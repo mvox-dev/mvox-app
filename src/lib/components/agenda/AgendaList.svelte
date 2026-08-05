@@ -71,12 +71,17 @@
 		new Date(new Date(todayKey + 'T12:00:00').getTime() + 24 * 60 * 60 * 1000)
 	);
 
-	/** Whole weeks between two group keys, or null when the gap is under a week. */
+	/**
+	 * Whole weeks between two group keys, or null when the gap doesn't clear a
+	 * genuine multi-week break. M4 fix: the old `days < 6` threshold fired at a
+	 * normal weekly rehearsal cadence (≥6 days apart) — "In 1 weeks" showed up on
+	 * every ordinary week. Require ~2 weeks (13+ days) before the marker appears.
+	 */
 	function gapWeeks(fromKey: string, toKey: string): number | null {
 		const fromMs = new Date(fromKey + 'T12:00:00').getTime();
 		const toMs = new Date(toKey + 'T12:00:00').getTime();
 		const days = Math.round((toMs - fromMs) / (24 * 60 * 60 * 1000));
-		if (days < 6) return null;
+		if (days < 13) return null;
 		return Math.max(1, Math.round(days / 7));
 	}
 
@@ -112,14 +117,14 @@
 	{:else}
 		{#each decoratedGroups as group (group.key)}
 			{#if group.gapWeeks}
-				<div data-testid="agenda-gap-marker" class="py-3 text-center font-mono text-[10px] tracking-wide text-ink-4">
+				<div data-testid="agenda-gap-marker" class="py-3 text-center font-mono text-[10px] tracking-wide text-ink-2">
 					{m.agenda_gap_weeks({ weeks: group.gapWeeks })}
 				</div>
 			{/if}
 			<section data-testid="agenda-day-group" class="flex flex-col">
 				<div
 					data-testid="agenda-date-header"
-					class="flex items-baseline gap-2 pt-4 pb-1 text-[10px] tracking-wide text-ink-3 uppercase"
+					class="flex items-baseline gap-2 pt-4 pb-1 text-[10px] tracking-wide text-ink-2 uppercase"
 					class:bg-highlight={group.relative === 'today'}
 				>
 					{#if group.relative === 'today'}
@@ -133,12 +138,12 @@
 					<div data-testid="agenda-row-{item.id}" class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0">
 						<div class="flex flex-col font-mono">
 							<span data-testid="row-time" class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
-							<span data-testid="row-duration" class="text-[10px] text-ink-4">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
+							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 						</div>
 						<div class="flex min-w-0 flex-col gap-0.5">
 							<span class="truncate text-sm text-ink">{item.name}</span>
 							{#if item.location}
-								<span data-testid="row-location" class="truncate text-xs text-ink-3">{item.location}</span>
+								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
 							{/if}
 						</div>
 					</div>

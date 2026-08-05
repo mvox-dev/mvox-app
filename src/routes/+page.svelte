@@ -3,6 +3,7 @@
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
 	import { loadAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
+	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 
@@ -16,26 +17,46 @@
 
 	let agendaItems = $state<AgendaItem[]>([]);
 	let agendaLoading = $state(true);
+	let agendaError = $state(false);
 
 	// Load the selected collective's upcoming agenda; reload on every collective
 	// switch. `requestId` guards against a slow earlier fetch clobbering a later
-	// one if the user switches collectives before the first load resolves.
+	// one if the user switches collectives before the first load resolves — the
+	// same guard covers a stale rejection (M2 fix below), not just a stale resolve.
 	let requestId = 0;
-	$effect(() => {
+	function loadForSelected() {
 		const db = selected?.db;
 		if (!db) {
 			agendaItems = [];
 			agendaLoading = false;
+			agendaError = false;
 			return;
 		}
 		const thisRequest = ++requestId;
 		agendaLoading = true;
-		loadAgenda().then((items) => {
-			if (thisRequest !== requestId) return; // superseded by a newer selection
-			agendaItems = items;
-			agendaLoading = false;
-		});
+		agendaError = false;
+		loadAgenda()
+			.then((items) => {
+				if (thisRequest !== requestId) return; // superseded by a newer selection
+				agendaItems = items;
+				agendaLoading = false;
+			})
+			.catch(() => {
+				// M2 fix: without this catch, a rejected loadAgenda left agendaLoading
+				// stuck at true forever — permanent skeleton, no error, no recovery.
+				if (thisRequest !== requestId) return;
+				agendaLoading = false;
+				agendaError = true;
+			});
+	}
+
+	$effect(() => {
+		loadForSelected();
 	});
+
+	function retryAgenda() {
+		loadForSelected();
+	}
 </script>
 
 {#if auth.status === 'authenticated'}
@@ -51,7 +72,23 @@
 						<a class="underline" href="/auth/logout">Sign out</a>
 					</nav>
 				</header>
-				<AgendaList items={agendaItems} loading={agendaLoading} />
+				<div class="rounded-lg bg-paper p-4">
+					{#if agendaError}
+						<div data-testid="agenda-error" class="flex flex-col items-center gap-3 py-10 text-center">
+							<p class="text-sm text-ink-2">{m.agenda_load_error()}</p>
+							<button
+								type="button"
+								class="rounded-md border border-ink px-4 py-2 text-sm text-ink hover:bg-ink hover:text-paper"
+								data-testid="agenda-retry"
+								onclick={retryAgenda}
+							>
+								{m.agenda_retry()}
+							</button>
+						</div>
+					{:else}
+						<AgendaList items={agendaItems} loading={agendaLoading} />
+					{/if}
+				</div>
 			</div>
 		</DeskSurface>
 	{:else}

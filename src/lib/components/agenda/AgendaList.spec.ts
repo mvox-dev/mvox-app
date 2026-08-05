@@ -155,7 +155,22 @@ describe('AgendaList — multi-week gap marker', () => {
 		expect(container.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
 	});
 
-	it('shows a gap marker for a jump of 6+ days', () => {
+	// M4 fix: a 7-day gap is a normal weekly rehearsal cadence, not a genuine
+	// multi-week break. The old `days < 6` threshold fired here ("In 1 weeks" on
+	// every ordinary week) — raised to 13 days (~2 weeks) so this stays quiet.
+	it('shows no gap marker for a normal weekly cadence (7 days)', () => {
+		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-08T09:00:00.000Z')]; // 7 days apart
+		const { container } = render(AgendaList, { items });
+		expect(container.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
+	});
+
+	it('shows no gap marker for a gap just under the 13-day threshold (12 days)', () => {
+		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-13T09:00:00.000Z')]; // 12 days apart
+		const { container } = render(AgendaList, { items });
+		expect(container.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
+	});
+
+	it('shows a gap marker for a genuine multi-week gap (14+ days)', () => {
 		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-15T09:00:00.000Z')]; // 14 days apart
 		const { container } = render(AgendaList, { items });
 		const marker = container.querySelector('[data-testid="agenda-gap-marker"]');
