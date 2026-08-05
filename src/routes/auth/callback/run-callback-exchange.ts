@@ -3,6 +3,7 @@ import { setToken, setUser, setLastProvider } from '$lib/auth/storage';
 import { decodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 import { safeRedirectTarget } from '$lib/auth/redirect';
 import { hydrateAuth } from '$lib/auth/session';
+import { hydrateCollectives } from '$lib/collectives/store';
 
 export type CallbackOutcome =
 	| { ok: true; redirectTo: string }
@@ -53,6 +54,14 @@ export async function runCallbackExchange(key: string): Promise<CallbackOutcome>
 		// spinner — fail closed back to login rather than leaving the user stuck.
 		return { ok: false, redirectTo: '/auth/login?error=persist_failed', error: 'persist_failed' };
 	}
+
+	// Drive collective discovery HERE, before we redirect. The root layout's onMount
+	// already ran (as anonymous) during THIS callback page's full load and does NOT
+	// re-run on the client-side `goto` back to the app — so without this the landing
+	// page is stranded at "Loading collectives…" until a manual full refresh. This
+	// resolves collectiveState to ready/none/error; it catches internally and never
+	// throws, so a discovery hiccup can't fail an otherwise-successful login.
+	await hydrateCollectives();
 
 	return { ok: true, redirectTo: safeRedirectTarget(decoded.return_to) };
 }
