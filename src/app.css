@@ -1,0 +1,52 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@theme {
+  --color-paper: #f7f1e1;
+  --color-paper-2: #efe7d2;
+  --color-paper-3: #e5dcc4;
+  --color-ink: #2a2620;
+  --color-ink-2: #4b443a;
+  --color-ink-3: #7a7166;
+  --color-ink-4: #a89f91;
+  --color-ink-5: #c9bfa9;
+
+  --color-red: #b54a3a;
+  --color-red-soft: #f0d8d0;
+  --color-green: #5f7a3b;
+  --color-green-soft: #dde9cb;
+  --color-amber: #b67a1e;
+  --color-amber-soft: #f5e3bf;
+  --color-indigo: #4f46e5;
+  --color-indigo-soft: #e0e7ff;
+  --color-highlight: #f7e58a;
+
+  --color-voice-s: #fbe3c1;
+  --color-voice-a: #fadcc4;
+  --color-voice-t: #d6e9c2;
+  --color-voice-b: #cdd9ee;
+
+  --color-desk-1: #d6c39a;
+  --color-desk-2: #d8c79e;
+  --color-desk-3: #d4be94;
+  --color-desk-base: #d3bf95;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-display: 'Caveat', cursive;
+}
+
+/* CHORE-67 — hide scrollbars globally. Scrolling works via wheel/trackpad/keys. */
+html,
+body,
+* {
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+*::-webkit-scrollbar {
+	display: none;
+	width: 0;
+	height: 0;
+}

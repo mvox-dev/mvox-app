@@ -1,0 +1,5 @@
+{
+	"$schema": "https://inlang.com/schema/inlang-message-format",
+	"app_name": "mvox",
+	"placeholder_greeting": "Привіт, {name}!"
+}
