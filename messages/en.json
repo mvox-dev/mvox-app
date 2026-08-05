@@ -6,7 +6,7 @@
 	"agenda_duration_min": "{minutes} min",
 	"agenda_today": "Today",
 	"agenda_tomorrow": "Tomorrow",
-	"agenda_gap_weeks": "In {weeks} weeks",
+	"agenda_gap_weeks": "{weeks} weeks later",
 	"agenda_load_error": "Couldn't load the agenda.",
 	"agenda_retry": "Retry"
 }

@@ -6,7 +6,7 @@
 	"agenda_duration_min": "{minutes} min",
 	"agenda_today": "Täna",
 	"agenda_tomorrow": "Homme",
-	"agenda_gap_weeks": "{weeks} nädala pärast",
+	"agenda_gap_weeks": "{weeks} nädalat hiljem",
 	"agenda_load_error": "Päevakorra laadimine ebaõnnestus.",
 	"agenda_retry": "Proovi uuesti"
 }

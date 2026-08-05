@@ -10,7 +10,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_duration_min: (params: { minutes: number }) => `${params.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
-		agenda_gap_weeks: (params: { weeks: number }) => `In ${params.weeks} weeks`
+		agenda_gap_weeks: (params: { weeks: number }) => `${params.weeks} weeks later`
 	}
 }));
 
@@ -175,7 +175,7 @@ describe('AgendaList — multi-week gap marker', () => {
 		const { container } = render(AgendaList, { items });
 		const marker = container.querySelector('[data-testid="agenda-gap-marker"]');
 		expect(marker).not.toBeNull();
-		expect(marker?.textContent).toContain('In 2 weeks');
+		expect(marker?.textContent).toContain('2 weeks later');
 	});
 
 	it('places the gap marker between the two day groups it separates', () => {

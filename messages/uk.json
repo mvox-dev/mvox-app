@@ -6,7 +6,7 @@
 	"agenda_duration_min": "{minutes} хв",
 	"agenda_today": "Сьогодні",
 	"agenda_tomorrow": "Завтра",
-	"agenda_gap_weeks": "Через {weeks} тижнів",
+	"agenda_gap_weeks": "{weeks} тижнів по тому",
 	"agenda_load_error": "Не вдалося завантажити порядок денний.",
 	"agenda_retry": "Повторити"
 }

@@ -6,7 +6,7 @@
 	"agenda_duration_min": "{minutes} min",
 	"agenda_today": "Šodien",
 	"agenda_tomorrow": "Rīt",
-	"agenda_gap_weeks": "Pēc {weeks} nedēļām",
+	"agenda_gap_weeks": "{weeks} nedēļas vēlāk",
 	"agenda_load_error": "Neizdevās ielādēt darba kārtību.",
 	"agenda_retry": "Mēģināt vēlreiz"
 }
