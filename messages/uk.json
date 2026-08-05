@@ -1,5 +1,10 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"app_name": "mvox",
-	"placeholder_greeting": "Привіт, {name}!"
+	"placeholder_greeting": "Привіт, {name}!",
+	"agenda_empty_no_rehearsals": "Немає майбутніх репетицій.",
+	"agenda_duration_min": "{minutes} хв",
+	"agenda_today": "Сьогодні",
+	"agenda_tomorrow": "Завтра",
+	"agenda_gap_weeks": "Через {weeks} тижнів"
 }

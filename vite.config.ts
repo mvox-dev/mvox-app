@@ -18,4 +18,10 @@ export default defineConfig({
 		}),
 		sveltekit(),
 	],
+	// Vitest needs the 'browser' export condition or `svelte` resolves to its
+	// server-side (SSR) build, which has no `mount` — @testing-library/svelte
+	// then throws "mount(...) is not available on the server". Standard fix
+	// per Svelte's own Vitest testing guide; scoped to `process.env.VITEST` so
+	// it doesn't affect `vite build`/`vite dev`.
+	resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
 });

@@ -1,5 +1,10 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"app_name": "mvox",
-	"placeholder_greeting": "Sveiki, {name}!"
+	"placeholder_greeting": "Sveiki, {name}!",
+	"agenda_empty_no_rehearsals": "Nav gaidāmu mēģinājumu.",
+	"agenda_duration_min": "{minutes} min",
+	"agenda_today": "Šodien",
+	"agenda_tomorrow": "Rīt",
+	"agenda_gap_weeks": "Pēc {weeks} nedēļām"
 }

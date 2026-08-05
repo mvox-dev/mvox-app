@@ -1,5 +1,10 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
 	"app_name": "mvox",
-	"placeholder_greeting": "Tere, {name}!"
+	"placeholder_greeting": "Tere, {name}!",
+	"agenda_empty_no_rehearsals": "Eelseisvaid proove ei ole.",
+	"agenda_duration_min": "{minutes} min",
+	"agenda_today": "Täna",
+	"agenda_tomorrow": "Homme",
+	"agenda_gap_weeks": "{weeks} nädala pärast"
 }
