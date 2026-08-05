@@ -1,0 +1,64 @@
+<script lang="ts">
+	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
+	import { getLastProvider } from '$lib/auth/storage';
+	import { safeRedirectTarget } from '$lib/auth/redirect';
+
+	// Provider list is a client-side constant (no server load). Slice-1 acceptance
+	// is Google sign-in; the rest are wired for parity and cost nothing.
+	const PROVIDERS: ReadonlyArray<{ id: string; label: string }> = [
+		{ id: 'google', label: 'Continue with Google' },
+		{ id: 'smart-id', label: 'Smart-ID' },
+		{ id: 'mobile-id', label: 'Mobile-ID' },
+		{ id: 'id-card', label: 'ID-card' },
+		{ id: 'apple', label: 'Apple' },
+		{ id: 'e-mail', label: 'E-mail' }
+	];
+
+	const error = $derived(page.url.searchParams.get('error'));
+	// The guard redirects here with `?redirect=<path>`; fall back to `return_to`.
+	const returnTo = $derived(
+		safeRedirectTarget(
+			page.url.searchParams.get('redirect') ?? page.url.searchParams.get('return_to')
+		)
+	);
+	const lastProvider = $state(typeof window !== 'undefined' ? getLastProvider() : null);
+
+	function providerHref(id: string, intent: 'login' | 'reauth'): string {
+		return `/auth/${id}?return_to=${encodeURIComponent(returnTo)}&intent=${intent}`;
+	}
+
+	// Remembered-provider fast path: silently re-auth unless we arrived with an error
+	// or an explicit picker request (`?picker=1`).
+	onMount(() => {
+		if (error) return;
+		if (page.url.searchParams.get('picker') === '1') return;
+		const remembered = getLastProvider();
+		if (remembered) goto(providerHref(remembered, 'reauth'));
+	});
+</script>
+
+<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper px-6 text-ink">
+	<h1 class="font-display text-2xl">Sign in to mvox</h1>
+
+	{#if error}
+		<p class="text-sm text-red-700" role="alert">
+			{#if error === 'csrf_mismatch'}Your sign-in link expired or was invalid. Please try again.
+			{:else if error === 'missing_session_token'}Sign-in did not complete. Please try again.
+			{:else}Something went wrong. Please try again.{/if}
+		</p>
+	{/if}
+
+	<div class="flex w-full max-w-xs flex-col gap-2">
+		{#each PROVIDERS as provider (provider.id)}
+			<a
+				href={providerHref(provider.id, provider.id === lastProvider ? 'reauth' : 'login')}
+				data-testid={`provider-${provider.id}`}
+				class="rounded-md border border-ink px-4 py-2 text-center text-sm hover:bg-ink hover:text-paper"
+			>
+				{provider.label}{#if provider.id === lastProvider}&nbsp;· last used{/if}
+			</a>
+		{/each}
+	</div>
+</main>
