@@ -92,6 +92,28 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 		});
 	});
 
+	it('an authenticated->anonymous transition (client-side sign-out, no remount) resets collectiveState — not left stale at ready', async () => {
+		discoverMock.mockResolvedValue({
+			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			erroredDbs: []
+		});
+
+		render(Layout);
+		setAuthedAuthStore();
+		await vi.waitFor(() => {
+			expect(get(collectiveState).status).toBe('ready');
+		});
+
+		// Client-side sign-out, same component instance — no remount. Without the
+		// becameAnonymous edge, collectiveState is stranded stale at 'ready'.
+		clearAll({ preserveProvider: true });
+		authStore.set({ status: 'anonymous' });
+
+		await vi.waitFor(() => {
+			expect(get(collectiveState).status).toBe('anonymous');
+		});
+	});
+
 	it('does not re-fire hydrateCollectives on a repeated authenticated emission (no loop)', async () => {
 		discoverMock.mockResolvedValue({
 			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
