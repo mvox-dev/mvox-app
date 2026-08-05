@@ -10,8 +10,8 @@ import type { MarkerResult } from './types';
 // MARKER IN THE DB: a single well-known entity of a dedicated type that other Entu
 // dbs do not have. Existence of the marker == this db is an mvox collective.
 //
-// PROPOSED SHAPE (awaiting PO sign-off before Pérotin seeds it):
-//   - Entity TYPE: `mvox` (dedicated; maximally self-identifying; absent from
+// SHAPE (PO-signed-off 2026-08-05; Pérotin seeds the matching entity into polyphony):
+//   - Entity TYPE: `mvox_collective` (dedicated; self-identifying; absent from
 //     non-mvox dbs). One singleton instance per collective.
 //   - The instance carries `name` (the collective's display label) — reused as the
 //     picker label, so the marker check doubles as the name fetch (no N+1).
@@ -20,9 +20,9 @@ import type { MarkerResult } from './types';
 //     the visibility model; anonymous/non-members can't see it, which is fine
 //     because we only probe dbs from the user's own token).
 //
-// The type name is centralised here so a different PO choice (e.g. `mvox_collective`)
-// is a one-line change with no impact on selection logic.
-export const MVOX_COLLECTIVE_MARKER_TYPE = 'mvox';
+// The type name is centralised here so any future rename is a one-line change with
+// no impact on selection logic.
+export const MVOX_COLLECTIVE_MARKER_TYPE = 'mvox_collective';
 
 /** Search response envelope for `GET {db}/entity?...` (count + entities). */
 type EntuSearchResponse = {

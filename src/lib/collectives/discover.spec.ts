@@ -4,7 +4,10 @@ import type { MarkerResult } from './types';
 // Control the per-db marker verdict directly — discovery's job is aggregation
 // (filter + preserve order + collect errors), tested independently of the query.
 const { markerMock } = vi.hoisted(() => ({ markerMock: vi.fn() }));
-vi.mock('./marker', () => ({ checkCollectiveMarker: markerMock, MVOX_COLLECTIVE_MARKER_TYPE: 'mvox' }));
+vi.mock('./marker', () => ({
+	checkCollectiveMarker: markerMock,
+	MVOX_COLLECTIVE_MARKER_TYPE: 'mvox_collective'
+}));
 
 import { discoverCollectives } from './discover';
 
