@@ -22,7 +22,10 @@ export async function listAgenda(
 	const nowIso = now.toISOString();
 
 	const seasons = await listSeasons(cfg, fetchImpl);
-	const ongoing = seasons.filter((s) => s.endDate >= today);
+	// An empty endDate means the season is open-ended (no end_date set yet) — the
+	// common case for the collective's current season. Treat it as ongoing; otherwise
+	// `'' >= today` is false and the open-ended season (and its rehearsals) vanish.
+	const ongoing = seasons.filter((s) => s.endDate === '' || s.endDate >= today);
 	const lists = await Promise.all(ongoing.map((s) => listRehearsals(cfg, s.id, fetchImpl)));
 
 	return lists

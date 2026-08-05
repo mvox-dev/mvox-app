@@ -69,6 +69,22 @@ describe('listAgenda (de-fanned to one collective)', () => {
 		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'cur', expect.anything());
 	});
 
+	it('treats an open-ended season (empty endDate) as ongoing — its rehearsals appear', async () => {
+		// The common case: the collective's CURRENT season has no end_date set yet,
+		// so entuSeasons maps it to endDate: ''. It must NOT be dropped — its future
+		// rehearsals are exactly what slice-1 acceptance depends on (real EFK open-ended
+		// season must show). `'' >= today` is false, so a naive endDate filter loses it.
+		listSeasonsMock.mockResolvedValue([
+			{ id: 'open', name: 'Open', startDate: '2026-09-01', endDate: '' }
+		]);
+		listRehearsalsMock.mockResolvedValue([item('future', '2026-09-12T18:00:00.000Z')]);
+
+		const result = await listAgenda(cfg, NOW);
+
+		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'open', expect.anything());
+		expect(result.map((i) => i.id)).toEqual(['future']);
+	});
+
 	it('excludes rehearsals earlier than now (this-morning boundary excluded)', async () => {
 		listSeasonsMock.mockResolvedValue([
 			{ id: 's', name: 'S', startDate: '2026-09-01', endDate: '2027-05-31' }
