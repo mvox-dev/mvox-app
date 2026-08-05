@@ -112,7 +112,7 @@
 		</div>
 	{:else if items.length === 0}
 		<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
-			<p class="font-display text-xl text-ink-3">{m.agenda_empty_no_rehearsals()}</p>
+			<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_rehearsals()}</p>
 		</div>
 	{:else}
 		{#each decoratedGroups as group (group.key)}
