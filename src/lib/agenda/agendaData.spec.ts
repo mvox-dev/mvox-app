@@ -56,24 +56,51 @@ describe('listAgenda (de-fanned to one collective)', () => {
 		expect(result[0]).toEqual(item('soon', '2026-09-10T16:00:00.000Z'));
 	});
 
-	it('skips seasons that ended before today (no rehearsal fetch for them)', async () => {
+	it('queries every season (no end_date pre-filter) — a past season contributes 0 via the event gate', async () => {
+		// season.end_date is NOT a reliable bound on event dates, so we no longer
+		// pre-filter seasons by it: BOTH seasons are queried. The past season's
+		// past-only events are dropped by the event-level `startDatetime >= now`
+		// gate, so the net result is unchanged — just an extra query.
 		listSeasonsMock.mockResolvedValue([
 			{ id: 'old', name: 'Old', startDate: '2025-09-01', endDate: '2026-05-31' },
 			{ id: 'cur', name: 'Cur', startDate: '2026-09-01', endDate: '2027-05-31' }
 		]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listRehearsalsMock.mockImplementation((_cfg: unknown, id: string) =>
+			Promise.resolve(
+				id === 'old'
+					? [item('old-past', '2026-05-10T18:00:00.000Z')] // before NOW → filtered out
+					: [item('cur-next', '2026-09-10T18:00:00.000Z')] // after NOW → kept
+			)
+		);
 
-		await listAgenda(cfg, NOW);
+		const result = await listAgenda(cfg, NOW);
 
-		expect(listRehearsalsMock).toHaveBeenCalledTimes(1);
-		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'cur', expect.anything());
+		expect(listRehearsalsMock).toHaveBeenCalledTimes(2);
+		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'old', expect.anything());
+		expect(result.map((i) => i.id)).toEqual(['cur-next']);
+	});
+
+	it('fetches a season with a PAST end_date too — its future rehearsals still appear', async () => {
+		// The real bug (Pérotin): season "Fila hooaeg" has end_date 2026-07-28 (past)
+		// but owns real upcoming rehearsals (Sept–Dec). end_date is not a bound on
+		// event dates, so the season must NOT be pre-filtered out — its future events
+		// are gated only by the event-level `startDatetime >= now` check.
+		listSeasonsMock.mockResolvedValue([
+			{ id: 'fila', name: 'Fila hooaeg', startDate: '2025-09-01', endDate: '2026-07-28' }
+		]);
+		listRehearsalsMock.mockResolvedValue([item('sept', '2026-09-15T18:00:00.000Z')]);
+
+		const result = await listAgenda(cfg, NOW);
+
+		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'fila', expect.anything());
+		expect(result.map((i) => i.id)).toEqual(['sept']);
 	});
 
 	it('treats an open-ended season (empty endDate) as ongoing — its rehearsals appear', async () => {
 		// The common case: the collective's CURRENT season has no end_date set yet,
-		// so entuSeasons maps it to endDate: ''. It must NOT be dropped — its future
-		// rehearsals are exactly what slice-1 acceptance depends on (real EFK open-ended
-		// season must show). `'' >= today` is false, so a naive endDate filter loses it.
+		// so entuSeasons maps it to endDate: ''. Its future rehearsals must appear —
+		// real EFK open-ended season, slice-1 acceptance. Now handled by fetching
+		// events for ALL seasons (no end_date pre-filter), so open-ended is not special.
 		listSeasonsMock.mockResolvedValue([
 			{ id: 'open', name: 'Open', startDate: '2026-09-01', endDate: '' }
 		]);

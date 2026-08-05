@@ -5,28 +5,35 @@ import { listSeasons, listRehearsals, type EntuCfg } from '$lib/seasons/entuSeas
 import type { AgendaItem } from './types';
 
 /**
- * The collective's upcoming agenda: every ongoing season's rehearsal events,
- * flattened → filtered to `startDatetime >= now` → sorted ascending.
+ * The collective's upcoming agenda: every season's rehearsal events, flattened →
+ * filtered to `startDatetime >= now` → sorted ascending.
  *
  * DE-FANNED from the old multi-org agenda: single-collective reads ONE collective's
  * seasons directly (no org fan-out, no per-org `orgId`/`orgLabel` stamping, no
- * per-org error partitioning). Ongoing-season pre-filter (`endDate >= today`) is
- * kept — it avoids fetching events for already-finished seasons.
+ * per-org error partitioning).
+ *
+ * We fetch rehearsals for ALL seasons — NO season pre-filter. `season.end_date` is
+ * an UNRELIABLE bound on event dates: a season whose end_date is past (or unset) can
+ * still own real upcoming rehearsals — e.g. "Fila hooaeg" (end_date 2026-07-28) owns
+ * ~20 events in Sept–Dec 2026. Pre-filtering seasons by end_date silently dropped
+ * those. The event-level `startDatetime >= now` filter below is the ONLY correct
+ * gate. (This also subsumes the old open-ended `endDate === ''` special case — an
+ * open-ended season is just one more season we fetch.)
+ *
+ * Perf: this queries events for every season on each load. Fine for single-collective
+ * slice-1. A future optimization is a single direct upcoming-events query, but ONLY
+ * if Entu supports a datetime range filter on the event query — probe the API before
+ * assuming it does.
  */
 export async function listAgenda(
 	cfg: EntuCfg,
 	now: Date,
 	fetchImpl: typeof fetch = fetch
 ): Promise<AgendaItem[]> {
-	const today = now.toISOString().slice(0, 10);
 	const nowIso = now.toISOString();
 
 	const seasons = await listSeasons(cfg, fetchImpl);
-	// An empty endDate means the season is open-ended (no end_date set yet) — the
-	// common case for the collective's current season. Treat it as ongoing; otherwise
-	// `'' >= today` is false and the open-ended season (and its rehearsals) vanish.
-	const ongoing = seasons.filter((s) => s.endDate === '' || s.endDate >= today);
-	const lists = await Promise.all(ongoing.map((s) => listRehearsals(cfg, s.id, fetchImpl)));
+	const lists = await Promise.all(seasons.map((s) => listRehearsals(cfg, s.id, fetchImpl)));
 
 	return lists
 		.flat()
