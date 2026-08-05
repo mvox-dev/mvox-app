@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { hydrateAuth } from '$lib/auth/session';
+	import { hydrateAuth, authStore } from '$lib/auth/session';
 	import { hydrateCollectives, urlCollectiveDbStore, COLLECTIVE_URL_PARAM } from '$lib/collectives/store';
 
 	let { children } = $props();
@@ -13,11 +13,52 @@
 		urlCollectiveDbStore.set(page.url.searchParams.get(COLLECTIVE_URL_PARAM));
 	});
 
-	// Publish auth from the localStorage JWT, then discover the user's mvox
-	// collectives from the token (marker-filtered) once mounted in the browser.
-	onMount(async () => {
+	// Publish auth from the localStorage JWT on mount. Collective hydration is
+	// driven reactively below (Fix B), not here — that covers both this initial
+	// resolve AND any later client-side auth flip without a re-mount.
+	onMount(() => {
 		hydrateAuth();
-		await hydrateCollectives();
+	});
+
+	// Fix B (#7 defense-in-depth): re-hydrate collectives reactively on the FIRST
+	// auth resolution and on every later transition INTO 'authenticated' — not
+	// just once at mount. Bug #7: discovery used to run only in onMount, which
+	// does NOT re-run on a client-side `goto` after a later auth flip (e.g. an
+	// OAuth sign-in), stranding collectiveState at 'loading'. Fix A closes the
+	// OAuth-callback path directly (drives hydrateCollectives() there before the
+	// redirect); this effect is the architectural safety net so NO client-side
+	// auth flip — from that path or any future one — can leave collectives
+	// stale, without requiring a full page reload.
+	//
+	// Guards against loops / duplicate fetches:
+	// - `lastAuthStatus` is a plain (non-reactive) variable, not `$state` —
+	//   reading/writing it inside the effect does not register a dependency, so
+	//   it can't retrigger this same effect (the feedback-loop risk raised for
+	//   $effect + store subscriptions).
+	// - Edge-detection (`firstResolve` / `becameAuthenticated`) means the guard
+	//   fires only on a genuine transition, not on every authStore emission —
+	//   deliberately NOT gated on collectiveState already being resolved, since
+	//   that would also suppress the real anonymous->authenticated case this
+	//   fix exists for.
+	// - `hydrating` skips overlapping calls if auth flips again before an
+	//   in-flight discovery resolves.
+	let lastAuthStatus: 'loading' | 'anonymous' | 'authenticated' | null = null;
+	let hydrating = false;
+	$effect(() => {
+		const auth = $authStore;
+		const prev = lastAuthStatus;
+		lastAuthStatus = auth.status;
+
+		if (auth.status === 'loading') return; // not yet resolved — nothing to react to
+
+		const firstResolve = prev === null || prev === 'loading';
+		const becameAuthenticated = auth.status === 'authenticated' && prev !== 'authenticated';
+		if ((firstResolve || becameAuthenticated) && !hydrating) {
+			hydrating = true;
+			hydrateCollectives().finally(() => {
+				hydrating = false;
+			});
+		}
 	});
 </script>
 
