@@ -1,6 +1,6 @@
 import { ENTU_API_BASE } from '$lib/entu-config';
 import { getUser } from '$lib/auth/storage';
-import { encodeState } from '$lib/auth/state';
+import { encodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 
 export interface OAuthInitArgs {
 	provider: string;
@@ -9,8 +9,6 @@ export interface OAuthInitArgs {
 	intent: 'login' | 'reauth';
 	nonce: string;
 }
-
-export const OAUTH_STATE_KEY = 'mvox.oauth_state';
 
 /**
  * Build the Entu OAuth-init URL and stash the CSRF/return state in localStorage.

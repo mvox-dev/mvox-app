@@ -9,6 +9,8 @@
 // (db-selection-from-token) decodes it straight off the token. A second copy in
 // localStorage would just be a staleness hazard.
 
+import { OAUTH_STATE_KEY } from './state';
+
 const KEYS = {
 	token: 'token',
 	user: 'user',
@@ -74,6 +76,9 @@ export function clearAll(opts: { preserveProvider: boolean }): void {
 	localStorage.removeItem(KEYS.token);
 	localStorage.removeItem(KEYS.user);
 	localStorage.removeItem(KEYS.tokenVersion);
+	// Drop any in-flight OAuth-state blob too — otherwise a stale blob survives
+	// logout and the callback's presence-check would key off it (single-use gate).
+	localStorage.removeItem(OAUTH_STATE_KEY);
 	if (!opts.preserveProvider) {
 		localStorage.removeItem(KEYS.lastProvider);
 	}

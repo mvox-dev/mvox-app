@@ -7,6 +7,11 @@
 
 const NONCE_KEY = 'mvox.oauth_nonce';
 
+// localStorage key for the encoded OAuth-state blob written at initiation and
+// consumed (single-use) at the callback. Lives here — not in the route module —
+// so `storage.clearAll` can drop it without a lib→routes import.
+export const OAUTH_STATE_KEY = 'mvox.oauth_state';
+
 export interface OAuthState {
 	nonce: string;
 	return_to: string;
