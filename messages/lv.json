@@ -8,5 +8,10 @@
 	"agenda_tomorrow": "Rīt",
 	"agenda_gap_weeks": "{weeks} nedēļas vēlāk",
 	"agenda_load_error": "Neizdevās ielādēt darba kārtību.",
-	"agenda_retry": "Mēģināt vēlreiz"
+	"agenda_retry": "Mēģināt vēlreiz",
+	"rsvp_non_member_hint": "Tikai dalībnieki var apstiprināt RSVP.",
+	"rsvp_status_going": "Būšu",
+	"rsvp_status_late": "Ar kavēšanos",
+	"rsvp_status_maybe": "Varbūt",
+	"rsvp_status_not_going": "Nebūšu"
 }

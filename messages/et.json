@@ -8,5 +8,10 @@
 	"agenda_tomorrow": "Homme",
 	"agenda_gap_weeks": "{weeks} nädalat hiljem",
 	"agenda_load_error": "Päevakorra laadimine ebaõnnestus.",
-	"agenda_retry": "Proovi uuesti"
+	"agenda_retry": "Proovi uuesti",
+	"rsvp_non_member_hint": "Ainult liikmed saavad RSVP kinnitada.",
+	"rsvp_status_going": "Tulen",
+	"rsvp_status_late": "Tulen hilja",
+	"rsvp_status_maybe": "Võib-olla",
+	"rsvp_status_not_going": "Ei tule"
 }

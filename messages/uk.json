@@ -8,5 +8,10 @@
 	"agenda_tomorrow": "Завтра",
 	"agenda_gap_weeks": "{weeks} тижнів по тому",
 	"agenda_load_error": "Не вдалося завантажити порядок денний.",
-	"agenda_retry": "Повторити"
+	"agenda_retry": "Повторити",
+	"rsvp_non_member_hint": "Лише учасники можуть підтвердити RSVP.",
+	"rsvp_status_going": "Буду",
+	"rsvp_status_late": "Запізнюся",
+	"rsvp_status_maybe": "Можливо",
+	"rsvp_status_not_going": "Не буду"
 }

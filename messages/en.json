@@ -8,5 +8,10 @@
 	"agenda_tomorrow": "Tomorrow",
 	"agenda_gap_weeks": "{weeks} weeks later",
 	"agenda_load_error": "Couldn't load the agenda.",
-	"agenda_retry": "Retry"
+	"agenda_retry": "Retry",
+	"rsvp_non_member_hint": "Only members can RSVP.",
+	"rsvp_status_going": "Going",
+	"rsvp_status_late": "Late",
+	"rsvp_status_maybe": "Maybe",
+	"rsvp_status_not_going": "Not going"
 }
