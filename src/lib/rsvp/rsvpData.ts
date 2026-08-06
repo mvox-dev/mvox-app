@@ -30,7 +30,16 @@ export async function findMyMemberId(
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string | null> {
-	throw new Error('not implemented');
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=member&person.reference=${personId}&status.string=active&props=_id&limit=1`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`findMyMemberId failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
+	return body.entities?.[0]?._id ?? null;
 }
 
 /**
@@ -49,7 +58,29 @@ export async function createRsvp(
 	input: CreateRsvpInput,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-	throw new Error('not implemented');
+	const rsvpTypeId = await resolveTypeId(cfg, 'rsvp', fetchImpl);
+	// One sentinel (`<status>_ref`) matching the chosen status; the other three are
+	// simply absent on a fresh create. Explicit `_sharing: private` suppresses the
+	// domain inherit from the person parent (Pérotin live-probe finding, #10).
+	const props = [
+		{ type: '_type', reference: rsvpTypeId },
+		{ type: '_parent', reference: input.personId },
+		{ type: 'event', reference: input.eventId },
+		{ type: 'member', reference: input.memberId },
+		{ type: 'status', string: input.status },
+		{ type: `${input.status}_ref`, reference: input.eventId },
+		{ type: '_sharing', string: 'private' }
+	];
+	const res = await entuFetch(
+		cfg.db,
+		'entity',
+		cfg.token,
+		{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(props) },
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`createRsvp failed: ${res.status}`);
+	const body = (await res.json()) as { _id: string };
+	return body._id;
 }
 
 /**
@@ -65,7 +96,65 @@ export async function updateRsvpStatus(
 	status: RsvpStatus,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	throw new Error('not implemented');
+	const getRes = await entuFetch(
+		cfg.db,
+		`entity/${rsvpId}?props=status,event,going_ref,not_going_ref,maybe_ref,late_ref`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!getRes.ok) throw new Error(`updateRsvpStatus lookup failed: ${getRes.status}`);
+	const body = (await getRes.json()) as {
+		entity?: {
+			status?: Array<{ _id: string }>;
+			event?: Array<{ reference: string }>;
+			going_ref?: Array<{ _id: string }>;
+			not_going_ref?: Array<{ _id: string }>;
+			maybe_ref?: Array<{ _id: string }>;
+			late_ref?: Array<{ _id: string }>;
+		};
+	};
+	const entity = body.entity ?? {};
+	// Sentinel event reference comes from the stored rsvp, never the caller — this
+	// function only ever takes a status change.
+	const eventId = entity.event?.[0]?.reference ?? '';
+
+	// GENERIC delete: the old status value AND every sentinel value-id that exists,
+	// not just the one we expect. If corrupted state left two sentinels set, both go
+	// — otherwise an orphan would survive as a phantom count.
+	const toDelete = [
+		...(entity.status ?? []),
+		...(entity.going_ref ?? []),
+		...(entity.not_going_ref ?? []),
+		...(entity.maybe_ref ?? []),
+		...(entity.late_ref ?? [])
+	];
+	for (const value of toDelete) {
+		const delRes = await entuFetch(
+			cfg.db,
+			`property/${value._id}`,
+			cfg.token,
+			{ method: 'DELETE' },
+			fetchImpl
+		);
+		if (!delRes.ok) throw new Error(`updateRsvpStatus delete failed: ${delRes.status}`);
+	}
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${rsvpId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([
+				{ type: 'status', string: status },
+				{ type: `${status}_ref`, reference: eventId }
+			])
+		},
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`updateRsvpStatus POST failed: ${postRes.status}`);
 }
 
 /**
@@ -78,7 +167,8 @@ export async function deleteRsvp(
 	rsvpId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	throw new Error('not implemented');
+	const res = await entuFetch(cfg.db, `entity/${rsvpId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+	if (!res.ok) throw new Error(`deleteRsvp failed: ${res.status}`);
 }
 
 // (*MVOX:Tallis*)

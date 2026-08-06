@@ -15,15 +15,32 @@ const typeIdCache = new Map<string, string>();
  * Resolve an Entu entity-type NAME (e.g. 'rsvp') to its type-definition entity id,
  * so callers can send `{ type: '_type', reference: <id> }` on create — Entu create
  * bodies require refs as `reference`, never `string` (#10 pinned wire-shape). Cached
- * per `db:typeName` — type definitions don't change at runtime. Stub for #10 RED:
- * needed by rsvpData.ts's createRsvp; not yet implemented.
+ * per `db:typeName` — type definitions don't change at runtime.
  */
 export async function resolveTypeId(
 	cfg: EntuCfg,
 	typeName: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-	throw new Error('not implemented');
+	const key = `${cfg.db}:${typeName}`;
+	const cached = typeIdCache.get(key);
+	if (cached) return cached;
+
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=entity&name.string=${encodeURIComponent(typeName)}&props=_id&limit=1`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`resolveTypeId failed: ${res.status}`);
+
+	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
+	const id = body.entities?.[0]?._id;
+	if (!id) throw new Error(`resolveTypeId: type definition not found: '${typeName}' in db '${cfg.db}'`);
+
+	typeIdCache.set(key, id);
+	return id;
 }
 
 /** Test-only: clear the type-id cache between cases. */

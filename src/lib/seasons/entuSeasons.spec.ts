@@ -169,7 +169,12 @@ describe('resolveTypeId', () => {
 	});
 
 	it('a different db triggers a new fetch even for the same typeName', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'rsvp-type-id' }] }));
+		// Fresh Response per call — a Response body is single-read, and real fetch
+		// mints a new one each time. mockResolvedValue would hand back one already-
+		// consumed body on the second (cache-miss) call.
+		const fetchImpl = vi
+			.fn()
+			.mockImplementation(() => Promise.resolve(json({ entities: [{ _id: 'rsvp-type-id' }] })));
 		await resolveTypeId({ db: 'db-a', token: 'jwt' }, 'rsvp', fetchImpl);
 		await resolveTypeId({ db: 'db-b', token: 'jwt' }, 'rsvp', fetchImpl);
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
