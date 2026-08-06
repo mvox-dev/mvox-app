@@ -10,6 +10,7 @@
 	"agenda_load_error": "Couldn't load the agenda.",
 	"agenda_retry": "Retry",
 	"rsvp_non_member_hint": "Only members can RSVP.",
+	"rsvp_save_failed": "Couldn't save — tap to try again.",
 	"rsvp_status_going": "Going",
 	"rsvp_status_late": "Late",
 	"rsvp_status_maybe": "Maybe",

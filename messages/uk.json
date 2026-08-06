@@ -10,6 +10,7 @@
 	"agenda_load_error": "Не вдалося завантажити порядок денний.",
 	"agenda_retry": "Повторити",
 	"rsvp_non_member_hint": "Лише учасники можуть підтвердити RSVP.",
+	"rsvp_save_failed": "Не вдалося зберегти — торкніться, щоб повторити.",
 	"rsvp_status_going": "Буду",
 	"rsvp_status_late": "Запізнюся",
 	"rsvp_status_maybe": "Можливо",

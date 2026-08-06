@@ -9,11 +9,20 @@
 		items: AgendaItem[];
 		loading?: boolean;
 		// #12 — one RsvpControl per row, seeded from rsvpByEventId (absent entry =
-		// unanswered, never defaulted — #11's display AC), disabled when memberId
-		// is null (non-member). onrsvpchange forwards (item, status) up so the
-		// page can own the optimistic write (keeps this component's test unit-level).
+		// unanswered, never defaulted — #11's display AC). onrsvpchange forwards
+		// (item, status) up so the page can own the optimistic write (keeps this
+		// component's test unit-level).
 		rsvpByEventId?: RsvpByEventId;
-		memberId?: string | null;
+		// The singer's membership, as an explicit 3-state — NOT a memberId-or-null
+		// (which conflated "still resolving" with "confirmed non-member"). Each
+		// row's control gets the REASON it's disabled, so the non-member hint tracks
+		// membership only:
+		//   'member'     → control enabled.
+		//   'non-member' → disabled + "Only members can RSVP" hint (CONFIRMED only).
+		//   'loading'    → unresolved (still looking up, or lookup failed) → disabled,
+		//                  NO hint (fail-safe: never a false non-member claim). Mapped
+		//                  onto the control's `pending` reason (disabled, no hint).
+		membership?: 'loading' | 'member' | 'non-member';
 		onrsvpchange?: (item: AgendaItem, status: RsvpStatus | null) => void;
 		// #15 — while an event's write is in flight, its whole RsvpControl (all 4
 		// buttons) is unclickable (Mihkel's ruling), not just the tapped button.
@@ -22,14 +31,18 @@
 		// against the '__optimistic__' placeholder (rsvpChangeQueue.ts covers the
 		// write-orchestration half).
 		pendingEventIds?: ReadonlySet<string>;
+		// Events whose last write REJECTED — that row surfaces an inline save-failed
+		// error (the optimistic value having been reverted upstream).
+		failedEventIds?: ReadonlySet<string>;
 	}
 	const {
 		items,
 		loading = false,
 		rsvpByEventId = {},
-		memberId = null,
+		membership = 'loading',
 		onrsvpchange,
-		pendingEventIds = new Set<string>()
+		pendingEventIds = new Set<string>(),
+		failedEventIds = new Set<string>()
 	}: Props = $props();
 
 	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
@@ -170,7 +183,9 @@
 							{/if}
 							<RsvpControl
 								status={rsvpByEventId[item.id]?.status ?? null}
-								disabled={memberId === null || pendingEventIds.has(item.id)}
+								nonMember={membership === 'non-member'}
+								pending={membership === 'loading' || pendingEventIds.has(item.id)}
+								saveFailed={failedEventIds.has(item.id)}
 								onchange={(newStatus) => onrsvpchange?.(item, newStatus)}
 							/>
 						</div>

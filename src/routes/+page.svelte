@@ -29,13 +29,27 @@
 	let agendaLoading = $state(true);
 	let agendaError = $state(false);
 
-	// #12 — the singer's own member id (gates the RSVP control for non-members)
-	// and existing rsvps (seeds each row's initial answer). Resolved alongside
-	// the agenda, same requestId guard, same collective. A read failure here
-	// fails safe (disabled control / unanswered rows) rather than blocking the
-	// agenda itself — RSVP data is supplementary, not load-bearing for the page.
+	// #12 — the singer's own member id (needed for the write path) and existing
+	// rsvps (seeds each row's initial answer). Resolved alongside the agenda, same
+	// requestId guard, same collective. A read failure here fails safe (disabled
+	// control / unanswered rows) rather than blocking the agenda itself — RSVP
+	// data is supplementary, not load-bearing for the page.
 	let memberId = $state<string | null>(null);
+	// Membership as an explicit 3-state, kept SEPARATE from memberId. `memberId`
+	// alone was ambiguous: null meant BOTH "still looking up / lookup failed" AND
+	// "confirmed non-member", so a real member was flashed (and, on a rejected
+	// lookup, PERMANENTLY shown) the "Only members can RSVP" hint. Rules:
+	//   'loading'    — unresolved: still in flight, OR the lookup rejected. Control
+	//                  disabled, NO non-member hint (fail-safe — never a false claim).
+	//   'member'     — resolved to an active member id. Control enabled.
+	//   'non-member' — resolved, no active membership. Control disabled + hint.
+	// Only 'non-member' (a genuine resolution) ever shows the hint.
+	let membership = $state<'loading' | 'member' | 'non-member'>('loading');
 	let rsvpByEventId = $state<RsvpByEventId>({});
+	// Events whose last write REJECTED — threaded into AgendaList so that row shows
+	// an inline save-failed error (otherwise the optimistic value just snapped back
+	// silently). Cleared when a fresh write for the event starts (setPending true).
+	let failedEventIds = $state<Set<string>>(new Set());
 	// #15 — events with an RSVP write in flight; threaded into AgendaList so the
 	// WHOLE control for that event disables (all 4 buttons), not just the tapped
 	// button. This is what makes a second tap on the same event structurally
@@ -56,12 +70,19 @@
 			agendaLoading = false;
 			agendaError = false;
 			memberId = null;
+			membership = 'loading';
 			rsvpByEventId = {};
+			failedEventIds = new Set();
 			return;
 		}
 		const thisRequest = ++requestId;
 		agendaLoading = true;
 		agendaError = false;
+		// Fresh selection → membership is unresolved again (not carried over as a
+		// stale member/non-member), and no event has a failed write yet.
+		memberId = null;
+		membership = 'loading';
+		failedEventIds = new Set();
 
 		const cfg = { db: current.db, token: getToken() ?? '' };
 		const personId = current.personId;
@@ -83,11 +104,16 @@
 		findMyMemberId(cfg, personId)
 			.then((id) => {
 				if (thisRequest !== requestId) return;
+				// A genuine resolution: an id → member; null → CONFIRMED non-member.
 				memberId = id;
+				membership = id ? 'member' : 'non-member';
 			})
 			.catch(() => {
 				if (thisRequest !== requestId) return;
+				// Lookup FAILED — do NOT assert non-member. Stay unresolved (disabled,
+				// no false hint) and fail safe.
 				memberId = null;
+				membership = 'loading';
 			});
 
 		listMyRsvps(cfg, personId)
@@ -121,6 +147,13 @@
 			if (isPending) next.add(eventId);
 			else next.delete(eventId);
 			pendingEventIds = next;
+			// A fresh write starting for this event clears any stale failure marker
+			// from a previous attempt — the user is trying again.
+			if (isPending && failedEventIds.has(eventId)) {
+				const cleared = new Set(failedEventIds);
+				cleared.delete(eventId);
+				failedEventIds = cleared;
+			}
 		},
 		reconcile(eventId, entry) {
 			const next = { ...rsvpByEventId };
@@ -133,6 +166,11 @@
 			if (before) next[eventId] = before;
 			else delete next[eventId];
 			rsvpByEventId = next;
+			// The write failed — mark this event so its row surfaces an inline error
+			// (the value just reverted, otherwise the answer would snap back silently).
+			const failed = new Set(failedEventIds);
+			failed.add(eventId);
+			failedEventIds = failed;
 		}
 	});
 
@@ -193,8 +231,9 @@
 							items={agendaItems}
 							loading={agendaLoading}
 							{rsvpByEventId}
-							{memberId}
+							{membership}
 							{pendingEventIds}
+							{failedEventIds}
 							onrsvpchange={handleRsvpChange}
 						/>
 					{/if}

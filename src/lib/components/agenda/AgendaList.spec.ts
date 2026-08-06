@@ -19,7 +19,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
-		rsvp_non_member_hint: () => 'You are not an active member.'
+		rsvp_non_member_hint: () => 'You are not an active member.',
+		rsvp_save_failed: () => 'Could not save your answer.'
 	}
 }));
 
@@ -251,7 +252,7 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 
 	it("an event present in rsvpByEventId shows that event's status as active (aria-pressed)", () => {
 		const rsvpByEventId: RsvpByEventId = { r1: { rsvpId: 'rsvp-1', status: 'maybe' } };
-		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, memberId: 'member-1' });
+		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, membership: 'member' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-maybe"]');
 		expect(btn?.getAttribute('aria-pressed')).toBe('true');
@@ -259,7 +260,7 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 
 	it("an event ABSENT from rsvpByEventId shows unanswered — no button active (the #11 'not defaulted' AC, display half)", () => {
 		const rsvpByEventId: RsvpByEventId = { r1: { rsvpId: 'rsvp-1', status: 'going' } }; // only r1 answered
-		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, memberId: 'member-1' });
+		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, membership: 'member' });
 		const row = container.querySelector('[data-testid="agenda-row-r2"]'); // r2 has no entry
 		const buttons = row?.querySelectorAll('[data-testid^="rsvp-btn-"]');
 		// Guard against a vacuous pass: the loop below proves nothing if the control
@@ -270,15 +271,15 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 		}
 	});
 
-	it('memberId=null disables every row\'s control (non-member)', () => {
-		const { container } = render(AgendaList, { items: itemSameDay, memberId: null });
+	it("membership='non-member' disables every row's control (confirmed non-member)", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'non-member' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(true);
 	});
 
-	it('memberId set enables every row\'s control', () => {
-		const { container } = render(AgendaList, { items: itemSameDay, memberId: 'member-1' });
+	it("membership='member' enables every row's control", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(false);
@@ -288,7 +289,7 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 		const onrsvpchange = vi.fn();
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			memberId: 'member-1',
+			membership: 'member',
 			onrsvpchange
 		});
 		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
@@ -308,10 +309,10 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 // `disabled` prop, and does so per-event.
 
 describe('AgendaList — pending event disables its whole control (#15)', () => {
-	it("an event id in pendingEventIds disables ALL FOUR buttons of that row's control, even when memberId is set", () => {
+	it("an event id in pendingEventIds disables ALL FOUR buttons of that row's control, even for a resolved member", () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			memberId: 'member-1',
+			membership: 'member',
 			pendingEventIds: new Set(['r1'])
 		});
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
@@ -325,7 +326,7 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 	it('a DIFFERENT row (not in pendingEventIds) stays fully interactive — pending is per-event, not global', () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			memberId: 'member-1',
+			membership: 'member',
 			pendingEventIds: new Set(['r1']) // only r1 pending
 		});
 		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
@@ -333,15 +334,64 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 		expect(btn?.disabled).toBe(false);
 	});
 
-	it('an empty pendingEventIds (nothing in flight) disables no row on account of pending — memberId alone still governs', () => {
+	it('an empty pendingEventIds (nothing in flight) disables no row on account of pending — membership alone still governs', () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			memberId: 'member-1',
+			membership: 'member',
 			pendingEventIds: new Set<string>()
 		});
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(false);
+	});
+});
+
+// ── AgendaList — membership 3-state passes the right REASON to each control ──
+// The disable reason (not a pre-collapsed boolean) reaches RsvpControl:
+//   'non-member' → disabled + hint;  'member' → enabled;  'loading' (unresolved)
+//   → disabled, NO hint (fail-safe — never a false "Only members can RSVP").
+
+describe('AgendaList — membership state (loading / member / non-member)', () => {
+	it("membership='non-member' shows the non-member hint on a row", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'non-member' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		expect(row?.textContent).toContain('You are not an active member.');
+	});
+
+	it("membership='member' shows no non-member hint", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		expect(row?.textContent).not.toContain('You are not an active member.');
+	});
+
+	it("membership='loading' (unresolved) disables the control but shows NO non-member hint", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'loading' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(true);
+		expect(row?.textContent).not.toContain('You are not an active member.');
+	});
+});
+
+describe('AgendaList — per-event write-failure indicator (failedEventIds)', () => {
+	it("a row whose event id is in failedEventIds surfaces the save-failed error", () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			membership: 'member',
+			failedEventIds: new Set(['r1'])
+		});
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		expect(row?.querySelector('[data-testid="rsvp-save-failed"]')).not.toBeNull();
+	});
+
+	it("a row NOT in failedEventIds shows no save-failed error — the indicator is per-event", () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			membership: 'member',
+			failedEventIds: new Set(['r1']) // only r1 failed
+		});
+		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
+		expect(row2?.querySelector('[data-testid="rsvp-save-failed"]')).toBeNull();
 	});
 });
 

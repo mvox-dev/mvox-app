@@ -10,6 +10,7 @@
 	"agenda_load_error": "Neizdevās ielādēt darba kārtību.",
 	"agenda_retry": "Mēģināt vēlreiz",
 	"rsvp_non_member_hint": "Tikai dalībnieki var apstiprināt RSVP.",
+	"rsvp_save_failed": "Neizdevās saglabāt — pieskarieties, lai mēģinātu vēlreiz.",
 	"rsvp_status_going": "Būšu",
 	"rsvp_status_late": "Ar kavēšanos",
 	"rsvp_status_maybe": "Varbūt",
