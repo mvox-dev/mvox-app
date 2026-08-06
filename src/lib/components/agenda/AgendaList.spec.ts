@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
+import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -10,7 +11,15 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_duration_min: (params: { minutes: number }) => `${params.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
-		agenda_gap_weeks: (params: { weeks: number }) => `${params.weeks} weeks later`
+		agenda_gap_weeks: (params: { weeks: number }) => `${params.weeks} weeks later`,
+		// #12 — RsvpControl's keys, added here up front so this mock stays valid once
+		// Byrd's GREEN wires the real RsvpControl (which imports the same module) into
+		// each row.
+		rsvp_status_going: () => 'Going',
+		rsvp_status_not_going: () => 'Not going',
+		rsvp_status_maybe: () => 'Maybe',
+		rsvp_status_late: () => 'Running late',
+		rsvp_non_member_hint: () => 'You are not an active member.'
 	}
 }));
 
@@ -223,6 +232,71 @@ describe('AgendaList — loading state', () => {
 		const { container } = render(AgendaList, { items: itemSameDay, loading: true });
 		expect(container.querySelector('[data-testid="agenda-skeleton"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid^="agenda-row-"]')).toBeNull();
+	});
+});
+
+// ── AgendaList — RsvpControl per row (#12) ──────────────────────────────────
+// The wiring contract only — RsvpControl's own button/label/tap behavior is
+// covered by RsvpControl.spec.ts. Not testing network here: rsvpByEventId and
+// memberId are plain props, onrsvpchange is a plain callback (team-lead's
+// brief: "keep write calls behind injected props/handlers so the component
+// test stays unit-level").
+
+describe('AgendaList — RsvpControl per row (#12)', () => {
+	it('renders one RsvpControl per row', () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		expect(row?.querySelector('[data-testid="rsvp-control"]')).not.toBeNull();
+	});
+
+	it("an event present in rsvpByEventId shows that event's status as active (aria-pressed)", () => {
+		const rsvpByEventId: RsvpByEventId = { r1: { rsvpId: 'rsvp-1', status: 'maybe' } };
+		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, memberId: 'member-1' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-maybe"]');
+		expect(btn?.getAttribute('aria-pressed')).toBe('true');
+	});
+
+	it("an event ABSENT from rsvpByEventId shows unanswered — no button active (the #11 'not defaulted' AC, display half)", () => {
+		const rsvpByEventId: RsvpByEventId = { r1: { rsvpId: 'rsvp-1', status: 'going' } }; // only r1 answered
+		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, memberId: 'member-1' });
+		const row = container.querySelector('[data-testid="agenda-row-r2"]'); // r2 has no entry
+		const buttons = row?.querySelectorAll('[data-testid^="rsvp-btn-"]');
+		// Guard against a vacuous pass: the loop below proves nothing if the control
+		// isn't rendered at all yet (empty NodeList) — assert its presence first.
+		expect(buttons?.length).toBe(4);
+		for (const btn of buttons ?? []) {
+			expect(btn.getAttribute('aria-pressed')).toBe('false');
+		}
+	});
+
+	it('memberId=null disables every row\'s control (non-member)', () => {
+		const { container } = render(AgendaList, { items: itemSameDay, memberId: null });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(true);
+	});
+
+	it('memberId set enables every row\'s control', () => {
+		const { container } = render(AgendaList, { items: itemSameDay, memberId: 'member-1' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(false);
+	});
+
+	it("tapping a row's control forwards (item, status) via onrsvpchange — the right item, not a different row's", async () => {
+		const onrsvpchange = vi.fn();
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			memberId: 'member-1',
+			onrsvpchange
+		});
+		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
+		const btn = row2?.querySelector('[data-testid="rsvp-btn-late"]');
+		expect(btn).not.toBeNull();
+		await fireEvent.click(btn!);
+		expect(onrsvpchange).toHaveBeenCalledTimes(1);
+		expect(onrsvpchange).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }), 'late');
 	});
 });
 

@@ -2,12 +2,20 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
+	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 
 	interface Props {
 		items: AgendaItem[];
 		loading?: boolean;
+		// #12 RED stub — Byrd wires RsvpControl per row at GREEN (harvest note:
+		// mvox_v4e_web RsvpControl.svelte + this app's rsvpData.ts #10/#11 primitives).
+		// Declared here only so the wiring spec can pass these props without a type
+		// error; the template below does not read them yet.
+		rsvpByEventId?: RsvpByEventId;
+		memberId?: string | null;
+		onrsvpchange?: (item: AgendaItem, status: RsvpStatus | null) => void;
 	}
-	const { items, loading = false }: Props = $props();
+	const { items, loading = false, rsvpByEventId, memberId, onrsvpchange }: Props = $props();
 
 	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
 	// PRESERVED VERBATIM from the harvested AgendaList (old mvox_v4e_web repo) — see
@@ -97,6 +105,7 @@
 	});
 </script>
 
+<!-- stub: rsvpByEventId={rsvpByEventId} memberId={memberId} onrsvpchange={typeof onrsvpchange} — #12, not wired into rows yet -->
 <div data-testid="agenda-list" class="flex flex-col">
 	{#if loading}
 		<div data-testid="agenda-skeleton" class="flex flex-col" aria-hidden="true">
