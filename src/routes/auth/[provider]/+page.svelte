@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { createNonce } from '$lib/auth/state';
 	import { safeRedirectTarget } from '$lib/auth/redirect';
+	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	import { buildOAuthInitUrl } from './build-oauth-init-url';
 
 	// Client-side OAuth kickoff: read provider + return target from the URL (no
@@ -15,7 +16,22 @@
 			const provider = page.params.provider ?? '';
 			const returnTo = safeRedirectTarget(page.url.searchParams.get('return_to'));
 			const intentParam = page.url.searchParams.get('intent');
-			const intent: 'login' | 'reauth' = intentParam === 'reauth' ? 'reauth' : 'login';
+			const intent: 'login' | 'reauth' | 'invite' =
+				intentParam === 'reauth' ? 'reauth' : intentParam === 'invite' ? 'invite' : 'login';
+
+			// T4.5 (#31): invite intent carries the invite token via an explicit
+			// `?invite=` param. Never launch OAuth with a garbage token — a client-
+			// clock-expired one may proceed (the server is the authority on expiry).
+			let invite: { db: string; token: string } | undefined;
+			if (intent === 'invite') {
+				const inviteToken = page.url.searchParams.get('invite');
+				const parsed = parseInviteToken(inviteToken, Date.now());
+				if (!inviteToken || parsed.status === 'invalid') {
+					goto('/auth/login?error=oauth_init_failed');
+					return;
+				}
+				invite = { db: parsed.db, token: inviteToken };
+			}
 
 			const url = buildOAuthInitUrl({
 				provider,
@@ -23,6 +39,7 @@
 				returnTo,
 				intent,
 				nonce: createNonce(),
+				invite,
 			});
 
 			window.location.href = url;

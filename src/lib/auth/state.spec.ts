@@ -51,3 +51,28 @@ describe('OAuth state', () => {
 		expect(consumeNonce()).toBeNull();
 	});
 });
+
+describe('OAuth state — invite intent (T4.5/#31)', () => {
+	it('round-trips an invite-intent payload (db + bearer token ride the localStorage blob, never the OAuth URL)', () => {
+		const payload = {
+			nonce: 'n1',
+			return_to: '/invite/tok.a.b',
+			intent: 'invite' as const,
+			provider: 'google',
+			invite: { db: 'polyphony', token: 'tok.a.b' }
+		};
+		expect(decodeState(encodeState(payload))).toEqual(payload);
+	});
+
+	it('still decodes a legacy blob without the invite field (codec unchanged)', () => {
+		const legacy = {
+			nonce: 'n1',
+			return_to: '/agenda',
+			intent: 'login' as const,
+			provider: 'google'
+		};
+		const decoded = decodeState(encodeState(legacy));
+		expect(decoded).toEqual(legacy);
+		expect(decoded.invite).toBeUndefined();
+	});
+});

@@ -4,6 +4,7 @@ import { decodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 import { safeRedirectTarget } from '$lib/auth/redirect';
 import { hydrateAuth } from '$lib/auth/session';
 import { hydrateCollectives } from '$lib/collectives/store';
+import { runInviteCallbackExchange } from './run-invite-callback';
 
 export type CallbackOutcome =
 	| { ok: true; redirectTo: string }
@@ -36,6 +37,13 @@ export async function runCallbackExchange(key: string): Promise<CallbackOutcome>
 		decoded = decodeState(stateBlob);
 	} catch {
 		return { ok: false, redirectTo: '/auth/login?error=csrf_mismatch', error: 'csrf_mismatch' };
+	}
+
+	// T4.5 (#31): an invite-intent blob takes the invite path (account-scoped
+	// exchange with the invite token); the db-less exchangeSession is never called
+	// in invite mode. The non-invite path below is unchanged.
+	if (decoded.intent === 'invite') {
+		return runInviteCallbackExchange(key, decoded);
 	}
 
 	const result = await exchangeSession({ sessionToken: key });

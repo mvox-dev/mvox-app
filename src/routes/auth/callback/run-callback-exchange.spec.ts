@@ -10,14 +10,18 @@ import { getToken } from '$lib/auth/storage';
 // Mock the collective-discovery boundary too (severs the same $env chain via
 // marker.ts → entu-config) and `$app/navigation` (the store imports `goto`), so
 // the post-exchange `hydrateCollectives` runs against a fake discovery result.
-const { exchangeMock, discoverMock, gotoMock } = vi.hoisted(() => ({
+const { exchangeMock, discoverMock, gotoMock, inviteCallbackMock } = vi.hoisted(() => ({
 	exchangeMock: vi.fn(),
 	discoverMock: vi.fn(),
-	gotoMock: vi.fn()
+	gotoMock: vi.fn(),
+	inviteCallbackMock: vi.fn()
 }));
 vi.mock('$lib/auth/exchange', () => ({ exchangeSession: exchangeMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+// T4.5: the invite-intent branch — mocked at its module boundary so this spec
+// stays a unit of the NON-invite path plus the delegation decision.
+vi.mock('./run-invite-callback', () => ({ runInviteCallbackExchange: inviteCallbackMock }));
 
 // Imported after the mock is registered (vi.mock is hoisted above imports anyway).
 import { runCallbackExchange } from './run-callback-exchange';
@@ -57,6 +61,7 @@ beforeEach(() => {
 	// result. Individual tests override for the shape they assert on.
 	discoverMock.mockResolvedValue({ collectives: [], erroredDbs: [] });
 	gotoMock.mockReset();
+	inviteCallbackMock.mockReset();
 	// Pre-auth baseline: the store as it stands when the callback page loads and
 	// the root layout's onMount already resolved it as anonymous → 'loading'.
 	collectiveState.set({ status: 'loading' });
@@ -142,6 +147,39 @@ describe('runCallbackExchange — post-auth collective hydration (bug #7)', () =
 		// the store stays 'loading' forever. It must be resolved before we redirect.
 		expect(get(collectiveState).status).toBe('ready');
 		expect(discoverMock).toHaveBeenCalledWith({ polyphony: 'p1' }, VALID_JWT, expect.anything());
+	});
+});
+
+describe('runCallbackExchange — invite intent delegates to the invite path (T4.5/#31)', () => {
+	it('routes an invite-intent state blob to runInviteCallbackExchange and NEVER calls the db-less exchange', async () => {
+		seedStateBlob({
+			intent: 'invite',
+			return_to: '/invite/tok.a.b',
+			invite: { db: 'polyphony', token: 'tok.a.b' }
+		});
+		exchangeOk(); // if the non-invite path ran by mistake, it would "succeed" — the assertions below catch it
+		inviteCallbackMock.mockResolvedValue({ ok: true, redirectTo: '/' });
+
+		const outcome = await runCallbackExchange('session-key');
+
+		expect(inviteCallbackMock).toHaveBeenCalledWith(
+			'session-key',
+			expect.objectContaining({
+				intent: 'invite',
+				invite: { db: 'polyphony', token: 'tok.a.b' }
+			})
+		);
+		expect(exchangeMock).not.toHaveBeenCalled();
+		expect(outcome).toEqual({ ok: true, redirectTo: '/' });
+	});
+
+	it('a non-invite blob never touches the invite path (regression: the proven login flow stays as-is)', async () => {
+		seedStateBlob({ intent: 'login' });
+		exchangeOk();
+
+		const outcome = await runCallbackExchange('session-key');
+		expect(outcome.ok).toBe(true);
+		expect(inviteCallbackMock).not.toHaveBeenCalled();
 	});
 });
 

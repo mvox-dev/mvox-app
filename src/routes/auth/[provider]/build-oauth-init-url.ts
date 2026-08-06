@@ -6,8 +6,14 @@ export interface OAuthInitArgs {
 	provider: string;
 	origin: string;
 	returnTo: string;
-	intent: 'login' | 'reauth';
+	intent: 'login' | 'reauth' | 'invite';
 	nonce: string;
+	/**
+	 * T4.5/#31: for `intent: 'invite'` the invite token + db must ride the
+	 * localStorage state blob (never the Entu init URL — the token must not
+	 * transit oauth.ee).
+	 */
+	invite?: { db: string; token: string };
 }
 
 /**
@@ -26,6 +32,9 @@ export function buildOAuthInitUrl(args: OAuthInitArgs): string {
 		return_to: args.returnTo,
 		intent: args.intent,
 		provider: args.provider,
+		// Invite intent only: the blob is the ONLY carrier of the invite token across
+		// the OAuth round-trip. It never enters the returned Entu init URL.
+		...(args.invite ? { invite: args.invite } : {}),
 	});
 	localStorage.setItem(OAUTH_STATE_KEY, state);
 

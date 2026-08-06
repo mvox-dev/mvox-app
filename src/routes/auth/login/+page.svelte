@@ -4,17 +4,9 @@
 	import { onMount } from 'svelte';
 	import { getLastProvider } from '$lib/auth/storage';
 	import { safeRedirectTarget } from '$lib/auth/redirect';
-
-	// Provider list is a client-side constant (no server load). Slice-1 acceptance
-	// is Google sign-in; the rest are wired for parity and cost nothing.
-	const PROVIDERS: ReadonlyArray<{ id: string; label: string }> = [
-		{ id: 'google', label: 'Continue with Google' },
-		{ id: 'smart-id', label: 'Smart-ID' },
-		{ id: 'mobile-id', label: 'Mobile-ID' },
-		{ id: 'id-card', label: 'ID-card' },
-		{ id: 'apple', label: 'Apple' },
-		{ id: 'e-mail', label: 'E-mail' }
-	];
+	// Provider list shared with the invite landing (T4.5) — extracted verbatim to
+	// $lib/auth/providers.
+	import { AUTH_PROVIDERS } from '$lib/auth/providers';
 
 	const error = $derived(page.url.searchParams.get('error'));
 	// The guard redirects here with `?redirect=<path>`; fall back to `return_to`.
@@ -51,7 +43,7 @@
 	{/if}
 
 	<div class="flex w-full max-w-xs flex-col gap-2">
-		{#each PROVIDERS as provider (provider.id)}
+		{#each AUTH_PROVIDERS as provider (provider.id)}
 			<a
 				href={providerHref(provider.id, provider.id === lastProvider ? 'reauth' : 'login')}
 				data-testid={`provider-${provider.id}`}

@@ -60,6 +60,20 @@ describe('isProtectedPath', () => {
 		for (const p of ['/agenda', '/library', '/roster', '/settings', '/library/x'])
 			expect(isProtectedPath(p)).toBe(true);
 	});
+
+	// T4.5/#31 — the unauthed invite landing rides the /invite/ prefix allowlist.
+	it('allowlists the tokened invite landing (unauthed by design)', () => {
+		expect(isProtectedPath('/invite/eyJhb.claims.sig')).toBe(false);
+		expect(isProtectedPath('/invite/')).toBe(false);
+	});
+
+	it('the BARE /invite (no trailing slash, no token) stays protected — real links always carry a token', () => {
+		expect(isProtectedPath('/invite')).toBe(true);
+	});
+
+	it('the admin invite surface is protected automatically (not on the allowlist)', () => {
+		expect(isProtectedPath('/admin/invite')).toBe(true);
+	});
 });
 
 describe('resolveGuardRedirect', () => {
