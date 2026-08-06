@@ -33,12 +33,24 @@ const { loadAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsM
 vi.mock('$lib/agenda/agendaData', () => ({ loadAgenda: loadAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// #12 — not yet imported by +page.svelte (that's Byrd's GREEN); mocked here so
-// the assertions below observe whether the page calls them, not a live network.
-vi.mock('$lib/rsvp/rsvpData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/rsvp/rsvpData')>()),
+// #12 — mocked so the assertions below observe whether the page calls them, not
+// a live network. Full replacement (not `importOriginal` spread): the real
+// rsvpData.ts imports $lib/entu/request -> $env/dynamic/public, which doesn't
+// resolve under happy-dom (same $env wall as discover.ts elsewhere) — spreading
+// importOriginal() still evaluates that real module graph and hits it.
+// rsvpsByEventId is reimplemented inline (pure, no $env) since the page calls
+// it directly on listMyRsvps' resolution.
+vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock
+	listMyRsvps: listMyRsvpsMock,
+	rsvpsByEventId: (rsvps: Array<{ rsvpId: string; eventId: string; status: string }>) => {
+		const map: Record<string, { rsvpId: string; status: string }> = {};
+		for (const r of rsvps) map[r.eventId] = { rsvpId: r.rsvpId, status: r.status };
+		return map;
+	},
+	createRsvp: vi.fn(),
+	updateRsvpStatus: vi.fn(),
+	deleteRsvp: vi.fn()
 }));
 
 import Page from './+page.svelte';

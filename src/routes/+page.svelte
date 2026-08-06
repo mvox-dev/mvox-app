@@ -3,6 +3,16 @@
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
 	import { loadAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
+	import { getToken } from '$lib/auth/storage';
+	import {
+		findMyMemberId,
+		listMyRsvps,
+		rsvpsByEventId,
+		type MyRsvp,
+		type RsvpByEventId,
+		type RsvpStatus
+	} from '$lib/rsvp/rsvpData';
+	import { applyRsvpChange } from '$lib/rsvp/rsvpOptimistic';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -19,22 +29,36 @@
 	let agendaLoading = $state(true);
 	let agendaError = $state(false);
 
+	// #12 — the singer's own member id (gates the RSVP control for non-members)
+	// and existing rsvps (seeds each row's initial answer). Resolved alongside
+	// the agenda, same requestId guard, same collective. A read failure here
+	// fails safe (disabled control / unanswered rows) rather than blocking the
+	// agenda itself — RSVP data is supplementary, not load-bearing for the page.
+	let memberId = $state<string | null>(null);
+	let rsvpByEventId = $state<RsvpByEventId>({});
+
 	// Load the selected collective's upcoming agenda; reload on every collective
 	// switch. `requestId` guards against a slow earlier fetch clobbering a later
 	// one if the user switches collectives before the first load resolves — the
 	// same guard covers a stale rejection (M2 fix below), not just a stale resolve.
 	let requestId = 0;
 	function loadForSelected() {
-		const db = selected?.db;
-		if (!db) {
+		const current = selected;
+		if (!current) {
 			agendaItems = [];
 			agendaLoading = false;
 			agendaError = false;
+			memberId = null;
+			rsvpByEventId = {};
 			return;
 		}
 		const thisRequest = ++requestId;
 		agendaLoading = true;
 		agendaError = false;
+
+		const cfg = { db: current.db, token: getToken() ?? '' };
+		const personId = current.personId;
+
 		loadAgenda()
 			.then((items) => {
 				if (thisRequest !== requestId) return; // superseded by a newer selection
@@ -47,6 +71,65 @@
 				if (thisRequest !== requestId) return;
 				agendaLoading = false;
 				agendaError = true;
+			});
+
+		findMyMemberId(cfg, personId)
+			.then((id) => {
+				if (thisRequest !== requestId) return;
+				memberId = id;
+			})
+			.catch(() => {
+				if (thisRequest !== requestId) return;
+				memberId = null;
+			});
+
+		listMyRsvps(cfg, personId)
+			.then((rsvps) => {
+				if (thisRequest !== requestId) return;
+				rsvpByEventId = rsvpsByEventId(rsvps);
+			})
+			.catch(() => {
+				if (thisRequest !== requestId) return;
+				rsvpByEventId = {};
+			});
+	}
+
+	// #12 — the optimistic write glue (mirrors the harvested mvox_v4e_web
+	// `handleRsvpChange`, minus the tally delta — tally is out of scope, epic
+	// #8). Sets local state immediately so the tap feels instant, dispatches
+	// the write via applyRsvpChange, and reverts local state in the .catch if
+	// the write fails — applyRsvpChange never swallows a failure.
+	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
+		if (!selected) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const personId = selected.personId;
+
+		const current = rsvpByEventId[item.id];
+		const existing: MyRsvp | null = current
+			? { rsvpId: current.rsvpId, eventId: item.id, status: current.status }
+			: null;
+
+		const before = rsvpByEventId;
+		const optimistic = { ...before };
+		if (newStatus === null) {
+			delete optimistic[item.id];
+		} else {
+			optimistic[item.id] = { rsvpId: existing?.rsvpId ?? '__optimistic__', status: newStatus };
+		}
+		rsvpByEventId = optimistic;
+
+		applyRsvpChange({ cfg, personId, eventId: item.id, memberId, existing, newStatus })
+			.then((result) => {
+				if (newStatus === null) return; // already removed optimistically, nothing to reconcile
+				// Replace the optimistic placeholder (create) or confirm the id (update)
+				// with the primitive's actual rsvpId.
+				rsvpByEventId = {
+					...rsvpByEventId,
+					[item.id]: { rsvpId: result.rsvpId ?? optimistic[item.id]?.rsvpId ?? '', status: newStatus }
+				};
+			})
+			.catch(() => {
+				rsvpByEventId = before; // revert — the write failed
 			});
 	}
 
@@ -86,7 +169,13 @@
 							</button>
 						</div>
 					{:else}
-						<AgendaList items={agendaItems} loading={agendaLoading} />
+						<AgendaList
+							items={agendaItems}
+							loading={agendaLoading}
+							{rsvpByEventId}
+							{memberId}
+							onrsvpchange={handleRsvpChange}
+						/>
 					{/if}
 				</div>
 			</div>

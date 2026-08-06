@@ -38,7 +38,28 @@ export interface ApplyRsvpChangeResult {
  * the caller's optimistic-UI revert always fires on a real failure.
  */
 export async function applyRsvpChange(input: ApplyRsvpChangeInput): Promise<ApplyRsvpChangeResult> {
-	throw new Error('not implemented');
+	const { cfg, personId, eventId, memberId, existing, newStatus } = input;
+
+	if (!existing && newStatus) {
+		// Create — requires memberId. The UI disables the control for non-members;
+		// this is the data-layer backstop, not the primary guard.
+		if (!memberId) throw new Error('applyRsvpChange: cannot create without a memberId');
+		const rsvpId = await createRsvp(cfg, { personId, eventId, memberId, status: newStatus });
+		return { rsvpId };
+	}
+
+	if (existing && newStatus) {
+		await updateRsvpStatus(cfg, existing.rsvpId, newStatus);
+		return { rsvpId: existing.rsvpId };
+	}
+
+	if (existing && !newStatus) {
+		await deleteRsvp(cfg, existing.rsvpId);
+		return { rsvpId: null };
+	}
+
+	// No existing rsvp, no status — nothing to do.
+	return { rsvpId: null };
 }
 
 // (*MVOX:Tallis*)

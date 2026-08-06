@@ -18,16 +18,35 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-const { loadAgendaMock, discoverMock, gotoMock } = vi.hoisted(() => ({
+const { loadAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
 	loadAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
-	gotoMock: vi.fn()
+	gotoMock: vi.fn(),
+	findMyMemberIdMock: vi.fn(),
+	listMyRsvpsMock: vi.fn()
 }));
 vi.mock('$lib/agenda/agendaData', () => ({ loadAgenda: loadAgendaMock }));
 // Same boundary as store.spec.ts: severs discover.ts's $env import under happy-dom
 // and stubs goto (can't run outside an app / not exercised by this spec).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+// #12 — +page.svelte now imports $lib/rsvp/rsvpData at module scope, which pulls
+// in $lib/entu/request -> $env/dynamic/public (same $env wall as discover.ts).
+// This spec doesn't exercise RSVP behavior, just needs the import to resolve
+// cleanly; rsvpsByEventId is reimplemented inline (pure, no $env) since the
+// page calls it directly on listMyRsvps' resolution.
+vi.mock('$lib/rsvp/rsvpData', () => ({
+	findMyMemberId: findMyMemberIdMock,
+	listMyRsvps: listMyRsvpsMock,
+	rsvpsByEventId: (rsvps: Array<{ rsvpId: string; eventId: string; status: string }>) => {
+		const map: Record<string, { rsvpId: string; status: string }> = {};
+		for (const r of rsvps) map[r.eventId] = { rsvpId: r.rsvpId, status: r.status };
+		return map;
+	},
+	createRsvp: vi.fn(),
+	updateRsvpStatus: vi.fn(),
+	deleteRsvp: vi.fn()
+}));
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
@@ -66,9 +85,16 @@ function setAuthedWithTwoCollectives() {
 	selectedCollectiveDbStore.set('org-a');
 }
 
+// Safe default so loadForSelected's findMyMemberId(...).then/listMyRsvps(...).then
+// have something to resolve — no test in this file asserts on RSVP state.
+findMyMemberIdMock.mockResolvedValue(null);
+listMyRsvpsMock.mockResolvedValue([]);
+
 afterEach(() => {
 	cleanup();
 	loadAgendaMock.mockReset();
+	findMyMemberIdMock.mockReset().mockResolvedValue(null);
+	listMyRsvpsMock.mockReset().mockResolvedValue([]);
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 });

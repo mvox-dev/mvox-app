@@ -3,19 +3,20 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
+	import RsvpControl from './RsvpControl.svelte';
 
 	interface Props {
 		items: AgendaItem[];
 		loading?: boolean;
-		// #12 RED stub — Byrd wires RsvpControl per row at GREEN (harvest note:
-		// mvox_v4e_web RsvpControl.svelte + this app's rsvpData.ts #10/#11 primitives).
-		// Declared here only so the wiring spec can pass these props without a type
-		// error; the template below does not read them yet.
+		// #12 — one RsvpControl per row, seeded from rsvpByEventId (absent entry =
+		// unanswered, never defaulted — #11's display AC), disabled when memberId
+		// is null (non-member). onrsvpchange forwards (item, status) up so the
+		// page can own the optimistic write (keeps this component's test unit-level).
 		rsvpByEventId?: RsvpByEventId;
 		memberId?: string | null;
 		onrsvpchange?: (item: AgendaItem, status: RsvpStatus | null) => void;
 	}
-	const { items, loading = false, rsvpByEventId, memberId, onrsvpchange }: Props = $props();
+	const { items, loading = false, rsvpByEventId = {}, memberId = null, onrsvpchange }: Props = $props();
 
 	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
 	// PRESERVED VERBATIM from the harvested AgendaList (old mvox_v4e_web repo) — see
@@ -105,7 +106,6 @@
 	});
 </script>
 
-<!-- stub: rsvpByEventId={rsvpByEventId} memberId={memberId} onrsvpchange={typeof onrsvpchange} — #12, not wired into rows yet -->
 <div data-testid="agenda-list" class="flex flex-col">
 	{#if loading}
 		<div data-testid="agenda-skeleton" class="flex flex-col" aria-hidden="true">
@@ -149,11 +149,16 @@
 							<span data-testid="row-time" class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
 							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 						</div>
-						<div class="flex min-w-0 flex-col gap-0.5">
+						<div class="flex min-w-0 flex-col gap-1">
 							<span class="truncate text-sm text-ink">{item.name}</span>
 							{#if item.location}
 								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
 							{/if}
+							<RsvpControl
+								status={rsvpByEventId[item.id]?.status ?? null}
+								disabled={memberId === null}
+								onchange={(newStatus) => onrsvpchange?.(item, newStatus)}
+							/>
 						</div>
 					</div>
 				{/each}
