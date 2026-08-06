@@ -42,7 +42,7 @@ export async function findMyMemberId(
 ): Promise<string | null> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=member&person.reference=${personId}&status.string=active&props=_id&limit=1`,
+		`entity?_type.string=member&person.reference=${encodeURIComponent(personId)}&status.string=active&props=_id&limit=1`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -55,23 +55,46 @@ export async function findMyMemberId(
 /**
  * List the singer's own rsvps (#11). `rsvp` is a child of `person` — scoping by
  * `_parent.reference=personId` is the whole query, native under the singer's own
- * person, no cross-person read (issue AC).
+ * person, no cross-person read (issue AC). Used to seed each agenda row's answer.
  */
 export async function listMyRsvps(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<MyRsvp[]> {
-	throw new Error('not implemented');
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=rsvp&_parent.reference=${encodeURIComponent(personId)}&props=event,status&limit=500`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listMyRsvps failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{
+			_id: string;
+			event?: Array<{ reference: string }>;
+			status?: Array<{ string: string }>;
+		}>;
+	};
+	return (body.entities ?? []).map((raw) => ({
+		rsvpId: raw._id,
+		eventId: raw.event?.[0]?.reference ?? '',
+		status: (raw.status?.[0]?.string ?? 'going') as RsvpStatus
+	}));
 }
 
 /**
- * Index rsvps by event id for the agenda row controls' initial state. An event
- * with no rsvp is simply ABSENT from the map — renders unanswered, never
- * defaulted to any status (issue AC).
+ * Index rsvps by event id for the agenda row controls' initial state. Pure — no
+ * fetch. An event with no rsvp is simply ABSENT from the map — renders unanswered,
+ * never defaulted to any status (issue AC).
  */
 export function rsvpsByEventId(rsvps: MyRsvp[]): RsvpByEventId {
-	throw new Error('not implemented');
+	const map: RsvpByEventId = {};
+	for (const r of rsvps) {
+		map[r.eventId] = { rsvpId: r.rsvpId, status: r.status };
+	}
+	return map;
 }
 
 /**
