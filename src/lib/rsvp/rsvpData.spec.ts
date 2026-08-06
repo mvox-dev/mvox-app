@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
-import { findMyMemberId, createRsvp, updateRsvpStatus, deleteRsvp } from './rsvpData';
+import {
+	findMyMemberId,
+	createRsvp,
+	updateRsvpStatus,
+	deleteRsvp,
+	listMyRsvps,
+	rsvpsByEventId,
+	type MyRsvp
+} from './rsvpData';
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
@@ -25,6 +33,14 @@ describe('findMyMemberId', () => {
 		expect(url).toContain('person.reference=person-p');
 		expect(url).toContain('status.string=active');
 		expect(url).not.toContain('_parent.reference'); // de-fanned: no org scoping
+	});
+
+	it('encodeURIComponent(personId) in the query — Bentham hygiene note on #10, consistency with resolveTypeId', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'member-1' }] }));
+		await findMyMemberId(cfg, 'person p', fetchImpl); // space forces the encoding to be observable
+		const url = String(fetchImpl.mock.calls[0][0]);
+		expect(url).toContain(`person.reference=${encodeURIComponent('person p')}`);
+		expect(url).not.toContain('person.reference=person p');
 	});
 
 	it('returns the first entity _id when found', async () => {
@@ -262,6 +278,80 @@ describe('deleteRsvp', () => {
 	it('throws on a non-2xx response (status surfaced)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
 		await expect(deleteRsvp(cfg, 'rsvp-xyz', fetchImpl)).rejects.toThrow(/403/);
+	});
+});
+
+// ── listMyRsvps (#11) ─────────────────────────────────────────────────────────
+// rsvp is a child of person — `_parent.reference=personId` alone scopes the read
+// to the singer's own rsvps. No `member`/`person` filter needed or wanted (issue
+// AC: "no cross-person query").
+
+describe('listMyRsvps', () => {
+	it('queries _type.string=rsvp&_parent.reference=<personId>, native under the singer\'s own person, no cross-person filter', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listMyRsvps(cfg, 'person p', fetchImpl); // space forces encoding to be observable
+		const url = String(fetchImpl.mock.calls[0][0]);
+		expect(url).toContain('_type.string=rsvp');
+		expect(url).toContain(`_parent.reference=${encodeURIComponent('person p')}`);
+		expect(url).not.toContain('member.reference');
+	});
+
+	it('maps entities to full-shape MyRsvp[]', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{ _id: 'rsvp-1', event: [{ reference: 'event-x' }], status: [{ string: 'going' }] },
+					{ _id: 'rsvp-2', event: [{ reference: 'event-y' }], status: [{ string: 'maybe' }] }
+				]
+			})
+		);
+		const rsvps = await listMyRsvps(cfg, 'person-p', fetchImpl);
+		expect(rsvps).toEqual([
+			{ rsvpId: 'rsvp-1', eventId: 'event-x', status: 'going' },
+			{ rsvpId: 'rsvp-2', eventId: 'event-y', status: 'maybe' }
+		]);
+	});
+
+	it('returns [] when entities array is empty', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		const rsvps = await listMyRsvps(cfg, 'person-p', fetchImpl);
+		expect(rsvps).toEqual([]);
+	});
+
+	it('throws on a non-2xx response', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
+		await expect(listMyRsvps(cfg, 'person-p', fetchImpl)).rejects.toThrow(/403/);
+	});
+});
+
+// ── rsvpsByEventId (#11) ──────────────────────────────────────────────────────
+// Pure mapping — no fetch. The agenda row control reads its initial state off
+// this map; an event with no rsvp must be ABSENT, never defaulted (issue AC:
+// "events with no answer render as unanswered rather than defaulting to any
+// status").
+
+describe('rsvpsByEventId', () => {
+	it('maps each rsvp by its event id', () => {
+		const rsvps: MyRsvp[] = [
+			{ rsvpId: 'rsvp-1', eventId: 'event-a', status: 'going' },
+			{ rsvpId: 'rsvp-2', eventId: 'event-b', status: 'maybe' }
+		];
+		const map = rsvpsByEventId(rsvps);
+		expect(map).toEqual({
+			'event-a': { rsvpId: 'rsvp-1', status: 'going' },
+			'event-b': { rsvpId: 'rsvp-2', status: 'maybe' }
+		});
+	});
+
+	it('an event with no rsvp is ABSENT from the map — not defaulted to any status', () => {
+		const rsvps: MyRsvp[] = [{ rsvpId: 'rsvp-1', eventId: 'event-a', status: 'going' }];
+		const map = rsvpsByEventId(rsvps);
+		expect('event-unanswered' in map).toBe(false);
+		expect(map['event-unanswered']).toBeUndefined();
+	});
+
+	it('returns {} for an empty rsvp list', () => {
+		expect(rsvpsByEventId([])).toEqual({});
 	});
 });
 

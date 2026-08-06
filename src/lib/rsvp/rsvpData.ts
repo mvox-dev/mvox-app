@@ -20,6 +20,16 @@ export interface CreateRsvpInput {
 	status: RsvpStatus;
 }
 
+/** A singer's own rsvp as read back for the agenda (#11). */
+export interface MyRsvp {
+	rsvpId: string;
+	eventId: string;
+	status: RsvpStatus;
+}
+
+/** The row-control's initial state, keyed by event id. */
+export type RsvpByEventId = Record<string, { rsvpId: string; status: RsvpStatus }>;
+
 /**
  * Resolve the singer's own active `member` id in the current collective. Returns
  * null when no active membership exists (e.g. a signed-in person with no roster
@@ -40,6 +50,28 @@ export async function findMyMemberId(
 	if (!res.ok) throw new Error(`findMyMemberId failed: ${res.status}`);
 	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
 	return body.entities?.[0]?._id ?? null;
+}
+
+/**
+ * List the singer's own rsvps (#11). `rsvp` is a child of `person` — scoping by
+ * `_parent.reference=personId` is the whole query, native under the singer's own
+ * person, no cross-person read (issue AC).
+ */
+export async function listMyRsvps(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<MyRsvp[]> {
+	throw new Error('not implemented');
+}
+
+/**
+ * Index rsvps by event id for the agenda row controls' initial state. An event
+ * with no rsvp is simply ABSENT from the map — renders unanswered, never
+ * defaulted to any status (issue AC).
+ */
+export function rsvpsByEventId(rsvps: MyRsvp[]): RsvpByEventId {
+	throw new Error('not implemented');
 }
 
 /**
