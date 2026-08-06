@@ -44,5 +44,22 @@
 	"rsvp_status_going": "Буду",
 	"rsvp_status_late": "Запізнюся",
 	"rsvp_status_maybe": "Можливо",
-	"rsvp_status_not_going": "Не буду"
+	"rsvp_status_not_going": "Не буду",
+	"profile_title": "Ваш профіль",
+	"profile_intro": "На кожному рівні видимості заповнюйте стільки, скільки бажаєте. Кожен рівень зберігається окремо.",
+	"profile_no_collective": "Щоб редагувати профіль, виберіть колектив.",
+	"profile_load_error": "Не вдалося завантажити ваш профіль: {message}",
+	"profile_load_retry": "Повторити",
+	"profile_field_name_label": "Ім'я",
+	"profile_field_email_label": "Електронна пошта",
+	"profile_level_public_label": "Публічний",
+	"profile_level_public_hint": "Видно всім, зокрема людям поза вашим колективом.",
+	"profile_level_domain_label": "Колектив",
+	"profile_level_domain_hint": "Видно всім у вашому колективі.",
+	"profile_level_private_label": "Приватний",
+	"profile_level_private_hint": "Видно лише вам.",
+	"profile_save": "Зберегти",
+	"profile_saving": "Збереження…",
+	"profile_saved": "Збережено",
+	"profile_save_error": "Не вдалося зберегти. Будь ласка, спробуйте ще раз."
 }

@@ -44,5 +44,22 @@
 	"rsvp_status_going": "Tulen",
 	"rsvp_status_late": "Tulen hilja",
 	"rsvp_status_maybe": "Võib-olla",
-	"rsvp_status_not_going": "Ei tule"
+	"rsvp_status_not_going": "Ei tule",
+	"profile_title": "Sinu profiil",
+	"profile_intro": "Täida igal nähtavuse tasemel nii palju või vähe, kui soovid. Iga tase salvestatakse eraldi.",
+	"profile_no_collective": "Profiili muutmiseks vali kollektiiv.",
+	"profile_load_error": "Sinu profiili laadimine ebaõnnestus: {message}",
+	"profile_load_retry": "Proovi uuesti",
+	"profile_field_name_label": "Nimi",
+	"profile_field_email_label": "E-post",
+	"profile_level_public_label": "Avalik",
+	"profile_level_public_hint": "Nähtav kõigile, ka väljaspool sinu kollektiivi.",
+	"profile_level_domain_label": "Kollektiiv",
+	"profile_level_domain_hint": "Nähtav kõigile sinu kollektiivis.",
+	"profile_level_private_label": "Privaatne",
+	"profile_level_private_hint": "Nähtav ainult sinule.",
+	"profile_save": "Salvesta",
+	"profile_saving": "Salvestamine…",
+	"profile_saved": "Salvestatud",
+	"profile_save_error": "Salvestamine ebaõnnestus. Palun proovi uuesti."
 }

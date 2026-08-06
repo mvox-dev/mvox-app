@@ -1,0 +1,78 @@
+import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { createOwnProfile, saveProfileFields, type Level } from './profileData';
+
+// T4.6/#26 — the write-dispatch half of the profile edit round trip. Kept
+// framework-agnostic (touches no Svelte state) so it is unit-testable without a
+// live component tree, exactly like `rsvpOptimistic.applyRsvpChange`.
+//
+// A FIRST save into a level is two wire calls because the frozen `createProfile`
+// signature makes only the shell (`_sharing`, no name/email): create the shell,
+// then POST the fields. If the shell create succeeds but the field write fails, we
+// throw a `ProfileSaveError` CARRYING the created shell's id, so a retry UPDATES the
+// existing shell instead of minting a duplicate entity (the honest partial-failure
+// window). A re-edit (existingId set) is a single `saveProfileFields`, no create.
+//
+// REJECTS on any underlying failure — propagates, never swallows — so the
+// orchestrator's fail-loud path (surface error, keep draft) always fires.
+
+/**
+ * A profile save failed. When `createdProfileId` is set, the level's shell entity
+ * WAS created (only the field write failed) — a retry must UPDATE that id, never
+ * create again.
+ */
+export class ProfileSaveError extends Error {
+	readonly createdProfileId?: string;
+	constructor(message: string, createdProfileId?: string) {
+		super(message);
+		this.name = 'ProfileSaveError';
+		this.createdProfileId = createdProfileId;
+	}
+}
+
+export interface ApplyProfileSaveInput {
+	cfg: EntuCfg;
+	personId: string;
+	level: Level;
+	/** null → first save into this level (create shell + fields); set → re-edit (update only). */
+	existingId: string | null;
+	fields: { name: string; email: string };
+}
+
+export interface ApplyProfileSaveResult {
+	profileId: string;
+}
+
+/**
+ * Dispatch one profile save:
+ *   - `existingId === null` → `createOwnProfile` (shell) then `saveProfileFields`
+ *     (fields). A field-write failure after a successful create throws
+ *     `ProfileSaveError` with the created shell id attached.
+ *   - `existingId` set → `saveProfileFields` only; `createOwnProfile` is NOT called.
+ */
+export async function applyProfileSave(
+	input: ApplyProfileSaveInput,
+	fetchImpl: typeof fetch = fetch
+): Promise<ApplyProfileSaveResult> {
+	const { cfg, personId, level, existingId, fields } = input;
+
+	if (existingId === null) {
+		// First save: create the shell (funnels through createProfile — fails loud on
+		// non-2xx AND the 2xx-no-_id trap), THEN write the fields. If the shell was
+		// created but the field write fails, throw a ProfileSaveError carrying the id
+		// so a retry UPDATES the shell rather than minting a duplicate.
+		const profileId = await createOwnProfile(cfg, personId, level, fetchImpl);
+		try {
+			await saveProfileFields(cfg, profileId, fields, fetchImpl);
+		} catch {
+			throw new ProfileSaveError('profile field save failed after create', profileId);
+		}
+		return { profileId };
+	}
+
+	// Re-edit: update the existing entity's fields only — no create.
+	await saveProfileFields(cfg, existingId, fields, fetchImpl);
+	return { profileId: existingId };
+}
+
+// (*MVOX:Tallis* — dispatcher spec)
+// (*MVOX:Josquin* — GREEN implementation)

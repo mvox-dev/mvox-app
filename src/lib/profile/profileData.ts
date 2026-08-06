@@ -102,5 +102,184 @@ export async function createProfile(
 	return body._id;
 }
 
+// ── T4.6/#26 — profile EDIT surface (lazy create per visibility level + re-edit).
+// These siblings live in this file ON PURPOSE: `createOwnProfile` is a thin wrapper
+// over `createProfile` so the `_inheritrights` literal stays confined to this
+// already-allowlisted file (soleCreatePath.spec.ts) — callers (the dispatcher) call
+// `createOwnProfile` and never name the literal. The read/update helpers touch only
+// `name`/`email`/`_sharing`-read and NEVER create an entity, so consolidating them
+// here does not widen the guarded surface.
+
+/** The three visibility levels — one `profile` entity per level (its own `_sharing`). */
+export type Level = 'public' | 'domain' | 'private';
+
+/** A profile entity as read back for the edit UI (projection of name/email/_sharing). */
+export interface MyProfile {
+	_id: string;
+	name: string;
+	email: string;
+	_sharing: Level;
+}
+
+/**
+ * Member self-create — she becomes the `_owner` (Entu auto-adds the caller;
+ * `entu-api utils/entity.js:401-406`), so NO `ownerIds` is sent. Funnels through
+ * `createProfile` with `_inheritrights:false` + the chosen level's `_sharing`,
+ * confining the `_inheritrights` literal to this allowlisted file. Returns the new
+ * profile `_id`; fails loud (inherits `createProfile`'s non-2xx + 2xx-no-`_id` throws).
+ */
+export async function createOwnProfile(
+	cfg: EntuCfg,
+	personId: string,
+	level: Level,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	// Funnel through createProfile — the sole allowed create path — with NO ownerIds
+	// (member self-create: Entu adds the caller as _owner itself). This confines the
+	// `_inheritrights` literal to this already-allowlisted file (soleCreatePath.spec.ts).
+	return createProfile(cfg, { personId, _inheritrights: false, _sharing: level }, fetchImpl);
+}
+
+const LEVELS: readonly Level[] = ['public', 'domain', 'private'];
+
+function isLevel(value: string): value is Level {
+	return (LEVELS as readonly string[]).includes(value);
+}
+
+/**
+ * Read the member's up-to-three profile entities (children of her person). Projects
+ * only `name,email,_sharing` (underscore — a bare `sharing` projection silently
+ * returns empty, `entu-api utils/entity.js:198`). An explicit `limit` is mandatory
+ * (every codebase query sets one). Fails loud on non-2xx; an unknown `_sharing`
+ * value throws rather than being silently dropped.
+ */
+export async function listMyProfiles(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<MyProfile[]> {
+	// Profiles are children of the member's person (`_parent` = personId), mirroring
+	// listMyRsvps' native own-person scoping. Project `_sharing` (underscore) — a bare
+	// `sharing` projection silently returns empty (entu-api utils/entity.js:198). A
+	// member has up to three profile entities; limit=10 is an explicit, ample bound.
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=profile&_parent.reference=${encodeURIComponent(personId)}&props=name,email,_sharing&limit=10`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listMyProfiles failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{
+			_id: string;
+			name?: Array<{ string: string }>;
+			email?: Array<{ string: string }>;
+			_sharing?: Array<{ string: string }>;
+		}>;
+	};
+	return (body.entities ?? []).map((raw) => {
+		const sharing = raw._sharing?.[0]?.string ?? '';
+		// Fail loud — an unknown _sharing is a data anomaly, never silently dropped or
+		// coerced to a default level (the standing fail-loud rule; a fallback here would
+		// hide the defect).
+		if (!isLevel(sharing)) {
+			throw new Error(
+				`listMyProfiles: profile ${raw._id} carries an unknown _sharing value ${JSON.stringify(sharing)}`
+			);
+		}
+		return {
+			_id: raw._id,
+			name: raw.name?.[0]?.string ?? '',
+			email: raw.email?.[0]?.string ?? '',
+			_sharing: sharing
+		};
+	});
+}
+
+/**
+ * Pure — index profiles by level. A level with no entity is ABSENT from the map.
+ * The anomalous duplicate-level case (should not occur pre-T4.7) is last-wins.
+ */
+export function profilesByLevel(ps: MyProfile[]): Partial<Record<Level, MyProfile>> {
+	const by: Partial<Record<Level, MyProfile>> = {};
+	for (const p of ps) {
+		if (by[p._sharing]) {
+			// Should not occur pre-T4.7 (one entity per level). Last-wins, but warn —
+			// a silent overwrite would hide the anomaly.
+			console.warn(`profilesByLevel: duplicate profile for level ${p._sharing} — last wins`);
+		}
+		by[p._sharing] = p;
+	}
+	return by;
+}
+
+/**
+ * Replace `name`/`email` on an EXISTING profile entity. NEVER creates; never sends
+ * `_type`/`_parent`/`_inheritrights`/`_sharing`. Because `POST entity/{id}` only
+ * ADDS (never replaces), this mirrors `updateRsvpStatus` (rsvpData.ts:148-213): GET
+ * the current value-ids → DELETE each stale name/email value → POST the new value.
+ * A field whose value is '' is omitted from the POST; both empty → no POST issued.
+ * On a FRESH shell (first-save create path) the GET returns no values → the DELETE
+ * step is a no-op → step 3 is a pure add. Fails loud on any non-2xx.
+ */
+export async function saveProfileFields(
+	cfg: EntuCfg,
+	profileId: string,
+	fields: { name: string; email: string },
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	// 1) GET the current name/email value-ids. POST entity/{id} only ADDS (never
+	//    replaces), so a real value CHANGE is delete-then-add (the updateRsvpStatus
+	//    pattern). On a fresh shell the GET returns no values → the DELETE step no-ops.
+	const getRes = await entuFetch(
+		cfg.db,
+		`entity/${profileId}?props=name,email`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!getRes.ok) throw new Error(`saveProfileFields lookup failed: ${getRes.status}`);
+	const body = (await getRes.json()) as {
+		entity?: {
+			name?: Array<{ _id: string }>;
+			email?: Array<{ _id: string }>;
+		};
+	};
+	const entity = body.entity ?? {};
+
+	// 2) DELETE each stale name/email value.
+	const toDelete = [...(entity.name ?? []), ...(entity.email ?? [])];
+	for (const value of toDelete) {
+		const delRes = await entuFetch(
+			cfg.db,
+			`property/${value._id}`,
+			cfg.token,
+			{ method: 'DELETE' },
+			fetchImpl
+		);
+		if (!delRes.ok) throw new Error(`saveProfileFields delete failed: ${delRes.status}`);
+	}
+
+	// 3) POST the new values — a field whose value is '' is omitted (never write an
+	//    empty string). Both empty → nothing to add, skip the POST entirely. Only
+	//    name/email are ever sent — NEVER _type/_parent/_inheritrights/_sharing (this
+	//    edits fields; it does not create an entity, keeping it out of the
+	//    sole-create-path guard's scope).
+	const props: Array<{ type: string; string: string }> = [];
+	if (fields.name !== '') props.push({ type: 'name', string: fields.name });
+	if (fields.email !== '') props.push({ type: 'email', string: fields.email });
+	if (props.length === 0) return;
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${profileId}`,
+		cfg.token,
+		{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(props) },
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`saveProfileFields save failed: ${postRes.status}`);
+}
+
 // (*MVOX:Tallis* — interface + guards spec)
 // (*MVOX:Josquin* — GREEN implementation)

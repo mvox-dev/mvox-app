@@ -44,5 +44,22 @@
 	"rsvp_status_going": "Going",
 	"rsvp_status_late": "Late",
 	"rsvp_status_maybe": "Maybe",
-	"rsvp_status_not_going": "Not going"
+	"rsvp_status_not_going": "Not going",
+	"profile_title": "Your profile",
+	"profile_intro": "Fill in as much or as little as you like at each visibility level. Each level is saved on its own.",
+	"profile_no_collective": "Select a collective to edit your profile.",
+	"profile_load_error": "Couldn't load your profile: {message}",
+	"profile_load_retry": "Retry",
+	"profile_field_name_label": "Name",
+	"profile_field_email_label": "Email",
+	"profile_level_public_label": "Public",
+	"profile_level_public_hint": "Visible to anyone, including people outside your collective.",
+	"profile_level_domain_label": "Collective",
+	"profile_level_domain_hint": "Visible to everyone in your collective.",
+	"profile_level_private_label": "Private",
+	"profile_level_private_hint": "Visible only to you.",
+	"profile_save": "Save",
+	"profile_saving": "Saving…",
+	"profile_saved": "Saved",
+	"profile_save_error": "Couldn't save — please try again."
 }
