@@ -38,6 +38,11 @@ export async function findMyMemberId(
  * `reference` (never `string` — #10 pinned wire-shape), plus the ONE sentinel
  * matching `status`; the other three sentinels are simply absent (a fresh create
  * has no stale values to clear).
+ *
+ * MUST send an explicit `{ type: '_sharing', string: 'private' }`. Omitting it
+ * makes Entu auto-inherit `_sharing: domain` from the (domain-shared) person
+ * parent — leaking the singer's private answer to every member. An explicit
+ * value on create suppresses the inherit (Pérotin's live-probe finding, #10).
  */
 export async function createRsvp(
 	cfg: EntuCfg,
