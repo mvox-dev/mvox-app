@@ -300,4 +300,49 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 	});
 });
 
+// ── AgendaList — per-event pending disables the WHOLE control (#15) ─────────
+// Mihkel's ruling: while an event's write is in flight, that event's entire
+// RsvpControl (all 4 buttons) is unclickable — re-enabled on resolve. This is
+// the primary #15 fix (rsvpChangeQueue.spec.ts covers the write-orchestration
+// half); here we only pin that the pending signal actually reaches the row's
+// `disabled` prop, and does so per-event.
+
+describe('AgendaList — pending event disables its whole control (#15)', () => {
+	it("an event id in pendingEventIds disables ALL FOUR buttons of that row's control, even when memberId is set", () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			memberId: 'member-1',
+			pendingEventIds: new Set(['r1'])
+		});
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const buttons = row?.querySelectorAll('[data-testid^="rsvp-btn-"]') as NodeListOf<HTMLButtonElement> | undefined;
+		expect(buttons?.length).toBe(4);
+		for (const btn of buttons ?? []) {
+			expect(btn.disabled).toBe(true);
+		}
+	});
+
+	it('a DIFFERENT row (not in pendingEventIds) stays fully interactive — pending is per-event, not global', () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			memberId: 'member-1',
+			pendingEventIds: new Set(['r1']) // only r1 pending
+		});
+		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
+		const btn = row2?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(false);
+	});
+
+	it('an empty pendingEventIds (nothing in flight) disables no row on account of pending — memberId alone still governs', () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			memberId: 'member-1',
+			pendingEventIds: new Set<string>()
+		});
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(false);
+	});
+});
+
 // (*MVOX:Byrd*)

@@ -14,13 +14,21 @@ import type { MyRsvp, RsvpStatus } from './rsvpData';
 //      forever (every later change 404s); only a reload (which refetches the
 //      real id) recovered.
 //
-// This module makes both defects structurally impossible by construction:
-//   - only ONE write is ever in flight per event; a tap that arrives while one
-//     is pending is COALESCED — no second network call, latest status wins —
-//     and automatically re-dispatched against the REAL id once the in-flight
-//     write resolves (never the placeholder);
-//   - setOptimistic/reconcile/revert are all PER-EVENT callbacks. There is no
-//     whole-map operation in this module's API for a caller to misuse.
+// FIX SHAPE (Mihkel's ruling, 2026-08-06): "the button should not be clickable
+// until resolved." NOT coalescing — the whole RsvpControl (all 4 status
+// buttons) for an event disables while that event's write is in flight, and
+// re-enables on resolve (success or failure). This makes a second tap on the
+// SAME event structurally impossible at the UI layer — no second write can
+// ever fire against the placeholder. `request()`'s own guard against a
+// concurrent call for the same event is a defensive backstop (correct even if
+// something bypasses the disabled control), not the primary mechanism — the
+// primary mechanism is AgendaList wiring `pendingEventIds` into each row's
+// `disabled` prop (see AgendaList.spec.ts).
+//
+// The other #15 defect — a whole-map revert clobbering a concurrent event's
+// state — is fixed the same way regardless of shape: setOptimistic/setPending/
+// reconcile/revert are all PER-EVENT callbacks. There is no whole-map
+// operation in this module's API for a caller to misuse.
 //
 // One instance lives for the page's lifetime — Byrd creates it once in
 // +page.svelte and calls .request() from the RsvpControl onchange handler.
@@ -31,12 +39,12 @@ export interface RsvpEntry {
 	status: RsvpStatus;
 }
 
-/** Internal-only, but exported so tests can assert against the exact sentinel. */
-export const OPTIMISTIC_PLACEHOLDER_ID = '__optimistic__';
-
 export interface RsvpChangeCallbacks {
 	/** Apply the optimistic value for exactly this event, synchronously. */
 	setOptimistic(eventId: string, entry: RsvpEntry | null): void;
+	/** Mark/unmark this event as having a write in flight — the caller threads
+	 *  this into that row's RsvpControl `disabled` prop (all 4 buttons). */
+	setPending(eventId: string, pending: boolean): void;
 	/** A write settled successfully — the final, reconciled value for this event. */
 	reconcile(eventId: string, entry: RsvpEntry | null): void;
 	/** A write failed — restore exactly this event's PRE-tap value. Nothing else. */

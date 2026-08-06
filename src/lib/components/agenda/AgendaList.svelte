@@ -15,8 +15,16 @@
 		rsvpByEventId?: RsvpByEventId;
 		memberId?: string | null;
 		onrsvpchange?: (item: AgendaItem, status: RsvpStatus | null) => void;
+		// #15 RED stub — Byrd widens the row's `disabled` expression at GREEN to
+		// `memberId === null || pendingEventIds.has(item.id)` (Mihkel's ruling: the
+		// whole control is unclickable while that event's write is in flight, not
+		// just the tapped button — see rsvpChangeQueue.ts). Declared here only so
+		// the wiring spec can pass this prop without a type error; the template
+		// below does not read it yet.
+		pendingEventIds?: ReadonlySet<string>;
 	}
-	const { items, loading = false, rsvpByEventId = {}, memberId = null, onrsvpchange }: Props = $props();
+	const { items, loading = false, rsvpByEventId = {}, memberId = null, onrsvpchange, pendingEventIds }: Props =
+		$props();
 
 	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
 	// PRESERVED VERBATIM from the harvested AgendaList (old mvox_v4e_web repo) — see
@@ -106,6 +114,7 @@
 	});
 </script>
 
+<!-- stub: pendingEventIds={pendingEventIds?.size ?? 0} — #15, not wired into the row disabled expression yet -->
 <div data-testid="agenda-list" class="flex flex-col">
 	{#if loading}
 		<div data-testid="agenda-skeleton" class="flex flex-col" aria-hidden="true">
