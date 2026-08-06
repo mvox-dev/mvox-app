@@ -66,9 +66,40 @@ export interface RsvpChangeQueue {
 }
 
 export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChangeQueue {
+	// The only mutable state this module owns: which events currently have a
+	// write in flight. Everything else (the actual rsvp values) lives with the
+	// caller, touched exclusively through the per-event callbacks above.
+	const pending = new Set<string>();
+
 	return {
-		request() {
-			throw new Error('not implemented');
+		request(input) {
+			const { cfg, personId, memberId, eventId, existing, newStatus } = input;
+
+			// Defensive backstop (see module doc) — the primary guard is the UI
+			// disabling the control for a pending event, via `setPending`.
+			if (pending.has(eventId)) return;
+
+			pending.add(eventId);
+			callbacks.setPending(eventId, true);
+
+			const optimisticEntry: RsvpEntry | null =
+				newStatus !== null ? { rsvpId: existing?.rsvpId ?? '__optimistic__', status: newStatus } : null;
+			callbacks.setOptimistic(eventId, optimisticEntry);
+
+			applyRsvpChange({ cfg, personId, eventId, memberId, existing, newStatus })
+				.then((result) => {
+					pending.delete(eventId);
+					callbacks.setPending(eventId, false);
+					const reconciled: RsvpEntry | null =
+						newStatus !== null ? { rsvpId: result.rsvpId ?? '', status: newStatus } : null;
+					callbacks.reconcile(eventId, reconciled);
+				})
+				.catch(() => {
+					pending.delete(eventId);
+					callbacks.setPending(eventId, false);
+					const before: RsvpEntry | null = existing ? { rsvpId: existing.rsvpId, status: existing.status } : null;
+					callbacks.revert(eventId, before);
+				});
 		}
 	};
 }

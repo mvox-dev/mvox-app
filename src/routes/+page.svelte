@@ -12,7 +12,7 @@
 		type RsvpByEventId,
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
-	import { applyRsvpChange } from '$lib/rsvp/rsvpOptimistic';
+	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -36,6 +36,13 @@
 	// agenda itself — RSVP data is supplementary, not load-bearing for the page.
 	let memberId = $state<string | null>(null);
 	let rsvpByEventId = $state<RsvpByEventId>({});
+	// #15 — events with an RSVP write in flight; threaded into AgendaList so the
+	// WHOLE control for that event disables (all 4 buttons), not just the tapped
+	// button. This is what makes a second tap on the same event structurally
+	// impossible — see rsvpChangeQueue.ts for why that's the actual fix (the old
+	// inline handleRsvpChange's whole-map optimistic-set/revert let a second tap
+	// fire against the '__optimistic__' placeholder and get the event stuck).
+	let pendingEventIds = $state<Set<string>>(new Set());
 
 	// Load the selected collective's upcoming agenda; reload on every collective
 	// switch. `requestId` guards against a slow earlier fetch clobbering a later
@@ -94,43 +101,56 @@
 			});
 	}
 
-	// #12 — the optimistic write glue (mirrors the harvested mvox_v4e_web
-	// `handleRsvpChange`, minus the tally delta — tally is out of scope, epic
-	// #8). Sets local state immediately so the tap feels instant, dispatches
-	// the write via applyRsvpChange, and reverts local state in the .catch if
-	// the write fails — applyRsvpChange never swallows a failure.
+	// #15 — the write-orchestration itself (per-event pending guard, coalescing-
+	// free disable, per-event optimistic/reconcile/revert) lives in
+	// rsvpChangeQueue.ts; created once for the page's lifetime. Every callback
+	// here touches ONLY the one event it's given — no whole-map operation, which
+	// is exactly what let the old inline handleRsvpChange's failure-revert
+	// clobber a different event's concurrent, still-in-flight state (#15 root
+	// cause #2). Reassign (not mutate) rsvpByEventId/pendingEventIds per Svelte 5
+	// runes.
+	const rsvpQueue = createRsvpChangeQueue({
+		setOptimistic(eventId, entry) {
+			const next = { ...rsvpByEventId };
+			if (entry) next[eventId] = entry;
+			else delete next[eventId];
+			rsvpByEventId = next;
+		},
+		setPending(eventId, isPending) {
+			const next = new Set(pendingEventIds);
+			if (isPending) next.add(eventId);
+			else next.delete(eventId);
+			pendingEventIds = next;
+		},
+		reconcile(eventId, entry) {
+			const next = { ...rsvpByEventId };
+			if (entry) next[eventId] = entry;
+			else delete next[eventId];
+			rsvpByEventId = next;
+		},
+		revert(eventId, before) {
+			const next = { ...rsvpByEventId };
+			if (before) next[eventId] = before;
+			else delete next[eventId];
+			rsvpByEventId = next;
+		}
+	});
+
+	// The onrsvpchange handler: resolves cfg/personId/the current pre-tap value
+	// for this event, then hands off to the queue. All the optimistic-set /
+	// pending / reconcile / revert mechanics live in the callbacks above — this
+	// is just the adapter from AgendaList's callback shape to the queue's.
 	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const personId = selected.personId;
 
-		const current = rsvpByEventId[item.id];
+		const current: RsvpEntry | undefined = rsvpByEventId[item.id];
 		const existing: MyRsvp | null = current
 			? { rsvpId: current.rsvpId, eventId: item.id, status: current.status }
 			: null;
 
-		const before = rsvpByEventId;
-		const optimistic = { ...before };
-		if (newStatus === null) {
-			delete optimistic[item.id];
-		} else {
-			optimistic[item.id] = { rsvpId: existing?.rsvpId ?? '__optimistic__', status: newStatus };
-		}
-		rsvpByEventId = optimistic;
-
-		applyRsvpChange({ cfg, personId, eventId: item.id, memberId, existing, newStatus })
-			.then((result) => {
-				if (newStatus === null) return; // already removed optimistically, nothing to reconcile
-				// Replace the optimistic placeholder (create) or confirm the id (update)
-				// with the primitive's actual rsvpId.
-				rsvpByEventId = {
-					...rsvpByEventId,
-					[item.id]: { rsvpId: result.rsvpId ?? optimistic[item.id]?.rsvpId ?? '', status: newStatus }
-				};
-			})
-			.catch(() => {
-				rsvpByEventId = before; // revert — the write failed
-			});
+		rsvpQueue.request({ cfg, personId, memberId, eventId: item.id, existing, newStatus });
 	}
 
 	$effect(() => {
@@ -174,6 +194,7 @@
 							loading={agendaLoading}
 							{rsvpByEventId}
 							{memberId}
+							{pendingEventIds}
 							onrsvpchange={handleRsvpChange}
 						/>
 					{/if}
