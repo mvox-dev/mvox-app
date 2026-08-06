@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-import { listSeasons, listRehearsals, type EntuCfg } from './entuSeasons';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { listSeasons, listRehearsals, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
 
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
 
@@ -141,5 +141,49 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 	it('throws on a non-2xx events response', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
 		await expect(listRehearsals(cfg, 'season1', fetchImpl)).rejects.toThrow(/listRehearsals failed: 403/);
+	});
+});
+
+// resolveTypeId — new shared infra for #10 (rsvp create needs `_type` as a
+// resolved `reference`, not `_type.string`). Ported from the mvox_v4e_web
+// original: same query shape, same per-db cache.
+describe('resolveTypeId', () => {
+	beforeEach(() => {
+		resetTypeIdCache();
+	});
+
+	it('queries _type.string=entity&name.string=<typeName>', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'rsvp-type-id' }] }));
+		const id = await resolveTypeId(cfg, 'rsvp', fetchImpl);
+		expect(id).toBe('rsvp-type-id');
+		const url = String(fetchImpl.mock.calls[0][0]);
+		expect(url).toContain('_type.string=entity');
+		expect(url).toContain('name.string=rsvp');
+	});
+
+	it('caches per db+typeName — a second call for the same pair does not refetch', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'rsvp-type-id' }] }));
+		await resolveTypeId(cfg, 'rsvp', fetchImpl);
+		await resolveTypeId(cfg, 'rsvp', fetchImpl);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it('a different db triggers a new fetch even for the same typeName', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'rsvp-type-id' }] }));
+		await resolveTypeId({ db: 'db-a', token: 'jwt' }, 'rsvp', fetchImpl);
+		await resolveTypeId({ db: 'db-b', token: 'jwt' }, 'rsvp', fetchImpl);
+		expect(fetchImpl).toHaveBeenCalledTimes(2);
+	});
+
+	it('throws when the type definition is not found', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await expect(resolveTypeId(cfg, 'nonexistent', fetchImpl)).rejects.toThrow(
+			/type definition not found.*nonexistent/
+		);
+	});
+
+	it('throws on a non-2xx response', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
+		await expect(resolveTypeId(cfg, 'rsvp', fetchImpl)).rejects.toThrow(/resolveTypeId failed: 500/);
 	});
 });

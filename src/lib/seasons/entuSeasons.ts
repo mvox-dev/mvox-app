@@ -9,6 +9,30 @@ export interface EntuCfg {
 	token: string;
 }
 
+const typeIdCache = new Map<string, string>();
+
+/**
+ * Resolve an Entu entity-type NAME (e.g. 'rsvp') to its type-definition entity id,
+ * so callers can send `{ type: '_type', reference: <id> }` on create — Entu create
+ * bodies require refs as `reference`, never `string` (#10 pinned wire-shape). Cached
+ * per `db:typeName` — type definitions don't change at runtime. Stub for #10 RED:
+ * needed by rsvpData.ts's createRsvp; not yet implemented.
+ */
+export async function resolveTypeId(
+	cfg: EntuCfg,
+	typeName: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	throw new Error('not implemented');
+}
+
+/** Test-only: clear the type-id cache between cases. */
+export function resetTypeIdCache(): void {
+	typeIdCache.clear();
+}
+
+// (*MVOX:Tallis*)
+
 /**
  * List the collective's seasons. DE-FANNED for single-collective: the selected db
  * IS the collective, so we drop the old org-`_parent` scoping and read every
