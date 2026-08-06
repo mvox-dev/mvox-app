@@ -235,12 +235,16 @@ describe('/admin/invite — done (show-once link)', () => {
 		});
 
 		// The data layer was driven with the selected collective + form values.
+		// #34 — email is collected client-side (for the bearer-warning display
+		// below) but must NEVER be forwarded into the createInvite call: the
+		// invitee's real email must never reach Entu.
 		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
-			{ memberName: string; email: string; orgId: string }
+			{ memberName: string; orgId: string; email?: string }
 		];
 		expect(cfgArg).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
-		expect(inputArg).toEqual({ memberName: 'Mari Mets', email: 'mari@example.com', orgId: 'org-1' });
+		expect(inputArg).toEqual({ memberName: 'Mari Mets', orgId: 'org-1' });
+		expect(inputArg).not.toHaveProperty('email');
 
 		// The full invite URL, shown once.
 		const link = container.querySelector('[data-testid="invite-link"]') as HTMLInputElement;

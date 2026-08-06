@@ -12,7 +12,6 @@ const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-admin' };
 
 const INPUT: CreateInviteInput = {
 	memberName: 'Mari Mets',
-	email: 'mari@example.com',
 	orgId: 'org-1'
 };
 
@@ -96,16 +95,16 @@ function callsOf(fetchImpl: ReturnType<typeof makeFetchMock>) {
 const _omitsMemberName: CreateInviteInput = { email: 'e@x.ee', orgId: 'o1' };
 void _omitsMemberName;
 
-// @ts-expect-error — omitting email must not typecheck (no email → nothing for the server to mint the invite from)
-const _omitsEmail: CreateInviteInput = { memberName: 'n', orgId: 'o1' };
-void _omitsEmail;
+// GREEN drops email from the type + these fixtures — #34 removes it from
+// CreateInviteInput entirely, so an "omitting email must not typecheck" guard
+// would contradict the no-email design. No replacement fixture needed here.
 
 // @ts-expect-error — omitting orgId must not typecheck (the member's parent org is required)
 const _omitsOrgId: CreateInviteInput = { memberName: 'n', email: 'e@x.ee' };
 void _omitsOrgId;
 
 // Forward guard: the correct shape DOES typecheck.
-const _validInput: CreateInviteInput = { memberName: 'n', email: 'e@x.ee', orgId: 'o1' };
+const _validInput: CreateInviteInput = { memberName: 'n', orgId: 'o1' };
 void _validInput;
 
 // ── resolvePersonParentId ──────────────────────────────────────────────────────
@@ -204,13 +203,8 @@ describe('createInvite — input guards fire before any network call', () => {
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	it('rejects an email without @, naming the field', async () => {
-		const fetchImpl = vi.fn();
-		await expect(createInvite(cfg, { ...INPUT, email: 'not-an-email' }, fetchImpl)).rejects.toThrow(
-			/email/
-		);
-		expect(fetchImpl).not.toHaveBeenCalled();
-	});
+	// GREEN drops email from the type + this guard — #34 removes the `@` check
+	// along with the email field itself. No replacement test needed here.
 
 	it('rejects an empty orgId, naming the field', async () => {
 		const fetchImpl = vi.fn();
@@ -228,7 +222,7 @@ describe('createInvite — happy path', () => {
 		expect(result).toEqual({ personId: 'p1', memberId: 'm1', inviteToken: 'tok.abc.def' });
 	});
 
-	it('person payload is EXACTLY: _type ref, _parent=add_user parent, entu_user=email, _sharing:domain, _inheritrights:true — and NO name/email props (prop-defs deleted in T4.3)', async () => {
+	it('person payload is EXACTLY: _type ref, _parent=add_user parent, entu_user=mint-trigger constant, _sharing:domain, _inheritrights:true — and NO name/email props (prop-defs deleted in T4.3)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
@@ -238,13 +232,28 @@ describe('createInvite — happy path', () => {
 			expect.arrayContaining([
 				{ type: '_type', reference: 'person-type-1' },
 				{ type: '_parent', reference: 'parent-1' },
-				{ type: 'entu_user', string: 'mari@example.com' },
+				// #34 — entu_user carries a fixed mint-trigger literal, NEVER the invitee
+				// email: any truthy string mints an identical invite token (entu-api
+				// utils/entity.js:462-467), so the invitee's real email must never reach
+				// Entu. Hard-coded here (not imported from source) so RED fails on the
+				// assertion, not on a missing export.
+				{ type: 'entu_user', string: 'trigger invite token' },
 				{ type: '_sharing', string: 'domain' },
 				{ type: '_inheritrights', boolean: true }
 			])
 		);
 		expect(personCall!.body).toHaveLength(5);
 		expect(personCall!.body!.some((p) => p.type === 'name' || p.type === 'email')).toBe(false);
+	});
+
+	it("#34 — the invitee's real email NEVER reaches Entu: the person-create request body contains no occurrence of it, anywhere", async () => {
+		const fetchImpl = makeFetchMock();
+		await createInvite(cfg, INPUT, fetchImpl);
+		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
+		expect(personCall).toBeDefined();
+		// Literal, not INPUT.email — GREEN drops `email` from CreateInviteInput, so
+		// referencing INPUT.email here would stop compiling once that lands.
+		expect(JSON.stringify(personCall!.body)).not.toContain('mari@example.com');
 	});
 
 	it('member payload is EXACTLY: _type ref, _parent=orgId, name, person ref, status:active, _sharing:private, _viewer=person, _inheritrights:true (slice3-proven visibility model)', async () => {

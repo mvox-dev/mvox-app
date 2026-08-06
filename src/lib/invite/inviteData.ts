@@ -1,8 +1,9 @@
-// T4.5 (#31) — the SOLE Entu write path of the invite mechanism: admin creates
-// the person (invitee email in the entu_user prop → the server mints the invite
-// JWT and deletes the email, entu-api utils/entity.js:462-468), grants the person
-// self-`_editor` (parity with native auto-create, routes/auth/index.get.js
-// createUserForAccount tail), then creates the member entity.
+// T4.5 (#31), #34 — the SOLE Entu write path of the invite mechanism: admin creates
+// the person (a fixed trigger constant in the entu_user prop → the server mints the
+// invite JWT and deletes the string, entu-api utils/entity.js:462-468; the invitee's
+// real email is never sent to Entu), grants the person self-`_editor` (parity with
+// native auto-create, routes/auth/index.get.js createUserForAccount tail), then
+// creates the member entity.
 //
 // Structurally enforced sole path: `entu_user` is the create-payload literal only
 // this file may contain (see singleInviteMechanism.spec.ts). This module creates
@@ -18,6 +19,12 @@
 
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+
+// #34 — the person-create `entu_user` property carries this fixed mint-trigger
+// literal, NEVER the invitee's real email. Any truthy string makes the server
+// mint an identical invite JWT (entu-api utils/entity.js:462-467), so the
+// invitee's email is never sent to Entu.
+export const INVITE_MINT_TRIGGER = 'trigger invite token';
 
 export type InviteCreatePhase =
 	| 'type-resolve'
@@ -55,7 +62,6 @@ export interface OrgOption {
 
 export interface CreateInviteInput {
 	memberName: string;
-	email: string;
 	orgId: string;
 }
 
@@ -172,9 +178,6 @@ export async function createInvite(
 	if (!input.memberName.trim()) {
 		throw new Error('createInvite: memberName must not be empty');
 	}
-	if (!input.email.includes('@')) {
-		throw new Error("createInvite: email must contain '@'");
-	}
 	if (!input.orgId) {
 		throw new Error('createInvite: orgId must not be empty');
 	}
@@ -196,15 +199,16 @@ export async function createInvite(
 
 	type Prop = { type: string; reference?: string; string?: string; boolean?: boolean };
 
-	// ── 1. Person create — the server mints the invite JWT from the entu_user
-	// email and deletes the email string (entu-api utils/entity.js:462-468). No
+	// ── 1. Person create — the server mints the invite JWT from any truthy
+	// entu_user string and deletes the string (entu-api utils/entity.js:462-467),
+	// so a fixed trigger constant is sent, never the invitee's email (#34). No
 	// name/email props: those prop-defs were deleted in T4.3. Explicit `_sharing`
 	// (omission would silently copy the parent tier, utils/entity.js:296-327) and
 	// explicit `_inheritrights` — no hidden defaults.
 	const personProps: Prop[] = [
 		{ type: '_type', reference: personTypeId },
 		{ type: '_parent', reference: personParentId },
-		{ type: 'entu_user', string: input.email },
+		{ type: 'entu_user', string: INVITE_MINT_TRIGGER },
 		{ type: '_sharing', string: 'domain' },
 		{ type: '_inheritrights', boolean: true }
 	];

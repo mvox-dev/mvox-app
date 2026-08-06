@@ -102,7 +102,7 @@
 		try {
 			const result = await createInvite(
 				{ db, token },
-				{ memberName: memberName.trim(), email: email.trim(), orgId }
+				{ memberName: memberName.trim(), orgId }
 			);
 			invitedEmail = email.trim();
 			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
