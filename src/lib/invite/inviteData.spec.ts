@@ -52,7 +52,10 @@ function makeFetchMock(
 	const d = {
 		personTypeResolve: () => json({ entities: [{ _id: 'person-type-1' }] }),
 		memberTypeResolve: () => json({ entities: [{ _id: 'member-type-1' }] }),
-		database: () => json({ entities: [{ _id: 'db-entity-1', add_user: [{ reference: 'parent-1' }] }] }),
+		// #29/T4.9 — the database entity carries NO `add_user` (deleted by #22); the
+		// parent is the entity's OWN _id (entu-api sets person _parent = databaseId
+		// at bootstrap, entu-api setupDatabase.js:183-191).
+		database: () => json({ entities: [{ _id: 'db-entity-1' }] }),
 		personCreate: () =>
 			json({
 				_id: 'p1',
@@ -110,14 +113,34 @@ void _validInput;
 // ── resolvePersonParentId ──────────────────────────────────────────────────────
 
 describe('resolvePersonParentId', () => {
-	it("reads the database entity's add_user reference (mirrors entu-api's own parent discovery) with the admin's Bearer token", async () => {
+	// #29/T4.9 — #22 deleted the database entity's `add_user` property, so the old
+	// add_user-based lookup throws live. Fix: the parent is the database entity's
+	// OWN `_id` — entu-api sets person `_parent = databaseId` at bootstrap
+	// (entu-api setupDatabase.js:183-191), and for polyphony that databaseId equals
+	// the deleted add_user value, so it's the same parent WITHOUT depending on (or
+	// re-arming) add_user.
+
+	it("resolves the parent as the database entity's OWN _id — no add_user needed — with the admin's Bearer token", async () => {
 		const fetchImpl = makeFetchMock();
 		const id = await resolvePersonParentId(cfg, fetchImpl);
-		expect(id).toBe('parent-1');
+		expect(id).toBe('db-entity-1');
 		const call = callsOf(fetchImpl).find((c) => c.url.includes('_type.string=database'));
 		expect(call).toBeDefined();
-		expect(call!.url).toContain('/polyphony/entity?_type.string=database&props=add_user&limit=1');
+		// Query shape beyond `_type.string=database` + `limit=1` is immaterial — GREEN
+		// may drop `props=add_user` from the request now that it's unused.
+		expect(call!.url).toContain('/polyphony/entity?_type.string=database');
+		expect(call!.url).toContain('limit=1');
 		expect(call!.headers.Authorization).toBe('Bearer jwt-admin');
+	});
+
+	it("IGNORES any add_user reference even if the response still carries a stale one — never re-arms the #22 exposure by reading it again", async () => {
+		const fetchImpl = makeFetchMock({
+			database: () =>
+				json({ entities: [{ _id: 'db-entity-1', add_user: [{ reference: 'stale-add-user-ref' }] }] })
+		});
+		const id = await resolvePersonParentId(cfg, fetchImpl);
+		expect(id).toBe('db-entity-1');
+		expect(id).not.toBe('stale-add-user-ref');
 	});
 
 	it('throws http (with the status) on a non-2xx response — a network/HTTP failure is NEVER presented as not-admin', async () => {
@@ -133,12 +156,6 @@ describe('resolvePersonParentId', () => {
 		const fetchImpl = makeFetchMock({ database: () => json({ entities: [] }) });
 		const err = await captureError(resolvePersonParentId(cfg, fetchImpl));
 		expect(err.phase).toBe('person-parent-resolve');
-		expect(err.reason).toBe('not-visible');
-	});
-
-	it('throws not-visible when the database entity carries no add_user reference', async () => {
-		const fetchImpl = makeFetchMock({ database: () => json({ entities: [{ _id: 'db-entity-1' }] }) });
-		const err = await captureError(resolvePersonParentId(cfg, fetchImpl));
 		expect(err.reason).toBe('not-visible');
 	});
 });
@@ -222,7 +239,7 @@ describe('createInvite — happy path', () => {
 		expect(result).toEqual({ personId: 'p1', memberId: 'm1', inviteToken: 'tok.abc.def' });
 	});
 
-	it('person payload is EXACTLY: _type ref, _parent=add_user parent, entu_user=mint-trigger constant, _sharing:domain, _inheritrights:true — and NO name/email props (prop-defs deleted in T4.3)', async () => {
+	it('person payload is EXACTLY: _type ref, _parent=database entity _id, entu_user=mint-trigger constant, _sharing:domain, _inheritrights:true — and NO name/email props (prop-defs deleted in T4.3)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
@@ -231,7 +248,8 @@ describe('createInvite — happy path', () => {
 		expect(personCall!.body).toEqual(
 			expect.arrayContaining([
 				{ type: '_type', reference: 'person-type-1' },
-				{ type: '_parent', reference: 'parent-1' },
+				// #29/T4.9 — parent is the database entity's OWN _id, not an add_user ref.
+				{ type: '_parent', reference: 'db-entity-1' },
 				// #34 — entu_user carries a fixed mint-trigger literal, NEVER the invitee
 				// email: any truthy string mints an identical invite token (entu-api
 				// utils/entity.js:462-467), so the invitee's real email must never reach

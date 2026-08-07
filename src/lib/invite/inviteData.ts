@@ -72,9 +72,12 @@ export interface CreateInviteResult {
 }
 
 /**
- * Resolve the parent for admin-created persons from the database entity's
- * `add_user` reference (mirrors entu-api's own parent discovery in
- * createUserForAccount, routes/auth/index.get.js:294-303). No hardcoded ids.
+ * Resolve the parent for admin-created persons: the database entity's OWN `_id`.
+ * entu-api sets a person's `_parent` to the database entity id at bootstrap
+ * (setupDatabase.js:183-191); for polyphony that id equals the `add_user` value
+ * that #22 deleted, so this is the SAME parent without depending on `add_user`.
+ * `add_user` is never read — a future restored add_user field can never re-arm the
+ * #22 public-auto-provision exposure through this path. No hardcoded ids.
  */
 export async function resolvePersonParentId(
 	cfg: EntuCfg,
@@ -82,7 +85,7 @@ export async function resolvePersonParentId(
 ): Promise<string> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=database&props=add_user&limit=1',
+		'entity?_type.string=database&limit=1',
 		cfg.token,
 		{},
 		fetchImpl
@@ -96,7 +99,7 @@ export async function resolvePersonParentId(
 		);
 	}
 	const body = (await res.json()) as {
-		entities?: Array<{ _id: string; add_user?: Array<{ reference?: string }> }>;
+		entities?: Array<{ _id?: string }>;
 	};
 	const entity = body.entities?.[0];
 	if (!entity) {
@@ -105,14 +108,16 @@ export async function resolvePersonParentId(
 			{ phase: 'person-parent-resolve', reason: 'not-visible' }
 		);
 	}
-	const ref = entity.add_user?.[0]?.reference;
-	if (!ref) {
+	// The parent IS the database entity's own _id. A 2xx that read back an entity
+	// without an _id is a contract violation (apparent-success trap) — fail loud
+	// rather than POST a person with an empty `_parent`.
+	if (!entity._id) {
 		throw new InviteCreateError(
-			`database entity ${entity._id} carries no readable add_user reference — creating invites requires rights on it that this account does not appear to have`,
-			{ phase: 'person-parent-resolve', reason: 'not-visible' }
+			'the database entity read back without an _id — cannot resolve the person parent',
+			{ phase: 'person-parent-resolve', reason: 'contract' }
 		);
 	}
-	return ref;
+	return entity._id;
 }
 
 /** List every organization entity in the db — polyphony verifiably has several. */
