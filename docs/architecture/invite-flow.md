@@ -4,7 +4,7 @@
 
 - **Status:** Active reference · 2026-08-07
 - **Built from:** `entu-api` source @`82cb25b` and this repo `main` @`cf66173`, each claim verified `file:line` this session; slice-4 (onboarding, #21) as built.
-- **Companions:** `docs/architecture/entu-rights-and-visibility-model.md` (rights/visibility) · wiki [Runbook — Entu visibility](Runbook-entu-visibility) §0 "where a `person` comes from".
+- **Companions:** `docs/architecture/entu-rights-and-visibility-model.md` (rights/visibility) · wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) §0 "where a `person` comes from".
 
 **Provenance discipline.** Every mechanics claim is **[SRC]** (traceable to `entu-api` source `file:line`), **[LIVE]** (empirically confirmed, with what was observed), or **[CONV]** (an mvox-app convention — true because we chose it, not because Entu enforces it). Unmarked is not established. **The invite path's anonymity and one-shot binding are Entu platform behaviours** — mvox uses the right field and reads the result; it does not re-implement them.
 
@@ -86,7 +86,7 @@ The mint stamps a 7-day `exp` (§2), but **nothing enforces it until redemption*
 
 - The invitee's email **never reaches Entu** — mvox sends a constant, so there is no server-side copy, not even a transient one in a request log (#34, compile-time-enforced).
 - The token **names no one**; a leaked link exposes only *that one membership slot*, claimable once, expiring in 7 days.
-- The admin is the gate: entry is his deliberate act (create person + member + mint), never self-service — the counterpart to [Runbook §0](Runbook-entu-visibility) "a new sign-in gets no `person`."
+- The admin is the gate: entry is his deliberate act (create person + member + mint), never self-service — the counterpart to [Runbook §0](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) "a new sign-in gets no `person`."
 - The link is a bearer secret and is treated as one end to end: show-once, never stored by mvox, `***`-masked by Entu, delivered by a human through a trusted channel.
 
 ## Where to read the code
