@@ -13,7 +13,9 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"migrate:t4-10:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts",
-		"migrate:t4-10:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts"
+		"migrate:t4-10:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts",
+		"migrate:t3-1:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-provision-singers-2026-08-07.ts",
+		"migrate:t3-1:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-provision-singers-2026-08-07.ts"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "^2.23.1",
