@@ -61,5 +61,22 @@
 	"profile_save": "Salvesta",
 	"profile_saving": "Salvestamine…",
 	"profile_saved": "Salvestatud",
-	"profile_save_error": "Salvestamine ebaõnnestus. Palun proovi uuesti."
+	"profile_save_error": "Salvestamine ebaõnnestus. Palun proovi uuesti.",
+	"profile_visibility_title": "Kes näeb iga välja",
+	"profile_visibility_intro": "Iga väli on nähtav täpselt ühel tasemel. Selle liigutamiseks vali ikoon.",
+	"profile_visibility_active": "Praegu nähtav tasemel {level}",
+	"profile_visibility_move": "Tee {field} nähtavaks tasemel {level}",
+	"profile_visibility_moving": "Liigutamine…",
+	"profile_visibility_leak": "Endiselt loetav tasemel {level} — lõpetamata muudatus",
+	"profile_visibility_unset": "Pole veel ühelgi tasemel määratud.",
+	"profile_move_error": "Nähtavuse muutmine ebaõnnestus. Midagi ei läinud kaotsi — palun proovi uuesti.",
+	"profile_visibility_conflict": "Sinu {field} on eri tasemetel erineva väärtusega. Enne nähtavuse muutmist ühtlusta väljad eespool.",
+	"profile_repair_title": "Lõpetamata nähtavuse muudatus",
+	"profile_repair_body_tightening": "Sinu {field} on endiselt loetav tasemel {level}. Lõpeta selle privaatsemaks muutmine.",
+	"profile_repair_body_widening": "Sinu välja {field} vana koopia on endiselt salvestatud tasemel {level}. Lõpeta puhastus.",
+	"profile_repair_body_loaded": "Lõpetamata muudatus jättis sinu {field} loetavaks tasemel {level}. Lahenda see.",
+	"profile_repair_action": "Lõpeta kohe",
+	"profile_repair_working": "Lõpetamine…",
+	"profile_repair_error": "Lõpetamine ebaõnnestus. Sinu {field} on endiselt loetav tasemel {level} — palun proovi uuesti.",
+	"profile_repair_done": "Nähtavuse muudatus lõpetatud."
 }

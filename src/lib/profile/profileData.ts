@@ -214,6 +214,56 @@ export function profilesByLevel(ps: MyProfile[]): Partial<Record<Level, MyProfil
 	return by;
 }
 
+// ── T4.7/#27 — narrower-wins READ resolver (AC2). Pure sibling of `profilesByLevel`,
+// living beside the `Level`/`MyProfile` types + the rights ordering it ranks. Touches
+// NO create surface (no `_inheritrights`, no `resolveTypeId(...,'profile')`), so it does
+// not widen the sole-create-path guard's scope.
+
+/**
+ * The narrower-wins ordering (AC2). `private` is NARROWER than `domain` is NARROWER
+ * than `public` — source-grounded in entu-api `cleanupEntity`'s reader-tier branch
+ * order + the `_sharing`-literal push in `getAccessArray` (RECON A §1): the reader-set
+ * inclusion is explicit-grant(private) ⊂ any-in-db-member(domain) ⊂ anyone(public). A
+ * LOWER number = more restrictive = the safe render (fails toward privacy).
+ */
+export const NARROWNESS: Record<Level, number> = { private: 0, domain: 1, public: 2 };
+
+/** The narrower-wins resolution of ONE field across the member's profile entities. */
+export interface FieldResolution {
+	/** The rendered value — the NARROWEST non-empty holder's value ('' when none holds it). */
+	value: string;
+	/**
+	 * Every entity holding a non-empty value for the field, ordered narrow→wide.
+	 * `holders.length > 1` is an interrupted-move DUPLICATE (AC3) — RETURNED, never
+	 * collapsed: a silent collapse would HIDE the inconsistency (forbidden by the
+	 * standing fail-loud rule; narrower-wins is a client render, NOT an Entu boundary,
+	 * RECON A §2 / Flag 3).
+	 */
+	holders: { level: Level; id: string }[];
+}
+
+/**
+ * Pure — resolve one field (`name`|`email`) across the member's up-to-three profile
+ * entities by the narrower-wins rule (AC2): the rendered value comes from the entity
+ * whose `_sharing` is most restrictive. RETURNS every non-empty holder ordered
+ * narrow→wide (via `NARROWNESS`) so the caller can DETECT a duplicate — this is NOT
+ * `profilesByLevel`'s last-wins (a different anomaly: same-level dupes, not a
+ * cross-level field duplicate).
+ */
+export function resolveField(ps: MyProfile[], field: 'name' | 'email'): FieldResolution {
+	// Only entities that actually HOLD a non-empty value are holders — an empty field
+	// is not a duplicate. Order narrow→wide by NARROWNESS so `holders[0]` is the safest
+	// (narrowest) render and any `holders.length > 1` is an interrupted-move duplicate.
+	const withValue = ps
+		.filter((p) => p[field] !== '')
+		.slice()
+		.sort((a, b) => NARROWNESS[a._sharing] - NARROWNESS[b._sharing]);
+	return {
+		value: withValue.length > 0 ? withValue[0][field] : '',
+		holders: withValue.map((p) => ({ level: p._sharing, id: p._id }))
+	};
+}
+
 /**
  * Replace `name`/`email` on an EXISTING profile entity. NEVER creates; never sends
  * `_type`/`_parent`/`_inheritrights`/`_sharing`. Because `POST entity/{id}` only

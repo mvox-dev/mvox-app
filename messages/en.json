@@ -61,5 +61,22 @@
 	"profile_save": "Save",
 	"profile_saving": "Saving…",
 	"profile_saved": "Saved",
-	"profile_save_error": "Couldn't save — please try again."
+	"profile_save_error": "Couldn't save — please try again.",
+	"profile_visibility_title": "Who can see each field",
+	"profile_visibility_intro": "Each field is visible at exactly one level. Pick an icon to move it.",
+	"profile_visibility_active": "Currently visible at the {level} level",
+	"profile_visibility_move": "Make {field} visible at the {level} level",
+	"profile_visibility_moving": "Moving…",
+	"profile_visibility_leak": "Still readable at the {level} level — an unfinished change",
+	"profile_visibility_unset": "Not set at any level yet.",
+	"profile_move_error": "Couldn't change visibility. Nothing was lost — please try again.",
+	"profile_visibility_conflict": "Your {field} has different values at more than one level. Edit the fields above to reconcile them before changing its visibility.",
+	"profile_repair_title": "Unfinished visibility change",
+	"profile_repair_body_tightening": "Your {field} is still readable at the {level} level. Finish making it more private.",
+	"profile_repair_body_widening": "An old copy of your {field} is still stored at the {level} level. Finish the cleanup.",
+	"profile_repair_body_loaded": "An unfinished change left your {field} readable at the {level} level. Resolve it.",
+	"profile_repair_action": "Finish now",
+	"profile_repair_working": "Finishing…",
+	"profile_repair_error": "Couldn't finish. Your {field} is still readable at the {level} level — please try again.",
+	"profile_repair_done": "Visibility change completed."
 }

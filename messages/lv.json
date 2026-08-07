@@ -61,5 +61,22 @@
 	"profile_save": "Saglabāt",
 	"profile_saving": "Saglabā…",
 	"profile_saved": "Saglabāts",
-	"profile_save_error": "Neizdevās saglabāt. Lūdzu, mēģiniet vēlreiz."
+	"profile_save_error": "Neizdevās saglabāt. Lūdzu, mēģiniet vēlreiz.",
+	"profile_visibility_title": "Kas var redzēt katru lauku",
+	"profile_visibility_intro": "Katrs lauks ir redzams tieši vienā līmenī. Lai to pārvietotu, izvēlieties ikonu.",
+	"profile_visibility_active": "Pašlaik redzams līmenī {level}",
+	"profile_visibility_move": "Padarīt {field} redzamu līmenī {level}",
+	"profile_visibility_moving": "Pārvieto…",
+	"profile_visibility_leak": "Joprojām lasāms līmenī {level} — nepabeigta izmaiņa",
+	"profile_visibility_unset": "Vēl nav iestatīts nevienā līmenī.",
+	"profile_move_error": "Neizdevās mainīt redzamību. Nekas netika zaudēts — lūdzu, mēģiniet vēlreiz.",
+	"profile_visibility_conflict": "Jūsu {field} dažādos līmeņos ir atšķirīgas vērtības. Pirms redzamības maiņas saskaņojiet laukus augstāk.",
+	"profile_repair_title": "Nepabeigta redzamības izmaiņa",
+	"profile_repair_body_tightening": "Jūsu {field} joprojām ir lasāms līmenī {level}. Pabeidziet padarīt to privātāku.",
+	"profile_repair_body_widening": "Jūsu lauka {field} veca kopija joprojām ir saglabāta līmenī {level}. Pabeidziet tīrīšanu.",
+	"profile_repair_body_loaded": "Nepabeigta izmaiņa atstāja jūsu {field} lasāmu līmenī {level}. Atrisiniet to.",
+	"profile_repair_action": "Pabeigt tagad",
+	"profile_repair_working": "Pabeidz…",
+	"profile_repair_error": "Neizdevās pabeigt. Jūsu {field} joprojām ir lasāms līmenī {level} — lūdzu, mēģiniet vēlreiz.",
+	"profile_repair_done": "Redzamības izmaiņa pabeigta."
 }

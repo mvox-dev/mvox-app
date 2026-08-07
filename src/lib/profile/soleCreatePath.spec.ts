@@ -73,4 +73,20 @@ describe('YELLOW-T4.4.1 — the invite create path stays out of the profile doma
 	});
 });
 
+describe('T4.7/#27 — the visibility-move modules compose on the sole create path, never re-implement it', () => {
+	const here = import.meta.dirname; // src/lib/profile
+	for (const file of ['fieldMove.ts', 'fieldMoveQueue.ts']) {
+		it(`${file} contains NO _inheritrights literal and NO resolveTypeId(cfg,'profile') — it funnels every create through createOwnProfile, so the allowlist stays unchanged`, () => {
+			const content = readFileSync(join(here, file), 'utf-8');
+			// The two markers the sole-create-path guard keys on must stay sole to profileData.ts.
+			expect(content.includes('_inheritrights')).toBe(false);
+			expect(content).not.toMatch(/resolveTypeId\([^)]*['"]profile['"]/);
+		});
+	}
+
+	it("the allowlist is still exactly the two T4.4/T4.5 entries — T4.7 added NO new create site", () => {
+		expect(EXEMPT).toEqual(['lib/profile/profileData.ts', 'lib/invite/inviteData.ts']);
+	});
+});
+
 // (*MVOX:Tallis*) — guard utilities extracted to $lib/testing/soleLiteralGuard

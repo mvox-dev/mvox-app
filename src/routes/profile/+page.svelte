@@ -14,10 +14,19 @@
 	import {
 		listMyProfiles,
 		profilesByLevel,
-		type Level
+		resolveField,
+		type Level,
+		type MyProfile
 	} from '$lib/profile/profileData';
+	import { planLoadedDuplicateRepairs, FieldMoveError, type FieldKey } from '$lib/profile/fieldMove';
+	import { createFieldMoveQueue } from '$lib/profile/fieldMoveQueue';
 	import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
 	import ProfileLevelCard from '$lib/components/profile/ProfileLevelCard.svelte';
+	import VisibilityFieldRow from '$lib/components/profile/VisibilityFieldRow.svelte';
+	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
+
+	const FIELDS: readonly FieldKey[] = ['name', 'email'];
+	const otherField = (f: FieldKey): FieldKey => (f === 'name' ? 'email' : 'name');
 
 	const LEVELS: readonly Level[] = ['public', 'domain', 'private'];
 
@@ -61,12 +70,70 @@
 	let failedLevels = $state(new Set<Level>());
 	let savedLevels = $state(new Set<Level>());
 
+	// ── T4.7/#27 — visibility MOVES. `loadedProfiles` is the raw read the narrower-wins
+	// resolver + duplicate detector run over. `transport` holds the icon mid-move per field.
+	// `moveFailed`/`repairWorking`/`repairFailed` are fail-loud surfacing markers. `busy` is
+	// the single-flight mirror that disables new moves while one is in flight (the queue's
+	// own single-flight is authoritative; this is just the visual gate).
+	let loadedProfiles = $state<MyProfile[]>([]);
+	let transport = $state<Record<FieldKey, Level | null>>({ name: null, email: null });
+	let moveFailed = $state(new Set<FieldKey>());
+	let repairWorking = $state(new Set<FieldKey>());
+	let repairFailed = $state(new Set<FieldKey>());
+	let busy = $state(false);
+	// The in-flight move's target level per field — captured on dispatch so a create-phase
+	// failure (whose callback carries only `field` + `err`) can record the minted shell at
+	// the right level for an idempotent retry. Non-rendered → a plain (non-$state) let.
+	let pendingMoveTo: Record<FieldKey, Level | null> = { name: null, email: null };
+
+	const nameRes = $derived(resolveField(loadedProfiles, 'name'));
+	const emailRes = $derived(resolveField(loadedProfiles, 'email'));
+	const resFor = (f: FieldKey) => (f === 'name' ? nameRes : emailRes);
+	const repairPlans = $derived(planLoadedDuplicateRepairs(loadedProfiles));
+	const planFor = (f: FieldKey) => repairPlans.find((p) => p.field === f);
+
+	// A field is MOVABLE only when exactly one entity holds it. 0 holders → nothing to
+	// move (set it via the level card); ≥2 holders → a duplicate/conflict to reconcile
+	// first. The icons go visibly disabled otherwise — never enabled-but-inert (the
+	// standing "no silent no-op click" rule).
+	const movableFor = (f: FieldKey) => resFor(f).holders.length === 1;
+	// A holders≥2 state with NO repair plan is a DISTINCT-value conflict: the same field
+	// carries different values at ≥2 levels (a legitimate T4.6 state, not an unfinished
+	// move — so no privacy-repair banner). Surface it on the row (a note + conflict
+	// markers) so the wider holder is not silently hidden behind a single active icon.
+	const isConflict = (f: FieldKey) => resFor(f).holders.length > 1 && planFor(f) === undefined;
+	const conflictLevelsFor = (f: FieldKey): Level[] =>
+		isConflict(f) ? resFor(f).holders.slice(1).map((h) => h.level) : [];
+
+	// Cross-queue write lock. A visibility MOVE and a T4.6 value-SAVE both write through
+	// the non-atomic whole-pair `saveProfileFields` and can target the SAME entity — an
+	// unsynchronized overlap can clobber a move's delete-from-old (resurrecting the moved
+	// value) or collide on already-deleted value-ids. The move queue's single-flight only
+	// covers move-vs-move; this derived signal serializes moves AGAINST level-saves too:
+	// no move starts while any level-save is pending (below), and no level-save starts
+	// while a move is in flight (`!busy` gate on each card's canSave).
+	const writesInFlight = $derived(busy || pendingLevels.size > 0);
+
+	function withSet(s: Set<FieldKey>, field: FieldKey, add: boolean): Set<FieldKey> {
+		const next = new Set(s);
+		if (add) next.add(field);
+		else next.delete(field);
+		return next;
+	}
+
 	function resetState() {
 		draft = emptyDraft();
 		confirmed = emptyConfirmed();
 		pendingLevels = new Set();
 		failedLevels = new Set();
 		savedLevels = new Set();
+		loadedProfiles = [];
+		transport = { name: null, email: null };
+		moveFailed = new Set();
+		repairWorking = new Set();
+		repairFailed = new Set();
+		busy = false;
+		pendingMoveTo = { name: null, email: null };
 	}
 
 	async function loadForSelected(): Promise<void> {
@@ -80,6 +147,7 @@
 		// the page's markers; the queue owns its own set (a stale settle still no-ops
 		// its UI via the generation guard).
 		queue.reset();
+		moveQueue.reset();
 		if (!current) {
 			status = 'no-collective';
 			return;
@@ -98,6 +166,7 @@
 		try {
 			const profiles = await listMyProfiles(cfg, personId);
 			if (g !== generation) return; // superseded by a newer selection
+			loadedProfiles = profiles;
 			const byLevel = profilesByLevel(profiles);
 			const nextDraft = emptyDraft();
 			const nextConfirmed = emptyConfirmed();
@@ -160,6 +229,131 @@
 		},
 		() => generation
 	);
+
+	// ── T4.7/#27 — the honest visibility-move orchestrator. Callbacks flip transport /
+	// markers only on SERVER-confirmed settles; after a completed move OR repair we
+	// re-load (a truthful round trip) so the resolver + duplicate detector re-derive from
+	// the real server state. A delete-phase move failure re-loads too: the value is now
+	// live in BOTH entities, and the reload lets `planLoadedDuplicateRepairs` surface it
+	// as the active privacy-repair banner (AC3). A create-phase failure created no
+	// duplicate, so it only marks the row error.
+	const moveQueue = createFieldMoveQueue(
+		{
+			setTransport(field, level, on) {
+				transport = { ...transport, [field]: on ? level : null };
+			},
+			onCreateConfirmed() {
+				// The value is now in the new entity (server-confirmed); the src spinner is
+				// turned on by setTransport. The visible narrower-wins render settles on the
+				// final re-load after the delete confirms — no premature optimistic mutation.
+			},
+			onMoveConfirmed(field) {
+				busy = false;
+				moveFailed = withSet(moveFailed, field, false);
+				void loadForSelected();
+			},
+			onMoveFailed(field, err) {
+				busy = false;
+				if (err instanceof FieldMoveError && err.phase === 'delete') {
+					// Create landed, delete didn't → a live duplicate. Re-load to surface the
+					// privacy-repair banner (AC3) rather than a passive per-row error.
+					void loadForSelected();
+				} else {
+					// Create-phase failure: value still only in the source, no duplicate. If a
+					// shell was minted before its field-write failed, `createdTargetId` carries
+					// it — RECORD that shell in loadedProfiles (at the move's target level) so a
+					// retry finds it (dstId set → the add-branch UPDATES it) instead of minting a
+					// SECOND empty shell. Mirrors T4.6's recordCreatedId. The shell holds no
+					// value, so the resolver/duplicate-detector ignore it.
+					if (err instanceof FieldMoveError && err.createdTargetId) {
+						const id = err.createdTargetId;
+						const toLevel = pendingMoveTo[field];
+						if (toLevel && !loadedProfiles.some((p) => p._id === id)) {
+							loadedProfiles = [...loadedProfiles, { _id: id, name: '', email: '', _sharing: toLevel }];
+						}
+					}
+					moveFailed = withSet(moveFailed, field, true);
+				}
+			},
+			onRepairConfirmed(field) {
+				busy = false;
+				repairWorking = withSet(repairWorking, field, false);
+				repairFailed = withSet(repairFailed, field, false);
+				void loadForSelected();
+			},
+			onRepairFailed(field) {
+				busy = false;
+				repairWorking = withSet(repairWorking, field, false);
+				repairFailed = withSet(repairFailed, field, true); // preserve-on-error: banner KEPT
+			}
+		},
+		() => generation
+	);
+
+	/** Resolve the live cfg/personId, or fail loud into `status` exactly as onsave does. */
+	function activeContext(): { cfg: { db: string; token: string }; personId: string } | null {
+		const current = selected;
+		if (!current) {
+			status = 'no-collective';
+			return null;
+		}
+		const token = getToken();
+		if (!token) {
+			loadError = 'no auth token in storage on a protected route';
+			status = 'load-error';
+			return null;
+		}
+		return { cfg: { db: current.db, token }, personId: current.personId };
+	}
+
+	function onmove(field: FieldKey, toLevel: Level) {
+		// Refuse while ANY profile-entity write is in flight — a move must not overlap a
+		// concurrent level-save on a shared entity (cross-queue lock). The row's icons are
+		// also disabled in this window, so this is a backstop, not the sole guard.
+		if (writesInFlight) return;
+		const res = resFor(field);
+		// A move needs exactly one current holder. Unset (0) → nothing to move; duplicated
+		// (>1) → the repair banner / conflict note is the action, not a move (the row's
+		// icons are disabled in that state — this guard is the backstop).
+		if (res.holders.length !== 1) return;
+		const from = res.holders[0];
+		if (from.level === toLevel) return;
+		const ctx = activeContext();
+		if (!ctx) return;
+		const src = loadedProfiles.find((p) => p._id === from.id);
+		if (!src) return;
+		const dst = loadedProfiles.find((p) => p._sharing === toLevel) ?? null;
+		const other = otherField(field);
+		pendingMoveTo = { ...pendingMoveTo, [field]: toLevel };
+		moveFailed = withSet(moveFailed, field, false);
+		busy = true;
+		moveQueue.move({
+			cfg: ctx.cfg,
+			personId: ctx.personId,
+			field,
+			fromLevel: from.level,
+			toLevel,
+			value: res.value,
+			srcId: from.id,
+			dstId: dst ? dst._id : null,
+			srcSibling: src[other],
+			dstSibling: dst ? dst[other] : ''
+		});
+	}
+
+	function onrepair(field: FieldKey) {
+		// Same cross-queue lock as onmove — a repair (delete-from-old) must not overlap a
+		// concurrent level-save on a shared entity.
+		if (writesInFlight) return;
+		const plan = planFor(field);
+		if (!plan) return;
+		const ctx = activeContext();
+		if (!ctx) return;
+		repairFailed = withSet(repairFailed, field, false);
+		repairWorking = withSet(repairWorking, field, true);
+		busy = true;
+		moveQueue.repair({ cfg: ctx.cfg, field, clear: plan.clear });
+	}
 
 	function isDirty(level: Level): boolean {
 		return draft[level].name !== confirmed[level].name || draft[level].email !== confirmed[level].email;
@@ -244,11 +438,47 @@
 						pending={pendingLevels.has(level)}
 						saveFailed={failedLevels.has(level)}
 						saved={savedLevels.has(level) && !isDirty(level)}
-						canSave={canSave(level)}
+						canSave={canSave(level) && !busy}
 						onsave={() => onsave(level)}
 					/>
 				{/each}
 			</div>
+
+			<!-- T4.7/#27 — visibility control: per-field icons + the ACTIVE interrupted-move
+			     privacy-repair banner (never a passive two-lit-icons state). -->
+			<section class="flex flex-col gap-3" aria-label={m.profile_visibility_title()}>
+				<div class="flex flex-col gap-1">
+					<h2 class="font-display text-lg">{m.profile_visibility_title()}</h2>
+					<p class="text-xs text-ink-2">{m.profile_visibility_intro()}</p>
+				</div>
+
+				{#each repairPlans as plan (plan.field)}
+					<VisibilityRepairBanner
+						field={plan.field}
+						widerLevels={plan.widerLevels}
+						severity="loaded"
+						working={repairWorking.has(plan.field)}
+						failed={repairFailed.has(plan.field)}
+						{onrepair}
+					/>
+				{/each}
+
+				{#each FIELDS as field (field)}
+					<VisibilityFieldRow
+						{field}
+						value={resFor(field).value}
+						currentLevel={resFor(field).holders[0]?.level ?? null}
+						transportLevel={transport[field]}
+						leakLevels={planFor(field)?.widerLevels ?? []}
+						movable={movableFor(field)}
+						conflict={isConflict(field)}
+						conflictLevels={conflictLevelsFor(field)}
+						disabled={writesInFlight}
+						moveFailed={moveFailed.has(field)}
+						{onmove}
+					/>
+				{/each}
+			</section>
 		{/if}
 	</div>
 </main>

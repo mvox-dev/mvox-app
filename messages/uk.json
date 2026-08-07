@@ -61,5 +61,22 @@
 	"profile_save": "Зберегти",
 	"profile_saving": "Збереження…",
 	"profile_saved": "Збережено",
-	"profile_save_error": "Не вдалося зберегти. Будь ласка, спробуйте ще раз."
+	"profile_save_error": "Не вдалося зберегти. Будь ласка, спробуйте ще раз.",
+	"profile_visibility_title": "Хто бачить кожне поле",
+	"profile_visibility_intro": "Кожне поле видно рівно на одному рівні. Щоб перемістити його, виберіть піктограму.",
+	"profile_visibility_active": "Зараз видно на рівні {level}",
+	"profile_visibility_move": "Показати поле {field} на рівні {level}",
+	"profile_visibility_moving": "Переміщення…",
+	"profile_visibility_leak": "Досі можна прочитати на рівні {level} — незавершена зміна",
+	"profile_visibility_unset": "Ще не встановлено на жодному рівні.",
+	"profile_move_error": "Не вдалося змінити видимість. Нічого не втрачено — будь ласка, спробуйте ще раз.",
+	"profile_visibility_conflict": "Ваше поле {field} має різні значення на кількох рівнях. Узгодьте поля вище, перш ніж змінювати видимість.",
+	"profile_repair_title": "Незавершена зміна видимості",
+	"profile_repair_body_tightening": "Поле {field} досі можна прочитати на рівні {level}. Завершіть, щоб зробити його приватнішим.",
+	"profile_repair_body_widening": "Стара копія поля {field} досі зберігається на рівні {level}. Завершіть очищення.",
+	"profile_repair_body_loaded": "Через незавершену зміну поле {field} залишилося доступним на рівні {level}. Розв'яжіть це.",
+	"profile_repair_action": "Завершити зараз",
+	"profile_repair_working": "Завершення…",
+	"profile_repair_error": "Не вдалося завершити. Поле {field} досі можна прочитати на рівні {level} — будь ласка, спробуйте ще раз.",
+	"profile_repair_done": "Зміну видимості завершено."
 }

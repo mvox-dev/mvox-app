@@ -28,7 +28,31 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_save: () => 'Save',
 		profile_saving: () => 'Saving…',
 		profile_saved: () => 'Saved',
-		profile_save_error: () => "Couldn't save — please try again."
+		profile_save_error: () => "Couldn't save — please try again.",
+		// T4.7/#27 visibility-move keys (mechanical mock-shape parity with en.json — the
+		// visibility rows/banner always render on the ready page).
+		profile_visibility_title: () => 'Who can see each field',
+		profile_visibility_intro: () => 'Pick an icon to move a field.',
+		profile_visibility_active: (p: { level: string }) => `Visible at ${p.level}`,
+		profile_visibility_move: (p: { field: string; level: string }) => `Move ${p.field} to ${p.level}`,
+		profile_visibility_moving: () => 'Moving…',
+		profile_visibility_leak: (p: { level: string }) => `Still readable at ${p.level}`,
+		profile_visibility_conflict: (p: { field: string }) =>
+			`Your ${p.field} has different values at more than one level.`,
+		profile_visibility_unset: () => 'Not set at any level yet.',
+		profile_move_error: () => "Couldn't change visibility. Nothing was lost — please try again.",
+		profile_repair_title: () => 'Unfinished visibility change',
+		profile_repair_body_tightening: (p: { field: string; level: string }) =>
+			`Your ${p.field} is still readable at ${p.level}.`,
+		profile_repair_body_widening: (p: { field: string; level: string }) =>
+			`An old copy of your ${p.field} is still at ${p.level}.`,
+		profile_repair_body_loaded: (p: { field: string; level: string }) =>
+			`An unfinished change left your ${p.field} readable at ${p.level}.`,
+		profile_repair_action: () => 'Finish now',
+		profile_repair_working: () => 'Finishing…',
+		profile_repair_error: (p: { field: string; level: string }) =>
+			`Couldn't finish. Your ${p.field} is still readable at ${p.level}.`,
+		profile_repair_done: () => 'Visibility change completed.'
 	}
 }));
 
@@ -45,14 +69,35 @@ const h = vi.hoisted(() => {
 	}
 	return { ProfileSaveError, listMyProfilesMock: vi.fn(), applyProfileSaveMock: vi.fn() };
 });
-vi.mock('$lib/profile/profileData', () => ({
-	listMyProfiles: h.listMyProfilesMock,
-	profilesByLevel: (ps: Array<{ _sharing: string }>) => {
-		const by: Record<string, unknown> = {};
-		for (const p of ps) by[p._sharing] = p;
-		return by;
-	}
-}));
+vi.mock('$lib/profile/profileData', () => {
+	// Declared INSIDE the factory — vi.mock is hoisted, so it cannot close over a
+	// top-level const (that would be a TDZ ReferenceError).
+	const NARROWNESS: Record<string, number> = { private: 0, domain: 1, public: 2 };
+	return {
+		listMyProfiles: h.listMyProfilesMock,
+		profilesByLevel: (ps: Array<{ _sharing: string }>) => {
+			const by: Record<string, unknown> = {};
+			for (const p of ps) by[p._sharing] = p;
+			return by;
+		},
+		NARROWNESS,
+		// Faithful narrower-wins resolver (mechanical mock-shape parity — the page derives
+		// per-field visibility from it; T4.6 assertions don't touch its output).
+		resolveField: (
+			ps: Array<{ _id: string; name: string; email: string; _sharing: string }>,
+			field: 'name' | 'email'
+		) => {
+			const withValue = ps
+				.filter((p) => p[field] !== '')
+				.slice()
+				.sort((a, b) => NARROWNESS[a._sharing] - NARROWNESS[b._sharing]);
+			return {
+				value: withValue.length > 0 ? withValue[0][field] : '',
+				holders: withValue.map((p) => ({ level: p._sharing, id: p._id }))
+			};
+		}
+	};
+});
 vi.mock('$lib/profile/applyProfileSave', () => ({
 	applyProfileSave: h.applyProfileSaveMock,
 	ProfileSaveError: h.ProfileSaveError
@@ -276,6 +321,31 @@ describe('/profile — load generation guard: a collective switch mid-load', () 
 		await Promise.resolve();
 		await Promise.resolve();
 		expect((q(container, '[data-testid="profile-public-name"]') as HTMLInputElement).value).toBe('Bob');
+	});
+});
+
+describe('/profile — T4.7 distinct-value conflict: surfaced, never a silent dead-click', () => {
+	it('a field holding DIFFERENT values at two levels shows a conflict note, no repair banner, and disabled (non-inert) icons', async () => {
+		selectPolyphony();
+		// Legitimate T4.6 state: name saved differently per level (NOT an unfinished move,
+		// so planLoadedDuplicateRepairs — real here — yields no plan and no banner).
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-priv', name: 'Alice', email: '', _sharing: 'private' },
+			{ _id: 'prof-pub', name: 'Alice Smith', email: '', _sharing: 'public' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+
+		// The conflict is actively surfaced on the row (not hidden behind a single active icon).
+		expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).not.toBeNull();
+		// It is NOT an unfinished move → no privacy-repair banner.
+		expect(q(container, '[data-testid="profile-visibility-repair-name"]')).toBeNull();
+		// The wider holder is marked distinctly, not rendered as an empty clickable icon.
+		expect(q(container, '[data-testid="profile-vis-name-public-conflict"]')).not.toBeNull();
+		// No enabled-but-inert icon: every name visibility button is disabled while unreconciled.
+		for (const level of ['private', 'domain', 'public']) {
+			expect((q(container, `[data-testid="profile-vis-name-${level}"]`) as HTMLButtonElement).disabled).toBe(true);
+		}
 	});
 });
 

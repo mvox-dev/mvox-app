@@ -5,7 +5,9 @@ import {
 	createOwnProfile,
 	listMyProfiles,
 	profilesByLevel,
+	resolveField,
 	saveProfileFields,
+	NARROWNESS,
 	type CreateProfileInput,
 	type Level,
 	type MyProfile
@@ -480,6 +482,69 @@ describe('saveProfileFields — property-swap update, never a create', () => {
 			return Promise.resolve(json({ _id: 'prof-1' }));
 		});
 		await expect(saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)).rejects.toThrow(/403/);
+	});
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// T4.7/#27 — narrower-wins READ resolver (AC2). Pure. RED: `resolveField` is a stub
+// throwing 'not implemented', so these fail on assertions until GREEN. `private` is
+// NARROWER than `domain` is NARROWER than `public` — the narrowest non-empty holder
+// wins the render, and EVERY non-empty holder is returned (never collapsed) so the
+// caller can detect an interrupted-move duplicate.
+// ════════════════════════════════════════════════════════════════════════════
+
+describe('resolveField — narrower-wins resolution (AC2)', () => {
+	const pub = (name: string, email = ''): MyProfile => ({ _id: 'prof-pub', name, email, _sharing: 'public' });
+	const dom = (name: string, email = ''): MyProfile => ({ _id: 'prof-dom', name, email, _sharing: 'domain' });
+	const pri = (name: string, email = ''): MyProfile => ({ _id: 'prof-pri', name, email, _sharing: 'private' });
+
+	it('the NARROWNESS ordering is private < domain < public (narrower→wider)', () => {
+		expect(NARROWNESS.private).toBeLessThan(NARROWNESS.domain);
+		expect(NARROWNESS.domain).toBeLessThan(NARROWNESS.public);
+	});
+
+	it('a single holder resolves to that value with exactly one holder', () => {
+		const res = resolveField([dom('Ada')], 'name');
+		expect(res.value).toBe('Ada');
+		expect(res.holders).toEqual([{ level: 'domain', id: 'prof-dom' }]);
+	});
+
+	it('domain + public: the NARROWER (domain) value renders, holders ordered narrow→wide, NOT collapsed', () => {
+		// The interrupted-move duplicate: the same field value lives in two entities.
+		const res = resolveField([pub('Ada-public'), dom('Ada-domain')], 'name');
+		expect(res.value).toBe('Ada-domain'); // domain is narrower than public → wins
+		expect(res.holders).toEqual([
+			{ level: 'domain', id: 'prof-dom' },
+			{ level: 'public', id: 'prof-pub' }
+		]);
+		// The duplicate is RETURNED, never silently collapsed (would hide the inconsistency).
+		expect(res.holders).toHaveLength(2);
+	});
+
+	it('private + domain + public: private (narrowest) wins; all three holders returned narrow→wide', () => {
+		const res = resolveField([pub('P'), dom('D'), pri('R')], 'name');
+		expect(res.value).toBe('R');
+		expect(res.holders.map((h) => h.level)).toEqual(['private', 'domain', 'public']);
+	});
+
+	it('an entity whose field is EMPTY is not a holder (only non-empty values count)', () => {
+		// email empty on the domain entity, present on public → public is the sole holder.
+		const res = resolveField([pub('', 'ada@x.io'), dom('Ada', '')], 'email');
+		expect(res.value).toBe('ada@x.io');
+		expect(res.holders).toEqual([{ level: 'public', id: 'prof-pub' }]);
+	});
+
+	it('no entity holds the field → empty value and NO holders (not a duplicate, not an error)', () => {
+		const res = resolveField([pub('', ''), dom('', '')], 'name');
+		expect(res.value).toBe('');
+		expect(res.holders).toEqual([]);
+	});
+
+	it('does NOT warn (it is not profilesByLevel last-wins — a different anomaly)', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		resolveField([pub('A'), dom('B')], 'name');
+		expect(warn).not.toHaveBeenCalled();
+		warn.mockRestore();
 	});
 });
 
