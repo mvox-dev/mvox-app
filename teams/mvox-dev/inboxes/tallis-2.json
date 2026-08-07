@@ -1,0 +1,25 @@
+[
+  {
+    "from": "team-lead",
+    "text": "[2026-06-12 06:26] New dispatch — slice-2a singer RSVP, RED (Task 2).\n\nIn your worktree: `git fetch origin && git checkout feat/rsvp-singer` (includes Comenius's `ff77b97`).\n\nExecute Task 2 of `docs/superpowers/plans/2026-06-12-slice-2a-rsvp-singer-plan.md` exactly (spec: `docs/superpowers/specs/2026-06-12-slice-2a-rsvp-singer-design.md`):\n- Stub `src/lib/rsvp/rsvpData.ts` (exact code in plan) + stub `RsvpControl.svelte`\n- Write `rsvpData.spec.ts` (6 groups: listMyRsvps, findMyMemberId incl. memoization, createRsvp full-shape with resolved `_type` + NO `_sharing`, updateRsvpStatus clear-then-set order, deleteRsvp, error paths)\n- Write `RsvpControl.spec.ts` (labels, active aria-pressed, onchange semantics incl. tap-active→null, disabled+hint)\n- Extend `src/routes/agenda/page.spec.ts` (rsvp map wiring, disabled for memberless org, optimistic revert + rsvp_error, YELLOW-10.1 staleness regression)\n- Mirror `entuSeasons.spec.ts` mock patterns; `resetTypeIdCache()` + `resetMemberIdCache()` in setup\n- Targeted vitest: new tests RED for right reasons; `pnpm check` 0 errors (stubs per L120)\n- Verify branch → commit `test(#8): RED — rsvpData + RsvpControl + page wiring (stubs per L120)` → push → handoff report to me.",
+    "summary": "Task 2 RED: rsvp tests on feat/rsvp-singer",
+    "timestamp": "2026-06-12T06:25:32.247Z",
+    "type": "message",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "[2026-06-12 20:55] New dispatch — auth trusted-identity, RED (Task 1).\n\n**NEW GIT PROTOCOL (single-tree serialization — architecture-decisions.md, PO directive today):** NO worktrees, NO EnterWorktree. Work directly in the shared primary tree at `~/workspace`. It is already checked out on `feat/auth-trusted-identity`. You are the ONLY actor touching the tree until your handoff. Before commit: `git branch --show-current` MUST say `feat/auth-trusted-identity` — if not, STOP and report (fail loudly, no stash/switch workarounds).\n\nExecute Task 1 of `docs/superpowers/plans/2026-06-12-auth-trusted-identity-plan.md` (spec: `docs/superpowers/specs/2026-06-12-auth-trusted-identity-issuance-design.md`):\n- Stub `src/lib/server/auth/identity-cookie.ts` (exact code in plan)\n- `identity-cookie.spec.ts` (6 cases: round-trip, payload tamper, sig tamper, expired, malformed, wrong secret — all async Web Crypto)\n- Extend callback `page.server.spec.ts` (4 cases per plan: success dual-cookie + personId verifies; 401 → no cookies + loud redirect; accounts-missing-db → same; missing-key regression pin)\n- Extend logout spec (mvox_identity cleared)\n- Targeted vitest RED for right reasons; `pnpm check` 0 (stubs per L120)\n- Commit `test(auth): RED — identity cookie + server-side callback exchange (stubs per L120)` → push → handoff to me.",
+    "summary": "RED: auth trusted-identity (new protocol)",
+    "timestamp": "2026-06-12T21:57:02.835Z",
+    "type": "message",
+    "read": true
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"shutdown_request\",\"requestId\":\"shutdown-1781331184321@tallis-2\",\"from\":\"team-lead\",\"reason\":\"Consolidating duplicate Tallis instances to zero — the stale-JWT RED isn't dispatched yet (its design workflow is still running). You've done all the RED work this session cleanly; thank you. Save any scratchpad notes (RED patterns worth keeping), then approve. A fresh Tallis spawns for the next RED.\",\"timestamp\":\"2026-06-13T06:13:04.321Z\"}",
+    "timestamp": "2026-06-13T06:13:04.321Z",
+    "type": "message",
+    "read": true
+  }
+]

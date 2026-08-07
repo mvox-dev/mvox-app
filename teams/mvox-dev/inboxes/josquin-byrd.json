@@ -1,0 +1,20 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"7\",\"subject\":\"Email→constant in entu_user (#34) — stop sending invitee email to Entu\",\"description\":\"Decided by Mihkel (not yet implemented), homed as GitHub issue mvox-dev/mvox-app#34 under epic #21. Change createInvite (src/lib/invite/inviteData.ts:207) to write a fixed self-documenting trigger constant into entu_user instead of the invitee's real email; the email becomes client-side-only (admin's manual link delivery). Rationale: entu_user string is only a mint trigger and is deleted at create (entu/api utils/entity.js:462-467); any truthy string mints an identical token. Buys: invitee email never reaches Entu servers/logs. Avoid the literal 'send-invite' (special on the [_id] endpoint). Queues on wave resume; no `ready` until dispatch. Walkthrough gist §2 documents it.\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-08-06T20:36:16.443Z\"}",
+    "timestamp": "2026-08-06T20:36:16.443Z",
+    "msgV": 1,
+    "msg_id": "dc0d145e-d112-4f26-bb1a-3ec65738e187",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"7\",\"subject\":\"Email→constant in entu_user (#34) — stop sending invitee email to Entu\",\"description\":\"Decided by Mihkel (not yet implemented), homed as GitHub issue mvox-dev/mvox-app#34 under epic #21. Change createInvite (src/lib/invite/inviteData.ts:207) to write a fixed self-documenting trigger constant into entu_user instead of the invitee's real email; the email becomes client-side-only (admin's manual link delivery). Rationale: entu_user string is only a mint trigger and is deleted at create (entu/api utils/entity.js:462-467); any truthy string mints an identical token. Buys: invitee email never reaches Entu servers/logs. Avoid the literal 'send-invite' (special on the [_id] endpoint). Queues on wave resume; no `ready` until dispatch. Walkthrough gist §2 documents it.\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-08-06T20:43:23.607Z\"}",
+    "timestamp": "2026-08-06T20:43:23.607Z",
+    "msgV": 1,
+    "msg_id": "eb19f611-d97d-4ea9-8141-904a9197d745",
+    "type": "message",
+    "read": false
+  }
+]

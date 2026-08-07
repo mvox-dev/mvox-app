@@ -1,0 +1,92 @@
+[
+  {
+    "from": "tallis",
+    "text": "CHORE-47 RED is complete. Branch: feat/env-migration, commit 53cd4fe.\n\nWhat's in:\n- client.spec.ts: replaced vi.stubEnv with vi.mock('$env/dynamic/private') mutable-object pattern. 2 tests RED: \"uses ENTU_BASE_URL from $env/dynamic/private\" and \"uses ENTU_DB from $env/dynamic/private\" — EntuClient implementation needs to read from $env/dynamic/private, not its current source.\n- callback-page-server.spec.ts, login-page-server.spec.ts, server.spec.ts (auth): same pattern applied, all GREEN (implementations already use $env/dynamic/private).\n- src/tests/deploy/no-process-env.spec.ts: new meta-spec, 4 tests, all GREEN — sources are already free of process.env. Acts as a regression net going forward.\n\nTotal: 2 RED (client.spec.ts), 401 GREEN.\n\nReady for Josquin GREEN: update src/lib/server/entu/client.ts to read ENTU_BASE_URL and ENTU_DB from $env/dynamic/private instead of its current env source.",
+    "summary": "CHORE-47 RED complete, handoff to Josquin",
+    "timestamp": "2026-05-22T19:59:12.852Z",
+    "color": "purple",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "Task 14 GREEN — build blocker, stopping as instructed.\n\npnpm build fails with:\n\n  Error: Files prefixed with + are reserved (saw src/routes/+page.spec.ts)\n\nRoot cause: Tallis placed the spec at src/routes/+page.spec.ts. SvelteKit's manifest builder rejects any + -prefixed file in the routes directory that isn't a route file.\n\nThe established pattern in this repo is src/tests/routes/landing/ — src/tests/routes/landing/page.server.spec.ts already exists there. The correct home for this spec is src/tests/routes/landing/page.spec.ts (no + prefix).\n\nThe +page.svelte rewrite is complete and correct. Gate cannot pass until the spec moves.\n\nProposal: Tallis moves src/routes/+page.spec.ts → src/tests/routes/landing/page.spec.ts, updating any imports as needed, and signals ready. I'll re-run the full gate sweep and commit when re-dispatched.",
+    "summary": "Task 14 blocked — +page.spec.ts in wrong directory",
+    "timestamp": "2026-05-31T08:46:55.405Z",
+    "color": "green",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "Task 14 GREEN — full block report.\n\nGate that failed: pnpm build (first gate in the full sweep)\n\nVerbatim error:\n  Error: Files prefixed with + are reserved (saw src/routes/+page.spec.ts)\n\nRoot cause: Tallis placed the spec at src/routes/+page.spec.ts. SvelteKit's manifest builder scans the routes directory and rejects any +‑prefixed file that isn't a recognized route file (+page.svelte, +layout.svelte, etc.). The spec filename starts with + because it mirrors the route file name.\n\nState of the implementation: The +page.svelte rewrite (12-line orchestrator) is complete and correct on the working tree. It is not committed. Nothing is broken in the implementation — the gate cannot even reach the component because the build aborts on the spec file.\n\nEstablished pattern in this repo: specs for routes live in src/tests/routes/, not in src/routes/. Evidence: src/tests/routes/landing/page.server.spec.ts already exists there, mirroring src/routes/+page.server.ts without the + prefix.\n\nCorrect location for the spec: src/tests/routes/landing/page.spec.ts\n\nAction needed: Tallis moves src/routes/+page.spec.ts → src/tests/routes/landing/page.spec.ts (and updates any path-relative imports inside it if present). Once Tallis signals ready, re-dispatch me and I will run the full gate sweep (pnpm build && pnpm check && pnpm test:unit && pnpm lint) and commit if all green.\n\nI am stopped and have not committed anything.",
+    "summary": "Task 14 full block report",
+    "timestamp": "2026-05-31T08:47:55.241Z",
+    "color": "green",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "Task 14 GREEN — COMPLETED.\n\nCommit fdcfa6f pushed to chore/landing-redesign.\n\nWhat was done:\n- Moved spec from src/routes/+page.spec.ts → src/tests/routes/landing/page.spec.ts (SvelteKit + prefix reservation)\n- Rewrote spec to use static vi.mock + store mutation pattern; the vi.doMock + vi.resetModules pattern Tallis used caused \"Cannot read properties of null (reading 'nodes')\" on tests 2 and 3 due to Svelte runtime re-initialization. Now 3/3 pass cleanly.\n- +page.svelte: 139-line data-fetching scaffold → 14-line auth-status orchestrator\n\nGate sweep results:\n- pnpm build: COMPLETED (225+228 modules, 0 errors)\n- pnpm check: COMPLETED 1094 FILES 0 ERRORS 0 WARNINGS\n- pnpm test:unit: Tests 545 passed (545) — 84 test files\n- pnpm lint: Checked 164 files. No fixes applied.\n\nReady for Task 15 (Bentham review).",
+    "summary": "Task 14 GREEN complete — commit fdcfa6f pushed",
+    "timestamp": "2026-05-31T08:51:55.525Z",
+    "color": "green",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "YELLOW-72.2 — COMPLETED. Commit 02d76d9 pushed to chore/landing-redesign.\n\n2 lines changed:\n- LandingInvitesSection.svelte:12 — INVITE ONLY → {m.landing_invites_stamp()}\n- LandingRequestSection.svelte:14 — RECEIVED → {m.landing_request_stamp()}\n\nGate results:\n- pnpm test:unit: Tests 545 passed (545) — 84 test files\n- pnpm check: COMPLETED 1094 FILES 0 ERRORS 0 WARNINGS\n- pnpm lint: Checked 164 files. No fixes applied.\n\nBranch is clean. Ready for Josquin Task 16 (merge).",
+    "summary": "YELLOW-72.2 done — commit 02d76d9 pushed",
+    "timestamp": "2026-05-31T09:06:54.463Z",
+    "color": "green",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "Story handoff — slice-3 client GREEN complete.\n\nCommit: 1359f69 on feat/invite-join\nBranch pushed: https://github.com/mvox-dev/mvox_v4e_web/pull/new/feat/invite-join\n\nGate results:\n- pnpm check: 0 errors (8 pre-existing RehearsalEditForm warnings, unchanged)\n- pnpm test:unit: 1127/1127 pass (122 files)\n- pnpm lint:fix: 0 errors on slice-3 files\n- pnpm build: ran during i18n stub setup, clean\n\nScope delivered:\n- src/lib/invite/inviteData.ts — 6 helpers: createInvitation, buildInviteUrl, listOrgInvitations, resolveInvite, createApplication, acceptInvite\n- src/lib/components/CopyLink.svelte — clipboard copy with 2s \"Copied!\" feedback\n- src/lib/components/members/InviteForm.svelte — email invite form + CopyLink + optimistic pending list\n- src/routes/members/+page.svelte — owner-gated roster + pending invitations panel\n- src/routes/invite/[token]/+page.svelte — public landing, two-leg accept flow, sign-in redirect\n- src/lib/components/MvoxNav.svelte — 'members' as real route tab (aria-current=\"page\" on active)\n- src/lib/nav/currentTab.ts — 'members' in Tab type + tabForPath\n- messages/{en,et,lv,uk}.json — 13 stub i18n keys (handoff sent to Comenius)\n\nSpec notes (CHORE-72 Task-15):\n- inviteData.spec.ts converted from RED rejects.toThrow pattern to live GREEN assertions\n- MvoxNav.spec.ts AC3 count updated 6→7 (members added)\n- members/page.spec.ts: roster test uses waitFor for async $effect; paraglide mock extended with InviteForm keys\n\ni18n: Comenius has the handoff. Will confirm when translations are committed.\n\nNext in TDD chain: Bentham review, then merge.",
+    "summary": "Story handoff — slice-3 client GREEN complete",
+    "timestamp": "2026-06-14T08:44:39.833Z",
+    "color": "pink",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "Comenius i18n confirmed — commit 6d45b14 on feat/invite-join. Gates clean: pnpm build OK, pnpm check 0 errors, 1127/1127 tests pass.\n\nTwo quality fixes landed (et invite_loading noun register, uk invite_expired gender agreement). No semantic changes to en.\n\nOne flag from Comenius: nav_tab_members collides with nav_tab_roster in et/lv/uk (both render \"Liikmed\"/\"Dalībnieki\"/\"Учасники\"). Owners would see both tabs. Not introduced this slice — stubs already had it. Flagging as a follow-up rename item, not blocking merge.\n\nBranch feat/invite-join is ready for Bentham REVIEW.",
+    "summary": "i18n confirmed — ready for Bentham review",
+    "timestamp": "2026-06-14T08:48:55.426Z",
+    "color": "pink",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "YELLOW re-spin story handoff — commit 68201fc on feat/invite-join, pushed.\n\nGate results:\n- pnpm format: clean (no fixes applied)\n- pnpm check: 0 errors (8 pre-existing RehearsalEditForm warnings)\n- pnpm test:unit: 1127/1127 pass\n- pnpm build: clean\n\nFixes applied:\n1. RED-35.1 (orgId threading): InviteProjection.orgId now required (non-optional); wishful cast in /invite/[token]/+page.svelte replaced with clean projection.orgId — Josquin's projection change completes the thread.\n2. YELLOW-35.3a (phantom status): dropped status prop from createInvitation POST body; replaced with correct inviter reference prop (invitation type: email/token/expires_at/sections/inviter/message).\n3. YELLOW-35.3b (inviterPersonId): wired from $userStore.personId in InviteForm — invitations now record who sent them.\n4. YELLOW-35.3c (silent catch): accept failures surface via 'error' page state (data-testid=\"invite-error\") with error message — no longer swallowed.\n5. YELLOW-35.1 (wrong button keys): InviteForm submit rewired to members_invite_submit / members_invite_submitting — correct admin register.\n\ni18n: stub keys for members_invite_submit/submitting added across all 4 locales. Comenius has the handoff for these 2 new keys + the nav_tab_members collision fix (YELLOW-35.2). Awaiting Comenius confirmation before Bentham re-review.",
+    "summary": "YELLOW re-spin story handoff — 5 fixes, gates green",
+    "timestamp": "2026-06-14T09:49:23.463Z",
+    "color": "pink",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "UX-angle comment posted on #91: https://github.com/mvox-dev/mvox_v4e_web/issues/91#issuecomment-4701405570\n\nCovered: UX difference (one-button instant vs request→approve deferred), what survives a pivot (createInvitation/buildInviteUrl/listOrgInvitations/resolveInvite/all UI components intact; createApplication + the BFF accept endpoint at risk), and the option-3 client complexity (owner enumeration + _viewer grants before \"request sent\" state).",
+    "summary": "Comment posted on #91",
+    "timestamp": "2026-06-14T10:02:36.321Z",
+    "color": "pink",
+    "type": "message",
+    "read": false
+  },
+  {
+    "from": "byrd",
+    "text": "Session 35 closing. Scratchpad updated at teams/mvox-dev/memory/byrd.md.\n\n[LEARNED] Biome format is a mandatory gate step — `pnpm format` before commit, not just `pnpm lint:fix`. Both were separate Bentham findings this round.\n[LEARNED] `pnpm build` required after adding new Paraglide keys (not just `pnpm check`) — Paraglide recompilation only triggers on build.\n[LEARNED] MvoxNav is layout-only; never add to individual pages or the spec mock gap manifests immediately.\n[LEARNED] `vi.waitFor` required for any page spec asserting post-`$effect` state.\n[LEARNED] Paraglide page spec mock must cover all sub-component keys that render when `loadState==='ready'`.\n[LEARNED] `InviteProjection.orgId` non-optional — Josquin's projection always returns it.\n[LEARNED] `createInvitation` phantom `status` prop — invitation type has no status (Pérotin probe).\n\n[DEFERRED] Slice-3 accept architecture — #91. Branch feat/invite-join (8b5ec86) conserved, 1127/1127 GREEN, not merged. Schema-design pass needed.\n\n[WARNING] Pre-handoff checklist: `pnpm format` → `pnpm lint` → `pnpm check` → `pnpm test:unit` → `git branch --show-current`. Both Bentham findings were avoidable.\n\nComenius's i18n YELLOW (8b5ec86) is banked and confirmed clean. Ready to shut down.",
+    "summary": "Closing — session 35 learnings saved, DEFERRED + WARNING",
+    "timestamp": "2026-06-14T10:07:57.564Z",
+    "color": "pink",
+    "type": "message",
+    "read": false
+  }
+]

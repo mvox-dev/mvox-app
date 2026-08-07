@@ -1,0 +1,9 @@
+[
+  {
+    "from": "team-lead",
+    "text": "{\"type\":\"task_assignment\",\"taskId\":\"8\",\"subject\":\"KB batch — discharge L91-L104 lessons to Brilliant\",\"description\":\"11 new Pattern entries (L96-L103 from session 21, L91-L93 from session 20, session-22 trailer-collision pattern) + 3 updates (Patterns/worktree-isolation-for-coding-agents, Projects/mvox, Decisions/mvox/ui-aesthetic-hybrid-inter-caveat) + cross-references. Tier 1 auto-approve expected. Delegated to background subagent aba0732f80d2a7479 (KB authoring).\",\"assignedBy\":\"team-lead\",\"timestamp\":\"2026-05-24T07:03:18.602Z\"}",
+    "timestamp": "2026-05-24T07:03:18.602Z",
+    "type": "message",
+    "read": false
+  }
+]
