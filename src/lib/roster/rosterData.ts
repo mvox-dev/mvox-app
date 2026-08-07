@@ -82,9 +82,13 @@ export async function listActiveMembers(
 	return (body.entities ?? []).map((raw) => {
 		const personId = raw.person?.[0]?.reference;
 		// `person` is REQUIRED on the target member shape — fail loud, naming the
-		// object, rather than silently dropping her out of the roster.
+		// object, rather than silently dropping her out of the roster. An absent
+		// value here means THIS reader's token couldn't read it — not proof the
+		// property doesn't exist (a narrower-than-entity sharing tier can hide it).
 		if (!personId) {
-			throw new Error(`listActiveMembers: member ${raw._id} has no person reference (data anomaly)`);
+			throw new Error(
+				`listActiveMembers: member ${raw._id} — cannot read person reference (visible fields insufficient for this reader's rights; may be a narrower-than-entity sharing tier, not necessarily absent data)`
+			);
 		}
 		return {
 			memberId: raw._id,

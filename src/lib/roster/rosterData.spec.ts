@@ -90,9 +90,12 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		await expect(listActiveMembers(cfg, fetchImpl)).rejects.toThrow(/500/);
 	});
 
-	it('fails loud when a returned member entity carries no person reference — names the member id, never silently dropped', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'member-orphan' }] }));
-		await expect(listActiveMembers(cfg, fetchImpl)).rejects.toThrow(/member-orphan/);
+	it('fails loud when a returned member entity carries an unreadable person reference — names the member id, asserts can\'t-see (not doesn\'t-exist), never silently dropped', async () => {
+		const orphanFetch = () =>
+			vi.fn().mockResolvedValue(json({ entities: [{ _id: 'member-orphan' }] }));
+		await expect(listActiveMembers(cfg, orphanFetch())).rejects.toThrow(/member-orphan/);
+		await expect(listActiveMembers(cfg, orphanFetch())).rejects.toThrow(/cannot read/i);
+		await expect(listActiveMembers(cfg, orphanFetch())).rejects.not.toThrow(/has no person reference/i);
 	});
 });
 
