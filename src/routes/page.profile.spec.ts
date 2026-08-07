@@ -109,7 +109,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken, setUser, clearAll } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -439,5 +439,50 @@ describe('/profile — T4.8/#28 completion-gate SSOT release (bidirectional, no 
 		// The banner clears in the same session — no reload — once the gate releases.
 		await waitFor(() => expect(q(container, '[data-testid="profile-completion-required"]')).toBeNull());
 		expect(get(completionGateStore)).toBe('complete');
+	});
+});
+
+describe('/profile — #39 name prefill from EntuUser', () => {
+	it('prefills domain name from EntuUser.name when no domain profile exists', async () => {
+		setUser({ _id: 'u1', name: 'Ada Lovelace' });
+		h.listMyProfilesMock.mockResolvedValue([]);
+		selectPolyphony();
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			const input = q(container, '[data-testid="profile-domain-name"]') as HTMLInputElement;
+			expect(input).not.toBeNull();
+			expect(input.value).toBe('Ada Lovelace');
+		});
+	});
+
+	it('does NOT overwrite an existing domain name with EntuUser.name', async () => {
+		setUser({ _id: 'u1', name: 'Ada Lovelace' });
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-d', name: 'Her Chosen Name', email: 'a@b.c', _sharing: 'domain' }
+		]);
+		selectPolyphony();
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			const input = q(container, '[data-testid="profile-domain-name"]') as HTMLInputElement;
+			expect(input.value).toBe('Her Chosen Name');
+		});
+	});
+
+	it('leaves domain name empty when EntuUser has no name', async () => {
+		setUser({ _id: 'u1' });
+		h.listMyProfilesMock.mockResolvedValue([]);
+		selectPolyphony();
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			const input = q(container, '[data-testid="profile-domain-name"]') as HTMLInputElement;
+			expect(input).not.toBeNull();
+			expect(input.value).toBe('');
+		});
 	});
 });

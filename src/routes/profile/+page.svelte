@@ -9,7 +9,7 @@
 	// (T4.4 sole-create-path); the honest round trip (AC2) lives in the queue: a level
 	// flips to "saved" ONLY after the server confirms the write's id, never on dispatch.
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { getToken, getUser } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
 		listMyProfiles,
@@ -185,6 +185,12 @@
 				if (p) {
 					nextConfirmed[level] = { id: p._id, name: p.name, email: p.email };
 					nextDraft[level] = { name: p.name, email: p.email };
+				}
+			}
+			if (nextDraft.domain.name === '' && nextConfirmed.domain.id === null) {
+				const providerName = getUser()?.name?.trim();
+				if (providerName) {
+					nextDraft.domain.name = providerName;
 				}
 			}
 			draft = nextDraft;
