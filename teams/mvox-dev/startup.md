@@ -120,17 +120,25 @@ Phase 1 is a gate: do not spawn implementer agents until finn + bentham have int
 - If agent already registered → `SendMessage` with the new task. Do NOT re-spawn.
 - If agent not registered → Spawn via Agent tool with `run_in_background: true`.
 
-**Spawn method depends on environment** (see `.claude/CLAUDE.md` "Spawn Method"):
-- **Container:** use `spawn_member.sh` with the Pane Map.
-- **Local:** use the `Agent` tool directly. The prompt is the content of `teams/mvox-dev/prompts/<name>.md`.
+**Spawn method:** Use the `Agent` tool directly with a **short identity + self-orient prompt** — do NOT inline the full prompt file. The agent reads its own prompt, common-prompt, and scratchpad on its first turn (same pattern as team-lead's own boot). This saves team-lead context and guarantees the agent always reads the current prompt (no drift/truncation from inlining).
+
+**Spawn prompt template:**
+
+```
+You are **<Name>**, <role> for mvox-dev (<model>).
+1. Read your full prompt: ~/workspace-app/teams/mvox-dev/prompts/<name>.md
+2. Read common-prompt: ~/workspace-app/teams/mvox-dev/common-prompt.md
+3. Read your scratchpad: ~/workspace-app/teams/mvox-dev/memory/<name>.md
+4. Follow the STARTUP INSTRUCTIONS in your prompt file.
+5. Send a timestamped intro (date '+%Y-%m-%d %H:%M') to team-lead when ready.
+```
 
 **Spawn checklist per agent:**
 
 ```
-1. jq '.members[].name' "$HOME/.claude/teams/mvox-dev/config.json"  # check duplicates
-2. Read prompt content from teams/mvox-dev/prompts/<name>.md
-3. Spawn (env-specific method above) with name="<name>", team_name="mvox-dev", run_in_background=true
-4. Wait for intro message from agent
+1. Check config.json for existing members with the same name
+2. Spawn with Agent tool: name="<name>", team_name="mvox-dev", model per roster.json, run_in_background=true, prompt from template above
+3. Wait for intro message from agent
 ```
 
 ### Phase 6: Ready
