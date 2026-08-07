@@ -80,7 +80,7 @@
 	"profile_repair_done": "Nähtavuse muudatus lõpetatud.",
 	"roster_title": "Liikmed",
 	"roster_no_collective": "Nimekirja vaatamiseks vali kollektiiv.",
-	"roster_load_error": "Liikmete nimekirja laadimine ebaõnnestus: {message}",
+	"roster_load_error": "Liikmete nimekirja laadimine ebaõnnestus.",
 	"roster_retry": "Proovi uuesti",
 	"roster_empty": "Liikmeid pole veel kuvada."
 }

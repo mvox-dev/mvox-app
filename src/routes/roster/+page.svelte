@@ -19,7 +19,6 @@
 	// against a stale (superseded) load resolving after a collective switch.
 	let generation = 0;
 	let status = $state<Status>('loading');
-	let loadError = $state('');
 	let rows = $state<RosterRow[]>([]);
 
 	async function loadForSelected(): Promise<void> {
@@ -34,7 +33,7 @@
 		if (!token) {
 			// Inconsistency on a protected route — fail loud as a load error, never a
 			// silent empty list.
-			loadError = 'no auth token in storage on a protected route';
+			console.error('roster: no auth token in storage on a protected route');
 			status = 'load-error';
 			return;
 		}
@@ -46,7 +45,7 @@
 			status = 'ready';
 		} catch (e) {
 			if (g !== generation) return;
-			loadError = e instanceof Error ? e.message : String(e);
+			console.error('roster: load failed', e);
 			status = 'load-error';
 		}
 	}
@@ -57,7 +56,7 @@
 		// fails loud into `status`, but its synchronous prologue must not throw here).
 		void selected;
 		loadForSelected().catch((e) => {
-			loadError = e instanceof Error ? e.message : String(e);
+			console.error('roster: load failed', e);
 			status = 'load-error';
 		});
 	});
@@ -85,7 +84,7 @@
 			</div>
 		{:else if status === 'load-error'}
 			<div data-testid="roster-load-error" class="flex flex-col gap-2" role="alert">
-				<p class="text-sm text-red-700">{m.roster_load_error({ message: loadError })}</p>
+				<p class="text-sm text-red-700">{m.roster_load_error()}</p>
 				<button
 					type="button"
 					data-testid="roster-retry-load"

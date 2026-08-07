@@ -12,7 +12,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
 		roster_title: () => 'Roster',
 		roster_no_collective: () => 'Select a collective to view the roster.',
-		roster_load_error: (p: { message: string }) => `Couldn't load the roster: ${p.message}`,
+		roster_load_error: () => 'Something went wrong loading the roster.',
 		roster_retry: () => 'Retry',
 		roster_empty: () => 'No members to show yet.'
 	}
@@ -122,7 +122,8 @@ describe('/roster — empty state', () => {
 });
 
 describe('/roster — load-error state', () => {
-	it('shows roster-load-error with the interpolated message; clicking roster-retry-load calls loadRoster again', async () => {
+	it('shows a generic localized error (not the raw thrown message); logs detail to console.error; retry calls loadRoster again', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		loadRosterMock.mockRejectedValue(new Error('boom 500'));
 		setAuthedWithOneCollective();
 
@@ -131,9 +132,19 @@ describe('/roster — load-error state', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-load-error"]')).not.toBeNull();
 		});
-		expect(container.textContent).toContain('boom 500');
+		// Generic message shown, raw error NOT shown
+		expect(container.textContent).toContain('Something went wrong loading the roster.');
+		expect(container.textContent).not.toContain('boom 500');
+		// Detail logged to console
+		expect(consoleSpy).toHaveBeenCalled();
+		const loggedArgs = consoleSpy.mock.calls.flat();
+		const loggedDetail = loggedArgs.some(
+			(arg) => arg instanceof Error && arg.message === 'boom 500'
+		);
+		expect(loggedDetail).toBe(true);
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 
+		// Retry still works
 		const retryBtn = container.querySelector('[data-testid="roster-retry-load"]') as HTMLButtonElement;
 		expect(retryBtn).not.toBeNull();
 		await fireEvent.click(retryBtn);
@@ -141,6 +152,8 @@ describe('/roster — load-error state', () => {
 		await waitFor(() => {
 			expect(loadRosterMock).toHaveBeenCalledTimes(2);
 		});
+
+		consoleSpy.mockRestore();
 	});
 });
 
