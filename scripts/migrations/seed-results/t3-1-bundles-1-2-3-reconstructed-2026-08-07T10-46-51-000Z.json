@@ -1,0 +1,100 @@
+{
+  "reconstructed": true,
+  "reconstructionNote": "This artifact was NOT captured at execution time (workspace-app scripts predating this one did not call writeResultArtifact / had no seed-results dir committed). Reconstructed 2026-08-07 by Pérotin from scratchpad prose (teams/mvox-dev/memory/perotin.md, T3.1 sections) + the scripts' own execution-time ledger/console output as reported live to team-lead, cross-checked against workspace-app git history (commit SHAs + timestamps below are read directly from `git log`, not recalled). No new live Entu calls were made to produce this file. Live-run wall-clock times were not captured originally; the ranges below are bounded by the adjacent build/commit timestamps.",
+  "issue": "#17 (T3.1 singer provisioning) + #36 (T3.5, referenced for bundle-3 precondition) on mvox-dev/mvox-app",
+  "authorizedBy": "team-lead, explicit \"I authorize this run\" messages per-bundle (bundles 1+2 together, then bundle 3 separately after #36 merged)",
+  "bundles": [
+    {
+      "bundle": "1+2",
+      "description": "Bundle 1: create a domain-shared `profile` entity for every public-tier person. Bundle 2: convert that person's `member` entity from private to domain tier. Bundle 2 was hard-gated on Bundle 1 succeeding for every target.",
+      "script": "scripts/migrations/t3-1-provision-singers-2026-08-07.ts",
+      "lib": "scripts/migrations/lib/t3-1-singer-provision.ts",
+      "buildCommit": "eed66b110b3cbb37e239e6259f2496bfba56b78e",
+      "buildCommitTime": "2026-08-07T09:52:24Z",
+      "liveRunWindow": "between build commit eed66b1 (2026-08-07T09:52:24Z) and bundle-3 dry-run commit 82bb58b (2026-08-07T10:19:58Z) — exact wall-clock not captured at the time",
+      "dryRun": {
+        "targetsEnumerated": 128,
+        "driftGuard": "128 == EXPECTED_PUBLIC_PERSON_COUNT, no truncation",
+        "preconditions": "all 128 targets had exactly 1 private-tier member, zero existing profile entities, all had a name value",
+        "writesIssued": 0,
+        "exitCode": 0
+      },
+      "live": {
+        "ledger": {
+          "bundle1Created": 128,
+          "bundle1Failed": 0,
+          "bundle2Converted": 128,
+          "incompleteMarkers": 0
+        },
+        "exitCode": 0
+      },
+      "independentReVerification": {
+        "method": "fresh separate query pass after the run, not the script's own read-backs",
+        "publicTierPersonsChecked": 128,
+        "result": "all 128 now have exactly 1 domain-tier member (was private) AND exactly 1 domain-tier profile, profile.name matches person.name exactly for all 128, zero mismatches",
+        "outOfScopeControlsUntouched": [
+          { "label": "db-root/PO", "id": "69bcfd8e9c031ab8e6ce8079", "memberTierUnchanged": "domain" },
+          { "label": "OAUTH (Mihkel domain identity)", "id": "6a2fc05e4cd971291c5d5ddc", "memberTierUnchanged": "domain" },
+          { "label": "fixture B", "id": "6a7591cc36c951d9114ec8de", "memberTierUnchanged": "private" }
+        ],
+        "aggregateReconciliation": {
+          "memberSharingHistogram": {
+            "domain": 245,
+            "private": 1,
+            "note": "245 = 115 pre-existing legacy orphan members + 2 pre-existing real (db-root + OAUTH) + 128 newly-converted; 1 private = fixture B's, correctly out of scope"
+          },
+          "profileSharingHistogram": {
+            "domain": 131,
+            "public": 1,
+            "note": "131 = 128 new + db-root's own admin profile + OAUTH's domain profile + fixture B's domain profile, all pre-existing/untouched; 1 public = OAUTH's pre-existing empty public profile"
+          }
+        },
+        "verified": true
+      }
+    },
+    {
+      "bundle": "3",
+      "description": "Schema mutation: remove the `name` prop-def from the `member` type (matches #36's shipped invite-code change, which stopped writing member.name on create).",
+      "script": "scripts/migrations/t3-1-bundle3-remove-member-name-2026-08-07.ts",
+      "gatingPrecondition": "#36 merged to main first",
+      "gatingCommit": "7177f85089e7751975e8d26422179e9a90585351",
+      "gatingCommitTime": "2026-08-07T10:12:29Z",
+      "buildAndDryRunCommit": "82bb58bef7d9775e6f3c31c3a328dce01450b745",
+      "buildAndDryRunCommitTime": "2026-08-07T10:19:58Z",
+      "liveRunWindow": "immediately after 82bb58b (2026-08-07T10:19:58Z) — same session, no pause round; exact wall-clock not captured at the time",
+      "preconditionDoubleCheck": [
+        "read src/routes/.../inviteData.ts:288-295 on main directly — memberProps no longer includes {type:'name',...}",
+        "live query independently confirmed the same precheck the script itself ran"
+      ],
+      "target": {
+        "memberTypeId": "69c7ea4a8489bfcb0e819edd",
+        "namePropDefId": "69c7ea4a8489bfcb0e819ee4",
+        "note": "exactly one name prop-def on member, unambiguous"
+      },
+      "dryRun": {
+        "matchedPreconditionExactly": true,
+        "writesIssued": 0,
+        "exitCode": 0
+      },
+      "live": {
+        "op": "DELETE /entity/{namePropDefId} (prop-def is an entity, not a property-value delete)",
+        "scriptReadBack": "name absent from member type's prop-defs"
+      },
+      "independentReVerification": {
+        "method": "fresh separate query, not reusing the script's own read-back",
+        "memberTypePropDefsAfter": ["person", "section", "current_section", "status"],
+        "noPurgeSpotCheck": {
+          "target": "legacy orphan member 69c7f8728489bfcb0e81b085",
+          "rawNameValue": "Yena Choi",
+          "result": "persists untouched — confirms the mutation removed only the schema declaration, not underlying values, matching the T4.3 precedent"
+        },
+        "verified": true
+      }
+    }
+  ],
+  "sourceCitations": {
+    "scratchpad": "teams/mvox-dev/memory/perotin.md (workspace repo), sections \"T3.1 (#17) Bundles 1+2 — LIVE, authorized, VERIFIED\" and \"T3.1 (#17) Bundle 3 — schema mutation LIVE, authorized, VERIFIED\", both dated 2026-08-07",
+    "teamLeadAutoMemory": "~/.claude/projects/-home-ai-teams/memory/mvox-app-slice1-resume-state.md — corroborates bundle scope, main@821450a, and flags the same missing-artifact gap this file closes"
+  },
+  "overallVerified": true
+}
