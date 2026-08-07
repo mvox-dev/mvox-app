@@ -5,8 +5,9 @@
 // - prerequisite load: not-visible → no-access (labeled heuristic); ANY other
 //   failure → load-error + retry. Network errors are NEVER presented as
 //   "not admin".
-// - ready → member-name + email + org select; single org preselected; submit
-//   disabled until all fields set
+// - ready → org select only (#36 — no name/email fields); a sole org
+//   preselects and submit is immediately enabled; multiple orgs require a
+//   manual pick before submit enables
 // - done → show-ONCE invite link + always-visible bearer warning; the token
 //   never touches localStorage/sessionStorage
 // - create-error → verbatim phased error; a personId-carrying error additionally
@@ -21,15 +22,13 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
 		admin_invite_load_error: (p: { message: string }) => `Could not load: ${p.message}`,
 		admin_invite_retry_load: () => 'Retry',
-		admin_invite_name_label: () => 'Member name',
-		admin_invite_email_label: () => "Invitee's email",
 		admin_invite_org_label: () => 'Organization',
 		admin_invite_submit: () => 'Create invite',
 		admin_invite_creating: () => 'Creating…',
 		admin_invite_link_label: () => 'Invite link',
 		admin_invite_copy: () => 'Copy link',
 		admin_invite_copied: () => 'Copied',
-		admin_invite_bearer_warning: (p: { email: string }) => `Bearer secret — send only to ${p.email}.`,
+		admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
 		admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
 		admin_invite_error: (p: { phase: string; message: string }) =>
 			`Invite creation failed at step ${p.phase}: ${p.message}`,
@@ -107,11 +106,7 @@ function loadOk() {
 	h.listOrgsMock.mockResolvedValue([{ _id: 'org-1', name: 'EFK' }]);
 }
 
-async function fillAndSubmit(container: HTMLElement) {
-	const name = container.querySelector('[data-testid="invite-member-name"]') as HTMLInputElement;
-	const email = container.querySelector('[data-testid="invite-email"]') as HTMLInputElement;
-	await fireEvent.input(name, { target: { value: 'Mari Mets' } });
-	await fireEvent.input(email, { target: { value: 'mari@example.com' } });
+async function submitForm(container: HTMLElement) {
 	const submit = container.querySelector(
 		'[data-testid="invite-admin-submit"]'
 	) as HTMLButtonElement;
@@ -138,7 +133,7 @@ describe('/admin/invite — prerequisites', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-no-collective"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="invite-member-name"]')).toBeNull();
+		expect(container.querySelector('[data-testid="invite-org"]')).toBeNull();
 	});
 
 	it("a not-visible prerequisite → the no-access state (a labeled heuristic — the authoritative gate is Entu's create POST)", async () => {
@@ -155,7 +150,7 @@ describe('/admin/invite — prerequisites', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-no-access"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="invite-member-name"]')).toBeNull();
+		expect(container.querySelector('[data-testid="invite-org"]')).toBeNull();
 		expect(container.querySelector('[data-testid="invite-admin-load-error"]')).toBeNull();
 	});
 
@@ -180,13 +175,13 @@ describe('/admin/invite — prerequisites', () => {
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-member-name"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="invite-org"]')).not.toBeNull();
 		});
 	});
 });
 
 describe('/admin/invite — ready form', () => {
-	it('renders name/email/org controls, preselects a sole organization, and keeps submit disabled until every field is set', async () => {
+	it('preselects a sole organization (select still rendered) and submit is immediately enabled — no other fields', async () => {
 		selectPolyphony();
 		loadOk();
 
@@ -201,13 +196,31 @@ describe('/admin/invite — ready form', () => {
 		const submit = container.querySelector(
 			'[data-testid="invite-admin-submit"]'
 		) as HTMLButtonElement;
+		expect(submit.disabled).toBe(false); // orgId is the only requirement, already set
+	});
+
+	it('with multiple organizations, nothing is preselected and submit stays disabled until one is picked', async () => {
+		selectPolyphony();
+		h.resolveParentMock.mockResolvedValue('parent-1');
+		h.listOrgsMock.mockResolvedValue([
+			{ _id: 'org-1', name: 'EFK' },
+			{ _id: 'org-2', name: 'RAM' }
+		]);
+
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
+		});
+
+		const select = container.querySelector('[data-testid="invite-org"]') as HTMLSelectElement;
+		expect(select.value).toBe('');
+
+		const submit = container.querySelector(
+			'[data-testid="invite-admin-submit"]'
+		) as HTMLButtonElement;
 		expect(submit.disabled).toBe(true);
 
-		const name = container.querySelector('[data-testid="invite-member-name"]') as HTMLInputElement;
-		const email = container.querySelector('[data-testid="invite-email"]') as HTMLInputElement;
-		await fireEvent.input(name, { target: { value: 'Mari Mets' } });
-		expect(submit.disabled).toBe(true); // email still missing
-		await fireEvent.input(email, { target: { value: 'mari@example.com' } });
+		await fireEvent.change(select, { target: { value: 'org-2' } });
 		await waitFor(() => {
 			expect(submit.disabled).toBe(false);
 		});
@@ -228,33 +241,35 @@ describe('/admin/invite — done (show-once link)', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
 		});
-		await fillAndSubmit(container);
+		await submitForm(container);
 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
 		});
 
-		// The data layer was driven with the selected collective + form values.
-		// #34 — email is collected client-side (for the bearer-warning display
-		// below) but must NEVER be forwarded into the createInvite call: the
-		// invitee's real email must never reach Entu.
+		// The data layer was driven with the selected collective + the sole
+		// preselected org. #34/#36 — neither the invitee's email nor a member
+		// name is ever collected or forwarded: the member carries no name and
+		// the invitee's real email never reaches Entu.
 		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
-			{ memberName: string; orgId: string; email?: string }
+			{ orgId: string; email?: string; memberName?: string }
 		];
 		expect(cfgArg).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
-		expect(inputArg).toEqual({ memberName: 'Mari Mets', orgId: 'org-1' });
+		expect(inputArg).toEqual({ orgId: 'org-1' });
 		expect(inputArg).not.toHaveProperty('email');
+		expect(inputArg).not.toHaveProperty('memberName');
 
 		// The full invite URL, shown once.
 		const link = container.querySelector('[data-testid="invite-link"]') as HTMLInputElement;
 		expect(link).not.toBeNull();
 		expect(link.value).toBe(`${window.location.origin}/invite/${MINTED_TOKEN}`);
 
-		// Bearer warning is always visible and names the invitee.
+		// Bearer warning is always visible. #36 — it can no longer name the
+		// invitee (no email is collected at all), so it stays generic.
 		const warning = container.querySelector('[data-testid="invite-bearer-warning"]');
 		expect(warning).not.toBeNull();
-		expect(warning!.textContent).toContain('mari@example.com');
+		expect(warning!.textContent).toContain('Bearer secret');
 
 		// Bearer-secret hygiene: the token surfaces EXACTLY ONCE in the rendered
 		// output — a second interpolation (warning text, href, data- attribute)
@@ -295,7 +310,7 @@ describe('/admin/invite — create-error', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
 		});
-		await fillAndSubmit(container);
+		await submitForm(container);
 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-error"]')).not.toBeNull();
@@ -308,8 +323,9 @@ describe('/admin/invite — create-error', () => {
 		expect(partial).not.toBeNull();
 		expect(partial!.textContent).toContain('p1');
 
-		const name = container.querySelector('[data-testid="invite-member-name"]') as HTMLInputElement;
-		expect(name.value).toBe('Mari Mets');
+		// Form value preserved for retry: the sole-org selection survives the error.
+		const select = container.querySelector('[data-testid="invite-org"]') as HTMLSelectElement;
+		expect(select.value).toBe('org-1');
 	});
 
 	it('an error WITHOUT a personId (nothing created yet) shows the phased error but NO orphan warning', async () => {
@@ -323,7 +339,7 @@ describe('/admin/invite — create-error', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
 		});
-		await fillAndSubmit(container);
+		await submitForm(container);
 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-error"]')).not.toBeNull();

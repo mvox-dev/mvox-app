@@ -36,20 +36,17 @@
 	let loadErrorMessage = $state('');
 	let orgs = $state<OrgOption[]>([]);
 
-	let memberName = $state('');
-	let email = $state('');
 	let orgId = $state('');
 
 	// Done-panel state — the token-carrying link exists ONLY here (component state).
 	let inviteLink = $state('');
 	let inviteExpiryDate = $state('');
-	let invitedEmail = $state('');
 	let copied = $state(false);
 	let copyErrorMessage = $state('');
 
 	let createError = $state<{ phase: string; message: string; personId?: string } | null>(null);
 
-	const canSubmit = $derived(memberName.trim() !== '' && email.includes('@') && orgId !== '');
+	const canSubmit = $derived(orgId !== '');
 
 	async function loadPrerequisites(currentDb: string): Promise<void> {
 		status = 'loading';
@@ -100,11 +97,7 @@
 		status = 'creating';
 		createError = null;
 		try {
-			const result = await createInvite(
-				{ db, token },
-				{ memberName: memberName.trim(), orgId }
-			);
-			invitedEmail = email.trim();
+			const result = await createInvite({ db, token }, { orgId });
 			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
 			// The shown expiry is the minted token's OWN exp — never an assumed +7d.
 			const parsed = parseInviteToken(result.inviteToken, Date.now());
@@ -140,11 +133,8 @@
 		// Discards the link for good — the token was shown once and is not stored.
 		inviteLink = '';
 		inviteExpiryDate = '';
-		invitedEmail = '';
 		copied = false;
 		copyErrorMessage = '';
-		memberName = '';
-		email = '';
 		createError = null;
 		status = 'ready';
 	}
@@ -199,7 +189,7 @@
 					<p class="text-sm text-red-700" role="alert">{copyErrorMessage}</p>
 				{/if}
 				<p data-testid="invite-bearer-warning" class="text-sm text-red-700">
-					{m.admin_invite_bearer_warning({ email: invitedEmail })}
+					{m.admin_invite_bearer_warning()}
 					{m.admin_invite_show_once({ date: inviteExpiryDate })}
 				</p>
 				<button
@@ -225,23 +215,6 @@
 				</div>
 			{/if}
 			<div class="flex flex-col gap-3">
-				<label class="flex flex-col gap-1 text-sm">
-					{m.admin_invite_name_label()}
-					<input
-						data-testid="invite-member-name"
-						bind:value={memberName}
-						class="rounded-md border border-ink px-3 py-2 text-sm"
-					/>
-				</label>
-				<label class="flex flex-col gap-1 text-sm">
-					{m.admin_invite_email_label()}
-					<input
-						type="email"
-						data-testid="invite-email"
-						bind:value={email}
-						class="rounded-md border border-ink px-3 py-2 text-sm"
-					/>
-				</label>
 				<label class="flex flex-col gap-1 text-sm">
 					{m.admin_invite_org_label()}
 					<select

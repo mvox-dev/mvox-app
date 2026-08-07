@@ -11,7 +11,6 @@ import {
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-admin' };
 
 const INPUT: CreateInviteInput = {
-	memberName: 'Mari Mets',
 	orgId: 'org-1'
 };
 
@@ -94,20 +93,20 @@ function callsOf(fetchImpl: ReturnType<typeof makeFetchMock>) {
 
 // ── Type-level contract (checked by `pnpm check`, not vitest) ──────────────────
 
-// @ts-expect-error — omitting memberName must not typecheck (member.name is a mandatory prop-def)
-const _omitsMemberName: CreateInviteInput = { email: 'e@x.ee', orgId: 'o1' };
-void _omitsMemberName;
+// #36 drops `memberName` from CreateInviteInput (the member carries no name), so an
+// "omitting memberName must not typecheck" guard would contradict the new design.
+// No replacement fixture needed here.
 
 // GREEN drops email from the type + these fixtures — #34 removes it from
 // CreateInviteInput entirely, so an "omitting email must not typecheck" guard
 // would contradict the no-email design. No replacement fixture needed here.
 
 // @ts-expect-error — omitting orgId must not typecheck (the member's parent org is required)
-const _omitsOrgId: CreateInviteInput = { memberName: 'n', email: 'e@x.ee' };
+const _omitsOrgId: CreateInviteInput = {};
 void _omitsOrgId;
 
 // Forward guard: the correct shape DOES typecheck.
-const _validInput: CreateInviteInput = { memberName: 'n', orgId: 'o1' };
+const _validInput: CreateInviteInput = { orgId: 'o1' };
 void _validInput;
 
 // ── resolvePersonParentId ──────────────────────────────────────────────────────
@@ -212,14 +211,6 @@ describe('listOrganizations', () => {
 // ── createInvite — input guards (before any fetch) ─────────────────────────────
 
 describe('createInvite — input guards fire before any network call', () => {
-	it('rejects an empty memberName, naming the field', async () => {
-		const fetchImpl = vi.fn();
-		await expect(createInvite(cfg, { ...INPUT, memberName: '  ' }, fetchImpl)).rejects.toThrow(
-			/memberName/
-		);
-		expect(fetchImpl).not.toHaveBeenCalled();
-	});
-
 	// GREEN drops email from the type + this guard — #34 removes the `@` check
 	// along with the email field itself. No replacement test needed here.
 
@@ -274,7 +265,7 @@ describe('createInvite — happy path', () => {
 		expect(JSON.stringify(personCall!.body)).not.toContain('mari@example.com');
 	});
 
-	it('member payload is EXACTLY: _type ref, _parent=orgId, name, person ref, status:active, _sharing:private, _viewer=person, _inheritrights:true (slice3-proven visibility model)', async () => {
+	it('member payload is EXACTLY: _type ref, _parent=orgId, person ref, status:active, _sharing:domain, _inheritrights:true — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const memberCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'person'));
@@ -284,15 +275,20 @@ describe('createInvite — happy path', () => {
 			expect.arrayContaining([
 				{ type: '_type', reference: 'member-type-1' },
 				{ type: '_parent', reference: 'org-1' },
-				{ type: 'name', string: 'Mari Mets' },
 				{ type: 'person', reference: 'p1' },
 				{ type: 'status', string: 'active' },
-				{ type: '_sharing', string: 'private' },
-				{ type: '_viewer', reference: 'p1' },
+				// #36 — private + explicit _viewer was the slice3 visibility model; the
+				// member→domain ruling exists specifically to unbreak the roster query
+				// (#18/T3.2), which under private returned only the invitee's own
+				// membership. domain sharing supersedes the need for the explicit grant.
+				{ type: '_sharing', string: 'domain' },
 				{ type: '_inheritrights', boolean: true }
 			])
 		);
-		expect(memberCall!.body).toHaveLength(8);
+		expect(memberCall!.body).toHaveLength(6);
+		// Positive proof — absence, not just a changed value.
+		expect(memberCall!.body!.some((p) => p.type === 'name')).toBe(false);
+		expect(memberCall!.body!.some((p) => p.type === '_viewer')).toBe(false);
 	});
 
 	it('grants the person self-_editor via POST entity/{personId} (parity with native auto-create — load-bearing for T4.6 lazy creates)', async () => {

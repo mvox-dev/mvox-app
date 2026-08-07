@@ -61,7 +61,6 @@ export interface OrgOption {
 }
 
 export interface CreateInviteInput {
-	memberName: string;
 	orgId: string;
 }
 
@@ -180,9 +179,6 @@ export async function createInvite(
 	fetchImpl: typeof fetch = fetch
 ): Promise<CreateInviteResult> {
 	// Input guards BEFORE any fetch, each naming the offending field.
-	if (!input.memberName.trim()) {
-		throw new Error('createInvite: memberName must not be empty');
-	}
 	if (!input.orgId) {
 		throw new Error('createInvite: orgId must not be empty');
 	}
@@ -284,17 +280,18 @@ export async function createInvite(
 	}
 
 	// ── 4. Member create — `person` ref + `status:'active'` are what
-	// findMyMemberId filters on (rsvpData.ts); `_sharing:'private'` + explicit
-	// `_viewer` grant for the invitee is the slice3-proven visibility model;
-	// `name` is a mandatory member prop-def on live polyphony.
+	// findMyMemberId filters on (rsvpData.ts). `_sharing:'domain'` (#36): the
+	// member→domain ruling unbreaks the roster query (#18/T3.2), which under
+	// `private` returned only the invitee's own membership; domain sharing also
+	// covers her own read, so the slice3-era explicit `_viewer` grant is retired.
+	// NO `name` property (#36) — the member carries no name; that lives on a
+	// separate per-visibility-level entity now (T4.3/T4.8).
 	const memberProps: Prop[] = [
 		{ type: '_type', reference: memberTypeId },
 		{ type: '_parent', reference: input.orgId },
-		{ type: 'name', string: input.memberName },
 		{ type: 'person', reference: personId },
 		{ type: 'status', string: 'active' },
-		{ type: '_sharing', string: 'private' },
-		{ type: '_viewer', reference: personId },
+		{ type: '_sharing', string: 'domain' },
 		{ type: '_inheritrights', boolean: true }
 	];
 	const memberRes = await entuFetch(
