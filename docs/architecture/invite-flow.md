@@ -2,8 +2,8 @@
 
 > **Canonical mechanics anchor.** This repo doc is the authority for the invite path (division of record: `docs/` wins for mechanics). The wiki page `Reference-invite-flow` is the readable companion built from this file. Extend this from `entu-api` source or from something observed live — never from a summary.
 
-- **Status:** Active reference · 2026-08-07
-- **Built from:** `entu-api` source @`82cb25b` and this repo `main` @`cf66173`, each claim verified `file:line` this session; slice-4 (onboarding, #21) as built.
+- **Status:** Active reference · 2026-08-07 (updated with live T4.9/#29 gate findings)
+- **Built from:** `entu-api` source @`82cb25b` and this repo `main` @`cf66173`, each claim verified `file:line` this session; slice-4 (onboarding, #21) as built. Live corrections from the T4.9 gate (#29, 2026-08-07) marked **[LIVE]** below.
 - **Companions:** `docs/architecture/entu-rights-and-visibility-model.md` (rights/visibility) · wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) §0 "where a `person` comes from".
 
 **Provenance discipline.** Every mechanics claim is **[SRC]** (traceable to `entu-api` source `file:line`), **[LIVE]** (empirically confirmed, with what was observed), or **[CONV]** (an mvox-app convention — true because we chose it, not because Entu enforces it). Unmarked is not established. **The invite path's anonymity and one-shot binding are Entu platform behaviours** — mvox uses the right field and reads the result; it does not re-implement them.
@@ -12,7 +12,7 @@
 
 ## The shape, in one breath
 
-The admin's app puts a fixed trigger constant in a special field; **Entu swaps it for an anonymous, signed, 7-day, one-shot ticket and throws the string away** (the invitee's real email never went there). mvox grabs that ticket on its single readable pass, wraps it in a link, shows the link to the admin once, and forgets it. The admin hands the link to the invitee through a channel he trusts. She opens a public page that can *describe* the invitation but can't *verify* it, signs in as herself, and in doing so **the ticket she's holding is permanently bound to her real identity** — whoever holds it first, once, no check on the address.
+The admin's app puts a fixed trigger constant in a special field; **Entu swaps it for an anonymous, signed, one-shot ticket and throws the string away** (the invitee's real email never went there) — the ticket's stated lifetime is **24 hours on the live deployment** (§7 — the pinned source reads 7 days; the two disagree). mvox grabs that ticket on its single readable pass, wraps it in a link, shows the link to the admin once, and forgets it. The admin hands the link to the invitee through a channel he trusts. She opens a public page that can *describe* the invitation but can't *verify* it, signs in as herself, and in doing so **the ticket she's holding is permanently bound to her real identity** — whoever holds it first, once, no check on the address.
 
 ---
 
@@ -74,18 +74,20 @@ if (inviteData.db === onlyForAccount) {
 - **No auto-provision** — when an invite is in play, Entu's separate auto-create path is skipped (`inviteAttempted`) · **[SRC]** `routes/auth/index.get.js:237`. The only way in is claiming a minted ticket.
 - **Conflict guard** — if she already had a *different* identity in this collective, it refuses to bind a second one and returns `conflict: 'invite'`.
 
-## 7. Expiry — where the 7-day limit is actually enforced (and the honest edge)
+## 7. Expiry — where the limit is actually enforced (and two honest edges)
 
-The mint stamps a 7-day `exp` (§2), but **nothing enforces it until redemption**, and the mechanism is worth stating precisely rather than smoothing over:
+The mint stamps an `exp` (§2), but **nothing enforces it until redemption**, and the mechanism is worth stating precisely rather than smoothing over:
 
 - The landing page only `jwt.decode`s the token (unverified) — it enforces nothing (that is why a client-clock "expired" keeps the buttons, §5).
 - The real gate is `jwt.verify(query.invite, jwtSecret)` · **[SRC]** `entu-api routes/auth/index.get.js:206`, called with **no `ignoreExpiration`** — so an expired token *throws* and the surrounding `catch { /* invalid/expired invite */ }` · **[SRC]** `:232` swallows it: no bind, nothing written, the invitee lands on `outcome=dead`.
-- **The honest edge:** that enforcement **rides on the `jsonwebtoken` library's default `exp` check, not an explicit comparison in Entu's own code** — and Entu's *separate* unverified `jwt.decode` · **[SRC]** `:127` (used only to route by db) checks nothing. The 7-day limit holds; the mechanism is a library default. Stated here so it is not mistaken for a hand-written expiry gate.
+- **Honest edge 1:** that enforcement **rides on the `jsonwebtoken` library's default `exp` check, not an explicit comparison in Entu's own code** — and Entu's *separate* unverified `jwt.decode` · **[SRC]** `:127` (used only to route by db) checks nothing. Whatever the lifetime is, it's a library default, not a hand-written gate.
+- **Honest edge 2 — [LIVE] the source and the deployment disagree.** The pinned source (`@82cb25b`) signs with `expiresIn: '7d'` (§2). But a token minted live during the T4.9 gate walkthrough (2026-08-07, PO Gama + Mihkel) measured **`exp − iat` = 24 hours** — not 7 days. So **the deployed `entu-api` differs from the pinned commit this doc cites**; the 7-day figure is source-accurate but not currently deployment-accurate. Treat the live lifetime as **24h until re-pinned against the actual running version.** No raw token was recorded (bearer secret); only the delta was observed. Filed as a qualified note on #23 (the report that first quoted 7d).
 
 ## Why this is safe
 
 - The invitee's email **never reaches Entu** — mvox sends a constant, so there is no server-side copy, not even a transient one in a request log (#34, compile-time-enforced).
-- The token **names no one**; a leaked link exposes only *that one membership slot*, claimable once, expiring in 7 days.
+- The token **names no one**; a leaked link exposes only *that one membership slot*, claimable once, expiring within a day on the live deployment (§7 — source says 7 days, observed live lifetime is 24h; either way, bounded).
+- **[LIVE]** who may mint an invite is governed by Entu's own create-time admin gate — creating a `person` with `_parent` set to the database entity requires the caller to be in that entity's `_expander` (or `_owner`/`_editor`) list · **[SRC]** `entu-api utils/entity.js:234-253`. A non-admin account attempting `createInvite` gets a 400 there, confirmed live during the T4.9 gate. This makes the parent-expander list a de facto "who may invite" register — any future access-control change for inviting lives in Entu's admin configuration, not in mvox code.
 - The admin is the gate: entry is his deliberate act (create person + member + mint), never self-service — the counterpart to [Runbook §0](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) "a new sign-in gets no `person`."
 - The link is a bearer secret and is treated as one end to end: show-once, never stored by mvox, `***`-masked by Entu, delivered by a human through a trusted channel.
 
@@ -107,6 +109,6 @@ The mint stamps a 7-day `exp` (§2), but **nothing enforces it until redemption*
 
 ---
 
-*Status: the invite path (T4.5/#31) and the email→constant change (#34) are merged and live. The live end-to-end run — a real OAuth sign-in through a real invite — is deliberately a separate gate, T4.9/#29, still owed.*
+*Status: the invite path (T4.5/#31) and the email→constant change (#34) are merged and live. The T4.9/#29 live gate is CLOSED (2026-08-07): end-to-end invite creation + redemption observed against real polyphony (the `resolvePersonParentId`→`entity._id` fix confirmed working live; the completion gate fired correctly on an empty-name arrival, per the tracked #9 prefill follow-up), plus the admin-cannot-read-private-profile control (positive control present, non-empty data both sides — verdict recorded by the check owner on #29). Two live findings folded into this doc: the parent-expander admin gate (§"Why this is safe") and the 24h-vs-7d token lifetime (§7).*
 
 *Authored `(*MVOX:Palestrina*)` from source this session; provenance-tagged for PO Gama's record.*
