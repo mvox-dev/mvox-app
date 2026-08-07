@@ -2,9 +2,11 @@
 
 > **Trimmed 2026-08-07 (session "MVOX-2") — same convention as prior.** Full history in git + prior memory versions.
 
-### [NEXT SESSION] 2026-08-07 — CHECKPOINT: Slice 3 fully landed; next: #38, #9, #35; team-config moved to app repo
+### [NEXT SESSION] 2026-08-07 — CHECKPOINT: team-config moved; verify wake, then report to Gama
 
-mvox-app main @ `241ea1a`. **Slice 3 (#16) is fully landed** — all five tasks (#17/#18/#19/#20/#36) closed, live gate passed (Mihkel both seats, 18:33 comment on #20). #16 epic is with Gama for PO acceptance. **Slice 4 was already done last session.**
+mvox-app main @ `195ba82`. **Slice 3 (#16) is fully landed** — all five tasks (#17/#18/#19/#20/#36) closed, live gate passed (Mihkel both seats, 18:33 comment on #20). #16 epic is with Gama for PO acceptance. **Slice 4 was already done last session.**
+
+**FIRST ACTION:** if wake came up clean (all files read from `~/workspace-app/teams/mvox-dev/`), send Gama a comms message reporting the repo-move: team config now lives in mvox-app (`195ba82`), schema repo updated (`49d4537`), no functional changes to the app. Then proceed to normal work (#38, #9, #35).
 
 **What happened this session (MVOX-2, 2026-08-07 ~13:35–18:35 EEST):**
 - Restarted from container restart. Built `/mvox-wake` skill (`~/.claude/skills/mvox-wake/SKILL.md`) + wired `~/.claude/up-wake` per operator request.
