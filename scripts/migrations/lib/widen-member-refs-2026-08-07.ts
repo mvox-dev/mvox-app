@@ -52,6 +52,21 @@
 //   her private bucket already carries everything to her own _viewer/_owner,
 //   unaffected by this gap.
 //
+// SCOPE — INTENDED, NOT INCIDENTAL (Gama, #20 18:11 comment): the touch-save
+// population includes the 115 legacy orphan members (no `person` ref, carry a
+// raw `name` string with no matching prop-def since bundle 3). Their `section`
+// reference goes from private-bucketed to domain-readable as a DIRECT,
+// INTENDED consequence of this fix — sections are roster-bound data, and
+// domain-readability for `section` is exactly what this fix is FOR, applied
+// uniformly (not carved out for orphans). Their `name` value stays invisible
+// outside the private bucket regardless — it has no prop-def at all (removed
+// in T3.1 bundle 3), and `aggregateEntity`'s bucket-placement loop iterates
+// the TYPE's prop-def list (`aggregate.js:111` `for (const d in definition)`)
+// — a raw property with no corresponding prop-def entry is never considered
+// for domain/public placement, it only ever exists in `private` (seeded there
+// unconditionally by `propertiesToEntity`). `verifyMemberNamePropDefAbsent`
+// below re-confirms this live rather than relying on memory of bundle 3.
+//
 // VERIFICATION CAVEAT (read before trusting a "converted" ledger line): every
 // call in this script runs under ENTU_API_KEY (PO/db-root), which is `_owner`
 // on effectively all these entities and therefore ALWAYS reads the private
@@ -73,10 +88,67 @@ import { type EntuCfg } from '$lib/seasons/entuSeasons';
 export const PERSON_PROPDEF_ID = '69c7ea4b8489bfcb0e819f05';
 export const SECTION_PROPDEF_ID = '69c7ea4c8489bfcb0e819f27';
 export const MEMBER_TYPE_ID = '69c7ea4a8489bfcb0e819edd';
+
+/** Frozen drift-check baseline — the exact 245 domain-tier member ids read
+ * live during the #20 follow-up probe (2026-08-07, committed
+ * `seed-results/widen-member-refs-2026-08-07-dry-2026-08-07T15-02-29-868Z.json`).
+ * Per Gama's #20 18:11 comment: the touch-save population must be stated
+ * explicitly, not left as bare arithmetic ("247"). `enumerateDomainMembers`
+ * uses this as a set-based drift-check (C4-1/C5-1 discipline — the hardcoded
+ * list is a check against live data, not itself authoritative): any baseline
+ * id no longer domain-tier live is a HALT, named individually; any live
+ * domain-tier member NOT in this list is a genuine delta since the probe,
+ * surfaced separately as `newSinceBaselineIds` rather than silently folded
+ * into the count. */
+export const BASELINE_DOMAIN_MEMBER_IDS: string[] = [
+	'69c7f8728489bfcb0e81b085', '69c7f8728489bfcb0e81b091', '69c7f8728489bfcb0e81b09b', '69c7f8738489bfcb0e81b0a5', '69c7f8738489bfcb0e81b0af', '69c7f8738489bfcb0e81b0b9',
+	'69c7f8738489bfcb0e81b0c3', '69c7f8748489bfcb0e81b0d7', '69c7f8748489bfcb0e81b0e1', '69c7f8748489bfcb0e81b0eb', '69c7f8748489bfcb0e81b0f5', '69c7f8748489bfcb0e81b0ff',
+	'69c7f8758489bfcb0e81b109', '69c7f8758489bfcb0e81b11d', '69c7f8758489bfcb0e81b127', '69c7f8758489bfcb0e81b131', '69c7f8768489bfcb0e81b13b', '69c7f8768489bfcb0e81b145',
+	'69c7f8768489bfcb0e81b14f', '69c7f8768489bfcb0e81b159', '69c7f8778489bfcb0e81b16d', '69c7f8778489bfcb0e81b177', '69c7f8778489bfcb0e81b181', '69c7f8778489bfcb0e81b18b',
+	'69c7f8778489bfcb0e81b195', '69c7f8778489bfcb0e81b19f', '69c7f8788489bfcb0e81b1c9', '69c7f8788489bfcb0e81b1d5', '69c7f8798489bfcb0e81b1df', '69c7f8798489bfcb0e81b1e9',
+	'69c7f8798489bfcb0e81b1f3', '69c7f8798489bfcb0e81b1fd', '69c7f8798489bfcb0e81b211', '69c7f87a8489bfcb0e81b21b', '69c7f87a8489bfcb0e81b225', '69c7f87a8489bfcb0e81b22f',
+	'69c7f87a8489bfcb0e81b239', '69c7f87a8489bfcb0e81b243', '69c7f87b8489bfcb0e81b24d', '69c7f87b8489bfcb0e81b261', '69c7f87b8489bfcb0e81b26b', '69c7f87b8489bfcb0e81b275',
+	'69c7f87b8489bfcb0e81b27f', '69c7f87c8489bfcb0e81b289', '69c7f87c8489bfcb0e81b293', '69c7f87c8489bfcb0e81b29d', '69c7f87c8489bfcb0e81b2b1', '69c7f87c8489bfcb0e81b2bb',
+	'69c7f87d8489bfcb0e81b2c5', '69c7f87d8489bfcb0e81b2cf', '69c7f87e8489bfcb0e81b304', '69c7f87e8489bfcb0e81b310', '69c7f87e8489bfcb0e81b31a', '69c7f87e8489bfcb0e81b324',
+	'69c7f87f8489bfcb0e81b32e', '69c7f87f8489bfcb0e81b338', '69c7f87f8489bfcb0e81b342', '69c7f87f8489bfcb0e81b34c', '69c7f87f8489bfcb0e81b356', '69c7f87f8489bfcb0e81b360',
+	'69c7f8808489bfcb0e81b36a', '69c7f8808489bfcb0e81b37e', '69c7f8808489bfcb0e81b388', '69c7f8808489bfcb0e81b392', '69c7f8808489bfcb0e81b39c', '69c7f8808489bfcb0e81b3a6',
+	'69c7f8818489bfcb0e81b3b0', '69c7f8818489bfcb0e81b3ba', '69c7f8818489bfcb0e81b3c4', '69c7f8818489bfcb0e81b3ce', '69c7f8818489bfcb0e81b3d8', '69c7f8818489bfcb0e81b3e2',
+	'69c7f8828489bfcb0e81b3f6', '69c7f8828489bfcb0e81b400', '69c7f8828489bfcb0e81b40a', '69c7f8828489bfcb0e81b414', '69c7f8828489bfcb0e81b41e', '69c7f8828489bfcb0e81b428',
+	'69c7f8838489bfcb0e81b432', '69c7f8838489bfcb0e81b43c', '69c7f8838489bfcb0e81b446', '69c7f8838489bfcb0e81b450', '69c7f8838489bfcb0e81b45a', '69c7f8838489bfcb0e81b464',
+	'69c7f8848489bfcb0e81b478', '69c7f8848489bfcb0e81b482', '69c7f8848489bfcb0e81b48c', '69c7f8858489bfcb0e81b496', '69c7f8858489bfcb0e81b4a0', '69c7f8858489bfcb0e81b4aa',
+	'69c7f8858489bfcb0e81b4b4', '69c7f8858489bfcb0e81b4be', '69c7f8858489bfcb0e81b4c8', '69c7f8868489bfcb0e81b4d2', '69c7f8868489bfcb0e81b4dc', '69c7f8868489bfcb0e81b4e6',
+	'69c7f8878489bfcb0e81b510', '69c7f8878489bfcb0e81b51c', '69c7f8878489bfcb0e81b526', '69c7f8878489bfcb0e81b530', '69c7f8888489bfcb0e81b53a', '69c7f8888489bfcb0e81b54e',
+	'69c7f8888489bfcb0e81b558', '69c7f8888489bfcb0e81b562', '69c7f8888489bfcb0e81b56c', '69c7f8898489bfcb0e81b576', '69c7f8898489bfcb0e81b58a', '69c7f8898489bfcb0e81b594',
+	'69c7f8898489bfcb0e81b59e', '69c7f88a8489bfcb0e81b5a8', '69c7f88a8489bfcb0e81b5b2', '69c7f88a8489bfcb0e81b5c6', '69c7f88a8489bfcb0e81b5d0', '69c7f88b8489bfcb0e81b5da',
+	'69c7f88b8489bfcb0e81b5e4', '6a0dd24b4ff8277cd4306172', '6a0dd24b4ff8277cd430617c', '6a0dd24b4ff8277cd4306186', '6a0dd24c4ff8277cd4306190', '6a0dd24c4ff8277cd430619a',
+	'6a0dd24c4ff8277cd43061a4', '6a0dd24c4ff8277cd43061ae', '6a0dd24c4ff8277cd43061b8', '6a0dd24d4ff8277cd43061c2', '6a0dd24d4ff8277cd43061cc', '6a0dd24d4ff8277cd43061d6',
+	'6a0dd24d4ff8277cd43061e0', '6a0dd24d4ff8277cd43061ea', '6a0dd24d4ff8277cd43061f4', '6a0dd24d4ff8277cd43061fe', '6a0dd24e4ff8277cd4306208', '6a0dd24e4ff8277cd4306212',
+	'6a0dd24e4ff8277cd430621c', '6a0dd24e4ff8277cd4306226', '6a0dd24f4ff8277cd4306230', '6a0dd24f4ff8277cd430623a', '6a0dd24f4ff8277cd4306244', '6a0dd24f4ff8277cd430624e',
+	'6a0dd24f4ff8277cd4306258', '6a0dd24f4ff8277cd4306262', '6a0dd24f4ff8277cd430626c', '6a0dd2504ff8277cd4306276', '6a0dd2504ff8277cd4306280', '6a0dd2504ff8277cd430628a',
+	'6a0dd2504ff8277cd4306294', '6a0dd2504ff8277cd430629e', '6a0dd2504ff8277cd43062a8', '6a0dd2514ff8277cd43062b2', '6a0dd2514ff8277cd43062bc', '6a0dd2514ff8277cd43062c6',
+	'6a0dd2514ff8277cd43062d0', '6a0dd2524ff8277cd43062da', '6a0dd2524ff8277cd43062e4', '6a0dd2524ff8277cd43062ee', '6a0dd2524ff8277cd43062f8', '6a0dd2524ff8277cd4306302',
+	'6a0dd2524ff8277cd430630c', '6a0dd2534ff8277cd4306316', '6a0dd2534ff8277cd4306320', '6a0dd2534ff8277cd430632a', '6a0dd2534ff8277cd4306334', '6a0dd2534ff8277cd430633e',
+	'6a0dd2544ff8277cd4306348', '6a0dd2544ff8277cd4306352', '6a0dd2544ff8277cd430635c', '6a0dd2544ff8277cd4306366', '6a0dd2544ff8277cd4306370', '6a0dd2554ff8277cd430637a',
+	'6a0dd2554ff8277cd4306384', '6a0dd2554ff8277cd430638e', '6a0dd2554ff8277cd4306398', '6a0dd2564ff8277cd43063a2', '6a0dd2564ff8277cd43063ac', '6a0dd2564ff8277cd43063b6',
+	'6a0dd2564ff8277cd43063c0', '6a0dd2574ff8277cd43063ca', '6a0dd2574ff8277cd43063d4', '6a0dd2574ff8277cd43063de', '6a0dd2574ff8277cd43063e8', '6a0dd2574ff8277cd43063f2',
+	'6a0dd2574ff8277cd43063fc', '6a0dd2584ff8277cd4306406', '6a0dd2584ff8277cd4306410', '6a0dd2584ff8277cd430641a', '6a0dd2584ff8277cd4306424', '6a0dd2584ff8277cd430642e',
+	'6a0dd2584ff8277cd4306438', '6a0dd2594ff8277cd4306442', '6a0dd2594ff8277cd430644c', '6a0dd2594ff8277cd4306456', '6a0dd2594ff8277cd4306460', '6a0dd2594ff8277cd430646a',
+	'6a0dd2594ff8277cd4306474', '6a0dd25a4ff8277cd430647e', '6a0dd25a4ff8277cd4306488', '6a0dd25a4ff8277cd4306492', '6a0dd25a4ff8277cd430649c', '6a0dd25a4ff8277cd43064a6',
+	'6a0dd25a4ff8277cd43064b0', '6a0dd25b4ff8277cd43064ba', '6a0dd25b4ff8277cd43064c4', '6a0dd25b4ff8277cd43064ce', '6a0dd25b4ff8277cd43064d8', '6a0dd25b4ff8277cd43064e2',
+	'6a0dd25b4ff8277cd43064ec', '6a0dd25c4ff8277cd43064f6', '6a0dd25c4ff8277cd4306500', '6a0dd25c4ff8277cd430650a', '6a0dd25c4ff8277cd4306514', '6a0dd25c4ff8277cd430651e',
+	'6a0dd25d4ff8277cd4306528', '6a0dd25d4ff8277cd4306532', '6a0dd25d4ff8277cd430653c', '6a0dd25d4ff8277cd4306546', '6a0dd25d4ff8277cd4306550', '6a0dd25d4ff8277cd430655a',
+	'6a0dd25e4ff8277cd4306564', '6a0dd25e4ff8277cd430656e', '6a0dd25e4ff8277cd4306578', '6a0dd25e4ff8277cd4306582', '6a0dd25e4ff8277cd430658c', '6a0dd25e4ff8277cd4306596',
+	'6a0dd25e4ff8277cd43065a0', '6a0dd25f4ff8277cd43065aa', '6a0dd25f4ff8277cd43065b4', '6a0dd25f4ff8277cd43065be', '6a0dd25f4ff8277cd43065c8', '6a0dd25f4ff8277cd43065d2',
+	'6a0dd25f4ff8277cd43065dc', '6a0dd2604ff8277cd43065e6', '6a0dd2604ff8277cd43065f0', '6a0dd2604ff8277cd43065fa', '6a0dd2604ff8277cd4306604', '6a0dd2604ff8277cd430660e',
+	'6a0dd2604ff8277cd4306618', '6a12036c4ff8277cd4306b34', '6a12036c4ff8277cd4306b45', '6a12036d4ff8277cd4306b56', '6a12036d4ff8277cd4306b67', '6a12036d4ff8277cd4306b78',
+	'6a12036d4ff8277cd4306b89', '6a12036e4ff8277cd4306b9a', '6a12036e4ff8277cd4306bab', '6a2ba6c84cd971291c5d5320', '6a2fdb434cd971291c5d5e85'
+];
+
 /** Frozen drift tripwire — the live domain-tier member count as of the #20
  * follow-up probe (2026-08-07). `enumerateDomainMembers` HALTs loudly if the
- * live count differs (a member added/converted/deleted since the probe). */
-export const EXPECTED_DOMAIN_MEMBER_COUNT = 245;
+ * live count is BELOW this (a baseline member deleted/converted). Derived
+ * from `BASELINE_DOMAIN_MEMBER_IDS.length` so the two can never drift apart. */
+export const EXPECTED_DOMAIN_MEMBER_COUNT = BASELINE_DOMAIN_MEMBER_IDS.length;
 
 function errMsg(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
@@ -101,8 +173,11 @@ export const PROPDEF_TARGETS: PropDefTarget[] = [
  * trap. HALTs if the `member` type entity's own `_sharing` is absent (neither
  * 'domain' nor 'public' — the only two values the cap logic in
  * aggregate.js:113-121 lets pass through to the propdef-level tier). Read-only;
- * no live mutation. */
-export async function verifyMemberTypeSharing(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<void> {
+ * no live mutation. Returns the OBSERVED value (Gama, #20 18:11 comment: the
+ * ledger must record the actual value read, not just a pass/fail boolean) so
+ * callers can put the real string in the ledger/artifact, e.g. `'domain'` —
+ * not merely "guard passed". */
+export async function verifyMemberTypeSharing(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<string> {
 	const res = await entuFetch(cfg.db, `entity/${MEMBER_TYPE_ID}?props=_sharing,name`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`verifyMemberTypeSharing: GET ${MEMBER_TYPE_ID} failed: ${res.status}`);
 	const body = (await res.json()) as { entity?: { _sharing?: Array<{ string: string }>; name?: Array<{ string: string }> } };
@@ -117,6 +192,28 @@ export async function verifyMemberTypeSharing(cfg: EntuCfg, fetchImpl: typeof fe
 				`per aggregate.js's cap logic, an absent type-level _sharing nukes domain-bucket exposure for EVERY prop-def on this type regardless of ` +
 				`the prop-def-level fix below. Proceeding would make all writes a no-op while the ledger falsely reports success. Refuse to proceed — ` +
 				`re-verify manually / route back to a schema call before running this migration.`
+		);
+	}
+	return typeSharing;
+}
+
+/** Step-0 enumeration (READ-ONLY). Gama, #20 18:11 comment: confirm live —
+ * don't assume from memory of bundle 3 — that `member.name` genuinely has no
+ * prop-def, which is WHY the 115 orphan members' raw `name` string can never
+ * reach the domain bucket (aggregate.js's bucket-placement loop iterates the
+ * type's prop-def list; a value with no matching prop-def entry is never
+ * considered, see the module header's SCOPE note). HALTs if a `name` prop-def
+ * is unexpectedly found (would mean bundle 3 was reverted or never landed —
+ * changes the scope statement above). */
+export async function verifyMemberNamePropDefAbsent(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<void> {
+	const res = await entuFetch(cfg.db, `entity?_parent.reference=${MEMBER_TYPE_ID}&name.string=name&props=_id&limit=10`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`verifyMemberNamePropDefAbsent: GET failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
+	const found = body.entities ?? [];
+	if (found.length > 0) {
+		throw new Error(
+			`verifyMemberNamePropDefAbsent: member.name prop-def UNEXPECTEDLY FOUND (${found.map((e) => e._id).join(', ')}) — ` +
+				`the orphan-name-stays-invisible scope claim in this module's header no longer holds, refuse to proceed until re-verified manually`
 		);
 	}
 }
@@ -195,17 +292,44 @@ export async function widenPropDefs(cfg: EntuCfg, fetchImpl: typeof fetch = fetc
 
 export type MemberTarget = { memberId: string; sharingPropId: string; sharingValue: string };
 
+export type EnumerationResult = {
+	targets: MemberTarget[];
+	/** Live domain-tier member ids present in the frozen probe baseline (245, unchanged). */
+	unchangedFromBaselineCount: number;
+	/** Live domain-tier member ids NOT in the probe baseline — created/converted since
+	 * 2026-08-07's probe. Named individually (Gama, #20 18:11) rather than silently
+	 * folded into the touch-save count. Every one of these STILL needs touching:
+	 * Bundle A for THIS run has not executed yet at enumeration time (script
+	 * sequencing — Bundle A always runs before this function), so no member
+	 * currently enumerated was ever aggregated under the fixed prop-def, regardless
+	 * of whether it's a #36-created member whose OWN `person._sharing` is already
+	 * an explicit per-value 'domain' — that only helps `person`'s own entity-level
+	 * exposure, not whether THIS member's domain bucket carries the `person`
+	 * reference at all (that's gated by member.person's prop-def, which Bundle A
+	 * fixes, and by this member's own aggregation having run AFTER that fix). */
+	newSinceBaselineIds: string[];
+	/** Domain-tier members with NO `person` reference — the 115 legacy orphans (or
+	 * whatever that population currently measures live). Their `section` value
+	 * becomes domain-readable as an INTENDED consequence of this fix (see module
+	 * header SCOPE note); their `name` value has no prop-def and stays invisible
+	 * regardless (see `verifyMemberNamePropDefAbsent`). */
+	orphanMemberIds: string[];
+};
+
 /** Step-0 enumeration (READ-ONLY) for Bundle B. One page of every `member`;
  * keep only `_sharing==='domain'`; HALT if the drift tripwire count doesn't
- * match, or the page was truncated, or any domain-tier member is somehow
- * missing its own `_sharing` value's `_id` (would mean the filter itself is
- * unreliable — refuse to invent one). */
-export async function enumerateDomainMembers(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<MemberTarget[]> {
-	const res = await entuFetch(cfg.db, 'entity?_type.string=member&props=_id,_sharing&limit=1000', cfg.token, {}, fetchImpl);
+ * match, the page was truncated, any domain-tier member is somehow missing its
+ * own `_sharing` value's `_id`, OR any baseline member from the 2026-08-07
+ * probe is no longer domain-tier live (named individually, not just a count
+ * mismatch — matches the C4-1/C5-1 discipline: the hardcoded baseline is a
+ * drift-check, not blindly trusted, but a MISSING baseline id is real drift
+ * that a bare count comparison could mask). */
+export async function enumerateDomainMembers(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<EnumerationResult> {
+	const res = await entuFetch(cfg.db, 'entity?_type.string=member&props=_id,_sharing,person&limit=1000', cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`enumerateDomainMembers: member census GET failed: ${res.status}`);
 	const body = (await res.json()) as {
 		count?: number;
-		entities?: Array<{ _id: string; _sharing?: Array<{ _id: string; string: string }> }>;
+		entities?: Array<{ _id: string; _sharing?: Array<{ _id: string; string: string }>; person?: Array<{ reference: string }> }>;
 	};
 	const all = body.entities ?? [];
 	if (typeof body.count === 'number' && body.count !== all.length) {
@@ -213,21 +337,42 @@ export async function enumerateDomainMembers(cfg: EntuCfg, fetchImpl: typeof fet
 	}
 
 	const domainMembers = all.filter((m) => m._sharing?.[0]?.string === 'domain');
-	if (domainMembers.length !== EXPECTED_DOMAIN_MEMBER_COUNT) {
+	if (domainMembers.length < EXPECTED_DOMAIN_MEMBER_COUNT) {
 		throw new Error(
-			`enumerateDomainMembers: domain-tier member count DRIFT — expected ${EXPECTED_DOMAIN_MEMBER_COUNT}, got ${domainMembers.length}; refuse to proceed, re-verify before running again`
+			`enumerateDomainMembers: domain-tier member count DRIFT (shrunk) — expected at least ${EXPECTED_DOMAIN_MEMBER_COUNT} (probe baseline), got ${domainMembers.length}; refuse to proceed, re-verify before running again`
 		);
 	}
 
+	const liveIds = new Set(domainMembers.map((m) => m._id));
+	const missingFromBaseline = BASELINE_DOMAIN_MEMBER_IDS.filter((id) => !liveIds.has(id));
+	if (missingFromBaseline.length > 0) {
+		throw new Error(
+			`enumerateDomainMembers: ${missingFromBaseline.length} member(s) from the 2026-08-07 probe baseline are no longer domain-tier live — ` +
+				`${missingFromBaseline.join(', ')} — refuse to proceed, re-verify individually (deleted? converted back to private?)`
+		);
+	}
+	const baselineSet = new Set(BASELINE_DOMAIN_MEMBER_IDS);
+	const newSinceBaselineIds = domainMembers.filter((m) => !baselineSet.has(m._id)).map((m) => m._id);
+
 	const targets: MemberTarget[] = [];
+	const orphanMemberIds: string[] = [];
 	for (const m of domainMembers) {
 		const sharing = m._sharing?.[0];
 		if (!sharing?._id || sharing.string !== 'domain') {
 			throw new Error(`enumerateDomainMembers: member ${m._id} (filtered as domain-tier) has no readable _sharing._id — refuse to invent one, inspect manually`);
 		}
 		targets.push({ memberId: m._id, sharingPropId: sharing._id, sharingValue: sharing.string });
+		if (!m.person?.[0]?.reference) {
+			orphanMemberIds.push(m._id);
+		}
 	}
-	return targets;
+
+	return {
+		targets,
+		unchangedFromBaselineCount: BASELINE_DOMAIN_MEMBER_IDS.length,
+		newSinceBaselineIds,
+		orphanMemberIds
+	};
 }
 
 export type TouchSaveLedgerEntry = { memberId: string; status: 'touched' | 'failed'; newSharingPropId?: string; message?: string };
@@ -314,11 +459,17 @@ export async function touchSaveDomainMembers(cfg: EntuCfg, targets: MemberTarget
 // ── Dry-run render + ledger ────────────────────────────────────────────────────
 
 /** PURE dry-run render — the operator's per-run verify surface for both
- * bundles. Carries the explicit prop-def ids + the 245 count per PO's ask
- * (Gama, #20 17:54 comment) — not just "re-aggregate affected members". */
-export function renderPlan(memberTargets: MemberTarget[]): string {
+ * bundles. Carries the explicit prop-def ids + the disambiguated touch-save
+ * population (unchanged-from-baseline count, individually-named deltas,
+ * orphan-section-visibility scope statement) per Gama's #20 18:11 comment —
+ * not bare "247" arithmetic. `observedMemberTypeSharing` is the ACTUAL value
+ * read live (Gama: record the observed value, not a pass/fail boolean). */
+export function renderPlan(enumeration: EnumerationResult, observedMemberTypeSharing: string): string {
+	const { targets, unchangedFromBaselineCount, newSinceBaselineIds, orphanMemberIds } = enumeration;
 	const lines: string[] = [];
 	lines.push('#20 follow-up — widen member.person/section refs DRY-RUN plan (NO writes issued)');
+	lines.push('');
+	lines.push(`── Pre-check: member TYPE entity's own _sharing observed live = '${observedMemberTypeSharing}' (gate 2 of the 3-gate AND — PASSED, not assumed)`);
 	lines.push('');
 	lines.push('── Bundle A: WOULD SET _sharing:domain on 2 member prop-defs (schema-level, both currently absent)');
 	for (const t of PROPDEF_TARGETS) {
@@ -326,12 +477,23 @@ export function renderPlan(memberTargets: MemberTarget[]): string {
 	}
 	lines.push('');
 	lines.push('── Bundle B: WOULD TOUCH-SAVE every domain-tier member to re-trigger aggregation (GATED on Bundle A succeeding for BOTH prop-defs)');
-	lines.push(`   ${memberTargets.length} domain-tier members in scope (expected ${EXPECTED_DOMAIN_MEMBER_COUNT}). Excludes the 1 private-tier member (fixture B) — unaffected by this gap.`);
+	lines.push(`   Touch-save population: ${targets.length} domain-tier members total.`);
+	lines.push(`     - ${unchangedFromBaselineCount} unchanged from the 2026-08-07 probe baseline.`);
+	if (newSinceBaselineIds.length === 0) {
+		lines.push('     - 0 new since the probe — population is EXACTLY the probe baseline, unchanged.');
+	} else {
+		lines.push(`     - ${newSinceBaselineIds.length} NEW since the probe (named individually, not folded silently into the count):`);
+		for (const id of newSinceBaselineIds) {
+			lines.push(`         ${id}: STILL NEEDS touching. Bundle A for THIS run has not executed yet at enumeration time (script sequencing), so no member enumerated here was ever aggregated under the fixed prop-def — true regardless of creation path, including a #36-created member whose own person._sharing is already an explicit per-value 'domain' (that only covers person's own exposure, not whether THIS member's domain bucket carries the person/section references).`);
+		}
+	}
+	lines.push(`   ${orphanMemberIds.length} of these are legacy orphan members (no \`person\` ref) — their \`section\` value becomes domain-readable as an INTENDED consequence of this fix (sections are roster-bound data; see module header SCOPE note), their \`name\` value has no prop-def and stays invisible regardless (verifyMemberNamePropDefAbsent confirmed this live, not from memory of bundle 3).`);
+	lines.push('   Excludes the 1 private-tier member (fixture B) — unaffected by this gap.');
 	lines.push('   Mechanic: atomic single POST per member, re-asserting its OWN existing `_sharing:domain` value under its OWN existing property _id (insertProperties soft-deletes + re-inserts in one call — no multi-value risk). `_sharing` chosen over `status` because the 115 legacy orphan members carry no `status` value at all.');
 	lines.push('');
-	lines.push('WHY #36 new-member creation needs no fix: inviteData.ts:213 writes person._sharing as an explicit PER-VALUE override in the SAME create POST — that bypasses the prop-def default-bucketing path entirely (explicit _sharing always wins over prop-def-driven inheritance/defaulting). Confirmed mechanism, not a coincidence. member.section still has no per-value override on that path though — the schema fix (Bundle A) covers it going forward for every member, invite-created or not.');
+	lines.push('WHY #36 new-member creation needs no fix going forward (AFTER this migration lands): inviteData.ts:213 writes person._sharing as an explicit PER-VALUE override in the SAME create POST — that bypasses the prop-def default-bucketing path entirely (explicit _sharing always wins over prop-def-driven inheritance/defaulting). Confirmed mechanism, not a coincidence. member.section still has no per-value override on that path though — the schema fix (Bundle A) covers it going forward for every member, invite-created or not.');
 	lines.push('');
-	lines.push(`Totals: 2 prop-def writes planned, ${memberTargets.length} member touch-saves planned. Writes issued this run: 0.`);
+	lines.push(`Totals: 2 prop-def writes planned, ${targets.length} member touch-saves planned. Writes issued this run: 0.`);
 	return lines.join('\n');
 }
 

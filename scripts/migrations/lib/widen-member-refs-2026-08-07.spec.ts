@@ -5,7 +5,9 @@ import {
 	PERSON_PROPDEF_ID,
 	SECTION_PROPDEF_ID,
 	EXPECTED_DOMAIN_MEMBER_COUNT,
+	BASELINE_DOMAIN_MEMBER_IDS,
 	verifyMemberTypeSharing,
+	verifyMemberNamePropDefAbsent,
 	verifyPropDefsAbsent,
 	widenPropDefs,
 	enumerateDomainMembers,
@@ -13,7 +15,8 @@ import {
 	touchSaveDomainMembers,
 	renderPlan,
 	WidenLedger,
-	type MemberTarget
+	type MemberTarget,
+	type EnumerationResult
 } from './widen-member-refs-2026-08-07';
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -23,7 +26,9 @@ import {
 // review, non-blocking): a small spec matching the sibling migration libs'
 // precedent (t3-1-singer-provision.spec.ts, t4-10-plan.spec.ts) — covers
 // partial-A⇒no-B (by construction, exercised at the entrypoint not here),
-// count-drift⇒HALT, and same-id-response⇒failed.
+// count-drift⇒HALT, and same-id-response⇒failed. Extended after Gama's #20
+// 18:11 comment: observed-value ledger recording, baseline-set drift-check
+// (not just count), and the orphan/new-since-baseline classification.
 // ════════════════════════════════════════════════════════════════════════════
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
@@ -44,12 +49,12 @@ describe('verifyMemberTypeSharing', () => {
 		});
 	}
 
-	it('passes when the type is domain', async () => {
-		await expect(verifyMemberTypeSharing(cfg, mockTypeEntity('domain'))).resolves.toBeUndefined();
+	it('resolves with the OBSERVED value when the type is domain — not just a boolean', async () => {
+		await expect(verifyMemberTypeSharing(cfg, mockTypeEntity('domain'))).resolves.toBe('domain');
 	});
 
-	it('passes when the type is public', async () => {
-		await expect(verifyMemberTypeSharing(cfg, mockTypeEntity('public'))).resolves.toBeUndefined();
+	it('resolves with the OBSERVED value when the type is public', async () => {
+		await expect(verifyMemberTypeSharing(cfg, mockTypeEntity('public'))).resolves.toBe('public');
 	});
 
 	it('HALTs when the type _sharing is absent — the apparent-success trap Bentham flagged', async () => {
@@ -62,6 +67,20 @@ describe('verifyMemberTypeSharing', () => {
 
 	it('HALTs on a name mismatch (wrong entity id)', async () => {
 		await expect(verifyMemberTypeSharing(cfg, mockTypeEntity('domain', 'organization'))).rejects.toThrow(/wrong entity id/);
+	});
+});
+
+// ── verifyMemberNamePropDefAbsent ────────────────────────────────────────────
+
+describe('verifyMemberNamePropDefAbsent', () => {
+	it('passes when no member.name prop-def is found', async () => {
+		const mock = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await expect(verifyMemberNamePropDefAbsent(cfg, mock)).resolves.toBeUndefined();
+	});
+
+	it('HALTs if a member.name prop-def is unexpectedly found — the orphan-name scope claim would no longer hold', async () => {
+		const mock = vi.fn().mockResolvedValue(json({ entities: [{ _id: 'propdef-name-revived' }] }));
+		await expect(verifyMemberNamePropDefAbsent(cfg, mock)).rejects.toThrow(/UNEXPECTEDLY FOUND/);
 	});
 });
 
@@ -100,31 +119,64 @@ describe('verifyPropDefsAbsent', () => {
 // ── enumerateDomainMembers ───────────────────────────────────────────────────
 
 describe('enumerateDomainMembers', () => {
-	function makeMember(i: number, sharing: string) {
-		return { _id: `member-${i}`, _sharing: [{ _id: `sharing-${i}`, string: sharing }] };
+	function baselineMember(id: string, opts: { hasPerson?: boolean } = {}) {
+		return {
+			_id: id,
+			_sharing: [{ _id: `sharing-${id}`, string: 'domain' }],
+			...(opts.hasPerson === false ? {} : { person: [{ reference: `person-for-${id}` }] })
+		};
 	}
 
-	it('HALTs on count drift', async () => {
-		const members = Array.from({ length: 3 }, (_, i) => makeMember(i, 'domain'));
+	it('HALTs when the live domain-tier count is below the baseline (shrunk)', async () => {
+		const members = BASELINE_DOMAIN_MEMBER_IDS.slice(0, 3).map((id) => baselineMember(id));
 		const mock = vi.fn().mockResolvedValue(json({ count: members.length, entities: members }));
-		await expect(enumerateDomainMembers(cfg, mock)).rejects.toThrow(/count DRIFT/);
+		await expect(enumerateDomainMembers(cfg, mock)).rejects.toThrow(/count DRIFT \(shrunk\)/);
 	});
 
 	it('HALTs on a truncated page (server count mismatch)', async () => {
-		const members = Array.from({ length: EXPECTED_DOMAIN_MEMBER_COUNT }, (_, i) => makeMember(i, 'domain'));
+		const members = BASELINE_DOMAIN_MEMBER_IDS.map((id) => baselineMember(id));
 		const mock = vi.fn().mockResolvedValue(json({ count: members.length + 1, entities: members }));
 		await expect(enumerateDomainMembers(cfg, mock)).rejects.toThrow(/truncated/);
 	});
 
-	it('returns exactly the domain-tier members, excluding private ones, when the count matches', async () => {
-		const domainMembers = Array.from({ length: EXPECTED_DOMAIN_MEMBER_COUNT }, (_, i) => makeMember(i, 'domain'));
+	it('HALTs, naming them individually, if any baseline member is no longer domain-tier live', async () => {
+		const members = BASELINE_DOMAIN_MEMBER_IDS.slice(1).map((id) => baselineMember(id)); // drop the first baseline id
+		// pad back up to count so the "shrunk" guard doesn't fire first — simulate a
+		// REPLACEMENT (same count, different composition), the exact case a bare
+		// count check would miss.
+		members.push(baselineMember('member-not-in-baseline'));
+		const mock = vi.fn().mockResolvedValue(json({ count: members.length, entities: members }));
+		await expect(enumerateDomainMembers(cfg, mock)).rejects.toThrow(new RegExp(BASELINE_DOMAIN_MEMBER_IDS[0]));
+	});
+
+	it('reports EXACTLY the baseline, unchanged, when live matches the baseline set 1:1 — excludes private members', async () => {
+		const domainMembers = BASELINE_DOMAIN_MEMBER_IDS.map((id) => baselineMember(id));
 		const privateMember = { _id: 'member-private', _sharing: [{ _id: 'sharing-private', string: 'private' }] };
 		const all = [...domainMembers, privateMember];
 		const mock = vi.fn().mockResolvedValue(json({ count: all.length, entities: all }));
-		const targets = await enumerateDomainMembers(cfg, mock);
-		expect(targets).toHaveLength(EXPECTED_DOMAIN_MEMBER_COUNT);
-		expect(targets.every((t) => t.memberId !== 'member-private')).toBe(true);
-		expect(targets[0]).toEqual({ memberId: 'member-0', sharingPropId: 'sharing-0', sharingValue: 'domain' });
+		const result = await enumerateDomainMembers(cfg, mock);
+		expect(result.targets).toHaveLength(EXPECTED_DOMAIN_MEMBER_COUNT);
+		expect(result.targets.every((t) => t.memberId !== 'member-private')).toBe(true);
+		expect(result.unchangedFromBaselineCount).toBe(EXPECTED_DOMAIN_MEMBER_COUNT);
+		expect(result.newSinceBaselineIds).toEqual([]);
+		expect(result.orphanMemberIds).toEqual([]);
+	});
+
+	it('surfaces a member created since the probe as an individually-named delta, not silently folded into the count', async () => {
+		const domainMembers = BASELINE_DOMAIN_MEMBER_IDS.map((id) => baselineMember(id));
+		const newMember = baselineMember('member-brand-new-since-probe');
+		const all = [...domainMembers, newMember];
+		const mock = vi.fn().mockResolvedValue(json({ count: all.length, entities: all }));
+		const result = await enumerateDomainMembers(cfg, mock);
+		expect(result.targets).toHaveLength(EXPECTED_DOMAIN_MEMBER_COUNT + 1);
+		expect(result.newSinceBaselineIds).toEqual(['member-brand-new-since-probe']);
+	});
+
+	it('classifies members with no `person` ref as orphans', async () => {
+		const domainMembers = BASELINE_DOMAIN_MEMBER_IDS.map((id, i) => baselineMember(id, { hasPerson: i >= 2 }));
+		const mock = vi.fn().mockResolvedValue(json({ count: domainMembers.length, entities: domainMembers }));
+		const result = await enumerateDomainMembers(cfg, mock);
+		expect(result.orphanMemberIds).toEqual(BASELINE_DOMAIN_MEMBER_IDS.slice(0, 2));
 	});
 });
 
@@ -217,13 +269,33 @@ describe('touchSaveCanary', () => {
 // ── renderPlan / WidenLedger ──────────────────────────────────────────────────
 
 describe('renderPlan', () => {
-	it('carries the explicit prop-def ids and the exact member count, not just a generic description', () => {
-		const targets: MemberTarget[] = [{ memberId: 'm1', sharingPropId: 's1', sharingValue: 'domain' }];
-		const plan = renderPlan(targets);
+	it('carries the explicit prop-def ids, the disambiguated population breakdown, and the observed type-sharing value', () => {
+		const enumeration: EnumerationResult = {
+			targets: [{ memberId: 'm1', sharingPropId: 's1', sharingValue: 'domain' }],
+			unchangedFromBaselineCount: 245,
+			newSinceBaselineIds: ['m1-new'],
+			orphanMemberIds: ['m1-orphan']
+		};
+		const plan = renderPlan(enumeration, 'domain');
 		expect(plan).toContain(PERSON_PROPDEF_ID);
 		expect(plan).toContain(SECTION_PROPDEF_ID);
-		expect(plan).toContain('1 domain-tier members in scope');
+		expect(plan).toContain("observed live = 'domain'");
+		expect(plan).toContain('Touch-save population: 1 domain-tier members total');
+		expect(plan).toContain('245 unchanged from the 2026-08-07 probe baseline');
+		expect(plan).toContain('m1-new: STILL NEEDS touching');
+		expect(plan).toContain('1 of these are legacy orphan members');
 		expect(plan).toContain('Writes issued this run: 0');
+	});
+
+	it('states plainly when the population is EXACTLY the unchanged baseline (no deltas)', () => {
+		const enumeration: EnumerationResult = {
+			targets: BASELINE_DOMAIN_MEMBER_IDS.map((id) => ({ memberId: id, sharingPropId: `s-${id}`, sharingValue: 'domain' })),
+			unchangedFromBaselineCount: EXPECTED_DOMAIN_MEMBER_COUNT,
+			newSinceBaselineIds: [],
+			orphanMemberIds: []
+		};
+		const plan = renderPlan(enumeration, 'domain');
+		expect(plan).toContain('0 new since the probe — population is EXACTLY the probe baseline, unchanged');
 	});
 });
 

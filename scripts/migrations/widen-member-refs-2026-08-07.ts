@@ -36,6 +36,7 @@ import { join } from 'node:path';
 import { loadCfg } from './lib/creds';
 import {
 	verifyMemberTypeSharing,
+	verifyMemberNamePropDefAbsent,
 	verifyPropDefsAbsent,
 	widenPropDefs,
 	enumerateDomainMembers,
@@ -61,22 +62,31 @@ async function main(): Promise<void> {
 	const cfg = await loadCfg();
 
 	// Step-0 enumeration (READ-ONLY) + drift/precheck guards — HALTs loudly.
-	await verifyMemberTypeSharing(cfg);
+	const observedMemberTypeSharing = await verifyMemberTypeSharing(cfg);
+	await verifyMemberNamePropDefAbsent(cfg);
 	await verifyPropDefsAbsent(cfg);
-	const memberTargets = await enumerateDomainMembers(cfg);
+	const enumeration = await enumerateDomainMembers(cfg);
+	const memberTargets = enumeration.targets;
 
 	if (DRY_RUN) {
-		const plan = renderPlan(memberTargets);
+		const plan = renderPlan(enumeration, observedMemberTypeSharing);
 		console.log(plan);
 		console.log('DRY_RUN=true — no writes issued. Set DRY_RUN=false to execute (gated on #20 §8.6 authorization).');
 		const artifactPath = writeResultArtifact({
 			dryRun: true,
-			memberTypeSharingCheck: "PASSED — member TYPE entity's own _sharing confirmed live (Bentham YELLOW-A guard, verifyMemberTypeSharing)",
+			memberTypeSharingObserved: observedMemberTypeSharing,
+			memberNamePropDefCheck: 'PASSED — no member.name prop-def found live (bundle 3 removal confirmed, not assumed from memory)',
 			propDefTargets: [
 				{ id: '69c7ea4b8489bfcb0e819f05', name: 'person' },
 				{ id: '69c7ea4c8489bfcb0e819f27', name: 'section' }
 			],
-			domainMemberCount: memberTargets.length,
+			touchSavePopulation: {
+				total: memberTargets.length,
+				unchangedFromBaseline: enumeration.unchangedFromBaselineCount,
+				newSinceBaselineIds: enumeration.newSinceBaselineIds,
+				orphanMemberIds: enumeration.orphanMemberIds,
+				orphanCount: enumeration.orphanMemberIds.length
+			},
 			domainMemberIds: memberTargets.map((t) => t.memberId),
 			writesIssued: 0,
 			exitCode: 0
@@ -111,13 +121,20 @@ async function main(): Promise<void> {
 	ledger.printReport();
 	const artifactPath = writeResultArtifact({
 		dryRun: false,
-		memberTypeSharingCheck: "PASSED — member TYPE entity's own _sharing confirmed live (Bentham YELLOW-A guard, verifyMemberTypeSharing)",
+		memberTypeSharingObserved: observedMemberTypeSharing,
+		memberNamePropDefCheck: 'PASSED — no member.name prop-def found live (bundle 3 removal confirmed, not assumed from memory)',
 		canaryMemberId: canaryTarget.memberId,
 		propDefTargets: [
 			{ id: '69c7ea4b8489bfcb0e819f05', name: 'person' },
 			{ id: '69c7ea4c8489bfcb0e819f27', name: 'section' }
 		],
-		domainMemberCount: memberTargets.length,
+		touchSavePopulation: {
+			total: memberTargets.length,
+			unchangedFromBaseline: enumeration.unchangedFromBaselineCount,
+			newSinceBaselineIds: enumeration.newSinceBaselineIds,
+			orphanMemberIds: enumeration.orphanMemberIds,
+			orphanCount: enumeration.orphanMemberIds.length
+		},
 		...ledger.toJSON(),
 		exitCode: ledger.hasFailures() ? 1 : 0,
 		verificationCaveat:
