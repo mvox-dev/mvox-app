@@ -17,17 +17,29 @@ import { type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createProfile, saveProfileFields, listMyProfiles } from '$lib/profile/profileData';
 
 /**
- * The three real (non-synthetic) persons, frozen at build time as a DRIFT TRIPWIRE
- * — NOT the authoritative source. The live `_sharing !== 'public'` filter is
- * authoritative; `enumerateTargets` HALTs loudly if the live-filtered id-set does
- * not exactly equal this list (a new real person, or a synthetic drifted off
- * `public`). Ids: db-root/PO (private), Mihkel's OAuth person (domain), Test User
- * (domain). See RECON A §1-2.
+ * The real (non-synthetic) persons IN MIGRATION SCOPE, frozen at build time as a
+ * DRIFT TRIPWIRE — NOT the authoritative source. The live `_sharing !== 'public'`
+ * filter (minus `EXCLUDED_TARGET_IDS`) is authoritative; `enumerateTargets` HALTs
+ * loudly if the live-filtered-and-included id-set does not exactly equal this list
+ * (a new real person, or a synthetic drifted off `public`). Ids: Mihkel's OAuth
+ * person (domain), Test User (domain). The db-root/PO person is EXCLUDED — see
+ * `EXCLUDED_TARGET_IDS`. See RECON A §1-2.
  */
 export const EXPECTED_TARGET_IDS: readonly string[] = [
-	'69bcfd8e9c031ab8e6ce8079',
 	'6a2fc05e4cd971291c5d5ddc',
 	'6a097dcc90c8df7a1cc7d6dd'
+];
+
+/**
+ * Persons that pass the `_sharing !== 'public'` selector but are deliberately OUT
+ * of migration scope (#30). The db-root/PO person is private and structurally
+ * different from a real member; Mihkel ruled to leave its name/email in place.
+ * `enumerateTargets` filters these out BEFORE the drift check (so an excluded
+ * non-public person is dropped, not flagged as drift) and HALTs if the exclusion
+ * has gone stale — the id absent from the live non-public set, or no longer private.
+ */
+export const EXCLUDED_TARGET_IDS: readonly string[] = [
+	'69bcfd8e9c031ab8e6ce8079' // db-root/PO
 ];
 
 /** A real person selected for migration, with its raw field values + own tier. */
@@ -103,8 +115,10 @@ function errMsg(err: unknown): string {
  * Step-0 enumeration (READ-ONLY). One-page GET of every person projecting
  * `_id,name,email,_sharing`; HALT if `count !== entities.length` (a truncated page
  * would silently drop targets); keep only `_sharing?.[0]?.string !== 'public'` (the
- * SOLE discriminator — excludes the 128 synthetic public-tier singers); HALT if the
- * filtered id-set ≠ `EXPECTED_TARGET_IDS` (drift tripwire, with the exact set diff).
+ * SOLE discriminator — excludes the 128 synthetic public-tier singers); drop the
+ * `EXCLUDED_TARGET_IDS` (db-root/PO) BEFORE the drift check, HALTing if that
+ * exclusion is stale; HALT if the remaining filtered id-set ≠ `EXPECTED_TARGET_IDS`
+ * (drift tripwire, with the exact set diff).
  * Reads values off the entity `props=` projection, never a `?name.string=` filter
  * (the name/email prop-defs were deleted in T4.3 — only the raw values survive).
  */
@@ -139,9 +153,35 @@ export async function enumerateTargets(
 	}
 
 	// Sole discriminator: exclude the 128 synthetic public-tier singers.
-	const reals = entities.filter((e) => e._sharing?.[0]?.string !== 'public');
+	const nonPublic = entities.filter((e) => e._sharing?.[0]?.string !== 'public');
 
-	// Drift tripwire: the live-filtered id-set MUST exactly equal EXPECTED_TARGET_IDS.
+	// #30 EXCLUSION (BEFORE the drift check): the db-root/PO person passes the
+	// `_sharing !== 'public'` selector but is deliberately out of scope. Filter the
+	// excluded ids out of the working set FIRST — otherwise an excluded-but-non-public
+	// person would trip the drift tripwire as "unexpected" and HALT the whole run.
+	// Guard the exclusion's premise fail-loud: each excluded id must still be present
+	// AND still private, or the exclusion is stale and proceeding could migrate/skip
+	// the wrong record.
+	for (const id of EXCLUDED_TARGET_IDS) {
+		const present = nonPublic.find((e) => e._id === id);
+		if (!present) {
+			throw new Error(
+				`enumerateTargets: STALE EXCLUSION — excluded id ${id} is absent from the live non-public set; ` +
+					`the account it was written for is gone or changed tier. Refuse to migrate until the exclusion list is re-verified.`
+			);
+		}
+		const excludedTier = present._sharing?.[0]?.string;
+		if (excludedTier !== 'private') {
+			throw new Error(
+				`enumerateTargets: STALE EXCLUSION — excluded id ${id} is present but its _sharing is ${JSON.stringify(excludedTier)}, not 'private'; ` +
+					`the excluded account changed shape. Refuse to migrate until the exclusion is re-verified.`
+			);
+		}
+	}
+	const excludedSet = new Set(EXCLUDED_TARGET_IDS);
+	const reals = nonPublic.filter((e) => !excludedSet.has(e._id));
+
+	// Drift tripwire: the live-filtered-and-included id-set MUST exactly equal EXPECTED_TARGET_IDS.
 	const filteredIds = reals.map((e) => e._id);
 	const filteredSet = new Set(filteredIds);
 	const expectedSet = new Set(EXPECTED_TARGET_IDS);

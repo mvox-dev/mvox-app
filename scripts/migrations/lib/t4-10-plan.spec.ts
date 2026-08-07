@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
-	EXPECTED_TARGET_IDS,
 	buildPlan,
 	enumerateTargets,
 	migrateOneGroup,
@@ -30,6 +29,14 @@ const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 const PO = '69bcfd8e9c031ab8e6ce8079';
 const OAUTH = '6a2fc05e4cd971291c5d5ddc';
 const TESTUSER = '6a097dcc90c8df7a1cc7d6dd';
+
+// #30 exclusion — PO (db-root) is excluded from the migration entirely (see
+// `enumerateTargets` describe block below), so it is no longer a fixture that
+// `buildPlan` needs to receive in practice. The private→domain name-promotion +
+// email-tier-preservation logic the engine RETAINS is still real for any future
+// private-tier person, so its coverage moves to a synthetic id — not PO — to avoid
+// implying PO still flows through the pipeline.
+const SYNTHETIC_PRIVATE = 'synthetic-private-1';
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -156,8 +163,12 @@ const deleteCalls = (m: ReturnType<typeof vi.fn>) =>
 // ════════════════════════════════════════════════════════════════════════════
 
 describe('buildPlan — pure grouping into profile creates', () => {
+	// PO is intentionally NOT a fixture here (#30 exclusion — see enumerateTargets
+	// below); the private-tier split/promotion logic is exercised via a synthetic
+	// private person instead, since it stays live engine behavior for any future
+	// private-tier person even though PO himself never reaches buildPlan.
 	const targets: TargetPerson[] = [
-		{ personId: PO, name: 'Mihkel Putrinš', email: 'mitselek@gmail.com', sourceTier: 'private' },
+		{ personId: SYNTHETIC_PRIVATE, name: 'Mihkel Putrinš', email: 'mitselek@gmail.com', sourceTier: 'private' },
 		{ personId: OAUTH, name: 'Mihkel Putrinš', email: 'mihkel.putrinsh@gmail.com', sourceTier: 'domain' },
 		{ personId: TESTUSER, name: 'Test User', sourceTier: 'domain' }
 	];
@@ -166,12 +177,12 @@ describe('buildPlan — pure grouping into profile creates', () => {
 		expect(buildPlan(targets)).toHaveLength(4);
 	});
 
-	it('PO (private, both fields) splits into a domain{name} group + a private{email} group', () => {
-		const groups = buildPlan(targets).filter((g) => g.personId === PO);
+	it('a private-tier person (both fields) splits into a domain{name} group + a private{email} group', () => {
+		const groups = buildPlan(targets).filter((g) => g.personId === SYNTHETIC_PRIVATE);
 		expect(groups).toEqual(
 			expect.arrayContaining([
-				expect.objectContaining({ personId: PO, tier: 'domain', fields: { name: 'Mihkel Putrinš' }, ownerIds: [PO] }),
-				expect.objectContaining({ personId: PO, tier: 'private', fields: { email: 'mitselek@gmail.com' }, ownerIds: [PO] })
+				expect.objectContaining({ personId: SYNTHETIC_PRIVATE, tier: 'domain', fields: { name: 'Mihkel Putrinš' }, ownerIds: [SYNTHETIC_PRIVATE] }),
+				expect.objectContaining({ personId: SYNTHETIC_PRIVATE, tier: 'private', fields: { email: 'mitselek@gmail.com' }, ownerIds: [SYNTHETIC_PRIVATE] })
 			])
 		);
 		expect(groups).toHaveLength(2);
@@ -197,16 +208,16 @@ describe('buildPlan — pure grouping into profile creates', () => {
 		]);
 	});
 
-	it('name ALWAYS targets domain (even for the private PO) — the T4.8 gate reads only the domain profile', () => {
+	it('name ALWAYS targets domain (even for a private-tier person) — the T4.8 gate reads only the domain profile', () => {
 		const nameGroups = buildPlan(targets).filter((g) => 'name' in g.fields);
 		expect(nameGroups.every((g) => g.tier === 'domain')).toBe(true);
 	});
 
-	it('email PRESERVES its source tier: PO private → private, OAUTH domain → domain (move-not-copy never re-exposes)', () => {
+	it('email PRESERVES its source tier: private → private, domain → domain (move-not-copy never re-exposes)', () => {
 		const groups = buildPlan(targets);
-		const poEmail = groups.find((g) => g.personId === PO && 'email' in g.fields);
+		const privateEmail = groups.find((g) => g.personId === SYNTHETIC_PRIVATE && 'email' in g.fields);
 		const oauthEmail = groups.find((g) => g.personId === OAUTH && 'email' in g.fields);
-		expect(poEmail?.tier).toBe('private');
+		expect(privateEmail?.tier).toBe('private');
 		expect(oauthEmail?.tier).toBe('domain');
 	});
 
@@ -247,21 +258,57 @@ describe('enumerateTargets — synthetic-exclusion + guards (READ-ONLY)', () => 
 		return vi.fn().mockResolvedValue(json(page));
 	}
 
-	it('selects ONLY the 3 real persons; the 128 public-tier synthetic singers are never selected', async () => {
+	it('excludes the 128 synthetic public-tier singers AND the excluded db-root/PO person; the remaining 2 real persons proceed WITHOUT a drift HALT (#30 exclusion)', async () => {
 		const targets = await enumerateTargets(cfg, pageMock(censusPage(REAL_TRIO)));
-		expect(targets.map((t) => t.personId).sort()).toEqual([...EXPECTED_TARGET_IDS].sort());
+		expect(targets.map((t) => t.personId).sort()).toEqual([OAUTH, TESTUSER].sort());
+		expect(targets.some((t) => t.personId === PO)).toBe(false);
 		expect(targets.some((t) => t.personId.startsWith('synthetic-'))).toBe(false);
-		expect(targets).toHaveLength(3);
+		expect(targets).toHaveLength(2);
 	});
 
-	it('carries each real person source tier + values off the props projection (no ?name.string= filter)', async () => {
+	it('carries each remaining real person source tier + values off the props projection (no ?name.string= filter)', async () => {
 		const targets = await enumerateTargets(cfg, pageMock(censusPage(REAL_TRIO)));
-		expect(targets.find((t) => t.personId === PO)).toEqual(
-			expect.objectContaining({ personId: PO, sourceTier: 'private', name: 'Mihkel Putrinš', email: 'mitselek@gmail.com' })
+		expect(targets.find((t) => t.personId === OAUTH)).toEqual(
+			expect.objectContaining({ personId: OAUTH, sourceTier: 'domain', name: 'Mihkel Putrinš', email: 'mihkel.putrinsh@gmail.com' })
 		);
 		expect(targets.find((t) => t.personId === TESTUSER)).toEqual(
 			expect.objectContaining({ personId: TESTUSER, sourceTier: 'domain', name: 'Test User' })
 		);
+	});
+
+	// ── #30 exclusion mechanism invariants ────────────────────────────────────────
+	// PO (db-root/PO, `69bcfd8e9c031ab8e6ce8079`) is EXCLUDED from the migration by
+	// design (private, structurally different from real members) — but the selector
+	// is `_sharing !== 'public'`, not EXPECTED_TARGET_IDS (a drift tripwire only), so
+	// PO still passes the selector and must be filtered separately, BEFORE the drift
+	// check (else shrinking EXPECTED_TARGET_IDS alone would make the drift guard HALT
+	// the whole run on PO as "unexpected"). Hard-coding the PO id here rather than
+	// importing a not-yet-existent EXCLUDED_TARGET_IDS — RED must fail on the
+	// assertions, not on a missing export.
+
+	it('does NOT weaken the drift tripwire into "ignore anything unexpected": an unexpected 4th non-public person (neither expected nor excluded) still HALTs', async () => {
+		const UNEXPECTED = '6bffffff00000000000000f';
+		const page = censusPage([...REAL_TRIO, { _id: UNEXPECTED, sharing: 'domain', name: 'Someone New' }]);
+		const mock = pageMock(page);
+		await expect(enumerateTargets(cfg, mock)).rejects.toThrow(new RegExp(`drift|${UNEXPECTED}|unexpected`, 'i'));
+		expect(deleteCalls(mock)).toEqual([]);
+	});
+
+	it('HALTs (stale exclusion) when the excluded db-root/PO person is entirely absent from the live non-public set — refuse rather than silently proceed', async () => {
+		const page = censusPage([
+			{ _id: OAUTH, sharing: 'domain', name: 'Mihkel Putrinš', email: 'mihkel.putrinsh@gmail.com' },
+			{ _id: TESTUSER, sharing: 'domain', name: 'Test User' }
+		]);
+		await expect(enumerateTargets(cfg, pageMock(page))).rejects.toThrow(new RegExp(PO));
+	});
+
+	it('HALTs (stale exclusion) when the excluded db-root/PO person IS present but its tier is no longer private — the exclusion assumption no longer holds', async () => {
+		const page = censusPage([
+			{ _id: PO, sharing: 'domain', name: 'Mihkel Putrinš', email: 'mitselek@gmail.com' },
+			{ _id: OAUTH, sharing: 'domain', name: 'Mihkel Putrinš', email: 'mihkel.putrinsh@gmail.com' },
+			{ _id: TESTUSER, sharing: 'domain', name: 'Test User' }
+		]);
+		await expect(enumerateTargets(cfg, pageMock(page))).rejects.toThrow(new RegExp(PO));
 	});
 
 	it('the enumeration query is a READ — issues no POST and no DELETE', async () => {
@@ -292,18 +339,20 @@ describe('enumerateTargets — synthetic-exclusion + guards (READ-ONLY)', () => 
 	});
 
 	it('HALTs (zero writes) when a real person carries MULTIPLE name values — copy-one/delete-all would silently destroy the rest', async () => {
-		// A person with the expected id but TWO name values: passes drift + one-page, but the
-		// engine would copy only value[0] and DELETE all value-ids → silent data loss. Refuse.
+		// OAUTH (not PO) carries the violation: PO is excluded from migration BEFORE
+		// this guard runs (#30 exclusion, filtered out of `reals` pre-drift-check), so a
+		// multi-valued PO would never reach it — the guard must still catch a genuinely
+		// in-scope person. PO stays present+single-valued here as ordinary census noise.
 		const page = {
 			entities: [
-				{ _id: PO, _sharing: [{ string: 'private' }], name: [{ string: 'Mihkel Putrinš' }, { string: 'M. Putrinš' }], email: [{ string: 'mitselek@gmail.com' }] },
-				{ _id: OAUTH, _sharing: [{ string: 'domain' }], name: [{ string: 'Mihkel Putrinš' }], email: [{ string: 'mihkel.putrinsh@gmail.com' }] },
+				{ _id: PO, _sharing: [{ string: 'private' }], name: [{ string: 'Mihkel Putrinš' }], email: [{ string: 'mitselek@gmail.com' }] },
+				{ _id: OAUTH, _sharing: [{ string: 'domain' }], name: [{ string: 'Mihkel Putrinš' }, { string: 'M. Putrinš' }], email: [{ string: 'mihkel.putrinsh@gmail.com' }] },
 				{ _id: TESTUSER, _sharing: [{ string: 'domain' }], name: [{ string: 'Test User' }] }
 			],
 			count: 3
 		};
 		const mock = pageMock(page);
-		await expect(enumerateTargets(cfg, mock)).rejects.toThrow(new RegExp(`${PO}[\\s\\S]*name|multi|value\\[0\\]`, 'i'));
+		await expect(enumerateTargets(cfg, mock)).rejects.toThrow(new RegExp(`${OAUTH}[\\s\\S]*name|multi|value\\[0\\]`, 'i'));
 		expect(deleteCalls(mock)).toEqual([]);
 	});
 });
