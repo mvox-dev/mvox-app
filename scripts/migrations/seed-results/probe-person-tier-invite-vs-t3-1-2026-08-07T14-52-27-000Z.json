@@ -1,0 +1,40 @@
+{
+  "issue": "#20 follow-up (roster orphan-crash incident) — what tier does the #36 invite path write `person` at for a NEW member, vs the T3.1 bundle-2-converted 128, and why does `person` read narrower than the domain-shared member entity",
+  "readOnly": true,
+  "liveCallsMade": [
+    "GET entity?_type.string=person&props=_id,_sharing,_created&limit=1000",
+    "GET entity?_type.string=member&props=_id,_sharing,person,status,_created&limit=1000",
+    "GET entity?_parent.reference=<personType>&props=name,_sharing,type&limit=200",
+    "GET entity?_parent.reference=<memberType>&props=name,_sharing,type&limit=200",
+    "GET entity?_parent.reference=<profileType>&props=name,_sharing,type&limit=200",
+    "GET entity/<personType>?props=_sharing,name",
+    "GET entity/<memberType>?props=_sharing,name",
+    "GET entity/<profileType>?props=_sharing,name"
+  ],
+  "sourceRead": "src/lib/invite/inviteData.ts:209-213 (person create, explicit _sharing:'domain') and :283-299 (member create, explicit _sharing:'domain', no name — #36); ~/projects/entu-api/utils/aggregate.js:94-154 (bucket-placement cap logic) and ~/projects/entu-api/utils/entity.js:569-586 (cleanupEntity — which bucket a reader actually receives)",
+  "findings": {
+    "personEntityTierComparison": {
+      "t3_1_128_population": "person._sharing = 'public' (128/128, reconfirmed fresh)",
+      "sharpe36_new_members_per_source": "person._sharing = 'domain' (inviteData.ts:213, explicit at create) — NOT YET OBSERVED LIVE: no member exists in polyphony yet whose person is domain-tier AND was created after #36 landed (main@7177f85); the two non-public-person domain members found (6a2ba6c8.../db-root, 6a2fdb43.../OAUTH-Mihkel) both predate #36 by ~2 months",
+      "conclusion": "person entity tier is a RED HERRING for this bug. It differs between the two populations (public vs domain) but that difference is NOT the cause of the observed narrowing."
+    },
+    "rootCause": {
+      "summary": "member.person and member.section prop-defs both carry NO explicit _sharing (confirmed live, both '(absent)'). Per entu-api's bucket-placement cap (aggregate.js:113-121: `if (!definitionSharing) sharing = undefined` only guards against an UNSHARED TYPE — an unshared/absent PROPERTY definition's own sharing stays undefined regardless of the type's sharing, so it never satisfies `sharing === 'domain'` and is therefore written ONLY into the private bucket at aggregation time (aggregate.js:148-154), never into the domain bucket that non-owner authenticated readers receive (entity.js:573-586 cleanupEntity).",
+      "scopeCorrection": "This is a SCHEMA-LEVEL gap, uniform across every member instance by construction (bucket placement is per prop-def, not per-instance — matches the earlier profile-visibility-self-service finding that per-value _sharing overrides don't exist). It affects the 128 T3.1-converted members, the 115 legacy orphan members, the 2 pre-existing real members, AND would affect any future #36-created member identically — NOT specific to the T3.1 128 as originally framed. It only SURFACED on the 128 because Bundle 2 just made them domain-readable at all (previously private, so nobody but the owner could read the member row and the person-property gap was invisible).",
+      "member_current_section_and_status_are_fine": "member.current_section and member.status prop-defs ARE explicitly _sharing:'domain' — only person and section are affected."
+    },
+    "writeTimeSnapshotWarning": {
+      "citation": "docs/architecture/entu-rights-and-visibility-model.md §1 + §3 operational note",
+      "implication": "Buckets are materialized at WRITE time by aggregateEntity, not computed at read time. Setting member.person's (and member.section's) prop-def _sharing to 'domain' does NOT retroactively fix any EXISTING member's already-stored domain-bucket snapshot — each of the 245 currently-domain-tier member entities needs to be re-aggregated (a touch-save: POST any non-formula property back onto it) AFTER the prop-def change, for `person`/`section` to actually appear in their domain bucket. New members created AFTER the prop-def fix get it for free (fresh aggregation on create) — this specifically covers all future #36 signups, no extra step needed for them.",
+      "staleDocNote": "docs/architecture/entu-rights-and-visibility-model.md's §3 operational note calls the re-aggregation requirement 'moot for mvox because import is last, so prop-def sharing is set correctly at type-creation with no instances to re-aggregate' — that assumption is now STALE (245 live domain-tier member instances exist as of this probe). Flagging for whoever owns that doc; not editing it myself."
+    }
+  },
+  "recommendedFixShape": {
+    "step1": "POST _sharing:'domain' on member.person prop-def (currently absent)",
+    "step2": "POST _sharing:'domain' on member.section prop-def (currently absent, same gap, not yet reported as symptomatic but identical mechanism)",
+    "step3": "Re-aggregate (touch-save) all 245 currently-domain-tier member entities — NOT the 128-entity-only per-instance migration originally scoped. The 1 private-tier member (fixture B) does not need touching (her _viewer/_owner already sees the private bucket, which is unaffected).",
+    "notNeeded": "No per-instance `person`-entity-tier mutation on the 128. Person entity tier (public vs domain) is not the bottleneck — leave it alone."
+  },
+  "liveMutationScopeChange": "team-lead's original plan (\"widen person's tier to domain-readable on the converted 128\", 128 entity-level writes) targets the wrong layer and would not fix the observed symptom. The corrected fix is 2 prop-def writes + a touch-save sweep across 245 member entities (same op, applied uniformly) — smaller in write-count, broader in effect (fixes every current + future member at once, not just the 128).",
+  "verified": "source-cited (entu-api file:line + inviteData.ts file:line) and live-read this turn — no live mutation performed"
+}
