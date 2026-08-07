@@ -16,7 +16,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_intro: () => 'Fill in each level.',
 		profile_completion_required: () => 'Please add your name to continue.',
 		profile_no_collective: () => 'Select a collective.',
-		profile_load_error: (p: { message: string }) => `Could not load: ${p.message}`,
+		profile_load_error: () => 'Could not load your profile.',
 		profile_load_retry: () => 'Retry',
 		profile_field_name_label: () => 'Name',
 		profile_field_email_label: () => 'Email',
@@ -183,12 +183,29 @@ describe('/profile — render + seed', () => {
 		expect((q(container, '[data-testid="profile-public-name"]') as HTMLInputElement).value).toBe('');
 	});
 
-	it('a load failure fails loud (error line + retry), never a silent empty form', async () => {
+	it('a load failure shows a generic localized error (not raw message); logs detail to console.error; retry available', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectPolyphony();
 		h.listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-load-error"]')).not.toBeNull());
+
+		// Generic message shown, raw error NOT shown
+		expect(container.textContent).toContain('Could not load your profile.');
+		expect(container.textContent).not.toContain('listMyProfiles failed: 500');
+
+		// Detail logged to console
+		expect(consoleSpy).toHaveBeenCalled();
+		const loggedArgs = consoleSpy.mock.calls.flat();
+		const loggedDetail = loggedArgs.some(
+			(arg) => arg instanceof Error && arg.message === 'listMyProfiles failed: 500'
+		);
+		expect(loggedDetail).toBe(true);
+
+		// Retry button present
 		expect(q(container, '[data-testid="profile-retry-load"]')).not.toBeNull();
+
+		consoleSpy.mockRestore();
 	});
 });
 

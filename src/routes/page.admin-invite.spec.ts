@@ -20,7 +20,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_title: () => 'Invite a new member',
 		admin_invite_no_collective: () => 'Select a collective before creating invites.',
 		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
-		admin_invite_load_error: (p: { message: string }) => `Could not load: ${p.message}`,
+		admin_invite_load_error: () => 'Could not load invite prerequisites.',
 		admin_invite_retry_load: () => 'Retry',
 		admin_invite_org_label: () => 'Organization',
 		admin_invite_submit: () => 'Create invite',
@@ -154,7 +154,8 @@ describe('/admin/invite — prerequisites', () => {
 		expect(container.querySelector('[data-testid="invite-admin-load-error"]')).toBeNull();
 	});
 
-	it('an HTTP/network prerequisite failure → the load-error state with retry — NEVER conflated with no-access', async () => {
+	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectPolyphony();
 		h.resolveParentMock.mockRejectedValue(
 			new h.InviteCreateError('resolve failed: 500', { phase: 'person-parent-resolve', reason: 'http' })
@@ -167,6 +168,18 @@ describe('/admin/invite — prerequisites', () => {
 		});
 		expect(container.querySelector('[data-testid="invite-admin-no-access"]')).toBeNull();
 
+		// Generic message shown, raw error NOT shown
+		expect(container.textContent).toContain('Could not load invite prerequisites.');
+		expect(container.textContent).not.toContain('resolve failed: 500');
+
+		// Detail logged to console
+		expect(consoleSpy).toHaveBeenCalled();
+		const loggedArgs = consoleSpy.mock.calls.flat();
+		const loggedDetail = loggedArgs.some(
+			(arg) => arg instanceof Error && arg.message === 'resolve failed: 500'
+		);
+		expect(loggedDetail).toBe(true);
+
 		// Retry is real: once the backend recovers, the same button reaches ready.
 		loadOk();
 		const retry = container.querySelector(
@@ -177,6 +190,8 @@ describe('/admin/invite — prerequisites', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-org"]')).not.toBeNull();
 		});
+
+		consoleSpy.mockRestore();
 	});
 });
 

@@ -33,7 +33,6 @@
 	const db = $derived($selectedDbStore);
 
 	let status = $state<Status>('loading');
-	let loadErrorMessage = $state('');
 	let orgs = $state<OrgOption[]>([]);
 
 	let orgId = $state('');
@@ -54,7 +53,7 @@
 		if (!token) {
 			// Inconsistency on a protected route — fail loudly as a load error, never
 			// silently as "not admin".
-			loadErrorMessage = 'no auth token in storage on a protected route';
+			console.error('admin/invite: no auth token in storage on a protected route');
 			status = 'load-error';
 			return;
 		}
@@ -72,7 +71,7 @@
 				// NEVER presented as "not admin".
 				status = 'no-access';
 			} else {
-				loadErrorMessage = e instanceof Error ? e.message : String(e);
+				console.error('admin/invite: load failed', e);
 				status = 'load-error';
 			}
 		}
@@ -156,7 +155,7 @@
 			</p>
 		{:else if status === 'load-error'}
 			<div data-testid="invite-admin-load-error" class="flex flex-col gap-2" role="alert">
-				<p class="text-sm text-red-700">{m.admin_invite_load_error({ message: loadErrorMessage })}</p>
+				<p class="text-sm text-red-700">{m.admin_invite_load_error()}</p>
 				<button
 					type="button"
 					data-testid="invite-admin-retry-load"

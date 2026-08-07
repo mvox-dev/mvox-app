@@ -43,8 +43,6 @@
 	// load $effect.
 	let generation = 0;
 	let status = $state<Status>('loading');
-	let loadError = $state('');
-
 	// `draft` is bound to the inputs (what she is typing). `confirmed` is the last
 	// SERVER-confirmed value per level (id + fields); its `id` is null until a level's
 	// first save is confirmed. "Saved" is confirmed === draft. Keeping them separate is
@@ -166,7 +164,7 @@
 		if (!token) {
 			// Inconsistency on a protected route — fail loud as a load error, never a
 			// silent empty form.
-			loadError = 'no auth token in storage on a protected route';
+			console.error('profile: no auth token in storage on a protected route');
 			status = 'load-error';
 			return;
 		}
@@ -198,7 +196,7 @@
 			status = 'ready';
 		} catch (e) {
 			if (g !== generation) return;
-			loadError = e instanceof Error ? e.message : String(e);
+			console.error('profile: load failed', e);
 			status = 'load-error';
 		}
 	}
@@ -350,7 +348,7 @@
 		}
 		const token = getToken();
 		if (!token) {
-			loadError = 'no auth token in storage on a protected route';
+			console.error('profile: no auth token in storage on a protected route');
 			status = 'load-error';
 			return null;
 		}
@@ -432,7 +430,7 @@
 			// Token cleared mid-session (another-tab logout / expiry) on a protected
 			// route. Surface it exactly as the load path does — bounce her to reload/
 			// re-auth — rather than swallowing the save with no signal.
-			loadError = 'no auth token in storage on a protected route';
+			console.error('profile: no auth token in storage on a protected route');
 			status = 'load-error';
 			return;
 		}
@@ -452,7 +450,7 @@
 		// fails loud into `status`, but its synchronous prologue must not throw here).
 		void selected;
 		loadForSelected().catch((e) => {
-			loadError = e instanceof Error ? e.message : String(e);
+			console.error('profile: load failed', e);
 			status = 'load-error';
 		});
 	});
@@ -468,7 +466,7 @@
 			<p class="text-sm" aria-busy="true">…</p>
 		{:else if status === 'load-error'}
 			<div data-testid="profile-load-error" class="flex flex-col gap-2" role="alert">
-				<p class="text-sm text-red-700">{m.profile_load_error({ message: loadError })}</p>
+				<p class="text-sm text-red-700">{m.profile_load_error()}</p>
 				<button
 					type="button"
 					data-testid="profile-retry-load"
