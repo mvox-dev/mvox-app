@@ -91,8 +91,19 @@ The mint stamps a 7-day `exp` (§2), but **nothing enforces it until redemption*
 
 ## Where to read the code
 
-**Entu platform** (`github.com/entu/api` @`82cb25b`): mint + email deletion `utils/entity.js:462-467` · token masking `utils/entity.js:594-598` · redemption/binding `routes/auth/index.get.js:198-267` · SES email sentinel `routes/[db]/entity/[_id]/index.post.js:122`.
-**mvox** (`main` @`cf66173`): `src/lib/invite/inviteData.ts` (create + token read-back), `parse-invite-token.ts`, `invite-links.ts`, `redeem.ts`, `src/routes/invite/[token]/+page.svelte`, `src/routes/admin/invite/+page.svelte`, `src/lib/auth/guard.ts:43`.
+- **Entu platform** (`github.com/entu/api` @`82cb25b`):
+  - mint + email deletion `utils/entity.js:462-467`;
+  - token masking `utils/entity.js:594-598`;
+  - redemption/binding `routes/auth/index.get.js:198-267`;
+  - SES email sentinel `routes/[db]/entity/[_id]/index.post.js:122`.
+- **mvox** (`main` @`cf66173`):
+  - `src/lib/invite/inviteData.ts` (create + token read-back),
+  - `parse-invite-token.ts`,
+  - `invite-links.ts`,
+  - `redeem.ts`,
+  - `src/routes/invite/[token]/+page.svelte`,
+  - `src/routes/admin/invite/+page.svelte`,
+  - `src/lib/auth/guard.ts:43`.
 
 ---
 
