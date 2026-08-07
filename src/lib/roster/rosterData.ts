@@ -1,0 +1,190 @@
+import { entuFetch } from '$lib/entu/request';
+import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { listMyProfiles, resolveField, type MyProfile } from '$lib/profile/profileData';
+import { hasDomainName } from '$lib/profile/completionGate';
+
+// T3.2/#18 — the roster READ data layer. RED (Tallis): every exported function below
+// is a STUB that throws 'not implemented' so `rosterData.spec.ts` compiles and FAILS
+// on assertions until Josquin's GREEN. Types are real (compile-time only). See the
+// build-contract design doc (Slice-3 #16) for the full rationale; short version:
+//
+//   - `listActiveMembers` is a NEW query (widened variant of `findMyMemberId`'s
+//     pattern, rsvpData.ts:38-53) — no person filter, `status.string=active` only,
+//     matching the RULED TARGET member shape (`_sharing:'domain'`, NO `name` prop-def).
+//   - `listProfilesForPerson` is a thin, same-file wrapper around the ALREADY-generic
+//     `listMyProfiles(cfg, personId, ...)` (profileData.ts:156-198) — reused as-is for
+//     call-site clarity only; zero new wire shape.
+//   - `toRosterRow` is a PURE per-member resolver: `hasDomainName` (completionGate.ts,
+//     #28) gates presentability; the domain-tier name is read the SAME way
+//     `hasDomainName` itself inlines (never `resolveField`, for the identical
+//     public-bucket-duplication reason documented there); `resolveField` IS correct
+//     for email (narrower-wins is exactly "whichever tier she shared it at").
+//   - `loadRoster` orchestrates: list members → fan out ONE profile read per member
+//     (`Promise.all`, genuinely independent reads) → resolve → drop nameless (#28) →
+//     sort by name. Fails loud as a whole on any per-member read rejection.
+//
+// HARD RULE — NO client-side privacy-boundary filtering anywhere in this module. The
+// server (entu-api Gate A: list-query `access` pre-filter; Gate B: `cleanupEntity`
+// per-entity bucket selection) already ensures `listProfilesForPerson` can only ever
+// return a member's domain/public-tier profile entities — her private one never
+// crosses the wire. An `if (_sharing === 'private') skip` branch anywhere here would
+// be dead code at best and a correctness smell at worst (implies this path could
+// legitimately receive private data). The nameless-member exclusion in `toRosterRow`
+// is a COMPLETENESS gate (#28), not a privacy filter — see that function's doc.
+
+// ── list active members (new — no direct precedent) ──────────────────────────────
+
+export interface ActiveMember {
+	memberId: string;
+	personId: string;
+	/**
+	 * Optional per the RULED target member shape; '' when absent. No query precedent
+	 * exists for this field anywhere in src/ (grep confirms) — queried defensively
+	 * (cheap, same request) but deliberately NOT carried into RosterRow/rendered —
+	 * T3.2/T3.3's AC is name+email only.
+	 */
+	currentSection: string;
+}
+
+/**
+ * List every ACTIVE member, domain-wide (no person/org filter — the RULED target
+ * member is `_sharing:'domain'`, #16, so an ordinary domain reader's query
+ * legitimately includes every one of them via the same Gate-A mechanics that admit
+ * her own membership row). Widened variant of `findMyMemberId`'s query shape
+ * (rsvpData.ts:38-53): drops `person.reference`, widens `props`, widens `limit` to
+ * roster scale (500, matching `listRehearsals`/`listMyRsvps` — entuSeasons.ts:99,
+ * rsvpData.ts:67).
+ *
+ * NEVER projects `name` — the RULED target member carries no name prop-def; the
+ * shared subset's name comes solely from the person's domain profile (below). The
+ * SHIPPED create path (inviteData.ts:290-299) still puts `name` on `member` — this
+ * function targets the RULED shape, not the pre-#29 live one (deliberate).
+ */
+export async function listActiveMembers(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<ActiveMember[]> {
+	const res = await entuFetch(
+		cfg.db,
+		'entity?_type.string=member&status.string=active&props=person,current_section&limit=500',
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listActiveMembers failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{
+			_id: string;
+			person?: Array<{ reference: string }>;
+			current_section?: Array<{ string: string }>;
+		}>;
+	};
+	return (body.entities ?? []).map((raw) => {
+		const personId = raw.person?.[0]?.reference;
+		// `person` is REQUIRED on the target member shape — fail loud, naming the
+		// object, rather than silently dropping her out of the roster.
+		if (!personId) {
+			throw new Error(`listActiveMembers: member ${raw._id} has no person reference (data anomaly)`);
+		}
+		return {
+			memberId: raw._id,
+			personId,
+			currentSection: raw.current_section?.[0]?.string ?? ''
+		};
+	});
+}
+
+// ── read another member's shared profile subset (reused, not new) ────────────────
+
+/**
+ * Read a member's shared-tier profile entities by her PERSON id. Delegates to the
+ * IDENTICAL query `listMyProfiles` already issues (profileData.ts:156-198). That
+ * function is verified-generic over `personId` (its "My" reflects its one current
+ * call-site, self-edit, not a structural restriction). Kept as a same-file wrapper
+ * here — NOT a new export on `profileData.ts` — purely for roster call-site clarity;
+ * zero new wire shape, zero duplicated fetch logic.
+ *
+ * SAFE for any member's personId, not just the caller's own — entu-api enforces the
+ * privacy boundary server-side, upstream of this response body ever reaching the
+ * browser (see module header). This module therefore contains, and must continue to
+ * contain, NO `if (_sharing === 'private') skip` branch anywhere.
+ */
+export function listProfilesForPerson(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<MyProfile[]> {
+	return listMyProfiles(cfg, personId, fetchImpl);
+}
+
+// ── shared subset + the #28 completeness gate (new — pure) ───────────────────────
+
+export interface RosterRow {
+	memberId: string;
+	personId: string;
+	name: string;
+	email: string;
+}
+
+/**
+ * Pure per-member resolver: member + her already-fetched profile entities → a
+ * roster row, or null.
+ *
+ * NAME: read directly off the domain-tier entity — deliberately NOT
+ * `resolveField('name', ...)`. A public-tier name is written into BOTH the domain
+ * and public buckets at write time (entu-api aggregate.js:152-155, per
+ * completionGate.ts:22-25's comment), so `resolveField`'s narrower-wins would let a
+ * public-only name pass — contradicting the #28 ruling this gate exists to enforce.
+ * This inlines the identical domain-only scan `hasDomainName` itself uses.
+ *
+ * EMAIL: `resolveField(profiles, 'email')` IS correct to reuse as-is — "email from
+ * whichever tier she shared it at" is exactly narrower-wins semantics, and per
+ * `listProfilesForPerson`'s doc, `profiles` can never legitimately contain a private
+ * holder for it to wrongly prefer.
+ *
+ * `null` here is a COMPLETENESS gate (#28: "not shown as a member anywhere until
+ * [her domain name] is filled"), NOT a privacy filter — her `profiles` array has
+ * already legitimately crossed the server boundary by the time this function sees
+ * it (see module header). Do not conflate the two.
+ */
+export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): RosterRow | null {
+	if (hasDomainName(profiles) === 'incomplete') return null;
+	// Same domain-only scan hasDomainName itself inlines — NEVER resolveField for the
+	// name (public-bucket-duplication trap, see doc comment above).
+	let domain: MyProfile | undefined;
+	for (const p of profiles) if (p._sharing === 'domain') domain = p;
+	return {
+		memberId: member.memberId,
+		personId: member.personId,
+		// hasDomainName === 'complete' guarantees `domain` is set and non-blank.
+		name: domain!.name.trim(),
+		email: resolveField(profiles, 'email').value
+	};
+}
+
+// ── orchestration (new) ───────────────────────────────────────────────────────────
+
+/**
+ * List active members, fan out ONE profile read per member (`Promise.all` — N
+ * genuinely independent reads, not a shared cache key like `listRehearsals`' series
+ * cache), resolve each via `toRosterRow`, drop the nameless (#28), sort by name.
+ * FAIL LOUD as a whole: any per-member `listProfilesForPerson` rejection (non-2xx /
+ * unknown `_sharing`) propagates out of `Promise.all` and rejects `loadRoster` — a
+ * member the app couldn't verify never silently vanishes into an incomplete-looking
+ * roster; the caller sees the failure and can retry.
+ */
+export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<RosterRow[]> {
+	const members = await listActiveMembers(cfg, fetchImpl);
+	const rows = await Promise.all(
+		members.map(async (member) => {
+			const profiles = await listProfilesForPerson(cfg, member.personId, fetchImpl);
+			return toRosterRow(member, profiles);
+		})
+	);
+	return rows
+		.filter((r): r is RosterRow => r !== null)
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// (*MVOX:Tallis* — RED stubs + interface)
+// (*MVOX:Josquin* — GREEN implementation)

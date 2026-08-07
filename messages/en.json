@@ -77,5 +77,10 @@
 	"profile_repair_action": "Finish now",
 	"profile_repair_working": "Finishing…",
 	"profile_repair_error": "Couldn't finish. Your {field} is still readable at the {level} level — please try again.",
-	"profile_repair_done": "Visibility change completed."
+	"profile_repair_done": "Visibility change completed.",
+	"roster_title": "Roster",
+	"roster_no_collective": "Select a collective to view the roster.",
+	"roster_load_error": "Couldn't load the roster: {message}",
+	"roster_retry": "Retry",
+	"roster_empty": "No members to show yet."
 }
