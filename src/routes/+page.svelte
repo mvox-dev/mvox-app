@@ -13,6 +13,7 @@
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import { completionGateStore } from '$lib/profile/completionGate';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -191,6 +192,18 @@
 		rsvpQueue.request({ cfg, personId, memberId, eventId: item.id, existing, newStatus });
 	}
 
+	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
+	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
+	// display set). An incomplete member is a MEMBER, not a non-member — she must
+	// NEVER see the S2 "Only members can RSVP" hint; present her as 'loading'
+	// (disabled, no hint) until the gate resolves 'complete'. No new prop; no
+	// AgendaList/RsvpControl change. Effect B in +layout.svelte redirects her to
+	// /profile; this is the belt-and-suspenders that S1 never lights during the
+	// redirect's in-flight tick.
+	const gatedMembership = $derived(
+		membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : membership
+	);
+
 	$effect(() => {
 		loadForSelected();
 	});
@@ -231,7 +244,7 @@
 							items={agendaItems}
 							loading={agendaLoading}
 							{rsvpByEventId}
-							{membership}
+							membership={gatedMembership}
 							{pendingEventIds}
 							{failedEventIds}
 							onrsvpchange={handleRsvpChange}

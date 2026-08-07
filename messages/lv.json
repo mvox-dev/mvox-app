@@ -47,6 +47,7 @@
 	"rsvp_status_not_going": "Nebūšu",
 	"profile_title": "Jūsu profils",
 	"profile_intro": "Katrā redzamības līmenī aizpildiet tik daudz vai maz, cik vēlaties. Katrs līmenis tiek saglabāts atsevišķi.",
+	"profile_completion_required": "Lūdzu, pievienojiet savu vārdu, lai turpinātu.",
 	"profile_no_collective": "Lai rediģētu profilu, izvēlieties kolektīvu.",
 	"profile_load_error": "Neizdevās ielādēt jūsu profilu: {message}",
 	"profile_load_retry": "Mēģināt vēlreiz",

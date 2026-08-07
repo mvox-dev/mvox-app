@@ -66,6 +66,7 @@ import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 
 const EVENT = {
 	id: 'e1',
@@ -89,6 +90,12 @@ function setAuthedWithOneCollective() {
 	});
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set('polyphony');
+	// T4.8/#28 — the home page now folds the completion gate into the membership value
+	// (gatedMembership): a member is only shown the ENABLED control once the gate is
+	// 'complete'. This spec exercises the membership 3-state, so establish a complete
+	// gate; it is inert for the non-member / loading / fail-safe cases (gatedMembership
+	// only diverges when membership === 'member').
+	completionGateStore.set('complete');
 }
 
 async function waitForGoingButton(container: HTMLElement) {
@@ -108,6 +115,7 @@ afterEach(() => {
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
+	resetGate();
 });
 
 describe('+page — membership 3-state gates the non-member hint', () => {

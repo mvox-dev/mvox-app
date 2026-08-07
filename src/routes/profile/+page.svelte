@@ -18,6 +18,7 @@
 		type Level,
 		type MyProfile
 	} from '$lib/profile/profileData';
+	import { completionGateStore, resolveGate } from '$lib/profile/completionGate';
 	import { planLoadedDuplicateRepairs, FieldMoveError, type FieldKey } from '$lib/profile/fieldMove';
 	import { createFieldMoveQueue } from '$lib/profile/fieldMoveQueue';
 	import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
@@ -85,6 +86,15 @@
 	// failure (whose callback carries only `field` + `err`) can record the minted shell at
 	// the right level for an idempotent retry. Non-rendered → a plain (non-$state) let.
 	let pendingMoveTo: Record<FieldKey, Level | null> = { name: null, email: null };
+
+	// T4.8/#28 — the completion banner makes the redirect-to-/profile honest (not a
+	// silent bounce): one i18n key tells her why she is here. Consumes the SSOT
+	// `completionGateStore` (the module's declared current-user surface) rather than the
+	// raw `loadedProfiles` read, so it stays truthful ACROSS a save: an ordinary domain
+	// value-save reconciles the store (release refresh below) but never re-reads
+	// loadedProfiles, so a loadedProfiles-derived banner would keep telling her to add a
+	// name she just added. NEVER a person.* fallback — the non-display IS the mechanism.
+	const domainNameMissing = $derived($completionGateStore === 'incomplete');
 
 	const nameRes = $derived(resolveField(loadedProfiles, 'name'));
 	const emailRes = $derived(resolveField(loadedProfiles, 'email'));
@@ -187,6 +197,26 @@
 		}
 	}
 
+	// T4.8/#28 — re-read the SSOT completion gate after ANY confirmed local write that
+	// could change domain-name presence. BIDIRECTIONAL by design: not only does a
+	// completion OPEN the gate ('complete'), a within-session removal must RE-CLOSE it
+	// ('incomplete') — otherwise a member who clears her domain name (empty-save) or moves
+	// it off the domain tier (T4.7) keeps a stale 'complete' and is wrongly shown as a
+	// member with no domain name until a full reload re-runs the layout's Effect A (which
+	// keys only on auth + selected collective, never on a local mutation). Re-read (never
+	// cache past the write) so it reflects the server. Generation is irrelevant here: this
+	// only fires from callbacks that are themselves generation-guarded (reconcile /
+	// onMoveConfirmed no-op on a collective switch).
+	function refreshCompletionGate(): void {
+		const current = selected;
+		const token = getToken();
+		if (current && token) {
+			resolveGate({ db: current.db, token }, current.personId).then((state) =>
+				completionGateStore.set(state)
+			);
+		}
+	}
+
 	const queue = createProfileEditQueue(
 		{
 			setPending(level, isPending) {
@@ -214,6 +244,16 @@
 				const s = new Set(savedLevels);
 				s.add(level);
 				savedLevels = s;
+				// T4.8/#28 — re-resolve the completion gate on ANY server-confirmed domain
+				// save (reconcile fires only after the write id is confirmed — an honest
+				// round trip). NOT guarded on a non-empty name: a domain save that CLEARS
+				// the name (empty-save on an existing entity — canSave permits it) must
+				// re-CLOSE the gate to 'incomplete', not leave a stale 'complete'. The
+				// bidirectional re-read lives in refreshCompletionGate. A collective switch
+				// mid-save can't misfire it: reconcile itself is generation-guarded.
+				if (level === 'domain') {
+					refreshCompletionGate();
+				}
 			},
 			recordCreatedId(level, profileId) {
 				// PARTIAL: the shell was created but the fields were NOT confirmed. Record
@@ -251,6 +291,11 @@
 				busy = false;
 				moveFailed = withSet(moveFailed, field, false);
 				void loadForSelected();
+				// T4.8/#28 — a NAME move on/off the domain tier changes domain-name presence
+				// (domain→wider re-closes the gate; wider→domain opens it). Re-resolve the
+				// SSOT gate so a within-session move can't strand a stale 'complete'. Only a
+				// name move can affect it; an email move re-reads harmlessly but is skipped.
+				if (field === 'name') refreshCompletionGate();
 			},
 			onMoveFailed(field, err) {
 				busy = false;
@@ -429,6 +474,15 @@
 			</div>
 		{:else}
 			<p class="text-sm text-ink-2">{m.profile_intro()}</p>
+			{#if domainNameMissing}
+				<p
+					data-testid="profile-completion-required"
+					class="rounded-md bg-amber-100 px-4 py-3 text-sm text-amber-900"
+					role="status"
+				>
+					{m.profile_completion_required()}
+				</p>
+			{/if}
 			<div class="flex flex-col gap-4">
 				{#each LEVELS as level (level)}
 					<ProfileLevelCard

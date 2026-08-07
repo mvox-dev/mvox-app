@@ -14,6 +14,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
 		profile_title: () => 'Your profile',
 		profile_intro: () => 'Fill in each level.',
+		profile_completion_required: () => 'Please add your name to continue.',
 		profile_no_collective: () => 'Select a collective.',
 		profile_load_error: (p: { message: string }) => `Could not load: ${p.message}`,
 		profile_load_retry: () => 'Retry',
@@ -114,6 +115,12 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { get } from 'svelte/store';
+// The REAL SSOT gate store (not mocked) — the page consumes it for the completion
+// banner and re-resolves it via resolveGate after a domain write. resolveGate lazily
+// imports './profileData', which resolves to the SAME mocked module above, so the
+// gate re-read is driven by h.listMyProfilesMock.
+import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 
 function deferred<T>() {
 	let resolve!: (v: T) => void;
@@ -149,6 +156,7 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 	selectedCollectiveDbStore.set(null);
 	urlCollectiveDbStore.set(null);
+	resetGate();
 });
 
 describe('/profile — render + seed', () => {
@@ -372,5 +380,64 @@ describe('/profile — re-edit dispatches an update, not a create', () => {
 			existingId: 'prof-dom',
 			fields: { name: 'Ada M.', email: 'ada@x.io' }
 		});
+	});
+});
+
+describe('/profile — T4.8/#28 completion-gate SSOT release (bidirectional, no stale complete)', () => {
+	it('CLEARING the domain name (empty-save on an existing entity) RE-CLOSES the gate to incomplete — never a stale complete', async () => {
+		selectPolyphony();
+		// Loaded complete: a domain entity with a name; the gate is already 'complete'.
+		h.listMyProfilesMock.mockResolvedValueOnce([
+			{ _id: 'dp-1', name: 'Ann', email: '', _sharing: 'domain' }
+		]);
+		// The post-save gate re-read (refreshCompletionGate → resolveGate → listMyProfiles)
+		// sees the CLEARED domain entity.
+		h.listMyProfilesMock.mockResolvedValue([{ _id: 'dp-1', name: '', email: '', _sharing: 'domain' }]);
+		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'dp-1' });
+		completionGateStore.set('complete');
+
+		const { container } = render(Page);
+		await waitFor(() =>
+			expect((q(container, '[data-testid="profile-domain-name"]') as HTMLInputElement).value).toBe('Ann')
+		);
+
+		// Clear the name and save — canSave permits clearing a field on an existing entity.
+		await fireEvent.input(q(container, '[data-testid="profile-domain-name"]') as HTMLInputElement, {
+			target: { value: '' }
+		});
+		const save = q(container, '[data-testid="profile-domain-save"]') as HTMLButtonElement;
+		await waitFor(() => expect(save.disabled).toBe(false));
+		await fireEvent.click(save);
+
+		// The empty-save dispatched with name '' (still Case 1 — no Case 2 throw) …
+		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({ level: 'domain', existingId: 'dp-1' });
+		// … and the gate re-closed to 'incomplete' WITHOUT a reload (the stale-complete hole).
+		await vi.waitFor(() => expect(get(completionGateStore)).toBe('incomplete'));
+	});
+
+	it('the completion banner clears after a successful domain-name save (consumes the gate SSOT, not a stale loadedProfiles)', async () => {
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValueOnce([]); // no domain entity yet
+		// The post-save gate re-read sees the freshly-created named domain entity.
+		h.listMyProfilesMock.mockResolvedValue([{ _id: 'dp-1', name: 'Ann', email: '', _sharing: 'domain' }]);
+		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'dp-1' });
+		completionGateStore.set('incomplete'); // redirected here: banner is showing
+
+		const { container } = render(Page);
+		await waitFor(() =>
+			expect(q(container, '[data-testid="profile-completion-required"]')).not.toBeNull()
+		);
+
+		await fireEvent.input(q(container, '[data-testid="profile-domain-name"]') as HTMLInputElement, {
+			target: { value: 'Ann' }
+		});
+		const save = q(container, '[data-testid="profile-domain-save"]') as HTMLButtonElement;
+		await waitFor(() => expect(save.disabled).toBe(false));
+		await fireEvent.click(save);
+
+		// The banner clears in the same session — no reload — once the gate releases.
+		await waitFor(() => expect(q(container, '[data-testid="profile-completion-required"]')).toBeNull());
+		expect(get(completionGateStore)).toBe('complete');
 	});
 });

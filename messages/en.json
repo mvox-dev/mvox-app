@@ -47,6 +47,7 @@
 	"rsvp_status_not_going": "Not going",
 	"profile_title": "Your profile",
 	"profile_intro": "Fill in as much or as little as you like at each visibility level. Each level is saved on its own.",
+	"profile_completion_required": "Please add your name to continue.",
 	"profile_no_collective": "Select a collective to edit your profile.",
 	"profile_load_error": "Couldn't load your profile: {message}",
 	"profile_load_retry": "Retry",

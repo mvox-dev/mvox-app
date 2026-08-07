@@ -47,6 +47,7 @@
 	"rsvp_status_not_going": "Ei tule",
 	"profile_title": "Sinu profiil",
 	"profile_intro": "Täida igal nähtavuse tasemel nii palju või vähe, kui soovid. Iga tase salvestatakse eraldi.",
+	"profile_completion_required": "Palun lisa jätkamiseks oma nimi.",
 	"profile_no_collective": "Profiili muutmiseks vali kollektiiv.",
 	"profile_load_error": "Sinu profiili laadimine ebaõnnestus: {message}",
 	"profile_load_retry": "Proovi uuesti",

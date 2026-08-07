@@ -2,8 +2,17 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import { getToken } from '$lib/auth/storage';
+	import { isProtectedPath } from '$lib/auth/guard';
 	import { hydrateAuth, authStore } from '$lib/auth/session';
-	import { hydrateCollectives, urlCollectiveDbStore, COLLECTIVE_URL_PARAM } from '$lib/collectives/store';
+	import {
+		hydrateCollectives,
+		urlCollectiveDbStore,
+		selectedCollectiveStore,
+		COLLECTIVE_URL_PARAM
+	} from '$lib/collectives/store';
+	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
 
 	let { children } = $props();
 
@@ -62,6 +71,54 @@
 			hydrateCollectives().finally(() => {
 				hydrating = false;
 			});
+		}
+	});
+
+	// ── T4.8/#28 — the mandatory-completion gate, enforced APP-WIDE in the one layout
+	// so no member-display surface can open a hole. Two sibling effects:
+	//
+	// EFFECT A — populate `completionGateStore`. Keyed on auth + selected collective
+	// ONLY (NOT pathname → no per-nav refetch). `resetGate()` to 'loading' on every
+	// (re)selection (no-flash: only a genuine read flips it). Generation-guarded so a
+	// stale collective's late resolve can't clobber a newer one (mirrors the
+	// +page.svelte requestId / profile generation discipline). FAIL-SAFE lives in
+	// resolveGate (a read throw → 'loading', never a false 'incomplete').
+	let gateGen = 0;
+	$effect(() => {
+		const auth = $authStore;
+		const selected = $selectedCollectiveStore;
+		const g = ++gateGen;
+		if (auth.status !== 'authenticated' || !selected) {
+			resetGate();
+			return;
+		}
+		resetGate();
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		resolveGate(cfg, selected.personId).then((state) => {
+			if (g === gateGen) completionGateStore.set(state);
+		});
+	});
+
+	// EFFECT B — enforce (cheap, no fetch). Acts ONLY on a RESOLVED 'incomplete';
+	// 'loading' never redirects (no flash). Exempts /profile itself (redirect loop)
+	// and reuses guard.isProtectedPath so public/asset paths pass through. Unauth is
+	// owned by +layout.ts (synchronous load guard) — this short-circuits unless
+	// authenticated, so the two layers never collide.
+	$effect(() => {
+		const auth = $authStore;
+		const selected = $selectedCollectiveStore;
+		const gate = $completionGateStore;
+		const path = page.url.pathname;
+		if (auth.status !== 'authenticated' || !selected) return;
+		// This effect runs ONLY for an authenticated member with a selected collective,
+		// so `/` here is unambiguously the post-login app home (the agenda — the primary
+		// member-display surface, RECON A S1), NOT the public landing page. The guard's
+		// `isProtectedPath` puts `/` on the public allowlist (correct for the unauth
+		// login guard), so we redirect from `/` explicitly IN ADDITION to any protected
+		// path — otherwise an incomplete member would sit on the home agenda and never be
+		// "directed to the profile page" (the #28 ruling). Exempt `/profile` (loop).
+		if (gate === 'incomplete' && path !== '/profile' && (path === '/' || isProtectedPath(path))) {
+			goto('/profile');
 		}
 	});
 </script>
