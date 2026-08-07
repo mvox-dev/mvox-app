@@ -11,7 +11,9 @@
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"migrate:t4-10:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts",
+		"migrate:t4-10:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "^2.23.1",
@@ -25,6 +27,7 @@
 		"svelte": "^5.56.8",
 		"svelte-check": "^4.7.4",
 		"tailwindcss": "^4.3.3",
+		"tsx": "^4.20.6",
 		"typescript": "^6.0.2",
 		"vite": "^8.2.0",
 		"vitest": "^4.1.10"

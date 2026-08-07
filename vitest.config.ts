@@ -9,7 +9,10 @@ export default mergeConfig(
 	viteConfig,
 	defineConfig({
 		test: {
-			include: ['src/**/*.spec.ts'],
+			// Colocated app specs, plus standalone ops/migration scripts (T4.10/#30 —
+			// `scripts/migrations/**`). Scripts import the real `$lib` data layer and run
+			// under Vite here (the tsx `$env` shim is only for standalone node execution).
+			include: ['src/**/*.spec.ts', 'scripts/**/*.spec.ts'],
 			environment: 'node',
 			globals: false
 		}
