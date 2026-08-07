@@ -1,5 +1,6 @@
 {
   "reconstructed": true,
+  "reconstructedAt": "2026-08-07T10:46:51.000Z",
   "reconstructionNote": "This artifact was NOT captured at execution time (workspace-app scripts predating this one did not call writeResultArtifact / had no seed-results dir committed). Reconstructed 2026-08-07 by Pérotin from scratchpad prose (teams/mvox-dev/memory/perotin.md, T3.1 sections) + the scripts' own execution-time ledger/console output as reported live to team-lead, cross-checked against workspace-app git history (commit SHAs + timestamps below are read directly from `git log`, not recalled). No new live Entu calls were made to produce this file. Live-run wall-clock times were not captured originally; the ranges below are bounded by the adjacent build/commit timestamps.",
   "issue": "#17 (T3.1 singer provisioning) + #36 (T3.5, referenced for bundle-3 precondition) on mvox-dev/mvox-app",
   "authorizedBy": "team-lead, explicit \"I authorize this run\" messages per-bundle (bundles 1+2 together, then bundle 3 separately after #36 merged)",
@@ -49,7 +50,7 @@
             "note": "131 = 128 new + db-root's own admin profile + OAUTH's domain profile + fixture B's domain profile, all pre-existing/untouched; 1 public = OAUTH's pre-existing empty public profile"
           }
         },
-        "verified": true
+        "verified": "operator-attested, not machine-captured — see sourceCitations.runReporting"
       }
     },
     {
@@ -63,7 +64,7 @@
       "buildAndDryRunCommitTime": "2026-08-07T10:19:58Z",
       "liveRunWindow": "immediately after 82bb58b (2026-08-07T10:19:58Z) — same session, no pause round; exact wall-clock not captured at the time",
       "preconditionDoubleCheck": [
-        "read src/routes/.../inviteData.ts:288-295 on main directly — memberProps no longer includes {type:'name',...}",
+        "read src/lib/invite/inviteData.ts:288-295 on main directly — memberProps no longer includes {type:'name',...}",
         "live query independently confirmed the same precheck the script itself ran"
       ],
       "target": {
@@ -88,13 +89,14 @@
           "rawNameValue": "Yena Choi",
           "result": "persists untouched — confirms the mutation removed only the schema declaration, not underlying values, matching the T4.3 precedent"
         },
-        "verified": true
+        "verified": "operator-attested, not machine-captured — see sourceCitations.runReporting"
       }
     }
   ],
   "sourceCitations": {
     "scratchpad": "teams/mvox-dev/memory/perotin.md (workspace repo), sections \"T3.1 (#17) Bundles 1+2 — LIVE, authorized, VERIFIED\" and \"T3.1 (#17) Bundle 3 — schema mutation LIVE, authorized, VERIFIED\", both dated 2026-08-07",
-    "teamLeadAutoMemory": "~/.claude/projects/-home-ai-teams/memory/mvox-app-slice1-resume-state.md — corroborates bundle scope, main@821450a, and flags the same missing-artifact gap this file closes"
+    "teamLeadAutoMemory": "~/.claude/projects/-home-ai-teams/memory/mvox-app-slice1-resume-state.md — corroborates bundle scope and main@821450a only",
+    "runReporting": "NO retrievable pointer exists. The granular content here (both entity IDs, memberTypePropDefsAfter, both histograms, publicTierPersonsChecked, the three out-of-scope control tiers) was reported live to team-lead via SendMessage during the original session, but that session's runtime inbox rotated on restart and the repo-persisted snapshots (teams/mvox-dev/inboxes/team-lead.json, perotin.json, perotin-2.json) do not contain it (checked directly — no match for bundle/tier-conversion/singer-provision keywords, files are near-empty). This content's only remaining source is my own scratchpad paraphrase, i.e. operator-attested, not independently re-derivable from any committed artifact."
   },
-  "overallVerified": true
+  "overallVerified": "operator-attested, not machine-captured — see sourceCitations.runReporting"
 }
