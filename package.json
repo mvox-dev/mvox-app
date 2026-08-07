@@ -17,7 +17,9 @@
 		"migrate:t3-1:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-provision-singers-2026-08-07.ts",
 		"migrate:t3-1:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-provision-singers-2026-08-07.ts",
 		"migrate:t3-1-bundle3:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-bundle3-remove-member-name-2026-08-07.ts",
-		"migrate:t3-1-bundle3:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-bundle3-remove-member-name-2026-08-07.ts"
+		"migrate:t3-1-bundle3:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t3-1-bundle3-remove-member-name-2026-08-07.ts",
+		"migrate:widen-member-refs:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/widen-member-refs-2026-08-07.ts",
+		"migrate:widen-member-refs:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/widen-member-refs-2026-08-07.ts"
 	},
 	"devDependencies": {
 		"@inlang/paraglide-js": "^2.23.1",
