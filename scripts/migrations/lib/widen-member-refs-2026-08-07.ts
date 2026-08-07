@@ -72,6 +72,7 @@ import { type EntuCfg } from '$lib/seasons/entuSeasons';
 
 export const PERSON_PROPDEF_ID = '69c7ea4b8489bfcb0e819f05';
 export const SECTION_PROPDEF_ID = '69c7ea4c8489bfcb0e819f27';
+export const MEMBER_TYPE_ID = '69c7ea4a8489bfcb0e819edd';
 /** Frozen drift tripwire — the live domain-tier member count as of the #20
  * follow-up probe (2026-08-07). `enumerateDomainMembers` HALTs loudly if the
  * live count differs (a member added/converted/deleted since the probe). */
@@ -88,6 +89,37 @@ export const PROPDEF_TARGETS: PropDefTarget[] = [
 	{ id: PERSON_PROPDEF_ID, name: 'person' },
 	{ id: SECTION_PROPDEF_ID, name: 'section' }
 ];
+
+/** Step-0 enumeration (READ-ONLY) for Bundle A. Bentham YELLOW-A (pre-execution
+ * review, 2026-08-07): bucket exposure is a three-gate AND — prop-def sharing
+ * (what this script sets), the TYPE's own sharing (a CAP: `aggregate.js:94/115`
+ * — if the type entity has no `_sharing` at all, it nukes exposure for EVERY
+ * prop-def on that type regardless of what this script does), and the
+ * instance's own sharing (already satisfied for the 245 domain-tier members).
+ * Without this check, gate 2 being unset would make all 247 writes accomplish
+ * nothing while the ledger reports "2 set, 245 touched" — an apparent-success
+ * trap. HALTs if the `member` type entity's own `_sharing` is absent (neither
+ * 'domain' nor 'public' — the only two values the cap logic in
+ * aggregate.js:113-121 lets pass through to the propdef-level tier). Read-only;
+ * no live mutation. */
+export async function verifyMemberTypeSharing(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<void> {
+	const res = await entuFetch(cfg.db, `entity/${MEMBER_TYPE_ID}?props=_sharing,name`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`verifyMemberTypeSharing: GET ${MEMBER_TYPE_ID} failed: ${res.status}`);
+	const body = (await res.json()) as { entity?: { _sharing?: Array<{ string: string }>; name?: Array<{ string: string }> } };
+	const name = body.entity?.name?.[0]?.string;
+	if (name !== 'member') {
+		throw new Error(`verifyMemberTypeSharing: ${MEMBER_TYPE_ID} has name=${JSON.stringify(name)}, expected 'member' — wrong entity id, refuse to proceed`);
+	}
+	const typeSharing = body.entity?._sharing?.[0]?.string;
+	if (typeSharing !== 'domain' && typeSharing !== 'public') {
+		throw new Error(
+			`verifyMemberTypeSharing: member TYPE entity ${MEMBER_TYPE_ID} has _sharing=${JSON.stringify(typeSharing)} (expected 'domain' or 'public') — ` +
+				`per aggregate.js's cap logic, an absent type-level _sharing nukes domain-bucket exposure for EVERY prop-def on this type regardless of ` +
+				`the prop-def-level fix below. Proceeding would make all writes a no-op while the ledger falsely reports success. Refuse to proceed — ` +
+				`re-verify manually / route back to a schema call before running this migration.`
+		);
+	}
+}
 
 /** Step-0 enumeration (READ-ONLY) for Bundle A. HALTs if either prop-def
  * already carries a `_sharing` value (live state has moved since the probe —
@@ -199,6 +231,39 @@ export async function enumerateDomainMembers(cfg: EntuCfg, fetchImpl: typeof fet
 }
 
 export type TouchSaveLedgerEntry = { memberId: string; status: 'touched' | 'failed'; newSharingPropId?: string; message?: string };
+
+/** Bentham note B (pre-execution review, non-blocking, cheap to close):
+ * touch-save ONE member as a canary before the full 245-sweep. Performs the
+ * SAME atomic replace as `touchSaveDomainMembers`, then an EXTRA read-back
+ * asserting the member now carries EXACTLY ONE `_sharing` value (not two —
+ * would mean the atomic replace didn't actually soft-delete the old value,
+ * i.e. the multi-value-append trap fired despite the `_id`-carrying replace).
+ * Throws on ANY failure (canary is a hard gate, not a per-record ledger entry
+ * — if the canary fails, the full sweep must not run at all). Callers should
+ * invoke this on `targets[0]` before `touchSaveDomainMembers(cfg, targets.slice(1), ...)`
+ * and merge the canary's own ledger entry in front of the rest. */
+export async function touchSaveCanary(cfg: EntuCfg, target: MemberTarget, fetchImpl: typeof fetch = fetch): Promise<TouchSaveLedgerEntry> {
+	const [entry] = await touchSaveDomainMembers(cfg, [target], fetchImpl);
+	if (entry.status !== 'touched') {
+		throw new Error(`touchSaveCanary: canary member ${target.memberId} FAILED — ${entry.message}. Refuse to run the full 245-sweep on an unproven mechanic.`);
+	}
+
+	const getRes = await entuFetch(cfg.db, `entity/${target.memberId}?props=_sharing`, cfg.token, {}, fetchImpl);
+	if (!getRes.ok) throw new Error(`touchSaveCanary: post-touch read-back GET failed: ${getRes.status}`);
+	const body = (await getRes.json()) as { entity?: { _sharing?: Array<{ _id: string; string: string }> } };
+	const sharingValues = body.entity?._sharing ?? [];
+	if (sharingValues.length !== 1) {
+		throw new Error(
+			`touchSaveCanary: canary member ${target.memberId} now carries ${sharingValues.length} _sharing values (expected exactly 1) — ` +
+				`the atomic replace did not cleanly soft-delete the old value. Refuse to run the full 245-sweep; this member needs manual repair first.`
+		);
+	}
+	if (sharingValues[0].string !== 'domain') {
+		throw new Error(`touchSaveCanary: canary member ${target.memberId}'s single surviving _sharing value is ${JSON.stringify(sharingValues[0].string)}, expected 'domain'`);
+	}
+
+	return entry;
+}
 
 /** Bundle B engine. Per member: atomic single-POST replace of `_sharing` (same
  * `_id`, same string 'domain') — a genuine write with zero multi-value risk.

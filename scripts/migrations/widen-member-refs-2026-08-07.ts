@@ -14,6 +14,15 @@
 // 245 members before the schema fix landed would waste writes and produce a
 // misleading ledger — the touch-saves only DO anything once the prop-defs are
 // actually domain-shared).
+//
+// Bentham note C (pre-execution review, non-blocking): a PARTIAL Bundle B
+// failure has NO automatic re-run path. `verifyPropDefsAbsent` HALTs on any
+// re-run once Bundle A has landed (it refuses to proceed if either prop-def
+// already carries a _sharing value) — this script is not idempotent across a
+// second invocation after Bundle A succeeds. If Bundle B fails partway
+// through, do NOT blindly re-run; repair per the ledger's per-record failures
+// (same posture as T4.10) — likely a targeted retry against just the failed
+// memberIds, built as a follow-up if it's ever actually needed.
 // ─────────────────────────────────────────────────────────────────────────────
 //
 // Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
@@ -26,9 +35,11 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadCfg } from './lib/creds';
 import {
+	verifyMemberTypeSharing,
 	verifyPropDefsAbsent,
 	widenPropDefs,
 	enumerateDomainMembers,
+	touchSaveCanary,
 	touchSaveDomainMembers,
 	renderPlan,
 	WidenLedger
@@ -50,6 +61,7 @@ async function main(): Promise<void> {
 	const cfg = await loadCfg();
 
 	// Step-0 enumeration (READ-ONLY) + drift/precheck guards — HALTs loudly.
+	await verifyMemberTypeSharing(cfg);
 	await verifyPropDefsAbsent(cfg);
 	const memberTargets = await enumerateDomainMembers(cfg);
 
@@ -59,6 +71,7 @@ async function main(): Promise<void> {
 		console.log('DRY_RUN=true — no writes issued. Set DRY_RUN=false to execute (gated on #20 §8.6 authorization).');
 		const artifactPath = writeResultArtifact({
 			dryRun: true,
+			memberTypeSharingCheck: "PASSED — member TYPE entity's own _sharing confirmed live (Bentham YELLOW-A guard, verifyMemberTypeSharing)",
 			propDefTargets: [
 				{ id: '69c7ea4b8489bfcb0e819f05', name: 'person' },
 				{ id: '69c7ea4c8489bfcb0e819f27', name: 'section' }
@@ -86,12 +99,20 @@ async function main(): Promise<void> {
 	}
 
 	// Bundle B — touch-save sweep. Only reached if Bundle A succeeded for both prop-defs.
-	const touchEntries = await touchSaveDomainMembers(cfg, memberTargets);
-	ledger.recordTouch(touchEntries);
+	// Canary first (Bentham note B): touch ONE member, hard-verify exactly one
+	// _sharing value survives, before committing to the other 244. Throws (not a
+	// ledger entry) on failure — the full sweep must never run on an unproven
+	// mechanic.
+	const [canaryTarget, ...restTargets] = memberTargets;
+	const canaryEntry = await touchSaveCanary(cfg, canaryTarget);
+	const restEntries = await touchSaveDomainMembers(cfg, restTargets);
+	ledger.recordTouch([canaryEntry, ...restEntries]);
 
 	ledger.printReport();
 	const artifactPath = writeResultArtifact({
 		dryRun: false,
+		memberTypeSharingCheck: "PASSED — member TYPE entity's own _sharing confirmed live (Bentham YELLOW-A guard, verifyMemberTypeSharing)",
+		canaryMemberId: canaryTarget.memberId,
 		propDefTargets: [
 			{ id: '69c7ea4b8489bfcb0e819f05', name: 'person' },
 			{ id: '69c7ea4c8489bfcb0e819f27', name: 'section' }
