@@ -1,0 +1,1382 @@
+{
+  "dryRun": false,
+  "memberTypeSharingObserved": "domain",
+  "memberNamePropDefCheck": "PASSED — no member.name prop-def found live (bundle 3 removal confirmed, not assumed from memory)",
+  "canaryMemberId": "69c7f8728489bfcb0e81b085",
+  "propDefTargets": [
+    {
+      "id": "69c7ea4b8489bfcb0e819f05",
+      "name": "person"
+    },
+    {
+      "id": "69c7ea4c8489bfcb0e819f27",
+      "name": "section"
+    }
+  ],
+  "touchSavePopulation": {
+    "total": 245,
+    "unchangedFromBaseline": 245,
+    "newSinceBaselineIds": [],
+    "orphanMemberIds": [
+      "69c7f8728489bfcb0e81b085",
+      "69c7f8728489bfcb0e81b091",
+      "69c7f8728489bfcb0e81b09b",
+      "69c7f8738489bfcb0e81b0a5",
+      "69c7f8738489bfcb0e81b0af",
+      "69c7f8738489bfcb0e81b0b9",
+      "69c7f8738489bfcb0e81b0c3",
+      "69c7f8748489bfcb0e81b0d7",
+      "69c7f8748489bfcb0e81b0e1",
+      "69c7f8748489bfcb0e81b0eb",
+      "69c7f8748489bfcb0e81b0f5",
+      "69c7f8748489bfcb0e81b0ff",
+      "69c7f8758489bfcb0e81b109",
+      "69c7f8758489bfcb0e81b11d",
+      "69c7f8758489bfcb0e81b127",
+      "69c7f8758489bfcb0e81b131",
+      "69c7f8768489bfcb0e81b13b",
+      "69c7f8768489bfcb0e81b145",
+      "69c7f8768489bfcb0e81b14f",
+      "69c7f8768489bfcb0e81b159",
+      "69c7f8778489bfcb0e81b16d",
+      "69c7f8778489bfcb0e81b177",
+      "69c7f8778489bfcb0e81b181",
+      "69c7f8778489bfcb0e81b18b",
+      "69c7f8778489bfcb0e81b195",
+      "69c7f8778489bfcb0e81b19f",
+      "69c7f8788489bfcb0e81b1c9",
+      "69c7f8788489bfcb0e81b1d5",
+      "69c7f8798489bfcb0e81b1df",
+      "69c7f8798489bfcb0e81b1e9",
+      "69c7f8798489bfcb0e81b1f3",
+      "69c7f8798489bfcb0e81b1fd",
+      "69c7f8798489bfcb0e81b211",
+      "69c7f87a8489bfcb0e81b21b",
+      "69c7f87a8489bfcb0e81b225",
+      "69c7f87a8489bfcb0e81b22f",
+      "69c7f87a8489bfcb0e81b239",
+      "69c7f87a8489bfcb0e81b243",
+      "69c7f87b8489bfcb0e81b24d",
+      "69c7f87b8489bfcb0e81b261",
+      "69c7f87b8489bfcb0e81b26b",
+      "69c7f87b8489bfcb0e81b275",
+      "69c7f87b8489bfcb0e81b27f",
+      "69c7f87c8489bfcb0e81b289",
+      "69c7f87c8489bfcb0e81b293",
+      "69c7f87c8489bfcb0e81b29d",
+      "69c7f87c8489bfcb0e81b2b1",
+      "69c7f87c8489bfcb0e81b2bb",
+      "69c7f87d8489bfcb0e81b2c5",
+      "69c7f87d8489bfcb0e81b2cf",
+      "69c7f87e8489bfcb0e81b304",
+      "69c7f87e8489bfcb0e81b310",
+      "69c7f87e8489bfcb0e81b31a",
+      "69c7f87e8489bfcb0e81b324",
+      "69c7f87f8489bfcb0e81b32e",
+      "69c7f87f8489bfcb0e81b338",
+      "69c7f87f8489bfcb0e81b342",
+      "69c7f87f8489bfcb0e81b34c",
+      "69c7f87f8489bfcb0e81b356",
+      "69c7f87f8489bfcb0e81b360",
+      "69c7f8808489bfcb0e81b36a",
+      "69c7f8808489bfcb0e81b37e",
+      "69c7f8808489bfcb0e81b388",
+      "69c7f8808489bfcb0e81b392",
+      "69c7f8808489bfcb0e81b39c",
+      "69c7f8808489bfcb0e81b3a6",
+      "69c7f8818489bfcb0e81b3b0",
+      "69c7f8818489bfcb0e81b3ba",
+      "69c7f8818489bfcb0e81b3c4",
+      "69c7f8818489bfcb0e81b3ce",
+      "69c7f8818489bfcb0e81b3d8",
+      "69c7f8818489bfcb0e81b3e2",
+      "69c7f8828489bfcb0e81b3f6",
+      "69c7f8828489bfcb0e81b400",
+      "69c7f8828489bfcb0e81b40a",
+      "69c7f8828489bfcb0e81b414",
+      "69c7f8828489bfcb0e81b41e",
+      "69c7f8828489bfcb0e81b428",
+      "69c7f8838489bfcb0e81b432",
+      "69c7f8838489bfcb0e81b43c",
+      "69c7f8838489bfcb0e81b446",
+      "69c7f8838489bfcb0e81b450",
+      "69c7f8838489bfcb0e81b45a",
+      "69c7f8838489bfcb0e81b464",
+      "69c7f8848489bfcb0e81b478",
+      "69c7f8848489bfcb0e81b482",
+      "69c7f8848489bfcb0e81b48c",
+      "69c7f8858489bfcb0e81b496",
+      "69c7f8858489bfcb0e81b4a0",
+      "69c7f8858489bfcb0e81b4aa",
+      "69c7f8858489bfcb0e81b4b4",
+      "69c7f8858489bfcb0e81b4be",
+      "69c7f8858489bfcb0e81b4c8",
+      "69c7f8868489bfcb0e81b4d2",
+      "69c7f8868489bfcb0e81b4dc",
+      "69c7f8868489bfcb0e81b4e6",
+      "69c7f8878489bfcb0e81b510",
+      "69c7f8878489bfcb0e81b51c",
+      "69c7f8878489bfcb0e81b526",
+      "69c7f8878489bfcb0e81b530",
+      "69c7f8888489bfcb0e81b53a",
+      "69c7f8888489bfcb0e81b54e",
+      "69c7f8888489bfcb0e81b558",
+      "69c7f8888489bfcb0e81b562",
+      "69c7f8888489bfcb0e81b56c",
+      "69c7f8898489bfcb0e81b576",
+      "69c7f8898489bfcb0e81b58a",
+      "69c7f8898489bfcb0e81b594",
+      "69c7f8898489bfcb0e81b59e",
+      "69c7f88a8489bfcb0e81b5a8",
+      "69c7f88a8489bfcb0e81b5b2",
+      "69c7f88a8489bfcb0e81b5c6",
+      "69c7f88a8489bfcb0e81b5d0",
+      "69c7f88b8489bfcb0e81b5da",
+      "69c7f88b8489bfcb0e81b5e4"
+    ],
+    "orphanCount": 115
+  },
+  "propDefEntries": [
+    {
+      "propDefId": "69c7ea4b8489bfcb0e819f05",
+      "name": "person",
+      "status": "set"
+    },
+    {
+      "propDefId": "69c7ea4c8489bfcb0e819f27",
+      "name": "section",
+      "status": "set"
+    }
+  ],
+  "touchEntries": [
+    {
+      "memberId": "69c7f8728489bfcb0e81b085",
+      "status": "touched",
+      "newSharingPropId": "6a75f8af36c951d9114ece68"
+    },
+    {
+      "memberId": "69c7f8728489bfcb0e81b091",
+      "status": "touched",
+      "newSharingPropId": "6a75f8af36c951d9114ece69"
+    },
+    {
+      "memberId": "69c7f8728489bfcb0e81b09b",
+      "status": "touched",
+      "newSharingPropId": "6a75f8af36c951d9114ece6a"
+    },
+    {
+      "memberId": "69c7f8738489bfcb0e81b0a5",
+      "status": "touched",
+      "newSharingPropId": "6a75f8af36c951d9114ece6b"
+    },
+    {
+      "memberId": "69c7f8738489bfcb0e81b0af",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece6c"
+    },
+    {
+      "memberId": "69c7f8738489bfcb0e81b0b9",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece6d"
+    },
+    {
+      "memberId": "69c7f8738489bfcb0e81b0c3",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece6e"
+    },
+    {
+      "memberId": "69c7f8748489bfcb0e81b0d7",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece6f"
+    },
+    {
+      "memberId": "69c7f8748489bfcb0e81b0e1",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece70"
+    },
+    {
+      "memberId": "69c7f8748489bfcb0e81b0eb",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece71"
+    },
+    {
+      "memberId": "69c7f8748489bfcb0e81b0f5",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece72"
+    },
+    {
+      "memberId": "69c7f8748489bfcb0e81b0ff",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece73"
+    },
+    {
+      "memberId": "69c7f8758489bfcb0e81b109",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece74"
+    },
+    {
+      "memberId": "69c7f8758489bfcb0e81b11d",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b036c951d9114ece75"
+    },
+    {
+      "memberId": "69c7f8758489bfcb0e81b127",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece76"
+    },
+    {
+      "memberId": "69c7f8758489bfcb0e81b131",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece77"
+    },
+    {
+      "memberId": "69c7f8768489bfcb0e81b13b",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece78"
+    },
+    {
+      "memberId": "69c7f8768489bfcb0e81b145",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece79"
+    },
+    {
+      "memberId": "69c7f8768489bfcb0e81b14f",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece7a"
+    },
+    {
+      "memberId": "69c7f8768489bfcb0e81b159",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece7b"
+    },
+    {
+      "memberId": "69c7f8778489bfcb0e81b16d",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece7c"
+    },
+    {
+      "memberId": "69c7f8778489bfcb0e81b177",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece7d"
+    },
+    {
+      "memberId": "69c7f8778489bfcb0e81b181",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b136c951d9114ece7e"
+    },
+    {
+      "memberId": "69c7f8778489bfcb0e81b18b",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece7f"
+    },
+    {
+      "memberId": "69c7f8778489bfcb0e81b195",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece80"
+    },
+    {
+      "memberId": "69c7f8778489bfcb0e81b19f",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece81"
+    },
+    {
+      "memberId": "69c7f8788489bfcb0e81b1c9",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece82"
+    },
+    {
+      "memberId": "69c7f8788489bfcb0e81b1d5",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece83"
+    },
+    {
+      "memberId": "69c7f8798489bfcb0e81b1df",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece84"
+    },
+    {
+      "memberId": "69c7f8798489bfcb0e81b1e9",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece85"
+    },
+    {
+      "memberId": "69c7f8798489bfcb0e81b1f3",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece86"
+    },
+    {
+      "memberId": "69c7f8798489bfcb0e81b1fd",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b236c951d9114ece87"
+    },
+    {
+      "memberId": "69c7f8798489bfcb0e81b211",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece88"
+    },
+    {
+      "memberId": "69c7f87a8489bfcb0e81b21b",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece89"
+    },
+    {
+      "memberId": "69c7f87a8489bfcb0e81b225",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece8a"
+    },
+    {
+      "memberId": "69c7f87a8489bfcb0e81b22f",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece8b"
+    },
+    {
+      "memberId": "69c7f87a8489bfcb0e81b239",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece8c"
+    },
+    {
+      "memberId": "69c7f87a8489bfcb0e81b243",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece8d"
+    },
+    {
+      "memberId": "69c7f87b8489bfcb0e81b24d",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece8e"
+    },
+    {
+      "memberId": "69c7f87b8489bfcb0e81b261",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece8f"
+    },
+    {
+      "memberId": "69c7f87b8489bfcb0e81b26b",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece90"
+    },
+    {
+      "memberId": "69c7f87b8489bfcb0e81b275",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece91"
+    },
+    {
+      "memberId": "69c7f87b8489bfcb0e81b27f",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b336c951d9114ece92"
+    },
+    {
+      "memberId": "69c7f87c8489bfcb0e81b289",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece93"
+    },
+    {
+      "memberId": "69c7f87c8489bfcb0e81b293",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece94"
+    },
+    {
+      "memberId": "69c7f87c8489bfcb0e81b29d",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece95"
+    },
+    {
+      "memberId": "69c7f87c8489bfcb0e81b2b1",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece96"
+    },
+    {
+      "memberId": "69c7f87c8489bfcb0e81b2bb",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece97"
+    },
+    {
+      "memberId": "69c7f87d8489bfcb0e81b2c5",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece98"
+    },
+    {
+      "memberId": "69c7f87d8489bfcb0e81b2cf",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece99"
+    },
+    {
+      "memberId": "69c7f87e8489bfcb0e81b304",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece9a"
+    },
+    {
+      "memberId": "69c7f87e8489bfcb0e81b310",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece9b"
+    },
+    {
+      "memberId": "69c7f87e8489bfcb0e81b31a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b436c951d9114ece9c"
+    },
+    {
+      "memberId": "69c7f87e8489bfcb0e81b324",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ece9d"
+    },
+    {
+      "memberId": "69c7f87f8489bfcb0e81b32e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ece9e"
+    },
+    {
+      "memberId": "69c7f87f8489bfcb0e81b338",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ece9f"
+    },
+    {
+      "memberId": "69c7f87f8489bfcb0e81b342",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea0"
+    },
+    {
+      "memberId": "69c7f87f8489bfcb0e81b34c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea1"
+    },
+    {
+      "memberId": "69c7f87f8489bfcb0e81b356",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea2"
+    },
+    {
+      "memberId": "69c7f87f8489bfcb0e81b360",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea3"
+    },
+    {
+      "memberId": "69c7f8808489bfcb0e81b36a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea4"
+    },
+    {
+      "memberId": "69c7f8808489bfcb0e81b37e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea5"
+    },
+    {
+      "memberId": "69c7f8808489bfcb0e81b388",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b536c951d9114ecea6"
+    },
+    {
+      "memberId": "69c7f8808489bfcb0e81b392",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114ecea7"
+    },
+    {
+      "memberId": "69c7f8808489bfcb0e81b39c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114ecea8"
+    },
+    {
+      "memberId": "69c7f8808489bfcb0e81b3a6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114ecea9"
+    },
+    {
+      "memberId": "69c7f8818489bfcb0e81b3b0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114eceaa"
+    },
+    {
+      "memberId": "69c7f8818489bfcb0e81b3ba",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114eceab"
+    },
+    {
+      "memberId": "69c7f8818489bfcb0e81b3c4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114eceac"
+    },
+    {
+      "memberId": "69c7f8818489bfcb0e81b3ce",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114ecead"
+    },
+    {
+      "memberId": "69c7f8818489bfcb0e81b3d8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114eceae"
+    },
+    {
+      "memberId": "69c7f8818489bfcb0e81b3e2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b636c951d9114eceaf"
+    },
+    {
+      "memberId": "69c7f8828489bfcb0e81b3f6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb0"
+    },
+    {
+      "memberId": "69c7f8828489bfcb0e81b400",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb1"
+    },
+    {
+      "memberId": "69c7f8828489bfcb0e81b40a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb2"
+    },
+    {
+      "memberId": "69c7f8828489bfcb0e81b414",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb3"
+    },
+    {
+      "memberId": "69c7f8828489bfcb0e81b41e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb4"
+    },
+    {
+      "memberId": "69c7f8828489bfcb0e81b428",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb5"
+    },
+    {
+      "memberId": "69c7f8838489bfcb0e81b432",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb6"
+    },
+    {
+      "memberId": "69c7f8838489bfcb0e81b43c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb7"
+    },
+    {
+      "memberId": "69c7f8838489bfcb0e81b446",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb8"
+    },
+    {
+      "memberId": "69c7f8838489bfcb0e81b450",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b736c951d9114eceb9"
+    },
+    {
+      "memberId": "69c7f8838489bfcb0e81b45a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114eceba"
+    },
+    {
+      "memberId": "69c7f8838489bfcb0e81b464",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecebb"
+    },
+    {
+      "memberId": "69c7f8848489bfcb0e81b478",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecebc"
+    },
+    {
+      "memberId": "69c7f8848489bfcb0e81b482",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecebd"
+    },
+    {
+      "memberId": "69c7f8848489bfcb0e81b48c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecebe"
+    },
+    {
+      "memberId": "69c7f8858489bfcb0e81b496",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecebf"
+    },
+    {
+      "memberId": "69c7f8858489bfcb0e81b4a0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecec0"
+    },
+    {
+      "memberId": "69c7f8858489bfcb0e81b4aa",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecec1"
+    },
+    {
+      "memberId": "69c7f8858489bfcb0e81b4b4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecec2"
+    },
+    {
+      "memberId": "69c7f8858489bfcb0e81b4be",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b836c951d9114ecec3"
+    },
+    {
+      "memberId": "69c7f8858489bfcb0e81b4c8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ecec4"
+    },
+    {
+      "memberId": "69c7f8868489bfcb0e81b4d2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ecec5"
+    },
+    {
+      "memberId": "69c7f8868489bfcb0e81b4dc",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ecec6"
+    },
+    {
+      "memberId": "69c7f8868489bfcb0e81b4e6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ecec7"
+    },
+    {
+      "memberId": "69c7f8878489bfcb0e81b510",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ecec8"
+    },
+    {
+      "memberId": "69c7f8878489bfcb0e81b51c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ecec9"
+    },
+    {
+      "memberId": "69c7f8878489bfcb0e81b526",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ececa"
+    },
+    {
+      "memberId": "69c7f8878489bfcb0e81b530",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ececb"
+    },
+    {
+      "memberId": "69c7f8888489bfcb0e81b53a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ececc"
+    },
+    {
+      "memberId": "69c7f8888489bfcb0e81b54e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8b936c951d9114ececd"
+    },
+    {
+      "memberId": "69c7f8888489bfcb0e81b558",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114ecece"
+    },
+    {
+      "memberId": "69c7f8888489bfcb0e81b562",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114ececf"
+    },
+    {
+      "memberId": "69c7f8888489bfcb0e81b56c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced0"
+    },
+    {
+      "memberId": "69c7f8898489bfcb0e81b576",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced1"
+    },
+    {
+      "memberId": "69c7f8898489bfcb0e81b58a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced2"
+    },
+    {
+      "memberId": "69c7f8898489bfcb0e81b594",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced3"
+    },
+    {
+      "memberId": "69c7f8898489bfcb0e81b59e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced4"
+    },
+    {
+      "memberId": "69c7f88a8489bfcb0e81b5a8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced5"
+    },
+    {
+      "memberId": "69c7f88a8489bfcb0e81b5b2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced6"
+    },
+    {
+      "memberId": "69c7f88a8489bfcb0e81b5c6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8ba36c951d9114eced7"
+    },
+    {
+      "memberId": "69c7f88a8489bfcb0e81b5d0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114eced8"
+    },
+    {
+      "memberId": "69c7f88b8489bfcb0e81b5da",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114eced9"
+    },
+    {
+      "memberId": "69c7f88b8489bfcb0e81b5e4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114eceda"
+    },
+    {
+      "memberId": "6a0dd24b4ff8277cd4306172",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114ecedb"
+    },
+    {
+      "memberId": "6a0dd24b4ff8277cd430617c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114ecedc"
+    },
+    {
+      "memberId": "6a0dd24b4ff8277cd4306186",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114ecedd"
+    },
+    {
+      "memberId": "6a0dd24c4ff8277cd4306190",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114ecede"
+    },
+    {
+      "memberId": "6a0dd24c4ff8277cd430619a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114ecedf"
+    },
+    {
+      "memberId": "6a0dd24c4ff8277cd43061a4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bb36c951d9114ecee0"
+    },
+    {
+      "memberId": "6a0dd24c4ff8277cd43061ae",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee1"
+    },
+    {
+      "memberId": "6a0dd24c4ff8277cd43061b8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee2"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061c2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee3"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061cc",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee4"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061d6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee5"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061e0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee6"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061ea",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee7"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061f4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee8"
+    },
+    {
+      "memberId": "6a0dd24d4ff8277cd43061fe",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114ecee9"
+    },
+    {
+      "memberId": "6a0dd24e4ff8277cd4306208",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bc36c951d9114eceea"
+    },
+    {
+      "memberId": "6a0dd24e4ff8277cd4306212",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114eceeb"
+    },
+    {
+      "memberId": "6a0dd24e4ff8277cd430621c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114eceec"
+    },
+    {
+      "memberId": "6a0dd24e4ff8277cd4306226",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114eceed"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd4306230",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114eceee"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd430623a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114eceef"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd4306244",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114ecef0"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd430624e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114ecef1"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd4306258",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114ecef2"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd4306262",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114ecef3"
+    },
+    {
+      "memberId": "6a0dd24f4ff8277cd430626c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bd36c951d9114ecef4"
+    },
+    {
+      "memberId": "6a0dd2504ff8277cd4306276",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecef5"
+    },
+    {
+      "memberId": "6a0dd2504ff8277cd4306280",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecef6"
+    },
+    {
+      "memberId": "6a0dd2504ff8277cd430628a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecef7"
+    },
+    {
+      "memberId": "6a0dd2504ff8277cd4306294",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecef8"
+    },
+    {
+      "memberId": "6a0dd2504ff8277cd430629e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecef9"
+    },
+    {
+      "memberId": "6a0dd2504ff8277cd43062a8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecefa"
+    },
+    {
+      "memberId": "6a0dd2514ff8277cd43062b2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecefb"
+    },
+    {
+      "memberId": "6a0dd2514ff8277cd43062bc",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecefc"
+    },
+    {
+      "memberId": "6a0dd2514ff8277cd43062c6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecefd"
+    },
+    {
+      "memberId": "6a0dd2514ff8277cd43062d0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8be36c951d9114ecefe"
+    },
+    {
+      "memberId": "6a0dd2524ff8277cd43062da",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114eceff"
+    },
+    {
+      "memberId": "6a0dd2524ff8277cd43062e4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf00"
+    },
+    {
+      "memberId": "6a0dd2524ff8277cd43062ee",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf01"
+    },
+    {
+      "memberId": "6a0dd2524ff8277cd43062f8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf02"
+    },
+    {
+      "memberId": "6a0dd2524ff8277cd4306302",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf03"
+    },
+    {
+      "memberId": "6a0dd2524ff8277cd430630c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf04"
+    },
+    {
+      "memberId": "6a0dd2534ff8277cd4306316",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf05"
+    },
+    {
+      "memberId": "6a0dd2534ff8277cd4306320",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf06"
+    },
+    {
+      "memberId": "6a0dd2534ff8277cd430632a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf07"
+    },
+    {
+      "memberId": "6a0dd2534ff8277cd4306334",
+      "status": "touched",
+      "newSharingPropId": "6a75f8bf36c951d9114ecf08"
+    },
+    {
+      "memberId": "6a0dd2534ff8277cd430633e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf09"
+    },
+    {
+      "memberId": "6a0dd2544ff8277cd4306348",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf0a"
+    },
+    {
+      "memberId": "6a0dd2544ff8277cd4306352",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf0b"
+    },
+    {
+      "memberId": "6a0dd2544ff8277cd430635c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf0c"
+    },
+    {
+      "memberId": "6a0dd2544ff8277cd4306366",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf0d"
+    },
+    {
+      "memberId": "6a0dd2544ff8277cd4306370",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf0e"
+    },
+    {
+      "memberId": "6a0dd2554ff8277cd430637a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf0f"
+    },
+    {
+      "memberId": "6a0dd2554ff8277cd4306384",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf10"
+    },
+    {
+      "memberId": "6a0dd2554ff8277cd430638e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c036c951d9114ecf11"
+    },
+    {
+      "memberId": "6a0dd2554ff8277cd4306398",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf12"
+    },
+    {
+      "memberId": "6a0dd2564ff8277cd43063a2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf13"
+    },
+    {
+      "memberId": "6a0dd2564ff8277cd43063ac",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf14"
+    },
+    {
+      "memberId": "6a0dd2564ff8277cd43063b6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf15"
+    },
+    {
+      "memberId": "6a0dd2564ff8277cd43063c0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf16"
+    },
+    {
+      "memberId": "6a0dd2574ff8277cd43063ca",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf17"
+    },
+    {
+      "memberId": "6a0dd2574ff8277cd43063d4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf18"
+    },
+    {
+      "memberId": "6a0dd2574ff8277cd43063de",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf19"
+    },
+    {
+      "memberId": "6a0dd2574ff8277cd43063e8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c136c951d9114ecf1a"
+    },
+    {
+      "memberId": "6a0dd2574ff8277cd43063f2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf1b"
+    },
+    {
+      "memberId": "6a0dd2574ff8277cd43063fc",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf1c"
+    },
+    {
+      "memberId": "6a0dd2584ff8277cd4306406",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf1d"
+    },
+    {
+      "memberId": "6a0dd2584ff8277cd4306410",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf1e"
+    },
+    {
+      "memberId": "6a0dd2584ff8277cd430641a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf1f"
+    },
+    {
+      "memberId": "6a0dd2584ff8277cd4306424",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf20"
+    },
+    {
+      "memberId": "6a0dd2584ff8277cd430642e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf21"
+    },
+    {
+      "memberId": "6a0dd2584ff8277cd4306438",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf22"
+    },
+    {
+      "memberId": "6a0dd2594ff8277cd4306442",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf23"
+    },
+    {
+      "memberId": "6a0dd2594ff8277cd430644c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf24"
+    },
+    {
+      "memberId": "6a0dd2594ff8277cd4306456",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c236c951d9114ecf25"
+    },
+    {
+      "memberId": "6a0dd2594ff8277cd4306460",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf26"
+    },
+    {
+      "memberId": "6a0dd2594ff8277cd430646a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf27"
+    },
+    {
+      "memberId": "6a0dd2594ff8277cd4306474",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf28"
+    },
+    {
+      "memberId": "6a0dd25a4ff8277cd430647e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf29"
+    },
+    {
+      "memberId": "6a0dd25a4ff8277cd4306488",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf2a"
+    },
+    {
+      "memberId": "6a0dd25a4ff8277cd4306492",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf2b"
+    },
+    {
+      "memberId": "6a0dd25a4ff8277cd430649c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf2c"
+    },
+    {
+      "memberId": "6a0dd25a4ff8277cd43064a6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf2d"
+    },
+    {
+      "memberId": "6a0dd25a4ff8277cd43064b0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf2e"
+    },
+    {
+      "memberId": "6a0dd25b4ff8277cd43064ba",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c336c951d9114ecf2f"
+    },
+    {
+      "memberId": "6a0dd25b4ff8277cd43064c4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf30"
+    },
+    {
+      "memberId": "6a0dd25b4ff8277cd43064ce",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf31"
+    },
+    {
+      "memberId": "6a0dd25b4ff8277cd43064d8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf32"
+    },
+    {
+      "memberId": "6a0dd25b4ff8277cd43064e2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf33"
+    },
+    {
+      "memberId": "6a0dd25b4ff8277cd43064ec",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf34"
+    },
+    {
+      "memberId": "6a0dd25c4ff8277cd43064f6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf35"
+    },
+    {
+      "memberId": "6a0dd25c4ff8277cd4306500",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf36"
+    },
+    {
+      "memberId": "6a0dd25c4ff8277cd430650a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf37"
+    },
+    {
+      "memberId": "6a0dd25c4ff8277cd4306514",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf38"
+    },
+    {
+      "memberId": "6a0dd25c4ff8277cd430651e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c436c951d9114ecf39"
+    },
+    {
+      "memberId": "6a0dd25d4ff8277cd4306528",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf3a"
+    },
+    {
+      "memberId": "6a0dd25d4ff8277cd4306532",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf3b"
+    },
+    {
+      "memberId": "6a0dd25d4ff8277cd430653c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf3c"
+    },
+    {
+      "memberId": "6a0dd25d4ff8277cd4306546",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf3d"
+    },
+    {
+      "memberId": "6a0dd25d4ff8277cd4306550",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf3e"
+    },
+    {
+      "memberId": "6a0dd25d4ff8277cd430655a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf3f"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd4306564",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf40"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd430656e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf41"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd4306578",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c536c951d9114ecf42"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd4306582",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf43"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd430658c",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf44"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd4306596",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf45"
+    },
+    {
+      "memberId": "6a0dd25e4ff8277cd43065a0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf46"
+    },
+    {
+      "memberId": "6a0dd25f4ff8277cd43065aa",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf47"
+    },
+    {
+      "memberId": "6a0dd25f4ff8277cd43065b4",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf48"
+    },
+    {
+      "memberId": "6a0dd25f4ff8277cd43065be",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf49"
+    },
+    {
+      "memberId": "6a0dd25f4ff8277cd43065c8",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf4a"
+    },
+    {
+      "memberId": "6a0dd25f4ff8277cd43065d2",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf4b"
+    },
+    {
+      "memberId": "6a0dd25f4ff8277cd43065dc",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c636c951d9114ecf4c"
+    },
+    {
+      "memberId": "6a0dd2604ff8277cd43065e6",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf4d"
+    },
+    {
+      "memberId": "6a0dd2604ff8277cd43065f0",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf4e"
+    },
+    {
+      "memberId": "6a0dd2604ff8277cd43065fa",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf4f"
+    },
+    {
+      "memberId": "6a0dd2604ff8277cd4306604",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf50"
+    },
+    {
+      "memberId": "6a0dd2604ff8277cd430660e",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf51"
+    },
+    {
+      "memberId": "6a0dd2604ff8277cd4306618",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf52"
+    },
+    {
+      "memberId": "6a12036c4ff8277cd4306b34",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf53"
+    },
+    {
+      "memberId": "6a12036c4ff8277cd4306b45",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf54"
+    },
+    {
+      "memberId": "6a12036d4ff8277cd4306b56",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf55"
+    },
+    {
+      "memberId": "6a12036d4ff8277cd4306b67",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c736c951d9114ecf56"
+    },
+    {
+      "memberId": "6a12036d4ff8277cd4306b78",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c836c951d9114ecf57"
+    },
+    {
+      "memberId": "6a12036d4ff8277cd4306b89",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c836c951d9114ecf58"
+    },
+    {
+      "memberId": "6a12036e4ff8277cd4306b9a",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c836c951d9114ecf59"
+    },
+    {
+      "memberId": "6a12036e4ff8277cd4306bab",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c836c951d9114ecf5a"
+    },
+    {
+      "memberId": "6a2ba6c84cd971291c5d5320",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c836c951d9114ecf5b"
+    },
+    {
+      "memberId": "6a2fdb434cd971291c5d5e85",
+      "status": "touched",
+      "newSharingPropId": "6a75f8c836c951d9114ecf5c"
+    }
+  ],
+  "propDefFailureCount": 0,
+  "touchFailureCount": 0,
+  "exitCode": 0,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root), which always reads the private bucket regardless of prop-def sharing (cleanupEntity's first branch matches on _owner). 'touched'/'set' here means the write landed and rotated the property _id (proof of a fresh aggregateEntity run), NOT an empirically-confirmed domain-bucket read by a non-owner reader. That last-mile confirmation needs a real non-omniscient browser session (Mihkel), same pattern as #20/#29."
+}
