@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken, getUser } from '$lib/auth/storage';
+	import { getToken, getUser, getLastProvider } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
 		listMyProfiles,
@@ -16,6 +16,26 @@
 	import { createAutosave } from '$lib/profile/autosave';
 	import ProfileField from '$lib/components/profile/ProfileField.svelte';
 	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
+
+	// #60 — identity display: which account + provider the user is signed in with.
+	// Informational only (no interactivity); multi-provider linking is parked.
+	const PROVIDER_LABELS: Record<string, string> = {
+		google: 'Google',
+		apple: 'Apple',
+		'smart-id': 'Smart-ID',
+		'mobile-id': 'Mobile-ID',
+		'id-card': 'ID-card',
+		'e-mail': 'E-mail'
+	};
+
+	function providerLabel(id: string | null): string {
+		if (!id) return '';
+		return PROVIDER_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
+	}
+
+	const identityUser = getUser();
+	const identityAccount = identityUser?.email || identityUser?.name || '';
+	const identityProvider = providerLabel(getLastProvider());
 
 	const FIELDS: readonly FieldKey[] = ['name', 'email'];
 	const otherField = (f: FieldKey): FieldKey => (f === 'name' ? 'email' : 'name');
@@ -372,6 +392,16 @@
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.profile_title()}</h1>
 
+		{#if identityAccount}
+			<p data-testid="profile-identity" class="text-sm text-ink-2">
+				{#if identityProvider}
+					{m.profile_signed_in_as({ account: identityAccount, provider: identityProvider })}
+				{:else}
+					{identityAccount}
+				{/if}
+			</p>
+		{/if}
+
 		{#if status === 'no-collective'}
 			<p data-testid="profile-no-collective" class="text-sm">{m.profile_no_collective()}</p>
 		{:else if status === 'loading'}
@@ -433,5 +463,7 @@
 				{/each}
 			</div>
 		{/if}
+
+		<a class="self-start text-sm underline" href="/auth/logout">{m.profile_sign_out()}</a>
 	</div>
 </main>

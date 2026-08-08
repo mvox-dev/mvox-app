@@ -49,7 +49,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_repair_working: () => 'Finishing…',
 		profile_repair_error: (p: { field: string; level: string }) =>
 			`Couldn't finish. Your ${p.field} is still readable at ${p.level}.`,
-		profile_repair_done: () => 'Visibility change completed.'
+		profile_repair_done: () => 'Visibility change completed.',
+		profile_sign_out: () => 'Sign out',
+		profile_signed_in_as: (p: { account: string; provider: string }) =>
+			`Signed in as ${p.account} via ${p.provider}`
 	}
 }));
 
@@ -98,7 +101,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, setUser, clearAll } from '$lib/auth/storage';
+import { setToken, setUser, setLastProvider, clearAll } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -179,6 +182,39 @@ describe('/profile v2 — render + seed', () => {
 		expect(container.textContent).toContain('Could not load your profile.');
 		expect(q(container, '[data-testid="profile-retry-load"]')).not.toBeNull();
 		consoleSpy.mockRestore();
+	});
+
+	it('renders a sign-out link to /auth/logout (#59 — moved from agenda page)', async () => {
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValue([]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		const signOut = q(container, 'a[href="/auth/logout"]');
+		expect(signOut).not.toBeNull();
+		expect(signOut?.textContent).toBe('Sign out');
+	});
+
+	it('shows the signed-in account + provider (#60)', async () => {
+		selectPolyphony();
+		setUser({ _id: 'u1', email: 'mihkel@example.com', name: 'Mihkel' });
+		setLastProvider('google');
+		h.listMyProfilesMock.mockResolvedValue([]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		const identity = q(container, '[data-testid="profile-identity"]');
+		expect(identity).not.toBeNull();
+		expect(identity?.textContent).toBe('Signed in as mihkel@example.com via Google');
+	});
+
+	it('falls back to name when the user has no email (#60)', async () => {
+		selectPolyphony();
+		setUser({ _id: 'u1', name: 'Mihkel' });
+		setLastProvider('smart-id');
+		h.listMyProfilesMock.mockResolvedValue([]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		const identity = q(container, '[data-testid="profile-identity"]');
+		expect(identity?.textContent).toBe('Signed in as Mihkel via Smart-ID');
 	});
 });
 

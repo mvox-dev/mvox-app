@@ -67,6 +67,8 @@
 	"profile_visibility_unset": "Not set at any level yet.",
 	"profile_move_error": "Couldn't change visibility. Nothing was lost — please try again.",
 	"profile_visibility_conflict": "Your {field} has different values at more than one level. Edit the fields above to reconcile them before changing its visibility.",
+	"profile_sign_out": "Sign out",
+	"profile_signed_in_as": "Signed in as {account} via {provider}",
 	"profile_repair_title": "Unfinished visibility change",
 	"profile_repair_body_tightening": "Your {field} is still readable at the {level} level. Finish making it more private.",
 	"profile_repair_body_widening": "An old copy of your {field} is still stored at the {level} level. Finish the cleanup.",

@@ -67,6 +67,8 @@
 	"profile_visibility_unset": "Ще не встановлено на жодному рівні.",
 	"profile_move_error": "Не вдалося змінити видимість. Нічого не втрачено — будь ласка, спробуйте ще раз.",
 	"profile_visibility_conflict": "Ваше поле {field} має різні значення на кількох рівнях. Узгодьте поля вище, перш ніж змінювати видимість.",
+	"profile_sign_out": "Вийти",
+	"profile_signed_in_as": "Ви увійшли як {account} ({provider})",
 	"profile_repair_title": "Незавершена зміна видимості",
 	"profile_repair_body_tightening": "Поле {field} досі можна прочитати на рівні {level}. Завершіть, щоб зробити його приватнішим.",
 	"profile_repair_body_widening": "Стара копія поля {field} досі зберігається на рівні {level}. Завершіть очищення.",

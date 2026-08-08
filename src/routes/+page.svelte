@@ -223,7 +223,6 @@
 						{#if pickerMode === 'picker'}
 							<a class="underline" href="/collectives">Switch collective</a>
 						{/if}
-						<a class="underline" href="/auth/logout">Sign out</a>
 					</nav>
 				</header>
 				<div class="rounded-lg bg-paper p-4">
@@ -263,7 +262,6 @@
 			{:else}
 				<p class="text-sm text-ink">Loading collectives…</p>
 			{/if}
-			<a class="text-sm underline" href="/auth/logout">Sign out</a>
 		</main>
 	{/if}
 {:else if auth.status === 'anonymous'}

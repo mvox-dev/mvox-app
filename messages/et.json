@@ -67,6 +67,8 @@
 	"profile_visibility_unset": "Pole veel ühelgi tasemel määratud.",
 	"profile_move_error": "Nähtavuse muutmine ebaõnnestus. Midagi ei läinud kaotsi — palun proovi uuesti.",
 	"profile_visibility_conflict": "Sinu {field} on eri tasemetel erineva väärtusega. Enne nähtavuse muutmist ühtlusta väljad eespool.",
+	"profile_sign_out": "Logi välja",
+	"profile_signed_in_as": "Sisse logitud kui {account} ({provider})",
 	"profile_repair_title": "Lõpetamata nähtavuse muudatus",
 	"profile_repair_body_tightening": "Sinu {field} on endiselt loetav tasemel {level}. Lõpeta selle privaatsemaks muutmine.",
 	"profile_repair_body_widening": "Sinu välja {field} vana koopia on endiselt salvestatud tasemel {level}. Lõpeta puhastus.",
