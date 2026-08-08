@@ -1,0 +1,201 @@
+{
+  "dryRun": true,
+  "personTypeSharingObserved": "domain",
+  "propDefTargets": [
+    {
+      "id": "69bcfd8e9c031ab8e6ce8060",
+      "name": "address",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80ec",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8061",
+      "name": "birthdate",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80ed",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8062",
+      "name": "county",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80ee",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8064",
+      "name": "entu_user",
+      "sharingValueId": "69bd0e619c031ab8e6ce9928",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8066",
+      "name": "idcode",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80f2",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8067",
+      "name": "entu_api_key",
+      "sharingValueId": "69bd0e569c031ab8e6ce9926",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806a",
+      "name": "phone",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce810e",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806c",
+      "name": "postalcode",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce8122",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806e",
+      "name": "town",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce8125",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806f",
+      "name": "entu_passkey",
+      "sharingValueId": "69bd0e5c9c031ab8e6ce9927",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5a8489bfcb0e81a1ac",
+      "name": "voice",
+      "sharingValueId": "69c7ea5a8489bfcb0e81a1bb",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5a8489bfcb0e81a1bf",
+      "name": "language",
+      "sharingValueId": "69c7ea5a8489bfcb0e81a1c7",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5b8489bfcb0e81a1cb",
+      "name": "locale",
+      "sharingValueId": "69c7ea5b8489bfcb0e81a1d3",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5b8489bfcb0e81a1d7",
+      "name": "timezone",
+      "sharingValueId": "69c7ea5b8489bfcb0e81a1df",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d2e8690c8df7a1cc7df71",
+      "name": "bio",
+      "sharingValueId": "6a0d2e8690c8df7a1cc7df77",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d2e8690c8df7a1cc7df7b",
+      "name": "preferred_contact_email",
+      "sharingValueId": "6a0d2e8690c8df7a1cc7df81",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d2e8690c8df7a1cc7df85",
+      "name": "preferences",
+      "sharingValueId": "6a0d2e8690c8df7a1cc7df8b",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d709890c8df7a1cc7e12e",
+      "name": "photo",
+      "sharingValueId": "6a0d709890c8df7a1cc7e134",
+      "sharingValue": "domain"
+    }
+  ],
+  "propertyPresenceCounts": [
+    {
+      "name": "address",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "birthdate",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "county",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "entu_user",
+      "personsCarryingValue": 3
+    },
+    {
+      "name": "idcode",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "entu_api_key",
+      "personsCarryingValue": 1
+    },
+    {
+      "name": "phone",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "postalcode",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "town",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "entu_passkey",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "voice",
+      "personsCarryingValue": 8
+    },
+    {
+      "name": "language",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "locale",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "timezone",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "bio",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "preferred_contact_email",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "preferences",
+      "personsCarryingValue": 0
+    },
+    {
+      "name": "photo",
+      "personsCarryingValue": 0
+    }
+  ],
+  "personPopulation": {
+    "total": 132,
+    "tierBreakdown": {
+      "private": 1,
+      "domain": 3,
+      "public": 128
+    },
+    "missingSharingIds": []
+  },
+  "canaryPersonId": "69bcfd8e9c031ab8e6ce8079",
+  "credentialSelfTestPlanned": true,
+  "writesIssued": 0,
+  "exitCode": 0
+}
