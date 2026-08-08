@@ -1,0 +1,18 @@
+{
+  "issue": "#46 (#37-P3.4) — orphan-115 _owner pre-check, requested by Gama before dry-run",
+  "readOnly": true,
+  "baselineSource": "scripts/migrations/seed-results/probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json",
+  "populationCheck": {
+    "liveOrphanCount": 115,
+    "baselineCount": 115,
+    "missingFromBaseline": [],
+    "newSinceBaseline": []
+  },
+  "ownershipHistogram": {
+    "db-root-owned": 115,
+    "mihkel-oauth-owned": 0,
+    "other": 0
+  },
+  "nonDbRootOwnedTargets": [],
+  "nonDbRootOwnedCount": 0
+}
