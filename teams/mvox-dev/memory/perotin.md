@@ -244,6 +244,17 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #47 menu-empty-shells DRY-RUN (2026-08-08) — plan built, 0 writes
+
+Repertoire/Programme/Attendance (0-instance types) → admin-only via `DELETE /property/{sharingValueId}`,
+same mechanic as #45 step1. All 3 re-verified live (domain, genuinely 0 instances). Computed model:
+21/23 → 18/23 domain-tier. **Member-seat verification not performed** — `ENTU_ADMIN_KEY` confirmed
+anonymous floor JWT (#44 finding), no working member seat exists locally; explicitly labeled
+computed-not-observed. **The 22-vs-11 discrepancy is PRE-EXISTING, from #37's own 2026-08-07
+walkthrough history** (not something I derived) — quoted verbatim in the plan output rather than
+diagnosed; team already marked its mechanism "unknown," parked for Mihkel's real-browser check.
+Artifact: `seed-results/menu-empty-shells-2026-08-08-dry-2026-08-08T04-36-00-055Z.json`.
+
 ## #46 corrected section signal via `_parent` refs (2026-08-08) — 7/18 now corroborate
 
 Gama correction: section membership lives in the `_parent`-reference shape (member is multi-parent
