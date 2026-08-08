@@ -33,12 +33,14 @@
 
 	$effect(() => {
 		function update() {
-			if (!screen.orientation) { railSide = 'left'; return; }
-			railSide = screen.orientation.type === 'landscape-secondary' ? 'right' : 'left';
+			// -90 = CCW rotation (notch on left) → rail on right
+			// 90 = CW rotation (notch on right) → rail on left
+			// 0/180/undefined = portrait or desktop → left (default)
+			railSide = window.orientation === -90 ? 'right' : 'left';
 		}
 		update();
-		screen.orientation?.addEventListener('change', update);
-		return () => screen.orientation?.removeEventListener('change', update);
+		window.addEventListener('orientationchange', update);
+		return () => window.removeEventListener('orientationchange', update);
 	});
 
 	function handleKeydown(e: KeyboardEvent): void {
@@ -235,25 +237,25 @@
 			flex-direction: row-reverse;
 		}
 
-		.nav-shell.rail-right .nav-bar {
+		.nav-shell.rail-right :global(.nav-bar) {
 			border-right: none;
 			border-left: 1px solid var(--color-paper-3);
 			padding-left: 0;
 			padding-right: env(safe-area-inset-right, 0px);
 		}
 
-		.nav-shell.rail-right .nav-content {
+		.nav-shell.rail-right :global(.nav-content) {
 			padding-left: env(safe-area-inset-left, 0px);
 			padding-right: 0;
 		}
 
-		.nav-shell.rail-right .nav-entry {
+		.nav-shell.rail-right :global(.nav-entry) {
 			border-radius: 0 0.5rem 0.5rem 0;
 			margin-left: 0;
 			margin-right: 0.25rem;
 		}
 
-		.nav-shell.rail-right .nav-entry--active {
+		.nav-shell.rail-right :global(.nav-entry--active) {
 			margin-left: -1px;
 			margin-right: 0.25rem;
 			border-left: 1px solid var(--color-paper);
