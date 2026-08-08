@@ -250,6 +250,21 @@ Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu doma
 18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
 `seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
 
+## T6.1 library field-set grooming (2026-08-08, epic #54) — read-only, gates T6.2
+
+work/edition/copy/lending prop-defs re-verified live (zero drift from #41). **Real finding, corrects
+the epic's own framing**: "copy and lending carry no _sharing at all" holds ONLY for those two —
+`work` has 6/9 fields ALREADY domain (catalog_id, catalog_system, part_of, original_voicing/duration/
+language), `edition` has 10/16 ALREADY domain (incl. `cost` — acquisition cost, worth a second look),
+none of them the ruling's actual title/composer/name/publisher target fields (those 4 are still
+private). `copy.location` **doesn't exist as a field** — ruling names it, schema doesn't have it
+(copy only has name/copy_number/barcode/condition/notes). `lending`'s "lent-date" has no exact field
+match (`assigned_at` is the best guess); `lending.copy` (+ maybe assigned_until/returned_at) is
+plausibly REQUIRED for AC3's "availability per copy" but isn't in the literal borrower+lent-date
+ruling — flagged as a design gap, not resolved. Posted full per-type table on #54, all ambiguities
+flagged for Mihkel/PO rather than assumed. Artifact:
+`seed-results/probe-55-library-fieldset-grooming-2026-08-08T07-44-05-000Z.json`.
+
 ## Single-tree collision, held correctly (2026-08-08) — T5.2/#52 active on feat/52-nav-shell
 
 Mid-#53-dispatch, `git branch --show-current` showed `feat/52-nav-shell` instead of `main` (8 agents
