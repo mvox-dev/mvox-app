@@ -247,6 +247,12 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #45 D5 complete (2026-08-08) — step4 live, 7/7 _probe_bulletin deleted
+
+3 instances + 3 prop-defs + type entity, all 404-confirmed. `_probe_bulletin` no longer exists.
+D2 steps 2/3 stay parked on the ownership gap below. Artifact:
+`seed-results/retire-application-probe-bulletin-2026-08-08-step4-live-2026-08-08T04-17-36-958Z.json`.
+
 ## #45 retire-application-probe-bulletin LIVE (epic #37 D2+D5, 2026-08-08) — step1 OK, step2 HALT
 
 Step 1 (menu privatize) succeeded cleanly. Step 2 (delete specimen `6a2fdac6...5e79`) FAILED 403 —
