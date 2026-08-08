@@ -1,0 +1,196 @@
+{
+  "dryRun": true,
+  "verified": {
+    "targets": [
+      {
+        "name": "Entities",
+        "menuId": "69bcfd8e9c031ab8e6ce8070",
+        "sharingValueId": "69bcfd8e9c031ab8e6ce8126",
+        "currentSharing": "domain"
+      },
+      {
+        "name": "Menu",
+        "menuId": "69bcfd8e9c031ab8e6ce8071",
+        "sharingValueId": "69bcfd8e9c031ab8e6ce812d",
+        "currentSharing": "domain"
+      },
+      {
+        "name": "Plugins",
+        "menuId": "69bcfd8e9c031ab8e6ce8072",
+        "sharingValueId": "69bcfd8e9c031ab8e6ce8129",
+        "currentSharing": "domain"
+      }
+    ],
+    "referenceCheck": {
+      "name": "Billing",
+      "menuId": "69bcfd8e9c031ab8e6ce8074",
+      "currentSharing": "(absent)",
+      "isAlreadyAdminOnly": true
+    },
+    "fullMenu": [
+      {
+        "id": "69bcfd8e9c031ab8e6ce8070",
+        "label": "Entities",
+        "group": "Configuration",
+        "currentSharing": "domain",
+        "isTarget": true
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8071",
+        "label": "Menu",
+        "group": "Configuration",
+        "currentSharing": "domain",
+        "isTarget": true
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8072",
+        "label": "Plugins",
+        "group": "Configuration",
+        "currentSharing": "domain",
+        "isTarget": true
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8073",
+        "label": "Persons",
+        "group": "Organisations",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8074",
+        "label": "Billing",
+        "group": "Configuration",
+        "currentSharing": "(absent)",
+        "isTarget": false
+      },
+      {
+        "id": "69c7f88b8489bfcb0e81b5f8",
+        "label": "Organisations",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d304ff8277cd43069ab",
+        "label": "Voices",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d304ff8277cd43069b6",
+        "label": "Sections",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d304ff8277cd43069c1",
+        "label": "Members",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069cc",
+        "label": "Libraries",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069d7",
+        "label": "Works",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069e2",
+        "label": "Editions",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069ed",
+        "label": "Copies",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069f8",
+        "label": "Loans",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a03",
+        "label": "Invitations",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a0e",
+        "label": "Applications",
+        "group": "Polyphony",
+        "currentSharing": "(absent)",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a19",
+        "label": "Seasons",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a24",
+        "label": "Event Series",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a2f",
+        "label": "Events",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a3a",
+        "label": "Repertoire",
+        "group": "Polyphony",
+        "currentSharing": "(absent)",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a45",
+        "label": "Programme",
+        "group": "Polyphony",
+        "currentSharing": "(absent)",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a50",
+        "label": "RSVPs",
+        "group": "Polyphony",
+        "currentSharing": "domain",
+        "isTarget": false
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a5b",
+        "label": "Attendance",
+        "group": "Polyphony",
+        "currentSharing": "(absent)",
+        "isTarget": false
+      }
+    ]
+  },
+  "writesIssued": 0,
+  "exitCode": 0
+}
