@@ -41,9 +41,9 @@
 	let inviteLink = $state('');
 	let inviteExpiryDate = $state('');
 	let copied = $state(false);
-	let copyErrorMessage = $state('');
+	let copyFailed = $state(false);
 
-	let createError = $state<{ phase: string; message: string; personId?: string } | null>(null);
+	let createError = $state<{ personId?: string } | null>(null);
 
 	const canSubmit = $derived(orgId !== '');
 
@@ -89,7 +89,8 @@
 		if (!db || !canSubmit || status === 'creating') return;
 		const token = getToken();
 		if (!token) {
-			createError = { phase: 'auth', message: 'no auth token in storage on a protected route' };
+			console.error('admin/invite: no auth token in storage on a protected route');
+			createError = {};
 			status = 'create-error';
 			return;
 		}
@@ -102,13 +103,14 @@
 			const parsed = parseInviteToken(result.inviteToken, Date.now());
 			inviteExpiryDate = parsed.status === 'invalid' ? '' : new Date(parsed.expMs).toLocaleDateString();
 			copied = false;
-			copyErrorMessage = '';
+			copyFailed = false;
 			status = 'done';
 		} catch (e) {
+			console.error('admin/invite: create failed', e);
 			if (e instanceof InviteCreateError) {
-				createError = { phase: e.phase, message: e.message, personId: e.personId };
+				createError = { personId: e.personId };
 			} else {
-				createError = { phase: 'unknown', message: e instanceof Error ? e.message : String(e) };
+				createError = {};
 			}
 			status = 'create-error'; // form values stay — retry enabled
 		}
@@ -116,7 +118,7 @@
 
 	async function copyLink(): Promise<void> {
 		copied = false;
-		copyErrorMessage = '';
+		copyFailed = false;
 		try {
 			// No silent no-op: an unavailable clipboard (non-secure context) fails
 			// visibly; the readonly input stays manually copyable.
@@ -124,7 +126,8 @@
 			await navigator.clipboard.writeText(inviteLink);
 			copied = true;
 		} catch (e) {
-			copyErrorMessage = e instanceof Error ? e.message : String(e);
+			console.error('admin/invite: copy failed', e);
+			copyFailed = true;
 		}
 	}
 
@@ -133,7 +136,7 @@
 		inviteLink = '';
 		inviteExpiryDate = '';
 		copied = false;
-		copyErrorMessage = '';
+		copyFailed = false;
 		createError = null;
 		status = 'ready';
 	}
@@ -184,8 +187,8 @@
 				>
 					{copied ? m.admin_invite_copied() : m.admin_invite_copy()}
 				</button>
-				{#if copyErrorMessage}
-					<p class="text-sm text-red-700" role="alert">{copyErrorMessage}</p>
+				{#if copyFailed}
+					<p class="text-sm text-red-700" role="alert">{m.admin_invite_copy_error()}</p>
 				{/if}
 				<p data-testid="invite-bearer-warning" class="text-sm text-red-700">
 					{m.admin_invite_bearer_warning()}
@@ -204,7 +207,7 @@
 			{#if createError}
 				<div data-testid="invite-admin-error" class="flex flex-col gap-1" role="alert">
 					<p class="text-sm text-red-700">
-						{m.admin_invite_error({ phase: createError.phase, message: createError.message })}
+						{m.admin_invite_error()}
 					</p>
 					{#if createError.personId}
 						<p data-testid="invite-partial-failure" class="text-sm text-red-700">

@@ -30,8 +30,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_copied: () => 'Copied',
 		admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
 		admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
-		admin_invite_error: (p: { phase: string; message: string }) =>
-			`Invite creation failed at step ${p.phase}: ${p.message}`,
+		admin_invite_error: () => 'Invite creation failed.',
+		admin_invite_copy_error: () => "Couldn't copy the link.",
 		admin_invite_partial_failure: (p: { personId: string }) =>
 			`A person entity (${p.personId}) was already created and carries a live invite token.`,
 		admin_invite_create_another: () => 'Create another invite'
@@ -310,7 +310,8 @@ describe('/admin/invite — done (show-once link)', () => {
 });
 
 describe('/admin/invite — create-error', () => {
-	it('renders the phased error verbatim and, with a personId attached, the orphaned-person warning — form values preserved for retry', async () => {
+	it('renders a generic localized error (not the raw thrown message); logs detail to console.error; with a personId attached, the orphaned-person warning — form values preserved for retry', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectPolyphony();
 		loadOk();
 		h.createInviteMock.mockRejectedValue(
@@ -331,8 +332,17 @@ describe('/admin/invite — create-error', () => {
 			expect(container.querySelector('[data-testid="invite-admin-error"]')).not.toBeNull();
 		});
 		const errorBlock = container.querySelector('[data-testid="invite-admin-error"]')!;
-		expect(errorBlock.textContent).toContain('member-create');
-		expect(errorBlock.textContent).toContain('member create failed: 500');
+		expect(errorBlock.textContent).toContain('Invite creation failed.');
+		expect(errorBlock.textContent).not.toContain('member-create');
+		expect(errorBlock.textContent).not.toContain('member create failed: 500');
+
+		// Detail logged to console
+		expect(consoleSpy).toHaveBeenCalled();
+		const loggedArgs = consoleSpy.mock.calls.flat();
+		const loggedDetail = loggedArgs.some(
+			(arg) => arg instanceof Error && arg.message === 'member create failed: 500'
+		);
+		expect(loggedDetail).toBe(true);
 
 		const partial = container.querySelector('[data-testid="invite-partial-failure"]');
 		expect(partial).not.toBeNull();
@@ -341,6 +351,8 @@ describe('/admin/invite — create-error', () => {
 		// Form value preserved for retry: the sole-org selection survives the error.
 		const select = container.querySelector('[data-testid="invite-org"]') as HTMLSelectElement;
 		expect(select.value).toBe('org-1');
+
+		consoleSpy.mockRestore();
 	});
 
 	it('an error WITHOUT a personId (nothing created yet) shows the phased error but NO orphan warning', async () => {
