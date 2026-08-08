@@ -250,6 +250,21 @@ Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu doma
 18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
 `seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
 
+## T6.2b instance-tier widen DRY-RUN (2026-08-08, #57/epic #54) — gate-3 gap closer, holds on Mihkel
+
+Gama's STOP (2026-08-08 11:00 on #54): T6.2 widened prop-defs + touch-saved instances, but
+touch-save re-asserted the SAME 'private' value — gate 3 (instance's own _sharing) never moved, so
+nothing was actually member-readable despite T6.2's clean 598/598 execution. **Real lesson: a
+visibility scope is complete only when it names all 3 gates** — T6.2's scope (mine to execute, not
+mine to have scoped) only ever asked for prop-def widen, so gate 3 was never in question until now.
+T6.2b closes it: gate 2 re-verified live for all 4 types (all pass, domain) — that was NEVER the
+blocker, gate 3 always was. 586-instance replace private→domain planned (genuine tier change this
+time, not touch-save), canary-per-type, 0/586 non-db-root-owned. Reused T6.2's TYPE_IDS/
+verifyInstances rather than duplicating. **Live execution HOLDS on Mihkel's explicit nod** even past
+Bentham+team-lead auth — do not self-authorize past that line. Chain posted on #57 itself (not #54)
+per this task's explicit ask. Artifact:
+`seed-results/library-instance-tier-widen-2026-08-08-dry-2026-08-08T08-04-12-528Z.json`.
+
 ## T6.2 library-visibility LIVE (2026-08-08, #56/epic #54) — 598/598, 0 failures, T6.2 complete
 
 Bundle A 12/12 prop-defs set, Bundle B 586/586 instances touched (4 canaries per-type all passed
