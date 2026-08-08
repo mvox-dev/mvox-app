@@ -1,0 +1,29 @@
+{
+  "dryRun": false,
+  "referenceCheck": {
+    "name": "Billing",
+    "menuId": "69bcfd8e9c031ab8e6ce8074",
+    "currentSharing": "(absent)",
+    "isAlreadyAdminOnly": true
+  },
+  "entries": [
+    {
+      "menuId": "69bcfd8e9c031ab8e6ce8070",
+      "name": "Entities",
+      "status": "privatized"
+    },
+    {
+      "menuId": "69bcfd8e9c031ab8e6ce8071",
+      "name": "Menu",
+      "status": "privatized"
+    },
+    {
+      "menuId": "69bcfd8e9c031ab8e6ce8072",
+      "name": "Plugins",
+      "status": "privatized"
+    }
+  ],
+  "failureCount": 0,
+  "exitCode": 0,
+  "verificationCaveat": "Run under ENTU_API_KEY (db-root). Member-seat visibility was NOT empirically observed — no working member-seat credential exists locally (per #44/#47). Acceptance item 3 stages that confirmation for the next Mihkel sitting."
+}
