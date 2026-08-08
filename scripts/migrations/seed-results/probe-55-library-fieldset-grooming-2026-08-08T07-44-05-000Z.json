@@ -1,0 +1,262 @@
+{
+  "issue": "#55 (T6.1, epic #54) — library field-set grooming pass, live re-verification",
+  "readOnly": true,
+  "types": {
+    "work": {
+      "typeId": "69c7ea4c8489bfcb0e819f3e",
+      "ownSharing": "domain",
+      "liveInstanceCount": 13,
+      "propDefs": [
+        {
+          "id": "69c7ea4d8489bfcb0e819f45",
+          "name": "name",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea4d8489bfcb0e819f51",
+          "name": "composer",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea4d8489bfcb0e819f66",
+          "name": "genre",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8890c8df7a1cc7e001",
+          "name": "catalog_id",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8890c8df7a1cc7e00b",
+          "name": "catalog_system",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8890c8df7a1cc7e015",
+          "name": "part_of",
+          "propType": "reference",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d709890c8df7a1cc7e14c",
+          "name": "original_voicing",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d709890c8df7a1cc7e156",
+          "name": "original_duration",
+          "propType": "number",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d709890c8df7a1cc7e160",
+          "name": "original_language",
+          "propType": "string",
+          "currentSharing": "domain"
+        }
+      ]
+    },
+    "edition": {
+      "typeId": "69c7ea4e8489bfcb0e819f9c",
+      "ownSharing": "domain",
+      "liveInstanceCount": 17,
+      "propDefs": [
+        {
+          "id": "69c7ea4f8489bfcb0e819fa3",
+          "name": "name",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea4f8489bfcb0e819faf",
+          "name": "edition_type",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea4f8489bfcb0e819fc1",
+          "name": "license",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea4f8489bfcb0e819fce",
+          "name": "publisher",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea508489bfcb0e819fd8",
+          "name": "year",
+          "propType": "number",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "69c7ea508489bfcb0e819fe2",
+          "name": "file",
+          "propType": "file",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8890c8df7a1cc7e01f",
+          "name": "external_link",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8890c8df7a1cc7e02a",
+          "name": "work",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8890c8df7a1cc7e035",
+          "name": "arranger",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e03f",
+          "name": "voicing",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e049",
+          "name": "duration",
+          "propType": "number",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e053",
+          "name": "language",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e05e",
+          "name": "acquired_at",
+          "propType": "date",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e068",
+          "name": "source",
+          "propType": "string",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e072",
+          "name": "cost",
+          "propType": "number",
+          "currentSharing": "domain"
+        },
+        {
+          "id": "6a0d2e8990c8df7a1cc7e07c",
+          "name": "license_note",
+          "propType": "text",
+          "currentSharing": "domain"
+        }
+      ]
+    },
+    "copy": {
+      "typeId": "6a0d2e8190c8df7a1cc7ddb0",
+      "ownSharing": "domain",
+      "liveInstanceCount": 552,
+      "propDefs": [
+        {
+          "id": "6a0d2e8190c8df7a1cc7ddb9",
+          "name": "name",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8190c8df7a1cc7ddc3",
+          "name": "copy_number",
+          "propType": "number",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8190c8df7a1cc7ddcd",
+          "name": "barcode",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8190c8df7a1cc7ddd6",
+          "name": "condition",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8190c8df7a1cc7dddf",
+          "name": "notes",
+          "propType": "text",
+          "currentSharing": "(absent)"
+        }
+      ]
+    },
+    "lending": {
+      "typeId": "6a0d2e8190c8df7a1cc7dde8",
+      "ownSharing": "domain",
+      "liveInstanceCount": 4,
+      "propDefs": [
+        {
+          "id": "6a0d2e8190c8df7a1cc7ddf1",
+          "name": "name",
+          "propType": "string",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8190c8df7a1cc7ddfb",
+          "name": "copy",
+          "propType": "reference",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8290c8df7a1cc7de05",
+          "name": "member",
+          "propType": "reference",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8290c8df7a1cc7de0f",
+          "name": "assigned_at",
+          "propType": "date",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8290c8df7a1cc7de19",
+          "name": "assigned_until",
+          "propType": "date",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8290c8df7a1cc7de22",
+          "name": "returned_at",
+          "propType": "date",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8290c8df7a1cc7de2b",
+          "name": "renewed_at",
+          "propType": "date",
+          "currentSharing": "(absent)"
+        },
+        {
+          "id": "6a0d2e8290c8df7a1cc7de35",
+          "name": "notes",
+          "propType": "text",
+          "currentSharing": "(absent)"
+        }
+      ]
+    }
+  }
+}
