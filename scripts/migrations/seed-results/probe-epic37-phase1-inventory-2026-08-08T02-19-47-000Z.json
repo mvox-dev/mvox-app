@@ -1,0 +1,2048 @@
+{
+  "issue": "#41 (epic #37 Phase 1) — read-only Entu frontend inventory",
+  "readOnly": true,
+  "item1_memberCounts": {
+    "totalMembers": 246,
+    "tierBreakdown": {
+      "domain": 245,
+      "private": 1
+    },
+    "orphanCount": 115,
+    "linkedCount": 131,
+    "memberNameResidualStillReadable": true,
+    "personNameResidualStillReadable": true,
+    "personTotalCount": 132
+  },
+  "item2_orphanSingerPartition": {
+    "orphanTotal": 115,
+    "linkedSingerPersonTotal": 132,
+    "withTwinCount": 18,
+    "withoutTwinCount": 97,
+    "withTwin": [
+      {
+        "orphanId": "69c7f87e8489bfcb0e81b31a",
+        "orphanName": "Aivar Kaldre",
+        "twinPersonIds": [
+          "6a0dd2404ff8277cd4305fee"
+        ]
+      },
+      {
+        "orphanId": "69c7f8808489bfcb0e81b388",
+        "orphanName": "Mikk Dede",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd430601e"
+        ]
+      },
+      {
+        "orphanId": "69c7f8828489bfcb0e81b3f6",
+        "orphanName": "Peeter Hillep",
+        "twinPersonIds": [
+          "6a0dd2424ff8277cd4306060"
+        ]
+      },
+      {
+        "orphanId": "69c7f8828489bfcb0e81b400",
+        "orphanName": "Hanno Hint",
+        "twinPersonIds": [
+          "6a0dd2434ff8277cd4306066"
+        ]
+      },
+      {
+        "orphanId": "69c7f8828489bfcb0e81b40a",
+        "orphanName": "Ott Indermitte",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd4306036"
+        ]
+      },
+      {
+        "orphanId": "69c7f8848489bfcb0e81b478",
+        "orphanName": "Andres Alamaa",
+        "twinPersonIds": [
+          "6a0dd2444ff8277cd43060a8"
+        ]
+      },
+      {
+        "orphanId": "69c7f8848489bfcb0e81b482",
+        "orphanName": "Jüri Eensoo",
+        "twinPersonIds": [
+          "6a0dd2444ff8277cd43060ae"
+        ]
+      },
+      {
+        "orphanId": "69c7f8848489bfcb0e81b48c",
+        "orphanName": "Rasmus Erismaa",
+        "twinPersonIds": [
+          "6a0dd2444ff8277cd43060b4"
+        ]
+      },
+      {
+        "orphanId": "69c7f8878489bfcb0e81b510",
+        "orphanName": "Taavi Kivisik",
+        "twinPersonIds": [
+          "6a0dd2404ff8277cd4306000"
+        ]
+      },
+      {
+        "orphanId": "69c7f8878489bfcb0e81b526",
+        "orphanName": "Jaan Lattik",
+        "twinPersonIds": [
+          "6a0dd2404ff8277cd430600c"
+        ]
+      },
+      {
+        "orphanId": "69c7f8888489bfcb0e81b54e",
+        "orphanName": "Tarmo Evestus",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd4306012"
+        ]
+      },
+      {
+        "orphanId": "69c7f8888489bfcb0e81b558",
+        "orphanName": "Kaspar Kaljuste",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd4306024"
+        ]
+      },
+      {
+        "orphanId": "69c7f8888489bfcb0e81b562",
+        "orphanName": "Hannes Kont",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd4306018"
+        ]
+      },
+      {
+        "orphanId": "69c7f8898489bfcb0e81b594",
+        "orphanName": "Meelis Kubits",
+        "twinPersonIds": [
+          "6a0dd2434ff8277cd4306078"
+        ]
+      },
+      {
+        "orphanId": "69c7f8898489bfcb0e81b59e",
+        "orphanName": "Tõnis Mägi",
+        "twinPersonIds": [
+          "6a0dd2434ff8277cd4306072"
+        ]
+      },
+      {
+        "orphanId": "69c7f88a8489bfcb0e81b5c6",
+        "orphanName": "Karl Heinz",
+        "twinPersonIds": [
+          "6a0dd2454ff8277cd43060d8"
+        ]
+      },
+      {
+        "orphanId": "69c7f88a8489bfcb0e81b5d0",
+        "orphanName": "Toomas Lunge",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd430602a"
+        ]
+      },
+      {
+        "orphanId": "69c7f88b8489bfcb0e81b5da",
+        "orphanName": "Arvo Meier",
+        "twinPersonIds": [
+          "6a0dd2414ff8277cd4306030"
+        ]
+      }
+    ],
+    "withoutTwin": [
+      {
+        "orphanId": "69c7f8728489bfcb0e81b085",
+        "orphanName": "Yena Choi"
+      },
+      {
+        "orphanId": "69c7f8728489bfcb0e81b091",
+        "orphanName": "Birke Elisabeth Jakobson"
+      },
+      {
+        "orphanId": "69c7f8728489bfcb0e81b09b",
+        "orphanName": "Mirell Jakobson"
+      },
+      {
+        "orphanId": "69c7f8738489bfcb0e81b0a5",
+        "orphanName": "Eleri-Kristel Kuimet"
+      },
+      {
+        "orphanId": "69c7f8738489bfcb0e81b0af",
+        "orphanName": "Annika Lõhmus"
+      },
+      {
+        "orphanId": "69c7f8738489bfcb0e81b0b9",
+        "orphanName": "Marie Roos"
+      },
+      {
+        "orphanId": "69c7f8738489bfcb0e81b0c3",
+        "orphanName": "Laura Štoma"
+      },
+      {
+        "orphanId": "69c7f8748489bfcb0e81b0d7",
+        "orphanName": "Ave Hännikäinen"
+      },
+      {
+        "orphanId": "69c7f8748489bfcb0e81b0e1",
+        "orphanName": "Annely Leinberg"
+      },
+      {
+        "orphanId": "69c7f8748489bfcb0e81b0eb",
+        "orphanName": "Kristel Marand"
+      },
+      {
+        "orphanId": "69c7f8748489bfcb0e81b0f5",
+        "orphanName": "Marianne Pärna"
+      },
+      {
+        "orphanId": "69c7f8748489bfcb0e81b0ff",
+        "orphanName": "Anni Marie Rea"
+      },
+      {
+        "orphanId": "69c7f8758489bfcb0e81b109",
+        "orphanName": "Cätly Talvik"
+      },
+      {
+        "orphanId": "69c7f8758489bfcb0e81b11d",
+        "orphanName": "Danila Frantou"
+      },
+      {
+        "orphanId": "69c7f8758489bfcb0e81b127",
+        "orphanName": "Kaido Janke"
+      },
+      {
+        "orphanId": "69c7f8758489bfcb0e81b131",
+        "orphanName": "Raul Mikson"
+      },
+      {
+        "orphanId": "69c7f8768489bfcb0e81b13b",
+        "orphanName": "Miguel Gonçalves Silva"
+      },
+      {
+        "orphanId": "69c7f8768489bfcb0e81b145",
+        "orphanName": "Kaarel Telgmaa"
+      },
+      {
+        "orphanId": "69c7f8768489bfcb0e81b14f",
+        "orphanName": "Toomas Tohert"
+      },
+      {
+        "orphanId": "69c7f8768489bfcb0e81b159",
+        "orphanName": "Danny Zhizhong Xie"
+      },
+      {
+        "orphanId": "69c7f8778489bfcb0e81b16d",
+        "orphanName": "Geir Luht"
+      },
+      {
+        "orphanId": "69c7f8778489bfcb0e81b177",
+        "orphanName": "Kristjan-Jaanek Mölder"
+      },
+      {
+        "orphanId": "69c7f8778489bfcb0e81b181",
+        "orphanName": "Kim Sargsyan"
+      },
+      {
+        "orphanId": "69c7f8778489bfcb0e81b18b",
+        "orphanName": "Aarne Talvik"
+      },
+      {
+        "orphanId": "69c7f8778489bfcb0e81b195",
+        "orphanName": "Henry Tiisma"
+      },
+      {
+        "orphanId": "69c7f8778489bfcb0e81b19f",
+        "orphanName": "Rainer Vilu"
+      },
+      {
+        "orphanId": "69c7f8788489bfcb0e81b1c9",
+        "orphanName": "Anu Einberg"
+      },
+      {
+        "orphanId": "69c7f8788489bfcb0e81b1d5",
+        "orphanName": "Margit Kont"
+      },
+      {
+        "orphanId": "69c7f8798489bfcb0e81b1df",
+        "orphanName": "Liis Rull"
+      },
+      {
+        "orphanId": "69c7f8798489bfcb0e81b1e9",
+        "orphanName": "Kleer Keret Tali"
+      },
+      {
+        "orphanId": "69c7f8798489bfcb0e81b1f3",
+        "orphanName": "Yoko Tees"
+      },
+      {
+        "orphanId": "69c7f8798489bfcb0e81b1fd",
+        "orphanName": "Silvia Toomet"
+      },
+      {
+        "orphanId": "69c7f8798489bfcb0e81b211",
+        "orphanName": "Mari Jurtom"
+      },
+      {
+        "orphanId": "69c7f87a8489bfcb0e81b21b",
+        "orphanName": "Iris Kallas"
+      },
+      {
+        "orphanId": "69c7f87a8489bfcb0e81b225",
+        "orphanName": "Kirstin Karis"
+      },
+      {
+        "orphanId": "69c7f87a8489bfcb0e81b22f",
+        "orphanName": "Laura Komp"
+      },
+      {
+        "orphanId": "69c7f87a8489bfcb0e81b239",
+        "orphanName": "Teele Raimla"
+      },
+      {
+        "orphanId": "69c7f87a8489bfcb0e81b243",
+        "orphanName": "Dagmar Talmar"
+      },
+      {
+        "orphanId": "69c7f87b8489bfcb0e81b24d",
+        "orphanName": "Helene Uppin"
+      },
+      {
+        "orphanId": "69c7f87b8489bfcb0e81b261",
+        "orphanName": "Kadri Järvelaid"
+      },
+      {
+        "orphanId": "69c7f87b8489bfcb0e81b26b",
+        "orphanName": "Mariel Luuk"
+      },
+      {
+        "orphanId": "69c7f87b8489bfcb0e81b275",
+        "orphanName": "Janika Mandel"
+      },
+      {
+        "orphanId": "69c7f87b8489bfcb0e81b27f",
+        "orphanName": "Kristel Pedak"
+      },
+      {
+        "orphanId": "69c7f87c8489bfcb0e81b289",
+        "orphanName": "Kadri Schüts"
+      },
+      {
+        "orphanId": "69c7f87c8489bfcb0e81b293",
+        "orphanName": "Ene Smorodina"
+      },
+      {
+        "orphanId": "69c7f87c8489bfcb0e81b29d",
+        "orphanName": "Kaisa Summel"
+      },
+      {
+        "orphanId": "69c7f87c8489bfcb0e81b2b1",
+        "orphanName": "Kertu Aksiim"
+      },
+      {
+        "orphanId": "69c7f87c8489bfcb0e81b2bb",
+        "orphanName": "Brett Lemsalu"
+      },
+      {
+        "orphanId": "69c7f87d8489bfcb0e81b2c5",
+        "orphanName": "Sandra Leon"
+      },
+      {
+        "orphanId": "69c7f87d8489bfcb0e81b2cf",
+        "orphanName": "Madli Sursu"
+      },
+      {
+        "orphanId": "69c7f87e8489bfcb0e81b304",
+        "orphanName": "Aleksander Arder"
+      },
+      {
+        "orphanId": "69c7f87e8489bfcb0e81b310",
+        "orphanName": "Kirill Gorjušin"
+      },
+      {
+        "orphanId": "69c7f87e8489bfcb0e81b324",
+        "orphanName": "Andrus Kirss"
+      },
+      {
+        "orphanId": "69c7f87f8489bfcb0e81b32e",
+        "orphanName": "Mart Kroon"
+      },
+      {
+        "orphanId": "69c7f87f8489bfcb0e81b338",
+        "orphanName": "Priit Lehto"
+      },
+      {
+        "orphanId": "69c7f87f8489bfcb0e81b342",
+        "orphanName": "Lennart Mängli"
+      },
+      {
+        "orphanId": "69c7f87f8489bfcb0e81b34c",
+        "orphanName": "Valnar Neidre"
+      },
+      {
+        "orphanId": "69c7f87f8489bfcb0e81b356",
+        "orphanName": "Oliver Povel"
+      },
+      {
+        "orphanId": "69c7f87f8489bfcb0e81b360",
+        "orphanName": "Kuldar Schüts"
+      },
+      {
+        "orphanId": "69c7f8808489bfcb0e81b36a",
+        "orphanName": "Karel Tohv"
+      },
+      {
+        "orphanId": "69c7f8808489bfcb0e81b37e",
+        "orphanName": "Priidu Aardam"
+      },
+      {
+        "orphanId": "69c7f8808489bfcb0e81b392",
+        "orphanName": "Reio Blond"
+      },
+      {
+        "orphanId": "69c7f8808489bfcb0e81b39c",
+        "orphanName": "Madis Enson"
+      },
+      {
+        "orphanId": "69c7f8808489bfcb0e81b3a6",
+        "orphanName": "Ero Esko"
+      },
+      {
+        "orphanId": "69c7f8818489bfcb0e81b3b0",
+        "orphanName": "Olev Koit"
+      },
+      {
+        "orphanId": "69c7f8818489bfcb0e81b3ba",
+        "orphanName": "Markus Leppoja"
+      },
+      {
+        "orphanId": "69c7f8818489bfcb0e81b3c4",
+        "orphanName": "Grigori Rutškin"
+      },
+      {
+        "orphanId": "69c7f8818489bfcb0e81b3ce",
+        "orphanName": "Margus Vaht"
+      },
+      {
+        "orphanId": "69c7f8818489bfcb0e81b3d8",
+        "orphanName": "Margus Vellmann"
+      },
+      {
+        "orphanId": "69c7f8818489bfcb0e81b3e2",
+        "orphanName": "Rihards Zariṇš"
+      },
+      {
+        "orphanId": "69c7f8828489bfcb0e81b414",
+        "orphanName": "Oleksandr Kadyrov"
+      },
+      {
+        "orphanId": "69c7f8828489bfcb0e81b41e",
+        "orphanName": "René Keldo"
+      },
+      {
+        "orphanId": "69c7f8828489bfcb0e81b428",
+        "orphanName": "Kaarel Kukk"
+      },
+      {
+        "orphanId": "69c7f8838489bfcb0e81b432",
+        "orphanName": "Igor Nikiforov"
+      },
+      {
+        "orphanId": "69c7f8838489bfcb0e81b43c",
+        "orphanName": "Andrus Poolma"
+      },
+      {
+        "orphanId": "69c7f8838489bfcb0e81b446",
+        "orphanName": "Alo Rammo"
+      },
+      {
+        "orphanId": "69c7f8838489bfcb0e81b450",
+        "orphanName": "Ants Reinhold"
+      },
+      {
+        "orphanId": "69c7f8838489bfcb0e81b45a",
+        "orphanName": "Andrus Siimon"
+      },
+      {
+        "orphanId": "69c7f8838489bfcb0e81b464",
+        "orphanName": "Stanislav Šeljahhovski"
+      },
+      {
+        "orphanId": "69c7f8858489bfcb0e81b496",
+        "orphanName": "Arno Jürjens"
+      },
+      {
+        "orphanId": "69c7f8858489bfcb0e81b4a0",
+        "orphanName": "Taavi Kendra"
+      },
+      {
+        "orphanId": "69c7f8858489bfcb0e81b4aa",
+        "orphanName": "Aare Kruusimäe"
+      },
+      {
+        "orphanId": "69c7f8858489bfcb0e81b4b4",
+        "orphanName": "John William Mathre"
+      },
+      {
+        "orphanId": "69c7f8858489bfcb0e81b4be",
+        "orphanName": "Nikita Mištšenko"
+      },
+      {
+        "orphanId": "69c7f8858489bfcb0e81b4c8",
+        "orphanName": "Mait Männik"
+      },
+      {
+        "orphanId": "69c7f8868489bfcb0e81b4d2",
+        "orphanName": "Juss Tamm"
+      },
+      {
+        "orphanId": "69c7f8868489bfcb0e81b4dc",
+        "orphanName": "Ranno Tamm"
+      },
+      {
+        "orphanId": "69c7f8868489bfcb0e81b4e6",
+        "orphanName": "Roland Viilukas"
+      },
+      {
+        "orphanId": "69c7f8878489bfcb0e81b51c",
+        "orphanName": "Mihkel Kõrvits"
+      },
+      {
+        "orphanId": "69c7f8878489bfcb0e81b530",
+        "orphanName": "Argo Moor"
+      },
+      {
+        "orphanId": "69c7f8888489bfcb0e81b53a",
+        "orphanName": "Raul Ojassaar"
+      },
+      {
+        "orphanId": "69c7f8888489bfcb0e81b56c",
+        "orphanName": "Peep Laansalu"
+      },
+      {
+        "orphanId": "69c7f8898489bfcb0e81b576",
+        "orphanName": "Margus Pärtlas"
+      },
+      {
+        "orphanId": "69c7f8898489bfcb0e81b58a",
+        "orphanName": "Alar Karis"
+      },
+      {
+        "orphanId": "69c7f88a8489bfcb0e81b5a8",
+        "orphanName": "Arvo Pärn"
+      },
+      {
+        "orphanId": "69c7f88a8489bfcb0e81b5b2",
+        "orphanName": "Raul Talmar"
+      },
+      {
+        "orphanId": "69c7f88b8489bfcb0e81b5e4",
+        "orphanName": "Raul Saar"
+      }
+    ]
+  },
+  "item3_propDefPass": {
+    "perType": {
+      "person": {
+        "ownSharing": "domain",
+        "instanceCount": 132,
+        "propDefs": [
+          {
+            "id": "69bcfd8e9c031ab8e6ce8060",
+            "name": "address",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce8061",
+            "name": "birthdate",
+            "sharing": "domain",
+            "type": "date"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce8062",
+            "name": "county",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce8064",
+            "name": "entu_user",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce8066",
+            "name": "idcode",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce8067",
+            "name": "entu_api_key",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce806a",
+            "name": "phone",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce806c",
+            "name": "postalcode",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce806e",
+            "name": "town",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69bcfd8e9c031ab8e6ce806f",
+            "name": "entu_passkey",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea5a8489bfcb0e81a1ac",
+            "name": "voice",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea5a8489bfcb0e81a1bf",
+            "name": "language",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea5b8489bfcb0e81a1cb",
+            "name": "locale",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea5b8489bfcb0e81a1d7",
+            "name": "timezone",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df71",
+            "name": "bio",
+            "sharing": "domain",
+            "type": "text"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df7b",
+            "name": "preferred_contact_email",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df85",
+            "name": "preferences",
+            "sharing": "domain",
+            "type": "text"
+          },
+          {
+            "id": "6a0d709890c8df7a1cc7e12e",
+            "name": "photo",
+            "sharing": "domain",
+            "type": "file"
+          }
+        ]
+      },
+      "organization": {
+        "ownSharing": "domain",
+        "instanceCount": 6,
+        "propDefs": [
+          {
+            "id": "69c7ea478489bfcb0e819e44",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea488489bfcb0e819e6a",
+            "name": "description",
+            "sharing": "(absent)",
+            "type": "text"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df8f",
+            "name": "founded",
+            "sharing": "domain",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7df99",
+            "name": "location",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfa3",
+            "name": "website",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfad",
+            "name": "photo",
+            "sharing": "domain",
+            "type": "file"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfb7",
+            "name": "social_links",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfc2",
+            "name": "rsvp_lockout_hours",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfcc",
+            "name": "public_contact",
+            "sharing": "domain",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfd7",
+            "name": "member_count_per_section",
+            "sharing": "domain",
+            "type": "number"
+          }
+        ]
+      },
+      "section": {
+        "ownSharing": "domain",
+        "instanceCount": 16,
+        "propDefs": [
+          {
+            "id": "69c7ea498489bfcb0e819eaa",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea4a8489bfcb0e819ed1",
+            "name": "member_count",
+            "sharing": "(absent)",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8790c8df7a1cc7dfe2",
+            "name": "description",
+            "sharing": "domain",
+            "type": "text"
+          },
+          {
+            "id": "6a0d709890c8df7a1cc7e138",
+            "name": "display_order",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a0d709890c8df7a1cc7e142",
+            "name": "voice",
+            "sharing": "domain",
+            "type": "reference"
+          }
+        ]
+      },
+      "member": {
+        "ownSharing": "domain",
+        "instanceCount": 246,
+        "propDefs": [
+          {
+            "id": "69c7ea4b8489bfcb0e819f05",
+            "name": "person",
+            "sharing": "domain",
+            "type": "reference"
+          },
+          {
+            "id": "69c7ea4c8489bfcb0e819f27",
+            "name": "section",
+            "sharing": "domain",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7dfec",
+            "name": "current_section",
+            "sharing": "domain",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7dff6",
+            "name": "status",
+            "sharing": "domain",
+            "type": "string"
+          }
+        ]
+      },
+      "work": {
+        "ownSharing": "domain",
+        "instanceCount": 13,
+        "propDefs": [
+          {
+            "id": "69c7ea4d8489bfcb0e819f45",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea4d8489bfcb0e819f51",
+            "name": "composer",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea4d8489bfcb0e819f66",
+            "name": "genre",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7e001",
+            "name": "catalog_id",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7e00b",
+            "name": "catalog_system",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7e015",
+            "name": "part_of",
+            "sharing": "domain",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d709890c8df7a1cc7e14c",
+            "name": "original_voicing",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d709890c8df7a1cc7e156",
+            "name": "original_duration",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a0d709890c8df7a1cc7e160",
+            "name": "original_language",
+            "sharing": "domain",
+            "type": "string"
+          }
+        ]
+      },
+      "edition": {
+        "ownSharing": "domain",
+        "instanceCount": 17,
+        "propDefs": [
+          {
+            "id": "69c7ea4f8489bfcb0e819fa3",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea4f8489bfcb0e819faf",
+            "name": "edition_type",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea4f8489bfcb0e819fc1",
+            "name": "license",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea4f8489bfcb0e819fce",
+            "name": "publisher",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea508489bfcb0e819fd8",
+            "name": "year",
+            "sharing": "(absent)",
+            "type": "number"
+          },
+          {
+            "id": "69c7ea508489bfcb0e819fe2",
+            "name": "file",
+            "sharing": "(absent)",
+            "type": "file"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7e01f",
+            "name": "external_link",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7e02a",
+            "name": "work",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8890c8df7a1cc7e035",
+            "name": "arranger",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e03f",
+            "name": "voicing",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e049",
+            "name": "duration",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e053",
+            "name": "language",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e05e",
+            "name": "acquired_at",
+            "sharing": "domain",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e068",
+            "name": "source",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e072",
+            "name": "cost",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e07c",
+            "name": "license_note",
+            "sharing": "domain",
+            "type": "text"
+          }
+        ]
+      },
+      "season": {
+        "ownSharing": "domain",
+        "instanceCount": 2,
+        "propDefs": [
+          {
+            "id": "69c7ea528489bfcb0e81a04b",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea538489bfcb0e81a057",
+            "name": "start_date",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8990c8df7a1cc7e086",
+            "name": "end_date",
+            "sharing": "domain",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e091",
+            "name": "description",
+            "sharing": "domain",
+            "type": "text"
+          }
+        ]
+      },
+      "repertoire_item": {
+        "ownSharing": "domain",
+        "instanceCount": 0,
+        "propDefs": [
+          {
+            "id": "69c7ea538489bfcb0e81a075",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea538489bfcb0e81a081",
+            "name": "work",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "69c7ea548489bfcb0e81a08d",
+            "name": "edition",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "69c7ea548489bfcb0e81a098",
+            "name": "ordinal",
+            "sharing": "(absent)",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e0c4",
+            "name": "status",
+            "sharing": "domain",
+            "type": "string"
+          }
+        ]
+      },
+      "event": {
+        "ownSharing": "public",
+        "instanceCount": 21,
+        "propDefs": [
+          {
+            "id": "69c7ea548489bfcb0e81a0a9",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea558489bfcb0e81a0b5",
+            "name": "event_type",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea558489bfcb0e81a0c4",
+            "name": "date",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "69c7ea558489bfcb0e81a0cf",
+            "name": "start_time",
+            "sharing": "(absent)",
+            "type": "datetime"
+          },
+          {
+            "id": "69c7ea558489bfcb0e81a0d9",
+            "name": "end_time",
+            "sharing": "(absent)",
+            "type": "datetime"
+          },
+          {
+            "id": "69c7ea568489bfcb0e81a0e3",
+            "name": "location",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea568489bfcb0e81a0ed",
+            "name": "season",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "69c7ea568489bfcb0e81a0f8",
+            "name": "notes",
+            "sharing": "(absent)",
+            "type": "text"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e09b",
+            "name": "start_datetime",
+            "sharing": "domain",
+            "type": "datetime"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e0a6",
+            "name": "duration_minutes",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e0b0",
+            "name": "description",
+            "sharing": "domain",
+            "type": "text"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e0ba",
+            "name": "capacity",
+            "sharing": "domain",
+            "type": "number"
+          },
+          {
+            "id": "6a2d3db44cd971291c5d5688",
+            "name": "rsvp_going_count",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a2d3db44cd971291c5d5692",
+            "name": "rsvp_not_going_count",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a2d3db44cd971291c5d569c",
+            "name": "rsvp_maybe_count",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a2d3db44cd971291c5d56a6",
+            "name": "rsvp_late_count",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a2d3db44cd971291c5d56b0",
+            "name": "rsvp_tally",
+            "sharing": "public",
+            "type": "string"
+          }
+        ]
+      },
+      "program_item": {
+        "ownSharing": "domain",
+        "instanceCount": 0,
+        "propDefs": [
+          {
+            "id": "69c7ea578489bfcb0e81a10a",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "69c7ea578489bfcb0e81a116",
+            "name": "work",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "69c7ea578489bfcb0e81a122",
+            "name": "edition",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "69c7ea578489bfcb0e81a12d",
+            "name": "ordinal",
+            "sharing": "(absent)",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8a90c8df7a1cc7e0ce",
+            "name": "notes",
+            "sharing": "domain",
+            "type": "text"
+          }
+        ]
+      },
+      "voice": {
+        "ownSharing": "public",
+        "instanceCount": 5,
+        "propDefs": [
+          {
+            "id": "6a0d2e8090c8df7a1cc7dd73",
+            "name": "name",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8090c8df7a1cc7dd7e",
+            "name": "class",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8090c8df7a1cc7dd89",
+            "name": "display_order",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8090c8df7a1cc7dd93",
+            "name": "description",
+            "sharing": "public",
+            "type": "text"
+          }
+        ]
+      },
+      "library": {
+        "ownSharing": "domain",
+        "instanceCount": 1,
+        "propDefs": [
+          {
+            "id": "6a0d2e8090c8df7a1cc7dda6",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          }
+        ]
+      },
+      "copy": {
+        "ownSharing": "domain",
+        "instanceCount": 552,
+        "propDefs": [
+          {
+            "id": "6a0d2e8190c8df7a1cc7ddb9",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8190c8df7a1cc7ddc3",
+            "name": "copy_number",
+            "sharing": "(absent)",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8190c8df7a1cc7ddcd",
+            "name": "barcode",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8190c8df7a1cc7ddd6",
+            "name": "condition",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8190c8df7a1cc7dddf",
+            "name": "notes",
+            "sharing": "(absent)",
+            "type": "text"
+          }
+        ]
+      },
+      "lending": {
+        "ownSharing": "domain",
+        "instanceCount": 4,
+        "propDefs": [
+          {
+            "id": "6a0d2e8190c8df7a1cc7ddf1",
+            "name": "name",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8190c8df7a1cc7ddfb",
+            "name": "copy",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8290c8df7a1cc7de05",
+            "name": "member",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8290c8df7a1cc7de0f",
+            "name": "assigned_at",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8290c8df7a1cc7de19",
+            "name": "assigned_until",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8290c8df7a1cc7de22",
+            "name": "returned_at",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8290c8df7a1cc7de2b",
+            "name": "renewed_at",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8290c8df7a1cc7de35",
+            "name": "notes",
+            "sharing": "(absent)",
+            "type": "text"
+          }
+        ]
+      },
+      "invitation": {
+        "ownSharing": "domain",
+        "instanceCount": 1,
+        "propDefs": [
+          {
+            "id": "6a0d2e8290c8df7a1cc7de47",
+            "name": "email",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8390c8df7a1cc7de51",
+            "name": "sections",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8390c8df7a1cc7de5b",
+            "name": "token",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8390c8df7a1cc7de65",
+            "name": "expires_at",
+            "sharing": "(absent)",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8390c8df7a1cc7de6f",
+            "name": "inviter",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8390c8df7a1cc7de78",
+            "name": "message",
+            "sharing": "(absent)",
+            "type": "text"
+          }
+        ]
+      },
+      "application": {
+        "ownSharing": "domain",
+        "instanceCount": 1,
+        "propDefs": [
+          {
+            "id": "6a0d2e8390c8df7a1cc7de8a",
+            "name": "target_org",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8390c8df7a1cc7de94",
+            "name": "message",
+            "sharing": "(absent)",
+            "type": "text"
+          },
+          {
+            "id": "6a0d2e8490c8df7a1cc7de9d",
+            "name": "status",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8490c8df7a1cc7dea7",
+            "name": "expires_at",
+            "sharing": "(absent)",
+            "type": "date"
+          }
+        ]
+      },
+      "event_series": {
+        "ownSharing": "public",
+        "instanceCount": 2,
+        "propDefs": [
+          {
+            "id": "6a0d2e8490c8df7a1cc7deba",
+            "name": "name",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8490c8df7a1cc7dec5",
+            "name": "event_type",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8490c8df7a1cc7ded0",
+            "name": "interval_days",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8490c8df7a1cc7dedb",
+            "name": "start_time",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8490c8df7a1cc7dee6",
+            "name": "duration_minutes",
+            "sharing": "public",
+            "type": "number"
+          },
+          {
+            "id": "6a0d2e8590c8df7a1cc7def1",
+            "name": "start_date",
+            "sharing": "public",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8590c8df7a1cc7defc",
+            "name": "end_date",
+            "sharing": "public",
+            "type": "date"
+          },
+          {
+            "id": "6a0d2e8590c8df7a1cc7df07",
+            "name": "default_location",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8590c8df7a1cc7df11",
+            "name": "default_description",
+            "sharing": "public",
+            "type": "text"
+          }
+        ]
+      },
+      "rsvp": {
+        "ownSharing": "domain",
+        "instanceCount": 16,
+        "propDefs": [
+          {
+            "id": "6a0d2e8590c8df7a1cc7df24",
+            "name": "event",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8590c8df7a1cc7df2e",
+            "name": "member",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8590c8df7a1cc7df38",
+            "name": "status",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df42",
+            "name": "notes",
+            "sharing": "(absent)",
+            "type": "text"
+          },
+          {
+            "id": "6a2d3db34cd971291c5d5664",
+            "name": "going_ref",
+            "sharing": "public",
+            "type": "reference"
+          },
+          {
+            "id": "6a2d3db34cd971291c5d566d",
+            "name": "not_going_ref",
+            "sharing": "public",
+            "type": "reference"
+          },
+          {
+            "id": "6a2d3db34cd971291c5d5676",
+            "name": "maybe_ref",
+            "sharing": "public",
+            "type": "reference"
+          },
+          {
+            "id": "6a2d3db34cd971291c5d567f",
+            "name": "late_ref",
+            "sharing": "public",
+            "type": "reference"
+          }
+        ]
+      },
+      "attendance": {
+        "ownSharing": "domain",
+        "instanceCount": 0,
+        "propDefs": [
+          {
+            "id": "6a0d2e8690c8df7a1cc7df54",
+            "name": "member",
+            "sharing": "(absent)",
+            "type": "reference"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df5e",
+            "name": "status",
+            "sharing": "(absent)",
+            "type": "string"
+          },
+          {
+            "id": "6a0d2e8690c8df7a1cc7df68",
+            "name": "notes",
+            "sharing": "(absent)",
+            "type": "text"
+          }
+        ]
+      },
+      "_probe_bulletin": {
+        "ownSharing": "(absent)",
+        "instanceCount": 3,
+        "propDefs": [
+          {
+            "id": "6a320175487a9c1f02f70adb",
+            "name": "title",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a320176487a9c1f02f70ae3",
+            "name": "summary",
+            "sharing": "domain",
+            "type": "string"
+          },
+          {
+            "id": "6a320176487a9c1f02f70aeb",
+            "name": "draft_notes",
+            "sharing": "(absent)",
+            "type": "string"
+          }
+        ]
+      },
+      "mvox_collective": {
+        "ownSharing": "domain",
+        "instanceCount": 1,
+        "propDefs": [
+          {
+            "id": "6a73880436c951d9114ec646",
+            "name": "name",
+            "sharing": "domain",
+            "type": "string"
+          }
+        ]
+      },
+      "profile": {
+        "ownSharing": "public",
+        "instanceCount": 132,
+        "propDefs": [
+          {
+            "id": "6a74934036c951d9114ec822",
+            "name": "name",
+            "sharing": "public",
+            "type": "string"
+          },
+          {
+            "id": "6a74934036c951d9114ec82e",
+            "name": "email",
+            "sharing": "public",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    "personDeferredDomainPropDefs": [
+      {
+        "id": "69bcfd8e9c031ab8e6ce8060",
+        "name": "address",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8061",
+        "name": "birthdate",
+        "sharing": "domain",
+        "type": "date"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8062",
+        "name": "county",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8064",
+        "name": "entu_user",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8066",
+        "name": "idcode",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8067",
+        "name": "entu_api_key",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806a",
+        "name": "phone",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806c",
+        "name": "postalcode",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806e",
+        "name": "town",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806f",
+        "name": "entu_passkey",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69c7ea5a8489bfcb0e81a1ac",
+        "name": "voice",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69c7ea5a8489bfcb0e81a1bf",
+        "name": "language",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69c7ea5b8489bfcb0e81a1cb",
+        "name": "locale",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "69c7ea5b8489bfcb0e81a1d7",
+        "name": "timezone",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df71",
+        "name": "bio",
+        "sharing": "domain",
+        "type": "text"
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df7b",
+        "name": "preferred_contact_email",
+        "sharing": "domain",
+        "type": "string"
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df85",
+        "name": "preferences",
+        "sharing": "domain",
+        "type": "text"
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e12e",
+        "name": "photo",
+        "sharing": "domain",
+        "type": "file"
+      }
+    ],
+    "personDeferredDomainCount": 18
+  },
+  "item4_menu": {
+    "count": 23,
+    "entries": [
+      {
+        "id": "69bcfd8e9c031ab8e6ce8070",
+        "nameEn": "Entities",
+        "group": "Configuration",
+        "ordinal": 1100,
+        "query": "_type.string=entity&system._id.exists=false&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "entity",
+        "instanceCountRef": "unknown-type"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8071",
+        "nameEn": "Menu",
+        "group": "Configuration",
+        "ordinal": 1000,
+        "query": "_type.string=menu&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "menu",
+        "instanceCountRef": "unknown-type"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8072",
+        "nameEn": "Plugins",
+        "group": "Configuration",
+        "ordinal": 1200,
+        "query": "_type.string=plugin&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "plugin",
+        "instanceCountRef": "unknown-type"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8073",
+        "nameEn": "Persons",
+        "group": "Organisations",
+        "ordinal": null,
+        "query": "_type.string=person&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "person",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8074",
+        "nameEn": "Billing",
+        "group": "Configuration",
+        "ordinal": 9999,
+        "query": "/{DATABASE}/billing",
+        "sharing": "(absent)",
+        "referencedType": null,
+        "instanceCountRef": "no-type-filter-in-query"
+      },
+      {
+        "id": "69c7f88b8489bfcb0e81b5f8",
+        "nameEn": "Organisations",
+        "group": "Polyphony",
+        "ordinal": 110,
+        "query": "_type.string=organization&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "organization",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d304ff8277cd43069ab",
+        "nameEn": "Voices",
+        "group": "Polyphony",
+        "ordinal": 115,
+        "query": "_type.string=voice&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "voice",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d304ff8277cd43069b6",
+        "nameEn": "Sections",
+        "group": "Polyphony",
+        "ordinal": 130,
+        "query": "_type.string=section&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "section",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d304ff8277cd43069c1",
+        "nameEn": "Members",
+        "group": "Polyphony",
+        "ordinal": 140,
+        "query": "_type.string=member&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "member",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069cc",
+        "nameEn": "Libraries",
+        "group": "Polyphony",
+        "ordinal": 240,
+        "query": "_type.string=library&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "library",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069d7",
+        "nameEn": "Works",
+        "group": "Polyphony",
+        "ordinal": 200,
+        "query": "_type.string=work&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "work",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069e2",
+        "nameEn": "Editions",
+        "group": "Polyphony",
+        "ordinal": 210,
+        "query": "_type.string=edition&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "edition",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069ed",
+        "nameEn": "Copies",
+        "group": "Polyphony",
+        "ordinal": 220,
+        "query": "_type.string=copy&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "copy",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd43069f8",
+        "nameEn": "Loans",
+        "group": "Polyphony",
+        "ordinal": 230,
+        "query": "_type.string=lending&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "lending",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a03",
+        "nameEn": "Invitations",
+        "group": "Polyphony",
+        "ordinal": 300,
+        "query": "_type.string=invitation&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "invitation",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a0e",
+        "nameEn": "Applications",
+        "group": "Polyphony",
+        "ordinal": 310,
+        "query": "_type.string=application&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "application",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a19",
+        "nameEn": "Seasons",
+        "group": "Polyphony",
+        "ordinal": 410,
+        "query": "_type.string=season&sort=start_date.date",
+        "sharing": "domain",
+        "referencedType": "season",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a24",
+        "nameEn": "Event Series",
+        "group": "Polyphony",
+        "ordinal": 440,
+        "query": "_type.string=event_series&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "event_series",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d314ff8277cd4306a2f",
+        "nameEn": "Events",
+        "group": "Polyphony",
+        "ordinal": 400,
+        "query": "_type.string=event&sort=start_date.date",
+        "sharing": "domain",
+        "referencedType": "event",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a3a",
+        "nameEn": "Repertoire",
+        "group": "Polyphony",
+        "ordinal": 420,
+        "query": "_type.string=repertoire_item&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "repertoire_item",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a45",
+        "nameEn": "Programme",
+        "group": "Polyphony",
+        "ordinal": 430,
+        "query": "_type.string=program_item&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "program_item",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a50",
+        "nameEn": "RSVPs",
+        "group": "Polyphony",
+        "ordinal": 510,
+        "query": "_type.string=rsvp&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "rsvp",
+        "instanceCountRef": "see item5"
+      },
+      {
+        "id": "6a0f6d324ff8277cd4306a5b",
+        "nameEn": "Attendance",
+        "group": "Polyphony",
+        "ordinal": 500,
+        "query": "_type.string=attendance&sort=name.string",
+        "sharing": "domain",
+        "referencedType": "attendance",
+        "instanceCountRef": "see item5"
+      }
+    ]
+  },
+  "item5_typeRegistry": {
+    "types": [
+      {
+        "type": "person",
+        "instanceCount": 132,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "organization",
+        "instanceCount": 6,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "section",
+        "instanceCount": 16,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "member",
+        "instanceCount": 246,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "work",
+        "instanceCount": 13,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "edition",
+        "instanceCount": 17,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "season",
+        "instanceCount": 2,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "repertoire_item",
+        "instanceCount": 0,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "event",
+        "instanceCount": 21,
+        "ownSharing": "public"
+      },
+      {
+        "type": "program_item",
+        "instanceCount": 0,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "voice",
+        "instanceCount": 5,
+        "ownSharing": "public"
+      },
+      {
+        "type": "library",
+        "instanceCount": 1,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "copy",
+        "instanceCount": 552,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "lending",
+        "instanceCount": 4,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "invitation",
+        "instanceCount": 1,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "application",
+        "instanceCount": 1,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "event_series",
+        "instanceCount": 2,
+        "ownSharing": "public"
+      },
+      {
+        "type": "rsvp",
+        "instanceCount": 16,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "attendance",
+        "instanceCount": 0,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "_probe_bulletin",
+        "instanceCount": 3,
+        "ownSharing": "(absent)"
+      },
+      {
+        "type": "mvox_collective",
+        "instanceCount": 1,
+        "ownSharing": "domain"
+      },
+      {
+        "type": "profile",
+        "instanceCount": 132,
+        "ownSharing": "public"
+      }
+    ],
+    "probeBulletinInventory": {
+      "type": "_probe_bulletin",
+      "instanceCount": 3,
+      "ownSharing": "(absent)"
+    }
+  },
+  "item6_plugins": {
+    "count": 4,
+    "entries": [
+      {
+        "id": "69bcfd8e9c031ab8e6ce8075",
+        "nameEn": "CSV file",
+        "sharing": "domain"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8076",
+        "nameEn": "ESTER",
+        "sharing": "domain"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8077",
+        "nameEn": "Objekti mall",
+        "sharing": "(absent)"
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8078",
+        "nameEn": "Discogs",
+        "sharing": "(absent)"
+      }
+    ]
+  }
+}
