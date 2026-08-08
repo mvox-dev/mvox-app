@@ -1,0 +1,3720 @@
+{
+  "dryRun": false,
+  "propDefTargets": [
+    {
+      "type": "work",
+      "name": "name",
+      "id": "69c7ea4d8489bfcb0e819f45",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "work",
+      "name": "composer",
+      "id": "69c7ea4d8489bfcb0e819f51",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "edition",
+      "name": "name",
+      "id": "69c7ea4f8489bfcb0e819fa3",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "edition",
+      "name": "publisher",
+      "id": "69c7ea4f8489bfcb0e819fce",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "copy",
+      "name": "name",
+      "id": "6a0d2e8190c8df7a1cc7ddb9",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "copy",
+      "name": "copy_number",
+      "id": "6a0d2e8190c8df7a1cc7ddc3",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "member",
+      "id": "6a0d2e8290c8df7a1cc7de05",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "assigned_at",
+      "id": "6a0d2e8290c8df7a1cc7de0f",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "copy",
+      "id": "6a0d2e8190c8df7a1cc7ddfb",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "assigned_until",
+      "id": "6a0d2e8290c8df7a1cc7de19",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "returned_at",
+      "id": "6a0d2e8290c8df7a1cc7de22",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "edition",
+      "name": "cost",
+      "id": "6a0d2e8990c8df7a1cc7e072",
+      "action": "narrow",
+      "currentSharing": "domain",
+      "sharingValueId": "6a0d2e8990c8df7a1cc7e078"
+    }
+  ],
+  "instancePopulation": {
+    "countsByType": {
+      "work": 13,
+      "edition": 17,
+      "copy": 552,
+      "lending": 4
+    },
+    "tierHistogram": {
+      "private": 586
+    }
+  },
+  "propDefEntries": [
+    {
+      "propDefId": "69c7ea4d8489bfcb0e819f45",
+      "type": "work",
+      "name": "name",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "69c7ea4d8489bfcb0e819f51",
+      "type": "work",
+      "name": "composer",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "69c7ea4f8489bfcb0e819fa3",
+      "type": "edition",
+      "name": "name",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "69c7ea4f8489bfcb0e819fce",
+      "type": "edition",
+      "name": "publisher",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8190c8df7a1cc7ddb9",
+      "type": "copy",
+      "name": "name",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8190c8df7a1cc7ddc3",
+      "type": "copy",
+      "name": "copy_number",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8290c8df7a1cc7de05",
+      "type": "lending",
+      "name": "member",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8290c8df7a1cc7de0f",
+      "type": "lending",
+      "name": "assigned_at",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8190c8df7a1cc7ddfb",
+      "type": "lending",
+      "name": "copy",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8290c8df7a1cc7de19",
+      "type": "lending",
+      "name": "assigned_until",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8290c8df7a1cc7de22",
+      "type": "lending",
+      "name": "returned_at",
+      "action": "widen",
+      "status": "set"
+    },
+    {
+      "propDefId": "6a0d2e8990c8df7a1cc7e072",
+      "type": "edition",
+      "name": "cost",
+      "action": "narrow",
+      "status": "set"
+    }
+  ],
+  "touchEntries": [
+    {
+      "type": "work",
+      "id": "6a12036e4ff8277cd4306bb5",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0af"
+    },
+    {
+      "type": "edition",
+      "id": "6a12036e4ff8277cd4306bc0",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0b0"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036e4ff8277cd4306bcb",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0b1"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c24ff8277cd4307ed5",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0b2"
+    },
+    {
+      "type": "work",
+      "id": "6a1203714ff8277cd4306c66",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0b3"
+    },
+    {
+      "type": "work",
+      "id": "6a12037a4ff8277cd4306e45",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0b4"
+    },
+    {
+      "type": "work",
+      "id": "6a1203864ff8277cd43070cb",
+      "status": "touched",
+      "newSharingPropId": "6a76e11036c951d9114ed0b5"
+    },
+    {
+      "type": "work",
+      "id": "6a12038d4ff8277cd430725c",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0b6"
+    },
+    {
+      "type": "work",
+      "id": "6a1203954ff8277cd4307435",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0b7"
+    },
+    {
+      "type": "work",
+      "id": "6a1203994ff8277cd430754c",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0b8"
+    },
+    {
+      "type": "work",
+      "id": "6a1203a04ff8277cd43076e1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0b9"
+    },
+    {
+      "type": "work",
+      "id": "6a1203a94ff8277cd43078d7",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0ba"
+    },
+    {
+      "type": "work",
+      "id": "6a1203ad4ff8277cd43079ae",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0bb"
+    },
+    {
+      "type": "work",
+      "id": "6a1203ad4ff8277cd43079c5",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0bc"
+    },
+    {
+      "type": "work",
+      "id": "6a1203b54ff8277cd4307b9a",
+      "status": "touched",
+      "newSharingPropId": "6a76e11136c951d9114ed0bd"
+    },
+    {
+      "type": "work",
+      "id": "6a1203bc4ff8277cd4307d3f",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0be"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203704ff8277cd4306c2b",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0bf"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203714ff8277cd4306c72",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c0"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203764ff8277cd4306d6e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c1"
+    },
+    {
+      "type": "edition",
+      "id": "6a12037a4ff8277cd4306e39",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c2"
+    },
+    {
+      "type": "edition",
+      "id": "6a12037b4ff8277cd4306e50",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c3"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203834ff8277cd4307030",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c4"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203864ff8277cd43070d7",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c5"
+    },
+    {
+      "type": "edition",
+      "id": "6a12038d4ff8277cd4307267",
+      "status": "touched",
+      "newSharingPropId": "6a76e11236c951d9114ed0c6"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203954ff8277cd4307441",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0c7"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203994ff8277cd4307556",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0c8"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203a04ff8277cd43076ec",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0c9"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203a94ff8277cd43078e3",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0ca"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203ad4ff8277cd43079b9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0cb"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203ad4ff8277cd43079cf",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0cc"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203b54ff8277cd4307ba4",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0cd"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203bc4ff8277cd4307d4a",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0ce"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bd3",
+      "status": "touched",
+      "newSharingPropId": "6a76e11336c951d9114ed0cf"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bdb",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d0"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306be3",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d1"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306beb",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d2"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bf3",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d3"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bfb",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c03",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c0b",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c13",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c1b",
+      "status": "touched",
+      "newSharingPropId": "6a76e11436c951d9114ed0d8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c23",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0d9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c36",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0da"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c3e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0db"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c46",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0dc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c4e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0dd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c56",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0de"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c5e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0df"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c7e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0e0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c86",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0e1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c8e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11536c951d9114ed0e2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c96",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c9e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306ca6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306cae",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306cb6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306cbe",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cc6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0e9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cce",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0ea"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cd6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0eb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cde",
+      "status": "touched",
+      "newSharingPropId": "6a76e11636c951d9114ed0ec"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306ce6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0ed"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306cee",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0ee"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306cf6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0ef"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306cfe",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306d06",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306d0e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306d16",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d1e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d26",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d2e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11736c951d9114ed0f6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d36",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0f7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d3e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0f8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d46",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0f9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d4e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0fa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d56",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0fb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d5e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0fc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d66",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0fd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d79",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0fe"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d81",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed0ff"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d89",
+      "status": "touched",
+      "newSharingPropId": "6a76e11836c951d9114ed100"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306d91",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed101"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306d99",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed102"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306da1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed103"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306da9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed104"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306db1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed105"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306db9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed106"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dc1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed107"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dc9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed108"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dd1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11936c951d9114ed109"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dd9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed10a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306de1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed10b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306de9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed10c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306df1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed10d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306df9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed10e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e01",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed10f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e09",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed110"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e11",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed111"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e19",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed112"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037a4ff8277cd4306e21",
+      "status": "touched",
+      "newSharingPropId": "6a76e11a36c951d9114ed113"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037a4ff8277cd4306e29",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed114"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037a4ff8277cd4306e31",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed115"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e5c",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed116"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e65",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed117"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e6e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed118"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e77",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed119"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e80",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed11a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306e89",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed11b"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306e92",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed11c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306e9b",
+      "status": "touched",
+      "newSharingPropId": "6a76e11b36c951d9114ed11d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306ea4",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed11e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306ead",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed11f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306eb6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed120"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ebf",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed121"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ec8",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed122"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ed1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed123"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306eda",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed124"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ee3",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed125"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306eec",
+      "status": "touched",
+      "newSharingPropId": "6a76e11c36c951d9114ed126"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306ef5",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed127"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306efe",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed128"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f07",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed129"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f10",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed12a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f19",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed12b"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f22",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed12c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f2b",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed12d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f34",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed12e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f3d",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed12f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f46",
+      "status": "touched",
+      "newSharingPropId": "6a76e11d36c951d9114ed130"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f4f",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed131"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f58",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed132"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f61",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed133"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f6a",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed134"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f73",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed135"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f7c",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed136"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f85",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed137"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f8e",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed138"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306f97",
+      "status": "touched",
+      "newSharingPropId": "6a76e11e36c951d9114ed139"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fa0",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed13a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fa9",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed13b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fb2",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed13c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fbb",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed13d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fc4",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed13e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fcd",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed13f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fd6",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed140"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fdf",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed141"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fe8",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed142"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306ff1",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed143"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306ffa",
+      "status": "touched",
+      "newSharingPropId": "6a76e11f36c951d9114ed144"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4307003",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed145"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd430700c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed146"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd4307015",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed147"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd430701e",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed148"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd4307027",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed149"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd430703b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed14a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd4307043",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed14b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd430704b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed14c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd4307053",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed14d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd430705b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12036c951d9114ed14e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd4307063",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed14f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd430706b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed150"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd4307073",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed151"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd430707b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed152"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd4307083",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed153"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd430708b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed154"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd4307093",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed155"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd430709b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed156"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070a3",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed157"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070ab",
+      "status": "touched",
+      "newSharingPropId": "6a76e12136c951d9114ed158"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070b3",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed159"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070bb",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed15a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070c3",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed15b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070e2",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed15c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd43070eb",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed15d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd43070f4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed15e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd43070fd",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed15f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd4307106",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed160"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd430710f",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed161"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd4307118",
+      "status": "touched",
+      "newSharingPropId": "6a76e12236c951d9114ed162"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd4307121",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed163"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd430712a",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed164"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd4307133",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed165"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd430713c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed166"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd4307145",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed167"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd430714e",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed168"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307157",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed169"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307160",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed16a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307169",
+      "status": "touched",
+      "newSharingPropId": "6a76e12336c951d9114ed16b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307172",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed16c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd430717b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed16d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd4307184",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed16e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd430718d",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed16f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd4307196",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed170"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd430719f",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed171"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd43071a8",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed172"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd43071b1",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed173"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071ba",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed174"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071c3",
+      "status": "touched",
+      "newSharingPropId": "6a76e12436c951d9114ed175"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071cc",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed176"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071d5",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed177"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071de",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed178"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071e7",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed179"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071f0",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed17a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd43071f9",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed17b"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307202",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed17c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd430720b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed17d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307214",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed17e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd430721d",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed17f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307226",
+      "status": "touched",
+      "newSharingPropId": "6a76e12536c951d9114ed180"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd430722f",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed181"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307238",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed182"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307241",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed183"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd430724a",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed184"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd4307253",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed185"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd4307273",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed186"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd430727c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed187"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd4307285",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed188"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd430728e",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed189"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd4307297",
+      "status": "touched",
+      "newSharingPropId": "6a76e12636c951d9114ed18a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072a0",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed18b"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072a9",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed18c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072b2",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed18d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072bb",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed18e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072c4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed18f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072cd",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed190"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072d6",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed191"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072df",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed192"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072e8",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed193"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072f1",
+      "status": "touched",
+      "newSharingPropId": "6a76e12736c951d9114ed194"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072fa",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed195"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd4307303",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed196"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd430730c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed197"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307315",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed198"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd430731e",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed199"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307327",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed19a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307330",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed19b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307339",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed19c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307342",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed19d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd430734b",
+      "status": "touched",
+      "newSharingPropId": "6a76e12836c951d9114ed19e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307354",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed19f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd430735d",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307366",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd430736f",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307378",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd4307381",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd430738a",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd4307393",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd430739c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd43073a5",
+      "status": "touched",
+      "newSharingPropId": "6a76e12936c951d9114ed1a8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd43073ae",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1a9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd43073b7",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1aa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073c0",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1ab"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073c9",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1ac"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073d2",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1ad"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073db",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1ae"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073e4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1af"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073ed",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1b0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd43073f6",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1b1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd43073ff",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1b2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd4307408",
+      "status": "touched",
+      "newSharingPropId": "6a76e12a36c951d9114ed1b3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd4307411",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1b4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd430741a",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1b5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd4307423",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1b6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd430742c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1b7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430744c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1b8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307454",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1b9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430745c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12b36c951d9114ed1ba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307464",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1bb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430746c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1bc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307474",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1bd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430747c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1be"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307484",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1bf"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd430748c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1c0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd4307494",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1c1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd430749c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12c36c951d9114ed1c2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074a4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074ac",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074b4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074bc",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074c4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074cc",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074d4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1c9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074dc",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1ca"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074e4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1cb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074ec",
+      "status": "touched",
+      "newSharingPropId": "6a76e12d36c951d9114ed1cc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074f4",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1cd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd43074fc",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1ce"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd4307504",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1cf"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd430750c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd4307514",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd430751c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd4307524",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd430752c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd4307534",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd430753c",
+      "status": "touched",
+      "newSharingPropId": "6a76e12e36c951d9114ed1d6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd4307544",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1d7"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307561",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1d8"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307569",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1d9"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307571",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1da"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307579",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1db"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307581",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1dc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307589",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1dd"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307591",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1de"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd4307599",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1df"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075a1",
+      "status": "touched",
+      "newSharingPropId": "6a76e12f36c951d9114ed1e0"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075a9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e1"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075b1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e2"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075b9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e3"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075c1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075c9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e5"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075d1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075d9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e7"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075e1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e8"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075e9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1e9"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075f1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13036c951d9114ed1ea"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075f9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1eb"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd4307601",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1ec"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd4307609",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1ed"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307611",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1ee"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307619",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1ef"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307621",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1f0"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307629",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1f1"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307631",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1f2"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307639",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1f3"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307641",
+      "status": "touched",
+      "newSharingPropId": "6a76e13136c951d9114ed1f4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307649",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1f5"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307651",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1f6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307659",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1f7"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307661",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1f8"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307669",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1f9"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307671",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1fa"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307679",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1fb"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307681",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1fc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307689",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1fd"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307691",
+      "status": "touched",
+      "newSharingPropId": "6a76e13236c951d9114ed1fe"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307699",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed1ff"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd43076a1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed200"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd43076a9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed201"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd43076b1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed202"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076b9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed203"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076c1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed204"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076c9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed205"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076d1",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed206"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076d9",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed207"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076f7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13336c951d9114ed208"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd43076ff",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed209"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd4307707",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed20a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd430770f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed20b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd4307717",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed20c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd430771f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed20d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd4307727",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed20e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430772f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed20f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd4307737",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed210"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430773f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13436c951d9114ed211"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd4307747",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed212"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430774f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed213"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd4307757",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed214"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430775f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed215"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307767",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed216"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd430776f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed217"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307777",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed218"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd430777f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed219"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307787",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed21a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd430778f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed21b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307797",
+      "status": "touched",
+      "newSharingPropId": "6a76e13536c951d9114ed21c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd430779f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed21d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077a7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed21e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077af",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed21f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077b7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed220"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077bf",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed221"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077c7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed222"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077cf",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed223"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077d7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed224"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077df",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed225"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077e7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13636c951d9114ed226"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077ef",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed227"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077f7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed228"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077ff",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed229"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd4307807",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed22a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd430780f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed22b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307817",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed22c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430781f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed22d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307827",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed22e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430782f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed22f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307837",
+      "status": "touched",
+      "newSharingPropId": "6a76e13736c951d9114ed230"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430783f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed231"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307847",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed232"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430784f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed233"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307857",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed234"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd430785f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed235"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307867",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed236"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd430786f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed237"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307877",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed238"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd430787f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed239"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307887",
+      "status": "touched",
+      "newSharingPropId": "6a76e13836c951d9114ed23a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd430788f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed23b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd4307897",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed23c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd430789f",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed23d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd43078a7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed23e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd43078af",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed23f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078b7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed240"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078bf",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed241"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078c7",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed242"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078cf",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed243"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078ee",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed244"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd43078f6",
+      "status": "touched",
+      "newSharingPropId": "6a76e13936c951d9114ed245"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd43078fe",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed246"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd4307906",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed247"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd430790e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed248"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd4307916",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed249"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd430791e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed24a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd4307926",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed24b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430792e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed24c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd4307936",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed24d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430793e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed24e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd4307946",
+      "status": "touched",
+      "newSharingPropId": "6a76e13a36c951d9114ed24f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430794e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed250"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd4307956",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed251"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430795e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed252"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307966",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed253"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430796e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed254"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307976",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed255"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430797e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed256"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307986",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed257"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430798e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed258"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307996",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed259"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430799e",
+      "status": "touched",
+      "newSharingPropId": "6a76e13b36c951d9114ed25a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ad4ff8277cd43079a6",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed25b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ad4ff8277cd43079da",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed25c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ad4ff8277cd43079e2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed25d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd43079ea",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed25e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd43079f2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed25f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd43079fa",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed260"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a02",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed261"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a0a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed262"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a12",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed263"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a1a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13c36c951d9114ed264"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a22",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed265"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a2a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed266"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a32",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed267"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a3a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed268"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a42",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed269"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a4a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed26a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a52",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed26b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a5a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed26c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a62",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed26d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a6a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13d36c951d9114ed26e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a72",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed26f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a7a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed270"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a82",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed271"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a8a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed272"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a92",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed273"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a9a",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed274"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307aa2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed275"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307aaa",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed276"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ab2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed277"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307aba",
+      "status": "touched",
+      "newSharingPropId": "6a76e13e36c951d9114ed278"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ac2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed279"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307aca",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed27a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ad2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed27b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ada",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed27c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ae2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed27d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307aea",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed27e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307af2",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed27f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307afa",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed280"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b02",
+      "status": "touched",
+      "newSharingPropId": "6a76e13f36c951d9114ed281"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b0a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed282"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b12",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed283"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b1a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed284"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b22",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed285"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b2a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed286"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b32",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed287"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b3a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed288"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b42",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed289"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b4a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed28a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b52",
+      "status": "touched",
+      "newSharingPropId": "6a76e14036c951d9114ed28b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b5a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed28c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b62",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed28d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b6a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed28e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b72",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed28f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b7a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed290"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b82",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed291"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b8a",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed292"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b92",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed293"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307baf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed294"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bb7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14136c951d9114ed295"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bbf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed296"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bc7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed297"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bcf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed298"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bd7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed299"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bdf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed29a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307be7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed29b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bef",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed29c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bf7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed29d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bff",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed29e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307c07",
+      "status": "touched",
+      "newSharingPropId": "6a76e14236c951d9114ed29f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307c0f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307c17",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c1f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c27",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c2f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c37",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c3f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c47",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c4f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c57",
+      "status": "touched",
+      "newSharingPropId": "6a76e14336c951d9114ed2a9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c5f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2aa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c67",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2ab"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c6f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2ac"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c77",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2ad"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c7f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2ae"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c87",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2af"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c8f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2b0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c97",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2b1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c9f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2b2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307ca7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2b3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307caf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14436c951d9114ed2b4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307cb7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2b5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307cbf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2b6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cc7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2b7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307ccf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2b8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cd7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2b9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cdf",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2ba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307ce7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2bb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cef",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2bc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cf7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2bd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307cff",
+      "status": "touched",
+      "newSharingPropId": "6a76e14536c951d9114ed2be"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d07",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2bf"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d0f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d17",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d1f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d27",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d2f",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d37",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d55",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d5d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14636c951d9114ed2c7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d65",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2c8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d6d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2c9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d75",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2ca"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d7d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2cb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d85",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2cc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d8d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2cd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d95",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2ce"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d9d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2cf"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307da5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14736c951d9114ed2d0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307dad",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307db5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dbd",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dc5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dcd",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dd5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307ddd",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307de5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307ded",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2d9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307df5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14836c951d9114ed2da"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307dfd",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2db"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e05",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2dc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e0d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2dd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e15",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2de"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e1d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2df"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e25",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2e0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e2d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2e1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e35",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2e2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e3d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2e3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e45",
+      "status": "touched",
+      "newSharingPropId": "6a76e14936c951d9114ed2e4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e4d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2e5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e55",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2e6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e5d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2e7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e65",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2e8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e6d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2e9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e75",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2ea"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e7d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2eb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e85",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2ec"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e8d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2ed"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e95",
+      "status": "touched",
+      "newSharingPropId": "6a76e14a36c951d9114ed2ee"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e9d",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2ef"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307ea5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ead",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307eb5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ebd",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ec5",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ecd",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f5"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c34ff8277cd4307ede",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f6"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c34ff8277cd4307ee7",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f7"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c34ff8277cd4307ef0",
+      "status": "touched",
+      "newSharingPropId": "6a76e14b36c951d9114ed2f8"
+    }
+  ],
+  "propDefFailureCount": 0,
+  "touchFailureCount": 0,
+  "exitCode": 0,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root), which always reads the private bucket regardless of prop-def sharing. 'set'/'touched' here means the write landed and rotated the property _id (proof a fresh aggregateEntity run happened), NOT an empirically-confirmed domain-bucket read by a non-owner reader. That last-mile confirmation needs a real non-omniscient browser session (Mihkel), same pattern as #20/#44."
+}
