@@ -108,21 +108,35 @@ export async function verifyPopulation(cfg: EntuCfg, baseline: FlaggedTarget[], 
 	return { stillFlagged, alreadyFixed, missing, preOwnerCounts };
 }
 
-export type BackfillLedgerEntry = { type: string; id: string; status: 'added' | 'failed'; message?: string };
+export type BackfillLedgerEntry = { type: string; id: string; status: 'added' | 'skipped' | 'failed'; message?: string };
 
 /** The genuine mutation: POST `_owner` (add, never replace — reference-type
  * properties APPEND on POST by default, which is exactly the wanted
  * semantics here, no DELETE-then-POST). Read-back verifies (a) db-root's
  * reference is now present, AND (b) the owner count grew by EXACTLY 1 —
- * proves add-only, not an accidental replace or a duplicate-add. */
-export async function backfillOwner(cfg: EntuCfg, targets: FlaggedTarget[], preOwnerCounts: Record<string, number>, fetchImpl: typeof fetch = fetch): Promise<BackfillLedgerEntry[]> {
+ * proves add-only, not an accidental replace or a duplicate-add.
+ *
+ * Idempotency guard (Bentham review, item 3 / YELLOW-T4.10.1 lesson): a
+ * FRESH GET immediately precedes every write, independent of whatever
+ * `verifyPopulation` already filtered upstream. If db-root is already
+ * present, SKIP — never POST again. This makes the function safe to
+ * re-run or call with a stale/unfiltered target list, not just safe when
+ * the caller remembers to filter first. */
+export async function backfillOwner(cfg: EntuCfg, targets: FlaggedTarget[], fetchImpl: typeof fetch = fetch): Promise<BackfillLedgerEntry[]> {
 	const entries: BackfillLedgerEntry[] = [];
 	for (const t of targets) {
-		const preCount = preOwnerCounts[t.id];
-		if (preCount === undefined) {
-			entries.push({ type: t.type, id: t.id, status: 'failed', message: 'no pre-image owner count captured — refuse to write without a baseline to verify add-only against' });
+		const freshRes = await entuFetch(cfg.db, `entity/${t.id}?props=_owner`, cfg.token, {}, fetchImpl);
+		if (!freshRes.ok) {
+			entries.push({ type: t.type, id: t.id, status: 'failed', message: `idempotency pre-check GET failed: ${freshRes.status}` });
 			continue;
 		}
+		const freshBody = (await freshRes.json()) as { entity?: { _owner?: OwnerRef[] } };
+		const freshOwners = freshBody.entity?._owner ?? [];
+		if (freshOwners.some((o) => o.reference === DB_ROOT_PERSON_ID)) {
+			entries.push({ type: t.type, id: t.id, status: 'skipped', message: 'db-root already present on fresh re-check — idempotency guard (not a re-add)' });
+			continue;
+		}
+		const preCount = freshOwners.length;
 		try {
 			const res = await entuFetch(
 				cfg.db,
@@ -160,26 +174,69 @@ export async function backfillOwner(cfg: EntuCfg, targets: FlaggedTarget[], preO
 	return entries;
 }
 
+/** Full-entity snapshot for the canary diff gate — deliberately NOT
+ * `props=`-scoped, so it captures every property Entu returns (aggregated
+ * buckets included) rather than only the one field we expect to change. */
+async function readFullEntity(cfg: EntuCfg, id: string, fetchImpl: typeof fetch = fetch): Promise<Record<string, unknown>> {
+	const res = await entuFetch(cfg.db, `entity/${id}`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`readFullEntity: GET ${id} failed: ${res.status}`);
+	const body = (await res.json()) as { entity?: Record<string, unknown> };
+	return body.entity ?? {};
+}
+
+/** Diffs two full-entity snapshots with `_owner` stripped from both sides —
+ * `_owner` is the ONLY field this module ever intends to change. Any other
+ * difference (a re-aggregated `_sharing`/bucket, a mutated custom property,
+ * anything) means the write had a side-effect nobody asked for. Returns the
+ * list of top-level keys whose JSON representation differs. */
+function diffEntitiesExcludingOwner(before: Record<string, unknown>, after: Record<string, unknown>): string[] {
+	const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
+	keys.delete('_owner');
+	const changed: string[] = [];
+	for (const k of keys) {
+		if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) changed.push(k);
+	}
+	return changed;
+}
+
 /** Canary — one target PER TYPE (6 types in the flagged population), added +
  * add-only verified, BEFORE the full 72-entity sweep. Throws on any canary
  * failure — refuses to run the full sweep on an unproven mechanic for that
- * type. */
-export async function backfillCanaries(
-	cfg: EntuCfg,
-	targets: FlaggedTarget[],
-	preOwnerCounts: Record<string, number>,
-	fetchImpl: typeof fetch = fetch
-): Promise<{ canaryEntries: BackfillLedgerEntry[]; remainingTargets: FlaggedTarget[] }> {
+ * type.
+ *
+ * Ordering (Bentham review, item 1): `no-owner` canaries run FIRST. The 3
+ * fully-unowned `profile` entities are the hardest case — if a POST can
+ * establish `_owner` where NONE exists at all, every other cohort (which
+ * already has SOME owner, just not db-root) is a weaker condition. Fail
+ * fast on the hardest case before spending writes on the easier ones.
+ *
+ * Re-aggregation diff gate (Bentham review, item 2): each canary captures a
+ * FULL entity snapshot before the write and after the read-back, then diffs
+ * every field except `_owner`. Throws immediately if anything else moved —
+ * this module has no business changing `_sharing` or any custom property. */
+export async function backfillCanaries(cfg: EntuCfg, targets: FlaggedTarget[], fetchImpl: typeof fetch = fetch): Promise<{ canaryEntries: BackfillLedgerEntry[]; remainingTargets: FlaggedTarget[] }> {
 	const canaryByType = new Map<string, FlaggedTarget>();
 	for (const t of targets) {
 		if (!canaryByType.has(t.type)) canaryByType.set(t.type, t);
 	}
-	const canaries = [...canaryByType.values()];
+	const canaries = [...canaryByType.values()].sort((a, b) => {
+		const aFirst = a.classification === 'no-owner' ? 0 : 1;
+		const bFirst = b.classification === 'no-owner' ? 0 : 1;
+		return aFirst - bFirst;
+	});
 	const canaryEntries: BackfillLedgerEntry[] = [];
 	for (const c of canaries) {
-		const [entry] = await backfillOwner(cfg, [c], preOwnerCounts, fetchImpl);
+		const before = await readFullEntity(cfg, c.id, fetchImpl);
+		const [entry] = await backfillOwner(cfg, [c], fetchImpl);
 		if (entry.status !== 'added') {
-			throw new Error(`backfillCanaries: canary ${c.type}/${c.id} FAILED — ${entry.message}. Refuse to run the full ${targets.length}-entity sweep on an unproven mechanic for this type.`);
+			throw new Error(`backfillCanaries: canary ${c.type}/${c.id} (classification=${c.classification}) FAILED — ${entry.message}. Refuse to run the full ${targets.length}-entity sweep on an unproven mechanic for this type.`);
+		}
+		const after = await readFullEntity(cfg, c.id, fetchImpl);
+		const changed = diffEntitiesExcludingOwner(before, after);
+		if (changed.length > 0) {
+			throw new Error(
+				`backfillCanaries: canary ${c.type}/${c.id} added _owner cleanly BUT re-aggregation moved other field(s): ${JSON.stringify(changed)}. before=${JSON.stringify(before)} after=${JSON.stringify(after)}. Refuse to run the full sweep — this write is not side-effect-free.`
+			);
 		}
 		canaryEntries.push(entry);
 	}
@@ -216,7 +273,9 @@ export function renderPlan(check: PopulationCheck): string {
 	const byType = new Map<string, number>();
 	for (const t of check.stillFlagged) byType.set(t.type, (byType.get(t.type) ?? 0) + 1);
 	for (const [type, count] of byType) lines.push(`   ${type}: ${count}`);
-	lines.push('   CANARY: one target PER TYPE, added + add-only-verified (owner count grew by exactly 1), before the full sweep.');
+	lines.push('   CANARY: one target PER TYPE, no-owner cohort FIRST (hardest case), added + add-only-verified before the full sweep.');
+	lines.push('   RE-AGGREGATION DIFF GATE: each canary\'s full entity is snapshotted before/after; any field other than _owner moving HALTS the run.');
+	lines.push('   IDEMPOTENCY GUARD: every write (canary or bulk) re-checks _owner fresh immediately before POSTing — an already-db-root-owned target is SKIPPED, never re-added.');
 	lines.push('');
 	lines.push('── Constraint: _sharing untouched by construction (this module never writes that property) — spot-checked on one specimen pre/post.');
 	lines.push('');
@@ -230,19 +289,25 @@ export class BackfillLedger {
 		this.entries.push(...entries);
 	}
 	failures(): BackfillLedgerEntry[] {
-		return this.entries.filter((e) => e.status !== 'added');
+		return this.entries.filter((e) => e.status === 'failed');
+	}
+	skipped(): BackfillLedgerEntry[] {
+		return this.entries.filter((e) => e.status === 'skipped');
 	}
 	hasFailures(): boolean {
 		return this.failures().length > 0;
 	}
 	toJSON() {
-		return { entries: this.entries, failureCount: this.failures().length };
+		return { entries: this.entries, failureCount: this.failures().length, skippedCount: this.skipped().length };
 	}
 	printReport(): void {
 		console.log(`\n── Owner backfill: ${this.entries.length} attempted`);
 		const failures = this.failures();
+		const skipped = this.skipped();
+		const added = this.entries.length - failures.length - skipped.length;
 		for (const e of failures) console.error(`FAILED ${e.type}/${e.id} — ${e.message}`);
-		console.log(`${this.entries.length - failures.length}/${this.entries.length} added cleanly.`);
+		if (skipped.length > 0) console.log(`${skipped.length} skipped (idempotency guard — db-root already present): ${skipped.map((e) => `${e.type}/${e.id}`).join(', ')}`);
+		console.log(`${added}/${this.entries.length} added cleanly.`);
 		if (failures.length > 0) {
 			console.error('');
 			console.error(`#68 Phase 2 INCOMPLETE — ${failures.length} failure(s) need operator repair.`);

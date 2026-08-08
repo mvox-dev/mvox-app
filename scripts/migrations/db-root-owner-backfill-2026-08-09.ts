@@ -76,8 +76,8 @@ async function main(): Promise<void> {
 	const sharingBefore = await readSharing(cfg, POST_RUN_PROOF_SPECIMEN_ID);
 
 	const ledger = new BackfillLedger();
-	const { canaryEntries, remainingTargets } = await backfillCanaries(cfg, check.stillFlagged, check.preOwnerCounts);
-	const restEntries = await backfillOwner(cfg, remainingTargets, check.preOwnerCounts);
+	const { canaryEntries, remainingTargets } = await backfillCanaries(cfg, check.stillFlagged);
+	const restEntries = await backfillOwner(cfg, remainingTargets);
 	ledger.record([...canaryEntries, ...restEntries]);
 	ledger.printReport();
 
