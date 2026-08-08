@@ -162,14 +162,48 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 		});
 	});
 
-	it('no domain profile at all → null', () => {
+	it('no profiles at all → null', () => {
 		expect(toRosterRow(member, [])).toBeNull();
-		expect(toRosterRow(member, [profile('public', 'Ada', 'ada@example.com')])).toBeNull();
 	});
 
-	it('domain profile present but name is empty or whitespace-only → null (matches hasDomainName\'s .trim() rule)', () => {
+	it('domain profile present but name is empty or whitespace-only, no public profile → null (matches hasVisibleName\'s .trim() rule)', () => {
 		expect(toRosterRow(member, [profile('domain', '')])).toBeNull();
 		expect(toRosterRow(member, [profile('domain', '   ')])).toBeNull();
+	});
+
+	it('#58: a PUBLIC-only name DOES satisfy the gate (Mihkel ruling) — row uses the public name', () => {
+		const row = toRosterRow(member, [profile('public', 'Ada', 'ada@example.com')]);
+		expect(row).toEqual<RosterRow>({
+			memberId: 'member-1',
+			personId: 'person-a',
+			name: 'Ada',
+			email: 'ada@example.com'
+		});
+	});
+
+	it('#58: domain name blank but public name present → row uses the public name', () => {
+		const row = toRosterRow(member, [
+			profile('domain', ''),
+			profile('public', 'Ada', 'ada@example.com')
+		]);
+		expect(row).toEqual<RosterRow>({
+			memberId: 'member-1',
+			personId: 'person-a',
+			name: 'Ada',
+			email: 'ada@example.com'
+		});
+	});
+
+	it('#58: both domain and public names present → domain is preferred for display', () => {
+		const row = toRosterRow(member, [
+			profile('domain', 'Ada Domain'),
+			profile('public', 'Ada Public', 'ada@example.com')
+		]);
+		expect(row?.name).toBe('Ada Domain');
+	});
+
+	it('#58: private-only name does NOT satisfy the gate → null', () => {
+		expect(toRosterRow(member, [profile('private', 'Ada', 'leak@x.com')])).toBeNull();
 	});
 
 	it('domain name present, no email at any tier → email: \'\'', () => {
@@ -182,9 +216,14 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 		});
 	});
 
-	it('a PUBLIC-only name must NOT satisfy the gate (regression-guards the exact public-bucket-duplication trap hasDomainName exists to avoid — a public-tier name is written to BOTH domain and public buckets at write time)', () => {
+	it('#58: a PUBLIC-only name DOES satisfy the gate — regression guard for the exact widening this issue introduced (superseded the pre-#58 domain-only rule)', () => {
 		const row = toRosterRow(member, [profile('public', 'Ada', 'pub@x.com')]);
-		expect(row).toBeNull();
+		expect(row).toEqual<RosterRow>({
+			memberId: 'member-1',
+			personId: 'person-a',
+			name: 'Ada',
+			email: 'pub@x.com'
+		});
 	});
 
 	it('THE SHARP EDGE, stated honestly: a private-tier entity handed to this function (illegitimately — the server should never do this) is NOT independently filtered. resolveField\'s narrower-wins (NARROWNESS: private=0 < domain=1 < public=2) picks the PRIVATE email because it sorts first. This documents that the resolver has ZERO independent defense — safety is 100% server-side (Gate A/B in entu-api). DO NOT "fix" this by adding a client-side `_sharing !== \'private\'` filter here — that would be exactly the forbidden client-side boundary filter the design rules this task out.', () => {

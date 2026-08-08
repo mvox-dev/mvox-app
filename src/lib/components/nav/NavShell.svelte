@@ -176,6 +176,8 @@
 			align-items: stretch;
 			width: 4.5rem;
 			padding: 0.75rem 0;
+			padding-left: env(safe-area-inset-left, 0px);
+			padding-right: env(safe-area-inset-right, 0px);
 			border-top: none;
 			border-right: 1px solid var(--color-paper-3);
 			gap: 0.125rem;
@@ -183,6 +185,8 @@
 
 		.nav-content {
 			order: 1;
+			padding-left: env(safe-area-inset-left, 0px);
+			padding-right: env(safe-area-inset-right, 0px);
 		}
 
 		.nav-entry {

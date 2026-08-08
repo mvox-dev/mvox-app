@@ -20,6 +20,7 @@ vi.mock('./profileData', async (importActual) => {
 
 import {
 	hasDomainName,
+	hasVisibleName,
 	resolveGate,
 	assertDomainNamePersisted,
 	DomainNameInconsistencyError
@@ -76,6 +77,46 @@ describe('hasDomainName — the SSOT predicate (name on the domain-visibility en
 	});
 });
 
+describe('hasVisibleName — #58 Mihkel ruling: domain OR public tier satisfies', () => {
+	it('a domain name satisfies the gate', () => {
+		expect(hasVisibleName([profile('domain', 'Ann')])).toBe('complete');
+	});
+
+	it('a public name satisfies the gate (a public name is readable by fellow members too)', () => {
+		expect(hasVisibleName([profile('public', 'Ann')])).toBe('complete');
+	});
+
+	it('a PRIVATE-only name does NOT satisfy the gate (under-shares — invisible to fellow members)', () => {
+		expect(hasVisibleName([profile('private', 'Ann')])).toBe('incomplete');
+	});
+
+	it('no profiles at all → incomplete', () => {
+		expect(hasVisibleName([])).toBe('incomplete');
+	});
+
+	it('domain name empty, public name empty → incomplete', () => {
+		expect(hasVisibleName([profile('domain', ''), profile('public', '')])).toBe('incomplete');
+	});
+
+	it('domain name empty but public name present → complete (the widened case #58 fixes)', () => {
+		expect(hasVisibleName([profile('domain', ''), profile('public', 'Ann')])).toBe('complete');
+	});
+
+	it('domain name present, public entity absent → complete', () => {
+		expect(hasVisibleName([profile('domain', 'Ann')])).toBe('complete');
+	});
+
+	it('a WHITESPACE-ONLY public name does NOT satisfy the gate (trimmed to empty — matches hasDomainName)', () => {
+		expect(hasVisibleName([profile('public', '   ')])).toBe('incomplete');
+	});
+
+	it('a private name alongside an empty domain/public does NOT satisfy the gate', () => {
+		expect(
+			hasVisibleName([profile('private', 'Ann'), profile('domain', ''), profile('public', '')])
+		).toBe('incomplete');
+	});
+});
+
 describe('resolveGate — async read + classify, fail-safe', () => {
 	it('domain name present → complete', async () => {
 		listMyProfilesMock.mockResolvedValue([profile('domain', 'Ann')]);
@@ -84,6 +125,16 @@ describe('resolveGate — async read + classify, fail-safe', () => {
 
 	it('domain name absent → incomplete', async () => {
 		listMyProfilesMock.mockResolvedValue([profile('domain', '')]);
+		expect(await resolveGate(cfg, 'person-p')).toBe('incomplete');
+	});
+
+	it('#58: domain name absent but PUBLIC name present → complete (widened Case-1 gate)', async () => {
+		listMyProfilesMock.mockResolvedValue([profile('domain', ''), profile('public', 'Ann')]);
+		expect(await resolveGate(cfg, 'person-p')).toBe('complete');
+	});
+
+	it('private-only name does NOT satisfy resolveGate', async () => {
+		listMyProfilesMock.mockResolvedValue([profile('private', 'Ann')]);
 		expect(await resolveGate(cfg, 'person-p')).toBe('incomplete');
 	});
 

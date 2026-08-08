@@ -294,7 +294,7 @@
 		});
 	}
 
-	const autosaveCtrl = createAutosave({ idleMs: 120_000, onSave: onAutosave });
+	const autosaveCtrl = createAutosave({ idleMs: 2_000, onSave: onAutosave });
 
 	function onmove(field: FieldKey, toLevel: Level) {
 		if (writesInFlight) return;

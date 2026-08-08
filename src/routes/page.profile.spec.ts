@@ -206,7 +206,7 @@ describe('/profile v2 — autosave on blur', () => {
 });
 
 describe('/profile v2 — autosave on idle', () => {
-	it('typing then waiting 2 minutes triggers an autosave', async () => {
+	it('typing then waiting 2 seconds triggers an autosave', async () => {
 		selectPolyphony();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
@@ -217,7 +217,7 @@ describe('/profile v2 — autosave on idle', () => {
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
-		vi.advanceTimersByTime(120_000);
+		vi.advanceTimersByTime(2_000);
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
 	});
 });

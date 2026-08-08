@@ -1,7 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles, resolveField, type MyProfile } from '$lib/profile/profileData';
-import { hasDomainName } from '$lib/profile/completionGate';
+import { hasVisibleName } from '$lib/profile/completionGate';
 
 // T3.2/#18 — the roster READ data layer. RED (Tallis): every exported function below
 // is a STUB that throws 'not implemented' so `rosterData.spec.ts` compiles and FAILS
@@ -14,11 +14,13 @@ import { hasDomainName } from '$lib/profile/completionGate';
 //   - `listProfilesForPerson` is a thin, same-file wrapper around the ALREADY-generic
 //     `listMyProfiles(cfg, personId, ...)` (profileData.ts:156-198) — reused as-is for
 //     call-site clarity only; zero new wire shape.
-//   - `toRosterRow` is a PURE per-member resolver: `hasDomainName` (completionGate.ts,
-//     #28) gates presentability; the domain-tier name is read the SAME way
-//     `hasDomainName` itself inlines (never `resolveField`, for the identical
-//     public-bucket-duplication reason documented there); `resolveField` IS correct
-//     for email (narrower-wins is exactly "whichever tier she shared it at").
+//   - `toRosterRow` is a PURE per-member resolver: `hasVisibleName` (completionGate.ts,
+//     #28/#58) gates presentability — a name at domain OR public tier satisfies (a
+//     public name is readable by fellow members too). The displayed name is read the
+//     SAME domain-or-public scan `hasVisibleName` itself inlines (never `resolveField`,
+//     never `private` — narrower-wins would let a private-only name leak through);
+//     domain is preferred when BOTH tiers hold a name. `resolveField` IS correct for
+//     email (narrower-wins is exactly "whichever tier she shared it at").
 //   - `loadRoster` orchestrates: list members → fan out ONE profile read per member
 //     (`Promise.all`, genuinely independent reads) → resolve → drop nameless (#28) →
 //     sort by name. Fails loud as a whole on any per-member read rejection.
@@ -134,34 +136,40 @@ export interface RosterRow {
  * Pure per-member resolver: member + her already-fetched profile entities → a
  * roster row, or null.
  *
- * NAME: read directly off the domain-tier entity — deliberately NOT
- * `resolveField('name', ...)`. A public-tier name is written into BOTH the domain
- * and public buckets at write time (entu-api aggregate.js:152-155, per
- * completionGate.ts:22-25's comment), so `resolveField`'s narrower-wins would let a
- * public-only name pass — contradicting the #28 ruling this gate exists to enforce.
- * This inlines the identical domain-only scan `hasDomainName` itself uses.
+ * NAME: read directly off the domain-tier OR public-tier entity — deliberately NOT
+ * `resolveField('name', ...)`, which would let a PRIVATE-only name leak through
+ * (narrower-wins sorts private first) — contradicting the #28/#58 ruling this gate
+ * exists to enforce. This inlines the identical domain-or-public scan
+ * `hasVisibleName` itself uses; when BOTH tiers hold a name, domain is preferred
+ * (matches `NARROWNESS`'s domain < public ordering elsewhere in this codebase).
  *
  * EMAIL: `resolveField(profiles, 'email')` IS correct to reuse as-is — "email from
  * whichever tier she shared it at" is exactly narrower-wins semantics, and per
  * `listProfilesForPerson`'s doc, `profiles` can never legitimately contain a private
  * holder for it to wrongly prefer.
  *
- * `null` here is a COMPLETENESS gate (#28: "not shown as a member anywhere until
- * [her domain name] is filled"), NOT a privacy filter — her `profiles` array has
- * already legitimately crossed the server boundary by the time this function sees
- * it (see module header). Do not conflate the two.
+ * `null` here is a COMPLETENESS gate (#28/#58: "not shown as a member anywhere
+ * until [a domain-or-public name] is filled"), NOT a privacy filter — her
+ * `profiles` array has already legitimately crossed the server boundary by the
+ * time this function sees it (see module header). Do not conflate the two.
  */
 export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): RosterRow | null {
-	if (hasDomainName(profiles) === 'incomplete') return null;
-	// Same domain-only scan hasDomainName itself inlines — NEVER resolveField for the
-	// name (public-bucket-duplication trap, see doc comment above).
+	if (hasVisibleName(profiles) === 'incomplete') return null;
+	// Same domain-or-public scan hasVisibleName itself inlines — NEVER resolveField,
+	// NEVER private, for the name (see doc comment above).
 	let domain: MyProfile | undefined;
-	for (const p of profiles) if (p._sharing === 'domain') domain = p;
+	let pub: MyProfile | undefined;
+	for (const p of profiles) {
+		if (p._sharing === 'domain') domain = p;
+		else if (p._sharing === 'public') pub = p;
+	}
+	const domainName = domain?.name.trim() ?? '';
+	const publicName = pub?.name.trim() ?? '';
 	return {
 		memberId: member.memberId,
 		personId: member.personId,
-		// hasDomainName === 'complete' guarantees `domain` is set and non-blank.
-		name: domain!.name.trim(),
+		// hasVisibleName === 'complete' guarantees at least one of these is non-blank.
+		name: domainName !== '' ? domainName : publicName,
 		email: resolveField(profiles, 'email').value
 	};
 }
@@ -192,3 +200,4 @@ export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch):
 
 // (*MVOX:Tallis* — RED stubs + interface)
 // (*MVOX:Josquin* — GREEN implementation)
+// (*MVOX:Palestrina* — #58: toRosterRow accepts domain OR public name)

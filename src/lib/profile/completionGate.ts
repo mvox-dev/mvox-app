@@ -1,5 +1,5 @@
 // T4.8/#28 — the mandatory-completion gate (SSOT). A signed-in member without a
-// `name` on her DOMAIN-visibility profile entity is directed to /profile and is NOT
+// visible `name` (domain OR public tier — #58) is directed to /profile and is NOT
 // shown as a member anywhere until it is filled. This module is the ONE app-wide
 // answer to "is she complete?" — every member-display surface consumes the same
 // store, and the single layout read + single redirect enforce it, so no surface can
@@ -7,30 +7,42 @@
 //
 // TWO-CASE SEPARATION (must NOT share a code path — #28 ruling):
 //   Case 1 — genuinely no name yet (incl. the transition window): the PASSIVE
-//            read/routing path. `hasDomainName` returns 'incomplete'; the layout
+//            read/routing path. `hasVisibleName` returns 'incomplete'; the layout
 //            redirects to /profile and member affordances are withheld. NEVER throws;
 //            NEVER classifies Case 2. It cannot false-positive the transition window
 //            because it never asks WHEN the entity was created — any nameless-at-
-//            runtime domain profile is uniformly "not yet completed".
+//            runtime domain+public pair is uniformly "not yet completed".
 //   Case 2 — a completion WRITE that reports success yet does not persist the name:
 //            the ACTIVE write path. `assertDomainNamePersisted` is a post-condition
-//            called from applyProfileSave after the domain name-save reports success;
-//            it re-reads and THROWS `DomainNameInconsistencyError` if the name is
-//            still absent (fail loud, never a silent empty row).
+//            called from applyProfileSave after a DOMAIN name-save specifically
+//            reports success; it re-reads and THROWS `DomainNameInconsistencyError`
+//            if the domain name is still absent (fail loud, never a silent empty
+//            row). Deliberately stays domain-SPECIFIC (uses `hasDomainName`, not the
+//            widened `hasVisibleName`) — it is verifying that *that* save persisted,
+//            not re-deriving the general gate; widening it would let a stale public
+//            name mask a genuine domain round-trip failure.
+//
+// #58 — Mihkel ruling (2026-08-08): "i got forced to profile page, because i didnt
+// had domain shared name. but I have public, and that should also count as good." A
+// name at domain OR public tier satisfies the READ-path gate (Case 1 /
+// `hasVisibleName`) — a public name is readable by fellow members too, a fortiori.
+// This does NOT touch Case 2 (`hasDomainName`/`assertDomainNamePersisted`), which
+// stays domain-specific by design (see above).
 //
 // PREDICATE RULES (load-bearing):
-//   - Read ONLY `profilesByLevel(profiles).domain?.name` — the entity whose OWN
-//     `_sharing === 'domain'`. NEVER `resolveField`: a public-tier name is written to
-//     BOTH the domain and public buckets (entu-api aggregate.js:152-155), so
-//     `resolveField` would let a public-only name PASS, contradicting the ruling.
-//   - `''` (missing OR empty name; profileData.ts:192-193) is 'incomplete' — both
+//   - `hasDomainName` reads ONLY the entity whose OWN `_sharing === 'domain'`.
+//   - `hasVisibleName` reads ONLY the entities whose OWN `_sharing` is 'domain' OR
+//     'public' — 'complete' if EITHER holds a non-blank name. NEVER `private`.
+//   - NEVER `resolveField` for either: narrower-wins would let a PRIVATE-only name
+//     leak through (private sorts narrowest), contradicting both rulings.
+//   - `''` (missing OR empty name; profileData.ts:192-193) does not count — both
 //     Case 1, undistinguished on the read path.
 //   - NEVER fall back to `person.name`/`person.email` (post-T4.3 they are unreadable
 //     to other members anyway; the non-display IS the mechanism).
 //
 // FUTURE surfaces: a surface presenting the CURRENT user as a member subscribes to
 // `completionGateStore`; a surface presenting OTHER members uses pure name-presence
-// (hasDomainName-style) — NEVER `_created` (private-bucket-only, unreadable
+// (`hasVisibleName`-style) — NEVER `_created` (private-bucket-only, unreadable
 // cross-member; entu-api aggregate.js:51-64 promote only `_parent`/`_type`).
 //
 // RED (T4.8): the decision helpers below are STUBS that throw 'not implemented' so
@@ -65,9 +77,16 @@ export function resetGate(): void {
 }
 
 /**
- * THE predicate — pure, SSOT. Reads ONLY the entity whose OWN `_sharing === 'domain'`.
- * Missing domain entity OR empty domain name → 'incomplete' (both Case 1). NEVER
- * `resolveField` (a public-only name must not pass). NEVER `person.*`. NEVER throws.
+ * The domain-SPECIFIC predicate — pure. Reads ONLY the entity whose OWN
+ * `_sharing === 'domain'`. Missing domain entity OR empty domain name → 'incomplete'.
+ * NEVER `resolveField` (a public-only name must not pass this specific check). NEVER
+ * `person.*`. NEVER throws.
+ *
+ * #58: this is now ONLY the domain-specific building block that `hasVisibleName`
+ * (below) widens for the app-wide Case-1 gate, plus the exact predicate Case 2's
+ * `assertDomainNamePersisted` needs (it verifies a DOMAIN save specifically
+ * persisted — see the module header's two-case-separation note). It is no longer
+ * the app-wide gate itself; callers wanting "is she complete" want `hasVisibleName`.
  */
 export function hasDomainName(profiles: MyProfile[]): 'complete' | 'incomplete' {
 	// Read ONLY the entity whose OWN _sharing === 'domain'. `''` (missing or empty
@@ -85,6 +104,30 @@ export function hasDomainName(profiles: MyProfile[]): 'complete' | 'incomplete' 
 }
 
 /**
+ * #58 — THE Case-1 app-wide "is she complete" predicate — pure, SSOT. Reads ONLY
+ * the entities whose OWN `_sharing` is 'domain' or 'public'; 'complete' if EITHER
+ * holds a non-blank (trimmed) name. Missing/empty on both → 'incomplete'. NEVER
+ * `private`. NEVER `resolveField` (narrower-wins would let a PRIVATE-only name pass
+ * — private sorts narrowest — which must never satisfy the gate).
+ *
+ * Widens `hasDomainName` per Mihkel's #58 ruling: a public-tier name is readable by
+ * fellow members too, so it satisfies the read/routing gate exactly as a domain-tier
+ * name does. Does NOT replace `hasDomainName` — that predicate remains the domain-
+ * SPECIFIC check `assertDomainNamePersisted` (Case 2) needs.
+ */
+export function hasVisibleName(profiles: MyProfile[]): 'complete' | 'incomplete' {
+	let domain: MyProfile | undefined;
+	let pub: MyProfile | undefined;
+	for (const p of profiles) {
+		if (p._sharing === 'domain') domain = p;
+		else if (p._sharing === 'public') pub = p;
+	}
+	const domainOk = domain !== undefined && domain.name.trim() !== '';
+	const publicOk = pub !== undefined && pub.name.trim() !== '';
+	return domainOk || publicOk ? 'complete' : 'incomplete';
+}
+
+/**
  * Async read + classify for the layout store population. FAIL-SAFE: any
  * `listMyProfiles` throw (non-2xx / unknown `_sharing`) → 'loading', NEVER a false
  * 'incomplete' (a transient blip must not redirect a completed member). Does NOT
@@ -97,9 +140,10 @@ export async function resolveGate(
 ): Promise<GateState> {
 	// FAIL-SAFE: any listMyProfiles throw (non-2xx / unknown _sharing) → 'loading',
 	// NEVER a false 'incomplete' (a transient blip must not redirect a completed member).
+	// #58: uses the WIDENED hasVisibleName (domain OR public), not hasDomainName.
 	try {
 		const { listMyProfiles } = await import('./profileData');
-		return hasDomainName(await listMyProfiles(cfg, personId, fetchImpl));
+		return hasVisibleName(await listMyProfiles(cfg, personId, fetchImpl));
 	} catch {
 		return 'loading';
 	}
@@ -138,3 +182,4 @@ export async function assertDomainNamePersisted(
 
 // (*MVOX:Tallis* — RED stubs + interface)
 // (*MVOX:Josquin* — GREEN implementation)
+// (*MVOX:Palestrina* — #58: hasVisibleName widening, domain OR public)
