@@ -1,0 +1,324 @@
+{
+  "issue": "#46 follow-up — corrected twin-section comparison via _parent refs (Gama ruling 2026-08-08 07:27)",
+  "readOnly": true,
+  "lesson": "a corroboration criterion binds to a SIGNAL, not a storage location — resolved section from the canonical _parent-reference shape, not the legacy section/current_section property (0/131 populated there)",
+  "exactMatchCount": 18,
+  "results": [
+    {
+      "orphanId": "69c7f87e8489bfcb0e81b31a",
+      "orphanName": "Aivar Kaldre",
+      "orphanSectionRef": "69c7f87e8489bfcb0e81b2fa",
+      "orphanSectionName": "I Tenor",
+      "twinPersonId": "6a0dd2404ff8277cd4305fee",
+      "twinMemberId": "6a0dd2564ff8277cd43063a2",
+      "twinParentSectionRef": "69c7f87e8489bfcb0e81b2fa",
+      "twinParentSectionName": "I Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8808489bfcb0e81b388",
+      "orphanName": "Mikk Dede",
+      "orphanSectionRef": "69c7f8808489bfcb0e81b374",
+      "orphanSectionName": "II Tenor",
+      "twinPersonId": "6a0dd2414ff8277cd430601e",
+      "twinMemberId": "6a0dd2574ff8277cd43063f2",
+      "twinParentSectionRef": "69c7f8808489bfcb0e81b374",
+      "twinParentSectionName": "II Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8828489bfcb0e81b3f6",
+      "orphanName": "Peeter Hillep",
+      "orphanSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "orphanSectionName": "Baritone",
+      "twinPersonId": "6a0dd2424ff8277cd4306060",
+      "twinMemberId": "6a0dd2594ff8277cd4306460",
+      "twinParentSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "twinParentSectionName": "Baritone",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8828489bfcb0e81b400",
+      "orphanName": "Hanno Hint",
+      "orphanSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "orphanSectionName": "Baritone",
+      "twinPersonId": "6a0dd2434ff8277cd4306066",
+      "twinMemberId": "6a0dd2594ff8277cd430646a",
+      "twinParentSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "twinParentSectionName": "Baritone",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8828489bfcb0e81b40a",
+      "orphanName": "Ott Indermitte",
+      "orphanSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "orphanSectionName": "Baritone",
+      "twinPersonId": "6a0dd2414ff8277cd4306036",
+      "twinMemberId": "6a0dd2584ff8277cd430641a",
+      "twinParentSectionRef": "69c7f8808489bfcb0e81b374",
+      "twinParentSectionName": "II Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8848489bfcb0e81b478",
+      "orphanName": "Andres Alamaa",
+      "orphanSectionRef": "69c7f8848489bfcb0e81b46e",
+      "orphanSectionName": "Bass",
+      "twinPersonId": "6a0dd2444ff8277cd43060a8",
+      "twinMemberId": "6a0dd25b4ff8277cd43064d8",
+      "twinParentSectionRef": "69c7f8848489bfcb0e81b46e",
+      "twinParentSectionName": "Bass",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8848489bfcb0e81b482",
+      "orphanName": "Jüri Eensoo",
+      "orphanSectionRef": "69c7f8848489bfcb0e81b46e",
+      "orphanSectionName": "Bass",
+      "twinPersonId": "6a0dd2444ff8277cd43060ae",
+      "twinMemberId": "6a0dd25b4ff8277cd43064e2",
+      "twinParentSectionRef": "69c7f8848489bfcb0e81b46e",
+      "twinParentSectionName": "Bass",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8848489bfcb0e81b48c",
+      "orphanName": "Rasmus Erismaa",
+      "orphanSectionRef": "69c7f8848489bfcb0e81b46e",
+      "orphanSectionName": "Bass",
+      "twinPersonId": "6a0dd2444ff8277cd43060b4",
+      "twinMemberId": "6a0dd25b4ff8277cd43064ec",
+      "twinParentSectionRef": "69c7f8848489bfcb0e81b46e",
+      "twinParentSectionName": "Bass",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "yes"
+    },
+    {
+      "orphanId": "69c7f8878489bfcb0e81b510",
+      "orphanName": "Taavi Kivisik",
+      "orphanSectionRef": "69c7f8878489bfcb0e81b506",
+      "orphanSectionName": "I Tenor",
+      "twinPersonId": "6a0dd2404ff8277cd4306000",
+      "twinMemberId": "6a0dd2564ff8277cd43063c0",
+      "twinParentSectionRef": "69c7f87e8489bfcb0e81b2fa",
+      "twinParentSectionName": "I Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8878489bfcb0e81b526",
+      "orphanName": "Jaan Lattik",
+      "orphanSectionRef": "69c7f8878489bfcb0e81b506",
+      "orphanSectionName": "I Tenor",
+      "twinPersonId": "6a0dd2404ff8277cd430600c",
+      "twinMemberId": "6a0dd2574ff8277cd43063d4",
+      "twinParentSectionRef": "69c7f87e8489bfcb0e81b2fa",
+      "twinParentSectionName": "I Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8888489bfcb0e81b54e",
+      "orphanName": "Tarmo Evestus",
+      "orphanSectionRef": "69c7f8888489bfcb0e81b544",
+      "orphanSectionName": "II Tenor",
+      "twinPersonId": "6a0dd2414ff8277cd4306012",
+      "twinMemberId": "6a0dd2574ff8277cd43063de",
+      "twinParentSectionRef": "69c7f87e8489bfcb0e81b2fa",
+      "twinParentSectionName": "I Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8888489bfcb0e81b558",
+      "orphanName": "Kaspar Kaljuste",
+      "orphanSectionRef": "69c7f8888489bfcb0e81b544",
+      "orphanSectionName": "II Tenor",
+      "twinPersonId": "6a0dd2414ff8277cd4306024",
+      "twinMemberId": "6a0dd2574ff8277cd43063fc",
+      "twinParentSectionRef": "69c7f8808489bfcb0e81b374",
+      "twinParentSectionName": "II Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8888489bfcb0e81b562",
+      "orphanName": "Hannes Kont",
+      "orphanSectionRef": "69c7f8888489bfcb0e81b544",
+      "orphanSectionName": "II Tenor",
+      "twinPersonId": "6a0dd2414ff8277cd4306018",
+      "twinMemberId": "6a0dd2574ff8277cd43063e8",
+      "twinParentSectionRef": "69c7f87e8489bfcb0e81b2fa",
+      "twinParentSectionName": "I Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8898489bfcb0e81b594",
+      "orphanName": "Meelis Kubits",
+      "orphanSectionRef": "69c7f8898489bfcb0e81b580",
+      "orphanSectionName": "Baritone",
+      "twinPersonId": "6a0dd2434ff8277cd4306078",
+      "twinMemberId": "6a0dd25a4ff8277cd4306488",
+      "twinParentSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "twinParentSectionName": "Baritone",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f8898489bfcb0e81b59e",
+      "orphanName": "Tõnis Mägi",
+      "orphanSectionRef": "69c7f8898489bfcb0e81b580",
+      "orphanSectionName": "Baritone",
+      "twinPersonId": "6a0dd2434ff8277cd4306072",
+      "twinMemberId": "6a0dd25a4ff8277cd430647e",
+      "twinParentSectionRef": "69c7f8828489bfcb0e81b3ec",
+      "twinParentSectionName": "Baritone",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f88a8489bfcb0e81b5c6",
+      "orphanName": "Karl Heinz",
+      "orphanSectionRef": "69c7f88a8489bfcb0e81b5bc",
+      "orphanSectionName": "Bass",
+      "twinPersonId": "6a0dd2454ff8277cd43060d8",
+      "twinMemberId": "6a0dd25d4ff8277cd4306528",
+      "twinParentSectionRef": "69c7f8848489bfcb0e81b46e",
+      "twinParentSectionName": "Bass",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f88a8489bfcb0e81b5d0",
+      "orphanName": "Toomas Lunge",
+      "orphanSectionRef": "69c7f88a8489bfcb0e81b5bc",
+      "orphanSectionName": "Bass",
+      "twinPersonId": "6a0dd2414ff8277cd430602a",
+      "twinMemberId": "6a0dd2584ff8277cd4306406",
+      "twinParentSectionRef": "69c7f8808489bfcb0e81b374",
+      "twinParentSectionName": "II Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    },
+    {
+      "orphanId": "69c7f88b8489bfcb0e81b5da",
+      "orphanName": "Arvo Meier",
+      "orphanSectionRef": "69c7f88a8489bfcb0e81b5bc",
+      "orphanSectionName": "Bass",
+      "twinPersonId": "6a0dd2414ff8277cd4306030",
+      "twinMemberId": "6a0dd2584ff8277cd4306410",
+      "twinParentSectionRef": "69c7f8808489bfcb0e81b374",
+      "twinParentSectionName": "II Tenor",
+      "twinParentOrgRefs": [
+        {
+          "reference": "69c7f87d8489bfcb0e81b2e4",
+          "name": "Eesti Rahvusmeeskoor"
+        }
+      ],
+      "match": "no"
+    }
+  ],
+  "corroboratedCount": 7,
+  "corroboratedOrphanIds": [
+    "69c7f87e8489bfcb0e81b31a",
+    "69c7f8808489bfcb0e81b388",
+    "69c7f8828489bfcb0e81b3f6",
+    "69c7f8828489bfcb0e81b400",
+    "69c7f8848489bfcb0e81b478",
+    "69c7f8848489bfcb0e81b482",
+    "69c7f8848489bfcb0e81b48c"
+  ]
+}
