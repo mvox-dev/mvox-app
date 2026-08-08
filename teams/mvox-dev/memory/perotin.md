@@ -247,6 +247,20 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #45 retire-application-probe-bulletin LIVE (epic #37 D2+D5, 2026-08-08) — step1 OK, step2 HALT
+
+Step 1 (menu privatize) succeeded cleanly. Step 2 (delete specimen `6a2fdac6...5e79`) FAILED 403 —
+db-root is not `_owner` on this entity (owned by person `6a2fc05e...5ddc`, Mihkel's real OAuth
+identity, + the "polyphony" database entity inherited — NOT db-root). **Second independent
+confirmation of the same rights-gap pattern as #44's one failure** (same person id failed a
+`_sharing` touch-save there too) — entities created by/under Mihkel's real OAuth account are not
+db-root-owned, unlike script-created/synthetic entities. `DELETE /entity` needs `_owner`, not
+`_editor`. Halted per "any surprise stops at the seam" — steps 3 (self-gates on zero instances
+anyway, would refuse) and 4 (independent, but did not skip ahead) NOT run. Needs an `_owner` grant
+from someone who already holds it (same open item as #44's [DEFERRED] entry below) before step 2/3
+can retry; step 4 has no dependency and can run independently once authorized. Artifacts:
+`seed-results/retire-application-probe-bulletin-2026-08-08-step{1,2}-live-2026-08-08T04-13-*.json`.
+
 ## #45 retire-application-probe-bulletin DRY-RUN (epic #37 D2+D5, 2026-08-08) — plan built, 0 writes
 
 `retire-application-probe-bulletin-2026-08-08.ts` + lib: 4 independently-gated steps (STEP=1|2|3|4
