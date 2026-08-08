@@ -36,7 +36,7 @@
 			// -90 = CCW rotation (notch on left) → rail on right
 			// 90 = CW rotation (notch on right) → rail on left
 			// 0/180/undefined = portrait or desktop → left (default)
-			railSide = window.orientation === -90 ? 'right' : 'left';
+			railSide = window.orientation === 90 ? 'right' : 'left';
 		}
 		update();
 		window.addEventListener('orientationchange', update);
