@@ -1,0 +1,407 @@
+=== Type registry: 25 total, 20 content types (excl. 5 system types) ===
+attendance         hasDescription=false id=6a0d2e8690c8df7a1cc7df4b
+copy               hasDescription=false id=6a0d2e8190c8df7a1cc7ddb0
+edition            hasDescription=false id=69c7ea4e8489bfcb0e819f9c
+event              hasDescription=false id=69c7ea548489bfcb0e81a0a2
+event_series       hasDescription=false id=6a0d2e8490c8df7a1cc7deb1
+invitation         hasDescription=false id=6a0d2e8290c8df7a1cc7de3e
+lending            hasDescription=false id=6a0d2e8190c8df7a1cc7dde8
+library            hasDescription=false id=6a0d2e8090c8df7a1cc7dd9d
+member             hasDescription=false id=69c7ea4a8489bfcb0e819edd
+mvox_collective    hasDescription=false id=6a73880336c951d9114ec63d
+organization       hasDescription=false id=69c7ea478489bfcb0e819e3d
+person             hasDescription=false id=69bcfd8e9c031ab8e6ce805f
+profile            hasDescription=false id=6a74933f36c951d9114ec817
+program_item       hasDescription=false id=69c7ea568489bfcb0e81a103
+repertoire_item    hasDescription=false id=69c7ea538489bfcb0e81a06e
+rsvp               hasDescription=false id=6a0d2e8590c8df7a1cc7df1b
+season             hasDescription=false id=69c7ea528489bfcb0e81a044
+section            hasDescription=false id=69c7ea498489bfcb0e819ea3
+voice              hasDescription=false id=6a0d2e8090c8df7a1cc7dd6a
+work               hasDescription=false id=69c7ea4c8489bfcb0e819f3e
+
+=== Prop-def description counts per type ===
+person             total= 18 withDesc=  0 missing= 18 <-- ALL MISSING
+event              total= 17 withDesc=  0 missing= 17 <-- ALL MISSING
+edition            total= 16 withDesc=  0 missing= 16 <-- ALL MISSING
+organization       total= 10 withDesc=  0 missing= 10 <-- ALL MISSING
+work               total=  9 withDesc=  0 missing=  9 <-- ALL MISSING
+event_series       total=  9 withDesc=  0 missing=  9 <-- ALL MISSING
+lending            total=  8 withDesc=  0 missing=  8 <-- ALL MISSING
+rsvp               total=  8 withDesc=  0 missing=  8 <-- ALL MISSING
+invitation         total=  6 withDesc=  0 missing=  6 <-- ALL MISSING
+section            total=  5 withDesc=  0 missing=  5 <-- ALL MISSING
+repertoire_item    total=  5 withDesc=  0 missing=  5 <-- ALL MISSING
+program_item       total=  5 withDesc=  0 missing=  5 <-- ALL MISSING
+copy               total=  5 withDesc=  0 missing=  5 <-- ALL MISSING
+member             total=  4 withDesc=  0 missing=  4 <-- ALL MISSING
+season             total=  4 withDesc=  0 missing=  4 <-- ALL MISSING
+voice              total=  4 withDesc=  0 missing=  4 <-- ALL MISSING
+attendance         total=  3 withDesc=  0 missing=  3 <-- ALL MISSING
+profile            total=  2 withDesc=  0 missing=  2 <-- ALL MISSING
+library            total=  1 withDesc=  0 missing=  1 <-- ALL MISSING
+mvox_collective    total=  1 withDesc=  0 missing=  1 <-- ALL MISSING
+
+Totals: 140 prop-defs across 20 types, 140 missing description.
+
+=== member type + prop-defs (display config check) ===
+member TYPE full entity: {
+  "entity": {
+    "_id": "69c7ea4a8489bfcb0e819edd",
+    "_created": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee3",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "datetime": "2026-03-28T14:48:42.686Z",
+        "property_type": "_created",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      }
+    ],
+    "_inheritrights": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee1",
+        "boolean": true
+      }
+    ],
+    "_owner": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee2",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      },
+      {
+        "_id": "69d64226a23df2072792c548",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database"
+      }
+    ],
+    "_sharing": [
+      {
+        "_id": "69c923048489bfcb0e81eed8",
+        "string": "domain"
+      }
+    ],
+    "_type": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ede",
+        "reference": "69bcfd8e9c031ab8e6ce8034",
+        "property_type": "_type",
+        "string": "entity",
+        "entity_type": "entity"
+      }
+    ],
+    "label": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee0",
+        "string": "Member"
+      }
+    ],
+    "name": [
+      {
+        "_id": "6a0972c090c8df7a1cc7d6a0",
+        "string": "member"
+      }
+    ],
+    "_editor": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee2",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      },
+      {
+        "_id": "69d64226a23df2072792c548",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database"
+      }
+    ],
+    "_expander": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee2",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      },
+      {
+        "_id": "69d64226a23df2072792c548",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database"
+      }
+    ],
+    "_viewer": [
+      {
+        "_id": "69c7ea4a8489bfcb0e819ee2",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      },
+      {
+        "_id": "69d64226a23df2072792c548",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database"
+      }
+    ]
+  }
+}
+{
+  "typeResults": [
+    {
+      "id": "6a0d2e8690c8df7a1cc7df4b",
+      "name": "attendance",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8190c8df7a1cc7ddb0",
+      "name": "copy",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea4e8489bfcb0e819f9c",
+      "name": "edition",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea548489bfcb0e81a0a2",
+      "name": "event",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8490c8df7a1cc7deb1",
+      "name": "event_series",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8290c8df7a1cc7de3e",
+      "name": "invitation",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8190c8df7a1cc7dde8",
+      "name": "lending",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8090c8df7a1cc7dd9d",
+      "name": "library",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea4a8489bfcb0e819edd",
+      "name": "member",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a73880336c951d9114ec63d",
+      "name": "mvox_collective",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea478489bfcb0e819e3d",
+      "name": "organization",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce805f",
+      "name": "person",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a74933f36c951d9114ec817",
+      "name": "profile",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea568489bfcb0e81a103",
+      "name": "program_item",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea538489bfcb0e81a06e",
+      "name": "repertoire_item",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8590c8df7a1cc7df1b",
+      "name": "rsvp",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea528489bfcb0e81a044",
+      "name": "season",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea498489bfcb0e819ea3",
+      "name": "section",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "6a0d2e8090c8df7a1cc7dd6a",
+      "name": "voice",
+      "hasDescription": false,
+      "description": null
+    },
+    {
+      "id": "69c7ea4c8489bfcb0e819f3e",
+      "name": "work",
+      "hasDescription": false,
+      "description": null
+    }
+  ],
+  "propDefResults": [
+    {
+      "type": "person",
+      "total": 18,
+      "withDescription": 0,
+      "withoutDescription": 18
+    },
+    {
+      "type": "event",
+      "total": 17,
+      "withDescription": 0,
+      "withoutDescription": 17
+    },
+    {
+      "type": "edition",
+      "total": 16,
+      "withDescription": 0,
+      "withoutDescription": 16
+    },
+    {
+      "type": "organization",
+      "total": 10,
+      "withDescription": 0,
+      "withoutDescription": 10
+    },
+    {
+      "type": "work",
+      "total": 9,
+      "withDescription": 0,
+      "withoutDescription": 9
+    },
+    {
+      "type": "event_series",
+      "total": 9,
+      "withDescription": 0,
+      "withoutDescription": 9
+    },
+    {
+      "type": "lending",
+      "total": 8,
+      "withDescription": 0,
+      "withoutDescription": 8
+    },
+    {
+      "type": "rsvp",
+      "total": 8,
+      "withDescription": 0,
+      "withoutDescription": 8
+    },
+    {
+      "type": "invitation",
+      "total": 6,
+      "withDescription": 0,
+      "withoutDescription": 6
+    },
+    {
+      "type": "section",
+      "total": 5,
+      "withDescription": 0,
+      "withoutDescription": 5
+    },
+    {
+      "type": "repertoire_item",
+      "total": 5,
+      "withDescription": 0,
+      "withoutDescription": 5
+    },
+    {
+      "type": "program_item",
+      "total": 5,
+      "withDescription": 0,
+      "withoutDescription": 5
+    },
+    {
+      "type": "copy",
+      "total": 5,
+      "withDescription": 0,
+      "withoutDescription": 5
+    },
+    {
+      "type": "member",
+      "total": 4,
+      "withDescription": 0,
+      "withoutDescription": 4
+    },
+    {
+      "type": "season",
+      "total": 4,
+      "withDescription": 0,
+      "withoutDescription": 4
+    },
+    {
+      "type": "voice",
+      "total": 4,
+      "withDescription": 0,
+      "withoutDescription": 4
+    },
+    {
+      "type": "attendance",
+      "total": 3,
+      "withDescription": 0,
+      "withoutDescription": 3
+    },
+    {
+      "type": "profile",
+      "total": 2,
+      "withDescription": 0,
+      "withoutDescription": 2
+    },
+    {
+      "type": "library",
+      "total": 1,
+      "withDescription": 0,
+      "withoutDescription": 1
+    },
+    {
+      "type": "mvox_collective",
+      "total": 1,
+      "withDescription": 0,
+      "withoutDescription": 1
+    }
+  ],
+  "totalPropDefs": 140,
+  "totalMissing": 140
+}
