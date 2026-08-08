@@ -250,6 +250,18 @@ Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu doma
 18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
 `seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
 
+## T6.2 library-visibility DRY-RUN (2026-08-08, #56/epic #54) — plan built, 0 writes
+
+12 prop-def writes (11 widen absent→domain + 1 narrow edition.cost domain→private) gated ahead of a
+586-instance touch-save re-agg (work13+edition17+copy552+lending4), canary-PER-TYPE (4, since first
+run of this mechanic on these types), #44 template. **Proactively ran the #44/#45 ownership
+pre-check without being asked** (that lesson is now standing practice for any new mutation batch):
+0/586 non-db-root-owned — unlike #44/#45 (both involved Mihkel's real OAuth identity), every library
+entity here is script/seed-created, fully db-root-owned, no known rights-gap risk. All 12 prop-defs +
+586-instance population re-verified live in the exact expected state, zero drift from T6.1. Live
+entrypoint hard-aborts pre-write if the ownership check ever finds a non-db-root instance. Artifact:
+`seed-results/library-visibility-2026-08-08-dry-2026-08-08T07-51-56-542Z.json`.
+
 ## T6.1 library field-set grooming (2026-08-08, epic #54) — read-only, gates T6.2
 
 work/edition/copy/lending prop-defs re-verified live (zero drift from #41). **Real finding, corrects
