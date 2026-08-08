@@ -247,6 +247,14 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #43 credential pre-check (epic #37 D3, 2026-08-08) — STOP triggered
+
+1/132 persons carries `entu_api_key` (none carry `entu_passkey`): person `69bcfd8e...8079` =
+db-root/PO's own identity, the same credential these probe scripts authenticate with — not an
+orphan/leaked key, but per #43's scope a non-empty result is a hard stop. Posted on #37, awaiting
+Mihkel/team-lead's call before #44 (D3 narrow) proceeds. Artifact:
+`seed-results/probe-credential-precheck-2026-08-08T03-35-01-000Z.json`.
+
 ## #41 inventory pass (epic #37 Phase 1, 2026-08-08) — headline numbers
 
 246 members (245 domain + 1 private = fixture B) · 132 persons (128 T3.1-synthetic + 4 real:
