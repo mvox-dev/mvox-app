@@ -83,6 +83,22 @@
 	"nav_agenda": "Agenda",
 	"nav_roster": "Roster",
 	"nav_profile": "Profile",
+	"nav_library": "Library",
 	"nav_invite": "Invite",
-	"nav_collectives": "Collectives"
+	"nav_collectives": "Collectives",
+	"library_title": "Library",
+	"library_no_collective": "Select a collective to view the library.",
+	"library_load_error": "Couldn't load the library.",
+	"library_retry": "Retry",
+	"library_empty": "No works to show yet.",
+	"library_work_composer_unknown": "Composer unknown",
+	"library_node_load_error": "Couldn't load.",
+	"library_node_retry": "Retry",
+	"library_editions_empty": "No editions to show yet.",
+	"library_edition_publisher_unknown": "Publisher unknown",
+	"library_copies_empty": "No copies to show yet.",
+	"library_copy_available": "Available",
+	"library_copy_lent_to": "With {name}",
+	"library_borrower_unknown": "Unknown member",
+	"library_lent_since": "since {date}"
 }

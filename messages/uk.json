@@ -83,6 +83,22 @@
 	"nav_agenda": "Порядок денний",
 	"nav_roster": "Учасники",
 	"nav_profile": "Профіль",
+	"nav_library": "Бібліотека",
 	"nav_invite": "Запросити",
-	"nav_collectives": "Колективи"
+	"nav_collectives": "Колективи",
+	"library_title": "Бібліотека",
+	"library_no_collective": "Щоб переглянути бібліотеку, виберіть колектив.",
+	"library_load_error": "Не вдалося завантажити бібліотеку.",
+	"library_retry": "Повторити",
+	"library_empty": "Поки немає творів для показу.",
+	"library_work_composer_unknown": "Композитор невідомий",
+	"library_node_load_error": "Не вдалося завантажити.",
+	"library_node_retry": "Повторити",
+	"library_editions_empty": "Поки немає видань для показу.",
+	"library_edition_publisher_unknown": "Видавець невідомий",
+	"library_copies_empty": "Поки немає примірників для показу.",
+	"library_copy_available": "Доступний",
+	"library_copy_lent_to": "У {name}",
+	"library_borrower_unknown": "Невідомий учасник",
+	"library_lent_since": "з {date}"
 }

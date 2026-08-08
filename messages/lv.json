@@ -83,6 +83,22 @@
 	"nav_agenda": "Darba kārtība",
 	"nav_roster": "Dalībnieki",
 	"nav_profile": "Profils",
+	"nav_library": "Bibliotēka",
 	"nav_invite": "Uzaicināt",
-	"nav_collectives": "Kolektīvi"
+	"nav_collectives": "Kolektīvi",
+	"library_title": "Bibliotēka",
+	"library_no_collective": "Lai skatītu bibliotēku, izvēlieties kolektīvu.",
+	"library_load_error": "Neizdevās ielādēt bibliotēku.",
+	"library_retry": "Mēģināt vēlreiz",
+	"library_empty": "Vēl nav darbu, ko rādīt.",
+	"library_work_composer_unknown": "Komponists nezināms",
+	"library_node_load_error": "Neizdevās ielādēt.",
+	"library_node_retry": "Mēģināt vēlreiz",
+	"library_editions_empty": "Vēl nav izdevumu, ko rādīt.",
+	"library_edition_publisher_unknown": "Izdevējs nezināms",
+	"library_copies_empty": "Vēl nav eksemplāru, ko rādīt.",
+	"library_copy_available": "Pieejams",
+	"library_copy_lent_to": "Pie {name}",
+	"library_borrower_unknown": "Nezināms dalībnieks",
+	"library_lent_since": "kopš {date}"
 }

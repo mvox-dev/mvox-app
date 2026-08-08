@@ -83,6 +83,22 @@
 	"nav_agenda": "Päevakord",
 	"nav_roster": "Liikmed",
 	"nav_profile": "Profiil",
+	"nav_library": "Noodikogu",
 	"nav_invite": "Kutsu",
-	"nav_collectives": "Kollektiivid"
+	"nav_collectives": "Kollektiivid",
+	"library_title": "Noodikogu",
+	"library_no_collective": "Noodikogu vaatamiseks vali kollektiiv.",
+	"library_load_error": "Noodikogu laadimine ebaõnnestus.",
+	"library_retry": "Proovi uuesti",
+	"library_empty": "Teoseid pole veel kuvada.",
+	"library_work_composer_unknown": "Helilooja teadmata",
+	"library_node_load_error": "Laadimine ebaõnnestus.",
+	"library_node_retry": "Proovi uuesti",
+	"library_editions_empty": "Väljaandeid pole veel kuvada.",
+	"library_edition_publisher_unknown": "Kirjastaja teadmata",
+	"library_copies_empty": "Eksemplare pole veel kuvada.",
+	"library_copy_available": "Saadaval",
+	"library_copy_lent_to": "Kasutaja {name} käes",
+	"library_borrower_unknown": "Tundmatu liige",
+	"library_lent_since": "alates {date}"
 }
