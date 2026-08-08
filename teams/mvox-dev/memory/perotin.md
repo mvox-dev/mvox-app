@@ -250,6 +250,15 @@ Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu doma
 18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
 `seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
 
+## T6.2b instance-tier widen LIVE (2026-08-08, #57/epic #54) — 586/586, gate 3 closed, library chain done
+
+Full chain: dry-run → Bentham GREEN → team-lead auth → Mihkel's nod (all confirmed before I ran it).
+586/586 widened private→domain, zero failures, gate 2 re-confirmed all 4 types pass. **The full
+3-gate-AND now clears** for T6.1's ruled field set — T6.1→T6.2→T6.2b library-visibility chain is
+complete at the data layer. T6.3 (browse surfaces) now has real domain-visible data to render
+against; T6.5's live-gate is where this finally gets empirically confirmed by a real member seat.
+Artifact: `seed-results/library-instance-tier-widen-2026-08-08-live-2026-08-08T08-25-33-315Z.json`.
+
 ## T6.2b instance-tier widen DRY-RUN (2026-08-08, #57/epic #54) — gate-3 gap closer, holds on Mihkel
 
 Gama's STOP (2026-08-08 11:00 on #54): T6.2 widened prop-defs + touch-saved instances, but
