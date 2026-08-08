@@ -244,6 +244,12 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #47 menu-empty-shells LIVE (2026-08-08) — 3/3 privatized, D4 complete
+
+Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu domain-tier: 21/23 →
+18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
+`seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
+
 ## #53 delete-corroborated-orphans DRY-RUN (2026-08-08) — 7/7 pass, 0 writes
 
 Loads the 7 corroborated ids DIRECTLY from the committed #46 corrected-comparison artifact (not
