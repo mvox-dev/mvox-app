@@ -219,31 +219,43 @@ ping — never self-authorize.
   would silently under-share future prop-defs under a shared parent type. Flagged to Josquin, not
   mine to fix (lib is his territory).
 
-## Recent session — 2026-08-07 (T3.1 #17, full arc)
+## Recent sessions — 2026-08-07 (T3.1 #17 + #20 fix, condensed)
 
-Probed member/roster population split: 130 clean v4E members (person ref + status, no `name`) vs
-115 orphan legacy members (no person ref/status, DO carry `name` — pre-v2-rewrite leftover never
-deleted). Confirmed `member.name` is still written by the CURRENT shipped invite code
-(`inviteData.ts`), not just legacy debt — motivated bundle 3's schema mutation. Ran T3.1 bundles
-1+2+3 live (see catalog above): 128 domain profiles created, 128 members private→domain, `name`
-prop-def removed from `member` type. All three independently re-verified against fresh live reads
-(not the scripts' own read-backs) — zero mismatches, zero out-of-scope entities touched. Full
-result artifact reconstructed + committed 2026-08-07 (see catalog). T4.10 profile-migration arc
-ran two dry-runs (3-person plan, then 2-person post-exclusion), caught two real conflicts via
-team-lead's independent verify each time (db-root visibility change; OAUTH's pre-existing
-conflicting profile), never went live — Mihkel closed it superseded. Confirmed via direct
-`entu-api` source read: `mandatory` is never enforced (see mechanics section above).
+T3.1: 130 clean v4E members vs 115 orphan legacy (name-carrying, pre-v2 leftover, still written by
+current `inviteData.ts`). Ran bundles 1+2+3 live: 128 domain profiles created, 128 members
+private→domain, `name` prop-def removed from `member` type — all independently re-verified, zero
+mismatches. T4.10 profile-migration arc ran two dry-runs, caught two real conflicts each round,
+never went live (Mihkel: superseded).
+#20: roster-crash root cause was `member.person`/`member.section` prop-defs carrying no `_sharing`
+(NOT person-entity tier, an initially-proposed red herring) — see 3-gate-AND mechanics above. Live
+fix executed 245/245, 0 failures, independently re-verified. Left 3 near-duplicate dry-run artifacts
+mid-fix, caused a review mix-up — captured as the artifact-hygiene habit above.
 
-## Recent session — 2026-08-07 continued (#20 roster rights-narrowing fix)
+## Entu meta-schema ids (verified 2026-08-08, #41)
 
-Diagnosed + fixed the live "roster crash on legacy orphan members" incident (mvox-app#20/#18).
-Root cause was NOT person-entity tier (red herring team-lead initially proposed) — it was
-`member.person`/`member.section` prop-defs carrying no `_sharing` (see 3-gate-AND mechanics entry
-above). Also caught an identical twin bug on `member.section` before it became its own incident.
-Bentham pre-execution review (YELLOW-A: missing type-level-sharing guard, closed) + Gama's 3
-chain-text requirements (observed-value ledger, disambiguated 245-population with baseline-set
-drift-check, orphan-section-visibility stated as intended) all folded in before authorization.
-Live executed 2026-08-07, 245/245 touched, 0 failures, independently re-verified against fresh
-reads (rotated property `_id`s matched the ledger exactly). Real process lesson this session:
-left 3 near-duplicate dry-run artifacts committed mid-fix, caused a genuine review mix-up — cleaned
-up + captured as a durable habit above.
+Prop-def entities (per-type field declarations) are `_type.reference`'d to the **"property"**
+meta-type entity `69bcfd8e9c031ab8e6ce8048` — NOT the "entity" meta-type `69bcfd8e9c031ab8e6ce8034`
+(that id is the meta-type for TYPE-DEFINITIONS themselves — person/member/organization/etc. are
+`_type.string=entity`, 27 total = 22 content types + 5 system types: database/entity/menu/plugin/
+property). `probe-person-propdef-sharing-2026-08-07.ts` used the WRONG id (entity, not property) and
+would have silently returned zero prop-defs for every type — caught + fixed while building
+`probe-epic37-phase1-inventory-2026-08-08.ts` (correct query: `_type.reference=<property-meta-id>&
+_parent.reference=<typeId>`). That 2026-08-07 script's own findings were never actually load-bearing
+(the #20 fix was verified through direct entity/{id} reads, not this listing), so nothing shipped
+wrong — but don't reuse the old script's constant.
+
+Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
+top-level content kinds, siblings of "entity"/"property", not children of anything.
+
+## #41 inventory pass (epic #37 Phase 1, 2026-08-08) — headline numbers
+
+246 members (245 domain + 1 private = fixture B) · 132 persons (128 T3.1-synthetic + 4 real:
+db-root/Mihkel-OAuth/TestUser/fixtureB) · 115 orphan members, orphan-vs-person exact-name-match
+partition = 18 with-twin / 97 without-twin · person carries 18 prop-defs all `_sharing:domain`
+(not ~15 as epic estimated) · member carries 4 prop-defs (person/section/current_section/status),
+all domain · 3 menu entries point at zero-instance types (repertoire_item/program_item/attendance)
+· `_probe_bulletin` = 3 inert Mihkel-created test rows, safe per §8.6. Orphan `member.name` values
+are STILL LIVE-READABLE via direct API query despite the prop-def removal (data persists, only the
+frontend's render-hint is gone) — don't conflate "no prop-def" with "no data" in future reporting.
+Full breakdown + result artifact: `seed-results/probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json`,
+posted as structured comment on #37.
