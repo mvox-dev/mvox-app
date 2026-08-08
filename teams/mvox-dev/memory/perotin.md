@@ -247,6 +247,23 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #44 narrow-person-refs DRY-RUN (epic #37 D3, 2026-08-08) — plan built, 0 writes
+
+`narrow-person-refs-2026-08-08.ts` + lib, mirrors #20's Bundle-A/Bundle-B/canary/ledger shape exactly
+(opposite direction: domain→private replace, not absent→domain create). All pre-checks passed live:
+18 prop-defs re-confirmed domain with current _id captured; 132 persons re-confirmed (matches #41,
+no drift); tier breakdown `{private:1, domain:3, public:128}`, all have an explicit _sharing value
+(uniform touch-save path, no absent-value edge case). Canary = db-root person `69bcfd8e...8079`,
+followed by a NEW-pattern hard gate this run uniquely needs: db-root's ENTU_API_KEY must
+re-authenticate a trivial read AFTER the canary's own re-aggregation, before touching the other 131
+(`touchSaveCanaryAndSelfTest` in the lib — reusable shape if a future narrow/widen ever touches the
+credential-holder's own entity again). **Real finding**: of the 18 targeted props, only 3 carry ANY
+value across all 132 persons (voice=8, entu_user=3, entu_api_key=1) — the other 15 are 0/132
+everywhere. Narrowing is a schema-hygiene no-op for 15/18 props; flagged to team-lead/#37 since the
+epic's stated "roster loses display affordances" consequence has little live surface to land on.
+Artifact: `seed-results/narrow-person-refs-2026-08-08-dry-2026-08-08T03-48-53-149Z.json`. Awaiting
+Bentham review + explicit "I authorize this run" before flipping DRY_RUN=false.
+
 ## #44 domain-bucket gate check (epic #37 D3, 2026-08-08) — resolved NOT-exposed
 
 db-root's `entu_api_key` (the #43 hit) is NOT domain-bucket-visible: instance-level `_sharing` on
