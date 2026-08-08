@@ -1,0 +1,589 @@
+{
+  "dryRun": true,
+  "populationCheck": {
+    "stillFlagged": [
+      {
+        "type": "database",
+        "typeId": "69bcfd8e9c031ab8e6ce8027",
+        "id": "69bcfd8e9c031ab8e6ce807a",
+        "name": "polyphony",
+        "classification": "other-owned"
+      },
+      {
+        "type": "entity",
+        "typeId": "69bcfd8e9c031ab8e6ce8034",
+        "id": "69bcfd8e9c031ab8e6ce8027",
+        "name": "database",
+        "classification": "other-owned"
+      },
+      {
+        "type": "entity",
+        "typeId": "69bcfd8e9c031ab8e6ce8034",
+        "id": "69bcfd8e9c031ab8e6ce8034",
+        "name": "entity",
+        "classification": "other-owned"
+      },
+      {
+        "type": "entity",
+        "typeId": "69bcfd8e9c031ab8e6ce8034",
+        "id": "69bcfd8e9c031ab8e6ce803c",
+        "name": "menu",
+        "classification": "other-owned"
+      },
+      {
+        "type": "entity",
+        "typeId": "69bcfd8e9c031ab8e6ce8034",
+        "id": "69bcfd8e9c031ab8e6ce8042",
+        "name": "plugin",
+        "classification": "other-owned"
+      },
+      {
+        "type": "entity",
+        "typeId": "69bcfd8e9c031ab8e6ce8034",
+        "id": "69bcfd8e9c031ab8e6ce8048",
+        "name": "property",
+        "classification": "other-owned"
+      },
+      {
+        "type": "person",
+        "typeId": "69bcfd8e9c031ab8e6ce805f",
+        "id": "6a2fc05e4cd971291c5d5ddc",
+        "name": "Mihkel Putrinš",
+        "classification": "other-owned"
+      },
+      {
+        "type": "profile",
+        "typeId": "6a74933f36c951d9114ec817",
+        "id": "6a75773136c951d9114ec894",
+        "name": "Mibiri Sumu",
+        "classification": "no-owner"
+      },
+      {
+        "type": "profile",
+        "typeId": "6a74933f36c951d9114ec817",
+        "id": "6a757d1b36c951d9114ec89d",
+        "name": "(no name prop)",
+        "classification": "no-owner"
+      },
+      {
+        "type": "profile",
+        "typeId": "6a74933f36c951d9114ec817",
+        "id": "6a75923936c951d9114ec8f4",
+        "name": "Mibiri",
+        "classification": "no-owner"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8028",
+        "name": "address",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8029",
+        "name": "add_user",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce802a",
+        "name": "email",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce802b",
+        "name": "name",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce802c",
+        "name": "organization",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce802d",
+        "name": "photo",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce802e",
+        "name": "price",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce802f",
+        "name": "billing_data_limit",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8030",
+        "name": "billing_entities_limit",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8031",
+        "name": "billing_requests_limit",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8032",
+        "name": "billing_customer_id",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8033",
+        "name": "entu_user",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8035",
+        "name": "add_from",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8036",
+        "name": "default_parent",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8037",
+        "name": "description",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8038",
+        "name": "label",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8039",
+        "name": "label_plural",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce803a",
+        "name": "name",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce803b",
+        "name": "plugin",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce803d",
+        "name": "description",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce803e",
+        "name": "group",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce803f",
+        "name": "name",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8040",
+        "name": "ordinal",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8041",
+        "name": "query",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8043",
+        "name": "name",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8044",
+        "name": "new_window",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8045",
+        "name": "type",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8046",
+        "name": "url",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8047",
+        "name": "description",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8049",
+        "name": "decimals",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce804a",
+        "name": "description",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce804b",
+        "name": "formula",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce804c",
+        "name": "group",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce804d",
+        "name": "label",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce804e",
+        "name": "label_plural",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce804f",
+        "name": "list",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8050",
+        "name": "mandatory",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8051",
+        "name": "markdown",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8052",
+        "name": "multilingual",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8053",
+        "name": "name",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8054",
+        "name": "ordinal",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8055",
+        "name": "plugin",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8056",
+        "name": "readonly",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8057",
+        "name": "reference_query",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8058",
+        "name": "search",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce8059",
+        "name": "set",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce805a",
+        "name": "table",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce805b",
+        "name": "type",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce805c",
+        "name": "uniqueness",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce805d",
+        "name": "default",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "69bcfd8e9c031ab8e6ce805e",
+        "name": "hidden",
+        "classification": "other-owned"
+      },
+      {
+        "type": "property",
+        "typeId": "69bcfd8e9c031ab8e6ce8048",
+        "id": "6a4b84f2a7041b3340aa4057",
+        "name": "billing_tokens_limit",
+        "classification": "other-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff236c951d9114ec6ce",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff336c951d9114ec6d9",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff436c951d9114ec6e4",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff536c951d9114ec6ef",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff536c951d9114ec6fa",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff636c951d9114ec705",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff836c951d9114ec710",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73dff836c951d9114ec71b",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73e73f36c951d9114ec795",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      },
+      {
+        "type": "rsvp",
+        "typeId": "6a0d2e8590c8df7a1cc7df1b",
+        "id": "6a73e77336c951d9114ec7ca",
+        "name": "(no name prop)",
+        "classification": "mihkel-oauth-owned"
+      }
+    ],
+    "alreadyFixed": [],
+    "missing": [],
+    "preOwnerCounts": {
+      "69bcfd8e9c031ab8e6ce807a": 1,
+      "69bcfd8e9c031ab8e6ce8027": 1,
+      "69bcfd8e9c031ab8e6ce8034": 1,
+      "69bcfd8e9c031ab8e6ce803c": 1,
+      "69bcfd8e9c031ab8e6ce8042": 1,
+      "69bcfd8e9c031ab8e6ce8048": 1,
+      "6a2fc05e4cd971291c5d5ddc": 1,
+      "6a75773136c951d9114ec894": 0,
+      "6a757d1b36c951d9114ec89d": 0,
+      "6a75923936c951d9114ec8f4": 0,
+      "69bcfd8e9c031ab8e6ce8028": 1,
+      "69bcfd8e9c031ab8e6ce8029": 1,
+      "69bcfd8e9c031ab8e6ce802a": 1,
+      "69bcfd8e9c031ab8e6ce802b": 1,
+      "69bcfd8e9c031ab8e6ce802c": 1,
+      "69bcfd8e9c031ab8e6ce802d": 1,
+      "69bcfd8e9c031ab8e6ce802e": 1,
+      "69bcfd8e9c031ab8e6ce802f": 1,
+      "69bcfd8e9c031ab8e6ce8030": 1,
+      "69bcfd8e9c031ab8e6ce8031": 1,
+      "69bcfd8e9c031ab8e6ce8032": 1,
+      "69bcfd8e9c031ab8e6ce8033": 1,
+      "69bcfd8e9c031ab8e6ce8035": 1,
+      "69bcfd8e9c031ab8e6ce8036": 1,
+      "69bcfd8e9c031ab8e6ce8037": 1,
+      "69bcfd8e9c031ab8e6ce8038": 1,
+      "69bcfd8e9c031ab8e6ce8039": 1,
+      "69bcfd8e9c031ab8e6ce803a": 1,
+      "69bcfd8e9c031ab8e6ce803b": 1,
+      "69bcfd8e9c031ab8e6ce803d": 1,
+      "69bcfd8e9c031ab8e6ce803e": 1,
+      "69bcfd8e9c031ab8e6ce803f": 1,
+      "69bcfd8e9c031ab8e6ce8040": 1,
+      "69bcfd8e9c031ab8e6ce8041": 1,
+      "69bcfd8e9c031ab8e6ce8043": 1,
+      "69bcfd8e9c031ab8e6ce8044": 1,
+      "69bcfd8e9c031ab8e6ce8045": 1,
+      "69bcfd8e9c031ab8e6ce8046": 1,
+      "69bcfd8e9c031ab8e6ce8047": 1,
+      "69bcfd8e9c031ab8e6ce8049": 1,
+      "69bcfd8e9c031ab8e6ce804a": 1,
+      "69bcfd8e9c031ab8e6ce804b": 1,
+      "69bcfd8e9c031ab8e6ce804c": 1,
+      "69bcfd8e9c031ab8e6ce804d": 1,
+      "69bcfd8e9c031ab8e6ce804e": 1,
+      "69bcfd8e9c031ab8e6ce804f": 1,
+      "69bcfd8e9c031ab8e6ce8050": 1,
+      "69bcfd8e9c031ab8e6ce8051": 1,
+      "69bcfd8e9c031ab8e6ce8052": 1,
+      "69bcfd8e9c031ab8e6ce8053": 1,
+      "69bcfd8e9c031ab8e6ce8054": 1,
+      "69bcfd8e9c031ab8e6ce8055": 1,
+      "69bcfd8e9c031ab8e6ce8056": 1,
+      "69bcfd8e9c031ab8e6ce8057": 1,
+      "69bcfd8e9c031ab8e6ce8058": 1,
+      "69bcfd8e9c031ab8e6ce8059": 1,
+      "69bcfd8e9c031ab8e6ce805a": 1,
+      "69bcfd8e9c031ab8e6ce805b": 1,
+      "69bcfd8e9c031ab8e6ce805c": 1,
+      "69bcfd8e9c031ab8e6ce805d": 1,
+      "69bcfd8e9c031ab8e6ce805e": 1,
+      "6a4b84f2a7041b3340aa4057": 1,
+      "6a73dff236c951d9114ec6ce": 2,
+      "6a73dff336c951d9114ec6d9": 2,
+      "6a73dff436c951d9114ec6e4": 2,
+      "6a73dff536c951d9114ec6ef": 2,
+      "6a73dff536c951d9114ec6fa": 2,
+      "6a73dff636c951d9114ec705": 2,
+      "6a73dff836c951d9114ec710": 2,
+      "6a73dff836c951d9114ec71b": 2,
+      "6a73e73f36c951d9114ec795": 2,
+      "6a73e77336c951d9114ec7ca": 2
+    }
+  },
+  "writesIssued": 0,
+  "exitCode": 0
+}
