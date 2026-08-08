@@ -1,0 +1,219 @@
+=== menu TYPE entity ===
+name=menu ownSharing=public
+
+=== menu prop-defs (gate 1) ===
+description  type=text       sharing=public id=69bcfd8e9c031ab8e6ce803d
+group        type=string     sharing=public id=69bcfd8e9c031ab8e6ce803e
+name         type=string     sharing=public id=69bcfd8e9c031ab8e6ce803f
+ordinal      type=number     sharing=public id=69bcfd8e9c031ab8e6ce8040
+query        type=string     sharing=public id=69bcfd8e9c031ab8e6ce8041
+
+=== library-related menu entries (own entity state) ===
+Libraries    id=6a0f6d314ff8277cd43069cc ownSharing=domain query=_type.string=library&sort=name.string
+Works        id=6a0f6d314ff8277cd43069d7 ownSharing=domain query=_type.string=work&sort=name.string
+Editions     id=6a0f6d314ff8277cd43069e2 ownSharing=domain query=_type.string=edition&sort=name.string
+Copies       id=6a0f6d314ff8277cd43069ed ownSharing=domain query=_type.string=copy&sort=name.string
+Loans        id=6a0f6d314ff8277cd43069f8 ownSharing=domain query=_type.string=lending&sort=name.string
+
+=== full unfiltered read of "Libraries" menu entry (db-root, always private-bucket-omniscient) ===
+{
+  "entity": {
+    "_id": "6a0f6d314ff8277cd43069cc",
+    "_created": [
+      {
+        "_id": "6a0f6d314ff8277cd43069d6",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "datetime": "2026-05-21T20:38:09.040Z",
+        "property_type": "_created",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      }
+    ],
+    "_inheritrights": [
+      {
+        "_id": "6a0f6d314ff8277cd43069d4",
+        "boolean": true
+      }
+    ],
+    "_owner": [
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      },
+      {
+        "_id": "6a0f6d314ff8277cd43069d5",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      }
+    ],
+    "_parent": [
+      {
+        "_id": "6a0f6d314ff8277cd43069ce",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_parent",
+        "string": "polyphony",
+        "entity_type": "database"
+      }
+    ],
+    "_sharing": [
+      {
+        "_id": "6a0f6d314ff8277cd43069cf",
+        "string": "domain"
+      }
+    ],
+    "_type": [
+      {
+        "_id": "6a0f6d314ff8277cd43069cd",
+        "reference": "69bcfd8e9c031ab8e6ce803c",
+        "property_type": "_type",
+        "string": "menu",
+        "entity_type": "entity"
+      }
+    ],
+    "group": [
+      {
+        "_id": "6a0f6d314ff8277cd43069d0",
+        "string": "Polyphony"
+      }
+    ],
+    "name": [
+      {
+        "_id": "6a0f6d314ff8277cd43069d1",
+        "string": "Libraries"
+      }
+    ],
+    "ordinal": [
+      {
+        "_id": "6a1170474ff8277cd4306afe",
+        "number": 240
+      }
+    ],
+    "query": [
+      {
+        "_id": "6a0f6d314ff8277cd43069d3",
+        "string": "_type.string=library&sort=name.string"
+      }
+    ],
+    "_parent_viewer": [
+      {
+        "_id": "6a2f3f0d4cd971291c5d5c9f",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_editor",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person",
+        "inherited": true
+      },
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      }
+    ],
+    "_parent_expander": [
+      {
+        "_id": "6a2f3f0d4cd971291c5d5c9f",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_editor",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person",
+        "inherited": true
+      },
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      }
+    ],
+    "_parent_editor": [
+      {
+        "_id": "6a2f3f0d4cd971291c5d5c9f",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_editor",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person",
+        "inherited": true
+      },
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      }
+    ],
+    "_parent_owner": [
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      }
+    ],
+    "_editor": [
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      },
+      {
+        "_id": "6a0f6d314ff8277cd43069d5",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      }
+    ],
+    "_expander": [
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      },
+      {
+        "_id": "6a0f6d314ff8277cd43069d5",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      }
+    ],
+    "_viewer": [
+      {
+        "_id": "69bd0b0827c417eed6f8a64b",
+        "reference": "69bcfd8e9c031ab8e6ce807a",
+        "property_type": "_owner",
+        "string": "polyphony",
+        "entity_type": "database",
+        "inherited": true
+      },
+      {
+        "_id": "6a0f6d314ff8277cd43069d5",
+        "reference": "69bcfd8e9c031ab8e6ce8079",
+        "property_type": "_owner",
+        "string": "Mihkel Putrinš",
+        "entity_type": "person"
+      }
+    ]
+  }
+}
