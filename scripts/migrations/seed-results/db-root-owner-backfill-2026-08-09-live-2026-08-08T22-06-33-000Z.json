@@ -1,0 +1,23 @@
+{
+  "dryRun": false,
+  "halted": "canary-403-no-owner-cohort",
+  "canaryAttempted": {
+    "type": "profile",
+    "id": "6a75773136c951d9114ec894",
+    "name": "Mibiri Sumu",
+    "classification": "no-owner"
+  },
+  "error": "backfillCanaries: canary profile/6a75773136c951d9114ec894 (classification=no-owner) FAILED — POST failed: 403. Refuse to run the full 72-entity sweep on an unproven mechanic for this type.",
+  "postFailureVerification": {
+    "method": "GET entity/6a75773136c951d9114ec894 (full, no props filter)",
+    "result": "byte-identical to the pre-write snapshot captured moments earlier — no _owner key present, no partial write, entity unchanged",
+    "confirmed": true
+  },
+  "entriesAttempted": 1,
+  "entriesSucceeded": 0,
+  "entriesSkipped": 0,
+  "entriesFailed": 1,
+  "remainingUnattempted": 71,
+  "rootCauseHypothesis": "_owner is a rightType property (per architecture-decisions.md 'Rights tiers'): writing it requires the requester to ALREADY hold _owner on the target entity. db-root holds _owner on NONE of the 72 flagged entities (that is the entire premise of #68) — so a plain-JWT POST of _owner is structurally a chicken-and-egg operation for this whole population, not just the no-owner cohort. This was not independently re-tested against cohort 1 (database-owned) or cohort 2 (Mihkel-oauth-owned) targets to avoid further live writes on schema-critical entities (type-defs/prop-defs) without direction — the platform rule is already documented and uniform, so the same 403 is predicted for all three cohorts, not empirically re-confirmed beyond this one canary.",
+  "exitCode": 1
+}
