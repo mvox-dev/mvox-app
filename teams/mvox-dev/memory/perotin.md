@@ -250,6 +250,14 @@ Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu doma
 18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
 `seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
 
+## T6.2 library-visibility LIVE (2026-08-08, #56/epic #54) — 598/598, 0 failures, T6.2 complete
+
+Bundle A 12/12 prop-defs set, Bundle B 586/586 instances touched (4 canaries per-type all passed
+first). Zero failures across the whole run. Library 1.0's field-set visibility mutation is done —
+next up in the epic is T6.3 (browse surfaces) + eventual T6.5 live-gate (real member seat confirms
+the ruled fields render and a negative-control field doesn't). Artifact:
+`seed-results/library-visibility-2026-08-08-live-2026-08-08T07-57-00-009Z.json`.
+
 ## T6.2 library-visibility DRY-RUN (2026-08-08, #56/epic #54) — plan built, 0 writes
 
 12 prop-def writes (11 widen absent→domain + 1 narrow edition.cost domain→private) gated ahead of a
