@@ -247,6 +247,17 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #44 domain-bucket gate check (epic #37 D3, 2026-08-08) — resolved NOT-exposed
+
+db-root's `entu_api_key` (the #43 hit) is NOT domain-bucket-visible: instance-level `_sharing` on
+that person entity is `private` (gate 3 of 3-gate-AND), which caps the property out of the domain
+bucket regardless of prop-def/type both being `domain` (gates 1+2). `ENTU_ADMIN_KEY` (the only other
+local credential) resolves to an ANONYMOUS FLOOR JWT (`accounts:[]`) — NOT a real second member seat,
+confirmed live; don't re-try it expecting a genuine cross-account read. Also found: the property
+carries 3 STACKED values (POST-append-never-replace), not 1 — flagged for the rotation call, not
+itself a new exposure (all sit behind the same private gate). Artifact:
+`seed-results/probe-44-domain-bucket-check-2026-08-08T03-41-53-000Z.json`.
+
 ## #43 credential pre-check (epic #37 D3, 2026-08-08) — STOP triggered
 
 1/132 persons carries `entu_api_key` (none carry `entu_passkey`): person `69bcfd8e...8079` =
