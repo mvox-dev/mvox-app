@@ -244,6 +244,21 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #46 corrected section signal via `_parent` refs (2026-08-08) — 7/18 now corroborate
+
+Gama correction: section membership lives in the `_parent`-reference shape (member is multi-parent
+under org + section, each `_parent` entry's own `entity_type` distinguishes them — confirmed live,
+every twin member has exactly one `organization` parent + one `section` parent), NOT the legacy
+`section`/`current_section` PROPERTY (0/131 populated, per the original dry-run). Re-ran the 18
+exact-name matches against this corrected signal: **7 corroborate** (name + section-by-reference-id
+both match), 11 don't. **Precision lesson for future comparisons**: of those 11, only 5 are genuinely
+different section NAMES (e.g. Baritone vs II Tenor) — the other 6 share the SAME section name across
+TWO DIFFERENT section entities (sections are per-org, not global; e.g. two choirs each have their
+own "I Tenor"). Comparing by reference id (not name string) was the right call — comparing by name
+would have false-corroborated those 6. Read-only, no mutations; grounds a future §8.6 delete task for
+the 7 corroborated orphans if that direction is taken. Artifact:
+`seed-results/probe-46-parent-section-corroboration-2026-08-08T04-31-31-000Z.json`.
+
 ## #46 orphan-115-disposition COMPLETE (2026-08-08) — Phase C live, 115/115 hidden
 
 Phase B skipped (0 delete candidates, structural — see dry-run entry below). Phase C executed after
