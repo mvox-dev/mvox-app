@@ -6,6 +6,14 @@ Tags: `[DECISION]`, `[PATTERN]`, `[WIP]`, `[CHECKPOINT]`, `[DEFERRED]`, `[GOTCHA
 
 ---
 
+## Session MVOX-4 — #38 roster error i18n leak (2026-08-08)
+
+[CHECKPOINT] Dropped `{message}` param from `roster_load_error` in et/lv/uk (en done by Byrd). Commit `d8bc5ce` on `fix/38-roster-error-i18n`. `pnpm check` 0 errors (needed `pnpm build` first to regen paraglide — recurring gotcha, already logged session 14). Roster spec 6/6 pass. Handed off to Bentham.
+
+(*MVOX:Comenius*)
+
+---
+
 ## Session 36 — About/Carus outreach i18n (2026-06-14)
 
 [CHECKPOINT] Translated all 12 `about_*` keys into et/lv/uk. Commit `79d6523` on `feat/about-carus`. pnpm check: 0 errors / 8 pre-existing warnings. 4-locale parity confirmed. No TODO/Lorem residue. Handoff to Bentham sent.

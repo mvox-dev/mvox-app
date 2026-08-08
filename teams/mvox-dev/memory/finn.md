@@ -3,6 +3,36 @@
 <!-- Pruned 2026-08-06 (S43): S32-39 detail compressed to bullets below; full text in git
 history of this file. S2-30 already pruned 2026-06-14 — durable facts live in MEMORY.md. -->
 
+## [DECISION-INPUT] Rights (_owner/_editor/_viewer/_expander) NOT in JWT, only readable via entity GET (S47, 2026-08-08, #51/#49 T5.1)
+
+JWT `accounts` claim (`routes/auth/index.get.js:136-138,253-264`) carries zero rights
+data — just `{_id, name, user}` per db. Rights props live ONLY in `private.*`
+(`aggregate.js:9-17`, never copied to domain/public — that copy logic at :133-152 only
+applies to ordinary prop-defs). Read gate = `utils/entity.js:569-586` `cleanupEntity`:
+caller sees `private.*` (and thus `_owner`/`_editor`) ONLY if own person `_id` is
+directly in `entity.access` (built by `utils/rights.js:76-97` `getAccessArray` = sharing
+value + all viewer/expander/editor/owner refs, deduped). Domain/public visibility is
+NOT enough — those buckets structurally never carry rights fields. **So: admin/editor
+determination for ANY entity (org, library scope, whatever) = `GET entity/{id}?props=
+_owner,_editor` + check own id in the returned array; absence of the key = fail-closed
+"not admin", not an error.** Generalizes to any entity, no type-specific logic needed.
+Caveat: ANY rights tier (even bare `_viewer`) sees the FULL `_owner`/`_editor` list once
+in `access` — not owner-gated. Existing 3-way error-vs-no-vs-yes idiom to reuse:
+`src/lib/collectives/marker.ts:34-39,58-74` (`{kind:'error'|'not-collective'|'collective'}`).
+
+## [DECISION-INPUT] API-key auth bypasses rights view entirely (S46, 2026-08-08, #44/#37 D3)
+
+`routes/auth/index.get.js:148-152` — API-key lookup is a raw MongoDB `.findOne()` on
+`entity` collection, field `private.entu_api_key.string` (indexed,
+`setupDatabase.js:225`). NOT the aggregated/rights-filtered view `GET /entity` uses.
+`utils/aggregate.js:51-152`: `private.*` bucket is **always fully populated** regardless
+of prop-def `_sharing` tier — `domain.*`/`public.*` are additive copies written
+conditionally (lines 133/140) on top of it. So narrowing a prop-def's `_sharing` to
+`private` only stops the domain/public copy; `private.*` (what auth reads) is untouched.
+**General pattern**: any narrow-`_sharing`-then-reaggregate op is safe for auth/internal
+lookups that key off `private.*` directly — check the query's bucket prefix before
+assuming a sharing-tier narrow is risky.
+
 ## [RESOLVED] Census script `sharing`→`_sharing` bug (S44, 2026-08-06)
 
 Flagged 2026-08-06, independently confirmed + reversed by team-lead same session (21/21
