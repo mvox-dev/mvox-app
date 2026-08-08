@@ -233,6 +233,21 @@ meta-type entity `69bcfd8e9c031ab8e6ce8048` — NOT the "entity" meta-type `69bc
 property). Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their
 own top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #48 meta-polish inventory (2026-08-08, read-only) — clean 0% baseline, display-config mechanism found
+
+20 content types (post-#45, was 22), all 20 missing `description`. 140 prop-defs across those types,
+all 140 missing `description` — a clean 0% baseline both levels, no partial coverage anywhere. Found
+the Entu admin list-display mechanism: prop-def `list:boolean` + `ordinal:number` control which
+fields render as list/table columns (not a separate config entity). `member`'s 4 prop-defs: only
+`section` has `list:true` — with no `name` prop-def (removed T3.1 bundle 3) and `person` not
+list-flagged, **the admin member list shows only a Section column today, no way to identify which
+member a row is**. Recommended fix (not executed): `list:true` + lower `ordinal` on `member.person`.
+Scope estimate: 160 description writes (20 types + 140 prop-defs) + 1-2 display-config writes ≈ 161-
+162 total. **Named explicitly for the parking decision**: unlike every other §8.6 mutation today,
+description text needs actual AUTHORING (content quality), not a mechanical tier-flip — "low risk"
+(correct, cosmetic) doesn't mean "low effort-shape-match to what's shipped so far." Artifact:
+`seed-results/probe-48-meta-polish-inventory-2026-08-08T12-48-20-000Z.json`.
+
 ## 2026-08-08 session digest — epic #37 (data/config cleanup) + epic #54 (Library 1.0)
 
 All items below shipped/were-found today; full row-by-row detail lives in the commits, result
