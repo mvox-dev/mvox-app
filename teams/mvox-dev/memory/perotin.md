@@ -247,6 +247,21 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #45 retire-application-probe-bulletin DRY-RUN (epic #37 D2+D5, 2026-08-08) — plan built, 0 writes
+
+`retire-application-probe-bulletin-2026-08-08.ts` + lib: 4 independently-gated steps (STEP=1|2|3|4
+env var, entrypoint refuses live execution without exactly one), each its own §8.6 gate per the issue.
+All targets re-verified live (menu entry, specimen, application type+propdefs, _probe_bulletin
+type+propdefs+3 instances — ids all match #41's inventory, zero drift). **Judgment call flagged**:
+menu Step 1 defaults to PRIVATIZE (`DELETE /property/{sharingValueId}`, leaving _sharing absent —
+matches the existing "Billing" admin-only entry's shape exactly) over full entity removal — more
+reversible for an equivalent outcome; alternative documented for override. Specimen's expiry
+(2026-07-15) confirmed genuinely past-due live. Step 3 (retire application type) self-gates on a live
+recount of zero instances — can't run before step 2 lands even if invoked out of order. Step 4 confirmed
+no menu entry exists for _probe_bulletin (nothing else to touch there). Mechanic: `DELETE /entity/{id}`
+for entities incl. prop-defs; `DELETE /property/{id}` only for the menu's _sharing VALUE. Artifact:
+`seed-results/retire-application-probe-bulletin-2026-08-08-dry-2026-08-08T04-09-39-559Z.json`.
+
 ## #44 narrow-person-refs LIVE (epic #37 D3, 2026-08-08) — 149/150 writes, 1 failure
 
 Executed after Bentham GREEN + team-lead's explicit "I authorize this run". Bundle A: 18/18 prop-defs
