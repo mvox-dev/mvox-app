@@ -28,7 +28,7 @@
 	"admin_invite_no_access": "Kutsete loomiseks on vaja administraatoriõigusi, mida sellel kontol ei paista olevat.",
 	"admin_invite_load_error": "Kutse eelduste laadimine ebaõnnestus.",
 	"admin_invite_retry_load": "Proovi uuesti",
-	"admin_invite_org_label": "Organisatsioon",
+	"admin_invite_db_label": "Kollektiiv",
 	"admin_invite_submit": "Loo kutse",
 	"admin_invite_creating": "Loomine…",
 	"admin_invite_link_label": "Kutselink",

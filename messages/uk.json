@@ -28,7 +28,7 @@
 	"admin_invite_no_access": "Для створення запрошень потрібні права адміністратора, яких цей обліковий запис, схоже, не має.",
 	"admin_invite_load_error": "Не вдалося завантажити передумови запрошення.",
 	"admin_invite_retry_load": "Повторити",
-	"admin_invite_org_label": "Організація",
+	"admin_invite_db_label": "Колектив",
 	"admin_invite_submit": "Створити запрошення",
 	"admin_invite_creating": "Створення…",
 	"admin_invite_link_label": "Посилання-запрошення",

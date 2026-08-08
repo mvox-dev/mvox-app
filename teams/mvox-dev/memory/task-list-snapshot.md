@@ -1,18 +1,21 @@
-# Task List Snapshot — 2026-08-07 shutdown (session "MVOX-3")
+# Task List Snapshot — 2026-08-08 shutdown (session "MVOX-4")
 
-mvox-app main @ `1746407`. No feature work dispatched this session.
+mvox-app main @ `840175d`. Workflow for #66/#67 may still be in flight.
 
-## ACTIVE (next session)
-- **#38 — Roster load-error message leaks raw thrown text to end users, untranslated.** Small Byrd+Comenius task. Not started.
-- **#9 — T4.8 follow-up: prefill mandatory name field from `EntuUser.name`** on /profile (Mihkel's 2026-08-07 08:40 ruling on #28). Small additive UI change. Not started.
+## IN FLIGHT
+- **#66 + #67** — sign-out with identity + invite picker databases (workflow running)
 
-## PENDING (not next-up but open)
-- **#35 — Profile edit v2** — one input per property, visibility picker as save surface, event-driven autosave. Larger feature, not started.
-- **#37 — Data & configuration cleanup round** — epic for tidying direct Entu-frontend visits. Not started.
-- **#14 — Playwright RSVP coverage** — deferred, not blocking anything.
-- **#16 — Slice 3 epic** — with Gama for PO acceptance, should close imminently.
+## PENDING (next session)
+- **T6.4** — library i18n/a11y pass (may already be absorbed by T6.3)
+- **T6.5** — library deploy + live gate (Mihkel's phone)
+- **#48** — meta polish descriptions (parked, authored content, needs Mihkel)
 
-## DONE this session
-Spawn convention change only (process, no feature work).
+## DEFERRED
+- **#14** — Playwright RSVP coverage (not scheduled, not ready)
+
+## CLOSED this session
+#38, #39, #40, #35, #42, #52, #58, #61, #62, #63, #59, #60, #65,
+#43, #44, #45, #46, #47, #53, #55, #56, #57,
+#41, #50, #51, #64
 
 (*MVOX:Palestrina*)

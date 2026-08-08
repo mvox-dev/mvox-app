@@ -3,7 +3,7 @@ import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	createInvite,
 	InviteCreateError,
-	listOrganizations,
+	resolveOrgId,
 	resolvePersonParentId,
 	type CreateInviteInput
 } from './inviteData';
@@ -159,52 +159,49 @@ describe('resolvePersonParentId', () => {
 	});
 });
 
-// ── listOrganizations ──────────────────────────────────────────────────────────
+// ── resolveOrgId ─────────────────────────────────────────────────────────────
 
-describe('listOrganizations', () => {
-	it('lists ALL organization entities (polyphony verifiably has several — no singleton assumption), name falling back to _id', async () => {
+describe('resolveOrgId', () => {
+	// #67 (Mihkel ruling) — replaces the old `listOrganizations` enumeration. This
+	// resolves the SOLE org id a member gets created under (a single `limit=1`
+	// read, same shape adminStore.ts's admin-rights check already relies on) —
+	// never a list for a UI picker.
+
+	it('resolves the first organization entity id with the admin Bearer token', async () => {
 		const fetchImpl = vi
 			.fn()
-			.mockResolvedValue(
-				json({ entities: [{ _id: 'org-1', name: [{ string: 'EFK' }] }, { _id: 'org-2' }] })
-			);
-		const orgs = await listOrganizations(cfg, fetchImpl);
-		expect(orgs).toEqual([
-			{ _id: 'org-1', name: 'EFK' },
-			{ _id: 'org-2', name: 'org-2' }
-		]);
-		const [url] = fetchImpl.mock.calls[0] as [string];
-		// Explicit limit — an omitted limit silently caps at the server default of
-		// 100 (entu-api routes/[db]/entity/index.get.js:494).
-		expect(String(url)).toContain('/polyphony/entity?_type.string=organization&props=name&limit=200');
+			.mockResolvedValue(json({ entities: [{ _id: 'org-1', name: [{ string: 'EFK' }] }] }));
+		const id = await resolveOrgId(cfg, fetchImpl);
+		expect(id).toBe('org-1');
+		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
+		expect(String(url)).toContain('/polyphony/entity?_type.string=organization');
+		expect(String(url)).toContain('limit=1');
+		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jwt-admin');
 	});
 
-	it('throws contract on a truncated page (count > returned entities) — a silently incomplete org select is never shown', async () => {
-		const fetchImpl = vi
-			.fn()
-			.mockResolvedValue(json({ count: 201, entities: [{ _id: 'org-1', name: [{ string: 'EFK' }] }] }));
-		const err = await captureError(listOrganizations(cfg, fetchImpl));
-		expect(err).toBeInstanceOf(InviteCreateError);
-		expect(err.phase).toBe('org-list');
-		expect(err.reason).toBe('contract');
-		expect(err.message).toMatch(/truncated/);
-	});
-
-	it('throws http on a non-2xx response', async () => {
+	it('throws http (with the status) on a non-2xx response', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 502));
-		const err = await captureError(listOrganizations(cfg, fetchImpl));
+		const err = await captureError(resolveOrgId(cfg, fetchImpl));
 		expect(err).toBeInstanceOf(InviteCreateError);
-		expect(err.phase).toBe('org-list');
+		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('http');
 		expect(err.message).toMatch(/502/);
 	});
 
-	it('throws not-visible when zero organizations are readable (names the missing object, no silent empty select)', async () => {
+	it('throws not-visible when no organization entity is readable', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
-		const err = await captureError(listOrganizations(cfg, fetchImpl));
-		expect(err.phase).toBe('org-list');
+		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('not-visible');
 		expect(err.message).toMatch(/organization/i);
+	});
+
+	it('throws contract when the organization entity read back without an _id (apparent-success trap)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{}] }));
+		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+		expect(err.phase).toBe('org-resolve');
+		expect(err.reason).toBe('contract');
+		expect(err.message).toMatch(/_id/i);
 	});
 });
 

@@ -28,7 +28,7 @@
 	"admin_invite_no_access": "Creating invites requires administrator rights this account does not appear to have.",
 	"admin_invite_load_error": "Could not load invite prerequisites.",
 	"admin_invite_retry_load": "Retry",
-	"admin_invite_org_label": "Organization",
+	"admin_invite_db_label": "Collective",
 	"admin_invite_submit": "Create invite",
 	"admin_invite_creating": "Creating…",
 	"admin_invite_link_label": "Invite link",

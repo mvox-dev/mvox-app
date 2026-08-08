@@ -28,7 +28,7 @@
 	"admin_invite_no_access": "Uzaicinājumu izveidei ir vajadzīgas administratora tiesības, kuru šim kontam, šķiet, nav.",
 	"admin_invite_load_error": "Neizdevās ielādēt uzaicinājuma priekšnosacījumus.",
 	"admin_invite_retry_load": "Mēģināt vēlreiz",
-	"admin_invite_org_label": "Organizācija",
+	"admin_invite_db_label": "Kolektīvs",
 	"admin_invite_submit": "Izveidot uzaicinājumu",
 	"admin_invite_creating": "Izveido…",
 	"admin_invite_link_label": "Uzaicinājuma saite",

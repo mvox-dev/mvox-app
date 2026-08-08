@@ -1,25 +1,48 @@
 # Palestrina — Team Lead Scratchpad
 
-> **Trimmed 2026-08-07 (session "MVOX-2") — same convention as prior.** Full history in git + prior memory versions.
+> **Trimmed 2026-08-08 (session MVOX-4).** Full history in git.
 
-### [NEXT SESSION] 2026-08-07 — session MVOX-3 → MVOX-4: wake verified, spawn convention updated
+### [NEXT SESSION] 2026-08-08 — session MVOX-4 → MVOX-5
 
-mvox-app main @ `1746407`. **Wake from new location (app repo) verified clean — all reads resolved correctly.**
+mvox-app main @ `840175d` (or later if #66/#67 workflow lands before session ends).
 
-**What happened this session (MVOX-3, 2026-08-07 ~22:39–22:50 EEST):**
-- `/mvox-wake` ran successfully from `~/workspace-app/teams/mvox-dev/`. All three standing teammates (finn, bentham, perotin) spawned and introed. No issues.
-- Gama comms message (repo-move report) rejected: `E_UNKNOWN_TEAM` — Gama's team not registered on stationmaster hub. Report delivered verbally to PO in session instead.
-- **Spawn convention changed** (`1746407`): agents now receive a short identity+self-orient prompt (~5 lines) instead of full inlined prompt (75–180 lines). Agent reads its own prompt file on first turn, same as team-lead. Updated in `startup.md`, `~/.claude/CLAUDE.md`, and `~/.claude/skills/mvox-wake/SKILL.md`.
-- No feature work dispatched.
+**What happened this session (MVOX-4, 2026-08-08 ~22:52 EEST → ongoing):**
 
-**FIRST ACTION:** proceed to normal work. Priority: #38 (roster error i18n leak, small Byrd+Comenius), then #9 (name prefill, small).
+Largest session to date. 11+ merges, ~1800 Entu writes, two new slices progressed.
 
-**Open issues (mvox-app) — unchanged from last session:**
-- **#38** — roster error message i18n leak (small, Byrd+Comenius, not started)
-- **#9** — T4.8 name-prefill follow-up (prefill mandatory name from `EntuUser.name`, small, not started — see #28 comments for the PO ruling)
-- **#35** — profile edit v2 (larger feature)
-- **#37** — data/config cleanup round (epic)
-- **#16** — slice 3 epic (with Gama for acceptance, should close soon)
-- **#14** — Playwright RSVP coverage (deferred)
+**Build lane — 11 features merged:**
+- #38 roster error i18n, #39 name prefill, #40 sibling page error i18n
+- #35 profile edit v2 (major — autosave, unified draft, visibility picker as save surface)
+- #42 admin/invite error i18n
+- #52 nav shell (3-breakpoint: bottom tabs, spine rail, top bar)
+- #58/#61/#62 gate fixes (public name, notch, idle 2s)
+- #63 library browse (works/editions/copies with availability)
+- #59/#60 sign-out + identity display
+- #65 rail side-switching fix (window.orientation)
+
+**Data lane — #37 Phase 3 complete + #54 T6.1/T6.2/T6.2b:**
+- #43 credential pre-check, #44 18-prop-def narrow + 132-person re-agg (149/150)
+- #45 retire apply-to-join + probe cleanup, #46/#53 orphan disposition (7 deleted, 108 hidden)
+- #47 menu shells privatized, #48 member display-config fix (descriptions parked)
+- #55/#56/#57 library visibility (12 prop-defs + 586 instances × 2)
+
+**In flight at session end:**
+- **#66/#67 workflow running** — sign-out with identity + invite picker databases. Check if merged.
+
+**FIRST ACTION next session:**
+1. Check if #66/#67 landed — if not, investigate/resume
+2. Check #49 — T5.5 gate CLOSED this session (Gama confirmed)
+3. T6.4/T6.5 — library i18n pass (may be absorbed) + live gate
+4. #48 descriptions — parked, needs Mihkel's authored content
+5. #14 Playwright — deferred
+
+**Key learnings saved to memory this session:**
+- `feedback_ultracode_team_roles.md` — TDD chain roles → workflow phases
+- `feedback_gama_green_sufficient.md` — Gama GREEN = go, don't loop to PO
+- `feedback_no_signature_in_conversation.md` — signatures for files/comms, not chat
+- `feedback_no_parallel_dispatch.md` — no parallel lane dispatch until worktrees
+- `reference_gama_comms_routing.md` — gama@po-team, not gama
+
+**Retro posted on #9** — 8 subjects covering slices 4–5 + #37 cleanup. PO response pending.
 
 (*MVOX:Palestrina*)

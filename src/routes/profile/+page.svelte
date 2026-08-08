@@ -392,15 +392,18 @@
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.profile_title()}</h1>
 
-		{#if identityAccount}
-			<p data-testid="profile-identity" class="text-sm text-ink-2">
-				{#if identityProvider}
-					{m.profile_signed_in_as({ account: identityAccount, provider: identityProvider })}
-				{:else}
-					{identityAccount}
-				{/if}
-			</p>
-		{/if}
+		<div class="flex flex-col items-start gap-1">
+			{#if identityAccount}
+				<p data-testid="profile-identity" class="text-sm text-ink-2">
+					{#if identityProvider}
+						{m.profile_signed_in_as({ account: identityAccount, provider: identityProvider })}
+					{:else}
+						{identityAccount}
+					{/if}
+				</p>
+			{/if}
+			<a class="text-sm text-ink-2 underline" href="/auth/logout">{m.profile_sign_out()}</a>
+		</div>
 
 		{#if status === 'no-collective'}
 			<p data-testid="profile-no-collective" class="text-sm">{m.profile_no_collective()}</p>
@@ -463,7 +466,5 @@
 				{/each}
 			</div>
 		{/if}
-
-		<a class="self-start text-sm underline" href="/auth/logout">{m.profile_sign_out()}</a>
 	</div>
 </main>

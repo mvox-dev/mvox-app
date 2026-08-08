@@ -1,21 +1,29 @@
 <script lang="ts">
 	// T4.5 (#31) — the admin invite surface (protected automatically: not on the
 	// guard allowlist; URL-only, no nav affordance in T4.5). State machine over
-	// resolvePersonParentId + listOrganizations (prerequisite load doubles as a
-	// LABELED not-admin heuristic — the authoritative gate is Entu's create POST)
-	// and createInvite. The minted invite token is a BEARER SECRET: it lives ONLY
-	// in component state — never localStorage/sessionStorage, never logged — and
-	// the link is shown exactly once.
+	// resolvePersonParentId + resolveOrgId (prerequisite load doubles as a LABELED
+	// not-admin heuristic — the authoritative gate is Entu's create POST) and
+	// createInvite. The minted invite token is a BEARER SECRET: it lives ONLY in
+	// component state — never localStorage/sessionStorage, never logged — and the
+	// link is shown exactly once.
+	//
+	// #67 (Mihkel ruling, 2026-08-08): the picker enumerates DATABASES (the
+	// collectives this account has a person in, from the collective store — same
+	// source the root layout already hydrates), never `organization` entities —
+	// polyphony verifiably carries 6 org entities (EFK + 5 unreferenced v4E-era
+	// legacy, #41), so offering all 6 for pick misrepresented five ghosts as real
+	// invite targets. The member's required org-entity `_parent` is still resolved
+	// (via `resolveOrgId`, a single `limit=1` read, NOT a user-facing list) once a
+	// target database is chosen.
 	// Contract: src/routes/page.admin-invite.spec.ts.
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
-	import { selectedDbStore } from '$lib/collectives/store';
+	import { collectiveState } from '$lib/collectives/store';
 	import {
 		createInvite,
 		InviteCreateError,
-		listOrganizations,
-		resolvePersonParentId,
-		type OrgOption
+		resolveOrgId,
+		resolvePersonParentId
 	} from '$lib/invite/inviteData';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
@@ -30,11 +38,16 @@
 		| 'done'
 		| 'create-error';
 
-	const db = $derived($selectedDbStore);
+	// The enumerable set: mvox collectives (databases) this account has a person
+	// in — NOT organization entities. Today that's exactly one (polyphony).
+	const availableDbs = $derived(
+		$collectiveState.status === 'ready' ? $collectiveState.collectives : []
+	);
 
 	let status = $state<Status>('loading');
-	let orgs = $state<OrgOption[]>([]);
-
+	let dbId = $state('');
+	// The member's required org-entity parent — resolved internally per chosen
+	// `dbId` (never rendered as a picker; see #67 note above).
 	let orgId = $state('');
 
 	// Done-panel state — the token-carrying link exists ONLY here (component state).
@@ -45,10 +58,19 @@
 
 	let createError = $state<{ personId?: string } | null>(null);
 
-	const canSubmit = $derived(orgId !== '');
+	const canSubmit = $derived(dbId !== '' && orgId !== '');
 
-	async function loadPrerequisites(currentDb: string): Promise<void> {
-		status = 'loading';
+	// Plain (non-reactive) flag, not $state — mirrors +layout.svelte's
+	// `lastAuthStatus`/`hydrating` pattern. Once the picker has been shown once
+	// (either the sole-db bootstrap resolved, or a multi-db "none chosen yet"
+	// ready state was reached), a LATER db switch keeps the select mounted and
+	// just disables submit while it re-resolves — it never collapses back to the
+	// bare loading spinner, which would unmount the select mid-interaction.
+	let hasShownForm = false;
+
+	async function loadPrerequisites(targetDb: string): Promise<void> {
+		if (!hasShownForm) status = 'loading';
+		orgId = '';
 		const token = getToken();
 		if (!token) {
 			// Inconsistency on a protected route — fail loudly as a load error, never
@@ -57,12 +79,15 @@
 			status = 'load-error';
 			return;
 		}
-		const cfg = { db: currentDb, token };
+		const cfg = { db: targetDb, token };
 		try {
-			const [, orgList] = await Promise.all([resolvePersonParentId(cfg), listOrganizations(cfg)]);
-			orgs = orgList;
-			if (orgList.length === 1) orgId = orgList[0]._id; // sole org preselected, select still rendered
+			const [, resolvedOrgId] = await Promise.all([
+				resolvePersonParentId(cfg),
+				resolveOrgId(cfg)
+			]);
+			orgId = resolvedOrgId;
 			status = 'ready';
+			hasShownForm = true;
 		} catch (e) {
 			if (e instanceof InviteCreateError && e.reason === 'not-visible') {
 				// Labeled HEURISTIC: the prerequisites are not visible to this account.
@@ -77,16 +102,39 @@
 		}
 	}
 
+	// EFFECT A — derive dbId from the available collectives: no-collective gate,
+	// sole-collective preselect. Pure state derivation, no fetches — kept
+	// separate from effect B below so a preselect-write doesn't also re-fire the
+	// fetch-triggering effect a second time in the same settle (each effect only
+	// reruns on an ACTUAL dependency value change, so splitting the write from
+	// the read-and-fetch keeps loadPrerequisites to exactly one call per db).
 	$effect(() => {
-		if (!db) {
+		if (availableDbs.length === 0) {
 			status = 'no-collective';
+			dbId = '';
+			orgId = '';
+			hasShownForm = false;
 			return;
 		}
-		void loadPrerequisites(db);
+		if (dbId === '' && availableDbs.length === 1) {
+			dbId = availableDbs[0].db; // sole database preselected, select still rendered
+		}
+	});
+
+	// EFFECT B — react to the resolved dbId: load its prerequisites, or (multiple
+	// databases, none chosen yet) show the picker with submit disabled.
+	$effect(() => {
+		if (availableDbs.length === 0) return; // effect A already set no-collective
+		if (dbId) {
+			void loadPrerequisites(dbId);
+		} else {
+			status = 'ready';
+			hasShownForm = true;
+		}
 	});
 
 	async function submit(): Promise<void> {
-		if (!db || !canSubmit || status === 'creating') return;
+		if (!dbId || !canSubmit || status === 'creating') return;
 		const token = getToken();
 		if (!token) {
 			console.error('admin/invite: no auth token in storage on a protected route');
@@ -97,7 +145,7 @@
 		status = 'creating';
 		createError = null;
 		try {
-			const result = await createInvite({ db, token }, { orgId });
+			const result = await createInvite({ db: dbId, token }, { orgId });
 			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
 			// The shown expiry is the minted token's OWN exp — never an assumed +7d.
 			const parsed = parseInviteToken(result.inviteToken, Date.now());
@@ -163,7 +211,7 @@
 					type="button"
 					data-testid="invite-admin-retry-load"
 					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-					onclick={() => db && loadPrerequisites(db)}
+					onclick={() => dbId && loadPrerequisites(dbId)}
 				>
 					{m.admin_invite_retry_load()}
 				</button>
@@ -218,14 +266,24 @@
 			{/if}
 			<div class="flex flex-col gap-3">
 				<label class="flex flex-col gap-1 text-sm">
-					{m.admin_invite_org_label()}
+					{m.admin_invite_db_label()}
 					<select
-						data-testid="invite-org"
-						bind:value={orgId}
+						data-testid="invite-db"
+						value={dbId}
+						onchange={(e) => (dbId = e.currentTarget.value)}
 						class="rounded-md border border-ink px-3 py-2 text-sm"
 					>
-						{#each orgs as org (org._id)}
-							<option value={org._id}>{org.name}</option>
+						<!-- Explicit empty-value option, ALWAYS present (not `{#if}`-gated) so
+						     the option SET never changes shape mid-interaction: a native
+						     <select> silently defaults its DOM selection to the FIRST real
+						     option whenever '' has no matching option, fighting the '' state
+						     (the multi-collective "none chosen yet" case). One-way `value=` +
+						     explicit `onchange` (not `bind:value`) — `bind:value`'s own
+						     controlled-select sync effect raced this page's async prerequisite
+						     effect in testing, landing on the wrong option. -->
+						<option value="" disabled hidden>—</option>
+						{#each availableDbs as c (c.db)}
+							<option value={c.db}>{c.name}</option>
 						{/each}
 					</select>
 				</label>

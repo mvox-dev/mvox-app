@@ -29,7 +29,7 @@ export const INVITE_MINT_TRIGGER = 'trigger invite token';
 export type InviteCreatePhase =
 	| 'type-resolve'
 	| 'person-parent-resolve'
-	| 'org-list'
+	| 'org-resolve'
 	| 'person-create'
 	| 'invite-mint'
 	| 'editor-grant'
@@ -53,11 +53,6 @@ export class InviteCreateError extends Error {
 		this.reason = opts.reason;
 		this.personId = opts.personId;
 	}
-}
-
-export interface OrgOption {
-	_id: string;
-	name: string;
 }
 
 export interface CreateInviteInput {
@@ -119,52 +114,57 @@ export async function resolvePersonParentId(
 	return entity._id;
 }
 
-/** List every organization entity in the db — polyphony verifiably has several. */
-export async function listOrganizations(
+/**
+ * Resolve the invite target org: the SOLE organization entity a member gets
+ * created under, within the given db. Mirrors `resolvePersonParentId`'s single-
+ * resolve shape — NOT an enumeration.
+ *
+ * #67 (Mihkel ruling, 2026-08-08): the invite picker enumerates DATABASES, not
+ * organization entities. polyphony verifiably carries 6 `organization` entities
+ * (EFK + 5 unreferenced v4E-era legacy, #41 inventory) — offering all 6 in a
+ * select misrepresented five ghosts as real invite targets. This resolves the
+ * SAME `limit=1` "first organization" that `adminStore.ts`'s own admin-rights
+ * check (`resolveAdmin`) already treats as canonical, rather than listing every
+ * org entity for a user-facing choice that never should have existed. Disposal
+ * of the 5 legacy entities stays on #37 — out of scope here.
+ */
+export async function resolveOrgId(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
-): Promise<OrgOption[]> {
-	// Explicit generous limit (sibling pattern: listSeasons' 200) — an omitted
-	// limit silently caps the page at the server default of 100 (entu-api
-	// routes/[db]/entity/index.get.js:494), and a truncated org select would hide
-	// options with a 2xx.
+): Promise<string> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=organization&props=name&limit=200',
+		'entity?_type.string=organization&limit=1',
 		cfg.token,
 		{},
 		fetchImpl
 	);
 	if (!res.ok) {
-		throw new InviteCreateError(`listing organization entities failed: HTTP ${res.status}`, {
-			phase: 'org-list',
+		throw new InviteCreateError(`resolving the invite org failed: HTTP ${res.status}`, {
+			phase: 'org-resolve',
 			reason: 'http'
 		});
 	}
 	const body = (await res.json()) as {
-		count?: number;
-		entities?: Array<{ _id: string; name?: Array<{ string?: string }> }>;
+		entities?: Array<{ _id?: string }>;
 	};
-	const orgs = (body.entities ?? []).map((e) => ({
-		_id: e._id,
-		name: e.name?.[0]?.string ?? e._id
-	}));
-	// FAIL-LOUD on truncation: `count` is the total match count computed without
-	// limit/skip (index.get.js:662) — more matches than returned entities means the
-	// select would silently omit organizations.
-	if (typeof body.count === 'number' && body.count > orgs.length) {
-		throw new InviteCreateError(
-			`organization list truncated: ${body.count} organization entities exist but only ${orgs.length} were returned — raise the limit; a silently incomplete select is never shown`,
-			{ phase: 'org-list', reason: 'contract' }
-		);
-	}
-	if (orgs.length === 0) {
+	const entity = body.entities?.[0];
+	if (!entity) {
 		throw new InviteCreateError(
 			`no organization entity is readable in db '${cfg.db}' — the member needs an organization parent`,
-			{ phase: 'org-list', reason: 'not-visible' }
+			{ phase: 'org-resolve', reason: 'not-visible' }
 		);
 	}
-	return orgs;
+	// A 2xx that read back an entity without an `_id` is a contract violation
+	// (apparent-success trap) — fail loud rather than POST a member with an
+	// empty `_parent`.
+	if (!entity._id) {
+		throw new InviteCreateError(
+			'the organization entity read back without an _id — cannot resolve the invite org',
+			{ phase: 'org-resolve', reason: 'contract' }
+		);
+	}
+	return entity._id;
 }
 
 /**

@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 //
-// T4.5/#31 — the admin invite surface at /admin/invite. Contract:
-// - no selected collective → no-collective message
+// T4.5/#31, #67 — the admin invite surface at /admin/invite. Contract:
+// - no available collective → no-collective message
 // - prerequisite load: not-visible → no-access (labeled heuristic); ANY other
 //   failure → load-error + retry. Network errors are NEVER presented as
 //   "not admin".
-// - ready → org select only (#36 — no name/email fields); a sole org
-//   preselects and submit is immediately enabled; multiple orgs require a
-//   manual pick before submit enables
+// - ready → DATABASE (collective) select only (#67 — no organization-entity
+//   enumeration remains in the invite path; the member's org-entity parent is
+//   resolved internally, never picked); a sole collective preselects and
+//   submit is immediately enabled once its prerequisites resolve; multiple
+//   collectives require a manual pick before submit enables
 // - done → show-ONCE invite link + always-visible bearer warning; the token
 //   never touches localStorage/sessionStorage
 // - create-error → verbatim phased error; a personId-carrying error additionally
@@ -22,7 +24,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
 		admin_invite_load_error: () => 'Could not load invite prerequisites.',
 		admin_invite_retry_load: () => 'Retry',
-		admin_invite_org_label: () => 'Organization',
+		admin_invite_db_label: () => 'Collective',
 		admin_invite_submit: () => 'Create invite',
 		admin_invite_creating: () => 'Creating…',
 		admin_invite_link_label: () => 'Invite link',
@@ -57,14 +59,14 @@ const h = vi.hoisted(() => {
 	return {
 		InviteCreateError,
 		resolveParentMock: vi.fn(),
-		listOrgsMock: vi.fn(),
+		resolveOrgMock: vi.fn(),
 		createInviteMock: vi.fn()
 	};
 });
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
-	listOrganizations: h.listOrgsMock,
+	resolveOrgId: h.resolveOrgMock,
 	createInvite: h.createInviteMock
 }));
 // Sever the $env chain the collectives store pulls in (discover → marker →
@@ -75,11 +77,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 
 import Page from './admin/invite/+page.svelte';
 import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -101,9 +99,23 @@ function selectPolyphony() {
 	selectedCollectiveDbStore.set('polyphony');
 }
 
+function selectTwoCollectives() {
+	setToken('jwt-admin');
+	collectiveState.set({
+		status: 'ready',
+		collectives: [
+			{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' },
+			{ db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }
+		],
+		erroredDbs: []
+	});
+	urlCollectiveDbStore.set(null);
+	selectedCollectiveDbStore.set(null);
+}
+
 function loadOk() {
 	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.listOrgsMock.mockResolvedValue([{ _id: 'org-1', name: 'EFK' }]);
+	h.resolveOrgMock.mockResolvedValue('org-1');
 }
 
 async function submitForm(container: HTMLElement) {
@@ -115,7 +127,7 @@ async function submitForm(container: HTMLElement) {
 
 beforeEach(() => {
 	h.resolveParentMock.mockReset();
-	h.listOrgsMock.mockReset();
+	h.resolveOrgMock.mockReset();
 	h.createInviteMock.mockReset();
 });
 
@@ -128,12 +140,14 @@ afterEach(() => {
 });
 
 describe('/admin/invite — prerequisites', () => {
-	it('without a selected collective shows the no-collective state (no form, no data calls)', async () => {
+	it('without an available collective shows the no-collective state (no form, no data calls)', async () => {
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-no-collective"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="invite-org"]')).toBeNull();
+		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
+		expect(h.resolveParentMock).not.toHaveBeenCalled();
+		expect(h.resolveOrgMock).not.toHaveBeenCalled();
 	});
 
 	it("a not-visible prerequisite → the no-access state (a labeled heuristic — the authoritative gate is Entu's create POST)", async () => {
@@ -144,14 +158,31 @@ describe('/admin/invite — prerequisites', () => {
 				reason: 'not-visible'
 			})
 		);
-		h.listOrgsMock.mockResolvedValue([{ _id: 'org-1', name: 'EFK' }]);
+		h.resolveOrgMock.mockResolvedValue('org-1');
 
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="invite-admin-no-access"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="invite-org"]')).toBeNull();
+		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
 		expect(container.querySelector('[data-testid="invite-admin-load-error"]')).toBeNull();
+	});
+
+	it("a not-visible org resolution → the no-access state too (#67 — resolveOrgId replaces listOrganizations as the org-parent source)", async () => {
+		selectPolyphony();
+		h.resolveParentMock.mockResolvedValue('parent-1');
+		h.resolveOrgMock.mockRejectedValue(
+			new h.InviteCreateError('no organization entity is readable', {
+				phase: 'org-resolve',
+				reason: 'not-visible'
+			})
+		);
+
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="invite-admin-no-access"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
 	});
 
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
@@ -160,7 +191,7 @@ describe('/admin/invite — prerequisites', () => {
 		h.resolveParentMock.mockRejectedValue(
 			new h.InviteCreateError('resolve failed: 500', { phase: 'person-parent-resolve', reason: 'http' })
 		);
-		h.listOrgsMock.mockResolvedValue([{ _id: 'org-1', name: 'EFK' }]);
+		h.resolveOrgMock.mockResolvedValue('org-1');
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -188,7 +219,7 @@ describe('/admin/invite — prerequisites', () => {
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-org"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="invite-db"]')).not.toBeNull();
 		});
 
 		consoleSpy.mockRestore();
@@ -196,7 +227,7 @@ describe('/admin/invite — prerequisites', () => {
 });
 
 describe('/admin/invite — ready form', () => {
-	it('preselects a sole organization (select still rendered) and submit is immediately enabled — no other fields', async () => {
+	it('preselects a sole collective (database select still rendered) and submit is immediately enabled once prerequisites resolve — no organization-entity picker', async () => {
 		selectPolyphony();
 		loadOk();
 
@@ -205,45 +236,55 @@ describe('/admin/invite — ready form', () => {
 			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
 		});
 
-		const select = container.querySelector('[data-testid="invite-org"]') as HTMLSelectElement;
-		expect(select.value).toBe('org-1'); // sole org preselected (select still rendered)
+		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
+		expect(select.value).toBe('polyphony'); // sole collective preselected (select still rendered)
+		// Explicit empty placeholder option + the one real collective.
+		expect(select.options.length).toBe(2);
 
 		const submit = container.querySelector(
 			'[data-testid="invite-admin-submit"]'
 		) as HTMLButtonElement;
-		expect(submit.disabled).toBe(false); // orgId is the only requirement, already set
+		await waitFor(() => {
+			expect(submit.disabled).toBe(false); // db chosen + org resolved internally
+		});
+
+		// #67 — the org-entity resolve happened ONCE, internally, never as a list
+		// the admin picks from.
+		expect(h.resolveOrgMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('with multiple organizations, nothing is preselected and submit stays disabled until one is picked', async () => {
-		selectPolyphony();
-		h.resolveParentMock.mockResolvedValue('parent-1');
-		h.listOrgsMock.mockResolvedValue([
-			{ _id: 'org-1', name: 'EFK' },
-			{ _id: 'org-2', name: 'RAM' }
-		]);
+	it('with multiple collectives, nothing is preselected and submit stays disabled until one is picked — picking one resolves its org internally', async () => {
+		selectTwoCollectives();
+		loadOk();
 
 		const { container } = render(Page);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="invite-db"]')).not.toBeNull();
 		});
 
-		const select = container.querySelector('[data-testid="invite-org"]') as HTMLSelectElement;
+		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
 		expect(select.value).toBe('');
+		// Explicit empty placeholder option + the two real collectives.
+		expect(select.options.length).toBe(3);
 
 		const submit = container.querySelector(
 			'[data-testid="invite-admin-submit"]'
 		) as HTMLButtonElement;
 		expect(submit.disabled).toBe(true);
+		expect(h.resolveOrgMock).not.toHaveBeenCalled(); // no fetch until a db is chosen
 
-		await fireEvent.change(select, { target: { value: 'org-2' } });
+		await fireEvent.change(select, { target: { value: 'ramkoor' } });
 		await waitFor(() => {
 			expect(submit.disabled).toBe(false);
 		});
+		expect(h.resolveParentMock).toHaveBeenCalledWith(
+			expect.objectContaining({ db: 'ramkoor', token: 'jwt-admin' })
+		);
 	});
 });
 
 describe('/admin/invite — done (show-once link)', () => {
-	it('calls createInvite with the selected cfg + form input, shows the link + always-visible bearer warning, and the token NEVER touches storage', async () => {
+	it('calls createInvite with the selected db + the internally-resolved org, shows the link + always-visible bearer warning, and the token NEVER touches storage', async () => {
 		selectPolyphony();
 		loadOk();
 		h.createInviteMock.mockResolvedValue({
@@ -254,7 +295,10 @@ describe('/admin/invite — done (show-once link)', () => {
 
 		const { container } = render(Page);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
+			const submit = container.querySelector(
+				'[data-testid="invite-admin-submit"]'
+			) as HTMLButtonElement | null;
+			expect(submit && !submit.disabled).toBe(true);
 		});
 		await submitForm(container);
 
@@ -262,10 +306,11 @@ describe('/admin/invite — done (show-once link)', () => {
 			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
 		});
 
-		// The data layer was driven with the selected collective + the sole
-		// preselected org. #34/#36 — neither the invitee's email nor a member
-		// name is ever collected or forwarded: the member carries no name and
-		// the invitee's real email never reaches Entu.
+		// The data layer was driven with the selected DATABASE (not an
+		// organization-entity id) + the internally-resolved org. #34/#36 —
+		// neither the invitee's email nor a member name is ever collected or
+		// forwarded: the member carries no name and the invitee's real email
+		// never reaches Entu.
 		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
 			{ orgId: string; email?: string; memberName?: string }
@@ -324,7 +369,10 @@ describe('/admin/invite — create-error', () => {
 
 		const { container } = render(Page);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
+			const submit = container.querySelector(
+				'[data-testid="invite-admin-submit"]'
+			) as HTMLButtonElement | null;
+			expect(submit && !submit.disabled).toBe(true);
 		});
 		await submitForm(container);
 
@@ -348,9 +396,9 @@ describe('/admin/invite — create-error', () => {
 		expect(partial).not.toBeNull();
 		expect(partial!.textContent).toContain('p1');
 
-		// Form value preserved for retry: the sole-org selection survives the error.
-		const select = container.querySelector('[data-testid="invite-org"]') as HTMLSelectElement;
-		expect(select.value).toBe('org-1');
+		// Form value preserved for retry: the sole-collective selection survives the error.
+		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
+		expect(select.value).toBe('polyphony');
 
 		consoleSpy.mockRestore();
 	});
@@ -364,7 +412,10 @@ describe('/admin/invite — create-error', () => {
 
 		const { container } = render(Page);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
+			const submit = container.querySelector(
+				'[data-testid="invite-admin-submit"]'
+			) as HTMLButtonElement | null;
+			expect(submit && !submit.disabled).toBe(true);
 		});
 		await submitForm(container);
 
