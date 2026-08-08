@@ -244,6 +244,14 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #46 orphan-115-disposition COMPLETE (2026-08-08) — Phase C live, 115/115 hidden
+
+Phase B skipped (0 delete candidates, structural — see dry-run entry below). Phase C executed after
+Bentham GREEN + explicit "I authorize Phase C": all 115 orphan members' `_sharing` domain→private,
+zero failures, all read-back-confirmed. #46 disposition is DONE. Hidden-rows eventual disposition
+(archive/export/delete) stays PARKED for Mihkel, no timeline. Artifact:
+`seed-results/orphan-115-disposition-2026-08-08-phaseC-live-2026-08-08T04-29-17-136Z.json`.
+
 ## #46 orphan-115-disposition DRY-RUN (2026-08-08) — Phase B mechanically EMPTY
 
 Phase A (loose-match, always read-only): 18 exact, **0 loose** — normalizing case/diacritics/
