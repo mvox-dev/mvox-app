@@ -250,6 +250,31 @@ Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu doma
 18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
 `seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
 
+## Single-tree collision, held correctly (2026-08-08) — T5.2/#52 active on feat/52-nav-shell
+
+Mid-#53-dispatch, `git branch --show-current` showed `feat/52-nav-shell` instead of `main` (8 agents
+running a nav-shell workflow, i18n files mid-edit). Halted BOTH #53 (irreversible) and #45 step3
+immediately, reported branch+status+recent-log evidence twice (escalating uncommitted-file count
+was the tell), did not switch/stash/work around. Team-lead confirmed: correct call, hold until
+squash-merge. This is the pattern to repeat — branch check before EVERY commit is not decorative.
+
+## #53 delete-corroborated-orphans LIVE (2026-08-08) — 7/7 deleted, disposition complete
+
+Executed after tree returned to main (confirmed clean before running). All 7 read-back-confirmed 404,
+zero failures. Orphan-115 disposition fully closed: 7 deleted, 108 hidden (97 without-twin + 11
+uncorroborated), 0 domain-visible. Artifact:
+`seed-results/delete-corroborated-orphans-2026-08-08-live-2026-08-08T05-08-52-354Z.json`.
+
+## #45 D2 complete (2026-08-08) — step2 verified + step3 live, script fix along the way
+
+Specimen confirmed 404 (Mihkel's direct delete). Step 3: 4 prop-defs + application TYPE entity
+deleted, 5/5, zero failures — NOT Mihkel-owned (Gama's cautioned stop-at-seam scenario didn't fire).
+**Fixed a real script bug**: `verifyAllTargets` unconditionally re-checked all 4 D2/D5 targets even
+though steps 1/2/4 had already landed (their entities correctly gone, not drift) — added
+`verifyStep3Only` (checks only the application type + live instance count) rather than loosening the
+shared function's contract used by dry-run/other steps. D2+D5 both fully complete now. Artifact:
+`seed-results/retire-application-probe-bulletin-2026-08-08-step3-live-2026-08-08T05-10-53-704Z.json`.
+
 ## #53 delete-corroborated-orphans DRY-RUN (2026-08-08) — 7/7 pass, 0 writes
 
 Loads the 7 corroborated ids DIRECTLY from the committed #46 corrected-comparison artifact (not
