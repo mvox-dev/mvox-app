@@ -29,6 +29,18 @@
 		return activeRoute.startsWith(route);
 	}
 
+	let railSide = $state<'left' | 'right'>('left');
+
+	$effect(() => {
+		function update() {
+			if (!screen.orientation) { railSide = 'left'; return; }
+			railSide = screen.orientation.type === 'landscape-secondary' ? 'right' : 'left';
+		}
+		update();
+		screen.orientation?.addEventListener('change', update);
+		return () => screen.orientation?.removeEventListener('change', update);
+	});
+
 	function handleKeydown(e: KeyboardEvent): void {
 		const nav = (e.currentTarget as HTMLElement);
 		const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a:not([tabindex="-1"])'));
@@ -49,7 +61,7 @@
 </script>
 
 {#if !anonymous && visibleEntries.length > 0}
-	<div class="nav-shell">
+	<div class="nav-shell" class:rail-right={railSide === 'right'}>
 		<nav
 			role="navigation"
 			aria-label="Main navigation"
@@ -214,6 +226,38 @@
 		.nav-label {
 			max-width: 3.5rem;
 			font-size: 0.5rem;
+		}
+	}
+
+	/* ── sm: Rail on RIGHT (CCW rotation, notch on left) ── */
+	@media (min-width: 640px) and (max-width: 1023.98px) {
+		.nav-shell.rail-right {
+			flex-direction: row-reverse;
+		}
+
+		.nav-shell.rail-right .nav-bar {
+			border-right: none;
+			border-left: 1px solid var(--color-paper-3);
+			padding-left: 0;
+			padding-right: env(safe-area-inset-right, 0px);
+		}
+
+		.nav-shell.rail-right .nav-content {
+			padding-left: env(safe-area-inset-left, 0px);
+			padding-right: 0;
+		}
+
+		.nav-shell.rail-right .nav-entry {
+			border-radius: 0 0.5rem 0.5rem 0;
+			margin-left: 0;
+			margin-right: 0.25rem;
+		}
+
+		.nav-shell.rail-right .nav-entry--active {
+			margin-left: -1px;
+			margin-right: 0.25rem;
+			border-left: 1px solid var(--color-paper);
+			border-right: none;
 		}
 	}
 
