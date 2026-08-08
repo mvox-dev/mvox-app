@@ -1,0 +1,16 @@
+{
+  "entities": [
+    {
+      "_id": "69c7f8718489bfcb0e81b05a",
+      "name": [
+        {
+          "_id": "6a0d488990c8df7a1cc7e0e1",
+          "string": "Eesti Kammerkooride Liit"
+        }
+      ]
+    }
+  ],
+  "count": 6,
+  "limit": 1,
+  "skip": 0
+}

@@ -224,6 +224,22 @@ never went live (Mihkel: superseded).
 fix executed 245/245, 0 failures, independently re-verified. Left 3 near-duplicate dry-run artifacts
 mid-fix, caused a review mix-up — captured as the artifact-hygiene habit above.
 
+## #68 db-root _owner backfill — Phase 1 inventory (2026-08-09)
+
+Full-db sweep (1444 entities, every registered type incl. system types) via
+`_type.reference=<id>` looped over every row from the `entity` meta-type
+registry — one loop covers content instances + prop-defs + type-defs +
+menu/plugin rows + the db entity itself, no type left uncovered. 72 flagged
+(not db-root-owned), three cohorts: **(1) 58 schema/meta entities** (db entity
++ 5 type-defs + 52 prop-defs) owned by the **database entity itself**
+(self-referential platform bootstrap root) — new finding, distinct mechanism
+from the known real-OAuth gap; **(2) 11 owned by Mihkel's real-OAuth person**
+`6a2fc05e...5ddc` (the person itself + 10 `rsvp` rows) — matches the
+pre-existing #44/#45-class gap; **(3) 3 `profile` entities with NO owner at
+all** (empty `_owner`). Artifact:
+`seed-results/probe-68-db-root-owner-inventory-2026-08-08T21-49-01-000Z.json`,
+commit `e677bbb`. Phase 2 (add-only backfill) awaits review + authorization.
+
 ## Entu meta-schema ids (verified 2026-08-08, #41)
 
 Prop-def entities (per-type field declarations) are `_type.reference`'d to the **"property"**
