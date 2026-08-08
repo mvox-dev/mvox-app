@@ -1,0 +1,3048 @@
+{
+  "dryRun": true,
+  "propDefTargets": [
+    {
+      "type": "work",
+      "name": "name",
+      "id": "69c7ea4d8489bfcb0e819f45",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "work",
+      "name": "composer",
+      "id": "69c7ea4d8489bfcb0e819f51",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "edition",
+      "name": "name",
+      "id": "69c7ea4f8489bfcb0e819fa3",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "edition",
+      "name": "publisher",
+      "id": "69c7ea4f8489bfcb0e819fce",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "copy",
+      "name": "name",
+      "id": "6a0d2e8190c8df7a1cc7ddb9",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "copy",
+      "name": "copy_number",
+      "id": "6a0d2e8190c8df7a1cc7ddc3",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "member",
+      "id": "6a0d2e8290c8df7a1cc7de05",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "assigned_at",
+      "id": "6a0d2e8290c8df7a1cc7de0f",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "copy",
+      "id": "6a0d2e8190c8df7a1cc7ddfb",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "assigned_until",
+      "id": "6a0d2e8290c8df7a1cc7de19",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "lending",
+      "name": "returned_at",
+      "id": "6a0d2e8290c8df7a1cc7de22",
+      "action": "widen",
+      "currentSharing": "(absent)",
+      "sharingValueId": null
+    },
+    {
+      "type": "edition",
+      "name": "cost",
+      "id": "6a0d2e8990c8df7a1cc7e072",
+      "action": "narrow",
+      "currentSharing": "domain",
+      "sharingValueId": "6a0d2e8990c8df7a1cc7e078"
+    }
+  ],
+  "instancePopulation": {
+    "countsByType": {
+      "work": 13,
+      "edition": 17,
+      "copy": 552,
+      "lending": 4
+    },
+    "tierHistogram": {
+      "private": 586
+    },
+    "missingSharingIds": [],
+    "nonDbRootOwned": []
+  },
+  "instanceIds": [
+    {
+      "type": "work",
+      "id": "6a12036e4ff8277cd4306bb5",
+      "sharingValueId": "6a12036e4ff8277cd4306bb8"
+    },
+    {
+      "type": "work",
+      "id": "6a1203714ff8277cd4306c66",
+      "sharingValueId": "6a1203714ff8277cd4306c69"
+    },
+    {
+      "type": "work",
+      "id": "6a12037a4ff8277cd4306e45",
+      "sharingValueId": "6a12037a4ff8277cd4306e48"
+    },
+    {
+      "type": "work",
+      "id": "6a1203864ff8277cd43070cb",
+      "sharingValueId": "6a1203864ff8277cd43070ce"
+    },
+    {
+      "type": "work",
+      "id": "6a12038d4ff8277cd430725c",
+      "sharingValueId": "6a12038d4ff8277cd430725f"
+    },
+    {
+      "type": "work",
+      "id": "6a1203954ff8277cd4307435",
+      "sharingValueId": "6a1203954ff8277cd4307438"
+    },
+    {
+      "type": "work",
+      "id": "6a1203994ff8277cd430754c",
+      "sharingValueId": "6a1203994ff8277cd430754f"
+    },
+    {
+      "type": "work",
+      "id": "6a1203a04ff8277cd43076e1",
+      "sharingValueId": "6a1203a04ff8277cd43076e4"
+    },
+    {
+      "type": "work",
+      "id": "6a1203a94ff8277cd43078d7",
+      "sharingValueId": "6a1203a94ff8277cd43078da"
+    },
+    {
+      "type": "work",
+      "id": "6a1203ad4ff8277cd43079ae",
+      "sharingValueId": "6a1203ad4ff8277cd43079b1"
+    },
+    {
+      "type": "work",
+      "id": "6a1203ad4ff8277cd43079c5",
+      "sharingValueId": "6a1203ad4ff8277cd43079c8"
+    },
+    {
+      "type": "work",
+      "id": "6a1203b54ff8277cd4307b9a",
+      "sharingValueId": "6a1203b54ff8277cd4307b9d"
+    },
+    {
+      "type": "work",
+      "id": "6a1203bc4ff8277cd4307d3f",
+      "sharingValueId": "6a1203bc4ff8277cd4307d42"
+    },
+    {
+      "type": "edition",
+      "id": "6a12036e4ff8277cd4306bc0",
+      "sharingValueId": "6a12036e4ff8277cd4306bc3"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203704ff8277cd4306c2b",
+      "sharingValueId": "6a1203704ff8277cd4306c2e"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203714ff8277cd4306c72",
+      "sharingValueId": "6a1203714ff8277cd4306c75"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203764ff8277cd4306d6e",
+      "sharingValueId": "6a1203764ff8277cd4306d71"
+    },
+    {
+      "type": "edition",
+      "id": "6a12037a4ff8277cd4306e39",
+      "sharingValueId": "6a12037a4ff8277cd4306e3c"
+    },
+    {
+      "type": "edition",
+      "id": "6a12037b4ff8277cd4306e50",
+      "sharingValueId": "6a12037b4ff8277cd4306e53"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203834ff8277cd4307030",
+      "sharingValueId": "6a1203834ff8277cd4307033"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203864ff8277cd43070d7",
+      "sharingValueId": "6a1203864ff8277cd43070da"
+    },
+    {
+      "type": "edition",
+      "id": "6a12038d4ff8277cd4307267",
+      "sharingValueId": "6a12038d4ff8277cd430726a"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203954ff8277cd4307441",
+      "sharingValueId": "6a1203954ff8277cd4307444"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203994ff8277cd4307556",
+      "sharingValueId": "6a1203994ff8277cd4307559"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203a04ff8277cd43076ec",
+      "sharingValueId": "6a1203a04ff8277cd43076ef"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203a94ff8277cd43078e3",
+      "sharingValueId": "6a1203a94ff8277cd43078e6"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203ad4ff8277cd43079b9",
+      "sharingValueId": "6a1203ad4ff8277cd43079bc"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203ad4ff8277cd43079cf",
+      "sharingValueId": "6a1203ad4ff8277cd43079d2"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203b54ff8277cd4307ba4",
+      "sharingValueId": "6a1203b54ff8277cd4307ba7"
+    },
+    {
+      "type": "edition",
+      "id": "6a1203bc4ff8277cd4307d4a",
+      "sharingValueId": "6a1203bc4ff8277cd4307d4d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036e4ff8277cd4306bcb",
+      "sharingValueId": "6a12036f4ff8277cd4306bce"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bd3",
+      "sharingValueId": "6a12036f4ff8277cd4306bd6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bdb",
+      "sharingValueId": "6a12036f4ff8277cd4306bde"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306be3",
+      "sharingValueId": "6a12036f4ff8277cd4306be6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306beb",
+      "sharingValueId": "6a12036f4ff8277cd4306bee"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bf3",
+      "sharingValueId": "6a12036f4ff8277cd4306bf6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12036f4ff8277cd4306bfb",
+      "sharingValueId": "6a12036f4ff8277cd4306bfe"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c03",
+      "sharingValueId": "6a1203704ff8277cd4306c06"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c0b",
+      "sharingValueId": "6a1203704ff8277cd4306c0e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c13",
+      "sharingValueId": "6a1203704ff8277cd4306c16"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c1b",
+      "sharingValueId": "6a1203704ff8277cd4306c1e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c23",
+      "sharingValueId": "6a1203704ff8277cd4306c26"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203704ff8277cd4306c36",
+      "sharingValueId": "6a1203704ff8277cd4306c39"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c3e",
+      "sharingValueId": "6a1203714ff8277cd4306c41"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c46",
+      "sharingValueId": "6a1203714ff8277cd4306c49"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c4e",
+      "sharingValueId": "6a1203714ff8277cd4306c51"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c56",
+      "sharingValueId": "6a1203714ff8277cd4306c59"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c5e",
+      "sharingValueId": "6a1203714ff8277cd4306c61"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203714ff8277cd4306c7e",
+      "sharingValueId": "6a1203714ff8277cd4306c81"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c86",
+      "sharingValueId": "6a1203724ff8277cd4306c89"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c8e",
+      "sharingValueId": "6a1203724ff8277cd4306c91"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c96",
+      "sharingValueId": "6a1203724ff8277cd4306c99"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306c9e",
+      "sharingValueId": "6a1203724ff8277cd4306ca1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306ca6",
+      "sharingValueId": "6a1203724ff8277cd4306ca9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306cae",
+      "sharingValueId": "6a1203724ff8277cd4306cb1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306cb6",
+      "sharingValueId": "6a1203724ff8277cd4306cb9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203724ff8277cd4306cbe",
+      "sharingValueId": "6a1203724ff8277cd4306cc1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cc6",
+      "sharingValueId": "6a1203734ff8277cd4306cc9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cce",
+      "sharingValueId": "6a1203734ff8277cd4306cd1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cd6",
+      "sharingValueId": "6a1203734ff8277cd4306cd9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306cde",
+      "sharingValueId": "6a1203734ff8277cd4306ce1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203734ff8277cd4306ce6",
+      "sharingValueId": "6a1203734ff8277cd4306ce9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306cee",
+      "sharingValueId": "6a1203744ff8277cd4306cf1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306cf6",
+      "sharingValueId": "6a1203744ff8277cd4306cf9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306cfe",
+      "sharingValueId": "6a1203744ff8277cd4306d01"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306d06",
+      "sharingValueId": "6a1203744ff8277cd4306d09"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306d0e",
+      "sharingValueId": "6a1203744ff8277cd4306d11"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203744ff8277cd4306d16",
+      "sharingValueId": "6a1203744ff8277cd4306d19"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d1e",
+      "sharingValueId": "6a1203754ff8277cd4306d21"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d26",
+      "sharingValueId": "6a1203754ff8277cd4306d29"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d2e",
+      "sharingValueId": "6a1203754ff8277cd4306d31"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d36",
+      "sharingValueId": "6a1203754ff8277cd4306d39"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d3e",
+      "sharingValueId": "6a1203754ff8277cd4306d41"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d46",
+      "sharingValueId": "6a1203754ff8277cd4306d49"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203754ff8277cd4306d4e",
+      "sharingValueId": "6a1203764ff8277cd4306d51"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d56",
+      "sharingValueId": "6a1203764ff8277cd4306d59"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d5e",
+      "sharingValueId": "6a1203764ff8277cd4306d61"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d66",
+      "sharingValueId": "6a1203764ff8277cd4306d69"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d79",
+      "sharingValueId": "6a1203764ff8277cd4306d7c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d81",
+      "sharingValueId": "6a1203764ff8277cd4306d84"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203764ff8277cd4306d89",
+      "sharingValueId": "6a1203764ff8277cd4306d8c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306d91",
+      "sharingValueId": "6a1203774ff8277cd4306d94"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306d99",
+      "sharingValueId": "6a1203774ff8277cd4306d9c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306da1",
+      "sharingValueId": "6a1203774ff8277cd4306da4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306da9",
+      "sharingValueId": "6a1203774ff8277cd4306dac"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203774ff8277cd4306db1",
+      "sharingValueId": "6a1203774ff8277cd4306db4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306db9",
+      "sharingValueId": "6a1203784ff8277cd4306dbc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dc1",
+      "sharingValueId": "6a1203784ff8277cd4306dc4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dc9",
+      "sharingValueId": "6a1203784ff8277cd4306dcc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dd1",
+      "sharingValueId": "6a1203784ff8277cd4306dd4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203784ff8277cd4306dd9",
+      "sharingValueId": "6a1203784ff8277cd4306ddc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306de1",
+      "sharingValueId": "6a1203794ff8277cd4306de4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306de9",
+      "sharingValueId": "6a1203794ff8277cd4306dec"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306df1",
+      "sharingValueId": "6a1203794ff8277cd4306df4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306df9",
+      "sharingValueId": "6a1203794ff8277cd4306dfc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e01",
+      "sharingValueId": "6a1203794ff8277cd4306e04"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e09",
+      "sharingValueId": "6a1203794ff8277cd4306e0c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e11",
+      "sharingValueId": "6a1203794ff8277cd4306e14"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203794ff8277cd4306e19",
+      "sharingValueId": "6a1203794ff8277cd4306e1c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037a4ff8277cd4306e21",
+      "sharingValueId": "6a12037a4ff8277cd4306e24"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037a4ff8277cd4306e29",
+      "sharingValueId": "6a12037a4ff8277cd4306e2c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037a4ff8277cd4306e31",
+      "sharingValueId": "6a12037a4ff8277cd4306e34"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e5c",
+      "sharingValueId": "6a12037b4ff8277cd4306e5f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e65",
+      "sharingValueId": "6a12037b4ff8277cd4306e68"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e6e",
+      "sharingValueId": "6a12037b4ff8277cd4306e71"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e77",
+      "sharingValueId": "6a12037b4ff8277cd4306e7a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037b4ff8277cd4306e80",
+      "sharingValueId": "6a12037b4ff8277cd4306e83"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306e89",
+      "sharingValueId": "6a12037c4ff8277cd4306e8c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306e92",
+      "sharingValueId": "6a12037c4ff8277cd4306e95"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306e9b",
+      "sharingValueId": "6a12037c4ff8277cd4306e9e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306ea4",
+      "sharingValueId": "6a12037c4ff8277cd4306ea7"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306ead",
+      "sharingValueId": "6a12037c4ff8277cd4306eb0"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037c4ff8277cd4306eb6",
+      "sharingValueId": "6a12037c4ff8277cd4306eb9"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ebf",
+      "sharingValueId": "6a12037d4ff8277cd4306ec2"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ec8",
+      "sharingValueId": "6a12037d4ff8277cd4306ecb"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ed1",
+      "sharingValueId": "6a12037d4ff8277cd4306ed4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306eda",
+      "sharingValueId": "6a12037d4ff8277cd4306edd"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037d4ff8277cd4306ee3",
+      "sharingValueId": "6a12037d4ff8277cd4306ee6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306eec",
+      "sharingValueId": "6a12037e4ff8277cd4306eef"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306ef5",
+      "sharingValueId": "6a12037e4ff8277cd4306ef8"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306efe",
+      "sharingValueId": "6a12037e4ff8277cd4306f01"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f07",
+      "sharingValueId": "6a12037e4ff8277cd4306f0a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f10",
+      "sharingValueId": "6a12037e4ff8277cd4306f13"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f19",
+      "sharingValueId": "6a12037e4ff8277cd4306f1c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037e4ff8277cd4306f22",
+      "sharingValueId": "6a12037e4ff8277cd4306f25"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f2b",
+      "sharingValueId": "6a12037f4ff8277cd4306f2e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f34",
+      "sharingValueId": "6a12037f4ff8277cd4306f37"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f3d",
+      "sharingValueId": "6a12037f4ff8277cd4306f40"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f46",
+      "sharingValueId": "6a12037f4ff8277cd4306f49"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f4f",
+      "sharingValueId": "6a12037f4ff8277cd4306f52"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f58",
+      "sharingValueId": "6a12037f4ff8277cd4306f5b"
+    },
+    {
+      "type": "copy",
+      "id": "6a12037f4ff8277cd4306f61",
+      "sharingValueId": "6a12037f4ff8277cd4306f64"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f6a",
+      "sharingValueId": "6a1203804ff8277cd4306f6d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f73",
+      "sharingValueId": "6a1203804ff8277cd4306f76"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f7c",
+      "sharingValueId": "6a1203804ff8277cd4306f7f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f85",
+      "sharingValueId": "6a1203804ff8277cd4306f88"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203804ff8277cd4306f8e",
+      "sharingValueId": "6a1203804ff8277cd4306f91"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306f97",
+      "sharingValueId": "6a1203814ff8277cd4306f9a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fa0",
+      "sharingValueId": "6a1203814ff8277cd4306fa3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fa9",
+      "sharingValueId": "6a1203814ff8277cd4306fac"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fb2",
+      "sharingValueId": "6a1203814ff8277cd4306fb5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fbb",
+      "sharingValueId": "6a1203814ff8277cd4306fbe"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203814ff8277cd4306fc4",
+      "sharingValueId": "6a1203814ff8277cd4306fc7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fcd",
+      "sharingValueId": "6a1203824ff8277cd4306fd0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fd6",
+      "sharingValueId": "6a1203824ff8277cd4306fd9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fdf",
+      "sharingValueId": "6a1203824ff8277cd4306fe2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306fe8",
+      "sharingValueId": "6a1203824ff8277cd4306feb"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306ff1",
+      "sharingValueId": "6a1203824ff8277cd4306ff4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4306ffa",
+      "sharingValueId": "6a1203824ff8277cd4306ffd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203824ff8277cd4307003",
+      "sharingValueId": "6a1203834ff8277cd4307006"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd430700c",
+      "sharingValueId": "6a1203834ff8277cd430700f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd4307015",
+      "sharingValueId": "6a1203834ff8277cd4307018"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd430701e",
+      "sharingValueId": "6a1203834ff8277cd4307021"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd4307027",
+      "sharingValueId": "6a1203834ff8277cd430702a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd430703b",
+      "sharingValueId": "6a1203834ff8277cd430703e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203834ff8277cd4307043",
+      "sharingValueId": "6a1203834ff8277cd4307046"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd430704b",
+      "sharingValueId": "6a1203844ff8277cd430704e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd4307053",
+      "sharingValueId": "6a1203844ff8277cd4307056"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd430705b",
+      "sharingValueId": "6a1203844ff8277cd430705e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd4307063",
+      "sharingValueId": "6a1203844ff8277cd4307066"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203844ff8277cd430706b",
+      "sharingValueId": "6a1203844ff8277cd430706e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd4307073",
+      "sharingValueId": "6a1203854ff8277cd4307076"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd430707b",
+      "sharingValueId": "6a1203854ff8277cd430707e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd4307083",
+      "sharingValueId": "6a1203854ff8277cd4307086"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd430708b",
+      "sharingValueId": "6a1203854ff8277cd430708e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd4307093",
+      "sharingValueId": "6a1203854ff8277cd4307096"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203854ff8277cd430709b",
+      "sharingValueId": "6a1203854ff8277cd430709e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070a3",
+      "sharingValueId": "6a1203864ff8277cd43070a6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070ab",
+      "sharingValueId": "6a1203864ff8277cd43070ae"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070b3",
+      "sharingValueId": "6a1203864ff8277cd43070b6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070bb",
+      "sharingValueId": "6a1203864ff8277cd43070be"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070c3",
+      "sharingValueId": "6a1203864ff8277cd43070c6"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203864ff8277cd43070e2",
+      "sharingValueId": "6a1203864ff8277cd43070e5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd43070eb",
+      "sharingValueId": "6a1203874ff8277cd43070ee"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd43070f4",
+      "sharingValueId": "6a1203874ff8277cd43070f7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd43070fd",
+      "sharingValueId": "6a1203874ff8277cd4307100"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd4307106",
+      "sharingValueId": "6a1203874ff8277cd4307109"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd430710f",
+      "sharingValueId": "6a1203874ff8277cd4307112"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203874ff8277cd4307118",
+      "sharingValueId": "6a1203884ff8277cd430711b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd4307121",
+      "sharingValueId": "6a1203884ff8277cd4307124"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd430712a",
+      "sharingValueId": "6a1203884ff8277cd430712d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd4307133",
+      "sharingValueId": "6a1203884ff8277cd4307136"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd430713c",
+      "sharingValueId": "6a1203884ff8277cd430713f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd4307145",
+      "sharingValueId": "6a1203884ff8277cd4307148"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203884ff8277cd430714e",
+      "sharingValueId": "6a1203894ff8277cd4307151"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307157",
+      "sharingValueId": "6a1203894ff8277cd430715a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307160",
+      "sharingValueId": "6a1203894ff8277cd4307163"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307169",
+      "sharingValueId": "6a1203894ff8277cd430716c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd4307172",
+      "sharingValueId": "6a1203894ff8277cd4307175"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203894ff8277cd430717b",
+      "sharingValueId": "6a1203894ff8277cd430717e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd4307184",
+      "sharingValueId": "6a12038a4ff8277cd4307187"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd430718d",
+      "sharingValueId": "6a12038a4ff8277cd4307190"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd4307196",
+      "sharingValueId": "6a12038a4ff8277cd4307199"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd430719f",
+      "sharingValueId": "6a12038a4ff8277cd43071a2"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd43071a8",
+      "sharingValueId": "6a12038a4ff8277cd43071ab"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038a4ff8277cd43071b1",
+      "sharingValueId": "6a12038a4ff8277cd43071b4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071ba",
+      "sharingValueId": "6a12038b4ff8277cd43071bd"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071c3",
+      "sharingValueId": "6a12038b4ff8277cd43071c6"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071cc",
+      "sharingValueId": "6a12038b4ff8277cd43071cf"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071d5",
+      "sharingValueId": "6a12038b4ff8277cd43071d8"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071de",
+      "sharingValueId": "6a12038b4ff8277cd43071e1"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071e7",
+      "sharingValueId": "6a12038b4ff8277cd43071ea"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038b4ff8277cd43071f0",
+      "sharingValueId": "6a12038c4ff8277cd43071f3"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd43071f9",
+      "sharingValueId": "6a12038c4ff8277cd43071fc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307202",
+      "sharingValueId": "6a12038c4ff8277cd4307205"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd430720b",
+      "sharingValueId": "6a12038c4ff8277cd430720e"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307214",
+      "sharingValueId": "6a12038c4ff8277cd4307217"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd430721d",
+      "sharingValueId": "6a12038c4ff8277cd4307220"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307226",
+      "sharingValueId": "6a12038c4ff8277cd4307229"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd430722f",
+      "sharingValueId": "6a12038c4ff8277cd4307232"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307238",
+      "sharingValueId": "6a12038c4ff8277cd430723b"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038c4ff8277cd4307241",
+      "sharingValueId": "6a12038c4ff8277cd4307244"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd430724a",
+      "sharingValueId": "6a12038d4ff8277cd430724d"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd4307253",
+      "sharingValueId": "6a12038d4ff8277cd4307256"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd4307273",
+      "sharingValueId": "6a12038d4ff8277cd4307276"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd430727c",
+      "sharingValueId": "6a12038d4ff8277cd430727f"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038d4ff8277cd4307285",
+      "sharingValueId": "6a12038d4ff8277cd4307288"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd430728e",
+      "sharingValueId": "6a12038e4ff8277cd4307291"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd4307297",
+      "sharingValueId": "6a12038e4ff8277cd430729a"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072a0",
+      "sharingValueId": "6a12038e4ff8277cd43072a3"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072a9",
+      "sharingValueId": "6a12038e4ff8277cd43072ac"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072b2",
+      "sharingValueId": "6a12038e4ff8277cd43072b5"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072bb",
+      "sharingValueId": "6a12038e4ff8277cd43072be"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038e4ff8277cd43072c4",
+      "sharingValueId": "6a12038e4ff8277cd43072c7"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072cd",
+      "sharingValueId": "6a12038f4ff8277cd43072d0"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072d6",
+      "sharingValueId": "6a12038f4ff8277cd43072d9"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072df",
+      "sharingValueId": "6a12038f4ff8277cd43072e2"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072e8",
+      "sharingValueId": "6a12038f4ff8277cd43072eb"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072f1",
+      "sharingValueId": "6a12038f4ff8277cd43072f4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd43072fa",
+      "sharingValueId": "6a12038f4ff8277cd43072fd"
+    },
+    {
+      "type": "copy",
+      "id": "6a12038f4ff8277cd4307303",
+      "sharingValueId": "6a12038f4ff8277cd4307306"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd430730c",
+      "sharingValueId": "6a1203904ff8277cd430730f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307315",
+      "sharingValueId": "6a1203904ff8277cd4307318"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd430731e",
+      "sharingValueId": "6a1203904ff8277cd4307321"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307327",
+      "sharingValueId": "6a1203904ff8277cd430732a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307330",
+      "sharingValueId": "6a1203904ff8277cd4307333"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203904ff8277cd4307339",
+      "sharingValueId": "6a1203904ff8277cd430733c"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307342",
+      "sharingValueId": "6a1203914ff8277cd4307345"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd430734b",
+      "sharingValueId": "6a1203914ff8277cd430734e"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307354",
+      "sharingValueId": "6a1203914ff8277cd4307357"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd430735d",
+      "sharingValueId": "6a1203914ff8277cd4307360"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307366",
+      "sharingValueId": "6a1203914ff8277cd4307369"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd430736f",
+      "sharingValueId": "6a1203914ff8277cd4307372"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203914ff8277cd4307378",
+      "sharingValueId": "6a1203914ff8277cd430737b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd4307381",
+      "sharingValueId": "6a1203924ff8277cd4307384"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd430738a",
+      "sharingValueId": "6a1203924ff8277cd430738d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd4307393",
+      "sharingValueId": "6a1203924ff8277cd4307396"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd430739c",
+      "sharingValueId": "6a1203924ff8277cd430739f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd43073a5",
+      "sharingValueId": "6a1203924ff8277cd43073a8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd43073ae",
+      "sharingValueId": "6a1203924ff8277cd43073b1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203924ff8277cd43073b7",
+      "sharingValueId": "6a1203924ff8277cd43073ba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073c0",
+      "sharingValueId": "6a1203934ff8277cd43073c3"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073c9",
+      "sharingValueId": "6a1203934ff8277cd43073cc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073d2",
+      "sharingValueId": "6a1203934ff8277cd43073d5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073db",
+      "sharingValueId": "6a1203934ff8277cd43073de"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073e4",
+      "sharingValueId": "6a1203934ff8277cd43073e7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203934ff8277cd43073ed",
+      "sharingValueId": "6a1203934ff8277cd43073f0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd43073f6",
+      "sharingValueId": "6a1203944ff8277cd43073f9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd43073ff",
+      "sharingValueId": "6a1203944ff8277cd4307402"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd4307408",
+      "sharingValueId": "6a1203944ff8277cd430740b"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd4307411",
+      "sharingValueId": "6a1203944ff8277cd4307414"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd430741a",
+      "sharingValueId": "6a1203944ff8277cd430741d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd4307423",
+      "sharingValueId": "6a1203944ff8277cd4307426"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203944ff8277cd430742c",
+      "sharingValueId": "6a1203944ff8277cd430742f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430744c",
+      "sharingValueId": "6a1203954ff8277cd430744f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307454",
+      "sharingValueId": "6a1203954ff8277cd4307457"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430745c",
+      "sharingValueId": "6a1203954ff8277cd430745f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307464",
+      "sharingValueId": "6a1203954ff8277cd4307467"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430746c",
+      "sharingValueId": "6a1203954ff8277cd430746f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307474",
+      "sharingValueId": "6a1203954ff8277cd4307477"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd430747c",
+      "sharingValueId": "6a1203954ff8277cd430747f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203954ff8277cd4307484",
+      "sharingValueId": "6a1203954ff8277cd4307487"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd430748c",
+      "sharingValueId": "6a1203964ff8277cd430748f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd4307494",
+      "sharingValueId": "6a1203964ff8277cd4307497"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd430749c",
+      "sharingValueId": "6a1203964ff8277cd430749f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074a4",
+      "sharingValueId": "6a1203964ff8277cd43074a7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074ac",
+      "sharingValueId": "6a1203964ff8277cd43074af"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074b4",
+      "sharingValueId": "6a1203964ff8277cd43074b7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203964ff8277cd43074bc",
+      "sharingValueId": "6a1203964ff8277cd43074bf"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074c4",
+      "sharingValueId": "6a1203974ff8277cd43074c7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074cc",
+      "sharingValueId": "6a1203974ff8277cd43074cf"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074d4",
+      "sharingValueId": "6a1203974ff8277cd43074d7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074dc",
+      "sharingValueId": "6a1203974ff8277cd43074df"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074e4",
+      "sharingValueId": "6a1203974ff8277cd43074e7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074ec",
+      "sharingValueId": "6a1203974ff8277cd43074ef"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203974ff8277cd43074f4",
+      "sharingValueId": "6a1203974ff8277cd43074f7"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd43074fc",
+      "sharingValueId": "6a1203984ff8277cd43074ff"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd4307504",
+      "sharingValueId": "6a1203984ff8277cd4307507"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd430750c",
+      "sharingValueId": "6a1203984ff8277cd430750f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd4307514",
+      "sharingValueId": "6a1203984ff8277cd4307517"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd430751c",
+      "sharingValueId": "6a1203984ff8277cd430751f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203984ff8277cd4307524",
+      "sharingValueId": "6a1203984ff8277cd4307527"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd430752c",
+      "sharingValueId": "6a1203994ff8277cd430752f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd4307534",
+      "sharingValueId": "6a1203994ff8277cd4307537"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd430753c",
+      "sharingValueId": "6a1203994ff8277cd430753f"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203994ff8277cd4307544",
+      "sharingValueId": "6a1203994ff8277cd4307547"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307561",
+      "sharingValueId": "6a12039a4ff8277cd4307564"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307569",
+      "sharingValueId": "6a12039a4ff8277cd430756c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307571",
+      "sharingValueId": "6a12039a4ff8277cd4307574"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307579",
+      "sharingValueId": "6a12039a4ff8277cd430757c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307581",
+      "sharingValueId": "6a12039a4ff8277cd4307584"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307589",
+      "sharingValueId": "6a12039a4ff8277cd430758c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039a4ff8277cd4307591",
+      "sharingValueId": "6a12039a4ff8277cd4307594"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd4307599",
+      "sharingValueId": "6a12039b4ff8277cd430759c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075a1",
+      "sharingValueId": "6a12039b4ff8277cd43075a4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075a9",
+      "sharingValueId": "6a12039b4ff8277cd43075ac"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075b1",
+      "sharingValueId": "6a12039b4ff8277cd43075b4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075b9",
+      "sharingValueId": "6a12039b4ff8277cd43075bc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075c1",
+      "sharingValueId": "6a12039b4ff8277cd43075c4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075c9",
+      "sharingValueId": "6a12039b4ff8277cd43075cc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039b4ff8277cd43075d1",
+      "sharingValueId": "6a12039b4ff8277cd43075d4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075d9",
+      "sharingValueId": "6a12039c4ff8277cd43075dc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075e1",
+      "sharingValueId": "6a12039c4ff8277cd43075e4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075e9",
+      "sharingValueId": "6a12039c4ff8277cd43075ec"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075f1",
+      "sharingValueId": "6a12039c4ff8277cd43075f4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd43075f9",
+      "sharingValueId": "6a12039c4ff8277cd43075fc"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd4307601",
+      "sharingValueId": "6a12039c4ff8277cd4307604"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039c4ff8277cd4307609",
+      "sharingValueId": "6a12039c4ff8277cd430760c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307611",
+      "sharingValueId": "6a12039d4ff8277cd4307614"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307619",
+      "sharingValueId": "6a12039d4ff8277cd430761c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307621",
+      "sharingValueId": "6a12039d4ff8277cd4307624"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307629",
+      "sharingValueId": "6a12039d4ff8277cd430762c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307631",
+      "sharingValueId": "6a12039d4ff8277cd4307634"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307639",
+      "sharingValueId": "6a12039d4ff8277cd430763c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039d4ff8277cd4307641",
+      "sharingValueId": "6a12039e4ff8277cd4307644"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307649",
+      "sharingValueId": "6a12039e4ff8277cd430764c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307651",
+      "sharingValueId": "6a12039e4ff8277cd4307654"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307659",
+      "sharingValueId": "6a12039e4ff8277cd430765c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307661",
+      "sharingValueId": "6a12039e4ff8277cd4307664"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307669",
+      "sharingValueId": "6a12039e4ff8277cd430766c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307671",
+      "sharingValueId": "6a12039e4ff8277cd4307674"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039e4ff8277cd4307679",
+      "sharingValueId": "6a12039e4ff8277cd430767c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307681",
+      "sharingValueId": "6a12039f4ff8277cd4307684"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307689",
+      "sharingValueId": "6a12039f4ff8277cd430768c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307691",
+      "sharingValueId": "6a12039f4ff8277cd4307694"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd4307699",
+      "sharingValueId": "6a12039f4ff8277cd430769c"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd43076a1",
+      "sharingValueId": "6a12039f4ff8277cd43076a4"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd43076a9",
+      "sharingValueId": "6a12039f4ff8277cd43076ac"
+    },
+    {
+      "type": "copy",
+      "id": "6a12039f4ff8277cd43076b1",
+      "sharingValueId": "6a12039f4ff8277cd43076b4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076b9",
+      "sharingValueId": "6a1203a04ff8277cd43076bc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076c1",
+      "sharingValueId": "6a1203a04ff8277cd43076c4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076c9",
+      "sharingValueId": "6a1203a04ff8277cd43076cc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076d1",
+      "sharingValueId": "6a1203a04ff8277cd43076d4"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076d9",
+      "sharingValueId": "6a1203a04ff8277cd43076dc"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a04ff8277cd43076f7",
+      "sharingValueId": "6a1203a04ff8277cd43076fa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd43076ff",
+      "sharingValueId": "6a1203a14ff8277cd4307702"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd4307707",
+      "sharingValueId": "6a1203a14ff8277cd430770a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd430770f",
+      "sharingValueId": "6a1203a14ff8277cd4307712"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd4307717",
+      "sharingValueId": "6a1203a14ff8277cd430771a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd430771f",
+      "sharingValueId": "6a1203a14ff8277cd4307722"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a14ff8277cd4307727",
+      "sharingValueId": "6a1203a24ff8277cd430772a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430772f",
+      "sharingValueId": "6a1203a24ff8277cd4307732"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd4307737",
+      "sharingValueId": "6a1203a24ff8277cd430773a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430773f",
+      "sharingValueId": "6a1203a24ff8277cd4307742"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd4307747",
+      "sharingValueId": "6a1203a24ff8277cd430774a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430774f",
+      "sharingValueId": "6a1203a24ff8277cd4307752"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd4307757",
+      "sharingValueId": "6a1203a24ff8277cd430775a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a24ff8277cd430775f",
+      "sharingValueId": "6a1203a24ff8277cd4307762"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307767",
+      "sharingValueId": "6a1203a34ff8277cd430776a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd430776f",
+      "sharingValueId": "6a1203a34ff8277cd4307772"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307777",
+      "sharingValueId": "6a1203a34ff8277cd430777a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd430777f",
+      "sharingValueId": "6a1203a34ff8277cd4307782"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307787",
+      "sharingValueId": "6a1203a34ff8277cd430778a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd430778f",
+      "sharingValueId": "6a1203a34ff8277cd4307792"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a34ff8277cd4307797",
+      "sharingValueId": "6a1203a34ff8277cd430779a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd430779f",
+      "sharingValueId": "6a1203a44ff8277cd43077a2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077a7",
+      "sharingValueId": "6a1203a44ff8277cd43077aa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077af",
+      "sharingValueId": "6a1203a44ff8277cd43077b2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077b7",
+      "sharingValueId": "6a1203a44ff8277cd43077ba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077bf",
+      "sharingValueId": "6a1203a44ff8277cd43077c2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077c7",
+      "sharingValueId": "6a1203a44ff8277cd43077ca"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077cf",
+      "sharingValueId": "6a1203a44ff8277cd43077d2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a44ff8277cd43077d7",
+      "sharingValueId": "6a1203a44ff8277cd43077da"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077df",
+      "sharingValueId": "6a1203a54ff8277cd43077e2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077e7",
+      "sharingValueId": "6a1203a54ff8277cd43077ea"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077ef",
+      "sharingValueId": "6a1203a54ff8277cd43077f2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077f7",
+      "sharingValueId": "6a1203a54ff8277cd43077fa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd43077ff",
+      "sharingValueId": "6a1203a54ff8277cd4307802"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd4307807",
+      "sharingValueId": "6a1203a54ff8277cd430780a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a54ff8277cd430780f",
+      "sharingValueId": "6a1203a54ff8277cd4307812"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307817",
+      "sharingValueId": "6a1203a64ff8277cd430781a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430781f",
+      "sharingValueId": "6a1203a64ff8277cd4307822"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307827",
+      "sharingValueId": "6a1203a64ff8277cd430782a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430782f",
+      "sharingValueId": "6a1203a64ff8277cd4307832"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307837",
+      "sharingValueId": "6a1203a64ff8277cd430783a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430783f",
+      "sharingValueId": "6a1203a64ff8277cd4307842"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd4307847",
+      "sharingValueId": "6a1203a64ff8277cd430784a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a64ff8277cd430784f",
+      "sharingValueId": "6a1203a64ff8277cd4307852"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307857",
+      "sharingValueId": "6a1203a74ff8277cd430785a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd430785f",
+      "sharingValueId": "6a1203a74ff8277cd4307862"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307867",
+      "sharingValueId": "6a1203a74ff8277cd430786a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd430786f",
+      "sharingValueId": "6a1203a74ff8277cd4307872"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307877",
+      "sharingValueId": "6a1203a74ff8277cd430787a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd430787f",
+      "sharingValueId": "6a1203a74ff8277cd4307882"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a74ff8277cd4307887",
+      "sharingValueId": "6a1203a74ff8277cd430788a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd430788f",
+      "sharingValueId": "6a1203a84ff8277cd4307892"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd4307897",
+      "sharingValueId": "6a1203a84ff8277cd430789a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd430789f",
+      "sharingValueId": "6a1203a84ff8277cd43078a2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd43078a7",
+      "sharingValueId": "6a1203a84ff8277cd43078aa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a84ff8277cd43078af",
+      "sharingValueId": "6a1203a84ff8277cd43078b2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078b7",
+      "sharingValueId": "6a1203a94ff8277cd43078ba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078bf",
+      "sharingValueId": "6a1203a94ff8277cd43078c2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078c7",
+      "sharingValueId": "6a1203a94ff8277cd43078ca"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078cf",
+      "sharingValueId": "6a1203a94ff8277cd43078d2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203a94ff8277cd43078ee",
+      "sharingValueId": "6a1203a94ff8277cd43078f1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd43078f6",
+      "sharingValueId": "6a1203aa4ff8277cd43078f9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd43078fe",
+      "sharingValueId": "6a1203aa4ff8277cd4307901"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd4307906",
+      "sharingValueId": "6a1203aa4ff8277cd4307909"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd430790e",
+      "sharingValueId": "6a1203aa4ff8277cd4307911"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd4307916",
+      "sharingValueId": "6a1203aa4ff8277cd4307919"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd430791e",
+      "sharingValueId": "6a1203aa4ff8277cd4307921"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203aa4ff8277cd4307926",
+      "sharingValueId": "6a1203aa4ff8277cd4307929"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430792e",
+      "sharingValueId": "6a1203ab4ff8277cd4307931"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd4307936",
+      "sharingValueId": "6a1203ab4ff8277cd4307939"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430793e",
+      "sharingValueId": "6a1203ab4ff8277cd4307941"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd4307946",
+      "sharingValueId": "6a1203ab4ff8277cd4307949"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430794e",
+      "sharingValueId": "6a1203ab4ff8277cd4307951"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd4307956",
+      "sharingValueId": "6a1203ab4ff8277cd4307959"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ab4ff8277cd430795e",
+      "sharingValueId": "6a1203ab4ff8277cd4307961"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307966",
+      "sharingValueId": "6a1203ac4ff8277cd4307969"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430796e",
+      "sharingValueId": "6a1203ac4ff8277cd4307971"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307976",
+      "sharingValueId": "6a1203ac4ff8277cd4307979"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430797e",
+      "sharingValueId": "6a1203ac4ff8277cd4307981"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307986",
+      "sharingValueId": "6a1203ac4ff8277cd4307989"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430798e",
+      "sharingValueId": "6a1203ac4ff8277cd4307991"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd4307996",
+      "sharingValueId": "6a1203ac4ff8277cd4307999"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ac4ff8277cd430799e",
+      "sharingValueId": "6a1203ac4ff8277cd43079a1"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ad4ff8277cd43079a6",
+      "sharingValueId": "6a1203ad4ff8277cd43079a9"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ad4ff8277cd43079da",
+      "sharingValueId": "6a1203ad4ff8277cd43079dd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ad4ff8277cd43079e2",
+      "sharingValueId": "6a1203ad4ff8277cd43079e5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd43079ea",
+      "sharingValueId": "6a1203ae4ff8277cd43079ed"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd43079f2",
+      "sharingValueId": "6a1203ae4ff8277cd43079f5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd43079fa",
+      "sharingValueId": "6a1203ae4ff8277cd43079fd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a02",
+      "sharingValueId": "6a1203ae4ff8277cd4307a05"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a0a",
+      "sharingValueId": "6a1203ae4ff8277cd4307a0d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a12",
+      "sharingValueId": "6a1203ae4ff8277cd4307a15"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a1a",
+      "sharingValueId": "6a1203ae4ff8277cd4307a1d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ae4ff8277cd4307a22",
+      "sharingValueId": "6a1203ae4ff8277cd4307a25"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a2a",
+      "sharingValueId": "6a1203af4ff8277cd4307a2d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a32",
+      "sharingValueId": "6a1203af4ff8277cd4307a35"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a3a",
+      "sharingValueId": "6a1203af4ff8277cd4307a3d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a42",
+      "sharingValueId": "6a1203af4ff8277cd4307a45"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a4a",
+      "sharingValueId": "6a1203af4ff8277cd4307a4d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a52",
+      "sharingValueId": "6a1203af4ff8277cd4307a55"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a5a",
+      "sharingValueId": "6a1203af4ff8277cd4307a5d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203af4ff8277cd4307a62",
+      "sharingValueId": "6a1203af4ff8277cd4307a65"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a6a",
+      "sharingValueId": "6a1203b04ff8277cd4307a6d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a72",
+      "sharingValueId": "6a1203b04ff8277cd4307a75"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a7a",
+      "sharingValueId": "6a1203b04ff8277cd4307a7d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a82",
+      "sharingValueId": "6a1203b04ff8277cd4307a85"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a8a",
+      "sharingValueId": "6a1203b04ff8277cd4307a8d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a92",
+      "sharingValueId": "6a1203b04ff8277cd4307a95"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307a9a",
+      "sharingValueId": "6a1203b04ff8277cd4307a9d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307aa2",
+      "sharingValueId": "6a1203b04ff8277cd4307aa5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b04ff8277cd4307aaa",
+      "sharingValueId": "6a1203b04ff8277cd4307aad"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ab2",
+      "sharingValueId": "6a1203b14ff8277cd4307ab5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307aba",
+      "sharingValueId": "6a1203b14ff8277cd4307abd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ac2",
+      "sharingValueId": "6a1203b14ff8277cd4307ac5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307aca",
+      "sharingValueId": "6a1203b14ff8277cd4307acd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ad2",
+      "sharingValueId": "6a1203b14ff8277cd4307ad5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ada",
+      "sharingValueId": "6a1203b14ff8277cd4307add"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307ae2",
+      "sharingValueId": "6a1203b14ff8277cd4307ae5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b14ff8277cd4307aea",
+      "sharingValueId": "6a1203b14ff8277cd4307aed"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307af2",
+      "sharingValueId": "6a1203b24ff8277cd4307af5"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307afa",
+      "sharingValueId": "6a1203b24ff8277cd4307afd"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b02",
+      "sharingValueId": "6a1203b24ff8277cd4307b05"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b0a",
+      "sharingValueId": "6a1203b24ff8277cd4307b0d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b12",
+      "sharingValueId": "6a1203b24ff8277cd4307b15"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b1a",
+      "sharingValueId": "6a1203b24ff8277cd4307b1d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b22",
+      "sharingValueId": "6a1203b24ff8277cd4307b25"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b24ff8277cd4307b2a",
+      "sharingValueId": "6a1203b24ff8277cd4307b2d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b32",
+      "sharingValueId": "6a1203b34ff8277cd4307b35"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b3a",
+      "sharingValueId": "6a1203b34ff8277cd4307b3d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b42",
+      "sharingValueId": "6a1203b34ff8277cd4307b45"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b4a",
+      "sharingValueId": "6a1203b34ff8277cd4307b4d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b52",
+      "sharingValueId": "6a1203b34ff8277cd4307b55"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b34ff8277cd4307b5a",
+      "sharingValueId": "6a1203b34ff8277cd4307b5d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b62",
+      "sharingValueId": "6a1203b44ff8277cd4307b65"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b6a",
+      "sharingValueId": "6a1203b44ff8277cd4307b6d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b72",
+      "sharingValueId": "6a1203b44ff8277cd4307b75"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b7a",
+      "sharingValueId": "6a1203b44ff8277cd4307b7d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b82",
+      "sharingValueId": "6a1203b44ff8277cd4307b85"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b8a",
+      "sharingValueId": "6a1203b44ff8277cd4307b8d"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b44ff8277cd4307b92",
+      "sharingValueId": "6a1203b44ff8277cd4307b95"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307baf",
+      "sharingValueId": "6a1203b54ff8277cd4307bb2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bb7",
+      "sharingValueId": "6a1203b54ff8277cd4307bba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bbf",
+      "sharingValueId": "6a1203b54ff8277cd4307bc2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bc7",
+      "sharingValueId": "6a1203b54ff8277cd4307bca"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bcf",
+      "sharingValueId": "6a1203b54ff8277cd4307bd2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b54ff8277cd4307bd7",
+      "sharingValueId": "6a1203b54ff8277cd4307bda"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bdf",
+      "sharingValueId": "6a1203b64ff8277cd4307be2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307be7",
+      "sharingValueId": "6a1203b64ff8277cd4307bea"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bef",
+      "sharingValueId": "6a1203b64ff8277cd4307bf2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bf7",
+      "sharingValueId": "6a1203b64ff8277cd4307bfa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307bff",
+      "sharingValueId": "6a1203b64ff8277cd4307c02"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307c07",
+      "sharingValueId": "6a1203b64ff8277cd4307c0a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307c0f",
+      "sharingValueId": "6a1203b64ff8277cd4307c12"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b64ff8277cd4307c17",
+      "sharingValueId": "6a1203b64ff8277cd4307c1a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c1f",
+      "sharingValueId": "6a1203b74ff8277cd4307c22"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c27",
+      "sharingValueId": "6a1203b74ff8277cd4307c2a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c2f",
+      "sharingValueId": "6a1203b74ff8277cd4307c32"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c37",
+      "sharingValueId": "6a1203b74ff8277cd4307c3a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b74ff8277cd4307c3f",
+      "sharingValueId": "6a1203b74ff8277cd4307c42"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c47",
+      "sharingValueId": "6a1203b84ff8277cd4307c4a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c4f",
+      "sharingValueId": "6a1203b84ff8277cd4307c52"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c57",
+      "sharingValueId": "6a1203b84ff8277cd4307c5a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c5f",
+      "sharingValueId": "6a1203b84ff8277cd4307c62"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c67",
+      "sharingValueId": "6a1203b84ff8277cd4307c6a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c6f",
+      "sharingValueId": "6a1203b84ff8277cd4307c72"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c77",
+      "sharingValueId": "6a1203b84ff8277cd4307c7a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b84ff8277cd4307c7f",
+      "sharingValueId": "6a1203b84ff8277cd4307c82"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c87",
+      "sharingValueId": "6a1203b94ff8277cd4307c8a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c8f",
+      "sharingValueId": "6a1203b94ff8277cd4307c92"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c97",
+      "sharingValueId": "6a1203b94ff8277cd4307c9a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307c9f",
+      "sharingValueId": "6a1203b94ff8277cd4307ca2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307ca7",
+      "sharingValueId": "6a1203b94ff8277cd4307caa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307caf",
+      "sharingValueId": "6a1203b94ff8277cd4307cb2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307cb7",
+      "sharingValueId": "6a1203b94ff8277cd4307cba"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203b94ff8277cd4307cbf",
+      "sharingValueId": "6a1203b94ff8277cd4307cc2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cc7",
+      "sharingValueId": "6a1203ba4ff8277cd4307cca"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307ccf",
+      "sharingValueId": "6a1203ba4ff8277cd4307cd2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cd7",
+      "sharingValueId": "6a1203ba4ff8277cd4307cda"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cdf",
+      "sharingValueId": "6a1203ba4ff8277cd4307ce2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307ce7",
+      "sharingValueId": "6a1203ba4ff8277cd4307cea"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cef",
+      "sharingValueId": "6a1203ba4ff8277cd4307cf2"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203ba4ff8277cd4307cf7",
+      "sharingValueId": "6a1203ba4ff8277cd4307cfa"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307cff",
+      "sharingValueId": "6a1203bb4ff8277cd4307d02"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d07",
+      "sharingValueId": "6a1203bb4ff8277cd4307d0a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d0f",
+      "sharingValueId": "6a1203bb4ff8277cd4307d12"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d17",
+      "sharingValueId": "6a1203bb4ff8277cd4307d1a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d1f",
+      "sharingValueId": "6a1203bb4ff8277cd4307d22"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d27",
+      "sharingValueId": "6a1203bb4ff8277cd4307d2a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bb4ff8277cd4307d2f",
+      "sharingValueId": "6a1203bb4ff8277cd4307d32"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d37",
+      "sharingValueId": "6a1203bc4ff8277cd4307d3a"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d55",
+      "sharingValueId": "6a1203bc4ff8277cd4307d58"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d5d",
+      "sharingValueId": "6a1203bc4ff8277cd4307d60"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d65",
+      "sharingValueId": "6a1203bc4ff8277cd4307d68"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d6d",
+      "sharingValueId": "6a1203bc4ff8277cd4307d70"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bc4ff8277cd4307d75",
+      "sharingValueId": "6a1203bc4ff8277cd4307d78"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d7d",
+      "sharingValueId": "6a1203bd4ff8277cd4307d80"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d85",
+      "sharingValueId": "6a1203bd4ff8277cd4307d88"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d8d",
+      "sharingValueId": "6a1203bd4ff8277cd4307d90"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d95",
+      "sharingValueId": "6a1203bd4ff8277cd4307d98"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307d9d",
+      "sharingValueId": "6a1203bd4ff8277cd4307da0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307da5",
+      "sharingValueId": "6a1203bd4ff8277cd4307da8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bd4ff8277cd4307dad",
+      "sharingValueId": "6a1203bd4ff8277cd4307db0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307db5",
+      "sharingValueId": "6a1203be4ff8277cd4307db8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dbd",
+      "sharingValueId": "6a1203be4ff8277cd4307dc0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dc5",
+      "sharingValueId": "6a1203be4ff8277cd4307dc8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dcd",
+      "sharingValueId": "6a1203be4ff8277cd4307dd0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307dd5",
+      "sharingValueId": "6a1203be4ff8277cd4307dd8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307ddd",
+      "sharingValueId": "6a1203be4ff8277cd4307de0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203be4ff8277cd4307de5",
+      "sharingValueId": "6a1203be4ff8277cd4307de8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307ded",
+      "sharingValueId": "6a1203bf4ff8277cd4307df0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307df5",
+      "sharingValueId": "6a1203bf4ff8277cd4307df8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307dfd",
+      "sharingValueId": "6a1203bf4ff8277cd4307e00"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e05",
+      "sharingValueId": "6a1203bf4ff8277cd4307e08"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e0d",
+      "sharingValueId": "6a1203bf4ff8277cd4307e10"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e15",
+      "sharingValueId": "6a1203bf4ff8277cd4307e18"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e1d",
+      "sharingValueId": "6a1203bf4ff8277cd4307e20"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203bf4ff8277cd4307e25",
+      "sharingValueId": "6a1203bf4ff8277cd4307e28"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e2d",
+      "sharingValueId": "6a1203c04ff8277cd4307e30"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e35",
+      "sharingValueId": "6a1203c04ff8277cd4307e38"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e3d",
+      "sharingValueId": "6a1203c04ff8277cd4307e40"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e45",
+      "sharingValueId": "6a1203c04ff8277cd4307e48"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e4d",
+      "sharingValueId": "6a1203c04ff8277cd4307e50"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c04ff8277cd4307e55",
+      "sharingValueId": "6a1203c04ff8277cd4307e58"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e5d",
+      "sharingValueId": "6a1203c14ff8277cd4307e60"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e65",
+      "sharingValueId": "6a1203c14ff8277cd4307e68"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e6d",
+      "sharingValueId": "6a1203c14ff8277cd4307e70"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e75",
+      "sharingValueId": "6a1203c14ff8277cd4307e78"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e7d",
+      "sharingValueId": "6a1203c14ff8277cd4307e80"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e85",
+      "sharingValueId": "6a1203c14ff8277cd4307e88"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e8d",
+      "sharingValueId": "6a1203c14ff8277cd4307e90"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e95",
+      "sharingValueId": "6a1203c14ff8277cd4307e98"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307e9d",
+      "sharingValueId": "6a1203c14ff8277cd4307ea0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c14ff8277cd4307ea5",
+      "sharingValueId": "6a1203c24ff8277cd4307ea8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ead",
+      "sharingValueId": "6a1203c24ff8277cd4307eb0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307eb5",
+      "sharingValueId": "6a1203c24ff8277cd4307eb8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ebd",
+      "sharingValueId": "6a1203c24ff8277cd4307ec0"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ec5",
+      "sharingValueId": "6a1203c24ff8277cd4307ec8"
+    },
+    {
+      "type": "copy",
+      "id": "6a1203c24ff8277cd4307ecd",
+      "sharingValueId": "6a1203c24ff8277cd4307ed0"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c24ff8277cd4307ed5",
+      "sharingValueId": "6a1203c24ff8277cd4307ed8"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c34ff8277cd4307ede",
+      "sharingValueId": "6a1203c34ff8277cd4307ee1"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c34ff8277cd4307ee7",
+      "sharingValueId": "6a1203c34ff8277cd4307eea"
+    },
+    {
+      "type": "lending",
+      "id": "6a1203c34ff8277cd4307ef0",
+      "sharingValueId": "6a1203c34ff8277cd4307ef3"
+    }
+  ],
+  "writesIssued": 0,
+  "exitCode": 0
+}
