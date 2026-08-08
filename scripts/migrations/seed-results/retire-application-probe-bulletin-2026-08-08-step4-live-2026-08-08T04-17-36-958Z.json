@@ -1,0 +1,43 @@
+{
+  "dryRun": false,
+  "step": 4,
+  "entries": [
+    {
+      "id": "6a320182487a9c1f02f70af2",
+      "label": "_probe_bulletin instance",
+      "status": "deleted"
+    },
+    {
+      "id": "6a320182487a9c1f02f70af9",
+      "label": "_probe_bulletin instance",
+      "status": "deleted"
+    },
+    {
+      "id": "6a320182487a9c1f02f70b01",
+      "label": "_probe_bulletin instance",
+      "status": "deleted"
+    },
+    {
+      "id": "6a320175487a9c1f02f70adb",
+      "label": "_probe_bulletin prop-def title",
+      "status": "deleted"
+    },
+    {
+      "id": "6a320176487a9c1f02f70ae3",
+      "label": "_probe_bulletin prop-def summary",
+      "status": "deleted"
+    },
+    {
+      "id": "6a320176487a9c1f02f70aeb",
+      "label": "_probe_bulletin prop-def draft_notes",
+      "status": "deleted"
+    },
+    {
+      "id": "6a320169487a9c1f02f70ad6",
+      "label": "_probe_bulletin TYPE entity",
+      "status": "deleted"
+    }
+  ],
+  "failureCount": 0,
+  "exitCode": 0
+}
