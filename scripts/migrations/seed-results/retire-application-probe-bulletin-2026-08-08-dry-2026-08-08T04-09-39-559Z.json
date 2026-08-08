@@ -1,0 +1,66 @@
+{
+  "dryRun": true,
+  "verifiedTargets": {
+    "menuEntry": {
+      "id": "6a0f6d314ff8277cd4306a0e",
+      "name": "Applications",
+      "sharingValueId": "6a0f6d314ff8277cd4306a11",
+      "currentSharing": "domain"
+    },
+    "specimen": {
+      "id": "6a2fdac64cd971291c5d5e79",
+      "type": "application",
+      "status": "approved",
+      "expiresAt": "2026-07-15T00:00:00.000Z"
+    },
+    "applicationType": {
+      "id": "6a0d2e8390c8df7a1cc7de81",
+      "name": "application",
+      "instanceCount": 1,
+      "propDefs": [
+        {
+          "id": "6a0d2e8390c8df7a1cc7de8a",
+          "name": "target_org"
+        },
+        {
+          "id": "6a0d2e8390c8df7a1cc7de94",
+          "name": "message"
+        },
+        {
+          "id": "6a0d2e8490c8df7a1cc7de9d",
+          "name": "status"
+        },
+        {
+          "id": "6a0d2e8490c8df7a1cc7dea7",
+          "name": "expires_at"
+        }
+      ]
+    },
+    "probeBulletinType": {
+      "id": "6a320169487a9c1f02f70ad6",
+      "name": "_probe_bulletin",
+      "instanceIds": [
+        "6a320182487a9c1f02f70af2",
+        "6a320182487a9c1f02f70af9",
+        "6a320182487a9c1f02f70b01"
+      ],
+      "propDefs": [
+        {
+          "id": "6a320175487a9c1f02f70adb",
+          "name": "title"
+        },
+        {
+          "id": "6a320176487a9c1f02f70ae3",
+          "name": "summary"
+        },
+        {
+          "id": "6a320176487a9c1f02f70aeb",
+          "name": "draft_notes"
+        }
+      ],
+      "menuEntryExists": false
+    }
+  },
+  "writesIssued": 0,
+  "exitCode": 0
+}
