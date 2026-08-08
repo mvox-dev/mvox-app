@@ -1,0 +1,86 @@
+{
+  "dryRun": true,
+  "targets": [
+    {
+      "orphanId": "69c7f87e8489bfcb0e81b31a",
+      "twinPersonId": "6a0dd2404ff8277cd4305fee",
+      "twinMemberId": "6a0dd2564ff8277cd43063a2",
+      "matchedName": "Aivar Kaldre",
+      "matchedSectionParentId": "69c7f87e8489bfcb0e81b2fa",
+      "corroborationBasis": "exact name match (\"Aivar Kaldre\") + section parent ref match (both reference 69c7f87e8489bfcb0e81b2fa, \"I Tenor\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    },
+    {
+      "orphanId": "69c7f8808489bfcb0e81b388",
+      "twinPersonId": "6a0dd2414ff8277cd430601e",
+      "twinMemberId": "6a0dd2574ff8277cd43063f2",
+      "matchedName": "Mikk Dede",
+      "matchedSectionParentId": "69c7f8808489bfcb0e81b374",
+      "corroborationBasis": "exact name match (\"Mikk Dede\") + section parent ref match (both reference 69c7f8808489bfcb0e81b374, \"II Tenor\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    },
+    {
+      "orphanId": "69c7f8828489bfcb0e81b3f6",
+      "twinPersonId": "6a0dd2424ff8277cd4306060",
+      "twinMemberId": "6a0dd2594ff8277cd4306460",
+      "matchedName": "Peeter Hillep",
+      "matchedSectionParentId": "69c7f8828489bfcb0e81b3ec",
+      "corroborationBasis": "exact name match (\"Peeter Hillep\") + section parent ref match (both reference 69c7f8828489bfcb0e81b3ec, \"Baritone\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    },
+    {
+      "orphanId": "69c7f8828489bfcb0e81b400",
+      "twinPersonId": "6a0dd2434ff8277cd4306066",
+      "twinMemberId": "6a0dd2594ff8277cd430646a",
+      "matchedName": "Hanno Hint",
+      "matchedSectionParentId": "69c7f8828489bfcb0e81b3ec",
+      "corroborationBasis": "exact name match (\"Hanno Hint\") + section parent ref match (both reference 69c7f8828489bfcb0e81b3ec, \"Baritone\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    },
+    {
+      "orphanId": "69c7f8848489bfcb0e81b478",
+      "twinPersonId": "6a0dd2444ff8277cd43060a8",
+      "twinMemberId": "6a0dd25b4ff8277cd43064d8",
+      "matchedName": "Andres Alamaa",
+      "matchedSectionParentId": "69c7f8848489bfcb0e81b46e",
+      "corroborationBasis": "exact name match (\"Andres Alamaa\") + section parent ref match (both reference 69c7f8848489bfcb0e81b46e, \"Bass\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    },
+    {
+      "orphanId": "69c7f8848489bfcb0e81b482",
+      "twinPersonId": "6a0dd2444ff8277cd43060ae",
+      "twinMemberId": "6a0dd25b4ff8277cd43064e2",
+      "matchedName": "Jüri Eensoo",
+      "matchedSectionParentId": "69c7f8848489bfcb0e81b46e",
+      "corroborationBasis": "exact name match (\"Jüri Eensoo\") + section parent ref match (both reference 69c7f8848489bfcb0e81b46e, \"Bass\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    },
+    {
+      "orphanId": "69c7f8848489bfcb0e81b48c",
+      "twinPersonId": "6a0dd2444ff8277cd43060b4",
+      "twinMemberId": "6a0dd25b4ff8277cd43064ec",
+      "matchedName": "Rasmus Erismaa",
+      "matchedSectionParentId": "69c7f8848489bfcb0e81b46e",
+      "corroborationBasis": "exact name match (\"Rasmus Erismaa\") + section parent ref match (both reference 69c7f8848489bfcb0e81b46e, \"Bass\")",
+      "liveExists": true,
+      "liveSharing": "private",
+      "verified": true
+    }
+  ],
+  "crossCheckPassed": true,
+  "crossCheckMessage": "confirmed: none of the 7 delete targets appear in the 11 uncorroborated (match=no) rows from the same artifact",
+  "writesIssued": 0,
+  "exitCode": 0
+}
