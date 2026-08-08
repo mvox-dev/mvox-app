@@ -2,9 +2,9 @@
 
 (*MVOX:Perotin*)
 
-> Pruned 2026-08-07 (session "MVOX") from ~1990 to this. Full session-by-session history lives in
+> Pruned 2026-08-08 (session "MVOX") from ~470 to this. Full session-by-session history lives in
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
-> committed artifact / findings doc / architecture-decisions.md entry carries the detail.
+> committed artifact / findings doc / issue-comment thread carries the detail.
 
 ## Repo location — IMPORTANT (2026-08-07)
 
@@ -120,10 +120,11 @@ a non-owner reader only if ALL THREE hold: (1) the PROP-DEF's own `_sharing` (un
 established above), (2) the TYPE entity's own `_sharing` — a CAP (`aggregate.js:94/115`: if the type
 has no `_sharing` at all, it nukes domain/public exposure for EVERY prop-def on that type regardless
 of gate 1), (3) the INSTANCE's own `_sharing`. Missing gate 2 is an easy-to-miss apparent-success
-trap: a script can "successfully" set gate 1 and still change nothing. Always read-verify gate 2
-live before trusting gate-1-only fixes (real incident: #20/mvox-app, 2026-08-07 — `member.person`/
-`member.section` prop-defs had no `_sharing`; fixed by setting both to `domain`, but the fix also
-needed a live check that `member`'s TYPE entity itself was already `domain`, which it was).
+trap: a script can "successfully" set gate 1 and still change nothing. **Missing gate 3 is the same
+trap one level down**: a touch-save re-triggers aggregation but does NOT change tier — if the
+instance's own `_sharing` never moves, nothing becomes visible no matter how clean gates 1+2 are
+(real incident: T6.2, 2026-08-08 — see session digest below). Always read-verify ALL THREE gates
+live before trusting a partial fix; a visibility scope is only complete when it names all three.
 
 **Buckets are write-time SNAPSHOTS, not read-time computed** (`aggregate.js` runs `aggregateEntity`
 on every write, materializing `private`/`domain`/`public` onto the stored document). A prop-def
@@ -142,34 +143,46 @@ history yet); keep exactly one current one until the live run lands its own arti
 
 ## Seed / probe script catalog (current, both repos)
 
-**`~/workspace` (mvox_v4e_web) — legacy, stable, not actively extended:**
-seed-voices.ts · seed-collectives.ts (120p/235m/6o/16s) · seed-po-member-ekf.ts ·
-seed-librarian-bundle-data.ts (CHORE-60 EPCC library subtree) · seed-menu-items-per-entity-type ·
-seed-rsvp-tally-prop-defs (rsvp/event formula tally props) · seed-mvox-collective-marker (app-ext
-type, PO-approved, not canonical v4E) · cleanup-menu-usability · cleanup-rename-photo-prop-def-only ·
-cleanup-fila-hooaeg-end-date · cleanup-mvox-collective-test-hidden · Phase B/C/D cleanup scripts
-(migration body of work, complete — polyphony is v4E-schema-aligned as of Phase C/D closeout).
-perotin-toolkit.ts: `isDryRun()`, `writeResultArtifact()`, `replaceProperty()`, `findOrCreateByName()`
-— consumes Josquin's `lib/entu-client.ts` primitives, doesn't duplicate.
+**`~/workspace` (legacy, stable, not extended):** seed-voices/collectives/po-member-ekf/
+librarian-bundle/menu-items/rsvp-tally/mvox-collective-marker · cleanup-* scripts · Phase B/C/D
+migration body (complete, polyphony v4E-aligned as of Phase C/D closeout). `perotin-toolkit.ts`:
+`isDryRun()`/`writeResultArtifact()`/`replaceProperty()`/`findOrCreateByName()`.
 
-**`~/workspace-app` (mvox-app) — active:**
-t3-1-provision-singers-2026-08-07.ts + lib/t3-1-singer-provision.ts (T3.1 bundles 1+2: 128 domain
-profiles + 128 tier conversions, live 2026-08-07, reconstructed artifact
-`seed-results/t3-1-bundles-1-2-3-reconstructed-2026-08-07T10-46-51-000Z.json`) ·
-t3-1-bundle3-remove-member-name-2026-08-07.ts (schema mutation, same artifact) ·
-t4-10-migrate-name-email-to-profile-2026-08-07.ts (built, dry-run-only, CLOSED superseded —
-never ran live, see Deferred below) · cleanup-scope-add-user-t4-1-2026-08-06.ts ·
-cleanup-t4-3-profile-type-person-reduction-2026-08-06.ts (both of these two are recorded in THIS
-repo's history per my own scratchpad, but team-lead's audit found `git log --all` on workspace-app
-shows no trace — treat as workspace-app-absent until re-confirmed; don't hunt for files that aren't
-there). **workspace-app's `seed-results/`+`probes/` dirs did not exist before 2026-08-07** — going
-forward, every live workspace-app run gets a committed artifact via the same toolkit pattern (port
-`perotin-toolkit.ts` over if/when a second script needs it — not yet extracted there).
-widen-member-refs-2026-08-07.ts + lib/widen-member-refs-2026-08-07.ts + .spec.ts (#20 fix: 2
-prop-def `_sharing` writes + 245-member touch-save sweep, live 2026-08-07, result artifact
-`seed-results/widen-member-refs-2026-08-07-live-2026-08-07T15-24-56-647Z.json`). Has a
-`BASELINE_DOMAIN_MEMBER_IDS` frozen-set drift-check (245 ids) — reusable pattern for any future
-script needing to disambiguate "population changed" from "count happens to match."
+**`~/workspace-app` (active):** every §8.6 script from 2026-08-07 onward lives in
+`scripts/migrations/` + `scripts/migrations/lib/`, one entrypoint+lib pair per task, one committed
+result artifact per run (dry AND live) in `scripts/migrations/seed-results/`. Full inventory =
+`git log --oneline -- scripts/migrations/` — don't re-narrate individual scripts here; the commits +
+artifacts + #37/#54 issue comments ARE the audit trail. Standing patterns worth naming once:
+- **`BASELINE_*_IDS` frozen-set drift-check**: hardcode a population snapshot, compare live re-reads
+  against it every run, name deltas individually rather than folding into a bare count. First used
+  #20 (245 member ids), reused throughout.
+- **Canary-first + read-back verify**: touch/widen one representative row (or one per type, when a
+  batch spans multiple types), hard-verify single-value-survives, BEFORE the full sweep. Throws (not
+  a ledger entry) on canary failure.
+- **Ownership pre-check now standing practice** (learned #44/#45, applied proactively from T6.2
+  onward without being asked): before any new instance-touching mutation, scan `_owner` across the
+  full target population for non-db-root ownership. Live entrypoints hard-abort pre-write if found.
+
+## Currently deferred / not scheduled
+
+- **Real member-seat empirical verification** — recurring theme across #20/#44/#45/#46/#47/T6.2/T6.2b:
+  every live run I execute is db-root-omniscient (always reads the private bucket regardless of
+  tier), so "write landed + property _id rotated" is NOT the same as "a real non-owner member sees
+  it." `ENTU_ADMIN_KEY` is CONFIRMED an anonymous-floor JWT (#44), not a usable second seat — I have
+  no way to close this gap myself. Every §8.6 ledger states this caveat explicitly; T6.5's live gate
+  (real browser, real member) is where it finally gets tested for the library slice. The pre-existing
+  **22-vs-11 menu discrepancy** (#37, 2026-08-07 walkthrough, mechanism "unknown") and the "no library
+  entries visible" symptom (2026-08-08, both hypotheses I checked refuted) are both instances of this
+  same unresolved class — needs Mihkel's actual browser, not more schema inspection from me.
+- **db-root lacks `_owner` on entities created by/under Mihkel's REAL OAuth identity** (`6a2fc05e...
+  5ddc`) — confirmed on 2 distinct entities (a person's own `_sharing`, an `application` specimen's
+  full entity DELETE), both 403. Script/seed-created entities are unaffected (confirmed clean on 586
+  library instances + 115 orphan members). Same shape as the older `entu_api_key` `_owner`-not-
+  `_editor` drift note. Not self-serviceable — needs an `_owner` grant from someone who already holds
+  it, or a fresh OAuth login on that person. PO/team-lead decision, not mine.
+- **#9 (T4.8 EntuUser.name prefill)** — Mihkel-blocked, not data-manager work.
+- **`lib/v4e-translator.ts` `translatePropertyDef`** never sets `_sharing` on new prop-def entities —
+  flagged to Josquin (his lib territory), harmless today, would silently under-share future prop-defs.
 
 ## Privacy boundary register
 
@@ -194,27 +207,10 @@ script/target-set even under a standing "go ahead," since a live write can hit a
 dry-run nor code review caught — this has happened for real, more than once (Phase D sub-op 1
 briefly nulled PO's name; T4.10 caught two separate real conflicts across two independent dry-run+
 verify rounds that never went live). If >15 min pass past an expected authorization, send a status
-ping — never self-authorize.
-
-## Currently deferred / not scheduled
-
-- **T4.10 (#30) profile migration** — CLOSED superseded 2026-08-07, never ran live. Mihkel ruled:
-  don't run it; the one real target's data was already re-established via the shipped profile-edit
-  UI (T4.6). Zero migration writes across the whole arc.
-- **#9 (T4.8 EntuUser.name prefill)** — Mihkel-blocked per team-lead's 2026-08-07 checkpoint, not
-  data-manager work.
-- **#20 last-mile** — the rights-narrowing gap itself (below) is fixed + live-verified by db-root.
-  What's left is Mihkel's real-browser confirmation that a genuine non-owner domain reader now sees
-  `person`/`section` on a member — db-root can never observe this (always reads private bucket).
-- **entu_api_key requires `_owner` (not just `_editor`)** on live api.entu.app — confirmed by direct
-  reproduction 2026-08-05, contradicts the local `~/projects/entu-api` clone's `checkEntityAccess`
-  `rightTypes` list (no `entu_api_key` entry there). Live/local source drift, unresolved — no
-  credential I hold can fix it (only an existing `_owner` can grant `_owner`, circular). Needs PO to
-  grant `_owner` directly via Entu UI or a fresh OAuth login on the affected reader person.
-- **`lib/v4e-translator.ts` `translatePropertyDef`** never sets `_sharing` on new prop-def entities
-  (checked function body) — harmless today (parent type has no `_sharing` on the affected census),
-  would silently under-share future prop-defs under a shared parent type. Flagged to Josquin, not
-  mine to fix (lib is his territory).
+ping — never self-authorize. **Some chains hold on a FURTHER gate past team-lead authorization**
+(e.g. T6.2b: "execution HOLDS on Mihkel's explicit nod" even after Bentham+team-lead GREEN) — read
+the dispatch's exact wording for any extra hold condition, don't assume the standard 2-party gate is
+always the full chain.
 
 ## Recent sessions — 2026-08-07 (T3.1 #17 + #20 fix, condensed)
 
@@ -234,223 +230,73 @@ Prop-def entities (per-type field declarations) are `_type.reference`'d to the *
 meta-type entity `69bcfd8e9c031ab8e6ce8048` — NOT the "entity" meta-type `69bcfd8e9c031ab8e6ce8034`
 (that id is the meta-type for TYPE-DEFINITIONS themselves — person/member/organization/etc. are
 `_type.string=entity`, 27 total = 22 content types + 5 system types: database/entity/menu/plugin/
-property). `probe-person-propdef-sharing-2026-08-07.ts` used the WRONG id (entity, not property) and
-would have silently returned zero prop-defs for every type — caught + fixed while building
-`probe-epic37-phase1-inventory-2026-08-08.ts` (correct query: `_type.reference=<property-meta-id>&
-_parent.reference=<typeId>`). That 2026-08-07 script's own findings were never actually load-bearing
-(the #20 fix was verified through direct entity/{id} reads, not this listing), so nothing shipped
-wrong — but don't reuse the old script's constant.
+property). Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their
+own top-level content kinds, siblings of "entity"/"property", not children of anything.
 
-Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
-top-level content kinds, siblings of "entity"/"property", not children of anything.
+## 2026-08-08 session digest — epic #37 (data/config cleanup) + epic #54 (Library 1.0)
 
-## #47 menu-empty-shells LIVE (2026-08-08) — 3/3 privatized, D4 complete
+All items below shipped/were-found today; full row-by-row detail lives in the commits, result
+artifacts (`seed-results/`), and the #37/#54/#41-46-47-53-55-56-57 issue-comment threads — this is
+the compressed pointer, not the audit trail.
 
-Repertoire/Programme/Attendance narrowed to admin-only, zero failures. Menu domain-tier: 21/23 →
-18/23. Member-seat verification + 22-vs-11 discrepancy stay parked (see dry-run entry). Artifact:
-`seed-results/menu-empty-shells-2026-08-08-live-2026-08-08T04-39-40-017Z.json`.
+**Epic #37 — orphan/config cleanup, in dependency order:**
+- **#41 inventory** (baseline for everything below): 246 members (245 domain + 1 private), 132
+  persons (128 T3.1-synthetic + 4 real), 115 orphan members, exact-name partition = 18 with-twin / 97
+  without-twin, person 18 domain-tier prop-defs, member 4 (all domain), 3 empty-shell menu entries,
+  `_probe_bulletin` 3 inert rows. Artifact: `probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json`.
+- **#43/#44 credential work**: db-root's own `entu_api_key` is NOT domain-exposed (instance-tier
+  private caps it); carries 3 stacked historical values (aware-only). `ENTU_ADMIN_KEY` confirmed dead
+  as a member-seat proxy (anonymous floor JWT). `narrow-person-refs`: 18 person prop-defs →private,
+  131/132 touched, 1 failure (Mihkel's real-OAuth person, rights gap — see deferred item above).
+- **#45 D2+D5**: menu "Applications" privatized; `application` specimen+type+4 prop-defs deleted
+  (specimen delete initially 403'd on the same rights gap, Mihkel deleted it manually, I fixed a
+  script bug — `verifyAllTargets` unconditionally re-checked already-landed steps — with a targeted
+  `verifyStep3Only`); `_probe_bulletin` type+3 prop-defs+3 instances deleted, 7/7. D2+D5 complete.
+- **#46 orphan-115 disposition**: ownership pre-check found all 115 db-root-owned (no rights-gap risk,
+  unlike #44/#45's real-OAuth entities). Loose-match found 0 new beyond the 18 exact; the ORIGINAL
+  corroboration check (name+section via the legacy `section`/`current_section` PROPERTY) was
+  mechanically empty because 0/131 twin members ever populated that property. Gama's correction:
+  section membership lives in the CANONICAL `_parent`-reference shape instead (each member has an
+  `organization` parent + a `section` parent, distinguished by `entity_type`) — re-run against that
+  signal, **7/18 corroborate** (comparing by reference id, not name string, correctly excluded 6
+  same-name-different-org-section false positives). Phase C hid all 115; **#53** later deleted the 7
+  corroborated ones live (7/7) — final state: 7 deleted, 108 hidden.
+- **#47**: 3 more empty-shell menu entries (Repertoire/Programme/Attendance) privatized, 3/3 live.
+- **Menu-bucket-mechanism probe** (urgent, triggered by Mihkel seeing no library entries despite
+  T6.2b): checked whether `menu`-type prop-defs lack `_sharing` (the #20 pattern) — REFUTED, they're
+  all `_sharing:public`. Re-checked T6.2b for regression — also clean. **Root cause still unresolved**,
+  likely same class as the pre-existing 22-vs-11 discrepancy (below).
+- **Open, unresolved**: the 22-vs-11 menu-visibility discrepancy (2026-08-07 walkthrough) and the
+  "no library entries visible" symptom (2026-08-08) are both instances of "real member-seat behavior
+  diverges from what schema inspection predicts" — see the deferred item above, needs Mihkel's
+  browser, not more schema reads from me.
 
-## T6.2b instance-tier widen LIVE (2026-08-08, #57/epic #54) — 586/586, gate 3 closed, library chain done
+**Epic #54 — Library 1.0, T6.1→T6.2→T6.2b (data layer now complete):**
+- **T6.1 grooming** (#55): re-verified work/edition/copy/lending prop-defs live. Corrected the epic's
+  own framing — `work` (6/9) and `edition` (10/16) already had fields domain-tier OUTSIDE the ruled
+  set (none of them the actual title/composer/name/publisher targets, which were still private).
+  `copy.location` doesn't exist as a field (ruling named it, schema doesn't have it). `lending.copy`
+  flagged as probably-required for "availability per copy" despite not being in the literal ruling.
+  Gama's rulings on #54 resolved all of this: `edition.cost` narrows to private (product decision,
+  bookkeeping not browse data); the other 15 already-domain fields stay domain deliberately;
+  `lending.copy`/`assigned_until`/`returned_at` join the widen set (mechanics of the ruled outcome);
+  no new `location` field this slice.
+- **T6.2** (#56): 12 prop-def writes (11 widen + edition.cost narrow) + 586-instance touch-save
+  re-aggregation, 598/598 clean. **Gama's STOP**: touch-save re-asserts the SAME value — it re-triggers
+  aggregation but doesn't change TIER. All 586 instances stayed `_sharing:private` (gate 3) the whole
+  time, so nothing was actually member-readable despite the clean execution. **Lesson: a visibility
+  scope is complete only when it names all 3 gates** (prop-def / type / instance) — T6.2's scope only
+  ever asked for prop-def widen, gate 3 was never in question until Gama's audit caught it.
+- **T6.2b** (#57): closed gate 3 — verified gate 2 (all 4 TYPE entities already `domain`, never the
+  blocker) then genuinely replaced (not touch-saved) all 586 instances' `_sharing` private→domain,
+  canary-per-type, full chain incl. Mihkel's explicit nod (held execution on that line even past
+  Bentham+team-lead auth, per the dispatch). 586/586, zero failures. **The full 3-gate-AND now clears**
+  for T6.1's ruled field set — T6.3 (browse surfaces) has real domain-visible data to render against.
+  Still unconfirmed by an actual member seat (see the menu-bucket probe above — something in the
+  member-visible chain still isn't rendering as expected; not yet root-caused).
 
-Full chain: dry-run → Bentham GREEN → team-lead auth → Mihkel's nod (all confirmed before I ran it).
-586/586 widened private→domain, zero failures, gate 2 re-confirmed all 4 types pass. **The full
-3-gate-AND now clears** for T6.1's ruled field set — T6.1→T6.2→T6.2b library-visibility chain is
-complete at the data layer. T6.3 (browse surfaces) now has real domain-visible data to render
-against; T6.5's live-gate is where this finally gets empirically confirmed by a real member seat.
-Artifact: `seed-results/library-instance-tier-widen-2026-08-08-live-2026-08-08T08-25-33-315Z.json`.
-
-## T6.2b instance-tier widen DRY-RUN (2026-08-08, #57/epic #54) — gate-3 gap closer, holds on Mihkel
-
-Gama's STOP (2026-08-08 11:00 on #54): T6.2 widened prop-defs + touch-saved instances, but
-touch-save re-asserted the SAME 'private' value — gate 3 (instance's own _sharing) never moved, so
-nothing was actually member-readable despite T6.2's clean 598/598 execution. **Real lesson: a
-visibility scope is complete only when it names all 3 gates** — T6.2's scope (mine to execute, not
-mine to have scoped) only ever asked for prop-def widen, so gate 3 was never in question until now.
-T6.2b closes it: gate 2 re-verified live for all 4 types (all pass, domain) — that was NEVER the
-blocker, gate 3 always was. 586-instance replace private→domain planned (genuine tier change this
-time, not touch-save), canary-per-type, 0/586 non-db-root-owned. Reused T6.2's TYPE_IDS/
-verifyInstances rather than duplicating. **Live execution HOLDS on Mihkel's explicit nod** even past
-Bentham+team-lead auth — do not self-authorize past that line. Chain posted on #57 itself (not #54)
-per this task's explicit ask. Artifact:
-`seed-results/library-instance-tier-widen-2026-08-08-dry-2026-08-08T08-04-12-528Z.json`.
-
-## T6.2 library-visibility LIVE (2026-08-08, #56/epic #54) — 598/598, 0 failures, T6.2 complete
-
-Bundle A 12/12 prop-defs set, Bundle B 586/586 instances touched (4 canaries per-type all passed
-first). Zero failures across the whole run. Library 1.0's field-set visibility mutation is done —
-next up in the epic is T6.3 (browse surfaces) + eventual T6.5 live-gate (real member seat confirms
-the ruled fields render and a negative-control field doesn't). Artifact:
-`seed-results/library-visibility-2026-08-08-live-2026-08-08T07-57-00-009Z.json`.
-
-## T6.2 library-visibility DRY-RUN (2026-08-08, #56/epic #54) — plan built, 0 writes
-
-12 prop-def writes (11 widen absent→domain + 1 narrow edition.cost domain→private) gated ahead of a
-586-instance touch-save re-agg (work13+edition17+copy552+lending4), canary-PER-TYPE (4, since first
-run of this mechanic on these types), #44 template. **Proactively ran the #44/#45 ownership
-pre-check without being asked** (that lesson is now standing practice for any new mutation batch):
-0/586 non-db-root-owned — unlike #44/#45 (both involved Mihkel's real OAuth identity), every library
-entity here is script/seed-created, fully db-root-owned, no known rights-gap risk. All 12 prop-defs +
-586-instance population re-verified live in the exact expected state, zero drift from T6.1. Live
-entrypoint hard-aborts pre-write if the ownership check ever finds a non-db-root instance. Artifact:
-`seed-results/library-visibility-2026-08-08-dry-2026-08-08T07-51-56-542Z.json`.
-
-## T6.1 library field-set grooming (2026-08-08, epic #54) — read-only, gates T6.2
-
-work/edition/copy/lending prop-defs re-verified live (zero drift from #41). **Real finding, corrects
-the epic's own framing**: "copy and lending carry no _sharing at all" holds ONLY for those two —
-`work` has 6/9 fields ALREADY domain (catalog_id, catalog_system, part_of, original_voicing/duration/
-language), `edition` has 10/16 ALREADY domain (incl. `cost` — acquisition cost, worth a second look),
-none of them the ruling's actual title/composer/name/publisher target fields (those 4 are still
-private). `copy.location` **doesn't exist as a field** — ruling names it, schema doesn't have it
-(copy only has name/copy_number/barcode/condition/notes). `lending`'s "lent-date" has no exact field
-match (`assigned_at` is the best guess); `lending.copy` (+ maybe assigned_until/returned_at) is
-plausibly REQUIRED for AC3's "availability per copy" but isn't in the literal borrower+lent-date
-ruling — flagged as a design gap, not resolved. Posted full per-type table on #54, all ambiguities
-flagged for Mihkel/PO rather than assumed. Artifact:
-`seed-results/probe-55-library-fieldset-grooming-2026-08-08T07-44-05-000Z.json`.
-
-## Single-tree collision, held correctly (2026-08-08) — T5.2/#52 active on feat/52-nav-shell
-
-Mid-#53-dispatch, `git branch --show-current` showed `feat/52-nav-shell` instead of `main` (8 agents
-running a nav-shell workflow, i18n files mid-edit). Halted BOTH #53 (irreversible) and #45 step3
-immediately, reported branch+status+recent-log evidence twice (escalating uncommitted-file count
-was the tell), did not switch/stash/work around. Team-lead confirmed: correct call, hold until
-squash-merge. This is the pattern to repeat — branch check before EVERY commit is not decorative.
-
-## #53 delete-corroborated-orphans LIVE (2026-08-08) — 7/7 deleted, disposition complete
-
-Executed after tree returned to main (confirmed clean before running). All 7 read-back-confirmed 404,
-zero failures. Orphan-115 disposition fully closed: 7 deleted, 108 hidden (97 without-twin + 11
-uncorroborated), 0 domain-visible. Artifact:
-`seed-results/delete-corroborated-orphans-2026-08-08-live-2026-08-08T05-08-52-354Z.json`.
-
-## #45 D2 complete (2026-08-08) — step2 verified + step3 live, script fix along the way
-
-Specimen confirmed 404 (Mihkel's direct delete). Step 3: 4 prop-defs + application TYPE entity
-deleted, 5/5, zero failures — NOT Mihkel-owned (Gama's cautioned stop-at-seam scenario didn't fire).
-**Fixed a real script bug**: `verifyAllTargets` unconditionally re-checked all 4 D2/D5 targets even
-though steps 1/2/4 had already landed (their entities correctly gone, not drift) — added
-`verifyStep3Only` (checks only the application type + live instance count) rather than loosening the
-shared function's contract used by dry-run/other steps. D2+D5 both fully complete now. Artifact:
-`seed-results/retire-application-probe-bulletin-2026-08-08-step3-live-2026-08-08T05-10-53-704Z.json`.
-
-## #53 delete-corroborated-orphans DRY-RUN (2026-08-08) — 7/7 pass, 0 writes
-
-Loads the 7 corroborated ids DIRECTLY from the committed #46 corrected-comparison artifact (not
-re-typed), re-verifies each live (exists, `_sharing:private` per Phase C, name unchanged), and
-cross-checks zero overlap against the 11 uncorroborated rows from that same artifact. Per-row ledger
-carries orphan id + twin person/member id + matched name + matched section parent id + basis, per
-Gama's requirement. All 7 pass. Artifact:
-`seed-results/delete-corroborated-orphans-2026-08-08-dry-2026-08-08T04-38-37-584Z.json`.
-
-## #47 menu-empty-shells DRY-RUN (2026-08-08) — plan built, 0 writes
-
-Repertoire/Programme/Attendance (0-instance types) → admin-only via `DELETE /property/{sharingValueId}`,
-same mechanic as #45 step1. All 3 re-verified live (domain, genuinely 0 instances). Computed model:
-21/23 → 18/23 domain-tier. **Member-seat verification not performed** — `ENTU_ADMIN_KEY` confirmed
-anonymous floor JWT (#44 finding), no working member seat exists locally; explicitly labeled
-computed-not-observed. **The 22-vs-11 discrepancy is PRE-EXISTING, from #37's own 2026-08-07
-walkthrough history** (not something I derived) — quoted verbatim in the plan output rather than
-diagnosed; team already marked its mechanism "unknown," parked for Mihkel's real-browser check.
-Artifact: `seed-results/menu-empty-shells-2026-08-08-dry-2026-08-08T04-36-00-055Z.json`.
-
-## #46 corrected section signal via `_parent` refs (2026-08-08) — 7/18 now corroborate
-
-Gama correction: section membership lives in the `_parent`-reference shape (member is multi-parent
-under org + section, each `_parent` entry's own `entity_type` distinguishes them — confirmed live,
-every twin member has exactly one `organization` parent + one `section` parent), NOT the legacy
-`section`/`current_section` PROPERTY (0/131 populated, per the original dry-run). Re-ran the 18
-exact-name matches against this corrected signal: **7 corroborate** (name + section-by-reference-id
-both match), 11 don't. **Precision lesson for future comparisons**: of those 11, only 5 are genuinely
-different section NAMES (e.g. Baritone vs II Tenor) — the other 6 share the SAME section name across
-TWO DIFFERENT section entities (sections are per-org, not global; e.g. two choirs each have their
-own "I Tenor"). Comparing by reference id (not name string) was the right call — comparing by name
-would have false-corroborated those 6. Read-only, no mutations; grounds a future §8.6 delete task for
-the 7 corroborated orphans if that direction is taken. Artifact:
-`seed-results/probe-46-parent-section-corroboration-2026-08-08T04-31-31-000Z.json`.
-
-## #46 orphan-115-disposition COMPLETE (2026-08-08) — Phase C live, 115/115 hidden
-
-Phase B skipped (0 delete candidates, structural — see dry-run entry below). Phase C executed after
-Bentham GREEN + explicit "I authorize Phase C": all 115 orphan members' `_sharing` domain→private,
-zero failures, all read-back-confirmed. #46 disposition is DONE. Hidden-rows eventual disposition
-(archive/export/delete) stays PARKED for Mihkel, no timeline. Artifact:
-`seed-results/orphan-115-disposition-2026-08-08-phaseC-live-2026-08-08T04-29-17-136Z.json`.
-
-## #46 orphan-115-disposition DRY-RUN (2026-08-08) — Phase B mechanically EMPTY
-
-Phase A (loose-match, always read-only): 18 exact, **0 loose** — normalizing case/diacritics/
-whitespace across the 97 unmatched orphans found nothing new against the full 132-person pool.
-Phase B (delete corroborated twins, name+section): **0 candidates — structural, not a bug.**
-0/131 linked/twin member rows carry ANY section/current_section value (confirmed live), while
-115/115 orphans do — the corroboration comparison always lands `n-a`, never `yes`, even for the 18
-exact matches. Did NOT loosen the criterion to manufacture deletes (would violate "bare name match
-alone is NOT sufficient" from the other direction) — flagged for Mihkel: accept 0 deletes this round,
-or define an alternative corroboration signal. Phase C: all 115 → hide (97 no-match + 18
-section-data-absent). Entrypoint gates live execution per-phase (`PHASE=B|C`), Phase C recomputes
-fresh each run so it naturally reflects any prior Phase B deletions. Artifact:
-`seed-results/orphan-115-disposition-2026-08-08-dry-2026-08-08T04-25-04-527Z.json`.
-
-## Epic #37 session — 2026-08-08 (Phase 1 inventory through #46 pre-check)
-
-Chronological, all live 2026-08-08, all posted as structured comments on #37 (single source of
-truth for full detail — this is the compressed pointer).
-
-**#41 Phase-1 inventory**: 246 members (245 domain + 1 private/fixture-B) · 132 persons (128
-T3.1-synthetic + 4 real: db-root/Mihkel-OAuth/TestUser/fixtureB) · 115 orphan members, exact-name
-partition vs the 132 persons = 18 with-twin / 97 without-twin · person carries 18 `_sharing:domain`
-prop-defs (not ~15 as estimated — full list + ids in the meta-schema-ids section above) · member
-carries 4 (person/section/current_section/status), all domain · 3 empty-shell menu entries
-(repertoire_item/program_item/attendance) · `_probe_bulletin` = 3 inert test rows. Orphan
-`member.name` values are STILL LIVE-READABLE via direct API despite no prop-def (data persists,
-only the render-hint is gone — don't conflate "no prop-def" with "no data"). Artifact:
-`probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json`.
-
-**#43 credential pre-check → STOP, then #44 gate check → resolved not-exposed**: 1/132 persons
-(db-root `...8079`) carries `entu_api_key` (0 carry `entu_passkey`) — triggered #43's STOP. #44's
-follow-up gate check found it's NOT domain-bucket-visible: the person entity's own `_sharing` is
-`private` (gate 3 of 3-gate-AND caps it regardless of prop-def/type both being domain). Also found:
-the property carries 3 STACKED historical values (POST-append-never-replace), not 1 — aware-only,
-not itself new exposure. `ENTU_ADMIN_KEY` (only other local credential) resolves to an ANONYMOUS
-FLOOR JWT (`accounts:[]`) — confirmed NOT a real second seat, don't re-try expecting otherwise.
-Artifacts: `probe-credential-precheck-2026-08-08T03-35-01-000Z.json`,
-`probe-44-domain-bucket-check-2026-08-08T03-41-53-000Z.json`.
-
-**#44 narrow-person-refs (18 person prop-defs domain→private + 132-person re-agg)**: dry-run built
-mirroring #20's Bundle-A/B/canary/ledger shape (opposite direction). Real finding: of the 18 targeted
-props, only 3 carry ANY value across all 132 persons (voice=8, entu_user=3, entu_api_key=1) — the
-other 15 are 0/132 everywhere, so narrowing was a schema-hygiene no-op for most of the list. Live run
-(after Bentham GREEN + explicit authorization): Bundle A 18/18 narrowed; canary (db-root) touched +
-NEW credential-self-test gate PASSED (`touchSaveCanaryAndSelfTest` — re-exchange ENTU_API_KEY, read
-the just-touched canary, hard-stop before the sweep if it fails; reusable pattern); sweep 131/132
-touched, **1 FAILURE**: person `6a2fc05e4cd971291c5d5ddc` (Mihkel's real OAuth identity, not
-script-created) — 403 on the `_sharing` touch-save, db-root lacks `_owner` there. Surfaced, not
-retried. Artifacts: `narrow-person-refs-2026-08-08-dry-2026-08-08T03-48-53-149Z.json`,
-`...-live-2026-08-08T03-54-57-759Z.json`.
-
-**#45 retire-application (D2) + delete _probe_bulletin (D5)**: 4 independently-gated steps
-(`STEP=1|2|3|4`, entrypoint refuses combined execution). Step 1 (privatize "Applications" menu via
-`DELETE /property/{sharingValueId}`, matching the existing "Billing" entry's absent-`_sharing`
-shape) — chosen over full removal as the more reversible option satisfying "remove/privatize",
-**live SUCCESS**. Step 2 (delete stale specimen `6a2fdac6...5e79`, confirmed 3.5wk past
-`expires_at`) — **live FAILED 403, SAME person id `6a2fc05e...5ddc`** as #44's failure (owned by
-that person + the "polyphony" db entity inherited, not db-root) — **second independent confirmation
-of one underlying rights gap**, not two unrelated incidents. Halted per "any surprise stops at the
-seam"; step 3 self-gates on zero live `application` instances anyway (would refuse). Step 4
-(`_probe_bulletin`: 3 instances + 3 prop-defs + type entity) — **live SUCCESS, 7/7**, independent of
-steps 1-3, run separately once authorized. D5 complete; D2 parked on the ownership gap. Artifacts:
-`retire-application-probe-bulletin-2026-08-08-{dry,step1-live,step2-live,step4-live}-*.json`.
-
-**#46 orphan-115 ownership pre-check** (requested by Gama, grounds the mechanism call before #46's
-own dry-run): **all 115 orphan members are db-root-owned** (0 Mihkel-OAuth-owned, 0 other) —
-population matches #41's baseline exactly, zero drift. Unlike #44/#45, **no rights-gap blocker for
-this batch** — these are pre-v2-rewrite legacy rows, not entities created via Mihkel's real OAuth
-account. Phase B (delete corroborated twins) and Phase C (narrow remainder to private) can proceed
-against the full 115 without hitting the ownership wall. Artifact:
-`probe-46-orphan-ownership-precheck-2026-08-08T04-19-35-000Z.json`.
-
-**Open thread across #44/#45**: db-root is NOT `_owner` on entities created by/under Mihkel's real
-OAuth identity (`6a2fc05e...5ddc`) — confirmed on 2 distinct entities (a person's own `_sharing`,
-an `application` specimen's full entity). Script-created/synthetic entities are unaffected. Needs an
-`_owner` grant from someone who already holds it (same shape as the pre-existing `entu_api_key`
-`_owner`-not-`_editor` deferred item below) — not self-serviceable, PO/team-lead decision.
+**Two single-tree collisions today, both handled correctly**: `feat/52-nav-shell` (mid-#53) and
+`fix/gate-findings` (mid-menu-probe) — halted immediately on `git branch --show-current` mismatch,
+reported branch+status+log evidence, did NOT switch/stash/work around, resumed only after team-lead
+confirmed the tree was back on `main`. This is the pattern to repeat — the branch check before every
+commit is not decorative, it caught two real concurrent-chain collisions in one session.
