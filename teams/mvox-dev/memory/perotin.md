@@ -247,6 +247,18 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #44 narrow-person-refs LIVE (epic #37 D3, 2026-08-08) — 149/150 writes, 1 failure
+
+Executed after Bentham GREEN + team-lead's explicit "I authorize this run". Bundle A: 18/18 prop-defs
+narrowed domain→private, read-back verified. Bundle B canary (db-root `...8079`) touched + credential
+self-test PASSED (ENTU_API_KEY re-exchanged + read the just-touched canary, per the new
+`touchSaveCanaryAndSelfTest` gate this run introduced). Sweep: 131/132 touched, 1 FAILURE: person
+`6a2fc05e4cd971291c5d5ddc` (Mihkel's real OAuth identity, not script-created) — 403 on the touch-save
+POST. Rights-model gap (db-root lacks `_owner` on this specific non-synthetic entity's `_sharing`),
+not a script defect — every OTHER real+synthetic person touched cleanly. Run exit 1, not claimed as
+success, surfaced on #37 for operator repair (likely needs an `_owner` grant, outside my authority).
+Artifact: `seed-results/narrow-person-refs-2026-08-08-live-2026-08-08T03-54-57-759Z.json`.
+
 ## #44 narrow-person-refs DRY-RUN (epic #37 D3, 2026-08-08) — plan built, 0 writes
 
 `narrow-person-refs-2026-08-08.ts` + lib, mirrors #20's Bundle-A/Bundle-B/canary/ledger shape exactly
