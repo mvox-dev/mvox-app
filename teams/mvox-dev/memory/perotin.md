@@ -198,9 +198,6 @@ ping — never self-authorize.
 
 ## Currently deferred / not scheduled
 
-- **115 legacy orphan `member` rows** (no `person` ref, no `status`, carry raw `name` strings) —
-  bundle-3's prop-def removal never purges existing values by design. PO-owned disposition
-  question, unscoped, not scheduled.
 - **T4.10 (#30) profile migration** — CLOSED superseded 2026-08-07, never ran live. Mihkel ruled:
   don't run it; the one real target's data was already re-established via the shipped profile-edit
   UI (T4.6). Zero migration writes across the whole arc.
@@ -247,98 +244,66 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
-## #45 D5 complete (2026-08-08) — step4 live, 7/7 _probe_bulletin deleted
+## Epic #37 session — 2026-08-08 (Phase 1 inventory through #46 pre-check)
 
-3 instances + 3 prop-defs + type entity, all 404-confirmed. `_probe_bulletin` no longer exists.
-D2 steps 2/3 stay parked on the ownership gap below. Artifact:
-`seed-results/retire-application-probe-bulletin-2026-08-08-step4-live-2026-08-08T04-17-36-958Z.json`.
+Chronological, all live 2026-08-08, all posted as structured comments on #37 (single source of
+truth for full detail — this is the compressed pointer).
 
-## #45 retire-application-probe-bulletin LIVE (epic #37 D2+D5, 2026-08-08) — step1 OK, step2 HALT
+**#41 Phase-1 inventory**: 246 members (245 domain + 1 private/fixture-B) · 132 persons (128
+T3.1-synthetic + 4 real: db-root/Mihkel-OAuth/TestUser/fixtureB) · 115 orphan members, exact-name
+partition vs the 132 persons = 18 with-twin / 97 without-twin · person carries 18 `_sharing:domain`
+prop-defs (not ~15 as estimated — full list + ids in the meta-schema-ids section above) · member
+carries 4 (person/section/current_section/status), all domain · 3 empty-shell menu entries
+(repertoire_item/program_item/attendance) · `_probe_bulletin` = 3 inert test rows. Orphan
+`member.name` values are STILL LIVE-READABLE via direct API despite no prop-def (data persists,
+only the render-hint is gone — don't conflate "no prop-def" with "no data"). Artifact:
+`probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json`.
 
-Step 1 (menu privatize) succeeded cleanly. Step 2 (delete specimen `6a2fdac6...5e79`) FAILED 403 —
-db-root is not `_owner` on this entity (owned by person `6a2fc05e...5ddc`, Mihkel's real OAuth
-identity, + the "polyphony" database entity inherited — NOT db-root). **Second independent
-confirmation of the same rights-gap pattern as #44's one failure** (same person id failed a
-`_sharing` touch-save there too) — entities created by/under Mihkel's real OAuth account are not
-db-root-owned, unlike script-created/synthetic entities. `DELETE /entity` needs `_owner`, not
-`_editor`. Halted per "any surprise stops at the seam" — steps 3 (self-gates on zero instances
-anyway, would refuse) and 4 (independent, but did not skip ahead) NOT run. Needs an `_owner` grant
-from someone who already holds it (same open item as #44's [DEFERRED] entry below) before step 2/3
-can retry; step 4 has no dependency and can run independently once authorized. Artifacts:
-`seed-results/retire-application-probe-bulletin-2026-08-08-step{1,2}-live-2026-08-08T04-13-*.json`.
+**#43 credential pre-check → STOP, then #44 gate check → resolved not-exposed**: 1/132 persons
+(db-root `...8079`) carries `entu_api_key` (0 carry `entu_passkey`) — triggered #43's STOP. #44's
+follow-up gate check found it's NOT domain-bucket-visible: the person entity's own `_sharing` is
+`private` (gate 3 of 3-gate-AND caps it regardless of prop-def/type both being domain). Also found:
+the property carries 3 STACKED historical values (POST-append-never-replace), not 1 — aware-only,
+not itself new exposure. `ENTU_ADMIN_KEY` (only other local credential) resolves to an ANONYMOUS
+FLOOR JWT (`accounts:[]`) — confirmed NOT a real second seat, don't re-try expecting otherwise.
+Artifacts: `probe-credential-precheck-2026-08-08T03-35-01-000Z.json`,
+`probe-44-domain-bucket-check-2026-08-08T03-41-53-000Z.json`.
 
-## #45 retire-application-probe-bulletin DRY-RUN (epic #37 D2+D5, 2026-08-08) — plan built, 0 writes
+**#44 narrow-person-refs (18 person prop-defs domain→private + 132-person re-agg)**: dry-run built
+mirroring #20's Bundle-A/B/canary/ledger shape (opposite direction). Real finding: of the 18 targeted
+props, only 3 carry ANY value across all 132 persons (voice=8, entu_user=3, entu_api_key=1) — the
+other 15 are 0/132 everywhere, so narrowing was a schema-hygiene no-op for most of the list. Live run
+(after Bentham GREEN + explicit authorization): Bundle A 18/18 narrowed; canary (db-root) touched +
+NEW credential-self-test gate PASSED (`touchSaveCanaryAndSelfTest` — re-exchange ENTU_API_KEY, read
+the just-touched canary, hard-stop before the sweep if it fails; reusable pattern); sweep 131/132
+touched, **1 FAILURE**: person `6a2fc05e4cd971291c5d5ddc` (Mihkel's real OAuth identity, not
+script-created) — 403 on the `_sharing` touch-save, db-root lacks `_owner` there. Surfaced, not
+retried. Artifacts: `narrow-person-refs-2026-08-08-dry-2026-08-08T03-48-53-149Z.json`,
+`...-live-2026-08-08T03-54-57-759Z.json`.
 
-`retire-application-probe-bulletin-2026-08-08.ts` + lib: 4 independently-gated steps (STEP=1|2|3|4
-env var, entrypoint refuses live execution without exactly one), each its own §8.6 gate per the issue.
-All targets re-verified live (menu entry, specimen, application type+propdefs, _probe_bulletin
-type+propdefs+3 instances — ids all match #41's inventory, zero drift). **Judgment call flagged**:
-menu Step 1 defaults to PRIVATIZE (`DELETE /property/{sharingValueId}`, leaving _sharing absent —
-matches the existing "Billing" admin-only entry's shape exactly) over full entity removal — more
-reversible for an equivalent outcome; alternative documented for override. Specimen's expiry
-(2026-07-15) confirmed genuinely past-due live. Step 3 (retire application type) self-gates on a live
-recount of zero instances — can't run before step 2 lands even if invoked out of order. Step 4 confirmed
-no menu entry exists for _probe_bulletin (nothing else to touch there). Mechanic: `DELETE /entity/{id}`
-for entities incl. prop-defs; `DELETE /property/{id}` only for the menu's _sharing VALUE. Artifact:
-`seed-results/retire-application-probe-bulletin-2026-08-08-dry-2026-08-08T04-09-39-559Z.json`.
+**#45 retire-application (D2) + delete _probe_bulletin (D5)**: 4 independently-gated steps
+(`STEP=1|2|3|4`, entrypoint refuses combined execution). Step 1 (privatize "Applications" menu via
+`DELETE /property/{sharingValueId}`, matching the existing "Billing" entry's absent-`_sharing`
+shape) — chosen over full removal as the more reversible option satisfying "remove/privatize",
+**live SUCCESS**. Step 2 (delete stale specimen `6a2fdac6...5e79`, confirmed 3.5wk past
+`expires_at`) — **live FAILED 403, SAME person id `6a2fc05e...5ddc`** as #44's failure (owned by
+that person + the "polyphony" db entity inherited, not db-root) — **second independent confirmation
+of one underlying rights gap**, not two unrelated incidents. Halted per "any surprise stops at the
+seam"; step 3 self-gates on zero live `application` instances anyway (would refuse). Step 4
+(`_probe_bulletin`: 3 instances + 3 prop-defs + type entity) — **live SUCCESS, 7/7**, independent of
+steps 1-3, run separately once authorized. D5 complete; D2 parked on the ownership gap. Artifacts:
+`retire-application-probe-bulletin-2026-08-08-{dry,step1-live,step2-live,step4-live}-*.json`.
 
-## #44 narrow-person-refs LIVE (epic #37 D3, 2026-08-08) — 149/150 writes, 1 failure
+**#46 orphan-115 ownership pre-check** (requested by Gama, grounds the mechanism call before #46's
+own dry-run): **all 115 orphan members are db-root-owned** (0 Mihkel-OAuth-owned, 0 other) —
+population matches #41's baseline exactly, zero drift. Unlike #44/#45, **no rights-gap blocker for
+this batch** — these are pre-v2-rewrite legacy rows, not entities created via Mihkel's real OAuth
+account. Phase B (delete corroborated twins) and Phase C (narrow remainder to private) can proceed
+against the full 115 without hitting the ownership wall. Artifact:
+`probe-46-orphan-ownership-precheck-2026-08-08T04-19-35-000Z.json`.
 
-Executed after Bentham GREEN + team-lead's explicit "I authorize this run". Bundle A: 18/18 prop-defs
-narrowed domain→private, read-back verified. Bundle B canary (db-root `...8079`) touched + credential
-self-test PASSED (ENTU_API_KEY re-exchanged + read the just-touched canary, per the new
-`touchSaveCanaryAndSelfTest` gate this run introduced). Sweep: 131/132 touched, 1 FAILURE: person
-`6a2fc05e4cd971291c5d5ddc` (Mihkel's real OAuth identity, not script-created) — 403 on the touch-save
-POST. Rights-model gap (db-root lacks `_owner` on this specific non-synthetic entity's `_sharing`),
-not a script defect — every OTHER real+synthetic person touched cleanly. Run exit 1, not claimed as
-success, surfaced on #37 for operator repair (likely needs an `_owner` grant, outside my authority).
-Artifact: `seed-results/narrow-person-refs-2026-08-08-live-2026-08-08T03-54-57-759Z.json`.
-
-## #44 narrow-person-refs DRY-RUN (epic #37 D3, 2026-08-08) — plan built, 0 writes
-
-`narrow-person-refs-2026-08-08.ts` + lib, mirrors #20's Bundle-A/Bundle-B/canary/ledger shape exactly
-(opposite direction: domain→private replace, not absent→domain create). All pre-checks passed live:
-18 prop-defs re-confirmed domain with current _id captured; 132 persons re-confirmed (matches #41,
-no drift); tier breakdown `{private:1, domain:3, public:128}`, all have an explicit _sharing value
-(uniform touch-save path, no absent-value edge case). Canary = db-root person `69bcfd8e...8079`,
-followed by a NEW-pattern hard gate this run uniquely needs: db-root's ENTU_API_KEY must
-re-authenticate a trivial read AFTER the canary's own re-aggregation, before touching the other 131
-(`touchSaveCanaryAndSelfTest` in the lib — reusable shape if a future narrow/widen ever touches the
-credential-holder's own entity again). **Real finding**: of the 18 targeted props, only 3 carry ANY
-value across all 132 persons (voice=8, entu_user=3, entu_api_key=1) — the other 15 are 0/132
-everywhere. Narrowing is a schema-hygiene no-op for 15/18 props; flagged to team-lead/#37 since the
-epic's stated "roster loses display affordances" consequence has little live surface to land on.
-Artifact: `seed-results/narrow-person-refs-2026-08-08-dry-2026-08-08T03-48-53-149Z.json`. Awaiting
-Bentham review + explicit "I authorize this run" before flipping DRY_RUN=false.
-
-## #44 domain-bucket gate check (epic #37 D3, 2026-08-08) — resolved NOT-exposed
-
-db-root's `entu_api_key` (the #43 hit) is NOT domain-bucket-visible: instance-level `_sharing` on
-that person entity is `private` (gate 3 of 3-gate-AND), which caps the property out of the domain
-bucket regardless of prop-def/type both being `domain` (gates 1+2). `ENTU_ADMIN_KEY` (the only other
-local credential) resolves to an ANONYMOUS FLOOR JWT (`accounts:[]`) — NOT a real second member seat,
-confirmed live; don't re-try it expecting a genuine cross-account read. Also found: the property
-carries 3 STACKED values (POST-append-never-replace), not 1 — flagged for the rotation call, not
-itself a new exposure (all sit behind the same private gate). Artifact:
-`seed-results/probe-44-domain-bucket-check-2026-08-08T03-41-53-000Z.json`.
-
-## #43 credential pre-check (epic #37 D3, 2026-08-08) — STOP triggered
-
-1/132 persons carries `entu_api_key` (none carry `entu_passkey`): person `69bcfd8e...8079` =
-db-root/PO's own identity, the same credential these probe scripts authenticate with — not an
-orphan/leaked key, but per #43's scope a non-empty result is a hard stop. Posted on #37, awaiting
-Mihkel/team-lead's call before #44 (D3 narrow) proceeds. Artifact:
-`seed-results/probe-credential-precheck-2026-08-08T03-35-01-000Z.json`.
-
-## #41 inventory pass (epic #37 Phase 1, 2026-08-08) — headline numbers
-
-246 members (245 domain + 1 private = fixture B) · 132 persons (128 T3.1-synthetic + 4 real:
-db-root/Mihkel-OAuth/TestUser/fixtureB) · 115 orphan members, orphan-vs-person exact-name-match
-partition = 18 with-twin / 97 without-twin · person carries 18 prop-defs all `_sharing:domain`
-(not ~15 as epic estimated) · member carries 4 prop-defs (person/section/current_section/status),
-all domain · 3 menu entries point at zero-instance types (repertoire_item/program_item/attendance)
-· `_probe_bulletin` = 3 inert Mihkel-created test rows, safe per §8.6. Orphan `member.name` values
-are STILL LIVE-READABLE via direct API query despite the prop-def removal (data persists, only the
-frontend's render-hint is gone) — don't conflate "no prop-def" with "no data" in future reporting.
-Full breakdown + result artifact: `seed-results/probe-epic37-phase1-inventory-2026-08-08T02-19-47-000Z.json`,
-posted as structured comment on #37.
+**Open thread across #44/#45**: db-root is NOT `_owner` on entities created by/under Mihkel's real
+OAuth identity (`6a2fc05e...5ddc`) — confirmed on 2 distinct entities (a person's own `_sharing`,
+an `application` specimen's full entity). Script-created/synthetic entities are unaffected. Needs an
+`_owner` grant from someone who already holds it (same shape as the pre-existing `entu_api_key`
+`_owner`-not-`_editor` deferred item below) — not self-serviceable, PO/team-lead decision.
