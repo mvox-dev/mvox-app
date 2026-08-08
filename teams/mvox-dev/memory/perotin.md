@@ -244,6 +244,20 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #46 orphan-115-disposition DRY-RUN (2026-08-08) — Phase B mechanically EMPTY
+
+Phase A (loose-match, always read-only): 18 exact, **0 loose** — normalizing case/diacritics/
+whitespace across the 97 unmatched orphans found nothing new against the full 132-person pool.
+Phase B (delete corroborated twins, name+section): **0 candidates — structural, not a bug.**
+0/131 linked/twin member rows carry ANY section/current_section value (confirmed live), while
+115/115 orphans do — the corroboration comparison always lands `n-a`, never `yes`, even for the 18
+exact matches. Did NOT loosen the criterion to manufacture deletes (would violate "bare name match
+alone is NOT sufficient" from the other direction) — flagged for Mihkel: accept 0 deletes this round,
+or define an alternative corroboration signal. Phase C: all 115 → hide (97 no-match + 18
+section-data-absent). Entrypoint gates live execution per-phase (`PHASE=B|C`), Phase C recomputes
+fresh each run so it naturally reflects any prior Phase B deletions. Artifact:
+`seed-results/orphan-115-disposition-2026-08-08-dry-2026-08-08T04-25-04-527Z.json`.
+
 ## Epic #37 session — 2026-08-08 (Phase 1 inventory through #46 pre-check)
 
 Chronological, all live 2026-08-08, all posted as structured comments on #37 (single source of
