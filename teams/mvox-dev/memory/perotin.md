@@ -233,6 +233,14 @@ meta-type entity `69bcfd8e9c031ab8e6ce8048` — NOT the "entity" meta-type `69bc
 property). Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their
 own top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #48 member display-config LIVE (2026-08-08) — list:true+ordinal:1 on person, descriptions PARKED
+
+Split decision: fix the 1-write display gap now, park the 160 description writes (authored content,
+Mihkel's call on wording, not mechanical). Combined verify+write+read-back: `member.person` list
+(absent)→true, ordinal 4→1, both read-back confirmed. Admin member list now shows the linked person
+first instead of only `section`. Artifact:
+`seed-results/member-display-config-2026-08-08-2026-08-08T12-50-47-647Z.json`.
+
 ## #48 meta-polish inventory (2026-08-08, read-only) — clean 0% baseline, display-config mechanism found
 
 20 content types (post-#45, was 22), all 20 missing `description`. 140 prop-defs across those types,
