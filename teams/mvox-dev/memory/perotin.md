@@ -244,6 +244,15 @@ wrong — but don't reuse the old script's constant.
 Menu (`_type.string=menu`, 23 rows) and plugin (`_type.string=plugin`, 4 rows) are their own
 top-level content kinds, siblings of "entity"/"property", not children of anything.
 
+## #53 delete-corroborated-orphans DRY-RUN (2026-08-08) — 7/7 pass, 0 writes
+
+Loads the 7 corroborated ids DIRECTLY from the committed #46 corrected-comparison artifact (not
+re-typed), re-verifies each live (exists, `_sharing:private` per Phase C, name unchanged), and
+cross-checks zero overlap against the 11 uncorroborated rows from that same artifact. Per-row ledger
+carries orphan id + twin person/member id + matched name + matched section parent id + basis, per
+Gama's requirement. All 7 pass. Artifact:
+`seed-results/delete-corroborated-orphans-2026-08-08-dry-2026-08-08T04-38-37-584Z.json`.
+
 ## #47 menu-empty-shells DRY-RUN (2026-08-08) — plan built, 0 writes
 
 Repertoire/Programme/Attendance (0-instance types) → admin-only via `DELETE /property/{sharingValueId}`,
