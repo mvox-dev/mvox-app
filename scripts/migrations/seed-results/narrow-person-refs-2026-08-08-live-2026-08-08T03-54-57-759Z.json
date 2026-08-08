@@ -1,0 +1,883 @@
+{
+  "dryRun": false,
+  "personTypeSharingObserved": "domain",
+  "propDefTargets": [
+    {
+      "id": "69bcfd8e9c031ab8e6ce8060",
+      "name": "address",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80ec",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8061",
+      "name": "birthdate",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80ed",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8062",
+      "name": "county",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80ee",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8064",
+      "name": "entu_user",
+      "sharingValueId": "69bd0e619c031ab8e6ce9928",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8066",
+      "name": "idcode",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce80f2",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce8067",
+      "name": "entu_api_key",
+      "sharingValueId": "69bd0e569c031ab8e6ce9926",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806a",
+      "name": "phone",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce810e",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806c",
+      "name": "postalcode",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce8122",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806e",
+      "name": "town",
+      "sharingValueId": "69bcfd8e9c031ab8e6ce8125",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69bcfd8e9c031ab8e6ce806f",
+      "name": "entu_passkey",
+      "sharingValueId": "69bd0e5c9c031ab8e6ce9927",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5a8489bfcb0e81a1ac",
+      "name": "voice",
+      "sharingValueId": "69c7ea5a8489bfcb0e81a1bb",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5a8489bfcb0e81a1bf",
+      "name": "language",
+      "sharingValueId": "69c7ea5a8489bfcb0e81a1c7",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5b8489bfcb0e81a1cb",
+      "name": "locale",
+      "sharingValueId": "69c7ea5b8489bfcb0e81a1d3",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "69c7ea5b8489bfcb0e81a1d7",
+      "name": "timezone",
+      "sharingValueId": "69c7ea5b8489bfcb0e81a1df",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d2e8690c8df7a1cc7df71",
+      "name": "bio",
+      "sharingValueId": "6a0d2e8690c8df7a1cc7df77",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d2e8690c8df7a1cc7df7b",
+      "name": "preferred_contact_email",
+      "sharingValueId": "6a0d2e8690c8df7a1cc7df81",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d2e8690c8df7a1cc7df85",
+      "name": "preferences",
+      "sharingValueId": "6a0d2e8690c8df7a1cc7df8b",
+      "sharingValue": "domain"
+    },
+    {
+      "id": "6a0d709890c8df7a1cc7e12e",
+      "name": "photo",
+      "sharingValueId": "6a0d709890c8df7a1cc7e134",
+      "sharingValue": "domain"
+    }
+  ],
+  "canaryPersonId": "69bcfd8e9c031ab8e6ce8079",
+  "credentialSelfTestPassed": true,
+  "personPopulation": {
+    "total": 132,
+    "tierBreakdown": {
+      "private": 1,
+      "domain": 3,
+      "public": 128
+    },
+    "missingSharingIds": []
+  },
+  "propDefEntries": [
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce8060",
+      "name": "address",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce8061",
+      "name": "birthdate",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce8062",
+      "name": "county",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce8064",
+      "name": "entu_user",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce8066",
+      "name": "idcode",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce8067",
+      "name": "entu_api_key",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce806a",
+      "name": "phone",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce806c",
+      "name": "postalcode",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce806e",
+      "name": "town",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69bcfd8e9c031ab8e6ce806f",
+      "name": "entu_passkey",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69c7ea5a8489bfcb0e81a1ac",
+      "name": "voice",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69c7ea5a8489bfcb0e81a1bf",
+      "name": "language",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69c7ea5b8489bfcb0e81a1cb",
+      "name": "locale",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "69c7ea5b8489bfcb0e81a1d7",
+      "name": "timezone",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "6a0d2e8690c8df7a1cc7df71",
+      "name": "bio",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "6a0d2e8690c8df7a1cc7df7b",
+      "name": "preferred_contact_email",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "6a0d2e8690c8df7a1cc7df85",
+      "name": "preferences",
+      "status": "narrowed"
+    },
+    {
+      "propDefId": "6a0d709890c8df7a1cc7e12e",
+      "name": "photo",
+      "status": "narrowed"
+    }
+  ],
+  "touchEntries": [
+    {
+      "personId": "69bcfd8e9c031ab8e6ce8079",
+      "status": "touched",
+      "newSharingPropId": "6a76a88336c951d9114ecf71"
+    },
+    {
+      "personId": "6a097dcc90c8df7a1cc7d6dd",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf72"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305e9e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf73"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305ea4",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf74"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305eaa",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf75"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305eb0",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf76"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305eb6",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf77"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305ebc",
+      "status": "touched",
+      "newSharingPropId": "6a76a88436c951d9114ecf78"
+    },
+    {
+      "personId": "6a0dd2384ff8277cd4305ec2",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf79"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305ec8",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf7a"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305ece",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf7b"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305ed4",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf7c"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305eda",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf7d"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305ee0",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf7e"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305ee6",
+      "status": "touched",
+      "newSharingPropId": "6a76a88536c951d9114ecf7f"
+    },
+    {
+      "personId": "6a0dd2394ff8277cd4305eec",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf80"
+    },
+    {
+      "personId": "6a0dd23a4ff8277cd4305ef2",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf81"
+    },
+    {
+      "personId": "6a0dd23a4ff8277cd4305ef8",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf82"
+    },
+    {
+      "personId": "6a0dd23a4ff8277cd4305efe",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf83"
+    },
+    {
+      "personId": "6a0dd23a4ff8277cd4305f04",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf84"
+    },
+    {
+      "personId": "6a0dd23a4ff8277cd4305f0a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf85"
+    },
+    {
+      "personId": "6a0dd23a4ff8277cd4305f10",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf86"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f16",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf87"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f1c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88636c951d9114ecf88"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f22",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf89"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f28",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf8a"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f2e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf8b"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f34",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf8c"
+    },
+    {
+      "personId": "6a0dd23b4ff8277cd4305f3a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf8d"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f40",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf8e"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f46",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf8f"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f4c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf90"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f52",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf91"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f58",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf92"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f5e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88736c951d9114ecf93"
+    },
+    {
+      "personId": "6a0dd23c4ff8277cd4305f64",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf94"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f6a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf95"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f70",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf96"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f76",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf97"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f7c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf98"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f82",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf99"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f88",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf9a"
+    },
+    {
+      "personId": "6a0dd23d4ff8277cd4305f8e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf9b"
+    },
+    {
+      "personId": "6a0dd23e4ff8277cd4305f94",
+      "status": "touched",
+      "newSharingPropId": "6a76a88836c951d9114ecf9c"
+    },
+    {
+      "personId": "6a0dd23e4ff8277cd4305f9a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecf9d"
+    },
+    {
+      "personId": "6a0dd23e4ff8277cd4305fa0",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecf9e"
+    },
+    {
+      "personId": "6a0dd23e4ff8277cd4305fa6",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecf9f"
+    },
+    {
+      "personId": "6a0dd23e4ff8277cd4305fac",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa0"
+    },
+    {
+      "personId": "6a0dd23e4ff8277cd4305fb2",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa1"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fb8",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa2"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fbe",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa3"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fc4",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa4"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fca",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa5"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fd0",
+      "status": "touched",
+      "newSharingPropId": "6a76a88936c951d9114ecfa6"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fd6",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfa7"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fdc",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfa8"
+    },
+    {
+      "personId": "6a0dd23f4ff8277cd4305fe2",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfa9"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd4305fe8",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfaa"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd4305fee",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfab"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd4305ff4",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfac"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd4305ffa",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfad"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd4306000",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfae"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd4306006",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfaf"
+    },
+    {
+      "personId": "6a0dd2404ff8277cd430600c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88a36c951d9114ecfb0"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd4306012",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb1"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd4306018",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb2"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd430601e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb3"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd4306024",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb4"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd430602a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb5"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd4306030",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb6"
+    },
+    {
+      "personId": "6a0dd2414ff8277cd4306036",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb7"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd430603c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb8"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd4306042",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfb9"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd4306048",
+      "status": "touched",
+      "newSharingPropId": "6a76a88b36c951d9114ecfba"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd430604e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfbb"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd4306054",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfbc"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd430605a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfbd"
+    },
+    {
+      "personId": "6a0dd2424ff8277cd4306060",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfbe"
+    },
+    {
+      "personId": "6a0dd2434ff8277cd4306066",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfbf"
+    },
+    {
+      "personId": "6a0dd2434ff8277cd430606c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfc0"
+    },
+    {
+      "personId": "6a0dd2434ff8277cd4306072",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfc1"
+    },
+    {
+      "personId": "6a0dd2434ff8277cd4306078",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfc2"
+    },
+    {
+      "personId": "6a0dd2434ff8277cd430607e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfc3"
+    },
+    {
+      "personId": "6a0dd2434ff8277cd4306084",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfc4"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd430608a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88c36c951d9114ecfc5"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd4306090",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfc6"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd4306096",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfc7"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd430609c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfc8"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd43060a2",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfc9"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd43060a8",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfca"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd43060ae",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfcb"
+    },
+    {
+      "personId": "6a0dd2444ff8277cd43060b4",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfcc"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060ba",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfcd"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060c0",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfce"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060c6",
+      "status": "touched",
+      "newSharingPropId": "6a76a88d36c951d9114ecfcf"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060cc",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd0"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060d2",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd1"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060d8",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd2"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060de",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd3"
+    },
+    {
+      "personId": "6a0dd2454ff8277cd43060e4",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd4"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd43060ea",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd5"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd43060f0",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd6"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd43060f6",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd7"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd43060fc",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd8"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd4306102",
+      "status": "touched",
+      "newSharingPropId": "6a76a88e36c951d9114ecfd9"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd4306108",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfda"
+    },
+    {
+      "personId": "6a0dd2464ff8277cd430610e",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfdb"
+    },
+    {
+      "personId": "6a0dd2474ff8277cd4306114",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfdc"
+    },
+    {
+      "personId": "6a0dd2474ff8277cd430611a",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfdd"
+    },
+    {
+      "personId": "6a0dd2474ff8277cd4306120",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfde"
+    },
+    {
+      "personId": "6a0dd2474ff8277cd4306126",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfdf"
+    },
+    {
+      "personId": "6a0dd2474ff8277cd430612c",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfe0"
+    },
+    {
+      "personId": "6a0dd2474ff8277cd4306132",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfe1"
+    },
+    {
+      "personId": "6a0dd2484ff8277cd4306138",
+      "status": "touched",
+      "newSharingPropId": "6a76a88f36c951d9114ecfe2"
+    },
+    {
+      "personId": "6a0dd2484ff8277cd430613e",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe3"
+    },
+    {
+      "personId": "6a0dd2484ff8277cd4306144",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe4"
+    },
+    {
+      "personId": "6a0dd2484ff8277cd430614a",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe5"
+    },
+    {
+      "personId": "6a0dd2484ff8277cd4306150",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe6"
+    },
+    {
+      "personId": "6a0dd2484ff8277cd4306156",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe7"
+    },
+    {
+      "personId": "6a0dd2494ff8277cd430615c",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe8"
+    },
+    {
+      "personId": "6a0dd2494ff8277cd4306162",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfe9"
+    },
+    {
+      "personId": "6a0dd2494ff8277cd4306168",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfea"
+    },
+    {
+      "personId": "6a12036c4ff8277cd4306b2d",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfeb"
+    },
+    {
+      "personId": "6a12036c4ff8277cd4306b3e",
+      "status": "touched",
+      "newSharingPropId": "6a76a89036c951d9114ecfec"
+    },
+    {
+      "personId": "6a12036c4ff8277cd4306b4f",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecfed"
+    },
+    {
+      "personId": "6a12036d4ff8277cd4306b60",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecfee"
+    },
+    {
+      "personId": "6a12036d4ff8277cd4306b71",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecfef"
+    },
+    {
+      "personId": "6a12036d4ff8277cd4306b82",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecff0"
+    },
+    {
+      "personId": "6a12036d4ff8277cd4306b93",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecff1"
+    },
+    {
+      "personId": "6a12036e4ff8277cd4306ba4",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecff2"
+    },
+    {
+      "personId": "6a2fc05e4cd971291c5d5ddc",
+      "status": "failed",
+      "message": "touch-save POST failed: 403"
+    },
+    {
+      "personId": "6a7591cc36c951d9114ec8de",
+      "status": "touched",
+      "newSharingPropId": "6a76a89136c951d9114ecff3"
+    }
+  ],
+  "propDefFailureCount": 0,
+  "touchFailureCount": 1,
+  "exitCode": 1,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root), which always reads the private bucket regardless of prop-def sharing. 'narrowed'/'touched' here means the write landed and rotated the property _id (proof a fresh aggregateEntity run happened), NOT an empirically-confirmed absence from a non-owner domain reader's view. That last-mile confirmation needs a real non-omniscient browser session (Mihkel), same pattern as #20/#29."
+}
