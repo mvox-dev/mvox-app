@@ -1,0 +1,22 @@
+{
+  "dryRun": false,
+  "entries": [
+    {
+      "menuId": "6a0f6d324ff8277cd4306a3a",
+      "name": "repertoire_item",
+      "status": "privatized"
+    },
+    {
+      "menuId": "6a0f6d324ff8277cd4306a45",
+      "name": "program_item",
+      "status": "privatized"
+    },
+    {
+      "menuId": "6a0f6d324ff8277cd4306a5b",
+      "name": "attendance",
+      "status": "privatized"
+    }
+  ],
+  "failureCount": 0,
+  "exitCode": 0
+}
