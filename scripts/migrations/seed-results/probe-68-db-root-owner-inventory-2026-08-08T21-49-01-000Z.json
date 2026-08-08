@@ -1,0 +1,1127 @@
+{
+  "issue": "#68 (epic #37) — db-root _owner backfill, Phase 1 read-only inventory",
+  "readOnly": true,
+  "dbRootPersonId": "69bcfd8e9c031ab8e6ce8079",
+  "mihkelOauthPersonId": "6a2fc05e4cd971291c5d5ddc",
+  "typeCount": 25,
+  "grandTotalEntities": 1444,
+  "grandDbRootOwned": 1372,
+  "grandFlagged": 72,
+  "histogram": {
+    "db-root-owned": 0,
+    "mihkel-oauth-owned": 10,
+    "other-owned": 59,
+    "no-owner": 3
+  },
+  "perType": [
+    {
+      "type": "attendance",
+      "typeId": "6a0d2e8690c8df7a1cc7df4b",
+      "total": 0,
+      "dbRootOwned": 0,
+      "flaggedCount": 0
+    },
+    {
+      "type": "copy",
+      "typeId": "6a0d2e8190c8df7a1cc7ddb0",
+      "total": 552,
+      "dbRootOwned": 552,
+      "flaggedCount": 0
+    },
+    {
+      "type": "database",
+      "typeId": "69bcfd8e9c031ab8e6ce8027",
+      "total": 1,
+      "dbRootOwned": 0,
+      "flaggedCount": 1
+    },
+    {
+      "type": "edition",
+      "typeId": "69c7ea4e8489bfcb0e819f9c",
+      "total": 17,
+      "dbRootOwned": 17,
+      "flaggedCount": 0
+    },
+    {
+      "type": "entity",
+      "typeId": "69bcfd8e9c031ab8e6ce8034",
+      "total": 25,
+      "dbRootOwned": 20,
+      "flaggedCount": 5
+    },
+    {
+      "type": "event",
+      "typeId": "69c7ea548489bfcb0e81a0a2",
+      "total": 21,
+      "dbRootOwned": 21,
+      "flaggedCount": 0
+    },
+    {
+      "type": "event_series",
+      "typeId": "6a0d2e8490c8df7a1cc7deb1",
+      "total": 2,
+      "dbRootOwned": 2,
+      "flaggedCount": 0
+    },
+    {
+      "type": "invitation",
+      "typeId": "6a0d2e8290c8df7a1cc7de3e",
+      "total": 1,
+      "dbRootOwned": 1,
+      "flaggedCount": 0
+    },
+    {
+      "type": "lending",
+      "typeId": "6a0d2e8190c8df7a1cc7dde8",
+      "total": 4,
+      "dbRootOwned": 4,
+      "flaggedCount": 0
+    },
+    {
+      "type": "library",
+      "typeId": "6a0d2e8090c8df7a1cc7dd9d",
+      "total": 1,
+      "dbRootOwned": 1,
+      "flaggedCount": 0
+    },
+    {
+      "type": "member",
+      "typeId": "69c7ea4a8489bfcb0e819edd",
+      "total": 239,
+      "dbRootOwned": 239,
+      "flaggedCount": 0
+    },
+    {
+      "type": "menu",
+      "typeId": "69bcfd8e9c031ab8e6ce803c",
+      "total": 23,
+      "dbRootOwned": 23,
+      "flaggedCount": 0
+    },
+    {
+      "type": "mvox_collective",
+      "typeId": "6a73880336c951d9114ec63d",
+      "total": 1,
+      "dbRootOwned": 1,
+      "flaggedCount": 0
+    },
+    {
+      "type": "organization",
+      "typeId": "69c7ea478489bfcb0e819e3d",
+      "total": 6,
+      "dbRootOwned": 6,
+      "flaggedCount": 0
+    },
+    {
+      "type": "person",
+      "typeId": "69bcfd8e9c031ab8e6ce805f",
+      "total": 132,
+      "dbRootOwned": 131,
+      "flaggedCount": 1
+    },
+    {
+      "type": "plugin",
+      "typeId": "69bcfd8e9c031ab8e6ce8042",
+      "total": 4,
+      "dbRootOwned": 4,
+      "flaggedCount": 0
+    },
+    {
+      "type": "profile",
+      "typeId": "6a74933f36c951d9114ec817",
+      "total": 133,
+      "dbRootOwned": 130,
+      "flaggedCount": 3
+    },
+    {
+      "type": "program_item",
+      "typeId": "69c7ea568489bfcb0e81a103",
+      "total": 0,
+      "dbRootOwned": 0,
+      "flaggedCount": 0
+    },
+    {
+      "type": "property",
+      "typeId": "69bcfd8e9c031ab8e6ce8048",
+      "total": 230,
+      "dbRootOwned": 178,
+      "flaggedCount": 52
+    },
+    {
+      "type": "repertoire_item",
+      "typeId": "69c7ea538489bfcb0e81a06e",
+      "total": 0,
+      "dbRootOwned": 0,
+      "flaggedCount": 0
+    },
+    {
+      "type": "rsvp",
+      "typeId": "6a0d2e8590c8df7a1cc7df1b",
+      "total": 16,
+      "dbRootOwned": 6,
+      "flaggedCount": 10
+    },
+    {
+      "type": "season",
+      "typeId": "69c7ea528489bfcb0e81a044",
+      "total": 2,
+      "dbRootOwned": 2,
+      "flaggedCount": 0
+    },
+    {
+      "type": "section",
+      "typeId": "69c7ea498489bfcb0e819ea3",
+      "total": 16,
+      "dbRootOwned": 16,
+      "flaggedCount": 0
+    },
+    {
+      "type": "voice",
+      "typeId": "6a0d2e8090c8df7a1cc7dd6a",
+      "total": 5,
+      "dbRootOwned": 5,
+      "flaggedCount": 0
+    },
+    {
+      "type": "work",
+      "typeId": "69c7ea4c8489bfcb0e819f3e",
+      "total": 13,
+      "dbRootOwned": 13,
+      "flaggedCount": 0
+    }
+  ],
+  "flaggedByType": [
+    {
+      "type": "database",
+      "typeId": "69bcfd8e9c031ab8e6ce8027",
+      "flagged": [
+        {
+          "id": "69bcfd8e9c031ab8e6ce807a",
+          "name": "polyphony",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "entity",
+      "typeId": "69bcfd8e9c031ab8e6ce8034",
+      "flagged": [
+        {
+          "id": "69bcfd8e9c031ab8e6ce8027",
+          "name": "database",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8034",
+          "name": "entity",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce803c",
+          "name": "menu",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8042",
+          "name": "plugin",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8048",
+          "name": "property",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "person",
+      "typeId": "69bcfd8e9c031ab8e6ce805f",
+      "flagged": [
+        {
+          "id": "6a2fc05e4cd971291c5d5ddc",
+          "name": "Mihkel Putrinš",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "profile",
+      "typeId": "6a74933f36c951d9114ec817",
+      "flagged": [
+        {
+          "id": "6a75773136c951d9114ec894",
+          "name": "Mibiri Sumu",
+          "classification": "no-owner",
+          "ownerRefs": []
+        },
+        {
+          "id": "6a757d1b36c951d9114ec89d",
+          "name": "(no name prop)",
+          "classification": "no-owner",
+          "ownerRefs": []
+        },
+        {
+          "id": "6a75923936c951d9114ec8f4",
+          "name": "Mibiri",
+          "classification": "no-owner",
+          "ownerRefs": []
+        }
+      ]
+    },
+    {
+      "type": "property",
+      "typeId": "69bcfd8e9c031ab8e6ce8048",
+      "flagged": [
+        {
+          "id": "69bcfd8e9c031ab8e6ce8028",
+          "name": "address",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8029",
+          "name": "add_user",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce802a",
+          "name": "email",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce802b",
+          "name": "name",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce802c",
+          "name": "organization",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce802d",
+          "name": "photo",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce802e",
+          "name": "price",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce802f",
+          "name": "billing_data_limit",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8030",
+          "name": "billing_entities_limit",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8031",
+          "name": "billing_requests_limit",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8032",
+          "name": "billing_customer_id",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8033",
+          "name": "entu_user",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8035",
+          "name": "add_from",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8036",
+          "name": "default_parent",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8037",
+          "name": "description",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8038",
+          "name": "label",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8039",
+          "name": "label_plural",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce803a",
+          "name": "name",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce803b",
+          "name": "plugin",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce803d",
+          "name": "description",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce803e",
+          "name": "group",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce803f",
+          "name": "name",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8040",
+          "name": "ordinal",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8041",
+          "name": "query",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8043",
+          "name": "name",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8044",
+          "name": "new_window",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8045",
+          "name": "type",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8046",
+          "name": "url",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8047",
+          "name": "description",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8049",
+          "name": "decimals",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce804a",
+          "name": "description",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce804b",
+          "name": "formula",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce804c",
+          "name": "group",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce804d",
+          "name": "label",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce804e",
+          "name": "label_plural",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce804f",
+          "name": "list",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8050",
+          "name": "mandatory",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8051",
+          "name": "markdown",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8052",
+          "name": "multilingual",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8053",
+          "name": "name",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8054",
+          "name": "ordinal",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8055",
+          "name": "plugin",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8056",
+          "name": "readonly",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8057",
+          "name": "reference_query",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8058",
+          "name": "search",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce8059",
+          "name": "set",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce805a",
+          "name": "table",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce805b",
+          "name": "type",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce805c",
+          "name": "uniqueness",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce805d",
+          "name": "default",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "69bcfd8e9c031ab8e6ce805e",
+          "name": "hidden",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        },
+        {
+          "id": "6a4b84f2a7041b3340aa4057",
+          "name": "billing_tokens_limit",
+          "classification": "other-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "rsvp",
+      "typeId": "6a0d2e8590c8df7a1cc7df1b",
+      "flagged": [
+        {
+          "id": "6a73dff236c951d9114ec6ce",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff336c951d9114ec6d9",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff436c951d9114ec6e4",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff536c951d9114ec6ef",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff536c951d9114ec6fa",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff636c951d9114ec705",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff836c951d9114ec710",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73dff836c951d9114ec71b",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73e73f36c951d9114ec795",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        },
+        {
+          "id": "6a73e77336c951d9114ec7ca",
+          "name": "(no name prop)",
+          "classification": "mihkel-oauth-owned",
+          "ownerRefs": [
+            {
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "entity_type": "database",
+              "string": "polyphony"
+            },
+            {
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "entity_type": "person",
+              "string": "Mihkel Putrinš"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
