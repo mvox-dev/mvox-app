@@ -1,0 +1,15 @@
+{
+  "status": "success",
+  "propDefId": "69c7ea4b8489bfcb0e819f05",
+  "before": {
+    "list": null,
+    "ordinal": 4
+  },
+  "after": {
+    "list": true,
+    "ordinal": 1
+  },
+  "listOk": true,
+  "ordinalOk": true,
+  "exitCode": 0
+}
