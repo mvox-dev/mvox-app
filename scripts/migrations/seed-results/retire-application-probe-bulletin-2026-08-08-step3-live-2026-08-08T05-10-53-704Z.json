@@ -1,0 +1,33 @@
+{
+  "dryRun": false,
+  "step": 3,
+  "entries": [
+    {
+      "id": "6a0d2e8390c8df7a1cc7de8a",
+      "label": "application prop-def target_org",
+      "status": "deleted"
+    },
+    {
+      "id": "6a0d2e8390c8df7a1cc7de94",
+      "label": "application prop-def message",
+      "status": "deleted"
+    },
+    {
+      "id": "6a0d2e8490c8df7a1cc7de9d",
+      "label": "application prop-def status",
+      "status": "deleted"
+    },
+    {
+      "id": "6a0d2e8490c8df7a1cc7dea7",
+      "label": "application prop-def expires_at",
+      "status": "deleted"
+    },
+    {
+      "id": "6a0d2e8390c8df7a1cc7de81",
+      "label": "application TYPE entity",
+      "status": "deleted"
+    }
+  ],
+  "failureCount": 0,
+  "exitCode": 0
+}

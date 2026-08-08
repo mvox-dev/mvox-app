@@ -90,6 +90,29 @@ export type VerifiedTargets = {
 	probeBulletinType: { id: string; name: string; instanceIds: string[]; propDefs: Array<{ id: string; name: string }>; menuEntryExists: boolean };
 };
 
+/** Targeted step-3-only verification (added 2026-08-08 after steps 1/2/4 had
+ * already landed live — steps 1/2/4's entities are gone by design at that
+ * point, so `verifyAllTargets`'s unconditional 4-target check fails on them
+ * even though step 3 doesn't need menu/specimen/probe-bulletin data at all).
+ * Confirms only what step 3 actually depends on: the `application` type
+ * entity resolves correctly and its live instance count is 0 (the specimen
+ * having been deleted, by this script's step 2 or otherwise — step 2's
+ * ownership doesn't matter here, only the resulting count). Does not touch
+ * `verifyAllTargets`'s contract for the other 3 (still-relevant-for-planning)
+ * steps. */
+export async function verifyStep3Only(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<{ applicationType: VerifiedTargets['applicationType'] }> {
+	const appTypeRes = await entuFetch(cfg.db, `entity/${APPLICATION_TYPE_ID}?props=name`, cfg.token, {}, fetchImpl);
+	if (!appTypeRes.ok) throw new Error(`verifyStep3Only: application type ${APPLICATION_TYPE_ID} GET failed: ${appTypeRes.status}`);
+	const appTypeBody = (await appTypeRes.json()) as { entity?: { name?: Array<{ string: string }> } };
+	if (appTypeBody.entity?.name?.[0]?.string !== 'application') {
+		throw new Error(`verifyStep3Only: ${APPLICATION_TYPE_ID} is not the 'application' type entity — refuse to proceed`);
+	}
+	const appCountRes = await entuFetch(cfg.db, `entity?_type.reference=${APPLICATION_TYPE_ID}&props=_id&limit=50`, cfg.token, {}, fetchImpl);
+	if (!appCountRes.ok) throw new Error(`verifyStep3Only: application instance count GET failed: ${appCountRes.status}`);
+	const appCountBody = (await appCountRes.json()) as { count: number };
+	return { applicationType: { id: APPLICATION_TYPE_ID, name: 'application', instanceCount: appCountBody.count, propDefs: APPLICATION_PROPDEFS } };
+}
+
 export async function verifyAllTargets(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<VerifiedTargets> {
 	// Menu entry
 	const menuRes = await entuFetch(cfg.db, `entity/${MENU_ENTRY_ID}?props=name,_sharing,query`, cfg.token, {}, fetchImpl);

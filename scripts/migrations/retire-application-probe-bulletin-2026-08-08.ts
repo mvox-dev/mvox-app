@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { loadCfg } from './lib/creds';
 import {
 	verifyAllTargets,
+	verifyStep3Only,
 	step1PrivatizeMenu,
 	step2DeleteSpecimen,
 	step3RetireApplicationType,
@@ -41,10 +42,9 @@ function writeResultArtifact(payload: Record<string, unknown>, suffix: string): 
 async function main(): Promise<void> {
 	const cfg = await loadCfg();
 
-	// Step-0 enumeration (READ-ONLY) — HALTs loudly on any drift from live-verified expectations.
-	const verified = await verifyAllTargets(cfg);
-
 	if (DRY_RUN) {
+		// Full-plan render still needs all 4 targets' live state.
+		const verified = await verifyAllTargets(cfg);
 		const plan = renderPlan(verified);
 		console.log(plan);
 		console.log('DRY_RUN=true — no writes issued. Set DRY_RUN=false AND STEP=1|2|3|4 to execute exactly one step (gated on its own #45 §8.6 authorization + Bentham review).');
@@ -59,6 +59,7 @@ async function main(): Promise<void> {
 
 	let entries: Array<{ id: string; label: string; status: string; message?: string }>;
 	if (STEP === 1) {
+		const verified = await verifyAllTargets(cfg);
 		if (!verified.menuEntry.sharingValueId) {
 			throw new Error('STEP 1: menu entry already has no _sharing value — already privatized, or state drifted; refuse to proceed, re-verify manually');
 		}
@@ -66,6 +67,12 @@ async function main(): Promise<void> {
 	} else if (STEP === 2) {
 		entries = [await step2DeleteSpecimen(cfg)];
 	} else if (STEP === 3) {
+		// Targeted verification only — steps 1/2/4 have already landed live by
+		// this point (specimen deleted, menu privatized, _probe_bulletin gone),
+		// so the full verifyAllTargets 4-target check would fail on entities
+		// that are gone BY DESIGN. step3RetireApplicationType does its own live
+		// zero-instance recount internally regardless (see lib header note).
+		await verifyStep3Only(cfg);
 		entries = await step3RetireApplicationType(cfg);
 	} else {
 		entries = await step4DeleteProbeBulletin(cfg);
