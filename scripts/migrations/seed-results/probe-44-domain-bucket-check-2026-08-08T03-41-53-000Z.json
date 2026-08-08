@@ -1,0 +1,28 @@
+{
+  "issue": "#44 pre-execution gate (epic #37 D3) — is entu_api_key on the #43 hit domain-bucket-visible?",
+  "readOnly": true,
+  "valuesLogged": false,
+  "targetPersonId": "69bcfd8e9c031ab8e6ce8079",
+  "targetPersonCreatedAt": "2026-03-20T07:55:58.462Z",
+  "adminSeatAttempt": {
+    "attempted": true,
+    "usable": false,
+    "reason": "ENTU_ADMIN_KEY resolves to an anonymous floor JWT (accounts:[]) — not identity-linked to a real member/OAuth account. Cannot be used to simulate a genuine domain-tier member seat."
+  },
+  "threeGateAndCheck": {
+    "gate1_propDefSharing": "domain",
+    "gate2_typeOwnSharing": "domain",
+    "gate3_instanceOwnSharing": "private",
+    "allThreeDomainOrPublic": false
+  },
+  "credentialValuePresence": {
+    "count": 3,
+    "propertyIds": [
+      "6a0d44c790c8df7a1cc7e0e0",
+      "6a32018e487a9c1f02f70b09",
+      "6a32018e487a9c1f02f70b0a"
+    ]
+  },
+  "verdict": "NOT domain-bucket-visible — gate 3 (instance _sharing) is \"private\", which caps every property on this entity out of the domain bucket regardless of the prop-def (gate 1, \"domain\") or type (gate 2, \"domain\") being domain-tier. The credential is structurally private today.",
+  "flagForAwareness": "entu_api_key carries 3 STACKED values on this entity (POST-appends-never-replaces — see architecture-decisions.md). Multiple historical/rotated keys may all still be independently valid at auth time; worth folding into whatever rotation decision follows."
+}
