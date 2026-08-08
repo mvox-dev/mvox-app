@@ -10,9 +10,13 @@
 		hydrateCollectives,
 		urlCollectiveDbStore,
 		selectedCollectiveStore,
+		pickerModeStore,
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
 	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
+	import NavShell from '$lib/components/nav/NavShell.svelte';
+	import { NAV_ENTRIES } from '$lib/nav/entries';
+	import { adminStore, resetAdmin, resolveAdmin } from '$lib/nav/adminStore';
 
 	let { children } = $props();
 
@@ -121,6 +125,34 @@
 			goto('/profile');
 		}
 	});
+
+	// ── T5.2/#52 — admin determination for the nav shell Invite entry.
+	// Same generation-guard discipline as the gate effect above: keyed on
+	// auth + selected collective; stale resolves cannot clobber.
+	let adminGen = 0;
+	$effect(() => {
+		const auth = $authStore;
+		const selected = $selectedCollectiveStore;
+		const g = ++adminGen;
+		if (auth.status !== 'authenticated' || !selected) {
+			resetAdmin();
+			return;
+		}
+		resetAdmin();
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		resolveAdmin(cfg, selected.personId).then((state) => {
+			if (g === adminGen) adminStore.set(state);
+		});
+	});
 </script>
 
-{@render children?.()}
+<NavShell
+	entries={NAV_ENTRIES}
+	activeRoute={page.url.pathname}
+	completionLocked={$completionGateStore === 'incomplete'}
+	anonymous={$authStore.status !== 'authenticated'}
+	isAdmin={$adminStore === 'admin'}
+	hasMultipleCollectives={$pickerModeStore === 'picker'}
+>
+	{@render children?.()}
+</NavShell>

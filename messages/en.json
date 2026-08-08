@@ -79,5 +79,10 @@
 	"roster_no_collective": "Select a collective to view the roster.",
 	"roster_load_error": "Something went wrong loading the roster.",
 	"roster_retry": "Retry",
-	"roster_empty": "No members to show yet."
+	"roster_empty": "No members to show yet.",
+	"nav_agenda": "Agenda",
+	"nav_roster": "Roster",
+	"nav_profile": "Profile",
+	"nav_invite": "Invite",
+	"nav_collectives": "Collectives"
 }

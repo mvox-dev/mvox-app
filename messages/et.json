@@ -79,5 +79,10 @@
 	"roster_no_collective": "Nimekirja vaatamiseks vali kollektiiv.",
 	"roster_load_error": "Liikmete nimekirja laadimine ebaõnnestus.",
 	"roster_retry": "Proovi uuesti",
-	"roster_empty": "Liikmeid pole veel kuvada."
+	"roster_empty": "Liikmeid pole veel kuvada.",
+	"nav_agenda": "Päevakord",
+	"nav_roster": "Liikmed",
+	"nav_profile": "Profiil",
+	"nav_invite": "Kutsu",
+	"nav_collectives": "Kollektiivid"
 }

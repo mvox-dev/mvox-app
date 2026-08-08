@@ -79,5 +79,10 @@
 	"roster_no_collective": "Lai skatītu sarakstu, izvēlieties kolektīvu.",
 	"roster_load_error": "Neizdevās ielādēt dalībnieku sarakstu.",
 	"roster_retry": "Mēģināt vēlreiz",
-	"roster_empty": "Vēl nav dalībnieku, ko rādīt."
+	"roster_empty": "Vēl nav dalībnieku, ko rādīt.",
+	"nav_agenda": "Darba kārtība",
+	"nav_roster": "Dalībnieki",
+	"nav_profile": "Profils",
+	"nav_invite": "Uzaicināt",
+	"nav_collectives": "Kolektīvi"
 }
