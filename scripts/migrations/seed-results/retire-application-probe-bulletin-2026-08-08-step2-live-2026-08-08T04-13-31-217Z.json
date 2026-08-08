@@ -1,0 +1,14 @@
+{
+  "dryRun": false,
+  "step": 2,
+  "entries": [
+    {
+      "id": "6a2fdac64cd971291c5d5e79",
+      "label": "application specimen",
+      "status": "failed",
+      "message": "DELETE /entity/6a2fdac64cd971291c5d5e79 failed: 403"
+    }
+  ],
+  "failureCount": 1,
+  "exitCode": 1
+}

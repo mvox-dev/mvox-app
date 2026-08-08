@@ -1,0 +1,13 @@
+{
+  "dryRun": false,
+  "step": 1,
+  "entries": [
+    {
+      "id": "6a0f6d314ff8277cd4306a11",
+      "label": "Applications menu _sharing value",
+      "status": "deleted"
+    }
+  ],
+  "failureCount": 0,
+  "exitCode": 0
+}
