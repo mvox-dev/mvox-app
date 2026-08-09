@@ -1,0 +1,969 @@
+{
+  "dryRun": false,
+  "alreadyFilled": [],
+  "entries": [
+    {
+      "kind": "type",
+      "id": "6a0d2e8690c8df7a1cc7df4b",
+      "label": "attendance",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df54",
+      "label": "attendance.member",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8190c8df7a1cc7ddb0",
+      "label": "copy",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea4e8489bfcb0e819f9c",
+      "label": "edition",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea548489bfcb0e81a0a2",
+      "label": "event",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8490c8df7a1cc7deb1",
+      "label": "event_series",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8290c8df7a1cc7de3e",
+      "label": "invitation",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8190c8df7a1cc7dde8",
+      "label": "lending",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8090c8df7a1cc7dd9d",
+      "label": "library",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea4a8489bfcb0e819edd",
+      "label": "member",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a73880336c951d9114ec63d",
+      "label": "mvox_collective",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea478489bfcb0e819e3d",
+      "label": "organization",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69bcfd8e9c031ab8e6ce805f",
+      "label": "person",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a74933f36c951d9114ec817",
+      "label": "profile",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea568489bfcb0e81a103",
+      "label": "program_item",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea538489bfcb0e81a06e",
+      "label": "repertoire_item",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8590c8df7a1cc7df1b",
+      "label": "rsvp",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea528489bfcb0e81a044",
+      "label": "season",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea498489bfcb0e819ea3",
+      "label": "section",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "6a0d2e8090c8df7a1cc7dd6a",
+      "label": "voice",
+      "status": "written"
+    },
+    {
+      "kind": "type",
+      "id": "69c7ea4c8489bfcb0e819f3e",
+      "label": "work",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df5e",
+      "label": "attendance.status",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df68",
+      "label": "attendance.notes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7ddb9",
+      "label": "copy.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7ddc3",
+      "label": "copy.copy_number",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7ddcd",
+      "label": "copy.barcode",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7ddd6",
+      "label": "copy.condition",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7dddf",
+      "label": "copy.notes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4f8489bfcb0e819fa3",
+      "label": "edition.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4f8489bfcb0e819faf",
+      "label": "edition.edition_type",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4f8489bfcb0e819fc1",
+      "label": "edition.license",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4f8489bfcb0e819fce",
+      "label": "edition.publisher",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea508489bfcb0e819fd8",
+      "label": "edition.year",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea508489bfcb0e819fe2",
+      "label": "edition.file",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7e01f",
+      "label": "edition.external_link",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7e02a",
+      "label": "edition.work",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7e035",
+      "label": "edition.arranger",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e03f",
+      "label": "edition.voicing",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e049",
+      "label": "edition.duration",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e053",
+      "label": "edition.language",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e05e",
+      "label": "edition.acquired_at",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e068",
+      "label": "edition.source",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e072",
+      "label": "edition.cost",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e07c",
+      "label": "edition.license_note",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea548489bfcb0e81a0a9",
+      "label": "event.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea558489bfcb0e81a0b5",
+      "label": "event.event_type",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea558489bfcb0e81a0c4",
+      "label": "event.date",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea558489bfcb0e81a0cf",
+      "label": "event.start_time",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea558489bfcb0e81a0d9",
+      "label": "event.end_time",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea568489bfcb0e81a0e3",
+      "label": "event.location",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea568489bfcb0e81a0ed",
+      "label": "event.season",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea568489bfcb0e81a0f8",
+      "label": "event.notes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e09b",
+      "label": "event.start_datetime",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e0a6",
+      "label": "event.duration_minutes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e0b0",
+      "label": "event.description",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e0ba",
+      "label": "event.capacity",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db44cd971291c5d5688",
+      "label": "event.rsvp_going_count",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db44cd971291c5d5692",
+      "label": "event.rsvp_not_going_count",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db44cd971291c5d569c",
+      "label": "event.rsvp_maybe_count",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db44cd971291c5d56a6",
+      "label": "event.rsvp_late_count",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db44cd971291c5d56b0",
+      "label": "event.rsvp_tally",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8490c8df7a1cc7deba",
+      "label": "event_series.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8490c8df7a1cc7dec5",
+      "label": "event_series.event_type",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8490c8df7a1cc7ded0",
+      "label": "event_series.interval_days",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8490c8df7a1cc7dedb",
+      "label": "event_series.start_time",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8490c8df7a1cc7dee6",
+      "label": "event_series.duration_minutes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7def1",
+      "label": "event_series.start_date",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7defc",
+      "label": "event_series.end_date",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7df07",
+      "label": "event_series.default_location",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7df11",
+      "label": "event_series.default_description",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de47",
+      "label": "invitation.email",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8390c8df7a1cc7de51",
+      "label": "invitation.sections",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8390c8df7a1cc7de5b",
+      "label": "invitation.token",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8390c8df7a1cc7de65",
+      "label": "invitation.expires_at",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8390c8df7a1cc7de6f",
+      "label": "invitation.inviter",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8390c8df7a1cc7de78",
+      "label": "invitation.message",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7ddf1",
+      "label": "lending.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8190c8df7a1cc7ddfb",
+      "label": "lending.copy",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de05",
+      "label": "lending.member",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de0f",
+      "label": "lending.assigned_at",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de19",
+      "label": "lending.assigned_until",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de22",
+      "label": "lending.returned_at",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de2b",
+      "label": "lending.renewed_at",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8290c8df7a1cc7de35",
+      "label": "lending.notes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8090c8df7a1cc7dda6",
+      "label": "library.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4b8489bfcb0e819f05",
+      "label": "member.person",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4c8489bfcb0e819f27",
+      "label": "member.section",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7dfec",
+      "label": "member.current_section",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7dff6",
+      "label": "member.status",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a73880436c951d9114ec646",
+      "label": "mvox_collective.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea478489bfcb0e819e44",
+      "label": "organization.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea488489bfcb0e819e6a",
+      "label": "organization.description",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df8f",
+      "label": "organization.founded",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7df99",
+      "label": "organization.location",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfa3",
+      "label": "organization.website",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfad",
+      "label": "organization.photo",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfb7",
+      "label": "organization.social_links",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfc2",
+      "label": "organization.rsvp_lockout_hours",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfcc",
+      "label": "organization.public_contact",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfd7",
+      "label": "organization.member_count_per_section",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce8060",
+      "label": "person.address",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce8061",
+      "label": "person.birthdate",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce8062",
+      "label": "person.county",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce8064",
+      "label": "person.entu_user",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce8066",
+      "label": "person.idcode",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce8067",
+      "label": "person.entu_api_key",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce806a",
+      "label": "person.phone",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce806c",
+      "label": "person.postalcode",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce806e",
+      "label": "person.town",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69bcfd8e9c031ab8e6ce806f",
+      "label": "person.entu_passkey",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea5a8489bfcb0e81a1ac",
+      "label": "person.voice",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea5a8489bfcb0e81a1bf",
+      "label": "person.language",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea5b8489bfcb0e81a1cb",
+      "label": "person.locale",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea5b8489bfcb0e81a1d7",
+      "label": "person.timezone",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df71",
+      "label": "person.bio",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df7b",
+      "label": "person.preferred_contact_email",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df85",
+      "label": "person.preferences",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d709890c8df7a1cc7e12e",
+      "label": "person.photo",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a74934036c951d9114ec822",
+      "label": "profile.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a74934036c951d9114ec82e",
+      "label": "profile.email",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea578489bfcb0e81a10a",
+      "label": "program_item.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea578489bfcb0e81a116",
+      "label": "program_item.work",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea578489bfcb0e81a122",
+      "label": "program_item.edition",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea578489bfcb0e81a12d",
+      "label": "program_item.ordinal",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e0ce",
+      "label": "program_item.notes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea538489bfcb0e81a075",
+      "label": "repertoire_item.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea538489bfcb0e81a081",
+      "label": "repertoire_item.work",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea548489bfcb0e81a08d",
+      "label": "repertoire_item.edition",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea548489bfcb0e81a098",
+      "label": "repertoire_item.ordinal",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e0c4",
+      "label": "repertoire_item.status",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7df24",
+      "label": "rsvp.event",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7df2e",
+      "label": "rsvp.member",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8590c8df7a1cc7df38",
+      "label": "rsvp.status",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8690c8df7a1cc7df42",
+      "label": "rsvp.notes",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db34cd971291c5d5664",
+      "label": "rsvp.going_ref",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db34cd971291c5d566d",
+      "label": "rsvp.not_going_ref",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db34cd971291c5d5676",
+      "label": "rsvp.maybe_ref",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a2d3db34cd971291c5d567f",
+      "label": "rsvp.late_ref",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea528489bfcb0e81a04b",
+      "label": "season.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea538489bfcb0e81a057",
+      "label": "season.start_date",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8990c8df7a1cc7e086",
+      "label": "season.end_date",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8a90c8df7a1cc7e091",
+      "label": "season.description",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea498489bfcb0e819eaa",
+      "label": "section.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4a8489bfcb0e819ed1",
+      "label": "section.member_count",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8790c8df7a1cc7dfe2",
+      "label": "section.description",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d709890c8df7a1cc7e138",
+      "label": "section.display_order",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d709890c8df7a1cc7e142",
+      "label": "section.voice",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8090c8df7a1cc7dd73",
+      "label": "voice.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8090c8df7a1cc7dd7e",
+      "label": "voice.class",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8090c8df7a1cc7dd89",
+      "label": "voice.display_order",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8090c8df7a1cc7dd93",
+      "label": "voice.description",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4d8489bfcb0e819f45",
+      "label": "work.name",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4d8489bfcb0e819f51",
+      "label": "work.composer",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "69c7ea4d8489bfcb0e819f66",
+      "label": "work.genre",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7e001",
+      "label": "work.catalog_id",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7e00b",
+      "label": "work.catalog_system",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d2e8890c8df7a1cc7e015",
+      "label": "work.part_of",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d709890c8df7a1cc7e14c",
+      "label": "work.original_voicing",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d709890c8df7a1cc7e156",
+      "label": "work.original_duration",
+      "status": "written"
+    },
+    {
+      "kind": "prop",
+      "id": "6a0d709890c8df7a1cc7e160",
+      "label": "work.original_language",
+      "status": "written"
+    }
+  ],
+  "failureCount": 0,
+  "skippedCount": 0,
+  "exitCode": 0
+}
