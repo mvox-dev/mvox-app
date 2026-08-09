@@ -1,48 +1,48 @@
 # Palestrina — Team Lead Scratchpad
 
-> **Trimmed 2026-08-08 (session MVOX-4).** Full history in git.
+> **Trimmed 2026-08-09 (session MVOX-5).** Full history in git.
 
-### [NEXT SESSION] 2026-08-08 — session MVOX-4 → MVOX-5
+### [NEXT SESSION] 2026-08-09 — session MVOX-5 → MVOX-6
 
-mvox-app main @ `840175d` (or later if #66/#67 workflow lands before session ends).
+mvox-app main @ `c94192b`.
 
-**What happened this session (MVOX-4, 2026-08-08 ~22:52 EEST → ongoing):**
+**What happened this session (MVOX-5, 2026-08-09 ~00:25 EEST → ongoing):**
 
-Largest session to date. 11+ merges, ~1800 Entu writes, two new slices progressed.
+Data/platform session — 10 commits, 480+ Entu writes, two major investigations.
 
-**Build lane — 11 features merged:**
-- #38 roster error i18n, #39 name prefill, #40 sibling page error i18n
-- #35 profile edit v2 (major — autosave, unified draft, visibility picker as save surface)
-- #42 admin/invite error i18n
-- #52 nav shell (3-breakpoint: bottom tabs, spine rail, top bar)
-- #58/#61/#62 gate fixes (public name, notch, idle 2s)
-- #63 library browse (works/editions/copies with availability)
-- #59/#60 sign-out + identity display
-- #65 rail side-switching fix (window.orientation)
+**Completed:**
+- #70 — Configuration menu admin-only (3 `_sharing` DELETEs, Bentham GREEN)
+- #48 — Meta polish descriptions (160×2 EN+ET = 320 writes, trust alternative)
+- T6.4 — Library i18n/a11y verified absorbed by T6.3 (#63), posted on #54
+- T6.5 — Already done per Gama (Mihkel walked live gate, PASS on #54)
+- #68 — db-root _owner backfill — closed with MAJOR CORRECTION (see below)
 
-**Data lane — #37 Phase 3 complete + #54 T6.1/T6.2/T6.2b:**
-- #43 credential pre-check, #44 18-prop-def narrow + 132-person re-agg (149/150)
-- #45 retire apply-to-join + probe cleanup, #46/#53 orphan disposition (7 deleted, 108 hidden)
-- #47 menu shells privatized, #48 member display-config fix (descriptions parked)
-- #55/#56/#57 library visibility (12 prop-defs + 586 instances × 2)
+**#68 key findings (platform knowledge):**
+1. "Cohort 3" (3 ownerless profiles) was a phantom — entities DO have owners, invisible to db-root due to Entu bucket system
+2. Entu bucket system verified from source: rights properties (`_owner`/`_editor`/`_viewer`) live in private bucket ONLY; non-granted callers read domain/public bucket without rights
+3. `_inheritrights: false` blocks the inheritance path into the access array, but the filtering is the bucket selection
+4. Any grant (even bare `_viewer`) gives full rights visibility — all-or-nothing at private level
+5. `systemUser` is hardcoded internal-only (6 backend routes), no obtainable "service key"
+6. Cohorts 1+2 (69 entities) resolved via `_inheritrights: true` cascade — Mihkel added db-root as `_owner` on the database entity manually
 
-**In flight at session end:**
-- **#66/#67 workflow running** — sign-out with identity + invite picker databases. Check if merged.
+**Platform fixes:**
+- Person type-def: added `name` + `email` prop-defs with `search:true` (fixes Entu UI picker). Existing entities need touch-save to re-index (only db-root done)
+- db-root person: `_sharing: private` → `domain`, renamed to "db-root (mvox dev admin)" (`69bcfd8e9c031ab8e6ce8079`)
+
+**Research: owner-discoverability gap:**
+- Entu has NO mechanism for non-owners to discover or contact entity owners (verified from API source, webapp source, docs)
+- Mihkel interested — relates to prior Argo discussion
+- Three directions identified: Entu feature request / BFF solution / schema workaround
+- No ruling yet
 
 **FIRST ACTION next session:**
-1. Check if #66/#67 landed — if not, investigate/resume
-2. Check #49 — T5.5 gate CLOSED this session (Gama confirmed)
-3. T6.4/T6.5 — library i18n pass (may be absorbed) + live gate
-4. #48 descriptions — parked, needs Mihkel's authored content
-5. #14 Playwright — deferred
+1. Check if #37 and #54 epics are closeable (all sub-tasks done)
+2. Owner-discoverability thread — awaiting Mihkel's direction
+3. #14 Playwright — deferred
+4. #71 Lending — BACKLOG, not ready (PO ruling)
 
 **Key learnings saved to memory this session:**
-- `feedback_ultracode_team_roles.md` — TDD chain roles → workflow phases
-- `feedback_gama_green_sufficient.md` — Gama GREEN = go, don't loop to PO
-- `feedback_no_signature_in_conversation.md` — signatures for files/comms, not chat
-- `feedback_no_parallel_dispatch.md` — no parallel lane dispatch until worktrees
-- `reference_gama_comms_routing.md` — gama@po-team, not gama
-
-**Retro posted on #9** — 8 subjects covering slices 4–5 + #37 cleanup. PO response pending.
+- `feedback_entity_id_readability.md` — always include human-readable names alongside entity IDs
+- `project_entu_inheritrights_hides_rights.md` — Entu bucket system: rights in private bucket only (verified from source)
 
 (*MVOX:Palestrina*)
