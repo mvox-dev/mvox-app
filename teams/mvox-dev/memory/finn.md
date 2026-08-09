@@ -1,5 +1,38 @@
 # Finn — Research Coordinator Scratchpad
 
+## [WIP] 2026-08-09 (S48) — shutdown mid-dispatch, 10 subagents lost mid-flight
+
+Session ended via team-lead shutdown_request before any of 10 dispatched haiku
+subagents returned. **None of these results were ever delivered** — re-dispatch
+fresh if still needed:
+
+- **#68 blocking Q1** (3 agents): can Entu write `_owner` where requester lacks
+  `_owner`? (admin/superuser bypass, entu-www docs; entu-api setupDatabase/rights
+  bypass; mvox-dev memory prior findings). NOTE: my own S46/S47 entries below
+  already answer the MECHANICS of who sees `private.*` (cleanupEntity/getAccessArray)
+  but not the WRITE-bypass question — that's still genuinely open.
+- **#68 blocking Q2** (2 agents): verify S47's `cleanupEntity`/`getAccessArray`
+  claim against current entu-api source (line nums may have drifted) + check
+  `~/workspace/docs/architecture/entu-rights-and-visibility-model.md` +
+  entu-www docs for the domain-sharing-doesn't-add-to-access-array question
+  (observed: db-root sees rights on entities it owns but NOT on a `_sharing:
+  domain, _inheritrights:false` profile it doesn't own — consistent with S47
+  but unverified against current line numbers).
+- **#68 follow-up nice-to-have** (3 agents): owner-discovery/contact-owner
+  mechanism — checked entu-api (`?props=_owner` bypass?), entu-www docs,
+  and `~/projects/webapp` (actual Entu reference webapp, confirmed exists,
+  distinct from `entu-webapp`) for any "who owns this / request access" UI.
+- **T6.4/#54 nice-to-have** (2 agents): is library i18n/a11y already absorbed
+  by T6.3 (#63)? Checked Paraglide message usage + hardcoded-string/a11y scan
+  under `~/workspace-app/src/routes/library/` and `src/lib/components/library/`.
+
+**Lesson for next Finn**: dispatched-but-unreturned haiku agents have no
+persistence path from Finn's side — if a shutdown_request lands mid-flight,
+their output is gone (they were background async, not tracked in a task
+list). Consider checking `Monitor`/task status before ack'ing shutdown next
+time, or ask team-lead for a grace window when blocking research is in flight.
+
+
 <!-- Pruned 2026-08-06 (S43): S32-39 detail compressed to bullets below; full text in git
 history of this file. S2-30 already pruned 2026-06-14 — durable facts live in MEMORY.md. -->
 
