@@ -1,0 +1,14 @@
+{
+  "dryRun": false,
+  "urgent": true,
+  "authorization": "Mihkel authorized directly via team-lead dispatch 2026-08-08; no §8.6 (schema prop-def CREATE, not a data mutation)",
+  "personTypeId": "69bcfd8e9c031ab8e6ce805f",
+  "referenceShape": "organization.name prop-def (69c7ea478489bfcb0e819e44) — the one other type with search:true",
+  "created": [
+    { "name": "name", "id": "6a78c96e23dc1d97bb8f16f2", "label": "Name", "type": "string", "search": true },
+    { "name": "email", "id": "6a78c96f23dc1d97bb8f16fd", "label": "Email", "type": "string", "search": true }
+  ],
+  "readBackVerified": true,
+  "personPropDefCountAfter": 20,
+  "exitCode": 0
+}
