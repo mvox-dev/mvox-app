@@ -6,6 +6,26 @@
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
 > committed artifact / findings doc / issue-comment thread carries the detail.
 
+## [CHECKPOINT] Session MVOX-5 close (2026-08-09/10)
+
+Four items this session, all committed to main, no active WIP:
+- **#68 Phase 1+2**: inventory + backfill script done, STRUCTURALLY BLOCKED on first live canary
+  (403 — see updated entry below). Awaiting a decision on mechanism, not mine to make. Script is
+  ready to re-run as-is once one exists.
+- **#70**: Configuration menu (Entities/Menu/Plugins) restricted to admin-only. LIVE, 3/3, done.
+- **#48**: all 160 meta descriptions (20 types + 140 prop-defs, EN+ET) drafted + shipped LIVE,
+  160/160, done. A delegated fork drifted off-task (wrote unwanted script files instead of content)
+  and later stalled — drafted the content directly myself instead of waiting on it further.
+  **[LEARNED]** for next time: for a bounded, well-specified content-drafting fork, set a tighter
+  leash (or just draft directly) rather than trusting a >160-item structured-output task to run
+  to completion unsupervised — verify its actual file output early, don't wait on a notification
+  that may not come.
+- **Urgent (unticketed)**: person type-def was missing `name`/`email` prop-defs entirely (breaking
+  the Entu UI rights picker's search) — created both with `search:true`, matching organization's
+  existing pattern. LIVE, verified. **Caveat flagged to team-lead, still open**: this only adds the
+  searchable FIELD DEFINITIONS — the 132 existing person entities have no `name`/`email` VALUES to
+  search against yet. Search will return empty until that's backfilled (separate task, not started).
+
 ## Repo location — IMPORTANT (2026-08-07)
 
 Two distinct repos are in play:
@@ -174,12 +194,20 @@ artifacts + #37/#54 issue comments ARE the audit trail. Standing patterns worth 
   **22-vs-11 menu discrepancy** (#37, 2026-08-07 walkthrough, mechanism "unknown") and the "no library
   entries visible" symptom (2026-08-08, both hypotheses I checked refuted) are both instances of this
   same unresolved class — needs Mihkel's actual browser, not more schema inspection from me.
-- **db-root lacks `_owner` on entities created by/under Mihkel's REAL OAuth identity** (`6a2fc05e...
-  5ddc`) — confirmed on 2 distinct entities (a person's own `_sharing`, an `application` specimen's
-  full entity DELETE), both 403. Script/seed-created entities are unaffected (confirmed clean on 586
-  library instances + 115 orphan members). Same shape as the older `entu_api_key` `_owner`-not-
-  `_editor` drift note. Not self-serviceable — needs an `_owner` grant from someone who already holds
-  it, or a fresh OAuth login on that person. PO/team-lead decision, not mine.
+- **#68 db-root `_owner` backfill — STRUCTURALLY BLOCKED, confirmed 2026-08-09.** Phase 1 inventory
+  (1444 entities swept, 72 flagged) + Phase 2 script (canary-first, no-owner-first, re-aggregation
+  diff gate, idempotency guard — all landed post-Bentham-review) both committed and authorized, but
+  the FIRST live canary (no-owner `profile` cohort, deliberately ordered first) 403'd on the `_owner`
+  POST. Root cause is now confirmed, not hypothesized: `_owner` is a rightType property — writing it
+  requires ALREADY holding `_owner` on the target. db-root holds `_owner` on none of the 72 flagged
+  entities (that's the whole premise of #68), so a plain db-root-JWT POST is chicken-and-egg for the
+  WHOLE population, not just the no-owner cohort (didn't burn more live writes re-confirming cohorts
+  1/2 against the same predicted 403 — see architecture-decisions.md "Rights tiers"). Zero writes
+  landed; verified byte-identical pre/post. Script ready to re-run (`db-root-owner-backfill-2026-08-
+  09.ts` + lib) the moment a different mechanism is found — needs an Entu admin/systemUser override,
+  manual action via Entu's own admin UI as a genuine platform superuser, or PO acceptance that these
+  72 stay unfixed via API (template-transformation checklist item instead). Not self-serviceable via
+  API as currently authenticated. Superseded the prior (softer) framing of this same gap below.
 - **#9 (T4.8 EntuUser.name prefill)** — Mihkel-blocked, not data-manager work.
 - **`lib/v4e-translator.ts` `translatePropertyDef`** never sets `_sharing` on new prop-def entities —
   flagged to Josquin (his lib territory), harmless today, would silently under-share future prop-defs.
