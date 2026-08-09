@@ -1,0 +1,1106 @@
+{
+  "types": [
+    {
+      "typeId": "6a0d2e8690c8df7a1cc7df4b",
+      "type": "attendance",
+      "en": "A conductor's post-event record of who actually attended, as opposed to who RSVP'd.",
+      "et": "Dirigendi järelkirje sündmusel tegelikult osalenutest, erinevalt RSVP vastanutest."
+    },
+    {
+      "typeId": "6a0d2e8190c8df7a1cc7ddb0",
+      "type": "copy",
+      "en": "A physical copy of an edition — the individual printed item that gets lent out.",
+      "et": "Väljaande füüsiline eksemplar — konkreetne trükitud ese, mida laenutatakse."
+    },
+    {
+      "typeId": "69c7ea4e8489bfcb0e819f9c",
+      "type": "edition",
+      "en": "A concrete published edition of a work — where files such as PDFs, audio, or video are attached.",
+      "et": "Teose konkreetne avaldatud väljaanne — koht, kuhu on lisatud failid nagu PDF-id, heli- või videofailid."
+    },
+    {
+      "typeId": "69c7ea548489bfcb0e81a0a2",
+      "type": "event",
+      "en": "A concrete occurrence — a specific rehearsal, concert, or other gathering, optionally generated from an event series.",
+      "et": "Konkreetne sündmus — kindel proov, kontsert või muu kokkusaamine, valikuliselt genereeritud sündmuste sarjast."
+    },
+    {
+      "typeId": "6a0d2e8490c8df7a1cc7deb1",
+      "type": "event_series",
+      "en": "A recurring pattern that generates individual events, e.g. a weekly rehearsal slot. The series sets defaults that each event can override.",
+      "et": "Korduv muster, mis genereerib üksikuid sündmusi, nt iganädalane proovi aeg. Sari määrab vaikeväärtused, mida iga sündmus võib üle kirjutada."
+    },
+    {
+      "typeId": "6a0d2e8290c8df7a1cc7de3e",
+      "type": "invitation",
+      "en": "An organization's side of the consent to join — an admin invites someone; when accepted, a membership is created and the invitation is removed.",
+      "et": "Organisatsiooni poolne nõusolek liitumiseks — administraator kutsub kellegi; nõustumisel luuakse liikmekirje ja kutse eemaldatakse."
+    },
+    {
+      "typeId": "6a0d2e8190c8df7a1cc7dde8",
+      "type": "lending",
+      "en": "A loan record — tracks a single copy being lent to a member, from checkout through return.",
+      "et": "Laenutuskirje — jälgib ühe eksemplari laenutamist liikmele, väljastamisest tagastamiseni."
+    },
+    {
+      "typeId": "6a0d2e8090c8df7a1cc7dd9d",
+      "type": "library",
+      "en": "An organization's catalog and lending container — the root of its sheet-music library, one library per organization.",
+      "et": "Organisatsiooni noodikogu ja laenutuse konteiner — organisatsiooni noodikogu juurobjekt, üks raamatukogu organisatsiooni kohta."
+    },
+    {
+      "typeId": "69c7ea4a8489bfcb0e819edd",
+      "type": "member",
+      "en": "A person's membership record within one organization — the roster entry that links a person to that organization and, optionally, its sections.",
+      "et": "Isiku liikmekirje ühes organisatsioonis — registrikanne, mis seob isiku organisatsiooni ja valikuliselt selle hääle­rühmadega."
+    },
+    {
+      "typeId": "6a73880336c951d9114ec63d",
+      "type": "mvox_collective",
+      "en": "App-level marker entity identifying this Entu database as an active mvox collective; not part of the canonical v4E schema.",
+      "et": "Rakenduse tasandi märgisobjekt, mis tähistab seda Entu andmebaasi aktiivse mvox-kollektiivina; ei kuulu v4E baasstruktuuri hulka."
+    },
+    {
+      "typeId": "69c7ea478489bfcb0e819e3d",
+      "type": "organization",
+      "en": "The choir, ensemble, or umbrella organization. Can be recursive — an umbrella organization groups member collectives.",
+      "et": "Koor, ansambel või katusorganisatsioon. Võib olla rekursiivne — katusorganisatsioon ühendab liikmeskollektiive."
+    },
+    {
+      "typeId": "69bcfd8e9c031ab8e6ce805f",
+      "type": "person",
+      "en": "Identity record for a single human — one per real person, shared across every organization they belong to.",
+      "et": "Üksiku inimese identiteedikirje — üks reaalse isiku kohta, ühine kõigi organisatsioonide vahel, kuhu ta kuulub."
+    },
+    {
+      "typeId": "6a74933f36c951d9114ec817",
+      "type": "profile",
+      "en": "A domain-visible display record for a member, denormalizing a name and contact email so members are identifiable in Entu's own admin views without exposing the private person record.",
+      "et": "Liikme domeenitasandil nähtav kuvakirje, mis dubleerib nime ja kontakt-e-posti, et liikmed oleksid Entu enda halduse vaates tuvastatavad ilma privaatset isikukirjet avaldamata."
+    },
+    {
+      "typeId": "69c7ea568489bfcb0e81a103",
+      "type": "program_item",
+      "en": "Links a work to a specific event's concert programme, in performance order.",
+      "et": "Seob teose konkreetse sündmuse kontsertkavaga, esituse järjekorras."
+    },
+    {
+      "typeId": "69c7ea538489bfcb0e81a06e",
+      "type": "repertoire_item",
+      "en": "Links a work to a season, tracking which pieces the organization is engaged with during that season.",
+      "et": "Seob teose hooajaga, jälgides milliste teostega organisatsioon selle hooaja jooksul tegeleb."
+    },
+    {
+      "typeId": "6a0d2e8590c8df7a1cc7df1b",
+      "type": "rsvp",
+      "en": "A member's pre-event commitment — whether they plan to attend. Lives under the person so members can respond directly.",
+      "et": "Liikme eelnev kinnitus sündmusele — kas ta plaanib osaleda. Asub isiku all, et liikmed saaksid ise otse vastata."
+    },
+    {
+      "typeId": "69c7ea528489bfcb0e81a044",
+      "type": "season",
+      "en": "An organization's annual activity cycle, spanning a start and end date.",
+      "et": "Organisatsiooni aastane tegevustsükkel, algus- ja lõppkuupäeva vahel."
+    },
+    {
+      "typeId": "69c7ea498489bfcb0e819ea3",
+      "type": "section",
+      "en": "A voice grouping or sub-ensemble within an organization. Sections can themselves have child sections.",
+      "et": "Hääle­rühm või allansambel organisatsiooni sees. Hääle­rühmadel võivad omakorda olla alluvad hääle­rühmad."
+    },
+    {
+      "typeId": "6a0d2e8090c8df7a1cc7dd6a",
+      "type": "voice",
+      "en": "Shared vocal-range or instrument taxonomy (e.g. Soprano, Tenor, Violin) referenced by person and section records across the collective.",
+      "et": "Ühine hääleliigi või pilli taksonoomia (nt sopran, tenor, viiul), millele viitavad isiku ja hääle­rühma kirjed kogu kollektiivis."
+    },
+    {
+      "typeId": "69c7ea4c8489bfcb0e819f3e",
+      "type": "work",
+      "en": "An abstract musical composition. Different arrangements, translations, or orchestrations of the same piece are separate editions of one work, not separate works.",
+      "et": "Abstraktne muusikateos. Sama teose erinevad seaded, tõlked või orkestratsioonid on ühe teose erinevad väljaanded, mitte eraldi teosed."
+    }
+  ],
+  "props": [
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df54",
+      "type": "attendance",
+      "name": "member",
+      "en": "The member this attendance record is about.",
+      "et": "Liige, keda see osaluskirje puudutab."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df5e",
+      "type": "attendance",
+      "name": "status",
+      "en": "Attendance outcome — present, absent, or late.",
+      "et": "Osaluse tulemus — kohal, puudus või hilines."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df68",
+      "type": "attendance",
+      "name": "notes",
+      "en": "Free-text notes, e.g. 'left after intermission'.",
+      "et": "Vabas vormis märkused, nt 'lahkus vaheajal'."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7ddb9",
+      "type": "copy",
+      "name": "name",
+      "en": "The copy's display name, e.g. 'Copy #3'.",
+      "et": "Eksemplari kuvatav nimi, nt 'Eksemplar #3'."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7ddc3",
+      "type": "copy",
+      "name": "copy_number",
+      "en": "Sequential number identifying this copy among others of the same edition.",
+      "et": "Järjekorranumber, mis eristab seda eksemplari teistest sama väljaande eksemplaridest."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7ddcd",
+      "type": "copy",
+      "name": "barcode",
+      "en": "Scannable barcode for this copy, used for quick lookup.",
+      "et": "Skaneeritav triipkood selle eksemplari kiireks tuvastamiseks."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7ddd6",
+      "type": "copy",
+      "name": "condition",
+      "en": "Physical condition of the copy — good, fair, poor, or lost.",
+      "et": "Eksemplari füüsiline seisukord — hea, rahuldav, halb või kadunud."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7dddf",
+      "type": "copy",
+      "name": "notes",
+      "en": "Free-text notes specific to this individual copy.",
+      "et": "Vabas vormis märkused selle konkreetse eksemplari kohta."
+    },
+    {
+      "propId": "69c7ea4f8489bfcb0e819fa3",
+      "type": "edition",
+      "name": "name",
+      "en": "The edition's display name, e.g. 'Bärenreiter BA 5103, vocal score'.",
+      "et": "Väljaande kuvatav nimi, nt 'Bärenreiter BA 5103, klaviir'."
+    },
+    {
+      "propId": "69c7ea4f8489bfcb0e819faf",
+      "type": "edition",
+      "name": "edition_type",
+      "en": "The kind of edition — full score, vocal score, part, reduction, audio, video, or supplementary material.",
+      "et": "Väljaande liik — partituur, klaviir, hääl, arranžeering, heli, video või lisamaterjal."
+    },
+    {
+      "propId": "69c7ea4f8489bfcb0e819fc1",
+      "type": "edition",
+      "name": "license",
+      "en": "The edition's licensing status — public domain, licensed, or owned.",
+      "et": "Väljaande litsentsi staatus — avalik omand, litsentseeritud või organisatsiooni omanduses."
+    },
+    {
+      "propId": "69c7ea4f8489bfcb0e819fce",
+      "type": "edition",
+      "name": "publisher",
+      "en": "The edition's publisher.",
+      "et": "Väljaande kirjastaja."
+    },
+    {
+      "propId": "69c7ea508489bfcb0e819fd8",
+      "type": "edition",
+      "name": "year",
+      "en": "The edition's publication year.",
+      "et": "Väljaande avaldamisaasta."
+    },
+    {
+      "propId": "69c7ea508489bfcb0e819fe2",
+      "type": "edition",
+      "name": "file",
+      "en": "Attached files for this edition — PDFs, audio, or video, stored in cloud file storage.",
+      "et": "Väljaandega seotud failid — PDF-id, heli- või videofailid, hoitakse pilvehoidlas."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7e01f",
+      "type": "edition",
+      "name": "external_link",
+      "en": "Links to external references for this edition, such as IMSLP or YouTube, complementing any uploaded file.",
+      "et": "Lingid väljaande välistele viidetele, näiteks IMSLP või YouTube, täiendades üleslaaditud faili."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7e02a",
+      "type": "edition",
+      "name": "work",
+      "en": "Automatically derived reference to the parent work's name, for display without an extra lookup.",
+      "et": "Automaatselt tuletatud viide ülemteose nimele, kuvamiseks ilma lisapäringuta."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7e035",
+      "type": "edition",
+      "name": "arranger",
+      "en": "The arranger, for arrangements or transcriptions that differ from the original.",
+      "et": "Arranžeerija, algupärasest erinevate seadete või ümberkirjutuste puhul."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e03f",
+      "type": "edition",
+      "name": "voicing",
+      "en": "Voicing for this specific edition, overriding the work's original voicing if different.",
+      "et": "Selle konkreetse väljaande hääleseade, mis erineb teose algupärasest, kui see on määratud."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e049",
+      "type": "edition",
+      "name": "duration",
+      "en": "Performance duration for this edition, overriding the work's original duration if different.",
+      "et": "Selle väljaande esituskestus, mis erineb teose algupärasest, kui see on määratud."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e053",
+      "type": "edition",
+      "name": "language",
+      "en": "Text language(s) for this edition, overriding the work's original language if different.",
+      "et": "Selle väljaande tekstikeel(ed), mis erinevad teose algupärastest, kui need on määratud."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e05e",
+      "type": "edition",
+      "name": "acquired_at",
+      "en": "Date this edition was acquired by the library.",
+      "et": "Kuupäev, mil raamatukogu selle väljaande omandas."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e068",
+      "type": "edition",
+      "name": "source",
+      "en": "Where the edition came from — donor, vendor, or publisher.",
+      "et": "Väljaande allikas — annetaja, tarnija või kirjastaja."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e072",
+      "type": "edition",
+      "name": "cost",
+      "en": "Acquisition cost of the edition.",
+      "et": "Väljaande soetusmaksumus."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e07c",
+      "type": "edition",
+      "name": "license_note",
+      "en": "Free-text notes on licensing terms or restrictions.",
+      "et": "Vabas vormis märkused litsentsitingimuste või piirangute kohta."
+    },
+    {
+      "propId": "69c7ea548489bfcb0e81a0a9",
+      "type": "event",
+      "name": "name",
+      "en": "The event's display name; inherited from its series if not set.",
+      "et": "Sündmuse kuvatav nimi; kui pole määratud, päritakse sarjalt."
+    },
+    {
+      "propId": "69c7ea558489bfcb0e81a0b5",
+      "type": "event",
+      "name": "event_type",
+      "en": "The kind of event — rehearsal, concert, festival, etc.; inherited from its series if not set.",
+      "et": "Sündmuse liik — proov, kontsert, festival jne; kui pole määratud, päritakse sarjalt."
+    },
+    {
+      "propId": "69c7ea558489bfcb0e81a0c4",
+      "type": "event",
+      "name": "date",
+      "en": "Legacy single-date field for the event; superseded by start_datetime.",
+      "et": "Sündmuse varasem üksik kuupäevaväli; asendatud start_datetime väljaga."
+    },
+    {
+      "propId": "69c7ea558489bfcb0e81a0cf",
+      "type": "event",
+      "name": "start_time",
+      "en": "Legacy start-time field; superseded by start_datetime.",
+      "et": "Varasem alguskellaaja väli; asendatud start_datetime väljaga."
+    },
+    {
+      "propId": "69c7ea558489bfcb0e81a0d9",
+      "type": "event",
+      "name": "end_time",
+      "en": "Legacy end-time field; superseded by duration_minutes.",
+      "et": "Varasem lõpukellaaja väli; asendatud duration_minutes väljaga."
+    },
+    {
+      "propId": "69c7ea568489bfcb0e81a0e3",
+      "type": "event",
+      "name": "location",
+      "en": "Where the event takes place; inherited from its series if not set.",
+      "et": "Sündmuse toimumiskoht; kui pole määratud, päritakse sarjalt."
+    },
+    {
+      "propId": "69c7ea568489bfcb0e81a0ed",
+      "type": "event",
+      "name": "season",
+      "en": "The season this event belongs to.",
+      "et": "Hooaeg, millesse sündmus kuulub."
+    },
+    {
+      "propId": "69c7ea568489bfcb0e81a0f8",
+      "type": "event",
+      "name": "notes",
+      "en": "Legacy free-text notes field for the event.",
+      "et": "Sündmuse varasem vabas vormis märkuste väli."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e09b",
+      "type": "event",
+      "name": "start_datetime",
+      "en": "Exact date and time the event starts.",
+      "et": "Sündmuse täpne alguskuupäev ja -kellaaeg."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e0a6",
+      "type": "event",
+      "name": "duration_minutes",
+      "en": "How long the event lasts, in minutes; inherited from its series if not set.",
+      "et": "Sündmuse kestus minutites; kui pole määratud, päritakse sarjalt."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e0b0",
+      "type": "event",
+      "name": "description",
+      "en": "Description of the event; inherited from its series' default if not set.",
+      "et": "Sündmuse kirjeldus; kui pole määratud, päritakse sarja vaikekirjeldusest."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e0ba",
+      "type": "event",
+      "name": "capacity",
+      "en": "Optional cap on attendance, used for RSVP collection or venue limits.",
+      "et": "Valikuline osalejate piirarv, kasutusel RSVP kogumiseks või ruumi mahupiiranguks."
+    },
+    {
+      "propId": "6a2d3db44cd971291c5d5688",
+      "type": "event",
+      "name": "rsvp_going_count",
+      "en": "Computed count of members who RSVP'd as going.",
+      "et": "Automaatselt arvutatud liikmete arv, kes on RSVP-le vastanud 'tulen'."
+    },
+    {
+      "propId": "6a2d3db44cd971291c5d5692",
+      "type": "event",
+      "name": "rsvp_not_going_count",
+      "en": "Computed count of members who RSVP'd as not going.",
+      "et": "Automaatselt arvutatud liikmete arv, kes on RSVP-le vastanud 'ei tule'."
+    },
+    {
+      "propId": "6a2d3db44cd971291c5d569c",
+      "type": "event",
+      "name": "rsvp_maybe_count",
+      "en": "Computed count of members who RSVP'd as maybe.",
+      "et": "Automaatselt arvutatud liikmete arv, kes on RSVP-le vastanud 'võib-olla'."
+    },
+    {
+      "propId": "6a2d3db44cd971291c5d56a6",
+      "type": "event",
+      "name": "rsvp_late_count",
+      "en": "Computed count of members who RSVP'd as running late.",
+      "et": "Automaatselt arvutatud liikmete arv, kes on RSVP-le vastanud 'hilinen'."
+    },
+    {
+      "propId": "6a2d3db44cd971291c5d56b0",
+      "type": "event",
+      "name": "rsvp_tally",
+      "en": "Computed JSON summary combining all four RSVP counts into one value.",
+      "et": "Automaatselt arvutatud JSON-kokkuvõte, mis ühendab kõik neli RSVP loendust üheks väärtuseks."
+    },
+    {
+      "propId": "6a0d2e8490c8df7a1cc7deba",
+      "type": "event_series",
+      "name": "name",
+      "en": "The series' display name, e.g. 'Tuesday Rehearsals 2025/2026'.",
+      "et": "Sarja kuvatav nimi, nt 'Teisipäevaproovid 2025/2026'."
+    },
+    {
+      "propId": "6a0d2e8490c8df7a1cc7dec5",
+      "type": "event_series",
+      "name": "event_type",
+      "en": "The kind of event this series generates — rehearsal, concert, festival, retreat, workshop, meeting, social, or other.",
+      "et": "Sündmuse liik, mida sari genereerib — proov, kontsert, festival, väljasõit, töötuba, koosolek, seltskondlik üritus või muu."
+    },
+    {
+      "propId": "6a0d2e8490c8df7a1cc7ded0",
+      "type": "event_series",
+      "name": "interval_days",
+      "en": "Days between occurrences — 7 for weekly, 14 for biweekly, roughly 30 for monthly.",
+      "et": "Päevade arv korduste vahel — 7 iganädalase, 14 kahenädalase ja umbes 30 kuupõhise sarja korral."
+    },
+    {
+      "propId": "6a0d2e8490c8df7a1cc7dedb",
+      "type": "event_series",
+      "name": "start_time",
+      "en": "Time of day each occurrence starts, e.g. '19:00'.",
+      "et": "Kellaaeg, millal iga kordus algab, nt '19:00'."
+    },
+    {
+      "propId": "6a0d2e8490c8df7a1cc7dee6",
+      "type": "event_series",
+      "name": "duration_minutes",
+      "en": "Default duration of each occurrence, in minutes.",
+      "et": "Iga korduse vaikekestus minutites."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7def1",
+      "type": "event_series",
+      "name": "start_date",
+      "en": "Date of the first occurrence in the series.",
+      "et": "Sarja esimese korduse kuupäev."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7defc",
+      "type": "event_series",
+      "name": "end_date",
+      "en": "Date of the last occurrence in the series.",
+      "et": "Sarja viimase korduse kuupäev."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7df07",
+      "type": "event_series",
+      "name": "default_location",
+      "en": "Default location, inherited by each event unless overridden.",
+      "et": "Vaikeasukoht, mille iga sündmus pärib, kui pole eraldi määratud."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7df11",
+      "type": "event_series",
+      "name": "default_description",
+      "en": "Default description, inherited by each event unless overridden.",
+      "et": "Vaikekirjeldus, mille iga sündmus pärib, kui pole eraldi määratud."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de47",
+      "type": "invitation",
+      "name": "email",
+      "en": "The email address the invitation was sent to.",
+      "et": "E-posti aadress, millele kutse saadeti."
+    },
+    {
+      "propId": "6a0d2e8390c8df7a1cc7de51",
+      "type": "invitation",
+      "name": "sections",
+      "en": "Section(s) the new member will be pre-assigned to when the invitation is accepted.",
+      "et": "Hääle­rühm(ad), millesse uus liige kutse vastuvõtmisel eelnevalt määratakse."
+    },
+    {
+      "propId": "6a0d2e8390c8df7a1cc7de5b",
+      "type": "invitation",
+      "name": "token",
+      "en": "Unique token used to access the invitation via its acceptance link.",
+      "et": "Unikaalne kood, mida kasutatakse kutsele ligipääsuks selle vastuvõtulingi kaudu."
+    },
+    {
+      "propId": "6a0d2e8390c8df7a1cc7de65",
+      "type": "invitation",
+      "name": "expires_at",
+      "en": "Date the invitation expires and can no longer be accepted.",
+      "et": "Kuupäev, mil kutse aegub ja seda enam vastu võtta ei saa."
+    },
+    {
+      "propId": "6a0d2e8390c8df7a1cc7de6f",
+      "type": "invitation",
+      "name": "inviter",
+      "en": "The person who created the invitation.",
+      "et": "Isik, kes kutse koostas."
+    },
+    {
+      "propId": "6a0d2e8390c8df7a1cc7de78",
+      "type": "invitation",
+      "name": "message",
+      "en": "Optional personalized note included with the invitation.",
+      "et": "Valikuline isiklik sõnum, mis kutsele lisatakse."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7ddf1",
+      "type": "lending",
+      "name": "name",
+      "en": "Auto-formatted display name combining the borrowing member's name and the copy, e.g. 'Alice Smith — Copy #3'.",
+      "et": "Automaatselt vormindatud kuvanimi, mis ühendab laenutaja nime ja eksemplari, nt 'Alice Smith — Eksemplar #3'."
+    },
+    {
+      "propId": "6a0d2e8190c8df7a1cc7ddfb",
+      "type": "lending",
+      "name": "copy",
+      "en": "The specific copy being lent.",
+      "et": "Konkreetne laenutatav eksemplar."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de05",
+      "type": "lending",
+      "name": "member",
+      "en": "The member borrowing the copy.",
+      "et": "Liige, kes eksemplari laenutab."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de0f",
+      "type": "lending",
+      "name": "assigned_at",
+      "en": "Date the copy was checked out.",
+      "et": "Kuupäev, mil eksemplar välja anti."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de19",
+      "type": "lending",
+      "name": "assigned_until",
+      "en": "Date the copy is due back.",
+      "et": "Kuupäev, milleks eksemplar tuleb tagastada."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de22",
+      "type": "lending",
+      "name": "returned_at",
+      "en": "Date the copy was returned; empty means it is still out.",
+      "et": "Kuupäev, mil eksemplar tagastati; tühi väli tähendab, et see on veel väljas."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de2b",
+      "type": "lending",
+      "name": "renewed_at",
+      "en": "Dates of each renewal, each one extending the due date.",
+      "et": "Iga pikendamise kuupäevad, millest kumbki pikendab tagastustähtaega."
+    },
+    {
+      "propId": "6a0d2e8290c8df7a1cc7de35",
+      "type": "lending",
+      "name": "notes",
+      "en": "Free-text notes about this loan.",
+      "et": "Vabas vormis märkused selle laenutuse kohta."
+    },
+    {
+      "propId": "6a0d2e8090c8df7a1cc7dda6",
+      "type": "library",
+      "name": "name",
+      "en": "The library's display name, typically the organization's name followed by 'Library'.",
+      "et": "Raamatukogu kuvatav nimi, tavaliselt organisatsiooni nimi koos sõnaga 'Raamatukogu'."
+    },
+    {
+      "propId": "69c7ea4b8489bfcb0e819f05",
+      "type": "member",
+      "name": "person",
+      "en": "The person this membership belongs to.",
+      "et": "Isik, kellele see liikmekirje kuulub."
+    },
+    {
+      "propId": "69c7ea4c8489bfcb0e819f27",
+      "type": "member",
+      "name": "section",
+      "en": "Section(s) this member sings or plays in — the section-assignment relationship itself.",
+      "et": "Hääle­rühm(ad), kus liige laulab või mängib — see ongi rühma kuuluvuse seos."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7dfec",
+      "type": "member",
+      "name": "current_section",
+      "en": "The member's primary section, used as a single pointer when they belong to more than one.",
+      "et": "Liikme peamine hääle­rühm, kasutusel ühese viitena juhul, kui liige kuulub mitmesse rühma."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7dff6",
+      "type": "member",
+      "name": "status",
+      "en": "Membership status — active or archived.",
+      "et": "Liikme staatus — aktiivne või arhiveeritud."
+    },
+    {
+      "propId": "6a73880436c951d9114ec646",
+      "type": "mvox_collective",
+      "name": "name",
+      "en": "The marker's display name, identifying the collective.",
+      "et": "Märgise kuvatav nimi, mis tähistab kollektiivi."
+    },
+    {
+      "propId": "69c7ea478489bfcb0e819e44",
+      "type": "organization",
+      "name": "name",
+      "en": "The organization's display name.",
+      "et": "Organisatsiooni kuvatav nimi."
+    },
+    {
+      "propId": "69c7ea488489bfcb0e819e6a",
+      "type": "organization",
+      "name": "description",
+      "en": "Public-facing marketing description of the organization.",
+      "et": "Avalik, turunduslik kirjeldus organisatsioonist."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df8f",
+      "type": "organization",
+      "name": "founded",
+      "en": "Date the organization was founded.",
+      "et": "Organisatsiooni asutamise kuupäev."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7df99",
+      "type": "organization",
+      "name": "location",
+      "en": "City or region where the organization is based, e.g. 'Tallinn, Estonia'.",
+      "et": "Linn või piirkond, kus organisatsioon tegutseb, nt 'Tallinn, Eesti'."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfa3",
+      "type": "organization",
+      "name": "website",
+      "en": "Link to the organization's public website.",
+      "et": "Link organisatsiooni avalikule veebilehele."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfad",
+      "type": "organization",
+      "name": "photo",
+      "en": "Organization logo or photo, resolved to a signed download URL for display.",
+      "et": "Organisatsiooni logo või foto, kuvamiseks lahendatakse allkirjastatud allalaadimislingiks."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfb7",
+      "type": "organization",
+      "name": "social_links",
+      "en": "Links to the organization's social media profiles.",
+      "et": "Lingid organisatsiooni sotsiaalmeedia kontodele."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfc2",
+      "type": "organization",
+      "name": "rsvp_lockout_hours",
+      "en": "Hours before an event after which RSVP changes are blocked or warned against; 0 means a soft warning only.",
+      "et": "Tundide arv enne sündmust, mille järel RSVP muutmine on blokeeritud või hoiatusega; 0 tähendab ainult pehmet hoiatust."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfcc",
+      "type": "organization",
+      "name": "public_contact",
+      "en": "Members designated as the organization's public point(s) of contact, e.g. the owner and conductor by default.",
+      "et": "Liikmed, kes on määratud organisatsiooni avalikeks kontaktisikuteks, vaikimisi omanik ja dirigent."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfd7",
+      "type": "organization",
+      "name": "member_count_per_section",
+      "en": "Computed total of members across all child sections; kept in sync automatically.",
+      "et": "Automaatselt arvutatud liikmete koguarv kõigis alluvates hääle­rühmades."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce8060",
+      "type": "person",
+      "name": "address",
+      "en": "Street address, part of the person's contact details.",
+      "et": "Tänavaaadress, osa isiku kontaktandmetest."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce8061",
+      "type": "person",
+      "name": "birthdate",
+      "en": "Date of birth.",
+      "et": "Sünnikuupäev."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce8062",
+      "type": "person",
+      "name": "county",
+      "en": "County of residence, part of the postal address.",
+      "et": "Elukoha maakond, osa postiaadressist."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce8064",
+      "type": "person",
+      "name": "entu_user",
+      "en": "System-managed link to the Entu OAuth account(s) bound to this person; not user-editable.",
+      "et": "Süsteemi hallatav viide selle isikuga seotud Entu OAuth-kontodele; kasutaja seda ise ei muuda."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce8066",
+      "type": "person",
+      "name": "idcode",
+      "en": "National identity code, used for unambiguous identification where required.",
+      "et": "Isikukood, mida kasutatakse üheselt tuvastamiseks vajaduse korral."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce8067",
+      "type": "person",
+      "name": "entu_api_key",
+      "en": "System-managed API key hash for programmatic access to Entu under this identity; not user-editable.",
+      "et": "Süsteemi hallatav API-võtme räsi programmiliseks juurdepääsuks Entule selle identiteedi all; kasutaja seda ise ei muuda."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce806a",
+      "type": "person",
+      "name": "phone",
+      "en": "Phone number, part of the person's contact details.",
+      "et": "Telefoninumber, osa isiku kontaktandmetest."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce806c",
+      "type": "person",
+      "name": "postalcode",
+      "en": "Postal code, part of the person's address.",
+      "et": "Sihtnumber, osa isiku aadressist."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce806e",
+      "type": "person",
+      "name": "town",
+      "en": "Town or city of residence, part of the postal address.",
+      "et": "Elukoha linn või asula, osa postiaadressist."
+    },
+    {
+      "propId": "69bcfd8e9c031ab8e6ce806f",
+      "type": "person",
+      "name": "entu_passkey",
+      "en": "System-managed passkey (WebAuthn) credential reference for passwordless sign-in; not user-editable.",
+      "et": "Süsteemi hallatav pääsuvõtme (WebAuthn) viide paroolita sisselogimiseks; kasutaja seda ise ei muuda."
+    },
+    {
+      "propId": "69c7ea5a8489bfcb0e81a1ac",
+      "type": "person",
+      "name": "voice",
+      "en": "The person's self-declared vocal range(s) or instrument(s), referencing the shared voice taxonomy.",
+      "et": "Isiku enda deklareeritud hääleulatus(ed) või pill(id), viidates ühisele hääleliikide loendile."
+    },
+    {
+      "propId": "69c7ea5a8489bfcb0e81a1bf",
+      "type": "person",
+      "name": "language",
+      "en": "Preferred interface language for this person.",
+      "et": "Isiku eelistatud liidesekeel."
+    },
+    {
+      "propId": "69c7ea5b8489bfcb0e81a1cb",
+      "type": "person",
+      "name": "locale",
+      "en": "Regional locale setting used for date, number, and text formatting.",
+      "et": "Piirkondlik seade, mida kasutatakse kuupäevade, numbrite ja teksti vormindamiseks."
+    },
+    {
+      "propId": "69c7ea5b8489bfcb0e81a1d7",
+      "type": "person",
+      "name": "timezone",
+      "en": "Time zone used to display dates and times to this person.",
+      "et": "Ajavöönd, mida kasutatakse selle isiku jaoks kuupäevade ja kellaaegade kuvamiseks."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df71",
+      "type": "person",
+      "name": "bio",
+      "en": "Short self-written biography, visible per the person's own sharing choice.",
+      "et": "Lühike enda kirjutatud tutvustus, nähtav vastavalt isiku enda jagamisvalikule."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df7b",
+      "type": "person",
+      "name": "preferred_contact_email",
+      "en": "Email address the person has chosen for outbound contact; separate from any OAuth-verified address.",
+      "et": "E-posti aadress, mille isik on valinud väljuvaks suhtluseks; erineb OAuth-iga kinnitatud aadressist."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df85",
+      "type": "person",
+      "name": "preferences",
+      "en": "Reserved for future personal settings; not yet in active use.",
+      "et": "Reserveeritud tulevaste isiklike seadete jaoks; hetkel veel kasutuses ei ole."
+    },
+    {
+      "propId": "6a0d709890c8df7a1cc7e12e",
+      "type": "person",
+      "name": "photo",
+      "en": "Profile photo, self-editable and resolved to a signed download URL for display.",
+      "et": "Profiilifoto, isiku enda muudetav, kuvamiseks lahendatakse allkirjastatud allalaadimislingiks."
+    },
+    {
+      "propId": "6a74934036c951d9114ec822",
+      "type": "profile",
+      "name": "name",
+      "en": "The member's display name, shown in Entu's own list views.",
+      "et": "Liikme kuvatav nimi, mida näidatakse Entu enda loenditevaates."
+    },
+    {
+      "propId": "6a74934036c951d9114ec82e",
+      "type": "profile",
+      "name": "email",
+      "en": "Contact email shown alongside the name in Entu's own list views.",
+      "et": "Kontakt-e-post, mida näidatakse koos nimega Entu enda loenditevaates."
+    },
+    {
+      "propId": "69c7ea578489bfcb0e81a10a",
+      "type": "program_item",
+      "name": "name",
+      "en": "Automatically derived from the linked edition's work name.",
+      "et": "Automaatselt tuletatud seotud väljaande teose nimest."
+    },
+    {
+      "propId": "69c7ea578489bfcb0e81a116",
+      "type": "program_item",
+      "name": "work",
+      "en": "The work performed at this point in the programme.",
+      "et": "Teos, mida sel programmipunktil esitatakse."
+    },
+    {
+      "propId": "69c7ea578489bfcb0e81a122",
+      "type": "program_item",
+      "name": "edition",
+      "en": "The specific edition being performed; the work is derivable from it.",
+      "et": "Konkreetne esitatav väljaanne; teos on sellest tuletatav."
+    },
+    {
+      "propId": "69c7ea578489bfcb0e81a12d",
+      "type": "program_item",
+      "name": "ordinal",
+      "en": "Position of this piece within the concert programme, set by an admin.",
+      "et": "Selle teose koht kontsertkavas, määratud administraatori poolt."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e0ce",
+      "type": "program_item",
+      "name": "notes",
+      "en": "Free-text notes for this programme entry, e.g. soloists or dedications.",
+      "et": "Vabas vormis märkused selle kavapunkti kohta, nt solistid või pühendused."
+    },
+    {
+      "propId": "69c7ea538489bfcb0e81a075",
+      "type": "repertoire_item",
+      "name": "name",
+      "en": "Automatically derived from the linked work's title.",
+      "et": "Automaatselt tuletatud seotud teose pealkirjast."
+    },
+    {
+      "propId": "69c7ea538489bfcb0e81a081",
+      "type": "repertoire_item",
+      "name": "work",
+      "en": "The work this repertoire entry refers to.",
+      "et": "Teos, millele see repertuaarikanne viitab."
+    },
+    {
+      "propId": "69c7ea548489bfcb0e81a08d",
+      "type": "repertoire_item",
+      "name": "edition",
+      "en": "The preferred edition of the work for this season, if one has been pinned.",
+      "et": "Teose eelistatud väljaanne selleks hooajaks, kui üks on määratud."
+    },
+    {
+      "propId": "69c7ea548489bfcb0e81a098",
+      "type": "repertoire_item",
+      "name": "ordinal",
+      "en": "Manual sort position for ordering repertoire entries.",
+      "et": "Käsitsi määratud järjekorranumber repertuaarikannete järjestamiseks."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e0c4",
+      "type": "repertoire_item",
+      "name": "status",
+      "en": "Where this piece stands — learning, active, retired, or dropped; defaults to active.",
+      "et": "Teose hetkeseis — õppimisel, aktiivne, mahavõetud või loobutud; vaikimisi aktiivne."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7df24",
+      "type": "rsvp",
+      "name": "event",
+      "en": "The event this RSVP responds to.",
+      "et": "Sündmus, millele see RSVP vastab."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7df2e",
+      "type": "rsvp",
+      "name": "member",
+      "en": "The membership context this RSVP is made under, since a person can belong to more than one organization.",
+      "et": "Liikmekontekst, milles see RSVP tehakse, kuna isik võib kuuluda mitmesse organisatsiooni."
+    },
+    {
+      "propId": "6a0d2e8590c8df7a1cc7df38",
+      "type": "rsvp",
+      "name": "status",
+      "en": "The response — going, not going, maybe, or late.",
+      "et": "Vastus — tulen, ei tule, võib-olla või hilinen."
+    },
+    {
+      "propId": "6a0d2e8690c8df7a1cc7df42",
+      "type": "rsvp",
+      "name": "notes",
+      "en": "Optional free-text note attached to the RSVP.",
+      "et": "Valikuline vabas vormis märkus RSVP juurde."
+    },
+    {
+      "propId": "6a2d3db34cd971291c5d5664",
+      "type": "rsvp",
+      "name": "going_ref",
+      "en": "System-managed marker set only when status is 'going', used to compute the event's attendance count without exposing individual RSVPs.",
+      "et": "Süsteemi hallatav märgis, mis seatakse ainult staatuse 'tulen' korral, et arvutada sündmuse osalejate arvu ilma üksikuid RSVP-sid avaldamata."
+    },
+    {
+      "propId": "6a2d3db34cd971291c5d566d",
+      "type": "rsvp",
+      "name": "not_going_ref",
+      "en": "System-managed marker set only when status is 'not going', used the same way as going_ref for counting.",
+      "et": "Süsteemi hallatav märgis, mis seatakse ainult staatuse 'ei tule' korral, kasutusel loendamiseks samamoodi kui going_ref."
+    },
+    {
+      "propId": "6a2d3db34cd971291c5d5676",
+      "type": "rsvp",
+      "name": "maybe_ref",
+      "en": "System-managed marker set only when status is 'maybe', used the same way as going_ref for counting.",
+      "et": "Süsteemi hallatav märgis, mis seatakse ainult staatuse 'võib-olla' korral, kasutusel loendamiseks samamoodi kui going_ref."
+    },
+    {
+      "propId": "6a2d3db34cd971291c5d567f",
+      "type": "rsvp",
+      "name": "late_ref",
+      "en": "System-managed marker set only when status is 'late', used the same way as going_ref for counting.",
+      "et": "Süsteemi hallatav märgis, mis seatakse ainult staatuse 'hilinen' korral, kasutusel loendamiseks samamoodi kui going_ref."
+    },
+    {
+      "propId": "69c7ea528489bfcb0e81a04b",
+      "type": "season",
+      "name": "name",
+      "en": "The season's display name, e.g. '2025/2026 season'.",
+      "et": "Hooaja kuvatav nimi, nt 'Hooaeg 2025/2026'."
+    },
+    {
+      "propId": "69c7ea538489bfcb0e81a057",
+      "type": "season",
+      "name": "start_date",
+      "en": "Date the season begins.",
+      "et": "Hooaja alguskuupäev."
+    },
+    {
+      "propId": "6a0d2e8990c8df7a1cc7e086",
+      "type": "season",
+      "name": "end_date",
+      "en": "Date the season ends.",
+      "et": "Hooaja lõppkuupäev."
+    },
+    {
+      "propId": "6a0d2e8a90c8df7a1cc7e091",
+      "type": "season",
+      "name": "description",
+      "en": "Optional free-text description of the season.",
+      "et": "Valikuline vabas vormis kirjeldus hooajast."
+    },
+    {
+      "propId": "69c7ea498489bfcb0e819eaa",
+      "type": "section",
+      "name": "name",
+      "en": "The section's display name, e.g. 'Soprano', 'Soprano 1', or 'Quartet'.",
+      "et": "Hääle­rühma kuvatav nimi, nt 'Sopran', 'Sopran 1' või 'Kvartett'."
+    },
+    {
+      "propId": "69c7ea4a8489bfcb0e819ed1",
+      "type": "section",
+      "name": "member_count",
+      "en": "Computed count of members in this section, rolled up recursively from any child sections.",
+      "et": "Automaatselt arvutatud liikmete arv selles hääle­rühmas, kaasa arvatud rekursiivselt alluvate hääle­rühmade omad."
+    },
+    {
+      "propId": "6a0d2e8790c8df7a1cc7dfe2",
+      "type": "section",
+      "name": "description",
+      "en": "Optional free-text description of the section.",
+      "et": "Valikuline vabas vormis kirjeldus hääle­rühmast."
+    },
+    {
+      "propId": "6a0d709890c8df7a1cc7e138",
+      "type": "section",
+      "name": "display_order",
+      "en": "Sort position within the parent, for consistent ordering in lists.",
+      "et": "Järjekorranumber ülemobjekti sees, et tagada ühtne kuvamisjärjestus loendites."
+    },
+    {
+      "propId": "6a0d709890c8df7a1cc7e142",
+      "type": "section",
+      "name": "voice",
+      "en": "The vocal range or instrument this section represents; left empty for mixed-voice sections.",
+      "et": "Hääleulatus või pill, mida see hääle­rühm esindab; segahäältega rühmade puhul jäetakse tühjaks."
+    },
+    {
+      "propId": "6a0d2e8090c8df7a1cc7dd73",
+      "type": "voice",
+      "name": "name",
+      "en": "The voice or instrument's display name, e.g. 'Soprano' or 'Trumpet'.",
+      "et": "Hääle või pilli kuvatav nimi, nt 'Sopran' või 'Trompet'."
+    },
+    {
+      "propId": "6a0d2e8090c8df7a1cc7dd7e",
+      "type": "voice",
+      "name": "class",
+      "en": "Broad category the voice belongs to, e.g. vocals, strings, brass, woodwinds, percussion, keyboards.",
+      "et": "Laiem kategooria, kuhu hääl kuulub, nt vokaal, keelpillid, vaskpillid, puupuhkpillid, löökpillid, klahvpillid."
+    },
+    {
+      "propId": "6a0d2e8090c8df7a1cc7dd89",
+      "type": "voice",
+      "name": "display_order",
+      "en": "Sort position within its class for consistent ordering in pickers and lists.",
+      "et": "Järjekorranumber oma klassi sees, et tagada ühtne kuvamisjärjestus valikutes ja loendites."
+    },
+    {
+      "propId": "6a0d2e8090c8df7a1cc7dd93",
+      "type": "voice",
+      "name": "description",
+      "en": "Optional free-text note, mainly used for less common voices (e.g. Countertenor) that need clarification.",
+      "et": "Valikuline vabas vormis märkus, kasutusel peamiselt harvemate häälte (nt kontratenor) selgitamiseks."
+    },
+    {
+      "propId": "69c7ea4d8489bfcb0e819f45",
+      "type": "work",
+      "name": "name",
+      "en": "The work's title.",
+      "et": "Teose pealkiri."
+    },
+    {
+      "propId": "69c7ea4d8489bfcb0e819f51",
+      "type": "work",
+      "name": "composer",
+      "en": "The work's composer.",
+      "et": "Teose helilooja."
+    },
+    {
+      "propId": "69c7ea4d8489bfcb0e819f66",
+      "type": "work",
+      "name": "genre",
+      "en": "Genre or style tag(s) for the work.",
+      "et": "Teose žanri- või stiilisilt(id)."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7e001",
+      "type": "work",
+      "name": "catalog_id",
+      "en": "Catalog number within the work's catalog system, e.g. '243'.",
+      "et": "Kataloogi number vastavas kataloogisüsteemis, nt '243'."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7e00b",
+      "type": "work",
+      "name": "catalog_system",
+      "en": "The catalog system the catalog_id belongs to, e.g. 'BWV'.",
+      "et": "Kataloogisüsteem, kuhu kataloogi number kuulub, nt 'BWV'."
+    },
+    {
+      "propId": "6a0d2e8890c8df7a1cc7e015",
+      "type": "work",
+      "name": "part_of",
+      "en": "Reference to a larger parent work, used for movements within a bigger composition such as a symphony.",
+      "et": "Viide suuremale teosele, kasutusel osade tähistamiseks suurema teose (nt sümfoonia) sees."
+    },
+    {
+      "propId": "6a0d709890c8df7a1cc7e14c",
+      "type": "work",
+      "name": "original_voicing",
+      "en": "The voicing the composer originally intended, e.g. SATB.",
+      "et": "Helilooja algupäraselt ette nähtud hääleseade, nt SATB."
+    },
+    {
+      "propId": "6a0d709890c8df7a1cc7e156",
+      "type": "work",
+      "name": "original_duration",
+      "en": "The composer's intended performance duration, in minutes.",
+      "et": "Helilooja poolt ette nähtud esituse kestus minutites."
+    },
+    {
+      "propId": "6a0d709890c8df7a1cc7e160",
+      "type": "work",
+      "name": "original_language",
+      "en": "The text language(s) of the original composition.",
+      "et": "Algupärase teose tekstikeel(ed)."
+    }
+  ]
+}

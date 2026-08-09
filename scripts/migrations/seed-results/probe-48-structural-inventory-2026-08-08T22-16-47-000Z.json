@@ -1,0 +1,962 @@
+[
+  {
+    "type": "attendance",
+    "typeId": "6a0d2e8690c8df7a1cc7df4b",
+    "props": [
+      {
+        "id": "6a0d2e8690c8df7a1cc7df54",
+        "name": "member",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df5e",
+        "name": "status",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df68",
+        "name": "notes",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "copy",
+    "typeId": "6a0d2e8190c8df7a1cc7ddb0",
+    "props": [
+      {
+        "id": "6a0d2e8190c8df7a1cc7ddb9",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8190c8df7a1cc7ddc3",
+        "name": "copy_number",
+        "fieldType": "number",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8190c8df7a1cc7ddcd",
+        "name": "barcode",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8190c8df7a1cc7ddd6",
+        "name": "condition",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8190c8df7a1cc7dddf",
+        "name": "notes",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "edition",
+    "typeId": "69c7ea4e8489bfcb0e819f9c",
+    "props": [
+      {
+        "id": "69c7ea4f8489bfcb0e819fa3",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea4f8489bfcb0e819faf",
+        "name": "edition_type",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea4f8489bfcb0e819fc1",
+        "name": "license",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea4f8489bfcb0e819fce",
+        "name": "publisher",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea508489bfcb0e819fd8",
+        "name": "year",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea508489bfcb0e819fe2",
+        "name": "file",
+        "fieldType": "file",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7e01f",
+        "name": "external_link",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7e02a",
+        "name": "work",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7e035",
+        "name": "arranger",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e03f",
+        "name": "voicing",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e049",
+        "name": "duration",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e053",
+        "name": "language",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e05e",
+        "name": "acquired_at",
+        "fieldType": "date",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e068",
+        "name": "source",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e072",
+        "name": "cost",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e07c",
+        "name": "license_note",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "event",
+    "typeId": "69c7ea548489bfcb0e81a0a2",
+    "props": [
+      {
+        "id": "69c7ea548489bfcb0e81a0a9",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea558489bfcb0e81a0b5",
+        "name": "event_type",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea558489bfcb0e81a0c4",
+        "name": "date",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea558489bfcb0e81a0cf",
+        "name": "start_time",
+        "fieldType": "datetime",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea558489bfcb0e81a0d9",
+        "name": "end_time",
+        "fieldType": "datetime",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea568489bfcb0e81a0e3",
+        "name": "location",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea568489bfcb0e81a0ed",
+        "name": "season",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea568489bfcb0e81a0f8",
+        "name": "notes",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e09b",
+        "name": "start_datetime",
+        "fieldType": "datetime",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e0a6",
+        "name": "duration_minutes",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e0b0",
+        "name": "description",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e0ba",
+        "name": "capacity",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db44cd971291c5d5688",
+        "name": "rsvp_going_count",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db44cd971291c5d5692",
+        "name": "rsvp_not_going_count",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db44cd971291c5d569c",
+        "name": "rsvp_maybe_count",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db44cd971291c5d56a6",
+        "name": "rsvp_late_count",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db44cd971291c5d56b0",
+        "name": "rsvp_tally",
+        "fieldType": "string",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "event_series",
+    "typeId": "6a0d2e8490c8df7a1cc7deb1",
+    "props": [
+      {
+        "id": "6a0d2e8490c8df7a1cc7deba",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8490c8df7a1cc7dec5",
+        "name": "event_type",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8490c8df7a1cc7ded0",
+        "name": "interval_days",
+        "fieldType": "number",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8490c8df7a1cc7dedb",
+        "name": "start_time",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8490c8df7a1cc7dee6",
+        "name": "duration_minutes",
+        "fieldType": "number",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8590c8df7a1cc7def1",
+        "name": "start_date",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8590c8df7a1cc7defc",
+        "name": "end_date",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8590c8df7a1cc7df07",
+        "name": "default_location",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8590c8df7a1cc7df11",
+        "name": "default_description",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "invitation",
+    "typeId": "6a0d2e8290c8df7a1cc7de3e",
+    "props": [
+      {
+        "id": "6a0d2e8290c8df7a1cc7de47",
+        "name": "email",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8390c8df7a1cc7de51",
+        "name": "sections",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8390c8df7a1cc7de5b",
+        "name": "token",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8390c8df7a1cc7de65",
+        "name": "expires_at",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8390c8df7a1cc7de6f",
+        "name": "inviter",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8390c8df7a1cc7de78",
+        "name": "message",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "lending",
+    "typeId": "6a0d2e8190c8df7a1cc7dde8",
+    "props": [
+      {
+        "id": "6a0d2e8190c8df7a1cc7ddf1",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8190c8df7a1cc7ddfb",
+        "name": "copy",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8290c8df7a1cc7de05",
+        "name": "member",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8290c8df7a1cc7de0f",
+        "name": "assigned_at",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8290c8df7a1cc7de19",
+        "name": "assigned_until",
+        "fieldType": "date",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8290c8df7a1cc7de22",
+        "name": "returned_at",
+        "fieldType": "date",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8290c8df7a1cc7de2b",
+        "name": "renewed_at",
+        "fieldType": "date",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8290c8df7a1cc7de35",
+        "name": "notes",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "library",
+    "typeId": "6a0d2e8090c8df7a1cc7dd9d",
+    "props": [
+      {
+        "id": "6a0d2e8090c8df7a1cc7dda6",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      }
+    ]
+  },
+  {
+    "type": "member",
+    "typeId": "69c7ea4a8489bfcb0e819edd",
+    "props": [
+      {
+        "id": "69c7ea4b8489bfcb0e819f05",
+        "name": "person",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea4c8489bfcb0e819f27",
+        "name": "section",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7dfec",
+        "name": "current_section",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7dff6",
+        "name": "status",
+        "fieldType": "string",
+        "mandatory": true
+      }
+    ]
+  },
+  {
+    "type": "mvox_collective",
+    "typeId": "6a73880336c951d9114ec63d",
+    "props": [
+      {
+        "id": "6a73880436c951d9114ec646",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "organization",
+    "typeId": "69c7ea478489bfcb0e819e3d",
+    "props": [
+      {
+        "id": "69c7ea478489bfcb0e819e44",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea488489bfcb0e819e6a",
+        "name": "description",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df8f",
+        "name": "founded",
+        "fieldType": "date",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7df99",
+        "name": "location",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfa3",
+        "name": "website",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfad",
+        "name": "photo",
+        "fieldType": "file",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfb7",
+        "name": "social_links",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfc2",
+        "name": "rsvp_lockout_hours",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfcc",
+        "name": "public_contact",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfd7",
+        "name": "member_count_per_section",
+        "fieldType": "number",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "person",
+    "typeId": "69bcfd8e9c031ab8e6ce805f",
+    "props": [
+      {
+        "id": "69bcfd8e9c031ab8e6ce8060",
+        "name": "address",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8061",
+        "name": "birthdate",
+        "fieldType": "date",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8062",
+        "name": "county",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8064",
+        "name": "entu_user",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8066",
+        "name": "idcode",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce8067",
+        "name": "entu_api_key",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806a",
+        "name": "phone",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806c",
+        "name": "postalcode",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806e",
+        "name": "town",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69bcfd8e9c031ab8e6ce806f",
+        "name": "entu_passkey",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea5a8489bfcb0e81a1ac",
+        "name": "voice",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea5a8489bfcb0e81a1bf",
+        "name": "language",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea5b8489bfcb0e81a1cb",
+        "name": "locale",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea5b8489bfcb0e81a1d7",
+        "name": "timezone",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df71",
+        "name": "bio",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df7b",
+        "name": "preferred_contact_email",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df85",
+        "name": "preferences",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e12e",
+        "name": "photo",
+        "fieldType": "file",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "profile",
+    "typeId": "6a74933f36c951d9114ec817",
+    "props": [
+      {
+        "id": "6a74934036c951d9114ec822",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a74934036c951d9114ec82e",
+        "name": "email",
+        "fieldType": "string",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "program_item",
+    "typeId": "69c7ea568489bfcb0e81a103",
+    "props": [
+      {
+        "id": "69c7ea578489bfcb0e81a10a",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea578489bfcb0e81a116",
+        "name": "work",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea578489bfcb0e81a122",
+        "name": "edition",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea578489bfcb0e81a12d",
+        "name": "ordinal",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e0ce",
+        "name": "notes",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "repertoire_item",
+    "typeId": "69c7ea538489bfcb0e81a06e",
+    "props": [
+      {
+        "id": "69c7ea538489bfcb0e81a075",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea538489bfcb0e81a081",
+        "name": "work",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea548489bfcb0e81a08d",
+        "name": "edition",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea548489bfcb0e81a098",
+        "name": "ordinal",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e0c4",
+        "name": "status",
+        "fieldType": "string",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "rsvp",
+    "typeId": "6a0d2e8590c8df7a1cc7df1b",
+    "props": [
+      {
+        "id": "6a0d2e8590c8df7a1cc7df24",
+        "name": "event",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8590c8df7a1cc7df2e",
+        "name": "member",
+        "fieldType": "reference",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8590c8df7a1cc7df38",
+        "name": "status",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8690c8df7a1cc7df42",
+        "name": "notes",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db34cd971291c5d5664",
+        "name": "going_ref",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db34cd971291c5d566d",
+        "name": "not_going_ref",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db34cd971291c5d5676",
+        "name": "maybe_ref",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a2d3db34cd971291c5d567f",
+        "name": "late_ref",
+        "fieldType": "reference",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "season",
+    "typeId": "69c7ea528489bfcb0e81a044",
+    "props": [
+      {
+        "id": "69c7ea528489bfcb0e81a04b",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea538489bfcb0e81a057",
+        "name": "start_date",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8990c8df7a1cc7e086",
+        "name": "end_date",
+        "fieldType": "date",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8a90c8df7a1cc7e091",
+        "name": "description",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "section",
+    "typeId": "69c7ea498489bfcb0e819ea3",
+    "props": [
+      {
+        "id": "69c7ea498489bfcb0e819eaa",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea4a8489bfcb0e819ed1",
+        "name": "member_count",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8790c8df7a1cc7dfe2",
+        "name": "description",
+        "fieldType": "text",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e138",
+        "name": "display_order",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e142",
+        "name": "voice",
+        "fieldType": "reference",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "voice",
+    "typeId": "6a0d2e8090c8df7a1cc7dd6a",
+    "props": [
+      {
+        "id": "6a0d2e8090c8df7a1cc7dd73",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8090c8df7a1cc7dd7e",
+        "name": "class",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "6a0d2e8090c8df7a1cc7dd89",
+        "name": "display_order",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8090c8df7a1cc7dd93",
+        "name": "description",
+        "fieldType": "text",
+        "mandatory": false
+      }
+    ]
+  },
+  {
+    "type": "work",
+    "typeId": "69c7ea4c8489bfcb0e819f3e",
+    "props": [
+      {
+        "id": "69c7ea4d8489bfcb0e819f45",
+        "name": "name",
+        "fieldType": "string",
+        "mandatory": true
+      },
+      {
+        "id": "69c7ea4d8489bfcb0e819f51",
+        "name": "composer",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "69c7ea4d8489bfcb0e819f66",
+        "name": "genre",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7e001",
+        "name": "catalog_id",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7e00b",
+        "name": "catalog_system",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d2e8890c8df7a1cc7e015",
+        "name": "part_of",
+        "fieldType": "reference",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e14c",
+        "name": "original_voicing",
+        "fieldType": "string",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e156",
+        "name": "original_duration",
+        "fieldType": "number",
+        "mandatory": false
+      },
+      {
+        "id": "6a0d709890c8df7a1cc7e160",
+        "name": "original_language",
+        "fieldType": "string",
+        "mandatory": false
+      }
+    ]
+  }
+]
