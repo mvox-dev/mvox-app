@@ -38,6 +38,19 @@ export interface EventAttendance {
 /** The panel's per-member initial state, keyed by member id. */
 export type AttendanceByMemberId = Record<string, { attendanceId: string; status: AttendanceStatus }>;
 
+/**
+ * One attendance record as read back for the SINGER's own "my attendance" line
+ * (#85 TA.4). The inverse shape of {@link EventAttendance}: there `memberId`
+ * rides along (one event, many members); here `eventId` rides along (one
+ * member, many events) — read off `_parent`, since attendance's parent IS the
+ * event (#77 participation split).
+ */
+export interface MyAttendance {
+	attendanceId: string;
+	eventId: string;
+	status: AttendanceStatus;
+}
+
 /** One rsvp row as read for the conductor's RSVP→attendance comparison (#84). */
 export interface RsvpForEvent {
 	rsvpId: string;
@@ -219,6 +232,54 @@ export async function listAttendance(
 			return [];
 		}
 		return [{ attendanceId: raw._id, memberId, status }];
+	});
+}
+
+/**
+ * List the SINGER's own attendance records across ALL events (#85 TA.4 — the
+ * "my attendance" line). `attendance` is a child of EVENT, so this can NOT be
+ * scoped by `_parent.reference` (that would scope to one event) — it filters
+ * by the `member` REFERENCE prop instead, and the event id is read back off
+ * each row's `_parent` (attendance's parent IS the event). Mirrors
+ * `listMyRsvps`' role for rsvp, with the participation split flipped: there
+ * rsvp is child-of-person (`_parent` scoping); here attendance is
+ * child-of-event (`member.reference` scoping).
+ */
+export async function listMyAttendance(
+	cfg: EntuCfg,
+	memberId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<MyAttendance[]> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=attendance&member.reference=${encodeURIComponent(memberId)}&props=_parent,status&limit=500`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listMyAttendance failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{
+			_id: string;
+			_parent?: Array<{ reference: string }>;
+			status?: Array<{ string: string }>;
+		}>;
+	};
+	return (body.entities ?? []).flatMap((raw) => {
+		const eventId = raw._parent?.[0]?.reference;
+		const status = raw.status?.[0]?.string as AttendanceStatus | undefined;
+		if (!eventId || !status) {
+			// Fail loudly: a row with no `_parent` or no status means the caller
+			// cannot see the private bucket (prop-def _sharing not widened). Drop the
+			// row and log — never fabricate an eventId or default a status, which
+			// would collapse all invisible rows onto key '' and stamp them with a lie
+			// (mirrors listAttendance/listAllRsvpsForEvent's #84-review rule).
+			console.warn(
+				`listMyAttendance: dropping entity ${raw._id} — missing ${!eventId ? '_parent' : ''}${!eventId && !status ? '+' : ''}${!status ? 'status' : ''} (prop-def _sharing not domain?)`
+			);
+			return [];
+		}
+		return [{ attendanceId: raw._id, eventId, status }];
 	});
 }
 

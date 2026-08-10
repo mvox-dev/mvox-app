@@ -44,7 +44,15 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_save_failed: () => 'Could not save your answer.',
 		// #83 — the two new keys this slice introduces.
 		agenda_recent: () => 'Recent',
-		agenda_take_attendance: () => 'Take attendance'
+		agenda_take_attendance: () => 'Take attendance',
+		// #85 TA.4 — every RECENT row now carries an attendance badge, so this
+		// direct AgendaList-level test needs the 4 badge-label keys even though
+		// it never passes myAttendanceByEventId (default {} -> every row reads
+		// as 'not-recorded').
+		attendance_status_present: () => 'Present',
+		attendance_status_absent: () => 'Absent',
+		attendance_status_late: () => 'Late',
+		attendance_status_not_recorded: () => 'Not recorded'
 	}
 }));
 

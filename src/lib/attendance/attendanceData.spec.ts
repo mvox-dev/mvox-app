@@ -5,9 +5,11 @@ import {
 	updateAttendanceStatus,
 	deleteAttendance,
 	listAttendance,
+	listMyAttendance,
 	listAllRsvpsForEvent,
 	attendanceByMemberId,
-	type EventAttendance
+	type EventAttendance,
+	type MyAttendance
 } from './attendanceData';
 
 // #84 TA.3 RED — the attendance write/read data layer. Mirrors rsvpData.ts
@@ -492,6 +494,79 @@ describe('attendanceByMemberId', () => {
 
 	it('returns {} for an empty list', () => {
 		expect(attendanceByMemberId([])).toEqual({});
+	});
+});
+
+// ── listMyAttendance ──────────────────────────────────────────────────────────
+// #85 TA.4 RED — the SINGER's own attendance across all events. The inverse
+// read of listAttendance: attendance is a child of EVENT, so "my records" can
+// NOT be scoped by `_parent.reference` (that scopes to ONE event) — the query
+// filters by the `member` REFERENCE prop instead, and the event id is read back
+// off each row's `_parent` (attendance's parent IS the event). Mirrors
+// listMyRsvps' role for rsvp (there: child-of-person, `_parent` scoping; here:
+// child-of-event, `member.reference` scoping — the participation split flips
+// which side is the parent).
+
+describe('listMyAttendance', () => {
+	it('queries attendance by MEMBER reference — never by _parent (which would scope to one event)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listMyAttendance(cfg, 'member-me', fetchImpl);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		const url = String(fetchImpl.mock.calls[0][0]);
+		expect(url).toContain('_type.string=attendance');
+		expect(url).toContain('member.reference=member-me');
+		// `_parent.reference=` scoping would return ONE event's records, not mine.
+		expect(url).not.toContain('_parent.reference=');
+		// The event id rides on `_parent`, status on `status` — both must be asked for.
+		expect(url).toContain('_parent');
+		expect(url).toContain('status');
+	});
+
+	it('maps rows to { attendanceId, eventId, status } — eventId read off _parent (attendance is a child of event)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{ _id: 'att-1', _parent: [{ reference: 'event-1' }], status: [{ string: 'present' }] },
+					{ _id: 'att-2', _parent: [{ reference: 'event-2' }], status: [{ string: 'late' }] },
+					{ _id: 'att-3', _parent: [{ reference: 'event-3' }], status: [{ string: 'absent' }] }
+				]
+			})
+		);
+		const mine: MyAttendance[] = await listMyAttendance(cfg, 'member-me', fetchImpl);
+		expect(mine).toEqual([
+			{ attendanceId: 'att-1', eventId: 'event-1', status: 'present' },
+			{ attendanceId: 'att-2', eventId: 'event-2', status: 'late' },
+			{ attendanceId: 'att-3', eventId: 'event-3', status: 'absent' }
+		]);
+	});
+
+	it('DROPS a row missing _parent or status with a console.warn naming the entity — never fabricates an eventId or defaults a status (fail loudly)', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{ _id: 'att-ok', _parent: [{ reference: 'event-1' }], status: [{ string: 'present' }] },
+					{ _id: 'att-no-parent', status: [{ string: 'present' }] },
+					{ _id: 'att-no-status', _parent: [{ reference: 'event-2' }] }
+				]
+			})
+		);
+		const mine = await listMyAttendance(cfg, 'member-me', fetchImpl);
+		expect(mine).toEqual([{ attendanceId: 'att-ok', eventId: 'event-1', status: 'present' }]);
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('att-no-parent'));
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('att-no-status'));
+		warnSpy.mockRestore();
+	});
+
+	it('returns [] when the member has no attendance records', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		expect(await listMyAttendance(cfg, 'member-me', fetchImpl)).toEqual([]);
+	});
+
+	it('throws on a non-2xx response', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
+		await expect(listMyAttendance(cfg, 'member-me', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
 

@@ -38,7 +38,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_save_failed: () => 'Could not save attendance.',
 		attendance_tally: (p: { present: number; absent: number; late: number }) =>
 			`${p.present} present · ${p.absent} absent · ${p.late} late`,
-		attendance_close: () => 'Close'
+		attendance_close: () => 'Close',
+		// #85 TA.4 — the recent-row attendance badge + season summary render
+		// unconditionally whenever the Recent section renders, so this file's
+		// conductor fixtures (which populate `recent`) need these keys too.
+		attendance_status_not_recorded: () => 'Not recorded',
+		attendance_season_summary: () => 'This season',
+		attendance_season_rate: (p: { attended: number; total: number }) =>
+			`Attended ${p.attended} of ${p.total} rehearsals`,
+		attendance_member_rate: (p: { attended: number; total: number }) => `${p.attended} of ${p.total}`,
+		attendance_all_members: () => 'All members'
 	}
 }));
 

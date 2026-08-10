@@ -72,6 +72,12 @@ vi.mock('$lib/rsvp/rsvpOptimistic', () => ({ applyRsvpChange: applyRsvpChangeMoc
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
+	// #85 TA.4 — +page.svelte now also calls listMyAttendance as soon as
+	// findMyMemberId resolves an id (not just on demand): a missing mock here
+	// throws inside the .then chain, which the outer .catch swallows by
+	// resetting memberId/membership — silently breaking THIS spec's member
+	// assertions even though it never exercises attendance itself.
+	listMyAttendance: vi.fn().mockResolvedValue([]),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),

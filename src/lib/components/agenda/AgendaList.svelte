@@ -1,9 +1,15 @@
 <!-- src/lib/components/agenda/AgendaList.svelte -->
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from './RsvpControl.svelte';
+
+	/** #85 TA.4 — the four attendance-badge states a RECENT (past) row can carry.
+	 *  'not-recorded' is a genuine 4th state (a past event nobody marked for me),
+	 *  never a blank and never defaulted onto 'absent'. */
+	type BadgeStatus = 'present' | 'absent' | 'late' | 'not-recorded';
 
 	interface Props {
 		items: AgendaItem[];
@@ -47,6 +53,16 @@
 		// fact only.
 		conductorEventIds?: ReadonlySet<string>;
 		ontakeattendance?: (item: AgendaItem) => void;
+		// #85 — my own attendance badge state per RECENT event id. An event id
+		// absent from the map (never marked for me) renders as 'not-recorded' —
+		// the same explicit 4th state, not a blank.
+		myAttendanceByEventId?: Record<string, BadgeStatus>;
+		// #85 — the season summary, rendered ONCE at the top of the Recent
+		// section (above the first row), whenever the section itself renders.
+		// Presentation lives in SeasonSummary.svelte; the page supplies it here
+		// as a snippet so it sits inside this component's 'agenda-recent' markup
+		// without AgendaList taking on any attendance IO itself.
+		seasonSummary?: Snippet;
 	}
 	const {
 		items,
@@ -58,8 +74,26 @@
 		failedEventIds = new Set<string>(),
 		recentItems = [],
 		conductorEventIds = new Set<string>(),
-		ontakeattendance
+		ontakeattendance,
+		myAttendanceByEventId = {},
+		seasonSummary
 	}: Props = $props();
+
+	const BADGE_DOT_CLASS: Record<BadgeStatus, string> = {
+		present: 'bg-green',
+		absent: 'bg-red',
+		late: 'bg-amber',
+		'not-recorded': 'bg-ink-4'
+	};
+	const BADGE_LABEL: Record<BadgeStatus, () => string> = {
+		present: m.attendance_status_present,
+		absent: m.attendance_status_absent,
+		late: m.attendance_status_late,
+		'not-recorded': m.attendance_status_not_recorded
+	};
+	function badgeStatus(eventId: string): BadgeStatus {
+		return myAttendanceByEventId[eventId] ?? 'not-recorded';
+	}
 
 	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
 	// PRESERVED VERBATIM from the harvested AgendaList (old mvox_v4e_web repo) — see
@@ -169,6 +203,14 @@
 		>
 			{m.agenda_recent()}
 		</h2>
+		<!-- #85 — visible for confirmed MEMBERS whenever the Recent section itself
+		     renders, above the first row (never conditional on data: zero attendance
+		     renders "Attended 0 of N"). Non-members and loading state see nothing —
+		     "Attended 0 of 4" reads as "you skipped everything" to someone who was
+		     never expected to attend (F4 fix). -->
+		{#if seasonSummary && membership === 'member'}
+			{@render seasonSummary()}
+		{/if}
 		{#each recentItems as item (item.id)}
 			<div
 				data-testid="agenda-recent-row-{item.id}"
@@ -189,6 +231,20 @@
 					     write is in flight either; reusing 'pending' keeps this a silent
 					     disable, no misleading non-member hint). -->
 					<RsvpControl status={rsvpByEventId[item.id]?.status ?? null} pending={true} />
+					<!-- #85 — every RECENT row carries my own attendance badge, gated on
+					     confirmed membership (F4 fix: non-members and loading state see
+					     no badge — 'Not recorded' reads as 'you skipped' to someone who
+					     was never expected to attend). -->
+					{#if membership === 'member'}
+						<span
+							data-testid="attendance-badge-{item.id}"
+							data-status={badgeStatus(item.id)}
+							class="inline-flex w-fit items-center gap-1 font-mono text-[9px] tracking-wide text-ink-2"
+						>
+							<span class="h-1.5 w-1.5 rounded-full {BADGE_DOT_CLASS[badgeStatus(item.id)]}"></span>
+							{BADGE_LABEL[badgeStatus(item.id)]()}
+						</span>
+					{/if}
 					{#if conductorEventIds.has(item.id) && ontakeattendance}
 						<button
 							type="button"

@@ -19,16 +19,20 @@
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import {
 		listAttendance,
+		listMyAttendance,
 		listAllRsvpsForEvent,
 		attendanceByMemberId,
 		type AttendanceStatus,
-		type EventAttendance
+		type EventAttendance,
+		type MyAttendance
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
+	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
+	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -71,6 +75,12 @@
 	// fire against the '__optimistic__' placeholder and get the event stuck).
 	let pendingEventIds = $state<Set<string>>(new Set());
 
+	// #85 TA.4 — my own attendance across every past event, loaded ONCE per
+	// member resolution (not per-event) alongside the memberId lookup. Powers
+	// both each Recent row's badge (via myAttendanceByEventId below) and my
+	// own season line in the SeasonSummary (deriveAttendanceRate).
+	let myAttendance = $state<MyAttendance[]>([]);
+
 	// #83 — the agenda's 'Recent' section: ALL past events of the CURRENT season.
 	// Loaded as part of loadFullAgenda (one fetch pass for upcoming + recent —
 	// F1+F2 fix: no duplicate listSeasons/listRehearsals calls, no N+1 conductor
@@ -78,6 +88,22 @@
 	// (season.conductors + event.conductors on each AgendaItem).
 	let recentItems = $state<AgendaItem[]>([]);
 	let conductorEventIds = $state<Set<string>>(new Set());
+
+	// #85 TA.4 — the season summary's expand state (conductor-only) + the
+	// full-roster rates it reveals. Loaded lazily on first expand (most visits
+	// never open it): one roster read + one listAttendance read per past event,
+	// cached for the collective's current load (reset on every fresh collective
+	// selection, same as rosterCache/attendanceFailedByEvent below).
+	let seasonSummaryExpanded = $state(false);
+	let seasonMemberRates = $state<MemberAttendanceRate[]>([]);
+	let seasonRatesLoaded = $state(false);
+	// F2 fix: explicit loading/error states for the roster rate expansion. The
+	// previous code's .catch() silently set seasonMemberRates = [] while leaving
+	// seasonSummaryExpanded true — an expanded block with zero rows,
+	// indistinguishable from "the roster is empty". Now a failed or in-flight
+	// load surfaces as a distinct state via SeasonSummary.
+	let seasonRatesLoading = $state(false);
+	let seasonRatesError = $state(false);
 
 	// #84 TA.3 — the "Take attendance" inline panel. `attendanceItem` is the
 	// recent AgendaItem currently expanded (null = collapsed / nothing open).
@@ -128,6 +154,12 @@
 			closeAttendancePanel();
 			rosterCache = null;
 			attendanceFailedByEvent = new Map();
+			myAttendance = [];
+			seasonSummaryExpanded = false;
+			seasonMemberRates = [];
+			seasonRatesLoaded = false;
+			seasonRatesLoading = false;
+			seasonRatesError = false;
 			return;
 		}
 		const thisRequest = ++requestId;
@@ -143,6 +175,12 @@
 		failedEventIds = new Set();
 		rosterCache = null;
 		attendanceFailedByEvent = new Map();
+		myAttendance = [];
+		seasonSummaryExpanded = false;
+		seasonMemberRates = [];
+		seasonRatesLoaded = false;
+		seasonRatesLoading = false;
+		seasonRatesError = false;
 
 		const personId = current.personId;
 
@@ -185,6 +223,21 @@
 				// A genuine resolution: an id -> member; null -> CONFIRMED non-member.
 				memberId = id;
 				membership = id ? 'member' : 'non-member';
+				// #85 TA.4 — my own attendance, ONE call keyed by my member id (not
+				// per-event). A non-member/failed lookup simply has no records.
+				if (id) {
+					listMyAttendance({ db: current.db, token: getToken() ?? '' }, id)
+						.then((records) => {
+							if (thisRequest !== requestId) return;
+							myAttendance = records;
+						})
+						.catch(() => {
+							if (thisRequest !== requestId) return;
+							myAttendance = [];
+						});
+				} else {
+					myAttendance = [];
+				}
 			})
 			.catch(() => {
 				if (thisRequest !== requestId) return;
@@ -420,31 +473,77 @@
 				attendanceFailedMemberIds = cleared;
 			}
 		},
-		reconcile(eventId, memberId, entry) {
+		reconcile(eventId, targetMemberId, entry) {
+			// #85 F1 fix: a successful attendance write invalidates the season
+			// summary cache so the next expand re-fetches fresh rates. Also patch
+			// myAttendance inline when the write was for the singer's own member id
+			// — her Recent-row badge should reflect the change immediately.
+			seasonRatesLoaded = false;
+			if (targetMemberId === memberId) {
+				if (entry) {
+					// Upsert: replace existing record for this event or append.
+					const idx = myAttendance.findIndex((a) => a.eventId === eventId);
+					const record = { attendanceId: entry.attendanceId, eventId, status: entry.status };
+					if (idx >= 0) {
+						const next = [...myAttendance];
+						next[idx] = record;
+						myAttendance = next;
+					} else {
+						myAttendance = [...myAttendance, record];
+					}
+				} else {
+					// Deletion: remove the record for this event.
+					myAttendance = myAttendance.filter((a) => a.eventId !== eventId);
+				}
+			}
+
 			if (eventId !== attendanceItem?.id) return;
 			const next = { ...attendanceMap };
-			if (entry) next[memberId] = entry;
-			else delete next[memberId];
+			if (entry) next[targetMemberId] = entry;
+			else delete next[targetMemberId];
 			attendanceMap = next;
 		},
-		revert(eventId, memberId, before) {
+		revert(eventId, targetMemberId, before) {
+			// #85 F1 fix: a failed write also invalidates the season summary cache
+			// — the optimistic update may have already been visible if the summary
+			// was expanded, so stale cached rates must not persist.
+			seasonRatesLoaded = false;
+
 			// Finding 4 fix: ALWAYS record the failure in the per-event map, even
 			// when the conductor has moved to a different event. This way the
 			// failure surfaces when she reopens this event later.
 			const eventFailed = new Set(attendanceFailedByEvent.get(eventId) ?? []);
-			eventFailed.add(memberId);
+			eventFailed.add(targetMemberId);
 			const nextMap = new Map(attendanceFailedByEvent);
 			nextMap.set(eventId, eventFailed);
 			attendanceFailedByEvent = nextMap;
 
+			// #85 F1 fix: revert myAttendance for the singer's own member id when
+			// her attendance write failed — the optimistic value must not stick.
+			if (targetMemberId === memberId) {
+				if (before) {
+					const idx = myAttendance.findIndex((a) => a.eventId === eventId);
+					const record = { attendanceId: before.attendanceId, eventId, status: before.status };
+					if (idx >= 0) {
+						const next = [...myAttendance];
+						next[idx] = record;
+						myAttendance = next;
+					} else {
+						myAttendance = [...myAttendance, record];
+					}
+				} else {
+					myAttendance = myAttendance.filter((a) => a.eventId !== eventId);
+				}
+			}
+
 			// Only update the live panel state if this event is still open.
 			if (eventId !== attendanceItem?.id) return;
 			const next = { ...attendanceMap };
-			if (before) next[memberId] = before;
-			else delete next[memberId];
+			if (before) next[targetMemberId] = before;
+			else delete next[targetMemberId];
 			attendanceMap = next;
 			const failed = new Set(attendanceFailedMemberIds);
-			failed.add(memberId);
+			failed.add(targetMemberId);
 			attendanceFailedMemberIds = failed;
 		}
 	});
@@ -457,6 +556,58 @@
 			? { attendanceId: current.attendanceId, memberId, status: current.status }
 			: null;
 		attendanceQueue.request({ cfg, eventId: attendanceItem.id, memberId, existing, newStatus });
+	}
+
+	// #85 TA.4 — my own attendance per RECENT event id (absent = badge renders
+	// 'not-recorded' — see AgendaList's badgeStatus fallback), and my season
+	// rate (late counts as attended; total is the season's past-event count,
+	// not my record count — a past event with no record for me still counts
+	// toward the total, just not toward `attended`).
+	const myAttendanceByEventId = $derived.by(() => {
+		const map: Record<string, AttendanceStatus> = {};
+		for (const a of myAttendance) map[a.eventId] = a.status;
+		return map;
+	});
+	// F1 fix: filter myAttendance to only records whose eventId appears in
+	// recentItems (the current season's PAST events). Without this, records from
+	// previous seasons inflate `attended` while `total` stays at this season's
+	// past-event count — "Attended 31 of 2 rehearsals".
+	const mySeasonAttendance = $derived((() => {
+		const recentIds = new Set(recentItems.map((i) => i.id));
+		return myAttendance.filter((a) => recentIds.has(a.eventId));
+	})());
+	const mySeasonRate = $derived(deriveAttendanceRate(mySeasonAttendance, recentItems.length));
+
+	// #85 TA.4 — open/close the conductor's full-roster expansion, loading the
+	// per-member rates lazily on first expand (one roster read + one
+	// listAttendance read per past event — mirrors openAttendancePanel's
+	// on-demand load, since most visits never open this either).
+	function handleExpandSeasonSummary() {
+		if (!selected) return;
+		if (seasonSummaryExpanded) {
+			seasonSummaryExpanded = false;
+			return;
+		}
+		seasonSummaryExpanded = true;
+		if (seasonRatesLoaded) return; // already loaded for this collective's current load
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const events = recentItems;
+		const thisRequestSnapshot = requestId; // guard against a collective switch mid-load
+		seasonRatesLoading = true;
+		seasonRatesError = false;
+		Promise.all([loadRoster(cfg), Promise.all(events.map((event) => listAttendance(cfg, event.id)))])
+			.then(([roster, perEventRecords]) => {
+				if (thisRequestSnapshot !== requestId) return;
+				seasonMemberRates = deriveAllMemberRates(perEventRecords.flat(), roster, events.length);
+				seasonRatesLoaded = true;
+				seasonRatesLoading = false;
+			})
+			.catch(() => {
+				if (thisRequestSnapshot !== requestId) return;
+				seasonRatesLoading = false;
+				seasonRatesError = true;
+				seasonMemberRates = [];
+			});
 	}
 
 	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
@@ -515,9 +666,22 @@
 							{failedEventIds}
 							{recentItems}
 							{conductorEventIds}
+							{myAttendanceByEventId}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}
-						/>
+						>
+							{#snippet seasonSummary()}
+								<SeasonSummary
+									myRate={mySeasonRate}
+									canExpand={$isConductor === 'conductor'}
+									expanded={seasonSummaryExpanded}
+									memberRates={seasonMemberRates}
+									loading={seasonRatesLoading}
+									error={seasonRatesError}
+									onexpand={handleExpandSeasonSummary}
+								/>
+							{/snippet}
+						</AgendaList>
 						{#if attendanceItem}
 							<AttendanceSurface
 								item={attendanceItem}
