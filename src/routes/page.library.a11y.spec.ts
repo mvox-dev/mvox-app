@@ -43,9 +43,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_bulk_checkout_availability: (p: { available: number; total: number }) => `${p.available}/${p.total} available`,
 		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_bulk_return_title: () => 'Bulk return',
-		library_bulk_return_edition_placeholder: () => 'Select edition',
-		library_bulk_return_lent_count: (p: { count: number }) => `${p.count} lent`,
 		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`
 	}
 }));
@@ -75,6 +72,7 @@ vi.mock('$lib/library/libraryData', async () => {
 		resolveCopyNames: resolveCopyNamesMock
 	};
 });
+vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
@@ -355,47 +353,10 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 		});
 	});
 
-	it('bulk return section contains checkboxes with aria-label or associated <label>', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
-		setAuthedLibrarian();
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter' }
-		]);
-		listAllCopiesMock.mockResolvedValue([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }]);
-		listActiveMembersMock.mockResolvedValue([{ memberId: 'member-a' }]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		// Select an edition to reveal the loan checkboxes
-		const select = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
-		await fireEvent.change(select, { target: { value: 'edition-1' } });
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
-		});
-
-		const loanList = container.querySelector('[data-testid="bulk-return-loan-list"]') as HTMLElement;
-		const checkboxes = loanList.querySelectorAll('input[type="checkbox"]');
-		// There should be checkboxes for selecting lendings to return in bulk
-		expect(checkboxes.length).toBeGreaterThan(0);
-
-		// Each checkbox must have either an aria-label, an associated label[for], or be inside a <label>
-		checkboxes.forEach((cb) => {
-			const hasAriaLabel = cb.getAttribute('aria-label') !== null && cb.getAttribute('aria-label') !== '';
-			const id = cb.getAttribute('id');
-			const hasExplicitLabel = id ? container.querySelector(`label[for="${id}"]`) !== null : false;
-			const hasImplicitLabel = cb.closest('label') !== null;
-			expect(hasAriaLabel || hasExplicitLabel || hasImplicitLabel).toBe(true);
-		});
-	});
+	// The bulk-return section (edition picker + loan checkboxes) is REMOVED by
+	// the #76 PO ruling — inline Return buttons on lent copy rows are the only
+	// return surface now. See page.library.spec.ts's '#76 correction 8' tests
+	// for the removal coverage; there is nothing left here to a11y-check.
 });
 
 // ---------------------------------------------------------------------------

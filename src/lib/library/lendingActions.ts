@@ -105,11 +105,6 @@ export interface BulkResult {
 	failed: Array<{ copyId: string; error: string }>;
 }
 
-export interface BulkReturnResult {
-	succeeded: string[];
-	failed: Array<{ lendingId: string; error: string }>;
-}
-
 /**
  * Check out copies of a single edition to multiple members. Resolves copies
  * for the chosen edition internally, filters out copies already on loan
@@ -176,35 +171,6 @@ export async function bulkCheckout(
 		} else {
 			failed.push({
 				copyId: copies[i].id,
-				error: result.reason instanceof Error ? result.reason.message : String(result.reason)
-			});
-		}
-	});
-
-	return { succeeded, failed };
-}
-
-/**
- * Return multiple lendings in one batch. Same allSettled partial-failure pattern.
- */
-export async function bulkReturn(
-	cfg: EntuCfg,
-	lendingIds: string[],
-	fetchImpl: typeof fetch = fetch
-): Promise<BulkReturnResult> {
-	const results = await Promise.allSettled(
-		lendingIds.map((id) => returnLending(cfg, id, fetchImpl))
-	);
-
-	const succeeded: string[] = [];
-	const failed: Array<{ lendingId: string; error: string }> = [];
-
-	results.forEach((result, i) => {
-		if (result.status === 'fulfilled') {
-			succeeded.push(lendingIds[i]);
-		} else {
-			failed.push({
-				lendingId: lendingIds[i],
 				error: result.reason instanceof Error ? result.reason.message : String(result.reason)
 			});
 		}

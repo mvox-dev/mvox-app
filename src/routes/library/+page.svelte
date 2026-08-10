@@ -27,9 +27,29 @@
 	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
-	import { createLending, returnLending, bulkCheckout, bulkReturn } from '$lib/library/lendingActions';
+	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
+	import { getLocale } from '$lib/paraglide/runtime';
 
 	const selected = $derived($selectedCollectiveStore);
+
+	// #76 correction 9 — localize lending dates. Entu delivers full ISO
+	// timestamps (e.g. "2026-07-01T00:00:00.000Z"); render them for humans via
+	// Intl.DateTimeFormat rather than leaking the raw ISO string into the UI.
+	// Uses the active Paraglide locale (not browser default) and forces UTC
+	// timezone so date-only values never shift to the previous day in negative
+	// offsets. Formatter is cached per locale to avoid re-creating it on every
+	// call inside render loops.
+	let _dateFmtLocale: string | undefined;
+	let _dateFmt: Intl.DateTimeFormat | undefined;
+	function formatDate(isoDate: string): string {
+		if (!isoDate) return '';
+		const locale = getLocale();
+		if (!_dateFmt || locale !== _dateFmtLocale) {
+			_dateFmtLocale = locale;
+			_dateFmt = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
+		}
+		return _dateFmt.format(new Date(isoDate));
+	}
 
 	type Status = 'loading' | 'no-collective' | 'load-error' | 'ready';
 	type NodeStatus = 'idle' | 'loading' | 'error';
@@ -64,15 +84,12 @@
 	let inlineCheckoutErrors = $state<Map<string, string>>(new Map());
 	let returnError = $state('');
 
-	// #74 — bulk checkout/return state (edition-first flow)
+	// #74 — bulk checkout state (edition-first flow)
 	let bulkCheckoutWorkId = $state('');
 	let bulkCheckoutEditionId = $state('');
-	let bulkReturnEditionId = $state('');
 	let bulkCheckoutCheckedMembers = $state<Set<string>>(new Set());
-	let bulkReturnCheckedLoans = $state<Set<string>>(new Set());
 	let bulkCheckoutDueDate = $state('');
 	let bulkCheckoutError = $state('');
-	let bulkReturnError = $state('');
 
 	// #73/#74 — checkout form data (loaded when librarian confirmed)
 	let allEditions = $state<Edition[]>([]);
@@ -202,10 +219,6 @@
 		void bulkCheckoutEditionId;
 		bulkCheckoutCheckedMembers = new Set();
 	});
-	$effect(() => {
-		void bulkReturnEditionId;
-		bulkReturnCheckedLoans = new Set();
-	});
 
 	// #74 — derive editions filtered by selected work
 	let filteredBulkCheckoutEditions = $derived(
@@ -227,28 +240,6 @@
 			? deriveEditionAvailability(bulkCheckoutEditionId, allCopies, lendings)
 			: { available: 0, total: 0 }
 	);
-
-	// #74 — derive copy IDs belonging to the selected return edition
-	let bulkReturnEditionCopyIds = $derived(
-		bulkReturnEditionId
-			? new Set(allCopies.filter((c) => c.editionId === bulkReturnEditionId).map((c) => c.id))
-			: new Set<string>()
-	);
-
-	// #76 — derive editions with active lendings for bulk return picker
-	let bulkReturnFilteredEditions = $derived.by(() => {
-		const activeCopyIds = new Set(lendings.filter(l => l.returnedAt === '').map(l => l.copyId));
-		return allEditions.filter(edition =>
-			allCopies.some(c => c.editionId === edition.id && activeCopyIds.has(c.id))
-		);
-	});
-
-	// #76-fix — clear stale bulk return edition when it drops out of filtered list
-	$effect(() => {
-		if (bulkReturnEditionId && !bulkReturnFilteredEditions.some(e => e.id === bulkReturnEditionId)) {
-			bulkReturnEditionId = '';
-		}
-	});
 
 	// #76-fix — resolve copy names for my-loans (avoids rendering raw entity IDs)
 	let copyNameGen = 0;
@@ -430,12 +421,6 @@
 		return deriveWorkAvailability(workId, allEditions, allCopies, lendings);
 	}
 
-	// #76 — count active lendings for a given edition (bulk return count display)
-	function activeLendingCountForEdition(editionId: string): number {
-		const editionCopyIds = new Set(allCopies.filter(c => c.editionId === editionId).map(c => c.id));
-		return lendings.filter(l => l.returnedAt === '' && editionCopyIds.has(l.copyId)).length;
-	}
-
 	// #74 — bulk checkout handler
 	async function handleBulkCheckout(): Promise<void> {
 		bulkCheckoutError = '';
@@ -469,33 +454,6 @@
 		} catch (e) {
 			console.error('library: bulk checkout failed', e);
 			bulkCheckoutError = e instanceof Error ? e.message : 'Bulk checkout failed';
-		}
-	}
-
-	// #74 — bulk return handler
-	async function handleBulkReturn(): Promise<void> {
-		bulkReturnError = '';
-		const current = selected;
-		if (!current) return;
-		const token = getToken();
-		if (!token) return;
-		if (bulkReturnCheckedLoans.size === 0) return;
-		const cfg = { db: current.db, token };
-		try {
-			const result = await bulkReturn(cfg, [...bulkReturnCheckedLoans]);
-			if (result.failed.length > 0) {
-				bulkReturnError = `${result.failed.length} return(s) failed`;
-			}
-			// Refresh lending data
-			const lendingList = await listLendings(cfg);
-			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
-			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingList;
-			borrowerNames = names;
-			bulkReturnCheckedLoans = new Set();
-		} catch (e) {
-			console.error('library: bulk return failed', e);
-			bulkReturnError = e instanceof Error ? e.message : 'Bulk return failed';
 		}
 	}
 </script>
@@ -535,7 +493,7 @@
 								{#if existingLending}
 									<div class="flex items-center gap-1 text-xs">
 										<span>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</span>
-										<span data-testid="bulk-checkout-already-lent-{member.memberId}">{m.library_bulk_checkout_already_lent({ date: existingLending.assignedAt })}</span>
+										<span data-testid="bulk-checkout-already-lent-{member.memberId}">{m.library_bulk_checkout_already_lent({ date: formatDate(existingLending.assignedAt) })}</span>
 									</div>
 								{:else}
 									<label class="flex items-center gap-1 text-xs">
@@ -562,41 +520,6 @@
 						</button>
 						{#if bulkCheckoutError}
 							<p data-testid="bulk-checkout-error" class="text-xs text-red-700" role="alert">{bulkCheckoutError}</p>
-						{/if}
-					{/if}
-				</div>
-
-				<!-- #74 — bulk return section (edition-grouped) -->
-				<div data-testid="bulk-return" class="mt-3">
-					<h3 class="text-xs font-medium">{m.library_bulk_return_title()}</h3>
-					<select data-testid="bulk-return-edition-select" aria-label={m.library_bulk_return_edition_placeholder()} value={bulkReturnEditionId} onchange={(e) => (bulkReturnEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
-						<option value="">{m.library_bulk_return_edition_placeholder()}</option>
-						{#each bulkReturnFilteredEditions as edition (edition.id)}
-							<option value={edition.id}>{edition.name} ({m.library_bulk_return_lent_count({ count: activeLendingCountForEdition(edition.id) })})</option>
-						{/each}
-					</select>
-					{#if bulkReturnEditionId}
-						<div data-testid="bulk-return-loan-list" class="mt-2 flex flex-col gap-1">
-							{#each lendings.filter(l => l.returnedAt === '' && bulkReturnEditionCopyIds.has(l.copyId)) as loan (loan.id)}
-								<label class="flex items-center gap-1 text-xs">
-									<input type="checkbox"
-										checked={bulkReturnCheckedLoans.has(loan.id)}
-										onchange={() => {
-											const next = new Set(bulkReturnCheckedLoans);
-											if (next.has(loan.id)) next.delete(loan.id);
-											else next.add(loan.id);
-											bulkReturnCheckedLoans = next;
-										}}
-									/>
-									<span>{borrowerNames.get(loan.memberId) || m.library_borrower_unknown()}</span>
-								</label>
-							{/each}
-						</div>
-						<button type="button" data-testid="bulk-return-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" onclick={handleBulkReturn}>
-							{m.library_return()}
-						</button>
-						{#if bulkReturnError}
-							<p data-testid="bulk-return-error" class="text-xs text-red-700" role="alert">{bulkReturnError}</p>
 						{/if}
 					{/if}
 				</div>
@@ -666,6 +589,9 @@
 						{#each myActiveLoans as loan (loan.id)}
 							<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
 								<span>{m.library_my_loans_copy_label({ copyName: myCopyNames.get(loan.copyId) || m.library_copy_name_unknown() })}</span>
+								<span class="text-ink-2">
+									{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
+								</span>
 								{#if isOverdue(loan.assignedUntil)}
 									<span data-testid="my-loans-overdue-{loan.id}" class="text-red-700">{m.library_my_loans_overdue()}</span>
 								{/if}
@@ -798,7 +724,7 @@
 																					{@const existingLending = activeLendingForMemberInEdition(member.memberId, editionCopyIds, lendings)}
 																					{#if existingLending}
 																						<option value={member.memberId} disabled>
-																							{memberNames.get(member.memberId) || m.library_borrower_unknown()} — {m.library_inline_checkout_already_lent({ date: existingLending.assignedAt })}
+																							{memberNames.get(member.memberId) || m.library_borrower_unknown()} — {m.library_inline_checkout_already_lent({ date: formatDate(existingLending.assignedAt) })}
 																						</option>
 																					{:else}
 																						<option value={member.memberId}>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</option>
@@ -818,7 +744,7 @@
 																				name: borrowerNames.get(availability.memberId) || m.library_borrower_unknown()
 																			})}
 																			{#if availability.assignedAt}
-																				· {m.library_lent_since({ date: availability.assignedAt })}
+																				· {m.library_lent_since({ date: formatDate(availability.assignedAt) })}
 																			{/if}
 																		</span>
 																		{#if $librarianStore === 'librarian' && activeLending}

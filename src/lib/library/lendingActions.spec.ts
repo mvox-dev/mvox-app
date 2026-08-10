@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createLending, returnLending, type CreateLendingPayload } from './lendingActions';
-import { bulkCheckout, bulkReturn, type BulkCheckoutPayload, type BulkResult, type BulkReturnResult } from './lendingActions';
+import { bulkCheckout, type BulkCheckoutPayload, type BulkResult } from './lendingActions';
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
@@ -384,48 +384,3 @@ describe('bulkCheckout', () => {
 	});
 });
 
-// ── #74 bulkReturn ───────────────────────────────────────────────────────────
-
-describe('bulkReturn', () => {
-	beforeEach(() => {
-		vi.useFakeTimers();
-		vi.setSystemTime(new Date('2026-08-10T12:34:56Z'));
-	});
-
-	afterEach(() => {
-		vi.useRealTimers();
-	});
-
-	it('all succeed — all IDs in succeeded, empty failed', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({}));
-		const result: BulkReturnResult = await bulkReturn(cfg, ['lend-1', 'lend-2', 'lend-3'], fetchImpl);
-
-		expect(result.succeeded).toEqual(['lend-1', 'lend-2', 'lend-3']);
-		expect(result.failed).toHaveLength(0);
-	});
-
-	it('partial failure — some in succeeded, some in failed', async () => {
-		const fetchImpl = vi.fn().mockImplementation((url: string) => {
-			if (url.includes('entity/lend-2')) {
-				return Promise.resolve(json({}, 500));
-			}
-			return Promise.resolve(json({}));
-		});
-		const result: BulkReturnResult = await bulkReturn(cfg, ['lend-1', 'lend-2', 'lend-3'], fetchImpl);
-
-		expect(result.succeeded).toEqual(['lend-1', 'lend-3']);
-		expect(result.failed).toHaveLength(1);
-		expect(result.failed[0].lendingId).toBe('lend-2');
-		expect(result.failed[0].error).toBeTruthy();
-	});
-
-	it('all fail — empty succeeded, all in failed', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
-		const result: BulkReturnResult = await bulkReturn(cfg, ['lend-1', 'lend-2', 'lend-3'], fetchImpl);
-
-		expect(result.succeeded).toHaveLength(0);
-		expect(result.failed).toHaveLength(3);
-		expect(result.failed.map((f) => f.lendingId).sort()).toEqual(['lend-1', 'lend-2', 'lend-3']);
-		expect(result.failed.every((f) => f.error.length > 0)).toBe(true);
-	});
-});

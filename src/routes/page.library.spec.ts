@@ -44,9 +44,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_bulk_checkout_availability: (p: { available: number; total: number }) => `${p.available}/${p.total} available`,
 		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_bulk_return_title: () => 'Bulk return',
-		library_bulk_return_edition_placeholder: () => 'Select edition',
-		library_bulk_return_lent_count: (p: { count: number }) => `${p.count} lent`,
 		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`,
 		// #76 — inline checkout on browse tree
 		library_inline_checkout_placeholder: () => 'Select member',
@@ -80,6 +77,7 @@ vi.mock('$lib/library/libraryData', async () => {
 		resolveCopyNames: resolveCopyNamesMock
 	};
 });
+vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // vi.importActual for $lib/library/libraryData (kept above, to preserve the real
@@ -107,17 +105,15 @@ const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
 // #74 — mock lendingActions to verify submit triggers the action layer
-const { createLendingMock, returnLendingMock, bulkCheckoutMock, bulkReturnMock } = vi.hoisted(() => ({
+const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
 	createLendingMock: vi.fn(),
 	returnLendingMock: vi.fn(),
-	bulkCheckoutMock: vi.fn(),
-	bulkReturnMock: vi.fn()
+	bulkCheckoutMock: vi.fn()
 }));
 vi.mock('$lib/library/lendingActions', () => ({
 	createLending: createLendingMock,
 	returnLending: returnLendingMock,
-	bulkCheckout: bulkCheckoutMock,
-	bulkReturn: bulkReturnMock
+	bulkCheckout: bulkCheckoutMock
 }));
 
 import Page from './library/+page.svelte';
@@ -171,7 +167,6 @@ afterEach(() => {
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();
 	bulkCheckoutMock.mockReset();
-	bulkReturnMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -601,6 +596,62 @@ describe('#73 — librarian return', () => {
 		});
 		expect(container.querySelector('[data-testid="library-return-copy-2"]')).toBeNull();
 	});
+
+	it('clicking the return button calls returnLending with the lending ID and refreshes lendings', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock
+			.mockResolvedValueOnce([
+				{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+			])
+			// After return, the refreshed lendings list shows the lending as returned
+			.mockResolvedValue([
+				{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '2026-08-10' }
+			]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter' }]);
+		listCopiesMock.mockResolvedValue([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }]);
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([
+			{ memberId: 'member-a', personId: 'p-a', currentSection: '' }
+		]);
+		returnLendingMock.mockResolvedValue(undefined);
+
+		const { container } = render(Page);
+
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-return-copy-2"]')).not.toBeNull();
+		});
+
+		// Click the return button
+		await fireEvent.click(container.querySelector('[data-testid="library-return-copy-2"]') as Element);
+
+		// returnLending must be called with the lending ID
+		await waitFor(() => expect(returnLendingMock).toHaveBeenCalledTimes(1));
+		const callArgs = returnLendingMock.mock.calls[0];
+		// callArgs: [cfg, lendingId, fetchImpl?]
+		expect(callArgs[1]).toBe('lend-1');
+
+		// Server-confirmed: lendings are re-fetched and the return button
+		// disappears (copy is now available — for a librarian the inline
+		// checkout dropdown replaces the return button).
+		await waitFor(() => expect(listLendingsMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-return-copy-2"]')).toBeNull();
+			expect(container.querySelector('[data-testid="inline-checkout-copy-2"]')).not.toBeNull();
+		});
+	});
 });
 
 describe('#76 — inline checkout on browse tree', () => {
@@ -724,12 +775,13 @@ describe('#76 — inline checkout on browse tree', () => {
 		});
 		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
 		// member-a already holds copy-2 of edition-1 → disabled, with the
-		// lending date visible in the option text.
+		// lending date visible in the option text. (#76 correction 9: assert the
+		// year, not the raw ISO string — the date is rendered localized.)
 		await waitFor(() => {
 			const optA = select.querySelector('option[value="member-a"]') as HTMLOptionElement | null;
 			expect(optA).not.toBeNull();
 			expect(optA!.disabled).toBe(true);
-			expect(optA!.textContent).toContain('2026-07-01');
+			expect(optA!.textContent).toContain('2026');
 		});
 	});
 
@@ -842,19 +894,35 @@ describe('#74 — bulk checkout + return', () => {
 		expect(container.querySelector('[data-testid="bulk-checkout"]')).toBeNull();
 	});
 
-	it('bulk return surface visible to librarian', async () => {
+	// #76 correction 8: the separate bulk-return section is REMOVED — inline
+	// Return buttons on lent copy rows are the only return surface. The old
+	// "visible to librarian" presence test is inverted accordingly.
+	it('bulk return section does NOT exist — not even for a librarian (#76 correction 8)', async () => {
 		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
 		setAuthedWithOneCollective();
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
+		]);
 
 		const { container } = render(Page);
 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="bulk-return"]')).not.toBeNull();
+		// Even with an active lending (the old section's reason to exist), the
+		// bulk return surface must be gone entirely.
+		expect(container.querySelector('[data-testid="bulk-return"]')).toBeNull();
+		expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).toBeNull();
+		// Bulk CHECKOUT is unaffected — still renders for a librarian.
+		expect(container.querySelector('[data-testid="bulk-checkout"]')).not.toBeNull();
 	});
 
 	it('bulk return surface hidden from non-librarian', async () => {
@@ -960,83 +1028,9 @@ describe('#74 — bulk checkout + return', () => {
 		});
 	});
 
-	// ── shape tests: grouped bulk return (edition-grouped) ────────────────────
-	it('bulk return renders an edition picker (grouped by edition), not a flat loan list', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
-			{ id: 'lend-2', copyId: 'copy-2', memberId: 'member-2', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada'], ['member-2', 'Bob']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllCopiesMock.mockResolvedValue([]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return"]')).not.toBeNull();
-		});
-		// Must have an edition picker / grouping selector
-		expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-	});
-
-	it('bulk return does NOT render a flat list of all active loans', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
-			{ id: 'lend-2', copyId: 'copy-2', memberId: 'member-2', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada'], ['member-2', 'Bob']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllCopiesMock.mockResolvedValue([]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return"]')).not.toBeNull();
-		});
-		// The bulk return section must NOT contain flat loan checkboxes before
-		// an edition is selected. The old shape dumps every active loan with a
-		// checkbox — the new shape groups by edition first.
-		const checkboxes = container.querySelectorAll('[data-testid="bulk-return"] input[type="checkbox"]');
-		expect(checkboxes.length).toBe(0);
-	});
-
-	it('after picking an edition in bulk return, shows members with copies out', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
-		setAuthedWithOneCollective();
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter' }
-		]);
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		// Select an edition from the return picker
-		const select = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
-		expect(select).not.toBeNull();
-		await fireEvent.change(select, { target: { value: 'edition-1' } });
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
-		});
-	});
+	// (The old grouped-bulk-return shape tests — edition picker, no flat loan
+	// list, edition-scoped loan list — are REMOVED by #76 correction 8: the
+	// bulk return section no longer exists at all.)
 
 	// ── action-layer wiring (submit triggers the function, not just DOM) ──────
 	it('bulk checkout submit calls bulkCheckout with the selected edition, checked members, and due date', async () => {
@@ -1093,100 +1087,9 @@ describe('#74 — bulk checkout + return', () => {
 		expect(callArgs[2].memberIds).toContain('member-1');
 	});
 
-	it('bulk return submit calls bulkReturn with the checked loan IDs', async () => {
-		listWorksMock.mockResolvedValue([]);
-		// First call returns the active lending; subsequent calls (refresh after
-		// bulk return) return empty to simulate successful returns.
-		listLendingsMock.mockResolvedValueOnce([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]).mockResolvedValue([]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter' }
-		]);
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-		bulkReturnMock.mockResolvedValue({ succeeded: ['lend-1'], failed: [] });
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		// Step 1: select edition
-		const editionSelect = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
-		await fireEvent.change(editionSelect, { target: { value: 'edition-1' } });
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
-		});
-
-		// Step 2: check a loan
-		const checkboxes = container.querySelectorAll('[data-testid="bulk-return-loan-list"] input[type="checkbox"]');
-		expect(checkboxes.length).toBeGreaterThan(0);
-		await fireEvent.click(checkboxes[0]);
-
-		// Step 3: click submit
-		const submitBtn = container.querySelector('[data-testid="bulk-return-submit"]') as HTMLButtonElement;
-		await fireEvent.click(submitBtn);
-
-		await waitFor(() => {
-			expect(bulkReturnMock).toHaveBeenCalledTimes(1);
-		});
-		const callArgs = bulkReturnMock.mock.calls[0];
-		// callArgs: [cfg, lendingIds]
-		expect(callArgs[1]).toContain('lend-1');
-	});
-
-	// ── edition-scoped return filtering ──────────────────────────────────────
-	it('bulk return only shows loans whose copy belongs to the selected edition, not all active loans', async () => {
-		listWorksMock.mockResolvedValue([]);
-		// Two active loans: one for edition-1's copy, one for edition-2's copy
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-e1', copyId: 'copy-e1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
-			{ id: 'lend-e2', copyId: 'copy-e2', memberId: 'member-2', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada'], ['member-2', 'Bob']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter' },
-			{ id: 'edition-2', name: 'Peters', publisher: 'Peters' }
-		]);
-		// copy-e1 belongs to edition-1, copy-e2 belongs to edition-2
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-e1', name: 'Copy E1', copyNumber: 1, editionId: 'edition-1' },
-			{ id: 'copy-e2', name: 'Copy E2', copyNumber: 1, editionId: 'edition-2' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		// Select edition-1
-		const select = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
-		await fireEvent.change(select, { target: { value: 'edition-1' } });
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
-		});
-
-		// Should only show 1 loan (lend-e1 for copy-e1/edition-1), not lend-e2
-		const checkboxes = container.querySelectorAll('[data-testid="bulk-return-loan-list"] input[type="checkbox"]');
-		expect(checkboxes.length).toBe(1);
-		// The visible loan text should show Ada (member-1), not Bob (member-2)
-		const loanList = container.querySelector('[data-testid="bulk-return-loan-list"]');
-		expect(loanList?.textContent).toContain('Ada');
-		expect(loanList?.textContent).not.toContain('Bob');
-	});
+	// (The old bulk-return submit-wiring and edition-scoped-filtering tests are
+	// REMOVED by #76 correction 8 — the section, and with it the bulkReturn
+	// UI path, no longer exists.)
 });
 
 // ---------------------------------------------------------------------------
@@ -1317,10 +1220,12 @@ describe('#74 — bulk checkout refinements', () => {
 			expect(container.querySelector('[data-testid="bulk-checkout-member-list"]')).not.toBeNull();
 		});
 
-		// member-a already has active lending -> date label, NOT a checkbox
+		// member-a already has active lending -> date label, NOT a checkbox.
+		// (#76 correction 9: assert the year, not the raw ISO string — the date
+		// is rendered localized.)
 		const alreadyLent = container.querySelector('[data-testid="bulk-checkout-already-lent-member-a"]');
 		expect(alreadyLent).not.toBeNull();
-		expect(alreadyLent?.textContent).toContain('2026-07-01');
+		expect(alreadyLent?.textContent).toContain('2026');
 
 		// member-b has no active lending -> checkbox, no already-lent label
 		expect(container.querySelector('[data-testid="bulk-checkout-already-lent-member-b"]')).toBeNull();
@@ -1386,104 +1291,9 @@ describe('#74 — bulk checkout refinements', () => {
 // nameless guard.
 // ---------------------------------------------------------------------------
 describe('#76 — consolidated corrections', () => {
-	// ── Correction 2: Bulk return edition filter ────────────────────────────
-	// The bulk return edition dropdown must only show editions that have at
-	// least one active lending (returnedAt === '' for a lending whose copyId
-	// belongs to a copy of that edition).
-	it('bulk return edition picker only lists editions with at least one active lending', async () => {
-		listWorksMock.mockResolvedValue([]);
-		// copy-e1 belongs to edition-1 and has an active lending;
-		// copy-e2 belongs to edition-2 and has NO active lending.
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-1', copyId: 'copy-e1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' },
-			{ id: 'edition-2', name: 'Peters arrangement', publisher: 'Peters', workId: 'work-1' }
-		]);
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-e1', name: 'Copy E1', copyNumber: 1, editionId: 'edition-1' },
-			{ id: 'copy-e2', name: 'Copy E2', copyNumber: 1, editionId: 'edition-2' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		const options = container.querySelectorAll('[data-testid="bulk-return-edition-select"] option');
-		const values = Array.from(options).map(o => (o as HTMLOptionElement).value).filter(v => v !== '');
-		expect(values).toContain('edition-1');
-		expect(values).not.toContain('edition-2');
-	});
-
-	it('bulk return edition picker has no edition options when there are no active lendings', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
-		]);
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-e1', name: 'Copy E1', copyNumber: 1, editionId: 'edition-1' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		const options = container.querySelectorAll('[data-testid="bulk-return-edition-select"] option');
-		const values = Array.from(options).map(o => (o as HTMLOptionElement).value).filter(v => v !== '');
-		// Only the placeholder option should remain — no editions with active lendings
-		expect(values).toEqual([]);
-	});
-
-	// ── Correction 3: Bulk return lending count per edition ─────────────────
-	// Each edition in the bulk return dropdown should show its active lending
-	// count, e.g. "40-part original (3 lent)".
-	it('bulk return edition option text includes the active lending count', async () => {
-		listWorksMock.mockResolvedValue([]);
-		// 3 active lendings for copies belonging to edition-1
-		listLendingsMock.mockResolvedValue([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
-			{ id: 'lend-2', copyId: 'copy-2', memberId: 'member-2', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
-			{ id: 'lend-3', copyId: 'copy-3', memberId: 'member-3', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada'], ['member-2', 'Bob'], ['member-3', 'Carol']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
-		]);
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
-			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
-			{ id: 'copy-3', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		const options = container.querySelectorAll('[data-testid="bulk-return-edition-select"] option');
-		const editionOption = Array.from(options).find(o => (o as HTMLOptionElement).value === 'edition-1');
-		expect(editionOption).not.toBeNull();
-		// Must include the count (3 active lendings) in the option text
-		expect(editionOption?.textContent).toContain('(3');
-	});
+	// (Corrections 2, 3, and 7 — bulk return edition filter, per-edition lending
+	// count, and stale-selection clearing — are REMOVED along with the bulk
+	// return section itself, per #76 correction 8.)
 
 	// ── Correction 4: Works tree available/total counters (librarian) ──────
 	// When the user is a librarian, show available/total copy counts behind
@@ -1591,54 +1401,6 @@ describe('#76 — consolidated corrections', () => {
 		expect(memberSelect?.textContent).not.toMatch(/[0-9a-f]{24}/);
 	});
 
-	// ── Correction 7: Stale bulkReturnEditionId after last loan returned ────
-	it('clears bulk return edition selection when the selected edition drops out of the filtered list', async () => {
-		// Start with one active lending for edition-1
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValueOnce([
-			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter' }
-		]);
-		listAllCopiesMock.mockResolvedValue([
-			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
-		]);
-		listActiveMembersMock.mockResolvedValue([]);
-		bulkReturnMock.mockResolvedValue({ succeeded: ['lend-1'], failed: [] });
-		// After return, lendings list is empty (all returned)
-		listLendingsMock.mockResolvedValue([]);
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
-		});
-
-		// Select edition-1
-		const select = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
-		await fireEvent.change(select, { target: { value: 'edition-1' } });
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
-		});
-
-		// Check the loan and submit bulk return
-		const checkboxes = container.querySelectorAll('[data-testid="bulk-return-loan-list"] input[type="checkbox"]');
-		await fireEvent.click(checkboxes[0]);
-		const submitBtn = container.querySelector('[data-testid="bulk-return-submit"]') as HTMLButtonElement;
-		await fireEvent.click(submitBtn);
-
-		// After return completes, the loan list panel should disappear because
-		// edition-1 no longer has active lendings and the selection should clear
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).toBeNull();
-		});
-	});
-
 	// ── Correction 8: My-loans copy name resolution (no raw entity IDs) ─────
 	it('my-loans section shows resolved copy name, not raw entity ID', async () => {
 		listWorksMock.mockResolvedValue([]);
@@ -1666,6 +1428,159 @@ describe('#76 — consolidated corrections', () => {
 			// Must NOT contain the raw entity ID
 			expect(item?.textContent).not.toContain('copy-abc');
 		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #76 — correction 9: lending dates are rendered localized (Intl.DateTimeFormat
+// with the current locale), never as raw ISO timestamps. Live Entu date
+// properties arrive as full ISO strings like "2026-07-01T00:00:00.000Z"; the
+// UI must format them for humans. The exact format is locale-dependent, so
+// these tests assert the ABSENCE of the raw ISO time pattern plus the year as
+// a human-readable anchor — not an exact format string.
+// ---------------------------------------------------------------------------
+describe('#76 — correction 9: localized lending dates', () => {
+	// Matches the time component of a raw ISO timestamp, e.g. "T00:00:00".
+	const RAW_ISO_TIME = /T\d{2}:\d{2}/;
+
+	it('a lent copy row shows a localized "since" date, never a raw ISO timestamp', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01T00:00:00.000Z', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter' }]);
+		listCopiesMock.mockResolvedValue([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]);
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-toggle-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-toggle-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-copy-copy-2"]')?.textContent).toContain('Out');
+		});
+		const row = container.querySelector('[data-testid="library-copy-copy-2"]');
+		// The raw ISO time component must never leak into the UI...
+		expect(row?.textContent).not.toMatch(RAW_ISO_TIME);
+		// ...but the date is still present in some human-readable form.
+		expect(row?.textContent).toContain('2026');
+	});
+
+	it('my-loans shows localized assignedAt/assignedUntil dates, never raw ISO', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-07-01T00:00:00.000Z', assignedUntil: '2099-01-01T00:00:00.000Z', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+		// Copy name deliberately digit-free so the year anchors below can only
+		// come from rendered dates.
+		resolveCopyNamesMock.mockResolvedValue(new Map([['copy-abc', 'Score Seven']]));
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans-item-lend-mine"]')).not.toBeNull();
+		});
+
+		const item = container.querySelector('[data-testid="my-loans-item-lend-mine"]');
+		// Never a raw ISO timestamp anywhere in the loan row.
+		expect(item?.textContent).not.toMatch(RAW_ISO_TIME);
+		// Both lending dates present in human-readable form (year anchors —
+		// exact format is locale-dependent).
+		expect(item?.textContent).toContain('2026'); // assignedAt
+		expect(item?.textContent).toContain('2099'); // assignedUntil
+	});
+
+	it('bulk checkout member picker "already lent" date is localized, never raw ISO', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		// member-a already holds copy-1 of edition-1 — full-ISO assignedAt as
+		// live Entu delivers it.
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-07-01T00:00:00.000Z', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([
+			{ memberId: 'member-a', personId: 'person-a', currentSection: '' }
+		]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-checkout-edition-select"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="bulk-checkout-edition-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'edition-1' } });
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-checkout-already-lent-member-a"]')).not.toBeNull();
+		});
+		const alreadyLent = container.querySelector('[data-testid="bulk-checkout-already-lent-member-a"]');
+		expect(alreadyLent?.textContent).not.toMatch(RAW_ISO_TIME);
+		expect(alreadyLent?.textContent).toContain('2026');
+	});
+
+	it('inline checkout picker disabled-member lending date is localized, never raw ISO', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01T00:00:00.000Z', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace'], ['member-b', 'Ben Jonson']]));
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter' }]);
+		listCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
+		]);
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([
+			{ memberId: 'member-a', personId: 'p-a', currentSection: '' },
+			{ memberId: 'member-b', personId: 'p-b', currentSection: '' }
+		]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-toggle-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-toggle-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
+		await waitFor(() => {
+			expect(select.querySelector('option[value="member-a"]')).not.toBeNull();
+		});
+		const optA = select.querySelector('option[value="member-a"]') as HTMLOptionElement;
+		expect(optA.disabled).toBe(true);
+		expect(optA.textContent).not.toMatch(RAW_ISO_TIME);
+		expect(optA.textContent).toContain('2026');
 	});
 });
 
