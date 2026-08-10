@@ -191,13 +191,14 @@
 		resetLibrarian();
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
-		resolveLibrarian(cfg, current.personId).then((result) => {
+		resolveLibrarian(cfg, current.personId).then(async (result) => {
 			if (g !== librarianGen) return;
-			librarianStore.set(result.state);
 			libraryEntityIdStore.set(result.libraryId);
-			// Load checkout form data when librarian confirmed
+			// Load checkout form data BEFORE revealing librarian tools so the
+			// bulk-checkout/return checkboxes are present on first render.
 			if (result.state === 'librarian') {
-				Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]).then(([copies, members]) => {
+				try {
+					const [copies, members] = await Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]);
 					if (g !== librarianGen) return;
 					allCopies = copies;
 					allMembers = members;
@@ -205,8 +206,12 @@
 					resolveBorrowerNames(cfg, memberIdList).then((names) => {
 						if (g === librarianGen) memberNames = names;
 					}).catch((e) => console.error('library: member name resolution failed', e));
-				}).catch((e) => console.error('library: checkout data load failed', e));
+				} catch (e) {
+					console.error('library: checkout data load failed', e);
+				}
 			}
+			if (g !== librarianGen) return;
+			librarianStore.set(result.state);
 		});
 	});
 
@@ -313,11 +318,27 @@
 				<!-- #74 — bulk checkout section -->
 				<div data-testid="bulk-checkout" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_checkout_title()}</h3>
+					<ul class="mt-1 flex flex-col gap-0.5">
+						{#each allCopies as copy (copy.id)}
+							<li class="flex items-center gap-1 text-xs">
+								<input type="checkbox" aria-label={copy.name || `#${copy.copyNumber}`} />
+								<span>{copy.name || `#${copy.copyNumber}`}</span>
+							</li>
+						{/each}
+					</ul>
 				</div>
 
 				<!-- #74 — bulk return section -->
 				<div data-testid="bulk-return" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_return_title()}</h3>
+					<ul class="mt-1 flex flex-col gap-0.5">
+						{#each lendings.filter(l => l.returnedAt === '') as loan (loan.id)}
+							<li class="flex items-center gap-1 text-xs">
+								<input type="checkbox" aria-label={borrowerNames.get(loan.memberId) || loan.copyId} />
+								<span>{borrowerNames.get(loan.memberId) || loan.copyId}</span>
+							</li>
+						{/each}
+					</ul>
 				</div>
 			</section>
 		{:else if $librarianStore === 'error'}
@@ -331,19 +352,22 @@
 						if (!selected) return;
 						const token = getToken();
 						const cfg = { db: selected.db, token: token ?? '' };
-						resolveLibrarian(cfg, selected.personId).then((result) => {
-							librarianStore.set(result.state);
+						resolveLibrarian(cfg, selected.personId).then(async (result) => {
 							libraryEntityIdStore.set(result.libraryId);
 							if (result.state === 'librarian') {
-								Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]).then(([copies, members]) => {
+								try {
+									const [copies, members] = await Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]);
 									allCopies = copies;
 									allMembers = members;
 									const memberIdList = members.map((mbr) => mbr.memberId);
 									resolveBorrowerNames(cfg, memberIdList).then((names) => {
 										memberNames = names;
 									}).catch((e) => console.error('library: member name resolution failed', e));
-								}).catch((e) => console.error('library: checkout data load failed', e));
+								} catch (e) {
+									console.error('library: checkout data load failed', e);
+								}
 							}
+							librarianStore.set(result.state);
 						});
 					}}
 				>
@@ -364,16 +388,17 @@
 					data-testid="my-loans-toggle"
 					class="flex w-full items-center justify-between text-left text-sm font-medium"
 					aria-expanded={myLoansExpanded}
+					aria-controls="my-loans-list"
 					onclick={() => { myLoansExpanded = !myLoansExpanded; }}
 				>
 					<span>{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
 					<span aria-hidden="true">{myLoansExpanded ? '▾' : '▸'}</span>
 				</button>
 				{#if myLoansExpanded}
-					<ul class="mt-2 flex flex-col gap-1">
+					<ul id="my-loans-list" class="mt-2 flex flex-col gap-1">
 						{#each myActiveLoans as loan (loan.id)}
 							<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
-								<span>Copy: {loan.copyId}</span>
+								<span>{m.library_my_loans_copy_label({ copyId: loan.copyId })}</span>
 								{#if isOverdue(loan.assignedUntil)}
 									<span data-testid="my-loans-overdue-{loan.id}" class="text-red-700">{m.library_my_loans_overdue()}</span>
 								{/if}
@@ -436,7 +461,7 @@
 								{#if editionNodeStatus.get(work.id) === 'loading'}
 									<div class="h-2.5 w-1/3 animate-pulse rounded bg-ink-5"></div>
 								{:else if editionNodeStatus.get(work.id) === 'error'}
-									<div class="flex items-center gap-2">
+									<div class="flex items-center gap-2" role="alert">
 										<p class="text-xs text-red-700">{m.library_node_load_error()}</p>
 										<button
 											type="button"
@@ -472,7 +497,7 @@
 													{#if copyNodeStatus.get(edition.id) === 'loading'}
 														<div class="h-2.5 w-1/3 animate-pulse rounded bg-ink-5"></div>
 													{:else if copyNodeStatus.get(edition.id) === 'error'}
-														<div class="flex items-center gap-2">
+														<div class="flex items-center gap-2" role="alert">
 															<p class="text-xs text-red-700">{m.library_node_load_error()}</p>
 															<button type="button" class="text-xs underline" onclick={() => loadCopiesFor(edition.id)}>
 																{m.library_node_retry()}

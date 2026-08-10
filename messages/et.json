@@ -107,6 +107,7 @@
 	"library_librarian_load_error": "Ligipääsu kontrollimine ebaõnnestus.",
 	"library_librarian_retry": "Proovi uuesti",
 	"library_my_loans_title": "Minu laenutused ({count})",
+	"library_my_loans_copy_label": "Eksemplar: {copyId}",
 	"library_my_loans_overdue": "Hilinenud",
 	"library_checkout_copy_placeholder": "Vali eksemplar",
 	"library_checkout_member_placeholder": "Vali liige",

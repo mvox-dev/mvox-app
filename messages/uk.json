@@ -107,6 +107,7 @@
 	"library_librarian_load_error": "Не вдалося перевірити доступ.",
 	"library_librarian_retry": "Повторити",
 	"library_my_loans_title": "Мої видачі ({count})",
+	"library_my_loans_copy_label": "Примірник: {copyId}",
 	"library_my_loans_overdue": "Прострочено",
 	"library_checkout_copy_placeholder": "Обрати примірник",
 	"library_checkout_member_placeholder": "Обрати учасника",

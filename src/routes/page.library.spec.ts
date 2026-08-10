@@ -31,6 +31,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
 		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
+		library_my_loans_copy_label: (p: { copyId: string }) => `Copy: ${p.copyId}`,
 		library_my_loans_overdue: () => 'Overdue',
 		library_checkout_copy_placeholder: () => 'Select copy',
 		library_checkout_member_placeholder: () => 'Select member',
@@ -651,6 +652,37 @@ describe('#74 — bulk checkout + return', () => {
 			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="bulk-return"]')).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #75 — i18n key existence: every m.* call used in the component must exist in
+// en.json. Guards against typos or stale keys that compile but render empty.
+// ---------------------------------------------------------------------------
+describe('#75 — i18n key existence', () => {
+	it('every m.* key referenced in the library page component exists in en.json', () => {
+		const componentSrc = readFileSync(resolve(process.cwd(), 'src/routes/library/+page.svelte'), 'utf-8');
+		const messagesSrc = readFileSync(resolve(process.cwd(), 'messages/en.json'), 'utf-8');
+		const messages = JSON.parse(messagesSrc) as Record<string, unknown>;
+
+		// Extract all m.someKey( calls from the component
+		const keyPattern = /\bm\.(\w+)\s*\(/g;
+		const usedKeys = new Set<string>();
+		let match: RegExpExecArray | null;
+		while ((match = keyPattern.exec(componentSrc)) !== null) {
+			usedKeys.add(match[1]);
+		}
+
+		expect(usedKeys.size).toBeGreaterThan(0);
+
+		const missingKeys: string[] = [];
+		for (const key of usedKeys) {
+			if (!(key in messages)) {
+				missingKeys.push(key);
+			}
+		}
+
+		expect(missingKeys).toEqual([]);
 	});
 });
 
