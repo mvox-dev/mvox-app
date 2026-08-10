@@ -1,48 +1,42 @@
 # Palestrina — Team Lead Scratchpad
 
-> **Trimmed 2026-08-09 (session MVOX-5).** Full history in git.
+> **Trimmed 2026-08-10 (session MVOX-6).** Full history in git.
 
-### [NEXT SESSION] 2026-08-09 — session MVOX-5 → MVOX-6
+### [NEXT SESSION] 2026-08-10 — session MVOX-6 → MVOX-7
 
-mvox-app main @ `c94192b`.
+mvox-app main @ `ee7ea5e`.
 
-**What happened this session (MVOX-5, 2026-08-09 ~00:25 EEST → ongoing):**
+**What happened this session (MVOX-6, 2026-08-10 ~02:25 EEST → ongoing):**
 
-Data/platform session — 10 commits, 480+ Entu writes, two major investigations.
+Major workflow session — Lending 1.0 epic delivered, TDD pipeline template created and evolved.
 
 **Completed:**
-- #70 — Configuration menu admin-only (3 `_sharing` DELETEs, Bentham GREEN)
-- #48 — Meta polish descriptions (160×2 EN+ET = 320 writes, trust alternative)
-- T6.4 — Library i18n/a11y verified absorbed by T6.3 (#63), posted on #54
-- T6.5 — Already done per Gama (Mihkel walked live gate, PASS on #54)
-- #68 — db-root _owner backfill — closed with MAJOR CORRECTION (see below)
+- #72 TL.1 — Librarian seat wiring (manual TDD chain, `33189f2`)
+- #73 TL.2 — Single checkout + return + my-loans (workflow, `3a93761`)
+- #74 TL.3 — Bulk checkout + return (workflow, `8dec64b`)
+- #75 TL.4 — i18n + a11y pass (workflow, `c657081`)
+- #76 TL.5 — Live gate PASSED, #71 Lending 1.0 CLOSED
+- Nine gate corrections on #76 (bulk shape, refinements, consolidated, inline checkout, bulk return removal, date localization)
+- CF Pages cache purge — production domain restored (token widened with Cache Purge permission)
 
-**#68 key findings (platform knowledge):**
-1. "Cohort 3" (3 ownerless profiles) was a phantom — entities DO have owners, invisible to db-root due to Entu bucket system
-2. Entu bucket system verified from source: rights properties (`_owner`/`_editor`/`_viewer`) live in private bucket ONLY; non-granted callers read domain/public bucket without rights
-3. `_inheritrights: false` blocks the inheritance path into the access array, but the filtering is the bucket selection
-4. Any grant (even bare `_viewer`) gives full rights visibility — all-or-nothing at private level
-5. `systemUser` is hardcoded internal-only (6 backend routes), no obtainable "service key"
-6. Cohorts 1+2 (69 entities) resolved via `_inheritrights: true` cascade — Mihkel added db-root as `_owner` on the database entity manually
-
-**Platform fixes:**
-- Person type-def: added `name` + `email` prop-defs with `search:true` (fixes Entu UI picker). Existing entities need touch-save to re-index (only db-root done)
-- db-root person: `_sharing: private` → `domain`, renamed to "db-root (mvox dev admin)" (`69bcfd8e9c031ab8e6ce8079`)
-
-**Research: owner-discoverability gap:**
-- Entu has NO mechanism for non-owners to discover or contact entity owners (verified from API source, webapp source, docs)
-- Mihkel interested — relates to prior Argo discussion
-- Three directions identified: Entu feature request / BFF solution / schema workaround
-- No ruling yet
-
-**FIRST ACTION next session:**
-1. Check if #37 and #54 epics are closeable (all sub-tasks done)
-2. Owner-discoverability thread — awaiting Mihkel's direction
-3. #14 Playwright — deferred
-4. #71 Lending — BACKLOG, not ready (PO ruling)
+**Workflow template evolution (6 commits):**
+- Created `~/workspace-app/.claude/workflows/tdd-slice-pipeline.js`
+- 8-phase chain: SPIKE → SEED → RED → GREEN → REVIEW → FIX → MERGE → PROBE
+- Model pins: opus-5 (SPIKE/REVIEW), opus-4-6 (SEED/FIX), fable (RED), sonnet (GREEN/MERGE/PROBE)
+- All model IDs fully qualified with [1m] context — no shorthands, no caller-dependent resolution
+- Template `scriptPath` invocation has args-parsing bug (tasks array arrives as undefined) — needs investigation; ad-hoc scripts work as workaround
 
 **Key learnings saved to memory this session:**
-- `feedback_entity_id_readability.md` — always include human-readable names alongside entity IDs
-- `project_entu_inheritrights_hides_rights.md` — Entu bucket system: rights in private bucket only (verified from source)
+- `feedback_single_workflow_slices.md` — pack whole slices into single workflow
+- `feedback_use_template_not_adhoc.md` — always use template, never ad-hoc scripts (model pins drift)
+
+**FIRST ACTION next session:**
+1. Investigate template `scriptPath` args-parsing bug (tasks array undefined)
+2. #77 Attendance 1.0 — pipeline-ready, #82–#87 on the board, dispatch when PO ready
+3. 4 settle-at-grooming questions on #77 need answers before dispatch
+4. #37 cleanup epic — still open, needs PO verification
+5. Production domain: CF cache purge now works via API (token widened)
+
+**Standing teammates this session:** finn, bentham, perotin (always-on), tallis, josquin, byrd (spawned for TDD chain, stayed alive)
 
 (*MVOX:Palestrina*)

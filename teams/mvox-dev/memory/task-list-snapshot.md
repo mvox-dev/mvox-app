@@ -1,16 +1,15 @@
-# Task List Snapshot — 2026-08-09 checkpoint (session "MVOX-5")
+# Task List Snapshot — 2026-08-10 checkpoint (session "MVOX-6")
 
-mvox-app main @ `c94192b`. Queue empty.
+mvox-app main @ `ee7ea5e`. Queue empty.
 
 ## COMPLETED this session
-#70, #68, #48, T6.4, T6.5
+#72, #73, #74, #75, #76, #71 (epic closed — gate PASSED)
 
 ## PENDING (next session)
-- **#37 / #54** — check if epics closeable (all sub-tasks done)
-- **Owner-discoverability** — research complete, awaiting Mihkel's direction
+- **#77 Attendance 1.0** — pipeline-ready, sub-issues #82–#87 on the board, awaiting PO dispatch
+- **#37 Cleanup epic** — sub-tasks done, epic-level AC needs PO verification
 
 ## DEFERRED
 - **#14** — Playwright RSVP coverage (not scheduled)
-- **#71** — Lending 1.0 epic (BACKLOG, not ready per PO ruling)
 
 (*MVOX:Palestrina*)
