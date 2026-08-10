@@ -49,14 +49,14 @@ export const meta = {
   description: 'Full TDD pipeline for a slice epic — SPIKE/SEED/RED/GREEN/REVIEW/MERGE/PROBE per task',
   whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain',
   phases: [
-    { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5' },
+    { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5[1m]' },
     { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'claude-opus-4-6[1m]' },
     { title: 'RED', detail: 'Write failing tests', model: 'claude-opus-4-6[1m]' },
-    { title: 'GREEN', detail: 'Implement to make tests pass', model: 'sonnet' },
-    { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'claude-opus-5' },
+    { title: 'GREEN', detail: 'Implement to make tests pass', model: 'claude-sonnet-5[1m]' },
+    { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'claude-opus-5[1m]' },
     { title: 'FIX', detail: 'Address review findings', model: 'claude-opus-4-6[1m]' },
-    { title: 'MERGE', detail: 'Squash-merge to main', model: 'sonnet' },
-    { title: 'PROBE', detail: 'Post-merge live data verification', model: 'sonnet' }
+    { title: 'MERGE', detail: 'Squash-merge to main', model: 'claude-sonnet-5[1m]' },
+    { title: 'PROBE', detail: 'Post-merge live data verification', model: 'claude-sonnet-5[1m]' }
   ]
 }
 
@@ -135,7 +135,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const spike = await agent(
       `${task.spikePrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are researching to discover facts that tests should assert. Read source, probe API behavior, report structured findings. Do NOT write code or tests — only research and report.`,
-      { label: `spike-${task.issueNumber}`, phase: `${taskLabel} SPIKE`, schema: SPIKE_SCHEMA, model: 'claude-opus-5' }
+      { label: `spike-${task.issueNumber}`, phase: `${taskLabel} SPIKE`, schema: SPIKE_SCHEMA, model: 'claude-opus-5[1m]' }
     )
 
     if (!spike || !spike.success) {
@@ -185,7 +185,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   const green = await agent(
     `${task.greenPrompt}\n\nWORKING DIRECTORY: ${REPO}\nBRANCH: ${task.branch} (already checked out)\n\nVerification:\n1. cd ${REPO} && pnpm test -- --run — ALL pass\n2. cd ${REPO} && pnpm check — 0 type errors\n\nGit: git add -A && git commit -m "${task.commitPrefix}: ${task.title}"`,
-    { label: `green-${task.issueNumber}`, phase: `${taskLabel} GREEN`, schema: RESULT_SCHEMA, model: 'sonnet' }
+    { label: `green-${task.issueNumber}`, phase: `${taskLabel} GREEN`, schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
 
   if (!green || !green.success) {
@@ -206,7 +206,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     verdict = await agent(
       `You are the architecture reviewer (Bentham) for mvox. Review branch ${task.branch} for issue #${task.issueNumber} (${task.title}).\n\nWORKING DIRECTORY: ${REPO}\n\n## Review checklist\n${task.reviewChecklist}\n\nRun: cd ${REPO} && git diff main...HEAD --stat\nRead changed files. Then: pnpm test -- --run && pnpm check\n\nIssue GREEN / YELLOW / RED. For non-GREEN: list specific findings.`,
-      { label: `review-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: VERDICT_SCHEMA, model: 'claude-opus-5' }
+      { label: `review-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: VERDICT_SCHEMA, model: 'claude-opus-5[1m]' }
     )
 
     if (!verdict) verdict = { verdict: 'RED', summary: 'Review agent failed', findings: [] }
@@ -232,7 +232,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   const merge = await agent(
     `Squash-merge ${task.branch} to main for issue #${task.issueNumber}.\n\nWORKING DIRECTORY: ${REPO}\n\ncd ${REPO} && git checkout main && git pull && git merge --squash ${task.branch} && git commit -m "$(cat <<'EOF'\n${task.commitPrefix}: ${task.title}\n\n${task.commitBody}\n\nCloses #${task.issueNumber}\n\n${CO_AUTHOR}\nEOF\n)" && git push && git branch -d ${task.branch}\n\nReport the merge commit SHA.`,
-    { label: `merge-${task.issueNumber}`, phase: `${taskLabel} MERGE`, schema: RESULT_SCHEMA, model: 'sonnet' }
+    { label: `merge-${task.issueNumber}`, phase: `${taskLabel} MERGE`, schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
 
   if (!merge || !merge.success) {
@@ -248,7 +248,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const probe = await agent(
       `${task.probePrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are verifying live data state after deployment. Query the live system, compare against expected state from the task spec, and report pass/fail per check. Do NOT modify any data — read-only verification only.`,
-      { label: `probe-${task.issueNumber}`, phase: `${taskLabel} PROBE`, schema: PROBE_SCHEMA, model: 'sonnet' }
+      { label: `probe-${task.issueNumber}`, phase: `${taskLabel} PROBE`, schema: PROBE_SCHEMA, model: 'claude-sonnet-5[1m]' }
     )
 
     if (!probe || !probe.passed) {
