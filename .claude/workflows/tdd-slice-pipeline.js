@@ -29,16 +29,17 @@
  * Model assignments per phase (Mihkel's ruling, 2026-08-10):
  *   SPIKE:  opus-5   — comprehension checkpoint, discover what RED should assert
  *   SEED:   opus-4-6 — careful execution, schema/data mutations with ledgers
- *   RED:    opus-4-6 — structural thinking, test design is the hard part
+ *   RED:    fable    — creative/lateral thinking, surprising edge-case tests
  *   GREEN:  sonnet   — constrained execution, tests define the goal
  *   REVIEW: opus-5   — comprehension checkpoint, different model than writer/implementer
  *   FIX:    opus-4-6 — careful execution, resolve architectural findings
  *   MERGE:  sonnet   — mechanical git ops
  *   PROBE:  sonnet   — constrained execution, well-defined checks
  *
- * Three models, deliberately placed: opus-5 at comprehension checkpoints
- * (SPIKE, REVIEW), opus-4-6 at careful-execution checkpoints (SEED, RED,
- * FIX), sonnet at constrained-execution checkpoints (GREEN, MERGE, PROBE).
+ * Four models, deliberately placed: opus-5 at comprehension checkpoints
+ * (SPIKE, REVIEW), opus-4-6 at careful-execution checkpoints (SEED, FIX),
+ * fable at creative checkpoint (RED — edge-case tests), sonnet at
+ * constrained-execution checkpoints (GREEN, MERGE, PROBE).
  * Full model IDs work inside workflow agent() — shorthand 'opus' resolves
  * to the session's opus (4.6); 'claude-opus-5' reaches opus 5 explicitly.
  *
@@ -51,7 +52,7 @@ export const meta = {
   phases: [
     { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5[1m]' },
     { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'claude-opus-4-6[1m]' },
-    { title: 'RED', detail: 'Write failing tests', model: 'claude-opus-4-6[1m]' },
+    { title: 'RED', detail: 'Write failing tests — creative edge cases', model: 'claude-fable-5' },
     { title: 'GREEN', detail: 'Implement to make tests pass', model: 'claude-sonnet-5[1m]' },
     { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'claude-opus-5[1m]' },
     { title: 'FIX', detail: 'Address review findings', model: 'claude-opus-4-6[1m]' },
@@ -169,7 +170,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const red = await agent(
       `${task.redPrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nFIRST: cd ${REPO} && git checkout main && git pull && git checkout -b ${task.branch}\n\nAfter writing tests, verify they FAIL (RED), then commit:\ngit add -A && git commit -m "test(#${task.issueNumber}): RED — ${task.title}"`,
-      { label: `red-${task.issueNumber}`, phase: `${taskLabel} RED`, schema: RESULT_SCHEMA, model: 'claude-opus-4-6[1m]' }
+      { label: `red-${task.issueNumber}`, phase: `${taskLabel} RED`, schema: RESULT_SCHEMA, model: 'claude-fable-5' }
     )
 
     if (!red || !red.success) {
