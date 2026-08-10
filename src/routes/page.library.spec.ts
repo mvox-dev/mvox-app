@@ -47,7 +47,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_bulk_return_title: () => 'Bulk return',
 		library_bulk_return_edition_placeholder: () => 'Select edition',
 		library_bulk_return_lent_count: (p: { count: number }) => `${p.count} lent`,
-		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`
+		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`,
+		// #76 — inline checkout on browse tree
+		library_inline_checkout_placeholder: () => 'Select member',
+		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
+		library_inline_checkout_error: () => 'Checkout failed'
 	}
 }));
 
@@ -547,40 +551,10 @@ describe('#73 — my loans', () => {
 	});
 });
 
-describe('#73 — librarian checkout + return', () => {
-	it('checkout form (copy picker + member picker + optional due date + submit) is visible to a librarian', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="checkout-form"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="checkout-copy-select"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="checkout-member-select"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="checkout-due-date"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="checkout-submit"]')).not.toBeNull();
-	});
-
-	it('checkout form is hidden from a non-librarian', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
-		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="checkout-form"]')).toBeNull();
-	});
-
+describe('#73 — librarian return', () => {
+	// The standalone single-checkout form that used to live here is REMOVED by
+	// the #76 PO ruling — single checkout now happens inline on the browse tree
+	// (see '#76 — inline checkout on browse tree' below). Return stays as-is.
 	it('a return button is visible on an active lending for a librarian', async () => {
 		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
 		listLendingsMock.mockResolvedValue([
@@ -626,6 +600,213 @@ describe('#73 — librarian checkout + return', () => {
 			expect(container.querySelector('[data-testid="library-copy-copy-2"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="library-return-copy-2"]')).toBeNull();
+	});
+});
+
+describe('#76 — inline checkout on browse tree', () => {
+	// PO ruling: the standalone checkout form (copy picker + member picker +
+	// date + submit) is replaced by an inline "Select member" dropdown
+	// [data-testid="inline-checkout-{copyId}"] on each AVAILABLE copy row in
+	// the librarian view. Picking a member checks the copy out immediately
+	// (server-confirmed: createLending resolves, then lendings are re-fetched).
+	// Members who already hold an active lending for that EDITION are disabled
+	// in the picker and show the lending date (double-lending guard).
+
+	// One work -> one edition -> two copies; copy-2 is out to member-a since
+	// 2026-07-01, copy-1 is available. Two active members: Ada (member-a,
+	// already borrowing) and Ben (member-b, free).
+	function mockTreeWithOneLending() {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(
+			new Map([
+				['member-a', 'Ada Lovelace'],
+				['member-b', 'Ben Jonson']
+			])
+		);
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]);
+		listCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
+		]);
+	}
+
+	function mockLibrarianCheckoutData() {
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([
+			{ memberId: 'member-a', personId: 'p-a', currentSection: '' },
+			{ memberId: 'member-b', personId: 'p-b', currentSection: '' }
+		]);
+	}
+
+	async function expandToCopies(container: Element) {
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-toggle-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-toggle-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-copy-copy-1"]')).not.toBeNull());
+	}
+
+	// ── 1. standalone form removed ──────────────────────────────────────────
+	it('the standalone checkout form does NOT exist — not even for a librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="checkout-form"]')).toBeNull();
+		expect(container.querySelector('[data-testid="checkout-copy-select"]')).toBeNull();
+		expect(container.querySelector('[data-testid="checkout-member-select"]')).toBeNull();
+		expect(container.querySelector('[data-testid="checkout-submit"]')).toBeNull();
+	});
+
+	// ── 2. inline dropdown on available copy rows (librarian) ───────────────
+	it('an AVAILABLE copy row shows an inline member dropdown for a librarian; a lent copy row does not', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const { container } = render(Page);
+		await expandToCopies(container);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
+		expect(select.tagName).toBe('SELECT');
+		// Accessible name — same discipline as the bulk pickers.
+		expect(select.getAttribute('aria-label')).toBeTruthy();
+		// copy-2 is out — no inline checkout dropdown on it.
+		expect(container.querySelector('[data-testid="inline-checkout-copy-2"]')).toBeNull();
+	});
+
+	// ── 3. non-librarian: label only, no dropdown ───────────────────────────
+	it('the inline dropdown is NOT rendered for a non-librarian — just the availability label', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+
+		const { container } = render(Page);
+		await expandToCopies(container);
+
+		const copyRow = container.querySelector('[data-testid="library-copy-copy-1"]');
+		expect(copyRow?.textContent).toContain('Available');
+		expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).toBeNull();
+		expect(container.querySelector('[data-testid="inline-checkout-copy-2"]')).toBeNull();
+	});
+
+	// ── 4. double-lending guard: borrower disabled, lending date shown ──────
+	it('a member with an active lending for the same edition is disabled in the picker and shows the lending date', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const { container } = render(Page);
+		await expandToCopies(container);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
+		// member-a already holds copy-2 of edition-1 → disabled, with the
+		// lending date visible in the option text.
+		await waitFor(() => {
+			const optA = select.querySelector('option[value="member-a"]') as HTMLOptionElement | null;
+			expect(optA).not.toBeNull();
+			expect(optA!.disabled).toBe(true);
+			expect(optA!.textContent).toContain('2026-07-01');
+		});
+	});
+
+	// ── 5. free members are selectable ──────────────────────────────────────
+	it('a member without an active lending for the edition is a selectable (enabled) option', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const { container } = render(Page);
+		await expandToCopies(container);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
+		await waitFor(() => {
+			const optB = select.querySelector('option[value="member-b"]') as HTMLOptionElement | null;
+			expect(optB).not.toBeNull();
+			expect(optB!.disabled).toBe(false);
+			expect(optB!.textContent).toContain('Ben Jonson');
+		});
+	});
+
+	// ── 6. selecting a member checks out immediately, server-confirmed ──────
+	it('selecting a member calls createLending with the copy + member and re-fetches lendings on success', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const today = new Date().toISOString().slice(0, 10);
+		const newLending = {
+			id: 'lend-new',
+			copyId: 'copy-1',
+			memberId: 'member-b',
+			assignedAt: today,
+			assignedUntil: '',
+			returnedAt: ''
+		};
+		createLendingMock.mockResolvedValue(newLending);
+		// Initial load sees only lend-1; the post-checkout refresh sees both —
+		// the UI flips copy-1 to "Out" only from the server's refreshed list.
+		listLendingsMock
+			.mockResolvedValueOnce([
+				{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+			])
+			.mockResolvedValue([
+				{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' },
+				newLending
+			]);
+
+		const { container } = render(Page);
+		await expandToCopies(container);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
+		await waitFor(() => {
+			expect(select.querySelector('option[value="member-b"]')).not.toBeNull();
+		});
+
+		await fireEvent.change(select, { target: { value: 'member-b' } });
+
+		await waitFor(() => expect(createLendingMock).toHaveBeenCalledTimes(1));
+		const [, libraryId, payload] = createLendingMock.mock.calls[0];
+		expect(libraryId).toBe('lib-1');
+		// Full-shape assertion (no objectContaining): inline flow has no due
+		// date input, so the payload is exactly copy + member + today.
+		expect(payload).toEqual({ copyId: 'copy-1', memberId: 'member-b', assignedAt: today });
+
+		// Server-confirmed: lendings are re-fetched and the copy row reflects
+		// the refreshed list, not an optimistic local flip.
+		await waitFor(() => expect(listLendingsMock.mock.calls.length).toBeGreaterThanOrEqual(2));
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-copy-copy-1"]')?.textContent).toContain('Out — Ben Jonson');
+		});
 	});
 });
 
@@ -1368,31 +1549,45 @@ describe('#76 — consolidated corrections', () => {
 	// If a member's name resolves to '' (empty), the UI must show a
 	// human-readable placeholder — never a raw hex entity ID like
 	// "6a785fd523dc1d97bb8f1687".
-	it('member with empty resolved name shows a placeholder, never a raw 24-char hex entity ID', async () => {
+	// #76 migration: the standalone checkout member-select is gone — the same
+	// guard now applies to the inline checkout picker on the browse tree.
+	it('member with empty resolved name shows a placeholder in the inline picker, never a raw 24-char hex entity ID', async () => {
 		const hexId = '6a785fd523dc1d97bb8f1687';
-		listWorksMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
 		listLendingsMock.mockResolvedValue([]);
 		// The name resolves to empty string for the member
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([[hexId, '']]));
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter' }]);
+		listCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
+		]);
 		setAuthedWithOneCollective();
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllEditionsMock.mockResolvedValue([]);
-		listAllCopiesMock.mockResolvedValue([]);
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
+		]);
 		listActiveMembersMock.mockResolvedValue([
 			{ memberId: hexId, personId: 'person-1', currentSection: '' }
 		]);
 
 		const { container } = render(Page);
 
-		// Wait for checkout form with member options rendered
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-toggle-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-toggle-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+
+		// Wait for the inline picker with member options rendered
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="checkout-form"]')).not.toBeNull();
-			const options = container.querySelectorAll('[data-testid="checkout-member-select"] option');
+			const options = container.querySelectorAll('[data-testid="inline-checkout-copy-1"] option');
 			expect(options.length).toBeGreaterThan(1);
 		});
 
-		// The member select must NOT contain the raw hex ID anywhere
-		const memberSelect = container.querySelector('[data-testid="checkout-member-select"]');
+		// The inline picker must NOT contain the raw hex ID anywhere
+		const memberSelect = container.querySelector('[data-testid="inline-checkout-copy-1"]');
 		expect(memberSelect?.textContent).not.toMatch(/[0-9a-f]{24}/);
 	});
 

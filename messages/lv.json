@@ -123,5 +123,8 @@
 	"library_bulk_checkout_already_lent": "Izsniegts kopš {date}",
 	"library_bulk_checkout_too_many": "Nepietiek pieejamu eksemplāru",
 	"library_bulk_return_lent_count": "{count} izsniegti",
-	"library_work_availability": "{available}/{total}"
+	"library_work_availability": "{available}/{total}",
+	"library_inline_checkout_placeholder": "Izvēlēties dalībnieku",
+	"library_inline_checkout_already_lent": "Izsniegts kopš {date}",
+	"library_inline_checkout_error": "Izsniegšana neizdevās"
 }

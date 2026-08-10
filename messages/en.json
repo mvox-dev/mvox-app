@@ -123,5 +123,8 @@
 	"library_bulk_checkout_already_lent": "Lent since {date}",
 	"library_bulk_checkout_too_many": "Not enough copies available",
 	"library_bulk_return_lent_count": "{count} lent",
-	"library_work_availability": "{available}/{total}"
+	"library_work_availability": "{available}/{total}",
+	"library_inline_checkout_placeholder": "Select member",
+	"library_inline_checkout_already_lent": "Lent since {date}",
+	"library_inline_checkout_error": "Checkout failed"
 }

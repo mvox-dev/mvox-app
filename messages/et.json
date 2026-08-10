@@ -123,5 +123,8 @@
 	"library_bulk_checkout_already_lent": "Laenutatud alates {date}",
 	"library_bulk_checkout_too_many": "Pole piisavalt eksemplare",
 	"library_bulk_return_lent_count": "{count} laenutatud",
-	"library_work_availability": "{available}/{total}"
+	"library_work_availability": "{available}/{total}",
+	"library_inline_checkout_placeholder": "Vali liige",
+	"library_inline_checkout_already_lent": "Laenutatud alates {date}",
+	"library_inline_checkout_error": "Laenutamine ebaõnnestus"
 }

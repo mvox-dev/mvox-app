@@ -123,5 +123,8 @@
 	"library_bulk_checkout_already_lent": "Видано з {date}",
 	"library_bulk_checkout_too_many": "Недостатньо примірників",
 	"library_bulk_return_lent_count": "{count} видано",
-	"library_work_availability": "{available}/{total}"
+	"library_work_availability": "{available}/{total}",
+	"library_inline_checkout_placeholder": "Обрати учасника",
+	"library_inline_checkout_already_lent": "Видано з {date}",
+	"library_inline_checkout_error": "Не вдалося видати"
 }

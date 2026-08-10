@@ -57,11 +57,11 @@
 		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && l.returnedAt === '') : []
 	);
 
-	// #73 — checkout form state
-	let checkoutCopyId = $state('');
-	let checkoutMemberId = $state('');
-	let checkoutDueDate = $state('');
-	let checkoutError = $state('');
+	// #76 — inline checkout state (per-copy error on the browse-tree row; the
+	// standalone checkout-copy/checkout-member/checkout-due-date/checkout-error
+	// state is gone — selecting a member in the inline picker checks out
+	// immediately, no separate form/submit step)
+	let inlineCheckoutErrors = $state<Map<string, string>>(new Map());
 	let returnError = $state('');
 
 	// #74 — bulk checkout/return state (edition-first flow)
@@ -349,39 +349,46 @@
 		});
 	});
 
-	// #73 — checkout form submission
-	async function handleCheckout(event: Event): Promise<void> {
-		event.preventDefault();
-		checkoutError = '';
+	// #76 — inline checkout: selecting a member on an available copy row checks
+	// it out immediately (no separate submit step). Server-confirmed — lendings
+	// are re-fetched after createLending resolves, so the row's availability
+	// reflects the refreshed list, not an optimistic local flip.
+	async function handleInlineCheckout(copyId: string, memberId: string): Promise<void> {
+		const nextErrors = new Map(inlineCheckoutErrors);
+		nextErrors.delete(copyId);
+		inlineCheckoutErrors = nextErrors;
 		const current = selected;
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		if (!checkoutCopyId || !checkoutMemberId) return;
 		const libraryId = $libraryEntityIdStore;
 		if (!libraryId) return;
 		const cfg = { db: current.db, token };
-		const payload = {
-			copyId: checkoutCopyId,
-			memberId: checkoutMemberId,
-			assignedAt: new Date().toISOString().slice(0, 10),
-			...(checkoutDueDate ? { assignedUntil: checkoutDueDate } : {})
-		};
 		try {
-			await createLending(cfg, libraryId, payload);
+			await createLending(cfg, libraryId, {
+				copyId,
+				memberId,
+				assignedAt: new Date().toISOString().slice(0, 10)
+			});
 			// Refresh lending data after successful checkout
 			const lendingList = await listLendings(cfg);
 			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
 			const names = await resolveBorrowerNames(cfg, activeMemberIds);
 			lendings = lendingList;
 			borrowerNames = names;
-			checkoutCopyId = '';
-			checkoutMemberId = '';
-			checkoutDueDate = '';
 		} catch (e) {
-			console.error('library: checkout failed', e);
-			checkoutError = e instanceof Error ? e.message : 'Checkout failed';
+			console.error('library: inline checkout failed', copyId, e);
+			const errNext = new Map(inlineCheckoutErrors);
+			errNext.set(copyId, e instanceof Error ? e.message : m.library_inline_checkout_error());
+			inlineCheckoutErrors = errNext;
 		}
+	}
+
+	// #76 — copy IDs belonging to an edition, for the inline picker's
+	// double-lending guard. Same logic as the bulk-checkout edition scoping
+	// (bulkCheckoutEditionCopyIds), derived from allCopies (librarian-only data).
+	function editionCopyIdsFor(editionId: string): Set<string> {
+		return new Set(allCopies.filter((c) => c.editionId === editionId).map((c) => c.id));
 	}
 
 	// #73 — return a lending
@@ -500,29 +507,6 @@
 		{#if $librarianStore === 'librarian'}
 			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
 				{m.library_librarian_tools()}
-
-				<!-- #73 — checkout form -->
-				<form data-testid="checkout-form" class="mt-3 flex flex-col gap-2" onsubmit={handleCheckout}>
-					<select data-testid="checkout-copy-select" bind:value={checkoutCopyId} required class="rounded border border-ink-5 px-2 py-1 text-xs">
-						<option value="">{m.library_checkout_copy_placeholder()}</option>
-						{#each allCopies as copy (copy.id)}
-							<option value={copy.id}>{copy.name || `#${copy.copyNumber}`}</option>
-						{/each}
-					</select>
-					<select data-testid="checkout-member-select" bind:value={checkoutMemberId} required class="rounded border border-ink-5 px-2 py-1 text-xs">
-						<option value="">{m.library_checkout_member_placeholder()}</option>
-						{#each allMembers as member (member.memberId)}
-							<option value={member.memberId}>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</option>
-						{/each}
-					</select>
-					<input data-testid="checkout-due-date" type="date" bind:value={checkoutDueDate} class="rounded border border-ink-5 px-2 py-1 text-xs" />
-					<button data-testid="checkout-submit" type="submit" class="self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper">
-						{m.library_checkout_submit()}
-					</button>
-					{#if checkoutError}
-						<p data-testid="checkout-error" class="text-xs text-red-700" role="alert">{checkoutError}</p>
-					{/if}
-				</form>
 
 				<!-- #74 — bulk checkout section (work→edition two-level picker) -->
 				<div data-testid="bulk-checkout" class="mt-3">
@@ -796,7 +780,38 @@
 																<span class="text-ink">{copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown())}</span>
 																<span class="flex items-center gap-1">
 																	{#if availability.status === 'available'}
+																	{#if $librarianStore === 'librarian'}
+																		{@const editionCopyIds = editionCopyIdsFor(edition.id)}
+																		<span class="flex flex-col items-end gap-0.5">
+																			<select
+																				data-testid="inline-checkout-{copy.id}"
+																				aria-label={m.library_inline_checkout_placeholder()}
+																				value=""
+																				onchange={(e) => {
+																					const memberId = e.currentTarget.value;
+																					if (memberId) void handleInlineCheckout(copy.id, memberId);
+																				}}
+																				class="rounded border border-ink-5 px-2 py-0.5 text-xs"
+																			>
+																				<option value="" disabled>{m.library_inline_checkout_placeholder()}</option>
+																				{#each allMembers as member (member.memberId)}
+																					{@const existingLending = activeLendingForMemberInEdition(member.memberId, editionCopyIds, lendings)}
+																					{#if existingLending}
+																						<option value={member.memberId} disabled>
+																							{memberNames.get(member.memberId) || m.library_borrower_unknown()} — {m.library_inline_checkout_already_lent({ date: existingLending.assignedAt })}
+																						</option>
+																					{:else}
+																						<option value={member.memberId}>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</option>
+																					{/if}
+																				{/each}
+																			</select>
+																			{#if inlineCheckoutErrors.get(copy.id)}
+																				<span data-testid="inline-checkout-error-{copy.id}" class="text-red-700" role="alert">{inlineCheckoutErrors.get(copy.id)}</span>
+																			{/if}
+																		</span>
+																	{:else}
 																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">{m.library_copy_available()}</span>
+																	{/if}
 																	{:else}
 																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">
 																			{m.library_copy_lent_to({
