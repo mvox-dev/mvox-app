@@ -85,6 +85,8 @@ function agendaItem(id: string, overrides: Partial<AgendaItem> = {}): AgendaItem
 		durationMinutes: 90,
 		location: '',
 		conductors: [],
+		owners: [],
+		editors: [],
 		...overrides
 	};
 }

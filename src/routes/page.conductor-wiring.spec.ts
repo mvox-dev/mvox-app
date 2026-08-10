@@ -3,7 +3,7 @@
 // #83 review fix — route-level test for the conductor data flow: loadFullAgenda
 // returns recent items + seasonConductors, and the page wires them into AgendaList
 // as recentItems + conductorEventIds. Prior route specs all returned
-// `recent: [], seasonConductors: []`, leaving this wire untested.
+// `recent: [], seasonConductors: [], seasonOwners: [], seasonEditors: []`, leaving this wire untested.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,6 +53,22 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
+// library reads that feed its pickers), which reaches entuFetch ->
+// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
+// request context under happy-dom. Same one-line fix the library/profile specs
+// already use; the real modules keep running, only the base url is stubbed.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+// ...and the page resolves management rights per season/event on every load.
+// Only that ONE call is stubbed (the pure helpers and the write functions stay
+// real): left alone it issues a live request per agenda event, which is both a
+// network call from a unit test and a source of teardown AbortErrors. The
+// management surface itself is covered end-to-end in
+// page.repertoire-manage-wiring.spec.ts.
+vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
+	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
+	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
@@ -119,8 +135,19 @@ function agendaItem(
 	durationMinutes: number;
 	location: string;
 	conductors: string[];
+	owners: string[];
+	editors: string[];
 } {
-	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors };
+	return {
+		id,
+		name: `Rehearsal ${id}`,
+		startDatetime,
+		durationMinutes: 90,
+		location: '',
+		conductors,
+		owners: [],
+		editors: []
+	};
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
@@ -163,7 +190,7 @@ describe('+page — recent items reach AgendaList (#83 conductor wiring)', () =>
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		setAuthedWithOneCollective();
 		const { container } = render(Page);
@@ -181,7 +208,7 @@ describe('+page — recent items reach AgendaList (#83 conductor wiring)', () =>
 			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
 			recent: [],
 			seasonId: 's1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		setAuthedWithOneCollective();
 		const { container } = render(Page);
@@ -201,7 +228,7 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
-			seasonConductors: ['person-p']
+			seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: []
 		});
 		setAuthedWithOneCollective('person-p');
 		const { container } = render(Page);
@@ -222,7 +249,7 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
-			seasonConductors: ['other-person']
+			seasonConductors: ['other-person'], seasonOwners: [], seasonEditors: []
 		});
 		setAuthedWithOneCollective('person-p');
 		const { container } = render(Page);
@@ -240,7 +267,7 @@ describe('+page — isConductor store reflects the broader signal (#83 signal sh
 			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
 			recent: [], // no past events yet
 			seasonId: 's1',
-			seasonConductors: ['person-p']
+			seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: []
 		});
 		setAuthedWithOneCollective('person-p');
 		render(Page);
@@ -255,7 +282,7 @@ describe('+page — isConductor store reflects the broader signal (#83 signal sh
 			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
 			recent: [],
 			seasonId: 's1',
-			seasonConductors: ['other-person']
+			seasonConductors: ['other-person'], seasonOwners: [], seasonEditors: []
 		});
 		setAuthedWithOneCollective('person-p');
 		render(Page);
@@ -275,7 +302,7 @@ describe('+page — isConductor store reflects the broader signal (#83 signal sh
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
-			seasonConductors: ['person-p'] // person conducts all events (inherit)
+			seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // person conducts all events (inherit)
 		});
 		setAuthedWithOneCollective('person-p');
 		render(Page);

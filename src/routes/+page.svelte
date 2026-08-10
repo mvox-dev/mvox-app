@@ -30,7 +30,29 @@
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import { loadWorksByEventId } from '$lib/repertoire/workRows';
 	import { signFileUrl } from '$lib/repertoire/fileUrls';
-	import type { WorkRow } from '$lib/repertoire/types';
+	import type {
+		ManageRightsState,
+		PickerOption,
+		RepertoireStatus,
+		WorkRow,
+		WorksManage
+	} from '$lib/repertoire/types';
+	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
+	import {
+		createProgramItem,
+		createRepertoireItem,
+		createRepertoireWriteQueue,
+		deleteProgramItem,
+		deleteRepertoireItem,
+		manageRightsFrom,
+		pickableWorks,
+		pinEdition,
+		planProgramMove,
+		reorderProgramItems,
+		updateRepertoireStatus
+	} from '$lib/repertoire/repertoireActions';
+	import { listWorks, listAllEditions, type Edition, type Work } from '$lib/library/libraryData';
+	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -101,6 +123,35 @@
 	// leaving the member staring at a tab that never navigated.
 	let pdfError = $state(false);
 
+	// #91 TR.3 — repertoire/programme MANAGEMENT. Everything below is what makes
+	// the write layer reachable: without it `manageRights` never left its
+	// 'not-editor' default and every control in RepertoireElement was dead code
+	// in the running app, however green its unit tests were.
+	//
+	// Rights are read per entity (repertoire is a child of the SEASON, a
+	// programme a child of the EVENT — different `_editor` grants), so the
+	// resolution is one GET for the season plus one per agenda event, fanned out
+	// concurrently. That is the same O(N) shape the works load already pays for
+	// its per-event program_item reads; it is not free, and it is why the works
+	// load waits for it (the manage read keeps retired/dropped rows, so it must
+	// know the answer before it fetches — see includeInactive below).
+	let currentSeasonId = $state<string | null>(null);
+	let seasonManageRights = $state<ManageRightsState>('not-editor');
+	let eventManageRights = $state<Record<string, ManageRightsState>>({});
+	// The season's repertoire_items — the exclusion set for the "Add work"
+	// picker. Read separately from the agenda rows because a fully programmed
+	// agenda produces NO repertoire rows at all, and the picker would then
+	// happily offer works that already have a repertoire_item.
+	let seasonRepertoire = $state<RepertoireItem[]>([]);
+	let libraryWorks = $state<Work[]>([]);
+	let libraryEditions = $state<Edition[]>([]);
+	// Write-queue keys in flight: row ids (and the ADD_* sentinels) the controls
+	// disable on — the #15 double-tap guard.
+	let managePendingKeys = $state<Set<string>>(new Set());
+	// The last management write REJECTED (its optimistic change already rolled
+	// back). Surfaced inline: a value that silently snaps back reads as a bug.
+	let manageError = $state(false);
+
 	// #85 TA.4 — the season summary's expand state (conductor-only) + the
 	// full-roster rates it reveals. Loaded lazily on first expand (most visits
 	// never open it): one roster read + one listAttendance read per past event,
@@ -164,6 +215,7 @@
 			conductorEventIds = new Set();
 			worksByEventId = {};
 			pdfError = false;
+			resetManagement();
 			resetConductor();
 			closeAttendancePanel();
 			rosterCache = null;
@@ -189,6 +241,7 @@
 		failedEventIds = new Set();
 		worksByEventId = {};
 		pdfError = false;
+		resetManagement();
 		rosterCache = null;
 		attendanceFailedByEvent = new Map();
 		myAttendance = [];
@@ -204,27 +257,33 @@
 		// loadRecentEvents() pair. Seasons and rehearsals are fetched once;
 		// conductor data rides on the already-fetched props (no separate reads).
 		loadFullAgenda()
-			.then(({ upcoming, recent, seasonId, seasonConductors }) => {
+			.then(({ upcoming, recent, seasonId, seasonConductors, seasonOwners, seasonEditors }) => {
 				if (thisRequest !== requestId) return; // superseded by a newer selection
 				agendaItems = upcoming;
 				agendaLoading = false;
 				recentItems = recent;
 
-				// #90 TR.2 — the Works element on every row. Resolved HERE (not in a
-				// parallel branch above) because it needs the event ids and the
-				// current season id the agenda load just produced. Supplementary:
-				// a rejection leaves rows work-free, it never fails the agenda.
+				// #90 TR.2 / #91 TR.3 — the Works element on every row, plus the
+				// management surface on top of it. Resolved HERE (not in a parallel
+				// branch above) because it needs the event ids and the current
+				// season id the agenda load just produced. Supplementary: a
+				// rejection leaves rows work-free, it never fails the agenda.
 				const worksCfg = { db: current.db, token: getToken() ?? '' };
-				const eventIds = [...upcoming, ...recent].map((item) => item.id);
-				loadWorksByEventId(worksCfg, eventIds, seasonId)
-					.then((byEvent) => {
-						if (thisRequest !== requestId) return;
-						worksByEventId = byEvent;
-					})
-					.catch(() => {
-						if (thisRequest !== requestId) return;
-						worksByEventId = {};
-					});
+				const events = [...upcoming, ...recent];
+				const eventIds = events.map((item) => item.id);
+				currentSeasonId = seasonId;
+				// #91 review F1 — rights are PURE COMPUTATION on the season/event
+				// reads that already happened (they now carry `_owner`/`_editor`).
+				// The old shape fired one rights GET per agenda event — up to ~500
+				// concurrent requests, for every member including plain singers who
+				// will never see a control — and held the works load hostage to
+				// them, because `includeInactive` depended on the answer.
+				seasonManageRights =
+					seasonId === null ? 'not-editor' : manageRightsFrom(seasonOwners, seasonEditors, personId);
+				eventManageRights = Object.fromEntries(
+					events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
+				);
+				loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
 				// Conductor event IDs: pure computation on already-loaded data (no IO).
 				const ids = computeConductorEventIds(personId, seasonConductors, recent);
 				conductorEventIds = ids;
@@ -247,6 +306,7 @@
 				recentItems = [];
 				conductorEventIds = new Set();
 				worksByEventId = {};
+				resetManagement();
 				resetConductor();
 			});
 
@@ -380,6 +440,505 @@
 				pdfError = true;
 			});
 	}
+
+
+	// ── #91 TR.3 — repertoire / programme management ──────────────────────────
+	//
+	// The wiring the branch was missing. Shape mirrors the RSVP and attendance
+	// precedents: the page owns the reads, the rights, the optimistic local
+	// mutation and its inverse; repertoireActions owns the wire calls; the queue
+	// owns the pending guard and the settle path; RepertoireElement only renders
+	// controls and forwards taps.
+
+	function resetManagement() {
+		currentSeasonId = null;
+		seasonManageRights = 'not-editor';
+		eventManageRights = {};
+		seasonRepertoire = [];
+		libraryWorks = [];
+		libraryEditions = [];
+		managePendingKeys = new Set();
+		manageError = false;
+	}
+
+	type ManageCfg = { db: string; token: string };
+
+	/**
+	 * The works load, and (for a rights-holder) the picker sources.
+	 *
+	 * Rights are already known by the time this runs — the caller derived them
+	 * from `_owner`/`_editor` on the season and event reads the agenda load
+	 * already made (#91 review F1). That matters twice over: no per-entity rights
+	 * fanout, and no serialization — `includeInactive` is known at the same
+	 * instant `seasonId` is, so the read-only agenda's Works elements appear as
+	 * early as they did before management existed.
+	 *
+	 * A rights-holder reads the repertoire UNFILTERED (`includeInactive`): the
+	 * member-facing active/learning filter is what made the status toggle one-way
+	 * — set a work to retired and its row (with it the only toggle that could
+	 * bring it back) vanished, while `pickableWorks` refuses to re-offer a work
+	 * that already has a repertoire_item.
+	 */
+	function loadWorksAndManagement(
+		cfg: ManageCfg,
+		eventIds: string[],
+		seasonId: string | null,
+		thisRequest: number
+	) {
+		const canManage =
+			seasonManageRights === 'editor' ||
+			Object.values(eventManageRights).some((right) => right === 'editor');
+		if (canManage) loadManagePickers(cfg, seasonId, thisRequest);
+
+		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
+			includeInactive: seasonManageRights === 'editor'
+		})
+			.then((byEvent) => {
+				if (thisRequest !== requestId) return;
+				worksByEventId = byEvent;
+			})
+			.catch(() => {
+				if (thisRequest !== requestId) return;
+				worksByEventId = {};
+			});
+	}
+
+	/** The picker sources — only fetched for someone who can actually write. */
+	function loadManagePickers(cfg: ManageCfg, seasonId: string | null, thisRequest: number) {
+		Promise.all([
+			listWorks(cfg),
+			listAllEditions(cfg),
+			seasonId === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, seasonId)
+		])
+			.then(([works, editions, repertoire]) => {
+				if (thisRequest !== requestId) return;
+				libraryWorks = works;
+				libraryEditions = editions;
+				seasonRepertoire = repertoire;
+			})
+			.catch(() => {
+				if (thisRequest !== requestId) return;
+				// Empty pickers, not a broken page: the row controls still work.
+				libraryWorks = [];
+				libraryEditions = [];
+				seasonRepertoire = [];
+			});
+	}
+
+	/** The pending-key a reorder of `eventId`'s programme runs under. Keyed on the
+	 *  EVENT, not the moved row (#91 review F4): a move is a RENUMBER — the plan
+	 *  can rewrite any row's ordinal — so a per-row key is finer than the write's
+	 *  blast radius and lets a second move start a concurrent write to a row the
+	 *  first one is already writing. */
+	const reorderKey = (eventId: string) => `move:${eventId}`;
+
+	/**
+	 * A refetch is authoritative for everything EXCEPT the keys with a write
+	 * still in flight — for those, the server has not seen the change yet, so its
+	 * answer is stale by construction. Merge it UNDER the live rows for those
+	 * keys, exactly as the attendance panel does for pending members (#77 F2).
+	 *
+	 * Without this, settling write B refetched over the optimistic value of
+	 * still-in-flight write A: A's badge snapped back to its old value while A's
+	 * own control was still disabled, then flipped again when A landed — the
+	 * editor watched her change get undone and silently re-applied.
+	 *
+	 * A pending row with NO live counterpart was optimistically REMOVED (a delete
+	 * in flight); it stays removed rather than being resurrected by the stale
+	 * response.
+	 */
+	function mergePendingRows(byEvent: Record<string, WorkRow[]>): Record<string, WorkRow[]> {
+		const merged: Record<string, WorkRow[]> = {};
+		for (const [eventId, rows] of Object.entries(byEvent)) {
+			const reorderPending = repertoireQueue.isPending(reorderKey(eventId));
+			const live = worksByEventId[eventId] ?? [];
+			const out: WorkRow[] = [];
+			for (const row of rows) {
+				// The queue is the authority on what is in flight — not the display
+				// set, which also carries the reorder's marks.
+				const pending =
+					repertoireQueue.isPending(row.id) || (reorderPending && row.kind === 'program');
+				if (!pending) {
+					out.push(row);
+					continue;
+				}
+				const liveRow = live.find((r) => r.id === row.id);
+				if (liveRow) out.push(liveRow);
+			}
+			merged[eventId] = out;
+		}
+		return merged;
+	}
+
+	/** Re-read what a settled write changed. The rows are a JOIN over four
+	 *  collections (works + editions + copies + one program_item read per event),
+	 *  so this is expensive — see the queue's `reconcile` for when it is actually
+	 *  worth paying. A create's server-assigned id exists nowhere else, and a
+	 *  FAILED write needs the truth on screen rather than a stale local fiction. */
+	function refreshWorksAfterWrite() {
+		if (!selected) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const eventIds = [...agendaItems, ...recentItems].map((item) => item.id);
+		const seasonId = currentSeasonId;
+		const thisRequest = requestId;
+		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
+			includeInactive: seasonManageRights === 'editor'
+		})
+			.then((byEvent) => {
+				if (thisRequest !== requestId) return;
+				worksByEventId = mergePendingRows(byEvent);
+			})
+			.catch(() => {
+				/* keep the optimistic rows; the next load reconciles */
+			});
+		if (seasonId !== null && seasonManageRights === 'editor') {
+			listRepertoireItems(cfg, seasonId)
+				.then((items) => {
+					if (thisRequest !== requestId) return;
+					seasonRepertoire = items;
+				})
+				.catch(() => {
+					/* the picker keeps its previous exclusion set */
+				});
+		}
+	}
+
+	// Extra keys a write should ALSO show as pending. A reorder renumbers a whole
+	// programme, so every row in it must disable — the queue guards one key, this
+	// maps that key onto every row the write can touch.
+	const managePendingMarks = new Map<string, string[]>();
+
+	const repertoireQueue = createRepertoireWriteQueue({
+		setPending(key, pending) {
+			const next = new Set(managePendingKeys);
+			for (const mark of [key, ...(managePendingMarks.get(key) ?? [])]) {
+				if (pending) next.add(mark);
+				else next.delete(mark);
+			}
+			managePendingKeys = next;
+			// A fresh attempt clears the previous failure — she is trying again.
+			if (pending) manageError = false;
+		},
+		reconcile(key) {
+			managePendingMarks.delete(key);
+			// #91 review F3 — only a CREATE needs the server. Its entity id is
+			// assigned there and there is no optimistic row to keep; every other
+			// write kind (status / pin / ordinal / delete) already holds the
+			// authoritative value locally, so a refetch buys nothing and costs the
+			// whole four-collection join plus one program_item read per agenda event
+			// — ~45 requests per tap on a 40-event season. The next natural agenda
+			// load reconciles those.
+			if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorksAfterWrite();
+		},
+		revert(key) {
+			// The optimistic mutation has ALREADY been rolled back by the request's
+			// own `rollback` hook (queue contract) — this surfaces the failure.
+			managePendingMarks.delete(key);
+			manageError = true;
+			// #91 review F5 — and then shows the TRUTH. None of these writes is
+			// atomic: `reorderProgramItems` writes program_items sequentially and
+			// throws on the first rejection, so earlier writes already landed; each
+			// update is itself a GET → POST → DELETE triple. Rolling the UI back
+			// without refetching leaves the screen showing an order (or a status)
+			// the server does not have, with no way for the editor to notice.
+			// mergePendingRows keeps any OTHER in-flight write's optimistic value.
+			refreshWorksAfterWrite();
+		}
+	});
+
+	// ── optimistic row mutations ──────────────────────────────────────────────
+	// Every one of these is PER ITEM, never a whole-map set/restore: two writes
+	// on different keys can be in flight at once, and a snapshot-and-restore
+	// rollback would wipe the other one's optimistic value (#15's root cause #2).
+
+	function mapRows(update: (rows: WorkRow[], eventId: string) => WorkRow[]) {
+		const next: Record<string, WorkRow[]> = {};
+		for (const [eventId, rows] of Object.entries(worksByEventId)) {
+			next[eventId] = update(rows, eventId);
+		}
+		worksByEventId = next;
+	}
+
+	/** A repertoire_item is a child of the SEASON, so the same row can be showing
+	 *  on every event that falls back to it — patch them all. */
+	function patchRow(itemId: string, patch: Partial<WorkRow>) {
+		mapRows((rows) => rows.map((row) => (row.id === itemId ? { ...row, ...patch } : row)));
+	}
+
+	function findRow(itemId: string): WorkRow | undefined {
+		for (const rows of Object.values(worksByEventId)) {
+			const hit = rows.find((row) => row.id === itemId);
+			if (hit) return hit;
+		}
+		return undefined;
+	}
+
+	/** Where a row sits right now, per event — enough to put it back exactly if
+	 *  the delete fails. */
+	function snapshotRow(itemId: string, onlyEventId?: string) {
+		const snapshot: Array<{ eventId: string; index: number; row: WorkRow }> = [];
+		for (const [eventId, rows] of Object.entries(worksByEventId)) {
+			if (onlyEventId !== undefined && eventId !== onlyEventId) continue;
+			const index = rows.findIndex((row) => row.id === itemId);
+			if (index >= 0) snapshot.push({ eventId, index, row: rows[index] });
+		}
+		return snapshot;
+	}
+
+	function restoreRow(snapshot: Array<{ eventId: string; index: number; row: WorkRow }>) {
+		const next = { ...worksByEventId };
+		for (const { eventId, index, row } of snapshot) {
+			const rows = [...(next[eventId] ?? [])];
+			if (rows.some((r) => r.id === row.id)) continue;
+			rows.splice(Math.min(index, rows.length), 0, row);
+			next[eventId] = rows;
+		}
+		worksByEventId = next;
+	}
+
+	function dropRow(itemId: string, onlyEventId?: string) {
+		mapRows((rows, eventId) =>
+			onlyEventId !== undefined && eventId !== onlyEventId
+				? rows
+				: rows.filter((row) => row.id !== itemId)
+		);
+	}
+
+	function setOrdinals(eventId: string, ordinalById: Map<string, number>) {
+		mapRows((rows, id) =>
+			id === eventId
+				? rows.map((row) =>
+						ordinalById.has(row.id) ? { ...row, ordinal: ordinalById.get(row.id)! } : row
+					)
+				: rows
+		);
+	}
+
+	// ── handlers (what a tap actually does) ───────────────────────────────────
+
+	function manageCfg(): ManageCfg | null {
+		if (!selected) return null;
+		return { db: selected.db, token: getToken() ?? '' };
+	}
+
+	/** Add a work to the season repertoire. NO optimistic row: the new
+	 *  repertoire_item's id is assigned by the server, and a row keyed on a
+	 *  placeholder id is exactly the '__optimistic__' trap #15 was about. The
+	 *  control disables while the create is in flight and the refetch brings the
+	 *  real row. */
+	function handleAddWork(workId: string) {
+		const cfg = manageCfg();
+		const seasonId = currentSeasonId;
+		if (!cfg || seasonId === null) return;
+		repertoireQueue.request(ADD_WORK_KEY, async () => {
+			await createRepertoireItem(cfg, { seasonId, workId });
+		});
+	}
+
+	function handleStatusChange(itemId: string, status: RepertoireStatus) {
+		const cfg = manageCfg();
+		const row = findRow(itemId);
+		if (!cfg || !row || row.kind !== 'repertoire') return;
+		const before = row.status;
+		repertoireQueue.request(
+			itemId,
+			() => updateRepertoireStatus(cfg, itemId, status),
+			{
+				apply: () => patchRow(itemId, { status }),
+				rollback: () => patchRow(itemId, { status: before })
+			}
+		);
+	}
+
+	function handlePinEdition(itemId: string, editionId: string) {
+		const cfg = manageCfg();
+		const row = findRow(itemId);
+		if (!cfg || !row || row.kind !== 'repertoire') return;
+		const before = { editionId: row.editionId, editionName: row.editionName };
+		const editionName = libraryEditions.find((e) => e.id === editionId)?.name ?? '';
+		repertoireQueue.request(
+			itemId,
+			() => pinEdition(cfg, itemId, editionId),
+			{
+				// The pinned edition's file/links only arrive with the refetch; the
+				// name is what the row shows on tap.
+				apply: () => patchRow(itemId, { editionId, editionName }),
+				rollback: () => patchRow(itemId, before)
+			}
+		);
+	}
+
+	/**
+	 * Remove. WHICH delete this is comes from the row's own `kind`, never from
+	 * the surface it was tapped on: an event with no program_items renders the
+	 * SEASON repertoire as fallback, so a programme row can be carrying a
+	 * repertoire_item id — deleting that as a program_item would destroy the
+	 * whole collective's season entry. A row whose kind we cannot read is not
+	 * deleted at all.
+	 */
+	function handleRemoveItem(eventId: string, itemId: string) {
+		const cfg = manageCfg();
+		const row = worksByEventId[eventId]?.find((r) => r.id === itemId);
+		if (!cfg || !row) return;
+		if (row.kind === 'program') {
+			const snapshot = snapshotRow(itemId, eventId);
+			repertoireQueue.request(itemId, () => deleteProgramItem(cfg, itemId), {
+				apply: () => dropRow(itemId, eventId),
+				rollback: () => restoreRow(snapshot)
+			});
+			return;
+		}
+		// repertoire_item — a child of the season, so it leaves every event that
+		// was falling back to it. `seasonRepertoire` is the "Add work" exclusion
+		// set, so it moves with the row: without the refetch that used to follow
+		// every settle (#91 review F3), a removed work would otherwise stay
+		// unpickable until the next agenda load.
+		const snapshot = snapshotRow(itemId);
+		const repertoireBefore = seasonRepertoire;
+		repertoireQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
+			apply: () => {
+				dropRow(itemId);
+				seasonRepertoire = seasonRepertoire.filter((item) => item.id !== itemId);
+			},
+			rollback: () => {
+				restoreRow(snapshot);
+				seasonRepertoire = repertoireBefore;
+			}
+		});
+	}
+
+	/**
+	 * Reorder. BOTH sides of the move are written: setting only the moved item's
+	 * ordinal leaves it tied with its neighbour, and listProgramItems' numeric
+	 * sort is a no-op for equal keys — the move would visibly do nothing and
+	 * repeated moves would pile up duplicate ordinals. planProgramMove returns
+	 * the full set of ordinal writes.
+	 *
+	 * Keyed on the EVENT and marking EVERY row in the programme (#91 review F4).
+	 * A move is a renumber whose blast radius is the whole programme, so a
+	 * per-row key was finer than the write it guarded: moving B then immediately
+	 * moving C issued a SECOND concurrent ordinal write to a row the first move
+	 * was already writing (last-write-wins, order undefined), and the first
+	 * settle then cleared that row's pending mark — with no reference counting —
+	 * re-enabling its buttons mid-write. With one key per programme the queue's
+	 * own `if (pending.has(key)) return` makes the second move a no-op while the
+	 * first runs, and the whole programme visibly disables, which is the honest
+	 * UI anyway.
+	 */
+	function handleMoveItem(eventId: string, itemId: string, direction: 'up' | 'down') {
+		const cfg = manageCfg();
+		if (!cfg) return;
+		const rows = worksByEventId[eventId] ?? [];
+		const items = rows
+			.filter((row) => row.kind === 'program')
+			.map((row) => ({ id: row.id, ordinal: row.ordinal ?? 0 }));
+		const plan = planProgramMove(items, itemId, direction);
+		if (plan.length === 0) return; // boundary row, or not in this programme
+
+		const key = reorderKey(eventId);
+		managePendingMarks.set(
+			key,
+			items.map((item) => item.id)
+		);
+		const before = new Map(
+			plan.map((entry) => [entry.id, items.find((i) => i.id === entry.id)?.ordinal ?? 0])
+		);
+		const after = new Map(plan.map((entry) => [entry.id, entry.ordinal]));
+		repertoireQueue.request(key, () => reorderProgramItems(cfg, plan), {
+			apply: () => setOrdinals(eventId, after),
+			rollback: () => setOrdinals(eventId, before)
+		});
+	}
+
+	/** Add to tonight's programme. Like "add work", no optimistic row — the
+	 *  program_item id comes from the server. One programme add at a time across
+	 *  the agenda (ADD_PROGRAMME_KEY is what the controls disable on). */
+	function handleAddProgramItem(eventId: string, editionId: string, ordinal: number) {
+		const cfg = manageCfg();
+		if (!cfg) return;
+		repertoireQueue.request(ADD_PROGRAMME_KEY, async () => {
+			await createProgramItem(cfg, { eventId, editionId, ordinal });
+		});
+	}
+
+	// ── derived picker sources ────────────────────────────────────────────────
+
+	const editionsByWorkId = $derived.by(() => {
+		const map = new Map<string, Edition[]>();
+		for (const edition of libraryEditions) {
+			const workId = edition.workId ?? '';
+			if (workId === '') continue;
+			const list = map.get(workId);
+			if (list) list.push(edition);
+			else map.set(workId, [edition]);
+		}
+		return map;
+	});
+
+	function editionLabel(edition: Edition): string {
+		return edition.name || edition.publisher || edition.id;
+	}
+
+	/** Per repertoire ROW: the editions of that row's work ("pin edition"). A row
+	 *  whose work has no editions gets no entry, which hides the control. */
+	const editionOptionsByRowId = $derived.by(() => {
+		const out: Record<string, PickerOption[]> = {};
+		for (const rows of Object.values(worksByEventId)) {
+			for (const row of rows) {
+				if (row.kind !== 'repertoire' || row.workId === '' || out[row.id]) continue;
+				const options = (editionsByWorkId.get(row.workId) ?? []).map((edition) => ({
+					id: edition.id,
+					label: editionLabel(edition)
+				}));
+				if (options.length > 0) out[row.id] = options;
+			}
+		}
+		return out;
+	});
+
+	/** Per EVENT: editions not already on that event's programme, labelled
+	 *  "Work — Edition" so the picker reads as music rather than as ids. */
+	const pickableEditionsByEventId = $derived.by(() => {
+		const workNameById = new Map(libraryWorks.map((work) => [work.id, work.name]));
+		const all: PickerOption[] = libraryEditions.map((edition) => {
+			const workName = workNameById.get(edition.workId ?? '') ?? '';
+			return {
+				id: edition.id,
+				label: workName === '' ? editionLabel(edition) : `${workName} — ${editionLabel(edition)}`
+			};
+		});
+		const out: Record<string, PickerOption[]> = {};
+		for (const [eventId, rows] of Object.entries(worksByEventId)) {
+			const programmed = new Set(
+				rows.filter((row) => row.kind === 'program').map((row) => row.editionId)
+			);
+			out[eventId] = all.filter((option) => !programmed.has(option.id));
+		}
+		return out;
+	});
+
+	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
+
+	/** Absent entirely for a reader with no rights anywhere — AgendaList then
+	 *  renders exactly the read-only agenda it rendered before TR.3. */
+	const worksManage = $derived.by<WorksManage | undefined>(() => {
+		const anyEventRight = Object.values(eventManageRights).some((right) => right === 'editor');
+		if (seasonManageRights !== 'editor' && !anyEventRight) return undefined;
+		return {
+			seasonRights: seasonManageRights,
+			eventRightsByEventId: eventManageRights,
+			pickableWorksList,
+			pickableEditionsByEventId,
+			editionOptionsByRowId,
+			pendingKeys: managePendingKeys,
+			onaddwork: handleAddWork,
+			onstatuschange: handleStatusChange,
+			onpinedition: handlePinEdition,
+			onremoveitem: handleRemoveItem,
+			onmoveitem: handleMoveItem,
+			onaddprogramitem: handleAddProgramItem
+		};
+	});
 
 	// #84 TA.3 — open/close the inline "Take attendance" panel and load its data
 	// on demand. `attendanceRequestId` guards a slow load from clobbering a
@@ -727,6 +1286,7 @@
 							{conductorEventIds}
 							{myAttendanceByEventId}
 							{worksByEventId}
+							{worksManage}
 							onpdfclick={handlePdfClick}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}
@@ -746,6 +1306,14 @@
 						{#if pdfError}
 							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red" role="alert">
 								{m.repertoire_pdf_error()}
+							</p>
+						{/if}
+						<!-- #91 — a management write that failed. Its optimistic change is
+						     already rolled back by the time this renders, so without the
+						     message the value would just snap back and read as a bug. -->
+						{#if manageError}
+							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red" role="alert">
+								{m.repertoire_manage_error()}
 							</p>
 						{/if}
 						{#if attendanceItem}

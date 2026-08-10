@@ -45,7 +45,47 @@ describe('listSeasons (de-fanned — no org scoping)', () => {
 		);
 		const seasons = await listSeasons(cfg, fetchImpl);
 		expect(seasons.map((s) => s.id)).toEqual(['a', 'b']);
-		expect(seasons[0]).toEqual({ id: 'a', name: 'A', startDate: '2025-09-01', endDate: '2026-05-31', conductors: [] });
+		expect(seasons[0]).toEqual({
+			id: 'a',
+			name: 'A',
+			startDate: '2025-09-01',
+			endDate: '2026-05-31',
+			conductors: [],
+			owners: [],
+			editors: []
+		});
+	});
+
+	// #91 review F1 — repertoire management gates on `_editor` on the SEASON.
+	// Asking for it in THIS query is what removes the per-entity rights probe.
+	it('asks for _owner,_editor and surfaces the refs the caller can see', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'a',
+						name: [{ string: 'A' }],
+						start_date: [{ date: '2025-09-01' }],
+						_owner: [{ reference: 'p-owner' }],
+						_editor: [{ reference: 'p-editor' }, {}]
+					}
+				]
+			})
+		);
+		const seasons = await listSeasons(cfg, fetchImpl);
+		expect(String(fetchImpl.mock.calls[0][0])).toContain('_owner,_editor');
+		expect(seasons[0].owners).toEqual(['p-owner']);
+		// A ref-less entry is dropped, never surfaced as an undefined person id.
+		expect(seasons[0].editors).toEqual(['p-editor']);
+	});
+
+	it('rights props ABSENT (non-granted caller — private bucket) → empty arrays, no throw', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValue(json({ entities: [{ _id: 'a', name: [{ string: 'A' }] }] }));
+		const seasons = await listSeasons(cfg, fetchImpl);
+		expect(seasons[0].owners).toEqual([]);
+		expect(seasons[0].editors).toEqual([]);
 	});
 
 	it('throws on a non-2xx response', async () => {
@@ -72,7 +112,9 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				startDatetime: '2026-09-01T16:00:00.000Z',
 				durationMinutes: 90,
 				location: 'Hall A',
-				conductors: []
+				conductors: [],
+				owners: [],
+				editors: []
 			}
 		]);
 	});
@@ -142,6 +184,30 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 	it('throws on a non-2xx events response', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
 		await expect(listRehearsals(cfg, 'season1', fetchImpl)).rejects.toThrow(/listRehearsals failed: 403/);
+	});
+
+	// #91 review F1 — the programme controls gate on `_editor` on the EVENT.
+	// Riding on this query is what replaced one rights GET per agenda event.
+	it('asks for _owner,_editor and carries the visible refs onto each AgendaItem', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
+			return json({
+				entities: [eventRaw({ _owner: [{ reference: 'p1' }], _editor: [{ reference: 'p2' }] })]
+			});
+		});
+		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(String(fetchImpl.mock.calls[0][0])).toContain('_owner,_editor');
+		expect(items[0]).toMatchObject({ owners: ['p1'], editors: ['p2'] });
+	});
+
+	it('rights are NOT inherited from the parent series the way duration/location are', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1'))
+				return json({ entity: { _id: 'series1', _editor: [{ reference: 'series-editor' }] } });
+			return json({ entities: [eventRaw()] });
+		});
+		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(items[0]).toMatchObject({ owners: [], editors: [] });
 	});
 });
 

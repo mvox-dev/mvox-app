@@ -15,7 +15,15 @@ export interface FullAgendaResult {
 	seasonId: string | null;
 	/** The current season's conductor person refs (for determineConductor). */
 	seasonConductors: string[];
+	/** #91 — the current season's `_owner`/`_editor` refs as VISIBLE to this
+	 *  caller (private bucket: no grant → empty). Repertoire management gates on
+	 *  these; carrying them here means the page derives its rights from the season
+	 *  read that already happened instead of firing a separate rights probe. */
+	seasonOwners: string[];
+	seasonEditors: string[];
 }
+
+const NO_SEASON = { seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] };
 
 /**
  * #83 fix (F1+F2) -- combined load that fetches seasons + rehearsals ONCE (the
@@ -48,12 +56,19 @@ export async function listFullAgenda(
 		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));
 
 	const season = currentSeason(seasons, now);
-	if (!season) return { upcoming, recent: [], seasonId: null, seasonConductors: [] };
+	if (!season) return { upcoming, recent: [], ...NO_SEASON };
 
 	const seasonData = paired.find((p) => p.seasonId === season.id);
 	const recent = recentEvents(seasonData?.items ?? [], now);
 
-	return { upcoming, recent, seasonId: season.id, seasonConductors: season.conductors };
+	return {
+		upcoming,
+		recent,
+		seasonId: season.id,
+		seasonConductors: season.conductors,
+		seasonOwners: season.owners,
+		seasonEditors: season.editors
+	};
 }
 
 /** Convenience for callers: resolve db/token from T4's stores, then delegate to listFullAgenda. */
@@ -63,7 +78,7 @@ export async function loadFullAgenda(
 ): Promise<FullAgendaResult> {
 	const db = get(selectedDbStore);
 	const token = getToken();
-	if (!db || !token) return { upcoming: [], recent: [], seasonId: null, seasonConductors: [] };
+	if (!db || !token) return { upcoming: [], recent: [], ...NO_SEASON };
 	return listFullAgenda({ db, token }, now, fetchImpl);
 }
 

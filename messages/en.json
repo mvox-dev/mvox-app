@@ -148,5 +148,20 @@
 	"repertoire_no_edition": "No pinned edition",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Borrow",
-	"repertoire_pdf_error": "Could not open the PDF — try again."
+	"repertoire_pdf_error": "Could not open the PDF — try again.",
+	"repertoire_status_learning": "Learning",
+	"repertoire_status_active": "Active",
+	"repertoire_status_retired": "Retired",
+	"repertoire_status_dropped": "Dropped",
+	"repertoire_pin_edition_label": "Pin edition",
+	"repertoire_pin_edition_button": "Pin",
+	"repertoire_remove": "Remove",
+	"repertoire_move_up": "Move up",
+	"repertoire_move_down": "Move down",
+	"repertoire_add_work_label": "Add a work",
+	"repertoire_add_work_button": "Add",
+	"repertoire_add_programme_label": "Add to programme",
+	"repertoire_add_programme_button": "Add",
+	"repertoire_inactive_count": "+{count} inactive",
+	"repertoire_manage_error": "Could not save that change — try again."
 }

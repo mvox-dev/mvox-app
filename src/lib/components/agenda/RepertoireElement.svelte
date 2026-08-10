@@ -6,12 +6,14 @@
 	the already-resolved view model).
 
 	Collapsed: a single tappable line — ♫ + work names joined by ' · '. Absent
-	entirely when `rows` is empty (never an empty "Works" placeholder).
+	entirely when `rows` is empty (never an empty "Works" placeholder). Only
+	ACTIVE rows are named: a season editor reads the repertoire unfiltered
+	(#91's `includeInactive`, so the status toggle is two-way), and a dropped
+	work must not advertise itself on a rehearsal row as if it were live rep —
+	it is counted instead ("+N inactive") and shown, de-emphasised, on expand.
 
-	Expanded: one row per work — name + composer, status badge (raw status
-	string, no translation: 'active'/'learning' are the ONLY two values a
-	repertoire fallback ever surfaces here, retired/dropped are filtered
-	upstream — see repertoireData.ts's resolveEventWorks), pinned edition (or a
+	Expanded: one row per work — name + composer, status badge (translated via
+	the same STATUS_OPTIONS lookup the management select uses), pinned edition (or a
 	work-no-edition placeholder), program notes when present, and the functional
 	links: PDF, Borrow (static /library link, present only when copies exist),
 	and one link per external_link value (text = the link's domain; the producer
@@ -31,26 +33,231 @@
 	renders numbered (ol/li) in ordinal order. When ordinals are absent (the
 	season-repertoire fallback, which carries no concert position), renders
 	unordered, in the given row order.
+
+	#91 TR.3 — management controls (rights-gated writes). Still prop-driven and
+	fetch-free: the page resolves rights (repertoireActions.resolveManageRights),
+	picker candidates, and per-key pending state, and owns the actual writes
+	(repertoireActions functions, queued through createRepertoireWriteQueue) —
+	this component only renders controls and forwards taps via callback props,
+	same seam as RsvpControl/onrsvpchange. Controls render iff
+	`manageRights === 'editor'`; any other value (including the default
+	'not-editor') renders nothing extra — existing read-only callers are
+	unaffected.
+
+	`context` distinguishes the two management surfaces sharing this element:
+	  - 'repertoire' — status cycle, pin edition, remove, "Add work" (from
+	    `pickableWorksList`, TR.3's pickableWorks()).
+	  - 'programme'  — move up/down (ordinal reorder), remove, "Add to
+	    programme" (from `pickableEditions` — {id,label} pairs the caller
+	    composes, e.g. "Work — Edition", so this component stays decoupled
+	    from the Work/Edition shapes).
+	Rows with no works AND editor rights still show the "Add" control (there is
+	nothing to collapse, so it renders directly, no disclosure).
+
+	The two surfaces are governed by DIFFERENT entities (`_editor` on the season
+	vs on the event), so `seasonRights`/`eventRights` may be supplied
+	independently; `manageRights` stays the single gate for whichever surface
+	`context` names, and is what a caller holding only one set of rights passes.
+	Two consequences worth stating:
+	  - Row controls are gated on `row.kind`, NOT on `context` alone. An event
+	    with no program_items renders the SEASON repertoire as fallback (TR.2's
+	    hierarchy), so a programme surface can be showing repertoire_item ids —
+	    forwarding one of those to a "remove from tonight" handler would delete
+	    the whole collective's season-repertoire entry, not tonight's programme.
+	  - "Add to programme" renders wherever `eventRights === 'editor'`, including
+	    on a repertoire-context (fallback) row. That is the ONLY entry point for
+	    creating the FIRST program_item on an event: until one exists the event
+	    has no programme of its own to hang controls on.
+
+	Pending state: `pendingKeys` is the caller's write-queue key set (per
+	repertoire_item/program_item id for row actions; the sentinels
+	`ADD_WORK_KEY`/`ADD_PROGRAMME_KEY` exported below for the two "Add"
+	controls) — every management button disables while its key is pending, the
+	same double-tap guard as attendance/rsvp.
 -->
+<script module lang="ts">
+	// Svelte 5: a plain `export` inside the instance script creates a component
+	// PROP, not a static module export — these need `<script module>` so
+	// `import RepertoireElement, { ADD_WORK_KEY } from './RepertoireElement.svelte'`
+	// actually works for callers (and the spec).
+
+	// The (id, label) picker pair lives in $lib/repertoire/types alongside the
+	// row view model, so non-Svelte callers (the page's derived pickers, their
+	// specs) can name it without importing a component. Re-exported here for
+	// callers that already reach for it through the component.
+	export type { PickerOption } from '$lib/repertoire/types';
+
+	/** Fixed pending-key sentinels for the two "Add" controls (row actions use
+	 *  their own item id as the key instead). */
+	export const ADD_WORK_KEY = '__add_work__';
+	export const ADD_PROGRAMME_KEY = '__add_programme__';
+</script>
+
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import type { WorkRow } from '$lib/repertoire/types';
+	import type { PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
+	import type { Work } from '$lib/library/libraryData';
+	import type { ManageRightsState } from '$lib/repertoire/repertoireActions';
+
+	const STATUS_OPTIONS: { value: RepertoireStatus; label: () => string }[] = [
+		{ value: 'learning', label: m.repertoire_status_learning },
+		{ value: 'active', label: m.repertoire_status_active },
+		{ value: 'retired', label: m.repertoire_status_retired },
+		{ value: 'dropped', label: m.repertoire_status_dropped }
+	];
+
+	/** The badge text. Routed through the SAME lookup the management select uses
+	 *  (#91 review F6) — printing `row.status` verbatim leaked raw 'retired' /
+	 *  'dropped' into all four locales, two snippets away from the translated
+	 *  options. An unknown value would fall back to itself, but narrowStatus
+	 *  (workRows.ts) already nulls those out before they reach a row. */
+	function statusLabel(status: RepertoireStatus): string {
+		return STATUS_OPTIONS.find((opt) => opt.value === status)?.label() ?? status;
+	}
+
+	/** Repertoire the collective is NOT singing. Only a season editor ever sees
+	 *  these (`includeInactive`), and only so the status toggle is two-way. */
+	const INACTIVE_STATUSES = new Set<RepertoireStatus>(['retired', 'dropped']);
+	function isInactive(row: WorkRow): boolean {
+		return row.status !== null && INACTIVE_STATUSES.has(row.status);
+	}
 
 	interface Props {
 		rows: WorkRow[];
 		/** Sign + open this edition file NOW (see the header note on the 60s url). */
 		onpdfclick?: (fileId: string) => void;
+		/** Rights for the surface `context` names. */
+		manageRights?: ManageRightsState;
+		/** `_editor` on the SEASON — governs repertoire_item writes. Defaults to
+		 *  `manageRights` when `context === 'repertoire'`, so a single-surface
+		 *  caller needs only `manageRights`. */
+		seasonRights?: ManageRightsState;
+		/** `_editor` on the EVENT — governs program_item writes. Defaults to
+		 *  `manageRights` when `context === 'programme'`. */
+		eventRights?: ManageRightsState;
+		context?: 'repertoire' | 'programme';
+		/** 'repertoire' context only — works not yet in the season's repertoire. */
+		pickableWorksList?: Work[];
+		/** 'programme' context only — editions not yet on tonight's programme. */
+		pickableEditions?: PickerOption[];
+		/** Per-row edition choices for "Pin edition" ('repertoire' context). A row
+		 *  id absent (or mapped to []) hides that row's pin control — nothing to
+		 *  pick from. */
+		editionOptionsByRowId?: Record<string, PickerOption[]>;
+		pendingKeys?: ReadonlySet<string>;
+		onaddwork?: (workId: string) => void;
+		onstatuschange?: (itemId: string, status: RepertoireStatus) => void;
+		onpinedition?: (itemId: string, editionId: string) => void;
+		onremoveitem?: (itemId: string) => void;
+		onmoveitem?: (itemId: string, direction: 'up' | 'down') => void;
+		/** ordinal is computed here (append-to-end; reorder afterwards via
+		 *  onmoveitem) so the caller only needs to know the chosen edition. */
+		onaddprogramitem?: (editionId: string, ordinal: number) => void;
 	}
-	const { rows, onpdfclick }: Props = $props();
+	const {
+		rows,
+		onpdfclick,
+		manageRights = 'not-editor',
+		seasonRights,
+		eventRights,
+		context = 'repertoire',
+		pickableWorksList = [],
+		pickableEditions = [],
+		editionOptionsByRowId = {},
+		pendingKeys = new Set<string>(),
+		onaddwork,
+		onstatuschange,
+		onpinedition,
+		onremoveitem,
+		onmoveitem,
+		onaddprogramitem
+	}: Props = $props();
+
+	// Per-surface rights. A caller that supplies only `manageRights` gets exactly
+	// the old behaviour: it governs `context`'s surface and the other stays shut.
+	const canManageRepertoire = $derived(
+		(seasonRights ?? (context === 'repertoire' ? manageRights : 'not-editor')) === 'editor'
+	);
+	const canManageProgramme = $derived(
+		(eventRights ?? (context === 'programme' ? manageRights : 'not-editor')) === 'editor'
+	);
+	const canManage = $derived(canManageRepertoire || canManageProgramme);
+
+	/** Repertoire ops (status / pin / remove) may touch this row: the surface is
+	 *  the repertoire one AND the row is genuinely a repertoire_item. */
+	function canEditRepertoireRow(row: WorkRow): boolean {
+		return canManageRepertoire && context === 'repertoire' && row.kind === 'repertoire';
+	}
+	/** Programme ops (move / remove) may touch this row. Gated on `kind`, not on
+	 *  `ordinal !== null`: a fallback row's id is a repertoire_item id, and a
+	 *  program_item whose ordinal failed to read defaults to 0 (Entu's
+	 *  `mandatory` is a soft hint), so ordinal is no proof of provenance. */
+	function canEditProgrammeRow(row: WorkRow): boolean {
+		return canManageProgramme && context === 'programme' && row.kind === 'program';
+	}
 
 	let expanded = $state(false);
+
+	let selectedWorkId = $state('');
+	let selectedEditionForAdd = $state('');
+	let selectedEditionByRow = $state<Record<string, string>>({});
+
+	function handleAddWork() {
+		if (!selectedWorkId || pendingKeys.has(ADD_WORK_KEY)) return;
+		onaddwork?.(selectedWorkId);
+		selectedWorkId = '';
+	}
+
+	function handleAddProgramItem() {
+		if (!selectedEditionForAdd || pendingKeys.has(ADD_PROGRAMME_KEY)) return;
+		const knownOrdinals = rows.flatMap((r) => (r.ordinal !== null ? [r.ordinal] : []));
+		const nextOrdinal = knownOrdinals.length === 0 ? 0 : Math.max(...knownOrdinals) + 1;
+		onaddprogramitem?.(selectedEditionForAdd, nextOrdinal);
+		selectedEditionForAdd = '';
+	}
+
+	function handleStatusChange(rowId: string, value: string) {
+		if (pendingKeys.has(rowId)) return;
+		onstatuschange?.(rowId, value as RepertoireStatus);
+	}
+
+	function handlePinEdition(rowId: string) {
+		const editionId = selectedEditionByRow[rowId];
+		if (!editionId || pendingKeys.has(rowId)) return;
+		onpinedition?.(rowId, editionId);
+		selectedEditionByRow[rowId] = '';
+	}
+
+	function handleRemove(rowId: string) {
+		if (pendingKeys.has(rowId)) return;
+		onremoveitem?.(rowId);
+	}
+
+	function handleMove(rowId: string, direction: 'up' | 'down') {
+		if (pendingKeys.has(rowId)) return;
+		onmoveitem?.(rowId, direction);
+	}
 
 	// SSR/client-stable per-instance id, same pattern as SeasonSummary — the
 	// collapsed toggle points aria-controls at the expanded region.
 	const componentId = $props.id();
 	const expandedRegionId = `works-expanded-${componentId}`;
 
-	const collapsedLine = $derived(rows.map((r) => r.workName).join(' · '));
+	// #91 review F6 — the at-a-glance line names the music actually being sung.
+	// A season editor reads the repertoire unfiltered so the status toggle stays
+	// two-way, but that must not make a dropped work advertise itself on an
+	// upcoming rehearsal row as if it were live rep; the count keeps it honest
+	// without hiding that the rows are there to be expanded and managed.
+	const activeRows = $derived(rows.filter((r) => !isInactive(r)));
+	const inactiveCount = $derived(rows.length - activeRows.length);
+	const collapsedLine = $derived(
+		[
+			activeRows.map((r) => r.workName).join(' · '),
+			inactiveCount > 0 ? m.repertoire_inactive_count({ count: inactiveCount }) : ''
+		]
+			.filter((part) => part !== '')
+			.join(' · ')
+	);
 
 	const hasOrdinals = $derived(rows.length > 0 && rows.every((r) => r.ordinal !== null));
 	// Only meaningful (and only sorted) when hasOrdinals — the unordered branch
@@ -78,7 +285,7 @@
 			data-testid="work-status-badge"
 			class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
 		>
-			{row.status}
+			{statusLabel(row.status)}
 		</span>
 	{/if}
 	{#if row.editionName !== ''}
@@ -125,6 +332,148 @@
 	</span>
 {/snippet}
 
+{#snippet removeButton(row: WorkRow)}
+	<button
+		type="button"
+		data-testid="work-manage-remove"
+		class="text-xs text-red underline disabled:cursor-default disabled:opacity-[0.45]"
+		disabled={pendingKeys.has(row.id)}
+		onclick={() => handleRemove(row.id)}
+	>
+		{m.repertoire_remove()}
+	</button>
+{/snippet}
+
+{#snippet manageRowControls(row: WorkRow, index: number)}
+	{#if canEditRepertoireRow(row) || canEditProgrammeRow(row)}
+		<div data-testid="work-manage-row" class="flex flex-wrap items-center gap-2 pt-1">
+			{#if canEditRepertoireRow(row)}
+				<select
+					data-testid="work-manage-status-select"
+					class="text-xs"
+					value={row.status ?? 'active'}
+					disabled={pendingKeys.has(row.id)}
+					onchange={(e) => handleStatusChange(row.id, (e.currentTarget as HTMLSelectElement).value)}
+				>
+					{#each STATUS_OPTIONS as opt (opt.value)}
+						<option value={opt.value}>{opt.label()}</option>
+					{/each}
+				</select>
+				{#if (editionOptionsByRowId[row.id] ?? []).length > 0}
+					<select
+						data-testid="work-manage-pin-edition-select"
+						class="text-xs"
+						value={selectedEditionByRow[row.id] ?? ''}
+						disabled={pendingKeys.has(row.id)}
+						onchange={(e) => {
+							selectedEditionByRow[row.id] = (e.currentTarget as HTMLSelectElement).value;
+						}}
+					>
+						<option value="">{m.repertoire_pin_edition_label()}</option>
+						{#each editionOptionsByRowId[row.id] ?? [] as opt (opt.id)}
+							<option value={opt.id}>{opt.label}</option>
+						{/each}
+					</select>
+					<button
+						type="button"
+						data-testid="work-manage-pin-edition-button"
+						class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+						disabled={pendingKeys.has(row.id) || !selectedEditionByRow[row.id]}
+						onclick={() => handlePinEdition(row.id)}
+					>
+						{m.repertoire_pin_edition_button()}
+					</button>
+				{/if}
+				<!-- Remove lives INSIDE each branch, never alongside them: the id it
+				     forwards is a repertoire_item id here and a program_item id below,
+				     and the two go to different DELETE handlers. A single shared button
+				     outside the branches rendered on season-fallback rows in programme
+				     context and handed a repertoire_item id to "remove from tonight". -->
+				{@render removeButton(row)}
+			{:else if canEditProgrammeRow(row)}
+				<button
+					type="button"
+					data-testid="work-manage-move-up"
+					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+					disabled={pendingKeys.has(row.id) || index === 0}
+					onclick={() => handleMove(row.id, 'up')}
+				>
+					{m.repertoire_move_up()}
+				</button>
+				<button
+					type="button"
+					data-testid="work-manage-move-down"
+					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+					disabled={pendingKeys.has(row.id) || index === orderedRows.length - 1}
+					onclick={() => handleMove(row.id, 'down')}
+				>
+					{m.repertoire_move_down()}
+				</button>
+				{@render removeButton(row)}
+			{/if}
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet manageAddControls()}
+	{#if canManageRepertoire && context === 'repertoire'}
+		<div data-testid="work-manage-add-work" class="flex flex-wrap items-center gap-2 pt-1">
+			<select
+				data-testid="work-manage-add-work-select"
+				class="text-xs"
+				value={selectedWorkId}
+				disabled={pendingKeys.has(ADD_WORK_KEY)}
+				onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
+			>
+				<option value="">{m.repertoire_add_work_label()}</option>
+				{#each pickableWorksList as w (w.id)}
+					<option value={w.id}>{w.name}</option>
+				{/each}
+			</select>
+			<button
+				type="button"
+				data-testid="work-manage-add-work-button"
+				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+				disabled={pendingKeys.has(ADD_WORK_KEY) || !selectedWorkId}
+				onclick={handleAddWork}
+			>
+				{m.repertoire_add_work_button()}
+			</button>
+		</div>
+	{/if}
+	<!-- Deliberately NOT the `{:else}` of the branch above: "Add to programme" is
+	     the ONLY way to create an event's FIRST program_item, and until one
+	     exists the event renders the season repertoire (repertoire context) — so
+	     gating this on `context === 'programme'` made a new programme
+	     uncreatable. Rights still gate it: an EVENT editor sees it, a
+	     season-only editor does not. -->
+	{#if canManageProgramme}
+		<div data-testid="work-manage-add-programme" class="flex flex-wrap items-center gap-2 pt-1">
+			<select
+				data-testid="work-manage-add-programme-select"
+				class="text-xs"
+				value={selectedEditionForAdd}
+				disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
+				onchange={(e) => (selectedEditionForAdd = (e.currentTarget as HTMLSelectElement).value)}
+			>
+				<option value="">{m.repertoire_add_programme_label()}</option>
+				{#each pickableEditions as opt (opt.id)}
+					<option value={opt.id}>{opt.label}</option>
+				{/each}
+			</select>
+			<button
+				type="button"
+				data-testid="work-manage-add-programme-button"
+				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+				disabled={pendingKeys.has(ADD_PROGRAMME_KEY) || !selectedEditionForAdd}
+				onclick={handleAddProgramItem}
+			>
+				{m.repertoire_add_programme_button()}
+			</button>
+		</div>
+	{/if}
+{/snippet}
+
 {#if rows.length > 0}
 	<button
 		type="button"
@@ -145,21 +494,38 @@
 					     soft UI hint in Entu, so two program_items can both carry the
 					     default 0 — a duplicate key throws each_key_duplicate and takes
 					     down the whole agenda page, not just this element. -->
-					{#each orderedRows as row (row.id)}
-						<li data-testid="work-row" class="flex flex-col gap-0.5">
+					{#each orderedRows as row, index (row.id)}
+						<li
+							data-testid="work-row"
+							data-inactive={isInactive(row) ? 'true' : undefined}
+							class="flex flex-col gap-0.5"
+							class:opacity-60={isInactive(row)}
+						>
 							{@render workRowContent(row)}
+							{@render manageRowControls(row, index)}
 						</li>
 					{/each}
 				</ol>
 			{:else}
 				<div class="flex flex-col gap-2">
-					{#each orderedRows as row (row.id)}
-						<div data-testid="work-row" class="flex flex-col gap-0.5">
+					{#each orderedRows as row, index (row.id)}
+						<div
+							data-testid="work-row"
+							data-inactive={isInactive(row) ? 'true' : undefined}
+							class="flex flex-col gap-0.5"
+							class:opacity-60={isInactive(row)}
+						>
 							{@render workRowContent(row)}
+							{@render manageRowControls(row, index)}
 						</div>
 					{/each}
 				</div>
 			{/if}
+			{@render manageAddControls()}
 		</div>
 	{/if}
+{:else if canManage}
+	<div data-testid="works-manage-empty" class="flex flex-col gap-2 pt-1">
+		{@render manageAddControls()}
+	</div>
 {/if}

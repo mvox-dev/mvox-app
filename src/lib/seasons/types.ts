@@ -2,7 +2,18 @@
 // the polyphony prototype, slimmed to the slice-1 agenda read path (RSVP tally,
 // conductor, series-admin shapes dropped — those are later slices).
 
-export interface SeasonRaw {
+// #91 review fix (F1) — `_owner`/`_editor` ride along on the ordinary list
+// reads. They live in Entu's PRIVATE bucket: a caller with no rights grant
+// reads the entity (domain `_sharing`) but simply does not see these props at
+// all, so ABSENCE is the clean "not an editor" signal. That is exactly what the
+// per-entity rights probe was asking for one GET at a time — asking for it in a
+// query the page already makes costs nothing extra.
+export interface RightsRefs {
+	_owner?: Array<{ reference?: string }>;
+	_editor?: Array<{ reference?: string }>;
+}
+
+export interface SeasonRaw extends RightsRefs {
 	_id: string;
 	name?: Array<{ string: string }>;
 	start_date?: Array<{ date: string }>;
@@ -17,6 +28,12 @@ export interface Season {
 	endDate: string;
 	/** Person entity ids of this season's conductors (empty if none set). */
 	conductors: string[];
+	/** `_owner` refs VISIBLE to the reading caller. Empty both when there are
+	 *  none and when the caller cannot see the private bucket — the two are
+	 *  indistinguishable on the wire, and mean the same thing for rights. */
+	owners: string[];
+	/** `_editor` refs visible to the reading caller; same bucket caveat. */
+	editors: string[];
 }
 
 export interface SeriesRaw {
@@ -25,7 +42,7 @@ export interface SeriesRaw {
 	default_location?: Array<{ string: string }>;
 }
 
-export interface RehearsalRaw {
+export interface RehearsalRaw extends RightsRefs {
 	_id: string;
 	name?: Array<{ string: string }>;
 	start_datetime?: Array<{ datetime: string }>;

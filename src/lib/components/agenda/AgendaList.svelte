@@ -9,7 +9,7 @@
 	// #90 TR.2 — ONE definition of the works view model, shared with
 	// RepertoireElement and its producer (repertoire/workRows.ts). Previously
 	// duplicated inline here, which let the two copies drift silently.
-	import type { WorkRow } from '$lib/repertoire/types';
+	import type { WorkRow, WorksManage } from '$lib/repertoire/types';
 
 	/** #85 TA.4 — the four attendance-badge states a RECENT (past) row can carry.
 	 *  'not-recorded' is a genuine 4th state (a past event nobody marked for me),
@@ -78,6 +78,15 @@
 		// AT CLICK TIME by the page (the signed url lives 60s), never pre-resolved
 		// into an href.
 		onpdfclick?: (fileId: string) => void;
+		// #91 TR.3 — the management surface, forwarded per event row. Omitted =
+		// the read-only agenda, unchanged (RepertoireElement's own rights default
+		// is 'not-editor', so nothing extra renders).
+		//
+		// THIS PROP IS THE WHOLE POINT of the TR.3 wiring: without it the write
+		// layer had zero runtime importers and `manageRights` could never be
+		// anything but the default — every control was unreachable in the product
+		// while its unit tests stayed green.
+		worksManage?: WorksManage;
 	}
 	const {
 		items,
@@ -93,8 +102,37 @@
 		myAttendanceByEventId = {},
 		seasonSummary,
 		worksByEventId = {},
-		onpdfclick
+		onpdfclick,
+		worksManage
 	}: Props = $props();
+
+	/**
+	 * Which management surface an event row shows, from the PROVENANCE of its
+	 * rows: an event with its own program_items shows the programme; one without
+	 * falls back to the season repertoire (TR.2's hierarchy) and therefore shows
+	 * the repertoire surface. Never guessed from ordinals — a program_item whose
+	 * ordinal failed to read defaults to 0.
+	 */
+	function worksContext(eventId: string): 'repertoire' | 'programme' {
+		return worksByEventId[eventId]?.some((r) => r.kind === 'program') ? 'programme' : 'repertoire';
+	}
+	// Stable empty defaults — a fresh `new Set()` / `[]` per render would make
+	// every RepertoireElement see a changed prop identity on every agenda tick.
+	const NO_KEYS: ReadonlySet<string> = new Set<string>();
+	const NO_OPTIONS: never[] = [];
+	const NO_OPTIONS_BY_ID: Record<string, never[]> = {};
+
+	function eventRightsFor(eventId: string) {
+		return worksManage?.eventRightsByEventId[eventId] ?? 'not-editor';
+	}
+	/** An event row renders the Works element when it HAS works, or when the
+	 *  viewer may add some (otherwise a rights-holder on an empty agenda row has
+	 *  no entry point at all). */
+	function showWorks(eventId: string): boolean {
+		if (worksByEventId[eventId]?.length) return true;
+		if (!worksManage) return false;
+		return worksManage.seasonRights === 'editor' || eventRightsFor(eventId) === 'editor';
+	}
 
 	const BADGE_DOT_CLASS: Record<BadgeStatus, string> = {
 		present: 'bg-green',
@@ -208,6 +246,33 @@
 	});
 </script>
 
+<!-- #90 TR.2 / #91 TR.3 — ONE definition of the per-event Works element, shared
+     by the Recent and Upcoming row templates. It was duplicated inline, and the
+     duplicate is exactly how the management wiring went missing from one of
+     them and unnoticed from both. -->
+{#snippet worksElement(item: AgendaItem)}
+	{#if showWorks(item.id)}
+		<RepertoireElement
+			rows={worksByEventId[item.id] ?? NO_OPTIONS}
+			{onpdfclick}
+			context={worksContext(item.id)}
+			seasonRights={worksManage?.seasonRights ?? 'not-editor'}
+			eventRights={eventRightsFor(item.id)}
+			pickableWorksList={worksManage?.pickableWorksList ?? NO_OPTIONS}
+			pickableEditions={worksManage?.pickableEditionsByEventId[item.id] ?? NO_OPTIONS}
+			editionOptionsByRowId={worksManage?.editionOptionsByRowId ?? NO_OPTIONS_BY_ID}
+			pendingKeys={worksManage?.pendingKeys ?? NO_KEYS}
+			onaddwork={(workId) => worksManage?.onaddwork(workId)}
+			onstatuschange={(itemId, status) => worksManage?.onstatuschange(itemId, status)}
+			onpinedition={(itemId, editionId) => worksManage?.onpinedition(itemId, editionId)}
+			onremoveitem={(itemId) => worksManage?.onremoveitem(item.id, itemId)}
+			onmoveitem={(itemId, direction) => worksManage?.onmoveitem(item.id, itemId, direction)}
+			onaddprogramitem={(editionId, ordinal) =>
+				worksManage?.onaddprogramitem(item.id, editionId, ordinal)}
+		/>
+	{/if}
+{/snippet}
+
 {#if recentItems.length > 0}
 	<!-- #83 — 'Recent': ALL past events of the current season, reverse-chron (order
 	     as given, no re-sort here). Sits ABOVE the upcoming list (Byrd's brief).
@@ -243,9 +308,7 @@
 					{#if item.location}
 						<span class="truncate text-xs text-ink-2">{item.location}</span>
 					{/if}
-					{#if worksByEventId[item.id]?.length}
-						<RepertoireElement rows={worksByEventId[item.id]} {onpdfclick} />
-					{/if}
+					{@render worksElement(item)}
 					<!-- Past event → the singer's own RsvpControl is read-only (always the
 					     'pending'/disabled reason — there is nothing left to answer, and no
 					     write is in flight either; reusing 'pending' keeps this a silent
@@ -334,9 +397,7 @@
 							{#if item.location}
 								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
 							{/if}
-							{#if worksByEventId[item.id]?.length}
-								<RepertoireElement rows={worksByEventId[item.id]} {onpdfclick} />
-							{/if}
+							{@render worksElement(item)}
 							<RsvpControl
 								status={rsvpByEventId[item.id]?.status ?? null}
 								nonMember={membership === 'non-member'}

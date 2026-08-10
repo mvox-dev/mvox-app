@@ -31,6 +31,22 @@ vi.mock('$lib/agenda/agendaData', () => ({
 // Same boundary as store.spec.ts: severs discover.ts's $env import under happy-dom
 // and stubs goto (can't run outside an app / not exercised by this spec).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
+// library reads that feed its pickers), which reaches entuFetch ->
+// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
+// request context under happy-dom. Same one-line fix the library/profile specs
+// already use; the real modules keep running, only the base url is stubbed.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+// ...and the page resolves management rights per season/event on every load.
+// Only that ONE call is stubbed (the pure helpers and the write functions stay
+// real): left alone it issues a live request per agenda event, which is both a
+// network call from a unit test and a source of teardown AbortErrors. The
+// management surface itself is covered end-to-end in
+// page.repertoire-manage-wiring.spec.ts.
+vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
+	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
+	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // #12 — +page.svelte now imports $lib/rsvp/rsvpData at module scope, which pulls
 // in $lib/entu/request -> $env/dynamic/public (same $env wall as discover.ts).

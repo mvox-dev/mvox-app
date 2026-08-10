@@ -349,6 +349,64 @@ describe('resolveEventWorksBatch', () => {
 	});
 });
 
+// ── manage read mode (#91 review finding 3) ─────────────────────────────────
+// The member-facing active/learning filter made the status toggle ONE-WAY: set
+// a work to retired and its row (and with it the only toggle that could bring
+// it back) vanished, while pickableWorks refuses to re-offer a work that
+// already HAS a repertoire_item. A rights-holder reads the list unfiltered.
+
+describe('resolveEventWorks — includeInactive (management read)', () => {
+	function fallbackFetch() {
+		return fetchByUrl([
+			[/_type\.string=program_item/, { entities: [] }],
+			[/_type\.string=repertoire_item/, { entities: repertoireEntities }]
+		]);
+	}
+
+	it('default (member) read still drops retired/dropped — AC-8 is unchanged', async () => {
+		const result = await resolveEventWorks(cfg, 'event-1', 'season-1', fallbackFetch());
+		expect(result.items.map((item) => item.id)).toEqual(['ri-1', 'ri-2']);
+	});
+
+	it('includeInactive keeps retired AND dropped, so the toggle has something to toggle back', async () => {
+		const result = await resolveEventWorks(cfg, 'event-1', 'season-1', fallbackFetch(), {
+			includeInactive: true
+		});
+		expect(result.source).toBe('repertoire');
+		if (result.source !== 'repertoire') return;
+		expect(result.items.map((item) => item.id)).toEqual(['ri-1', 'ri-2', 'ri-3', 'ri-4']);
+		expect(result.items.map((item) => item.status)).toContain('retired');
+		expect(result.items.map((item) => item.status)).toContain('dropped');
+	});
+
+	it('includeInactive changes NOTHING about the source hierarchy — a programmed event still never reads repertoire', async () => {
+		const fetchImpl = fetchByUrl([
+			[/_type\.string=program_item/, { entities: programEntities }],
+			[/_type\.string=repertoire_item/, { entities: repertoireEntities }]
+		]);
+		const result = await resolveEventWorks(cfg, 'event-1', 'season-1', fetchImpl, {
+			includeInactive: true
+		});
+		expect(result.source).toBe('program');
+		const urls = fetchImpl.mock.calls.map((c) => String(c[0]));
+		expect(urls.some((u) => u.includes('_type.string=repertoire_item'))).toBe(false);
+	});
+
+	it('batch: includeInactive still reads the season repertoire AT MOST ONCE across events', async () => {
+		const fetchImpl = fetchByUrl([
+			[/_type\.string=program_item/, { entities: [] }],
+			[/_type\.string=repertoire_item/, { entities: repertoireEntities }]
+		]);
+		await resolveEventWorksBatch(cfg, ['e1', 'e2', 'e3'], 'season-1', fetchImpl, {
+			includeInactive: true
+		});
+		const repertoireReads = fetchImpl.mock.calls.filter((c) =>
+			String(c[0]).includes('_type.string=repertoire_item')
+		);
+		expect(repertoireReads.length).toBe(1);
+	});
+});
+
 // (*MVOX:Tallis* — RED spec)
 // (*MVOX:Josquin* — review fix-forward: batch resolver; edition metadata now
 // comes from libraryData's bulk reads, file signing from fileUrls.ts)

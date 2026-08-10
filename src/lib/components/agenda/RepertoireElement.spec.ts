@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import RepertoireElement from './RepertoireElement.svelte';
+import RepertoireElement, { ADD_WORK_KEY } from './RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
 
 // #90 TR.2 RED — the collapsed/expanded "Works" element on an agenda event row.
@@ -35,6 +35,11 @@ let rowSeq = 0;
 function row(overrides: Partial<WorkRow> = {}): WorkRow {
 	return {
 		id: `ri-${++rowSeq}`,
+		// #91 — provenance defaults to the season repertoire (the read-only specs
+		// above all describe repertoire rows); programme fixtures override it.
+		kind: 'repertoire',
+		workId: 'work-1',
+		editionId: 'ed-1',
 		workName: 'Spem in alium',
 		composer: 'Thomas Tallis',
 		status: 'active',
@@ -68,6 +73,31 @@ describe('RepertoireElement — collapsed Works line', () => {
 		expect(text(line)).toContain('Spem in alium · Mass in B minor');
 	});
 
+	// #91 review F6 — a season editor reads the repertoire unfiltered so the
+	// status toggle stays two-way, but the at-a-glance line must still name the
+	// music actually being sung. Inactive rows are counted, not listed.
+	it('names only ACTIVE works, counting the inactive ones instead', () => {
+		const { container } = render(RepertoireElement, {
+			rows: [
+				row({ workName: 'Spem in alium', status: 'active' }),
+				row({ workName: 'Dropped motet', status: 'dropped' }),
+				row({ workName: 'Retired anthem', status: 'retired' })
+			]
+		});
+		const line = text(container.querySelector('[data-testid="works-line"]'));
+		expect(line).toContain('Spem in alium');
+		expect(line).not.toContain('Dropped motet');
+		expect(line).not.toContain('Retired anthem');
+		expect(line).toContain('[repertoire_inactive_count]');
+	});
+
+	it('no inactive rows → no count suffix at all', () => {
+		const { container } = render(RepertoireElement, { rows: twoRows });
+		expect(text(container.querySelector('[data-testid="works-line"]'))).not.toContain(
+			'[repertoire_inactive_count]'
+		);
+	});
+
 	it('is ABSENT when there are no works — no empty "Works" placeholder', () => {
 		const { container } = render(RepertoireElement, { rows: [] });
 		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
@@ -91,8 +121,12 @@ describe('RepertoireElement — collapsed Works line', () => {
 
 // ── Expanded view (#90 AC-1, badge + edition) ───────────────────────────────
 
-async function renderExpanded(rows: WorkRow[]) {
-	const rendered = render(RepertoireElement, { rows });
+async function renderExpanded(rows: WorkRow[], extra: Record<string, unknown> = {}) {
+	// Wrapped under `props` explicitly: one management prop is named `context`,
+	// which COLLIDES with @testing-library/svelte's own mount-option name — an
+	// unwrapped options object containing a `context` key is (mis)parsed as a
+	// mount option, not a component prop (see UnknownSvelteOptionsError).
+	const rendered = render(RepertoireElement, { props: { rows, ...extra } });
 	await fireEvent.click(rendered.container.querySelector('[data-testid="works-line"]')!);
 	return rendered;
 }
@@ -108,12 +142,29 @@ describe('RepertoireElement — expanded view', () => {
 		expect(text(rows[1])).toContain('J. S. Bach');
 	});
 
-	it("shows the status badge with the repertoire status ('active' / 'learning')", async () => {
+	// #91 review F6 — the badge is TRANSLATED, through the same message lookup the
+	// management select uses. It used to print `row.status` verbatim, which put
+	// raw 'retired'/'dropped' on screen in all four locales.
+	it("shows the status badge with the TRANSLATED repertoire status ('active' / 'learning')", async () => {
 		const { container } = await renderExpanded(twoRows);
 		const badges = container.querySelectorAll('[data-testid="work-status-badge"]');
 		expect(badges.length).toBe(2);
-		expect(text(badges[0])).toContain('active');
-		expect(text(badges[1])).toContain('learning');
+		expect(text(badges[0])).toBe('[repertoire_status_active]');
+		expect(text(badges[1])).toBe('[repertoire_status_learning]');
+	});
+
+	it('translates retired/dropped too — never the raw schema string', async () => {
+		const { container } = await renderExpanded([row({ status: 'retired' }), row({ status: 'dropped' })]);
+		const badges = container.querySelectorAll('[data-testid="work-status-badge"]');
+		expect(text(badges[0])).toBe('[repertoire_status_retired]');
+		expect(text(badges[1])).toBe('[repertoire_status_dropped]');
+	});
+
+	it('de-emphasises inactive rows so a dropped work cannot read as live repertoire', async () => {
+		const { container } = await renderExpanded([row({ status: 'active' }), row({ status: 'dropped' })]);
+		const workRows = container.querySelectorAll('[data-testid="work-row"]');
+		expect(workRows[0].getAttribute('data-inactive')).toBeNull();
+		expect(workRows[1].getAttribute('data-inactive')).toBe('true');
 	});
 
 	it('hides the status badge for program items (status null — a concert programme has no status)', async () => {
@@ -291,7 +342,339 @@ describe('RepertoireElement — duplicate external links', () => {
 	});
 });
 
+// ── #91 TR.3 — management controls (rights-gated writes) ────────────────────
+// Still prop-driven and fetch-free: this component only renders controls and
+// forwards taps via callback props. Rights, picker candidates and pending
+// state are all caller-supplied.
+
+describe('RepertoireElement — management: rights gating', () => {
+	it("manageRights omitted (defaults 'not-editor') → no management controls, even with rows", async () => {
+		const { container } = await renderExpanded(twoRows);
+		expect(container.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
+	});
+
+	it("manageRights 'error' → no management controls (never treated as editor)", async () => {
+		const { container } = await renderExpanded(twoRows, { manageRights: 'error' });
+		expect(container.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+	});
+
+	it("manageRights 'editor' with rows → per-row management controls render", async () => {
+		const { container } = await renderExpanded(twoRows, { manageRights: 'editor' });
+		expect(container.querySelectorAll('[data-testid="work-manage-row"]').length).toBe(2);
+	});
+
+	it("rows.length === 0 with manageRights 'editor' → renders the 'Add' control directly, no disclosure at all", () => {
+		const { container } = render(RepertoireElement, { rows: [], manageRights: 'editor' });
+		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
+		expect(container.querySelector('[data-testid="works-manage-empty"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
+	});
+
+	it("rows.length === 0 with manageRights 'not-editor' → nothing renders at all (unchanged read-only behaviour)", () => {
+		const { container } = render(RepertoireElement, { rows: [] });
+		expect(container.querySelector('[data-testid="works-manage-empty"]')).toBeNull();
+	});
+});
+
+async function renderExpandedManaged(rows: WorkRow[], extra: Record<string, unknown> = {}) {
+	return renderExpanded(rows, { manageRights: 'editor', ...extra });
+}
+
+describe('RepertoireElement — management: repertoire status + remove', () => {
+	it('status select is seeded with the row status and calls onstatuschange on change', async () => {
+		const onstatuschange = vi.fn();
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1', status: 'active' })], {
+			onstatuschange
+		});
+		const select = container.querySelector('[data-testid="work-manage-status-select"]') as HTMLSelectElement;
+		expect(select.value).toBe('active');
+		await fireEvent.change(select, { target: { value: 'retired' } });
+		expect(onstatuschange).toHaveBeenCalledWith('ri-1', 'retired');
+	});
+
+	it('status select disables while its row id is pending', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
+			pendingKeys: new Set(['ri-1'])
+		});
+		const select = container.querySelector('[data-testid="work-manage-status-select"]') as HTMLSelectElement;
+		expect(select.disabled).toBe(true);
+	});
+
+	it('Remove button calls onremoveitem with the row id, and is disabled while pending', async () => {
+		const onremoveitem = vi.fn();
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], { onremoveitem });
+		const btn = container.querySelector('[data-testid="work-manage-remove"]') as HTMLButtonElement;
+		expect(btn.disabled).toBe(false);
+		await fireEvent.click(btn);
+		expect(onremoveitem).toHaveBeenCalledWith('ri-1');
+	});
+
+	it('pin-edition picker is absent when editionOptionsByRowId has no options for the row', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })]);
+		expect(container.querySelector('[data-testid="work-manage-pin-edition-select"]')).toBeNull();
+	});
+
+	it('picking an edition and tapping Pin calls onpinedition with the row id + chosen edition id', async () => {
+		const onpinedition = vi.fn();
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
+			onpinedition,
+			editionOptionsByRowId: { 'ri-1': [{ id: 'ed-1', label: 'Bärenreiter' }] }
+		});
+		const select = container.querySelector('[data-testid="work-manage-pin-edition-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'ed-1' } });
+		const btn = container.querySelector('[data-testid="work-manage-pin-edition-button"]') as HTMLButtonElement;
+		expect(btn.disabled).toBe(false);
+		await fireEvent.click(btn);
+		expect(onpinedition).toHaveBeenCalledWith('ri-1', 'ed-1');
+	});
+
+	it('Pin button stays disabled until an edition is picked', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
+			editionOptionsByRowId: { 'ri-1': [{ id: 'ed-1', label: 'Bärenreiter' }] }
+		});
+		const btn = container.querySelector('[data-testid="work-manage-pin-edition-button"]') as HTMLButtonElement;
+		expect(btn.disabled).toBe(true);
+	});
+});
+
+describe('RepertoireElement — management: add work (repertoire context)', () => {
+	it('Add button disabled with no selection; picking a work then tapping Add calls onaddwork', async () => {
+		const onaddwork = vi.fn();
+		const { container } = await renderExpandedManaged([row()], {
+			onaddwork,
+			pickableWorksList: [{ id: 'work-x', name: 'Nunc dimittis', composer: 'Rachmaninoff' }]
+		});
+		const addBtn = container.querySelector('[data-testid="work-manage-add-work-button"]') as HTMLButtonElement;
+		expect(addBtn.disabled).toBe(true);
+		const select = container.querySelector('[data-testid="work-manage-add-work-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'work-x' } });
+		expect(addBtn.disabled).toBe(false);
+		await fireEvent.click(addBtn);
+		expect(onaddwork).toHaveBeenCalledWith('work-x');
+	});
+
+	it('Add-work controls disable while ADD_WORK_KEY is pending', async () => {
+		const { container } = await renderExpandedManaged([row()], {
+			pendingKeys: new Set([ADD_WORK_KEY]),
+			pickableWorksList: [{ id: 'work-x', name: 'Nunc dimittis', composer: 'Rachmaninoff' }]
+		});
+		const select = container.querySelector('[data-testid="work-manage-add-work-select"]') as HTMLSelectElement;
+		expect(select.disabled).toBe(true);
+	});
+});
+
+describe('RepertoireElement — management: programme reorder + remove + add', () => {
+	const programmeRows: WorkRow[] = [
+		row({ id: 'pi-a', kind: 'program', workName: 'First', status: null, ordinal: 0 }),
+		row({ id: 'pi-b', kind: 'program', workName: 'Second', status: null, ordinal: 1 }),
+		row({ id: 'pi-c', kind: 'program', workName: 'Third', status: null, ordinal: 2 })
+	];
+
+	it('move up/down call onmoveitem with direction; boundary rows disable the boundary button', async () => {
+		const onmoveitem = vi.fn();
+		const { container } = await renderExpandedManaged(programmeRows, {
+			context: 'programme',
+			onmoveitem
+		});
+		const ups = container.querySelectorAll('[data-testid="work-manage-move-up"]');
+		const downs = container.querySelectorAll('[data-testid="work-manage-move-down"]');
+		expect((ups[0] as HTMLButtonElement).disabled).toBe(true); // first row can't move up
+		expect((downs[2] as HTMLButtonElement).disabled).toBe(true); // last row can't move down
+		expect((ups[1] as HTMLButtonElement).disabled).toBe(false);
+		await fireEvent.click(downs[1]);
+		expect(onmoveitem).toHaveBeenCalledWith('pi-b', 'down');
+	});
+
+	it('Remove in programme context calls onremoveitem with the program_item id', async () => {
+		const onremoveitem = vi.fn();
+		const { container } = await renderExpandedManaged(programmeRows, {
+			context: 'programme',
+			onremoveitem
+		});
+		const removeButtons = container.querySelectorAll('[data-testid="work-manage-remove"]');
+		await fireEvent.click(removeButtons[0]);
+		expect(onremoveitem).toHaveBeenCalledWith('pi-a');
+	});
+
+	it('add-to-programme picks the NEXT ordinal (max existing + 1) and forwards it to onaddprogramitem', async () => {
+		const onaddprogramitem = vi.fn();
+		const { container } = await renderExpandedManaged(programmeRows, {
+			context: 'programme',
+			onaddprogramitem,
+			pickableEditions: [{ id: 'ed-9', label: 'Work — Edition' }]
+		});
+		const select = container.querySelector('[data-testid="work-manage-add-programme-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'ed-9' } });
+		const btn = container.querySelector('[data-testid="work-manage-add-programme-button"]') as HTMLButtonElement;
+		await fireEvent.click(btn);
+		expect(onaddprogramitem).toHaveBeenCalledWith('ed-9', 3);
+	});
+
+	it('add-to-programme on an EMPTY row set defaults the ordinal to 0', async () => {
+		const onaddprogramitem = vi.fn();
+		const { container } = render(RepertoireElement, {
+			props: {
+				rows: [],
+				manageRights: 'editor',
+				context: 'programme',
+				onaddprogramitem,
+				pickableEditions: [{ id: 'ed-9', label: 'Work — Edition' }]
+			}
+		});
+		const select = container.querySelector('[data-testid="work-manage-add-programme-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'ed-9' } });
+		await fireEvent.click(container.querySelector('[data-testid="work-manage-add-programme-button"]')!);
+		expect(onaddprogramitem).toHaveBeenCalledWith('ed-9', 0);
+	});
+
+	it('repertoire-context rows never render move up/down (wrong context for reordering)', async () => {
+		const { container } = await renderExpandedManaged(twoRows);
+		expect(container.querySelector('[data-testid="work-manage-move-up"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-move-down"]')).toBeNull();
+	});
+});
+
+// ── #91 review — provenance gating, status round-trip, programme entry point ─
+// The three ways the management surface could hand the page the wrong id, or
+// strand a work, all live in this component's gating.
+
+describe('RepertoireElement — management: row provenance (kind) gates the controls', () => {
+	// An event with NO program_items renders the SEASON repertoire as fallback
+	// (TR.2's hierarchy), so a programme surface can be showing repertoire_item
+	// ids. "Remove from tonight" on one of those deletes the whole collective's
+	// season entry.
+	const fallbackRows: WorkRow[] = [
+		row({ id: 'ri-fallback', kind: 'repertoire', status: 'active', ordinal: null })
+	];
+
+	it('programme context + season-fallback rows → NO Remove button (its id is a repertoire_item id)', async () => {
+		const { container } = await renderExpandedManaged(fallbackRows, { context: 'programme' });
+		expect(container.querySelector('[data-testid="work-manage-remove"]')).toBeNull();
+	});
+
+	it('programme context + season-fallback rows → no row controls at all, not even an empty control strip', async () => {
+		const { container } = await renderExpandedManaged(fallbackRows, { context: 'programme' });
+		expect(container.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-move-up"]')).toBeNull();
+	});
+
+	it('repertoire context + PROGRAM rows → no row controls either (the ids are program_item ids)', async () => {
+		const programRows: WorkRow[] = [
+			row({ id: 'pi-1', kind: 'program', status: null, ordinal: 0 })
+		];
+		const { container } = await renderExpandedManaged(programRows, { context: 'repertoire' });
+		expect(container.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+	});
+
+	it('programme context + program rows → Remove is present and forwards the program_item id', async () => {
+		const onremoveitem = vi.fn();
+		const { container } = await renderExpandedManaged(
+			[row({ id: 'pi-1', kind: 'program', status: null, ordinal: 0 })],
+			{ context: 'programme', onremoveitem }
+		);
+		await fireEvent.click(container.querySelector('[data-testid="work-manage-remove"]')!);
+		expect(onremoveitem).toHaveBeenCalledWith('pi-1');
+	});
+});
+
+describe('RepertoireElement — management: the status toggle round-trips', () => {
+	it('a RETIRED row still renders the status select, seeded with retired — the toggle is two-way', async () => {
+		const { container } = await renderExpandedManaged([
+			row({ id: 'ri-1', kind: 'repertoire', status: 'retired' })
+		]);
+		const select = container.querySelector(
+			'[data-testid="work-manage-status-select"]'
+		) as HTMLSelectElement;
+		expect(select).not.toBeNull();
+		expect(select.value).toBe('retired');
+	});
+
+	it('a retired row can be set back to active', async () => {
+		const onstatuschange = vi.fn();
+		const { container } = await renderExpandedManaged(
+			[row({ id: 'ri-1', kind: 'repertoire', status: 'dropped' })],
+			{ onstatuschange }
+		);
+		const select = container.querySelector(
+			'[data-testid="work-manage-status-select"]'
+		) as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'active' } });
+		expect(onstatuschange).toHaveBeenCalledWith('ri-1', 'active');
+	});
+
+	it('a row whose status did not narrow (bad data) still gets the control, seeded to the schema default', async () => {
+		const { container } = await renderExpandedManaged([
+			row({ id: 'ri-1', kind: 'repertoire', status: null })
+		]);
+		const select = container.querySelector(
+			'[data-testid="work-manage-status-select"]'
+		) as HTMLSelectElement;
+		expect(select).not.toBeNull();
+		expect(select.value).toBe('active');
+	});
+});
+
+describe('RepertoireElement — management: per-surface rights', () => {
+	it('an EVENT editor sees "Add to programme" on a repertoire-context row — the only way to create the FIRST program_item', async () => {
+		const onaddprogramitem = vi.fn();
+		const { container } = await renderExpanded(
+			[row({ kind: 'repertoire', status: 'active' })],
+			{
+				seasonRights: 'not-editor',
+				eventRights: 'editor',
+				context: 'repertoire',
+				onaddprogramitem,
+				pickableEditions: [{ id: 'ed-9', label: 'Work — Edition' }]
+			}
+		);
+		const select = container.querySelector(
+			'[data-testid="work-manage-add-programme-select"]'
+		) as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'ed-9' } });
+		await fireEvent.click(
+			container.querySelector('[data-testid="work-manage-add-programme-button"]')!
+		);
+		// No ordinals on a fallback row set → the new programme opens at 0.
+		expect(onaddprogramitem).toHaveBeenCalledWith('ed-9', 0);
+	});
+
+	it('an EVENT-only editor gets NO repertoire row controls (season repertoire is not theirs to edit)', async () => {
+		const { container } = await renderExpanded([row({ kind: 'repertoire', status: 'active' })], {
+			seasonRights: 'not-editor',
+			eventRights: 'editor',
+			context: 'repertoire'
+		});
+		expect(container.querySelector('[data-testid="work-manage-status-select"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
+	});
+
+	it('a SEASON-only editor gets repertoire controls but no programme add', async () => {
+		const { container } = await renderExpanded([row({ kind: 'repertoire', status: 'active' })], {
+			seasonRights: 'editor',
+			eventRights: 'not-editor',
+			context: 'repertoire'
+		});
+		expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-programme"]')).toBeNull();
+	});
+
+	it("neither right → nothing at all, even with rows (the reader's view is untouched)", async () => {
+		const { container } = await renderExpanded([row({ kind: 'repertoire' })], {
+			seasonRights: 'error',
+			eventRights: 'not-editor'
+		});
+		expect(container.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-programme"]')).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — RED spec)
 // (*MVOX:Josquin* — review fix-forward: shared WorkRow, click-time PDF signing,
 // duplicate-ordinal keying, disclosure a11y, programme notes, unkeyed external
 // links)
+// (*MVOX:Josquin* — #91 TR.3 GREEN: management-controls coverage, mirroring
+// the repertoireActions.ts RED contract)
+// (*MVOX:Josquin* — #91 review fix-forward: row-provenance gating, status
+// round-trip, per-surface rights)

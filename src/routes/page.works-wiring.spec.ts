@@ -35,6 +35,22 @@ const {
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
+// library reads that feed its pickers), which reaches entuFetch ->
+// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
+// request context under happy-dom. Same one-line fix the library/profile specs
+// already use; the real modules keep running, only the base url is stubbed.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+// ...and the page resolves management rights per season/event on every load.
+// Only that ONE call is stubbed (the pure helpers and the write functions stay
+// real): left alone it issues a live request per agenda event, which is both a
+// network call from a unit test and a source of teardown AbortErrors. The
+// management surface itself is covered end-to-end in
+// page.repertoire-manage-wiring.spec.ts.
+vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
+	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
+	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // Same $env wall as the sibling page specs: these modules pull in
 // $lib/entu/request -> $env/dynamic/public, unavailable under happy-dom.
@@ -84,15 +100,36 @@ const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 const past = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
 const upcoming = [
-	{ id: 'ev-1', name: 'Rehearsal', startDatetime: future, durationMinutes: 90, location: '', conductors: [] }
+	{
+		id: 'ev-1',
+		name: 'Rehearsal',
+		startDatetime: future,
+		durationMinutes: 90,
+		location: '',
+		conductors: [],
+		owners: [],
+		editors: []
+	}
 ];
 const recent = [
-	{ id: 'ev-0', name: 'Last rehearsal', startDatetime: past, durationMinutes: 90, location: '', conductors: [] }
+	{
+		id: 'ev-0',
+		name: 'Last rehearsal',
+		startDatetime: past,
+		durationMinutes: 90,
+		location: '',
+		conductors: [],
+		owners: [],
+		editors: []
+	}
 ];
 
 function workRow(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'ri-1',
+		kind: 'repertoire' as const,
+		workId: 'work-1',
+		editionId: 'ed-1',
 		workName: 'Spem in alium',
 		composer: 'Thomas Tallis',
 		status: 'active' as const,
@@ -122,7 +159,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			upcoming,
 			recent,
 			seasonId: 'season-1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		loadWorksByEventIdMock.mockResolvedValue({});
 		setAuthedWithOneCollective();
@@ -132,10 +169,14 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		await vi.waitFor(() => {
 			expect(loadWorksByEventIdMock).toHaveBeenCalled();
 		});
+		// #91 TR.3 widened the call: the read mode depends on the rights answer
+		// (a season editor reads retired/dropped too), so the flag rides along.
 		expect(loadWorksByEventIdMock).toHaveBeenCalledWith(
 			{ db: 'polyphony', token: 'jwt-abc' },
 			['ev-1', 'ev-0'],
-			'season-1'
+			'season-1',
+			expect.anything(),
+			{ includeInactive: false }
 		);
 	});
 
@@ -144,7 +185,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow()] });
 		setAuthedWithOneCollective();
@@ -168,7 +209,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
@@ -196,7 +237,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
@@ -226,7 +267,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
 		signFileUrlMock.mockRejectedValue(new Error('403'));
@@ -253,7 +294,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		loadWorksByEventIdMock.mockRejectedValue(new Error('boom'));
 		setAuthedWithOneCollective();

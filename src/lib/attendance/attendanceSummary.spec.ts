@@ -187,6 +187,22 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
+// library reads that feed its pickers), which reaches entuFetch ->
+// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
+// request context under happy-dom. Same one-line fix the library/profile specs
+// already use; the real modules keep running, only the base url is stubbed.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+// ...and the page resolves management rights per season/event on every load.
+// Only that ONE call is stubbed (the pure helpers and the write functions stay
+// real): left alone it issues a live request per agenda event, which is both a
+// network call from a unit test and a source of teardown AbortErrors. The
+// management surface itself is covered end-to-end in
+// page.repertoire-manage-wiring.spec.ts.
+vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
+	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
+	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
@@ -241,7 +257,16 @@ import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetConductor } from '$lib/attendance/conductorStore';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
-	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors };
+	return {
+		id,
+		name: `Rehearsal ${id}`,
+		startDatetime,
+		durationMinutes: 90,
+		location: '',
+		conductors,
+		owners: [],
+		editors: []
+	};
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
@@ -276,7 +301,7 @@ function setMemberFixture() {
 			agendaItem('past-4', '2026-05-20T16:00:00.000Z')
 		],
 		seasonId: 's1',
-		seasonConductors: ['someone-else'] // person-p holds no conductor seat
+		seasonConductors: ['someone-else'], seasonOwners: [], seasonEditors: [] // person-p holds no conductor seat
 	});
 	findMyMemberIdMock.mockResolvedValue('m-me');
 	listMyAttendanceMock.mockResolvedValue([
@@ -300,7 +325,7 @@ function setConductorFixture() {
 			agendaItem('past-2', '2026-06-03T16:00:00.000Z')
 		],
 		seasonId: 's1',
-		seasonConductors: ['person-p']
+		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: []
 	});
 	findMyMemberIdMock.mockResolvedValue('m1');
 	listMyAttendanceMock.mockResolvedValue([
@@ -482,7 +507,7 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 				agendaItem('current-2', '2027-06-03T16:00:00.000Z')
 			],
 			seasonId: 's2',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		findMyMemberIdMock.mockResolvedValue('m-me');
 		// 5 records: 2 for current-season events, 3 for old-season events.
@@ -539,7 +564,7 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z')],
 			seasonId: 's1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		// Confirmed non-member (null member id).
 		findMyMemberIdMock.mockResolvedValue(null);
@@ -561,7 +586,7 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z')],
 			seasonId: 's1',
-			seasonConductors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		});
 		// Member lookup hangs forever — membership stays 'loading'.
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));

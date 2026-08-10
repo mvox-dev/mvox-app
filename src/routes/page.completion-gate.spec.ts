@@ -44,6 +44,22 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
+// library reads that feed its pickers), which reaches entuFetch ->
+// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
+// request context under happy-dom. Same one-line fix the library/profile specs
+// already use; the real modules keep running, only the base url is stubbed.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+// ...and the page resolves management rights per season/event on every load.
+// Only that ONE call is stubbed (the pure helpers and the write functions stay
+// real): left alone it issues a live request per agenda event, which is both a
+// network call from a unit test and a source of teardown AbortErrors. The
+// management surface itself is covered end-to-end in
+// page.repertoire-manage-wiring.spec.ts.
+vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
+	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
+	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
@@ -105,7 +121,9 @@ const EVENT = {
 	startDatetime: '2026-06-15T09:00:00.000Z',
 	durationMinutes: 90,
 	location: '',
-	conductors: []
+	conductors: [],
+	owners: [],
+	editors: []
 };
 
 function setAuthedWithOneCollective() {
@@ -146,7 +164,7 @@ afterEach(() => {
 
 describe('+page — completion gate suppresses S1 (the member RSVP affordance)', () => {
 	it('an INCOMPLETE member (real member id, gate incomplete) is NOT shown as a member: control disabled AND no non-member hint (never mislabeled)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1'); // she IS an active member
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('incomplete'); // ...but her domain name is missing
@@ -165,7 +183,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a COMPLETE member (gate complete) IS shown as a member: control enabled (the release path)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('complete');
@@ -178,7 +196,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a member with the gate still LOADING is disabled with NO hint (no flash of the member affordance)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('loading');
@@ -195,7 +213,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a GENUINE non-member is unaffected by the gate: disabled + the non-member hint (no over-reach)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue(null); // confirmed non-member
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('complete');

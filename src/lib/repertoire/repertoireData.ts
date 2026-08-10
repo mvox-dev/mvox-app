@@ -112,11 +112,28 @@ export async function listProgramItems(
 const ACTIVE_STATUSES = new Set(['active', 'learning']);
 
 /**
+ * #91 TR.3 — read mode.
+ *
+ * `includeInactive: true` keeps retired/dropped repertoire_items in the
+ * fallback. It exists because the member-facing filter made the status toggle
+ * ONE-WAY: the instant an editor set a work to retired the row vanished from
+ * the only surface carrying the toggle, and `pickableWorks` deliberately
+ * refuses to re-offer a work that already HAS a repertoire_item — so the work
+ * became permanently unmanageable. A rights-holder therefore reads the
+ * UNFILTERED repertoire; every other reader keeps the AC-8 filter.
+ */
+export interface RepertoireReadOptions {
+	/** Keep retired/dropped repertoire_items in the fallback (management read). */
+	includeInactive?: boolean;
+}
+
+/**
  * The source hierarchy (#90): an event WITH program_items uses those
  * (concert-ordinal order) and never touches the season's repertoire — a
  * programmed concert must not silently gain unrelated season rep. An event
  * WITHOUT program_items falls back to the CURRENT season's repertoire_items,
- * filtered to active/learning (retired/dropped never reach a member, AC-8).
+ * filtered to active/learning (retired/dropped never reach a member, AC-8)
+ * unless `options.includeInactive` says otherwise (see RepertoireReadOptions).
  * `seasonId === null` (no current season) short-circuits the fallback to an
  * empty repertoire WITHOUT a second fetch — there is nothing to query.
  */
@@ -124,9 +141,10 @@ export async function resolveEventWorks(
 	cfg: EntuCfg,
 	eventId: string,
 	seasonId: string | null,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	options: RepertoireReadOptions = {}
 ): Promise<EventWorks> {
-	const byEvent = await resolveEventWorksBatch(cfg, [eventId], seasonId, fetchImpl);
+	const byEvent = await resolveEventWorksBatch(cfg, [eventId], seasonId, fetchImpl, options);
 	return byEvent[eventId];
 }
 
@@ -149,7 +167,8 @@ export async function resolveEventWorksBatch(
 	cfg: EntuCfg,
 	eventIds: string[],
 	seasonId: string | null,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	options: RepertoireReadOptions = {}
 ): Promise<Record<string, EventWorks>> {
 	const uniqueIds = [...new Set(eventIds)];
 	const programsPerEvent = await Promise.all(
@@ -157,12 +176,11 @@ export async function resolveEventWorksBatch(
 	);
 
 	const needsFallback = programsPerEvent.some(([, items]) => items.length === 0);
-	const fallback: RepertoireItem[] =
-		needsFallback && seasonId !== null
-			? (await listRepertoireItems(cfg, seasonId, fetchImpl)).filter((item) =>
-					ACTIVE_STATUSES.has(item.status)
-				)
-			: [];
+	const all: RepertoireItem[] =
+		needsFallback && seasonId !== null ? await listRepertoireItems(cfg, seasonId, fetchImpl) : [];
+	const fallback: RepertoireItem[] = options.includeInactive
+		? all
+		: all.filter((item) => ACTIVE_STATUSES.has(item.status));
 
 	const byEvent: Record<string, EventWorks> = {};
 	for (const [id, items] of programsPerEvent) {

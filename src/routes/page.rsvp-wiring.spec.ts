@@ -34,6 +34,22 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
+// library reads that feed its pickers), which reaches entuFetch ->
+// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
+// request context under happy-dom. Same one-line fix the library/profile specs
+// already use; the real modules keep running, only the base url is stubbed.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+// ...and the page resolves management rights per season/event on every load.
+// Only that ONE call is stubbed (the pure helpers and the write functions stay
+// real): left alone it issues a live request per agenda event, which is both a
+// network call from a unit test and a source of teardown AbortErrors. The
+// management surface itself is covered end-to-end in
+// page.repertoire-manage-wiring.spec.ts.
+vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
+	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
+	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // #12 — mocked so the assertions below observe whether the page calls them, not
 // a live network. Full replacement (not `importOriginal` spread): the real
@@ -123,7 +139,7 @@ afterEach(() => {
 
 describe('+page — resolves member id + existing rsvps alongside the agenda (#12 data half)', () => {
 	it('calls findMyMemberId with {db,token} for the selected collective and the selected person id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -137,7 +153,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 	});
 
 	it('calls listMyRsvps with {db,token} for the selected collective and the selected person id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();

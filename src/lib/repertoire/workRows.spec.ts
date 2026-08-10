@@ -62,6 +62,9 @@ describe('buildWorkRows — program items', () => {
 		expect(buildWorkRows(eventWorks, sources)).toEqual<WorkRow[]>([
 			{
 				id: 'pi-1',
+				kind: 'program',
+				workId: 'work-1',
+				editionId: 'ed-1',
 				workName: 'Spem in alium',
 				composer: 'Thomas Tallis',
 				status: null,
@@ -74,6 +77,9 @@ describe('buildWorkRows — program items', () => {
 			},
 			{
 				id: 'pi-2',
+				kind: 'program',
+				workId: 'work-2',
+				editionId: 'ed-2',
 				workName: 'Mass in B minor',
 				composer: 'J. S. Bach',
 				status: null,
@@ -104,6 +110,9 @@ describe('buildWorkRows — program items', () => {
 		expect(rows).toEqual<WorkRow[]>([
 			{
 				id: 'pi-9',
+				kind: 'program',
+				workId: '',
+				editionId: 'ed-gone',
 				workName: 'Ghost piece',
 				composer: '',
 				status: null,
@@ -135,6 +144,9 @@ describe('buildWorkRows — repertoire items', () => {
 		expect(rows).toEqual<WorkRow[]>([
 			{
 				id: 'ri-1',
+				kind: 'repertoire',
+				workId: 'work-1',
+				editionId: 'ed-1',
 				workName: 'Spem in alium',
 				composer: 'Thomas Tallis',
 				status: 'active',
@@ -147,6 +159,9 @@ describe('buildWorkRows — repertoire items', () => {
 			},
 			{
 				id: 'ri-2',
+				kind: 'repertoire',
+				workId: 'work-2',
+				editionId: '',
 				workName: 'Mass in B minor',
 				composer: 'J. S. Bach',
 				status: 'learning',
@@ -160,7 +175,7 @@ describe('buildWorkRows — repertoire items', () => {
 		]);
 	});
 
-	it('drops the badge for a status outside learning/active — a data slip is not a badge', () => {
+	it('drops the badge for a status outside the schema\'s four — a data slip is not a badge', () => {
 		const rows = buildWorkRows(
 			{
 				source: 'repertoire',
@@ -315,6 +330,9 @@ describe('loadWorksByEventId', () => {
 			e1: [
 				{
 					id: 'ri-1',
+					kind: 'repertoire',
+					workId: 'work-1',
+					editionId: 'ed-1',
 					workName: 'Spem in alium',
 					composer: 'Thomas Tallis',
 					status: 'active',

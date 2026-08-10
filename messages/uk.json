@@ -148,5 +148,20 @@
 	"repertoire_no_edition": "Видання не вказано",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Позичити",
-	"repertoire_pdf_error": "Не вдалося відкрити PDF — спробуйте ще раз."
+	"repertoire_pdf_error": "Не вдалося відкрити PDF — спробуйте ще раз.",
+	"repertoire_status_learning": "Вивчається",
+	"repertoire_status_active": "Активний",
+	"repertoire_status_retired": "Архівний",
+	"repertoire_status_dropped": "Знято",
+	"repertoire_pin_edition_label": "Обрати видання",
+	"repertoire_pin_edition_button": "Закріпити",
+	"repertoire_remove": "Видалити",
+	"repertoire_move_up": "Перемістити вгору",
+	"repertoire_move_down": "Перемістити вниз",
+	"repertoire_add_work_label": "Додати твір",
+	"repertoire_add_work_button": "Додати",
+	"repertoire_add_programme_label": "Додати до програми",
+	"repertoire_add_programme_button": "Додати",
+	"repertoire_inactive_count": "+{count} неактивних",
+	"repertoire_manage_error": "Не вдалося зберегти зміну — спробуйте ще раз."
 }

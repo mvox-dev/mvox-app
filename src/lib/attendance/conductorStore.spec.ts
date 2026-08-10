@@ -103,7 +103,7 @@ describe('determineConductor — 2-state verdict on already-loaded data (#83 AC-
 afterEach(cleanup);
 
 function item(id: string, startDatetime: string): AgendaItem {
-	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors: [] };
+	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors: [], owners: [], editors: [] };
 }
 
 // Already reverse-chron — the order recentEvents() hands over.

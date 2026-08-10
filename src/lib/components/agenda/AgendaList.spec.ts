@@ -36,7 +36,17 @@ vi.mock('$lib/paraglide/messages.js', () => {
 afterEach(cleanup);
 
 function item(id: string, startDatetime: string, overrides: Partial<AgendaItem> = {}): AgendaItem {
-	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors: [], ...overrides };
+	return {
+		id,
+		name: `Rehearsal ${id}`,
+		startDatetime,
+		durationMinutes: 90,
+		location: '',
+		conductors: [],
+		owners: [],
+		editors: [],
+		...overrides
+	};
 }
 
 // Europe/Tallinn is UTC+3 in summer (EEST). These two items are on the same calendar
@@ -418,6 +428,9 @@ describe('AgendaList — Works line per row (#90 TR.2)', () => {
 		r1: [
 			{
 				id: 'ri-1',
+				kind: 'repertoire' as const,
+				workId: 'work-1',
+				editionId: 'ed-1',
 				workName: 'Spem in alium',
 				composer: 'Thomas Tallis',
 				status: 'active' as const,

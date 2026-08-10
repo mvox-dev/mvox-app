@@ -69,7 +69,7 @@ describe('resolveConductors — conditional merge/override (#83 AC-1)', () => {
 // ── recentEvents — the 'Recent' section's data (#83 / TA agenda surface) ────
 
 function item(id: string, startDatetime: string): AgendaItem {
-	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors: [] };
+	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors: [], owners: [], editors: [] };
 }
 
 const NOW = new Date('2026-06-15T12:00:00.000Z');
@@ -113,7 +113,7 @@ describe('recentEvents — past events of the current season, reverse-chronologi
 // ── currentSeason — which season the 'Recent' list is scoped to ─────────────
 
 function season(id: string, startDate: string, endDate = ''): Season {
-	return { id, name: `Season ${id}`, startDate, endDate, conductors: [] };
+	return { id, name: `Season ${id}`, startDate, endDate, conductors: [], owners: [], editors: [] };
 }
 
 describe('currentSeason — latest season already started (end_date deliberately ignored)', () => {

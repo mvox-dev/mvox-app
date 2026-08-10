@@ -148,5 +148,20 @@
 	"repertoire_no_edition": "Trükiväljaanne valimata",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Laenuta",
-	"repertoire_pdf_error": "PDF-i avamine ebaõnnestus — proovi uuesti."
+	"repertoire_pdf_error": "PDF-i avamine ebaõnnestus — proovi uuesti.",
+	"repertoire_status_learning": "Õppimisel",
+	"repertoire_status_active": "Aktiivne",
+	"repertoire_status_retired": "Arhiveeritud",
+	"repertoire_status_dropped": "Loobutud",
+	"repertoire_pin_edition_label": "Vali trükiväljaanne",
+	"repertoire_pin_edition_button": "Vali",
+	"repertoire_remove": "Eemalda",
+	"repertoire_move_up": "Liiguta üles",
+	"repertoire_move_down": "Liiguta alla",
+	"repertoire_add_work_label": "Lisa teos",
+	"repertoire_add_work_button": "Lisa",
+	"repertoire_add_programme_label": "Lisa kavasse",
+	"repertoire_add_programme_button": "Lisa",
+	"repertoire_inactive_count": "+{count} mitteaktiivset",
+	"repertoire_manage_error": "Muudatust ei õnnestunud salvestada — proovi uuesti."
 }

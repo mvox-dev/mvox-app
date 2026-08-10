@@ -1,6 +1,12 @@
 import { entuFetch } from '$lib/entu/request';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { RehearsalRaw, Season, SeasonRaw, SeriesRaw } from './types';
+import type { RehearsalRaw, RightsRefs, Season, SeasonRaw, SeriesRaw } from './types';
+
+/** The `_owner`/`_editor` refs the caller can actually see, flattened. Private
+ *  bucket: a caller with no grant reads neither prop, which flattens to []. */
+function rightsRefs(raw: RightsRefs, prop: '_owner' | '_editor'): string[] {
+	return (raw[prop] ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+}
 
 export interface EntuCfg {
 	/** Runtime db (the selected collective) — threaded as the URL path segment. */
@@ -58,7 +64,10 @@ export function resetTypeIdCache(): void {
 export async function listSeasons(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Season[]> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=season&props=name,start_date,end_date,conductor&limit=200',
+		// `_owner,_editor` ride along (#91 F1): the repertoire management controls
+		// need `_editor` on the season, and asking for it HERE replaces a separate
+		// per-entity rights GET with zero extra round-trips.
+		'entity?_type.string=season&props=name,start_date,end_date,conductor,_owner,_editor&limit=200',
 		cfg.token,
 		{},
 		fetchImpl
@@ -73,7 +82,9 @@ export async function listSeasons(cfg: EntuCfg, fetchImpl: typeof fetch = fetch)
 				name: raw.name?.[0]?.string ?? '',
 				startDate: raw.start_date?.[0]?.date?.slice(0, 10) ?? '',
 				endDate: raw.end_date?.[0]?.date?.slice(0, 10) ?? '',
-				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []))
+				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : [])),
+				owners: rightsRefs(raw, '_owner'),
+				editors: rightsRefs(raw, '_editor')
 			})
 		)
 		.sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -97,7 +108,7 @@ export async function listRehearsals(
 ): Promise<AgendaItem[]> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=event&event_type.string=rehearsal&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,_parent,conductor&limit=500`,
+		`entity?_type.string=event&event_type.string=rehearsal&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,_parent,conductor,_owner,_editor&limit=500`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -140,7 +151,12 @@ export async function listRehearsals(
 				durationMinutes:
 					raw.duration_minutes?.[0]?.number ?? series?.duration_minutes?.[0]?.number ?? 0,
 				location: raw.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? '',
-				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []))
+				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : [])),
+				// Rights are NEVER merged from the series the way duration/location
+				// are: Entu keeps rights per entity, so a series editor is not
+				// thereby an editor of this event.
+				owners: rightsRefs(raw, '_owner'),
+				editors: rightsRefs(raw, '_editor')
 			};
 		})
 		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));

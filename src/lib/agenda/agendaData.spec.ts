@@ -28,11 +28,11 @@ const cfg = { db: 'polyphony', token: 'jwt' };
 const NOW = new Date('2026-09-05T10:00:00.000Z');
 
 function item(id: string, startDatetime: string, conductors: string[] = []): AgendaItem {
-	return { id, name: id, startDatetime, durationMinutes: 60, location: '', conductors };
+	return { id, name: id, startDatetime, durationMinutes: 60, location: '', conductors, owners: [], editors: [] };
 }
 
 function season(id: string, startDate: string, endDate: string, conductors: string[] = []): Season {
-	return { id, name: `Season ${id}`, startDate, endDate, conductors };
+	return { id, name: `Season ${id}`, startDate, endDate, conductors, owners: [], editors: [] };
 }
 
 beforeEach(() => {
@@ -255,14 +255,28 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 	it('returns empty result without reading when no collective is selected', async () => {
 		setToken('jwt-live'); // token present, but db null
 		const result = await loadFullAgenda(NOW);
-		expect(result).toEqual({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		expect(result).toEqual({
+			upcoming: [],
+			recent: [],
+			seasonId: null,
+			seasonConductors: [],
+			seasonOwners: [],
+			seasonEditors: []
+		});
 		expect(listSeasonsMock).not.toHaveBeenCalled();
 	});
 
 	it('returns empty result without reading when there is no token', async () => {
 		dbHolder.store.set('polyphony'); // db present, but no token
 		const result = await loadFullAgenda(NOW);
-		expect(result).toEqual({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		expect(result).toEqual({
+			upcoming: [],
+			recent: [],
+			seasonId: null,
+			seasonConductors: [],
+			seasonOwners: [],
+			seasonEditors: []
+		});
 		expect(listSeasonsMock).not.toHaveBeenCalled();
 	});
 });

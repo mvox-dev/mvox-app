@@ -148,5 +148,20 @@
 	"repertoire_no_edition": "Izdevums nav norādīts",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Aizņemties",
-	"repertoire_pdf_error": "Neizdevās atvērt PDF — mēģini vēlreiz."
+	"repertoire_pdf_error": "Neizdevās atvērt PDF — mēģini vēlreiz.",
+	"repertoire_status_learning": "Mācās",
+	"repertoire_status_active": "Aktīvs",
+	"repertoire_status_retired": "Arhivēts",
+	"repertoire_status_dropped": "Atmests",
+	"repertoire_pin_edition_label": "Izvēlies izdevumu",
+	"repertoire_pin_edition_button": "Piesaistīt",
+	"repertoire_remove": "Noņemt",
+	"repertoire_move_up": "Pārvietot augšup",
+	"repertoire_move_down": "Pārvietot lejup",
+	"repertoire_add_work_label": "Pievienot darbu",
+	"repertoire_add_work_button": "Pievienot",
+	"repertoire_add_programme_label": "Pievienot programmai",
+	"repertoire_add_programme_button": "Pievienot",
+	"repertoire_inactive_count": "+{count} neaktīvi",
+	"repertoire_manage_error": "Neizdevās saglabāt izmaiņas — mēģini vēlreiz."
 }

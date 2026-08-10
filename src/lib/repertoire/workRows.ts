@@ -1,7 +1,11 @@
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listWorks, listAllEditions, listAllCopies, type Work, type Edition, type Copy } from '$lib/library/libraryData';
-import { resolveEventWorksBatch, type EventWorks } from './repertoireData';
-import type { WorkRow } from './types';
+import {
+	resolveEventWorksBatch,
+	type EventWorks,
+	type RepertoireReadOptions
+} from './repertoireData';
+import type { RepertoireStatus, WorkRow } from './types';
 
 // #90 TR.2 — the JOIN between the repertoire data layer and the agenda's works
 // view model. repertoireData.ts resolves WHICH items an event shows
@@ -83,6 +87,21 @@ function safeExternalLinks(links: string[]): string[] {
  * work name with a blank composer is strictly better than a silently shorter
  * programme.
  */
+const KNOWN_STATUSES = new Set<string>([
+	'learning',
+	'active',
+	'retired',
+	'dropped'
+] satisfies RepertoireStatus[]);
+
+/** All four schema statuses survive to the row (#91: an editor must be able to
+ *  toggle a retired work back). Anything OUTSIDE the four is a data slip and
+ *  becomes null — no badge, and the management select falls back to the schema
+ *  default rather than seeding an option that does not exist. */
+function narrowStatus(raw: string): RepertoireStatus | null {
+	return KNOWN_STATUSES.has(raw) ? (raw as RepertoireStatus) : null;
+}
+
 export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): WorkRow[] {
 	const { worksById, editionsById, copyCountByEditionId } = sources;
 
@@ -92,6 +111,11 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 			const work = edition?.workId ? worksById.get(edition.workId) : undefined;
 			return {
 				id: item.id,
+				// #91 — provenance travels WITH the row: `id` here names a
+				// program_item, so only the programme write layer may touch it.
+				kind: 'program' as const,
+				workId: edition?.workId ?? '',
+				editionId: item.editionId,
 				// item.name is the program_item's own formula (edition -> work), the
 				// right fallback when the work entity itself isn't readable.
 				workName: work?.name || item.name,
@@ -112,11 +136,14 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 		const edition = item.editionId === '' ? undefined : editionsById.get(item.editionId);
 		return {
 			id: item.id,
+			// #91 — `id` here names a repertoire_item (a CHILD OF SEASON, shared by
+			// every event that falls back to it), never a program_item.
+			kind: 'repertoire' as const,
+			workId: item.workId,
+			editionId: item.editionId,
 			workName: work?.name || item.name,
 			composer: work?.composer ?? '',
-			// Only 'active' and 'learning' survive resolveEventWorks's filter, so the
-			// narrowing is total; anything else would be a data slip -> no badge.
-			status: item.status === 'learning' || item.status === 'active' ? item.status : null,
+			status: narrowStatus(item.status),
 			editionName: edition?.name ?? '',
 			ordinal: null,
 			fileId: pickFileId(edition),
@@ -146,7 +173,8 @@ export async function loadWorksByEventId(
 	cfg: EntuCfg,
 	eventIds: string[],
 	seasonId: string | null,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	options: RepertoireReadOptions = {}
 ): Promise<Record<string, WorkRow[]>> {
 	if (eventIds.length === 0) return {};
 
@@ -154,7 +182,7 @@ export async function loadWorksByEventId(
 		listWorks(cfg, fetchImpl),
 		listAllEditions(cfg, fetchImpl),
 		listAllCopies(cfg, fetchImpl),
-		resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl)
+		resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl, options)
 	]);
 
 	const sources = collectSources(works, editions, copies);
