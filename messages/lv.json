@@ -107,7 +107,8 @@
 	"library_librarian_load_error": "Neizdevās pārbaudīt piekļuvi.",
 	"library_librarian_retry": "Mēģināt vēlreiz",
 	"library_my_loans_title": "Mani izsniegumi ({count})",
-	"library_my_loans_copy_label": "Eksemplārs: {copyId}",
+	"library_copy_name_unknown": "Nenosaukta kopija",
+	"library_my_loans_copy_label": "{copyName}",
 	"library_my_loans_overdue": "Kavēts",
 	"library_checkout_copy_placeholder": "Izvēlēties eksemplāru",
 	"library_checkout_member_placeholder": "Izvēlēties dalībnieku",
@@ -120,5 +121,7 @@
 	"library_bulk_checkout_work_placeholder": "Izvēlēties darbu",
 	"library_bulk_checkout_availability": "{available}/{total} pieejami",
 	"library_bulk_checkout_already_lent": "Izsniegts kopš {date}",
-	"library_bulk_checkout_too_many": "Nepietiek pieejamu eksemplāru"
+	"library_bulk_checkout_too_many": "Nepietiek pieejamu eksemplāru",
+	"library_bulk_return_lent_count": "{count} izsniegti",
+	"library_work_availability": "{available}/{total}"
 }

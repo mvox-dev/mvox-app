@@ -24,6 +24,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_available: () => 'Available',
 		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
 		library_borrower_unknown: () => 'an unnamed member',
+		library_copy_name_unknown: () => 'Untitled copy',
 		library_lent_since: (p: { date: string }) => `since ${p.date}`,
 		library_node_load_error: () => 'Could not load.',
 		library_node_retry: () => 'Retry',
@@ -31,7 +32,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
 		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyId: string }) => `Copy: ${p.copyId}`,
+		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
 		library_my_loans_overdue: () => 'Overdue',
 		library_checkout_copy_placeholder: () => 'Select copy',
 		library_checkout_member_placeholder: () => 'Select member',
@@ -44,11 +45,13 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 		library_bulk_checkout_too_many: () => 'Not enough copies available',
 		library_bulk_return_title: () => 'Bulk return',
-		library_bulk_return_edition_placeholder: () => 'Select edition'
+		library_bulk_return_edition_placeholder: () => 'Select edition',
+		library_bulk_return_lent_count: (p: { count: number }) => `${p.count} lent`,
+		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`
 	}
 }));
 
-const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock } =
+const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock, resolveCopyNamesMock } =
 	vi.hoisted(() => ({
 		listWorksMock: vi.fn(),
 		listEditionsMock: vi.fn(),
@@ -56,19 +59,21 @@ const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, li
 		listAllEditionsMock: vi.fn(),
 		listAllCopiesMock: vi.fn(),
 		listLendingsMock: vi.fn(),
-		resolveBorrowerNamesMock: vi.fn()
+		resolveBorrowerNamesMock: vi.fn(),
+		resolveCopyNamesMock: vi.fn()
 	}));
 vi.mock('$lib/library/libraryData', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>('$lib/library/libraryData');
 	return {
-		...actual, // keep the real, pure deriveCopyAvailability
+		...actual, // keep the real, pure deriveCopyAvailability / deriveWorkAvailability
 		listWorks: listWorksMock,
 		listEditions: listEditionsMock,
 		listCopies: listCopiesMock,
 		listAllEditions: listAllEditionsMock,
 		listAllCopies: listAllCopiesMock,
 		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock
+		resolveBorrowerNames: resolveBorrowerNamesMock,
+		resolveCopyNames: resolveCopyNamesMock
 	};
 });
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
@@ -130,6 +135,8 @@ function setAuthedWithOneCollective() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.
 	findMyMemberIdMock.mockResolvedValue(null);
+	// Default: empty copy names, unless a test overrides.
+	resolveCopyNamesMock.mockResolvedValue(new Map());
 	// Default: empty checkout data, unless a test overrides.
 	listAllEditionsMock.mockResolvedValue([]);
 	listAllCopiesMock.mockResolvedValue([]);
@@ -151,6 +158,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
+	resolveCopyNamesMock.mockReset();
 	resolveLibrarianMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -828,7 +836,9 @@ describe('#74 — bulk checkout + return', () => {
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter' }
 		]);
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-		listAllCopiesMock.mockResolvedValue([]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
+		]);
 		listActiveMembersMock.mockResolvedValue([]);
 
 		const { container } = render(Page);
@@ -1186,6 +1196,280 @@ describe('#74 — bulk checkout refinements', () => {
 		await fireEvent.click(checkboxes[2]);
 		await waitFor(() => {
 			expect((container.querySelector('[data-testid="bulk-checkout-submit"]') as HTMLButtonElement).disabled).toBe(false);
+		});
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #76 — consolidated corrections: return filter, count, tree counters,
+// nameless guard.
+// ---------------------------------------------------------------------------
+describe('#76 — consolidated corrections', () => {
+	// ── Correction 2: Bulk return edition filter ────────────────────────────
+	// The bulk return edition dropdown must only show editions that have at
+	// least one active lending (returnedAt === '' for a lending whose copyId
+	// belongs to a copy of that edition).
+	it('bulk return edition picker only lists editions with at least one active lending', async () => {
+		listWorksMock.mockResolvedValue([]);
+		// copy-e1 belongs to edition-1 and has an active lending;
+		// copy-e2 belongs to edition-2 and has NO active lending.
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-e1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' },
+			{ id: 'edition-2', name: 'Peters arrangement', publisher: 'Peters', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-e1', name: 'Copy E1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-e2', name: 'Copy E2', copyNumber: 1, editionId: 'edition-2' }
+		]);
+		listActiveMembersMock.mockResolvedValue([]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
+		});
+
+		const options = container.querySelectorAll('[data-testid="bulk-return-edition-select"] option');
+		const values = Array.from(options).map(o => (o as HTMLOptionElement).value).filter(v => v !== '');
+		expect(values).toContain('edition-1');
+		expect(values).not.toContain('edition-2');
+	});
+
+	it('bulk return edition picker has no edition options when there are no active lendings', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-e1', name: 'Copy E1', copyNumber: 1, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
+		});
+
+		const options = container.querySelectorAll('[data-testid="bulk-return-edition-select"] option');
+		const values = Array.from(options).map(o => (o as HTMLOptionElement).value).filter(v => v !== '');
+		// Only the placeholder option should remain — no editions with active lendings
+		expect(values).toEqual([]);
+	});
+
+	// ── Correction 3: Bulk return lending count per edition ─────────────────
+	// Each edition in the bulk return dropdown should show its active lending
+	// count, e.g. "40-part original (3 lent)".
+	it('bulk return edition option text includes the active lending count', async () => {
+		listWorksMock.mockResolvedValue([]);
+		// 3 active lendings for copies belonging to edition-1
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'lend-2', copyId: 'copy-2', memberId: 'member-2', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'lend-3', copyId: 'copy-3', memberId: 'member-3', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada'], ['member-2', 'Bob'], ['member-3', 'Carol']]));
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
+			{ id: 'copy-3', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
+		});
+
+		const options = container.querySelectorAll('[data-testid="bulk-return-edition-select"] option');
+		const editionOption = Array.from(options).find(o => (o as HTMLOptionElement).value === 'edition-1');
+		expect(editionOption).not.toBeNull();
+		// Must include the count (3 active lendings) in the option text
+		expect(editionOption?.textContent).toContain('(3');
+	});
+
+	// ── Correction 4: Works tree available/total counters (librarian) ──────
+	// When the user is a librarian, show available/total copy counts behind
+	// each work name in the browse tree, e.g. "Spem in alium (8/12)".
+	it('librarian view shows available/total counter behind each work name in the browse tree', async () => {
+		listWorksMock.mockResolvedValue([
+			{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
+		]);
+		// 1 active lending for copy-1 (of edition-1, of work-1)
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
+		]);
+		// 3 copies total for edition-1 (which belongs to work-1), 1 actively lent -> 2 available
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
+			{ id: 'copy-3', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([]);
+
+		const { container } = render(Page);
+
+		// Wait for both the work list and librarian tools to render (allCopies
+		// and allEditions are loaded before librarianStore is set)
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
+		});
+
+		const workRow = container.querySelector('[data-testid="library-work-work-1"]');
+		// 3 copies, 1 lent => 2 available => "2/3" should appear in the work row
+		expect(workRow?.textContent).toContain('2/3');
+	});
+
+	it('non-librarian view does NOT show an availability counter behind work names', async () => {
+		listWorksMock.mockResolvedValue([
+			{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
+		]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		// Explicitly non-librarian
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull();
+		});
+
+		const workRow = container.querySelector('[data-testid="library-work-work-1"]');
+		// No fraction pattern like "N/M" should appear for non-librarians
+		expect(workRow?.textContent).not.toMatch(/\d+\/\d+/);
+	});
+
+	// ── Correction 5: Raw entity ID in member list ─────────────────────────
+	// If a member's name resolves to '' (empty), the UI must show a
+	// human-readable placeholder — never a raw hex entity ID like
+	// "6a785fd523dc1d97bb8f1687".
+	it('member with empty resolved name shows a placeholder, never a raw 24-char hex entity ID', async () => {
+		const hexId = '6a785fd523dc1d97bb8f1687';
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		// The name resolves to empty string for the member
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([[hexId, '']]));
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([]);
+		listAllCopiesMock.mockResolvedValue([]);
+		listActiveMembersMock.mockResolvedValue([
+			{ memberId: hexId, personId: 'person-1', currentSection: '' }
+		]);
+
+		const { container } = render(Page);
+
+		// Wait for checkout form with member options rendered
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="checkout-form"]')).not.toBeNull();
+			const options = container.querySelectorAll('[data-testid="checkout-member-select"] option');
+			expect(options.length).toBeGreaterThan(1);
+		});
+
+		// The member select must NOT contain the raw hex ID anywhere
+		const memberSelect = container.querySelector('[data-testid="checkout-member-select"]');
+		expect(memberSelect?.textContent).not.toMatch(/[0-9a-f]{24}/);
+	});
+
+	// ── Correction 7: Stale bulkReturnEditionId after last loan returned ────
+	it('clears bulk return edition selection when the selected edition drops out of the filtered list', async () => {
+		// Start with one active lending for edition-1
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValueOnce([
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([]);
+		bulkReturnMock.mockResolvedValue({ succeeded: ['lend-1'], failed: [] });
+		// After return, lendings list is empty (all returned)
+		listLendingsMock.mockResolvedValue([]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
+		});
+
+		// Select edition-1
+		const select = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'edition-1' } });
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
+		});
+
+		// Check the loan and submit bulk return
+		const checkboxes = container.querySelectorAll('[data-testid="bulk-return-loan-list"] input[type="checkbox"]');
+		await fireEvent.click(checkboxes[0]);
+		const submitBtn = container.querySelector('[data-testid="bulk-return-submit"]') as HTMLButtonElement;
+		await fireEvent.click(submitBtn);
+
+		// After return completes, the loan list panel should disappear because
+		// edition-1 no longer has active lendings and the selection should clear
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).toBeNull();
+		});
+	});
+
+	// ── Correction 8: My-loans copy name resolution (no raw entity IDs) ─────
+	it('my-loans section shows resolved copy name, not raw entity ID', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+		resolveCopyNamesMock.mockResolvedValue(new Map([['copy-abc', 'Score #7']]));
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+
+		// Expand to see loan rows
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+
+		await waitFor(() => {
+			const item = container.querySelector('[data-testid="my-loans-item-lend-mine"]');
+			expect(item).not.toBeNull();
+			expect(item?.textContent).toContain('Score #7');
+			// Must NOT contain the raw entity ID
+			expect(item?.textContent).not.toContain('copy-abc');
 		});
 	});
 });

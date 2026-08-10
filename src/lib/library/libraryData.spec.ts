@@ -8,8 +8,10 @@ import {
 	listCopies,
 	listLendings,
 	resolveBorrowerNames,
+	resolveCopyNames,
 	deriveCopyAvailability,
 	deriveEditionAvailability,
+	deriveWorkAvailability,
 	activeLendingForMemberInEdition,
 	type Work,
 	type Edition,
@@ -351,5 +353,103 @@ describe('activeLendingForMemberInEdition', () => {
 		expect(activeLendingForMemberInEdition('member-a', outsideCopyIds, lendings)).toEqual(lendings[2]);
 		// But if we ask about a set that doesn't include copy-3:
 		expect(activeLendingForMemberInEdition('member-a', new Set(['copy-99']), lendings)).toBeUndefined();
+	});
+});
+
+// ── deriveWorkAvailability — pure, no fetch ───────────────────────────────
+
+describe('deriveWorkAvailability', () => {
+	const editions: Edition[] = [
+		{ id: 'ed-1', name: 'Ed 1', publisher: 'P1', workId: 'work-1' },
+		{ id: 'ed-2', name: 'Ed 2', publisher: 'P2', workId: 'work-1' },
+		{ id: 'ed-other', name: 'Ed Other', publisher: 'P3', workId: 'work-2' }
+	];
+	const copies: Copy[] = [
+		{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'ed-1' },
+		{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'ed-1' },
+		{ id: 'copy-3', name: 'Copy #3', copyNumber: 1, editionId: 'ed-2' },
+		{ id: 'copy-other', name: 'Copy Other', copyNumber: 1, editionId: 'ed-other' }
+	];
+
+	it('aggregates availability across all editions of a work', () => {
+		const lendings: Lending[] = [
+			{ id: 'l1', copyId: 'copy-1', memberId: 'm-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'l2', copyId: 'copy-3', memberId: 'm-b', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+		];
+		// work-1 has 3 copies (copy-1, copy-2, copy-3), 2 lent => 1 available
+		expect(deriveWorkAvailability('work-1', editions, copies, lendings)).toEqual({ available: 1, total: 3 });
+	});
+
+	it('all copies available when no active lendings', () => {
+		expect(deriveWorkAvailability('work-1', editions, copies, [])).toEqual({ available: 3, total: 3 });
+	});
+
+	it('ignores copies/editions from other works', () => {
+		const lendings: Lending[] = [
+			{ id: 'l1', copyId: 'copy-other', memberId: 'm-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+		];
+		// work-1 has 3 copies, none lent (copy-other belongs to work-2)
+		expect(deriveWorkAvailability('work-1', editions, copies, lendings)).toEqual({ available: 3, total: 3 });
+	});
+
+	it('returns zero for a nonexistent work', () => {
+		expect(deriveWorkAvailability('work-unknown', editions, copies, [])).toEqual({ available: 0, total: 0 });
+	});
+
+	it('ignores returned lendings (returnedAt !== "")', () => {
+		const lendings: Lending[] = [
+			{ id: 'l1', copyId: 'copy-1', memberId: 'm-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '2026-07-15' }
+		];
+		expect(deriveWorkAvailability('work-1', editions, copies, lendings)).toEqual({ available: 3, total: 3 });
+	});
+});
+
+// ── resolveCopyNames — batched, dedup ─────────────────────────────────────
+
+describe('resolveCopyNames', () => {
+	it('resolves copy names from entity lookup; prefers name over copy_number', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-1')) {
+				return Promise.resolve(json({ entity: { name: [{ string: 'Score #7' }], copy_number: [{ number: 7 }] } }));
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		const names = await resolveCopyNames(cfg, ['copy-1'], fetchImpl);
+		expect(names.get('copy-1')).toBe('Score #7');
+	});
+
+	it('falls back to #<copy_number> when name is absent', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-2')) {
+				return Promise.resolve(json({ entity: { copy_number: [{ number: 3 }] } }));
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		const names = await resolveCopyNames(cfg, ['copy-2'], fetchImpl);
+		expect(names.get('copy-2')).toBe('#3');
+	});
+
+	it('returns empty string when neither name nor copy_number is present', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entity: {} }));
+		const names = await resolveCopyNames(cfg, ['copy-3'], fetchImpl);
+		expect(names.get('copy-3')).toBe('');
+	});
+
+	it('dedupes repeated copyIds', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-1')) {
+				return Promise.resolve(json({ entity: { name: [{ string: 'Score #7' }] } }));
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		const names = await resolveCopyNames(cfg, ['copy-1', 'copy-1'], fetchImpl);
+		expect(names.get('copy-1')).toBe('Score #7');
+		const lookups = fetchImpl.mock.calls.filter((args) => String(args[0]).includes('entity/copy-1'));
+		expect(lookups).toHaveLength(1);
+	});
+
+	it('fails loud on non-2xx', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
+		await expect(resolveCopyNames(cfg, ['copy-bad'], fetchImpl)).rejects.toThrow(/500/);
 	});
 });

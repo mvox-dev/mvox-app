@@ -14,8 +14,10 @@
 		listAllCopies,
 		listLendings,
 		resolveBorrowerNames,
+		resolveCopyNames,
 		deriveCopyAvailability,
 		deriveEditionAvailability,
+		deriveWorkAvailability,
 		activeLendingForMemberInEdition,
 		type Work,
 		type Edition,
@@ -48,6 +50,7 @@
 	// #73 — my loans state
 	let myMemberId = $state<string | null>(null);
 	let myLoansExpanded = $state(false);
+	let myCopyNames = $state<Map<string, string>>(new Map());
 
 	// Derived: active loans for the current member
 	let myActiveLoans = $derived(
@@ -232,6 +235,64 @@
 			: new Set<string>()
 	);
 
+	// #76 — derive editions with active lendings for bulk return picker
+	let bulkReturnFilteredEditions = $derived.by(() => {
+		const activeCopyIds = new Set(lendings.filter(l => l.returnedAt === '').map(l => l.copyId));
+		return allEditions.filter(edition =>
+			allCopies.some(c => c.editionId === edition.id && activeCopyIds.has(c.id))
+		);
+	});
+
+	// #76-fix — clear stale bulk return edition when it drops out of filtered list
+	$effect(() => {
+		if (bulkReturnEditionId && !bulkReturnFilteredEditions.some(e => e.id === bulkReturnEditionId)) {
+			bulkReturnEditionId = '';
+		}
+	});
+
+	// #76-fix — resolve copy names for my-loans (avoids rendering raw entity IDs)
+	let copyNameGen = 0;
+	$effect(() => {
+		const loans = myActiveLoans;
+		const g = ++copyNameGen;
+		if (loans.length === 0) {
+			myCopyNames = new Map();
+			return;
+		}
+		const current = selected;
+		if (!current) { myCopyNames = new Map(); return; }
+		const token = getToken();
+		if (!token) return;
+		const copyIds = loans.map(l => l.copyId);
+		// Librarian path: allCopies already has name + copyNumber — resolve
+		// locally without a network round-trip per copy.
+		const localNames = new Map<string, string>();
+		const unresolved: string[] = [];
+		for (const id of copyIds) {
+			const cached = allCopies.find(c => c.id === id);
+			if (cached) {
+				const label = cached.name || (cached.copyNumber ? `#${cached.copyNumber}` : '');
+				localNames.set(id, label);
+			} else {
+				unresolved.push(id);
+			}
+		}
+		if (unresolved.length === 0) {
+			if (g !== copyNameGen) return;
+			myCopyNames = localNames;
+			return;
+		}
+		const cfg = { db: current.db, token };
+		resolveCopyNames(cfg, unresolved).then(names => {
+			if (g !== copyNameGen) return;
+			// Merge locally-resolved names with network-fetched ones
+			for (const [id, name] of localNames) names.set(id, name);
+			myCopyNames = names;
+		}).catch(e => {
+			console.error('library: copy name resolution failed', e);
+		});
+	});
+
 	$effect(() => {
 		void selected;
 		loadForSelected().catch((e) => {
@@ -278,6 +339,9 @@
 					}).catch((e) => console.error('library: member name resolution failed', e));
 				} catch (e) {
 					console.error('library: checkout data load failed', e);
+					if (g !== librarianGen) return;
+					librarianStore.set('error');
+					return;
 				}
 			}
 			if (g !== librarianGen) return;
@@ -351,6 +415,18 @@
 	// Find the active lending for a given copy (for return button)
 	function activeLendingForCopy(copyId: string): Lending | undefined {
 		return lendings.find((l) => l.copyId === copyId && l.returnedAt === '');
+	}
+
+	// #76 — work availability for browse tree counter (librarian only)
+	// Delegates to the pure, unit-tested deriveWorkAvailability in libraryData.ts.
+	function workAvailability(workId: string): { available: number; total: number } {
+		return deriveWorkAvailability(workId, allEditions, allCopies, lendings);
+	}
+
+	// #76 — count active lendings for a given edition (bulk return count display)
+	function activeLendingCountForEdition(editionId: string): number {
+		const editionCopyIds = new Set(allCopies.filter(c => c.editionId === editionId).map(c => c.id));
+		return lendings.filter(l => l.returnedAt === '' && editionCopyIds.has(l.copyId)).length;
 	}
 
 	// #74 — bulk checkout handler
@@ -436,7 +512,7 @@
 					<select data-testid="checkout-member-select" bind:value={checkoutMemberId} required class="rounded border border-ink-5 px-2 py-1 text-xs">
 						<option value="">{m.library_checkout_member_placeholder()}</option>
 						{#each allMembers as member (member.memberId)}
-							<option value={member.memberId}>{memberNames.get(member.memberId) || member.memberId}</option>
+							<option value={member.memberId}>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</option>
 						{/each}
 					</select>
 					<input data-testid="checkout-due-date" type="date" bind:value={checkoutDueDate} class="rounded border border-ink-5 px-2 py-1 text-xs" />
@@ -474,7 +550,7 @@
 								{@const existingLending = activeLendingForMemberInEdition(member.memberId, bulkCheckoutEditionCopyIds, lendings)}
 								{#if existingLending}
 									<div class="flex items-center gap-1 text-xs">
-										<span>{memberNames.get(member.memberId) || member.memberId}</span>
+										<span>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</span>
 										<span data-testid="bulk-checkout-already-lent-{member.memberId}">{m.library_bulk_checkout_already_lent({ date: existingLending.assignedAt })}</span>
 									</div>
 								{:else}
@@ -488,7 +564,7 @@
 												bulkCheckoutCheckedMembers = next;
 											}}
 										/>
-										<span>{memberNames.get(member.memberId) || member.memberId}</span>
+										<span>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</span>
 									</label>
 								{/if}
 							{/each}
@@ -511,8 +587,8 @@
 					<h3 class="text-xs font-medium">{m.library_bulk_return_title()}</h3>
 					<select data-testid="bulk-return-edition-select" aria-label={m.library_bulk_return_edition_placeholder()} value={bulkReturnEditionId} onchange={(e) => (bulkReturnEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
 						<option value="">{m.library_bulk_return_edition_placeholder()}</option>
-						{#each allEditions as edition (edition.id)}
-							<option value={edition.id}>{edition.name}</option>
+						{#each bulkReturnFilteredEditions as edition (edition.id)}
+							<option value={edition.id}>{edition.name} ({m.library_bulk_return_lent_count({ count: activeLendingCountForEdition(edition.id) })})</option>
 						{/each}
 					</select>
 					{#if bulkReturnEditionId}
@@ -528,7 +604,7 @@
 											bulkReturnCheckedLoans = next;
 										}}
 									/>
-									<span>{borrowerNames.get(loan.memberId) || loan.copyId}</span>
+									<span>{borrowerNames.get(loan.memberId) || m.library_borrower_unknown()}</span>
 								</label>
 							{/each}
 						</div>
@@ -570,6 +646,8 @@
 									}).catch((e) => console.error('library: member name resolution failed', e));
 								} catch (e) {
 									console.error('library: checkout data load failed', e);
+									librarianStore.set('error');
+									return;
 								}
 							}
 							librarianStore.set(result.state);
@@ -603,7 +681,7 @@
 					<ul id="my-loans-list" class="mt-2 flex flex-col gap-1">
 						{#each myActiveLoans as loan (loan.id)}
 							<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
-								<span>{m.library_my_loans_copy_label({ copyId: loan.copyId })}</span>
+								<span>{m.library_my_loans_copy_label({ copyName: myCopyNames.get(loan.copyId) || m.library_copy_name_unknown() })}</span>
 								{#if isOverdue(loan.assignedUntil)}
 									<span data-testid="my-loans-overdue-{loan.id}" class="text-red-700">{m.library_my_loans_overdue()}</span>
 								{/if}
@@ -655,7 +733,7 @@
 							onclick={() => toggleWork(work.id)}
 						>
 							<span class="flex flex-col">
-								<span class="text-sm text-ink">{work.name}</span>
+								<span class="text-sm text-ink">{work.name}{#if $librarianStore === 'librarian'}{@const avail = workAvailability(work.id)}{#if avail.total > 0} ({m.library_work_availability(avail)}){/if}{/if}</span>
 								<span class="text-xs text-ink-2">{work.composer || m.library_work_composer_unknown()}</span>
 							</span>
 							<span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
@@ -715,7 +793,7 @@
 															{@const availability = deriveCopyAvailability(copy.id, lendings)}
 															{@const activeLending = activeLendingForCopy(copy.id)}
 															<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">
-																<span class="text-ink">{copy.name}</span>
+																<span class="text-ink">{copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown())}</span>
 																<span class="flex items-center gap-1">
 																	{#if availability.status === 'available'}
 																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">{m.library_copy_available()}</span>

@@ -215,6 +215,43 @@ export function deriveCopyAvailability(copyId: string, lendings: Lending[]): Cop
 }
 
 /**
+ * Resolves a copy entity's display name. Prefers `name`; falls back to
+ * `#<copy_number>`; falls back to '' (page renders a placeholder).
+ */
+async function resolveCopyName(
+	cfg: EntuCfg,
+	copyId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	const res = await entuFetch(cfg.db, `entity/${copyId}?props=name,copy_number`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`resolveCopyName: copy ${copyId} lookup failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entity?: { name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> };
+	};
+	const name = body.entity?.name?.[0]?.string ?? '';
+	if (name) return name;
+	const num = body.entity?.copy_number?.[0]?.number;
+	if (num !== undefined) return `#${num}`;
+	return '';
+}
+
+/**
+ * Batched + deduped copy-name resolution. Same fail-loud-as-a-whole pattern
+ * as resolveBorrowerNames.
+ */
+export async function resolveCopyNames(
+	cfg: EntuCfg,
+	copyIds: string[],
+	fetchImpl: typeof fetch = fetch
+): Promise<Map<string, string>> {
+	const unique = [...new Set(copyIds)];
+	const pairs = await Promise.all(
+		unique.map(async (id) => [id, await resolveCopyName(cfg, id, fetchImpl)] as const)
+	);
+	return new Map(pairs);
+}
+
+/**
  * `lending.member` references a `member` entity, which carries no name of its own
  * (entu/research schema.ts:287-336) — same shape rosterData.ts already solved for
  * roster rows: member -> person -> profile -> name. Reuses profileData.ts's
@@ -280,6 +317,26 @@ export function deriveEditionAvailability(
 		(c) => deriveCopyAvailability(c.id, lendings).status === 'available'
 	).length;
 	return { available, total: editionCopies.length };
+}
+
+/**
+ * Pure — no fetch. Counts how many copies across ALL editions of a given work
+ * are currently available (not actively lent). Aggregates per-edition
+ * availability for the whole work subtree.
+ */
+export function deriveWorkAvailability(
+	workId: string,
+	editions: Edition[],
+	copies: Copy[],
+	lendings: Lending[]
+): { available: number; total: number } {
+	const editionIds = new Set(editions.filter((e) => e.workId === workId).map((e) => e.id));
+	const workCopies = copies.filter((c) => editionIds.has(c.editionId));
+	const activeLentCopyIds = new Set(
+		lendings.filter((l) => l.returnedAt === '').map((l) => l.copyId)
+	);
+	const lent = workCopies.filter((c) => activeLentCopyIds.has(c.id)).length;
+	return { available: workCopies.length - lent, total: workCopies.length };
 }
 
 /**

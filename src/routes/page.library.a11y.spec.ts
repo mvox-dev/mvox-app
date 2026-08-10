@@ -23,6 +23,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_available: () => 'Available',
 		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
 		library_borrower_unknown: () => 'an unnamed member',
+		library_copy_name_unknown: () => 'Untitled copy',
 		library_lent_since: (p: { date: string }) => `since ${p.date}`,
 		library_node_load_error: () => 'Could not load.',
 		library_node_retry: () => 'Retry',
@@ -30,7 +31,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
 		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyId: string }) => `Copy: ${p.copyId}`,
+		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
 		library_my_loans_overdue: () => 'Overdue',
 		library_checkout_copy_placeholder: () => 'Select copy',
 		library_checkout_member_placeholder: () => 'Select member',
@@ -43,11 +44,13 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 		library_bulk_checkout_too_many: () => 'Not enough copies available',
 		library_bulk_return_title: () => 'Bulk return',
-		library_bulk_return_edition_placeholder: () => 'Select edition'
+		library_bulk_return_edition_placeholder: () => 'Select edition',
+		library_bulk_return_lent_count: (p: { count: number }) => `${p.count} lent`,
+		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`
 	}
 }));
 
-const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock } =
+const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock, resolveCopyNamesMock } =
 	vi.hoisted(() => ({
 		listWorksMock: vi.fn(),
 		listAllEditionsMock: vi.fn(),
@@ -55,7 +58,8 @@ const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, li
 		listCopiesMock: vi.fn(),
 		listAllCopiesMock: vi.fn(),
 		listLendingsMock: vi.fn(),
-		resolveBorrowerNamesMock: vi.fn()
+		resolveBorrowerNamesMock: vi.fn(),
+		resolveCopyNamesMock: vi.fn()
 	}));
 vi.mock('$lib/library/libraryData', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>('$lib/library/libraryData');
@@ -67,7 +71,8 @@ vi.mock('$lib/library/libraryData', async () => {
 		listAllEditions: listAllEditionsMock,
 		listAllCopies: listAllCopiesMock,
 		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock
+		resolveBorrowerNames: resolveBorrowerNamesMock,
+		resolveCopyNames: resolveCopyNamesMock
 	};
 });
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
@@ -187,6 +192,7 @@ describe('#75 — a11y: my-loans section', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
@@ -498,6 +504,7 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
@@ -519,6 +526,7 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 

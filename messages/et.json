@@ -107,7 +107,8 @@
 	"library_librarian_load_error": "Ligipääsu kontrollimine ebaõnnestus.",
 	"library_librarian_retry": "Proovi uuesti",
 	"library_my_loans_title": "Minu laenutused ({count})",
-	"library_my_loans_copy_label": "Eksemplar: {copyId}",
+	"library_copy_name_unknown": "Nimetu koopia",
+	"library_my_loans_copy_label": "{copyName}",
 	"library_my_loans_overdue": "Hilinenud",
 	"library_checkout_copy_placeholder": "Vali eksemplar",
 	"library_checkout_member_placeholder": "Vali liige",
@@ -120,5 +121,7 @@
 	"library_bulk_checkout_work_placeholder": "Vali teos",
 	"library_bulk_checkout_availability": "{available}/{total} saadaval",
 	"library_bulk_checkout_already_lent": "Laenutatud alates {date}",
-	"library_bulk_checkout_too_many": "Pole piisavalt eksemplare"
+	"library_bulk_checkout_too_many": "Pole piisavalt eksemplare",
+	"library_bulk_return_lent_count": "{count} laenutatud",
+	"library_work_availability": "{available}/{total}"
 }
