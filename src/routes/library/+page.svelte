@@ -29,6 +29,12 @@
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 	import { getLocale } from '$lib/paraglide/runtime';
+	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
+	// reuses the agenda's pure currentSeason picker (never re-derived); the
+	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
+	import { listSeasons } from '$lib/seasons/entuSeasons';
+	import { currentSeason } from '$lib/attendance/conductorLogic';
+	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -66,6 +72,19 @@
 	let copiesByEdition = $state<Map<string, Copy[]>>(new Map());
 	let editionNodeStatus = $state<Map<string, NodeStatus>>(new Map());
 	let copyNodeStatus = $state<Map<string, NodeStatus>>(new Map());
+
+	// #92 TR.4 — current season's active/learning repertoire, keyed by work id.
+	// Retired/dropped items never enter this map — filtered at resolution time
+	// (AC-8: members never see those statuses, same discipline as TR.2/TR.3).
+	let repertoireByWorkId = $state<Map<string, RepertoireItem>>(new Map());
+	const REPERTOIRE_BADGE_DOT_CLASS: Record<string, string> = {
+		active: 'bg-green',
+		learning: 'bg-amber'
+	};
+	const REPERTOIRE_BADGE_LABEL: Record<string, () => string> = {
+		active: m.repertoire_status_active,
+		learning: m.repertoire_status_learning
+	};
 
 	// #73 — my loans state
 	let myMemberId = $state<string | null>(null);
@@ -116,6 +135,7 @@
 		expandedEditions = new Set();
 		editionsByWork = new Map();
 		copiesByEdition = new Map();
+		repertoireByWorkId = new Map();
 		try {
 			const cfg = { db: current.db, token };
 			const [workList, lendingList] = await Promise.all([listWorks(cfg), listLendings(cfg)]);
@@ -132,6 +152,31 @@
 			findMyMemberId(cfg, current.personId).then((id) => {
 				if (g === generation) myMemberId = id;
 			});
+
+			// #92 TR.4 — season-scoped repertoire read, once: resolve the CURRENT
+			// season (same pure picker the agenda uses) then TR.2's
+			// listRepertoireItems. No current season -> no badges, no second fetch.
+			listSeasons(cfg)
+				.then((seasons) => {
+					if (g !== generation) return;
+					const season = currentSeason(seasons, new Date());
+					if (!season) return;
+					return listRepertoireItems(cfg, season.id).then((items) => {
+						if (g !== generation) return;
+						const byWorkId = new Map<string, RepertoireItem>();
+						for (const item of items) {
+							if (item.status === 'active' || item.status === 'learning') {
+								byWorkId.set(item.workId, item);
+							}
+						}
+						repertoireByWorkId = byWorkId;
+					});
+				})
+				.catch((e) => {
+					// Badges are supplementary — a failed repertoire read must not take
+					// down the (already-successful) library browse tree with it.
+					console.error('library: repertoire badge load failed', e);
+				});
 		} catch (e) {
 			if (g !== generation) return;
 			console.error('library: load failed', e);
@@ -648,6 +693,27 @@
 							</span>
 							<span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
 						</button>
+
+						<!-- #92 TR.4 — repertoire status badge. Only works whose id resolved
+						     into repertoireByWorkId (active/learning in the CURRENT season)
+						     carry one; retired/dropped and non-repertoire works render none —
+						     same pattern as AgendaList's attendance badge. -->
+						{#if repertoireByWorkId.has(work.id)}
+							{@const repStatus = repertoireByWorkId.get(work.id)!.status}
+							<span
+								data-testid="repertoire-badge-{work.id}"
+								data-status={repStatus}
+								role="img"
+								aria-label={REPERTOIRE_BADGE_LABEL[repStatus]?.() ?? repStatus}
+								class="mt-1 inline-flex w-fit items-center gap-1 font-mono text-[9px] tracking-wide text-ink-2"
+							>
+								<span
+									class="h-1.5 w-1.5 rounded-full {REPERTOIRE_BADGE_DOT_CLASS[repStatus] ?? 'bg-ink-4'}"
+									aria-hidden="true"
+								></span>
+								{REPERTOIRE_BADGE_LABEL[repStatus]?.() ?? repStatus}
+							</span>
+						{/if}
 
 						{#if isOpen}
 							<div id="library-editions-{work.id}" class="ml-4 mt-2 flex flex-col gap-1">
