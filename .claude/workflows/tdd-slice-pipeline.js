@@ -2,8 +2,8 @@
  * tdd-slice-pipeline — TDD chain workflow template for mvox-dev slices.
  *
  * Packs an entire slice epic into a single orchestrated run:
- * each task gets RED → GREEN → REVIEW (with fix loop) → MERGE,
- * executed sequentially on a shared working tree.
+ * SPIKE → SEED → RED → GREEN → REVIEW → FIX → MERGE → PROBE
+ * per task, executed sequentially on a shared working tree.
  *
  * Usage: Workflow({ name: 'tdd-slice-pipeline', args: { tasks: [...], repoPath, coAuthor } })
  *
@@ -13,44 +13,49 @@
  *     branch: string,           // e.g. 'feat/73-single-checkout-return'
  *     title: string,            // short title for logs/commits
  *     commitPrefix: string,     // e.g. 'feat(#73)'
+ *     spikePrompt: string,      // research/exploration (optional — skip if facts known)
+ *     seedPrompt: string,       // schema/data setup via Entu API (optional — skip if code-only)
  *     skipRed: boolean,         // true if RED already done externally
- *     redPrompt: string,        // prompt for RED agent (ignored if skipRed)
- *     greenPrompt: string,      // prompt for GREEN agent
+ *     redPrompt: string,        // test design (ignored if skipRed)
+ *     greenPrompt: string,      // implementation
  *     reviewChecklist: string,  // checklist items for reviewer
  *     commitBody: string,       // body for squash-merge commit message
+ *     probePrompt: string,      // post-merge live verification (optional — skip if no data)
  *   }
  *
  * args.repoPath: string — absolute path to the repo
  * args.coAuthor: string — co-author trailer for commits
  *
- * The pattern:
- * - RED agents write failing tests + commit on a feature branch
- * - GREEN agents implement to make tests pass + commit
- * - REVIEW agents assess the diff; if not GREEN, a fix agent runs (max 3 loops)
- * - MERGE agents squash-merge to main + push + delete branch
- * - Between tasks: fresh branch from updated main
- *
  * Model assignments per phase (Mihkel's ruling, 2026-08-10):
+ *   SPIKE:  opus   — comprehension checkpoint, discover what RED should assert
+ *   SEED:   opus   — careful execution, schema/data mutations with ledgers
  *   RED:    opus   — structural thinking, test design is the hard part
  *   GREEN:  sonnet — constrained execution, tests define the goal
- *   REVIEW: fable  — independent perspective, different model family than writer/implementer
- *   FIX:    opus   — understand + resolve architectural findings
+ *   REVIEW: fable  — comprehension checkpoint, different model than writer/implementer
+ *   FIX:    opus   — careful execution, resolve architectural findings
  *   MERGE:  sonnet — mechanical git ops
+ *   PROBE:  sonnet — constrained execution, well-defined checks
  *
- * Designed for the mvox-dev TDD chain. Adapt prompts per-slice.
+ * Three models, deliberately placed: opus at comprehension/careful-execution
+ * checkpoints (SPIKE, SEED, RED, FIX), fable at independent-perspective
+ * checkpoint (REVIEW), sonnet at constrained-execution checkpoints (GREEN,
+ * MERGE, PROBE).
  *
  * (*MVOX:Palestrina*)
  */
 export const meta = {
   name: 'tdd-slice-pipeline',
-  description: 'Full TDD pipeline for a slice epic — RED/GREEN/REVIEW/MERGE per task, sequentially',
+  description: 'Full TDD pipeline for a slice epic — SPIKE/SEED/RED/GREEN/REVIEW/MERGE/PROBE per task',
   whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain',
   phases: [
+    { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'opus' },
+    { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'opus' },
     { title: 'RED', detail: 'Write failing tests', model: 'opus' },
     { title: 'GREEN', detail: 'Implement to make tests pass', model: 'sonnet' },
     { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'fable' },
     { title: 'FIX', detail: 'Address review findings', model: 'opus' },
-    { title: 'MERGE', detail: 'Squash-merge to main', model: 'sonnet' }
+    { title: 'MERGE', detail: 'Squash-merge to main', model: 'sonnet' },
+    { title: 'PROBE', detail: 'Post-merge live data verification', model: 'sonnet' }
   ]
 }
 
@@ -82,11 +87,79 @@ const RESULT_SCHEMA = {
   additionalProperties: false
 }
 
+const SPIKE_SCHEMA = {
+  type: 'object',
+  properties: {
+    success: { type: 'boolean' },
+    findings: { type: 'array', items: { type: 'string' } },
+    summary: { type: 'string' }
+  },
+  required: ['success', 'summary'],
+  additionalProperties: false
+}
+
+const PROBE_SCHEMA = {
+  type: 'object',
+  properties: {
+    passed: { type: 'boolean' },
+    checks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          passed: { type: 'boolean' },
+          detail: { type: 'string' }
+        },
+        required: ['name', 'passed'],
+        additionalProperties: false
+      }
+    },
+    summary: { type: 'string' }
+  },
+  required: ['passed', 'summary'],
+  additionalProperties: false
+}
+
 const results = []
 
 for (let i = 0; i < tasks.length; i++) {
   const task = tasks[i]
   const taskLabel = `#${task.issueNumber} ${task.title}`
+
+  // ── SPIKE ─────────────────────────────────────────────────────────────────
+  if (task.spikePrompt) {
+    phase(`${taskLabel} SPIKE`)
+    log(`Starting SPIKE for ${taskLabel}`)
+
+    const spike = await agent(
+      `${task.spikePrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are researching to discover facts that tests should assert. Read source, probe API behavior, report structured findings. Do NOT write code or tests — only research and report.`,
+      { label: `spike-${task.issueNumber}`, phase: `${taskLabel} SPIKE`, schema: SPIKE_SCHEMA, model: 'opus' }
+    )
+
+    if (!spike || !spike.success) {
+      log(`SPIKE failed for ${taskLabel}: ` + (spike ? spike.summary : 'null'))
+      return { success: false, failedAt: `${taskLabel} SPIKE`, results }
+    }
+    log(`SPIKE done: ${spike.summary}`)
+  }
+
+  // ── SEED ──────────────────────────────────────────────────────────────────
+  if (task.seedPrompt) {
+    phase(`${taskLabel} SEED`)
+    log(`Starting SEED for ${taskLabel}`)
+
+    const seed = await agent(
+      `${task.seedPrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are performing schema/data setup via the Entu API. Follow the §8.6 discipline: dry-run first, verify, then execute. Commit ledger artifacts to the repo. Report what was created/modified.`,
+      { label: `seed-${task.issueNumber}`, phase: `${taskLabel} SEED`, schema: RESULT_SCHEMA, model: 'opus' }
+    )
+
+    if (!seed || !seed.success) {
+      log(`SEED failed for ${taskLabel}: ` + (seed ? seed.summary : 'null'))
+      return { success: false, failedAt: `${taskLabel} SEED`, results }
+    }
+    log(`SEED done: ${seed.summary}`)
+  }
 
   // ── RED ──────────────────────────────────────────────────────────────────
   if (!task.skipRed) {
@@ -166,7 +239,27 @@ for (let i = 0; i < tasks.length; i++) {
     return { success: false, failedAt: `${taskLabel} MERGE`, results }
   }
   log(`Merged: ${merge.summary}`)
-  results.push({ issueNumber: task.issueNumber, title: task.title, commitSha: merge.commitSha })
+
+  // ── PROBE ────────────────────────────────────────────────────────────────
+  if (task.probePrompt) {
+    phase(`${taskLabel} PROBE`)
+    log(`Starting PROBE for ${taskLabel}`)
+
+    const probe = await agent(
+      `${task.probePrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are verifying live data state after deployment. Query the live system, compare against expected state from the task spec, and report pass/fail per check. Do NOT modify any data — read-only verification only.`,
+      { label: `probe-${task.issueNumber}`, phase: `${taskLabel} PROBE`, schema: PROBE_SCHEMA, model: 'sonnet' }
+    )
+
+    if (!probe || !probe.passed) {
+      log(`PROBE failed for ${taskLabel}: ` + (probe ? probe.summary : 'null'))
+      results.push({ issueNumber: task.issueNumber, title: task.title, commitSha: merge.commitSha, probePassed: false, probeDetail: probe })
+      continue
+    }
+    log(`PROBE passed: ${probe.summary}`)
+    results.push({ issueNumber: task.issueNumber, title: task.title, commitSha: merge.commitSha, probePassed: true })
+  } else {
+    results.push({ issueNumber: task.issueNumber, title: task.title, commitSha: merge.commitSha })
+  }
 }
 
 log(`Pipeline complete: ${results.length} tasks merged.`)
