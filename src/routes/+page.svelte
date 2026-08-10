@@ -15,9 +15,20 @@
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
 	import { computeConductorEventIds, isConductor, resetConductor } from '$lib/attendance/conductorStore';
 	import { completionGateStore } from '$lib/profile/completionGate';
+	import { loadRoster } from '$lib/roster/rosterData';
+	import type { RosterRow } from '$lib/roster/rosterData';
+	import {
+		listAttendance,
+		listAllRsvpsForEvent,
+		attendanceByMemberId,
+		type AttendanceStatus,
+		type EventAttendance
+	} from '$lib/attendance/attendanceData';
+	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
+	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -68,6 +79,34 @@
 	let recentItems = $state<AgendaItem[]>([]);
 	let conductorEventIds = $state<Set<string>>(new Set());
 
+	// #84 TA.3 — the "Take attendance" inline panel. `attendanceItem` is the
+	// recent AgendaItem currently expanded (null = collapsed / nothing open).
+	// Data (roster + attendance + rsvp comparison) is loaded on demand when the
+	// conductor opens the panel — not pre-fetched with the agenda, since most
+	// visits never open it.
+	let attendanceItem = $state<AgendaItem | null>(null);
+	let attendanceLoading = $state(false);
+	let attendanceError = $state(false);
+	let attendanceRoster = $state<RosterRow[]>([]);
+	let attendanceMap = $state<Record<string, { attendanceId: string; status: AttendanceStatus }>>({});
+	let attendanceRsvpMap = $state<Record<string, { rsvpId: string; status: string }>>({});
+	// #15-shaped guard, per member id (see attendanceChangeQueue.ts doc).
+	let attendancePendingMemberIds = $state<Set<string>>(new Set());
+	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
+	// Per-event failed map: stores failed member IDs per event so that a write
+	// failure on a non-current event is not lost — when the conductor reopens that
+	// event later, the failures surface. (#84 review Finding 4)
+	let attendanceFailedByEvent = $state<Map<string, Set<string>>>(new Map());
+	let attendanceRequestId = 0;
+	// Roster cache: keyed by collective db, avoids 1+N roster reads on every
+	// panel open for the same collective. Cleared on collective switch. (#84
+	// review Finding 5)
+	// Finding 3 fix: TTL of 5 minutes — a member added or deactivated mid-session
+	// is picked up on the next panel open after the TTL expires (previously the
+	// cache was keyed by db alone and cleared only on collective switch).
+	const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
+	let rosterCache = $state<{ db: string; roster: RosterRow[]; fetchedAt: number } | null>(null);
+
 	// Load the selected collective's upcoming agenda; reload on every collective
 	// switch. `requestId` guards against a slow earlier fetch clobbering a later
 	// one if the user switches collectives before the first load resolves — the
@@ -86,9 +125,15 @@
 			recentItems = [];
 			conductorEventIds = new Set();
 			resetConductor();
+			closeAttendancePanel();
+			rosterCache = null;
+			attendanceFailedByEvent = new Map();
 			return;
 		}
 		const thisRequest = ++requestId;
+		// A fresh collective selection closes any open attendance panel — its data
+		// (roster + attendance + rsvp) belongs to the PREVIOUS collective.
+		closeAttendancePanel();
 		agendaLoading = true;
 		agendaError = false;
 		// Fresh selection -> membership is unresolved again (not carried over as a
@@ -96,6 +141,8 @@
 		memberId = null;
 		membership = 'loading';
 		failedEventIds = new Set();
+		rosterCache = null;
+		attendanceFailedByEvent = new Map();
 
 		const personId = current.personId;
 
@@ -222,6 +269,196 @@
 		rsvpQueue.request({ cfg, personId, memberId, eventId: item.id, existing, newStatus });
 	}
 
+	// #84 TA.3 — open/close the inline "Take attendance" panel and load its data
+	// on demand. `attendanceRequestId` guards a slow load from clobbering a
+	// later open/close/re-open, same shape as `requestId` above.
+	function openAttendancePanel(item: AgendaItem) {
+		if (!selected) return;
+		// Finding 4 hardening: re-check conductor gate locally — the AgendaList
+		// render condition is the primary gate, but keeping the invariant here
+		// avoids relying solely on a remote Entu rights rejection.
+		if (!conductorEventIds.has(item.id)) return;
+		attendanceItem = item;
+		attendanceLoading = true;
+		attendanceError = false;
+		attendanceRoster = [];
+		attendanceMap = {};
+		attendanceRsvpMap = {};
+		// Finding 3 fix: restore pending members from the queue's live state for
+		// THIS event, so that reopening the same event while a write is in flight
+		// correctly shows the toggle as disabled (not enabled-but-swallowed).
+		attendancePendingMemberIds = attendanceQueue.pendingMembersForEvent(item.id);
+		// Finding 4 fix: restore any failures recorded for this event from the
+		// per-event map (a write that failed while the panel was on another event
+		// is surfaced when the conductor returns to it).
+		attendanceFailedMemberIds = new Set(attendanceFailedByEvent.get(item.id) ?? []);
+
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const thisRequest = ++attendanceRequestId;
+
+		// Finding 5 fix: use cached roster if available and fresh for this
+		// collective, otherwise load and cache. Avoids 1+N reads per panel open.
+		// Finding 3 fix: TTL-based invalidation so mid-session roster changes
+		// (member added/deactivated) surface within ROSTER_CACHE_TTL_MS.
+		const cacheValid =
+			rosterCache &&
+			rosterCache.db === selected.db &&
+			Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
+		const rosterPromise = cacheValid
+			? Promise.resolve(rosterCache!.roster)
+			: loadRoster(cfg).then((roster) => {
+					if (selected) rosterCache = { db: selected.db, roster, fetchedAt: Date.now() };
+					return roster;
+				});
+
+		// Snapshot the request-time instant so the .then can detect whether any
+		// write settled between request issue and list resolve (Finding 2 fix).
+		const requestIssuedAt = Date.now();
+		Promise.all([rosterPromise, listAttendance(cfg, item.id), listAllRsvpsForEvent(cfg, item.id)])
+			.then(([roster, records, rsvps]) => {
+				if (thisRequest !== attendanceRequestId) return; // superseded
+				attendanceRoster = roster;
+				// Finding 2 fix: a stale list response must NOT overwrite members whose
+				// write settled (reconciled/reverted) between request issue and list
+				// resolve. Skip members currently pending OR already reconciled since
+				// thisRequest was issued — merge the server's map UNDER the live map
+				// for those members, not over it.
+				const pendingMembers = attendanceQueue.pendingMembersForEvent(item.id);
+				const serverMap = attendanceByMemberId(records);
+				const merged = { ...serverMap };
+				// For every member that has an in-flight write OR already has a live
+				// value from a reconcile/revert that fired after the list was requested,
+				// keep the live value instead of the (stale) server value.
+				for (const mid of pendingMembers) {
+					if (mid in attendanceMap) merged[mid] = attendanceMap[mid];
+					else delete merged[mid];
+				}
+				// Also preserve any member whose value was reconciled into the live map
+				// after this request was issued — detected by the member being present
+				// in the live map with a different attendanceId than the server returned.
+				for (const mid of Object.keys(attendanceMap)) {
+					if (pendingMembers.has(mid)) continue; // already handled
+					const liveEntry = attendanceMap[mid];
+					const serverEntry = serverMap[mid];
+					// A reconciled write that the server hasn't seen yet: the live entry
+					// exists but the server either has no record or has a stale id.
+					if (liveEntry && (!serverEntry || serverEntry.attendanceId !== liveEntry.attendanceId)) {
+						merged[mid] = liveEntry;
+					}
+				}
+				attendanceMap = merged;
+				const rsvpMap: Record<string, { rsvpId: string; status: string }> = {};
+				for (const r of rsvps) rsvpMap[r.memberId] = { rsvpId: r.rsvpId, status: r.status };
+				attendanceRsvpMap = rsvpMap;
+				attendanceLoading = false;
+			})
+			.catch(() => {
+				if (thisRequest !== attendanceRequestId) return;
+				attendanceLoading = false;
+				attendanceError = true;
+			});
+	}
+
+	function closeAttendancePanel() {
+		attendanceRequestId++; // invalidate any in-flight load
+		attendanceItem = null;
+		attendanceLoading = false;
+		attendanceError = false;
+	}
+
+	// Same #15 shape as rsvpQueue above, keyed by an eventId:memberId composite
+	// instead of event id alone (attendanceChangeQueue.ts doc). Created ONCE for
+	// the page lifetime — NOT per panel open.
+	//
+	// #77 fix-forward (cross-event bleed) — every callback receives `eventId` as
+	// its first argument and checks it against `attendanceItem?.id`, THE LIVE
+	// CURRENTLY-OPEN EVENT, read fresh at callback-fire time. This replaced a
+	// "generation" guard (attendanceQueueGen vs attendanceRequestId) that looked
+	// right but was a no-op in practice: both variables were re-synced to the
+	// same value on every panel open, so by the time a stale write's callback
+	// fired, the comparison always read as "current" — it never actually caught
+	// a write that belonged to a previously-open event. Comparing against the
+	// live `attendanceItem.id` instead has no such window: a write for event A
+	// that resolves after the panel has moved to event B fails the check
+	// (`eventId !== attendanceItem.id`) and no-ops, full stop.
+	//
+	// Duplicate writes on same-event reopen are fixed on the queue side (see
+	// attendanceChangeQueue.ts): the pending Set there is now keyed by
+	// `eventId:memberId`, so there is no `reset()` call here to (mis)wipe
+	// in-flight state for the SAME event on every open — reopening the same
+	// event while a write is in flight for it still blocks a duplicate tap.
+	const attendanceQueue = createAttendanceChangeQueue({
+		setOptimistic(eventId, memberId, entry) {
+			if (eventId !== attendanceItem?.id) return;
+			const next = { ...attendanceMap };
+			if (entry) next[memberId] = entry;
+			else delete next[memberId];
+			attendanceMap = next;
+		},
+		setPending(eventId, memberId, isPending) {
+			// Clear the per-event failure on fresh write regardless of which event
+			// is currently open (symmetric with the revert always-write above).
+			if (isPending) {
+				const eventFailed = attendanceFailedByEvent.get(eventId);
+				if (eventFailed?.has(memberId)) {
+					const cleared = new Set(eventFailed);
+					cleared.delete(memberId);
+					const nextMap = new Map(attendanceFailedByEvent);
+					if (cleared.size === 0) nextMap.delete(eventId);
+					else nextMap.set(eventId, cleared);
+					attendanceFailedByEvent = nextMap;
+				}
+			}
+			if (eventId !== attendanceItem?.id) return;
+			const next = new Set(attendancePendingMemberIds);
+			if (isPending) next.add(memberId);
+			else next.delete(memberId);
+			attendancePendingMemberIds = next;
+			if (isPending && attendanceFailedMemberIds.has(memberId)) {
+				const cleared = new Set(attendanceFailedMemberIds);
+				cleared.delete(memberId);
+				attendanceFailedMemberIds = cleared;
+			}
+		},
+		reconcile(eventId, memberId, entry) {
+			if (eventId !== attendanceItem?.id) return;
+			const next = { ...attendanceMap };
+			if (entry) next[memberId] = entry;
+			else delete next[memberId];
+			attendanceMap = next;
+		},
+		revert(eventId, memberId, before) {
+			// Finding 4 fix: ALWAYS record the failure in the per-event map, even
+			// when the conductor has moved to a different event. This way the
+			// failure surfaces when she reopens this event later.
+			const eventFailed = new Set(attendanceFailedByEvent.get(eventId) ?? []);
+			eventFailed.add(memberId);
+			const nextMap = new Map(attendanceFailedByEvent);
+			nextMap.set(eventId, eventFailed);
+			attendanceFailedByEvent = nextMap;
+
+			// Only update the live panel state if this event is still open.
+			if (eventId !== attendanceItem?.id) return;
+			const next = { ...attendanceMap };
+			if (before) next[memberId] = before;
+			else delete next[memberId];
+			attendanceMap = next;
+			const failed = new Set(attendanceFailedMemberIds);
+			failed.add(memberId);
+			attendanceFailedMemberIds = failed;
+		}
+	});
+
+	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
+		if (!selected || !attendanceItem) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const current = attendanceMap[memberId];
+		const existing: EventAttendance | null = current
+			? { attendanceId: current.attendanceId, memberId, status: current.status }
+			: null;
+		attendanceQueue.request({ cfg, eventId: attendanceItem.id, memberId, existing, newStatus });
+	}
+
 	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
 	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
 	// display set). An incomplete member is a MEMBER, not a non-member — she must
@@ -279,7 +516,22 @@
 							{recentItems}
 							{conductorEventIds}
 							onrsvpchange={handleRsvpChange}
+							ontakeattendance={openAttendancePanel}
 						/>
+						{#if attendanceItem}
+							<AttendanceSurface
+								item={attendanceItem}
+								members={attendanceRoster}
+								attendanceByMemberId={attendanceMap}
+								rsvpByMemberId={attendanceRsvpMap}
+								loading={attendanceLoading}
+								error={attendanceError}
+								pendingMemberIds={attendancePendingMemberIds}
+								failedMemberIds={attendanceFailedMemberIds}
+								ontoggle={handleAttendanceToggle}
+								onclose={closeAttendancePanel}
+							/>
+						{/if}
 					{/if}
 				</div>
 			</div>

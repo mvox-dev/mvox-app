@@ -1,0 +1,56 @@
+{
+  "dryRun": false,
+  "authorization": "PO-authorized fix — same class as rsvp prop-def sharing widen",
+  "description": "Attendance prop-def _sharing widen to domain (member, status, notes)",
+  "attendanceTypeId": "6a0d2e8690c8df7a1cc7df4b",
+  "targets": [
+    {
+      "name": "attendance.member",
+      "id": "6a0d2e8690c8df7a1cc7df54",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "name": "attendance.status",
+      "id": "6a0d2e8690c8df7a1cc7df5e",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "name": "attendance.notes",
+      "id": "6a0d2e8690c8df7a1cc7df68",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    }
+  ],
+  "ledger": [
+    {
+      "action": "attendance-propdef-sharing-widen",
+      "target": "attendance.member",
+      "targetId": "6a0d2e8690c8df7a1cc7df54",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "attendance-propdef-sharing-widen",
+      "target": "attendance.status",
+      "targetId": "6a0d2e8690c8df7a1cc7df5e",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "attendance-propdef-sharing-widen",
+      "target": "attendance.notes",
+      "targetId": "6a0d2e8690c8df7a1cc7df68",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    }
+  ],
+  "exitCode": 0
+}

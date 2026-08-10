@@ -1,0 +1,108 @@
+{
+  "dryRun": false,
+  "authorization": "PO-authorized fixes (Gama 2026-08-10 15:52)",
+  "fix1": {
+    "description": "RSVP prop-def _sharing widen to domain (event, member, status, notes)",
+    "rsvpTypeId": "6a0d2e8590c8df7a1cc7df1b",
+    "targets": [
+      {
+        "name": "rsvp.event",
+        "id": "6a0d2e8590c8df7a1cc7df24",
+        "status": "widened",
+        "before": "(absent/private)",
+        "after": "domain"
+      },
+      {
+        "name": "rsvp.member",
+        "id": "6a0d2e8590c8df7a1cc7df2e",
+        "status": "widened",
+        "before": "(absent/private)",
+        "after": "domain"
+      },
+      {
+        "name": "rsvp.status",
+        "id": "6a0d2e8590c8df7a1cc7df38",
+        "status": "widened",
+        "before": "(absent/private)",
+        "after": "domain"
+      },
+      {
+        "name": "rsvp.notes",
+        "id": "6a0d2e8690c8df7a1cc7df42",
+        "status": "widened",
+        "before": "(absent/private)",
+        "after": "domain"
+      }
+    ]
+  },
+  "fix2": {
+    "description": "Conductor prop-def list:true (season.conductor, event.conductor)",
+    "targets": [
+      {
+        "name": "season.conductor",
+        "id": "6a79a39f23dc1d97bb8f179d",
+        "status": "set",
+        "before": null,
+        "after": true
+      },
+      {
+        "name": "event.conductor",
+        "id": "6a79a39f23dc1d97bb8f17a6",
+        "status": "set",
+        "before": null,
+        "after": true
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "action": "rsvp-propdef-sharing-widen",
+      "target": "rsvp.event",
+      "targetId": "6a0d2e8590c8df7a1cc7df24",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "rsvp-propdef-sharing-widen",
+      "target": "rsvp.member",
+      "targetId": "6a0d2e8590c8df7a1cc7df2e",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "rsvp-propdef-sharing-widen",
+      "target": "rsvp.status",
+      "targetId": "6a0d2e8590c8df7a1cc7df38",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "rsvp-propdef-sharing-widen",
+      "target": "rsvp.notes",
+      "targetId": "6a0d2e8690c8df7a1cc7df42",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "conductor-list-true",
+      "target": "season.conductor",
+      "targetId": "6a79a39f23dc1d97bb8f179d",
+      "status": "set",
+      "before": null,
+      "after": true
+    },
+    {
+      "action": "conductor-list-true",
+      "target": "event.conductor",
+      "targetId": "6a79a39f23dc1d97bb8f17a6",
+      "status": "set",
+      "before": null,
+      "after": true
+    }
+  ],
+  "exitCode": 0
+}

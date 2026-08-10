@@ -53,6 +53,27 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	deleteRsvp: vi.fn()
 }));
 
+// #84 — +page.svelte now also imports $lib/roster/rosterData and
+// $lib/attendance/attendanceData at module scope (the "Take attendance" panel
+// wiring), both of which pull in $lib/entu/request -> $env/dynamic/public —
+// same $env wall as rsvpData above. This spec doesn't exercise attendance
+// behavior, just needs the import to resolve cleanly.
+vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
+vi.mock('$lib/attendance/attendanceData', () => ({
+	listAttendance: vi.fn(),
+	listAllRsvpsForEvent: vi.fn(),
+	createAttendance: vi.fn(),
+	updateAttendanceStatus: vi.fn(),
+	deleteAttendance: vi.fn(),
+	attendanceByMemberId: (
+		records: Array<{ attendanceId: string; memberId: string; status: string }>
+	) => {
+		const map: Record<string, { attendanceId: string; status: string }> = {};
+		for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
+		return map;
+	}
+}));
+
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
@@ -166,10 +187,11 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
-		// The button is NOT visible because +page.svelte does not wire ontakeattendance
-		// (deferred to TA.3). The conductorEventIds set IS computed and ready; the
-		// button's absence is by design (gated behind handler presence, Finding 3 fix).
-		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
+		// #84 TA.3 — +page.svelte now wires ontakeattendance, so the button that was
+		// deliberately gated absent here in TA.2 (handler not yet wired) is now
+		// present for a conductor. See page.attendance-panel.spec.ts for the full
+		// expand-flow coverage this handler now drives.
+		expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 	});
 
 	it('a non-conductor sees recent rows but no attendance button, conductorEventIds is empty', async () => {
