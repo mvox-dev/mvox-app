@@ -30,6 +30,13 @@
  * - MERGE agents squash-merge to main + push + delete branch
  * - Between tasks: fresh branch from updated main
  *
+ * Model assignments per phase (Mihkel's ruling, 2026-08-10):
+ *   RED:    opus   — structural thinking, test design is the hard part
+ *   GREEN:  sonnet — constrained execution, tests define the goal
+ *   REVIEW: fable  — independent perspective, different model family than writer/implementer
+ *   FIX:    opus   — understand + resolve architectural findings
+ *   MERGE:  sonnet — mechanical git ops
+ *
  * Designed for the mvox-dev TDD chain. Adapt prompts per-slice.
  *
  * (*MVOX:Palestrina*)
@@ -37,7 +44,14 @@
 export const meta = {
   name: 'tdd-slice-pipeline',
   description: 'Full TDD pipeline for a slice epic — RED/GREEN/REVIEW/MERGE per task, sequentially',
-  whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain'
+  whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain',
+  phases: [
+    { title: 'RED', detail: 'Write failing tests', model: 'opus' },
+    { title: 'GREEN', detail: 'Implement to make tests pass', model: 'sonnet' },
+    { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'fable' },
+    { title: 'FIX', detail: 'Address review findings', model: 'opus' },
+    { title: 'MERGE', detail: 'Squash-merge to main', model: 'sonnet' }
+  ]
 }
 
 const REPO = args.repoPath
@@ -81,7 +95,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const red = await agent(
       `${task.redPrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nFIRST: cd ${REPO} && git checkout main && git pull && git checkout -b ${task.branch}\n\nAfter writing tests, verify they FAIL (RED), then commit:\ngit add -A && git commit -m "test(#${task.issueNumber}): RED — ${task.title}"`,
-      { label: `red-${task.issueNumber}`, phase: `${taskLabel} RED`, schema: RESULT_SCHEMA }
+      { label: `red-${task.issueNumber}`, phase: `${taskLabel} RED`, schema: RESULT_SCHEMA, model: 'opus' }
     )
 
     if (!red || !red.success) {
@@ -97,7 +111,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   const green = await agent(
     `${task.greenPrompt}\n\nWORKING DIRECTORY: ${REPO}\nBRANCH: ${task.branch} (already checked out)\n\nVerification:\n1. cd ${REPO} && pnpm test -- --run — ALL pass\n2. cd ${REPO} && pnpm check — 0 type errors\n\nGit: git add -A && git commit -m "${task.commitPrefix}: ${task.title}"`,
-    { label: `green-${task.issueNumber}`, phase: `${taskLabel} GREEN`, schema: RESULT_SCHEMA, model: 'opus' }
+    { label: `green-${task.issueNumber}`, phase: `${taskLabel} GREEN`, schema: RESULT_SCHEMA, model: 'sonnet' }
   )
 
   if (!green || !green.success) {
@@ -118,7 +132,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     verdict = await agent(
       `You are the architecture reviewer (Bentham) for mvox. Review branch ${task.branch} for issue #${task.issueNumber} (${task.title}).\n\nWORKING DIRECTORY: ${REPO}\n\n## Review checklist\n${task.reviewChecklist}\n\nRun: cd ${REPO} && git diff main...HEAD --stat\nRead changed files. Then: pnpm test -- --run && pnpm check\n\nIssue GREEN / YELLOW / RED. For non-GREEN: list specific findings.`,
-      { label: `review-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: VERDICT_SCHEMA, model: 'opus' }
+      { label: `review-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: VERDICT_SCHEMA, model: 'fable' }
     )
 
     if (!verdict) verdict = { verdict: 'RED', summary: 'Review agent failed', findings: [] }
@@ -127,7 +141,7 @@ for (let i = 0; i < tasks.length; i++) {
       log(`Review ${verdict.verdict}, fixing (attempt ${reviewAttempts})`)
       await agent(
         `Fix review findings for #${task.issueNumber} (${task.title}) in ${REPO} on branch ${task.branch}.\n\nVerdict: ${verdict.verdict}\nFindings:\n${(verdict.findings || []).join('\n')}\n\nFix, verify (pnpm test -- --run && pnpm check), commit.`,
-        { label: `fix-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: RESULT_SCHEMA, model: 'opus' }
+        { label: `fix-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} FIX`, schema: RESULT_SCHEMA, model: 'opus' }
       )
     }
   }
@@ -144,7 +158,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   const merge = await agent(
     `Squash-merge ${task.branch} to main for issue #${task.issueNumber}.\n\nWORKING DIRECTORY: ${REPO}\n\ncd ${REPO} && git checkout main && git pull && git merge --squash ${task.branch} && git commit -m "$(cat <<'EOF'\n${task.commitPrefix}: ${task.title}\n\n${task.commitBody}\n\nCloses #${task.issueNumber}\n\n${CO_AUTHOR}\nEOF\n)" && git push && git branch -d ${task.branch}\n\nReport the merge commit SHA.`,
-    { label: `merge-${task.issueNumber}`, phase: `${taskLabel} MERGE`, schema: RESULT_SCHEMA }
+    { label: `merge-${task.issueNumber}`, phase: `${taskLabel} MERGE`, schema: RESULT_SCHEMA, model: 'sonnet' }
   )
 
   if (!merge || !merge.success) {
