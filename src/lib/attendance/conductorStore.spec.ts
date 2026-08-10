@@ -45,6 +45,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// #83 — the two new keys this slice introduces.
 		agenda_recent: () => 'Recent',
 		agenda_take_attendance: () => 'Take attendance',
+		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
 		// #85 TA.4 — every RECENT row now carries an attendance badge, so this
 		// direct AgendaList-level test needs the 4 badge-label keys even though
 		// it never passes myAttendanceByEventId (default {} -> every row reads
@@ -52,7 +53,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_status_present: () => 'Present',
 		attendance_status_absent: () => 'Absent',
 		attendance_status_late: () => 'Late',
-		attendance_status_not_recorded: () => 'Not recorded'
+		attendance_status_not_recorded: () => 'Not recorded',
+		attendance_toggle_aria_label: (p: { name: string; status: string }) => `Mark ${p.name} as ${p.status}`
 	}
 }));
 

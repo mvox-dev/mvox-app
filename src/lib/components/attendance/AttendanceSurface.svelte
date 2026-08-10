@@ -117,7 +117,7 @@
 			{/each}
 		</div>
 	{:else if error}
-		<p data-testid="attendance-panel-error" class="text-sm text-ink-2">{m.attendance_load_error()}</p>
+		<p data-testid="attendance-panel-error" class="text-sm text-ink-2" role="alert">{m.attendance_load_error()}</p>
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#each members as member (member.memberId)}
@@ -127,19 +127,26 @@
 				>
 					<div class="flex items-center justify-between gap-2">
 						<span class="min-w-0 flex-1 truncate text-sm text-ink">{member.name}</span>
-						<span data-testid="attendance-rsvp-{member.memberId}" class="text-[10px] text-ink-2">
+						<span data-testid="attendance-rsvp-{member.memberId}" class="text-[10px] text-ink-2"
+							role="img"
+							aria-label={m.attendance_rsvp_aria_label({ name: member.name, rsvp: rsvpLabel(member.memberId) })}
+						>
 							{rsvpLabel(member.memberId)}
 						</span>
-						<div class="inline-flex overflow-hidden rounded-md border border-ink-4">
+						<div
+							class="inline-flex overflow-hidden rounded-md border border-ink-4"
+							aria-busy={pendingMemberIds.has(member.memberId) ? 'true' : undefined}
+						>
 							{#each STATUSES as status (status.value)}
 								<button
 									data-testid="attendance-toggle-{member.memberId}-{status.value}"
 									type="button"
-									disabled={pendingMemberIds.has(member.memberId)}
+									aria-disabled={pendingMemberIds.has(member.memberId) ? 'true' : undefined}
 									aria-pressed={attendanceByMemberId[member.memberId]?.status === status.value
 										? 'true'
 										: 'false'}
-									class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 disabled:cursor-default disabled:opacity-[0.45]"
+									aria-label={m.attendance_toggle_aria_label({ name: member.name, status: status.label() })}
+									class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 aria-disabled:cursor-default aria-disabled:opacity-[0.45]"
 									class:bg-ink={attendanceByMemberId[member.memberId]?.status === status.value}
 									class:text-paper={attendanceByMemberId[member.memberId]?.status === status.value}
 									class:text-ink-2={attendanceByMemberId[member.memberId]?.status !== status.value}
@@ -151,14 +158,18 @@
 						</div>
 					</div>
 					{#if failedMemberIds.has(member.memberId)}
-						<p data-testid="attendance-save-failed-{member.memberId}" class="text-[9px] text-red" role="alert">
+						<p
+							data-testid="attendance-save-failed-{member.memberId}"
+							class="text-[9px] text-red"
+							role="alert"
+						>
 							{m.attendance_save_failed()}
 						</p>
 					{/if}
 				</div>
 			{/each}
 		</div>
-		<p data-testid="attendance-tally" class="pt-1 text-[10px] text-ink-2">
+		<p data-testid="attendance-tally" class="pt-1 text-[10px] text-ink-2" aria-live="polite">
 			{m.attendance_tally({ present: tally.present, absent: tally.absent, late: tally.late })}
 		</p>
 	{/if}

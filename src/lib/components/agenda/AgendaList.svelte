@@ -239,9 +239,14 @@
 						<span
 							data-testid="attendance-badge-{item.id}"
 							data-status={badgeStatus(item.id)}
+							role="img"
+							aria-label={m.attendance_badge_aria_label({ status: BADGE_LABEL[badgeStatus(item.id)]() })}
 							class="inline-flex w-fit items-center gap-1 font-mono text-[9px] tracking-wide text-ink-2"
 						>
-							<span class="h-1.5 w-1.5 rounded-full {BADGE_DOT_CLASS[badgeStatus(item.id)]}"></span>
+							<span
+								class="h-1.5 w-1.5 rounded-full {BADGE_DOT_CLASS[badgeStatus(item.id)]}"
+								aria-hidden="true"
+							></span>
 							{BADGE_LABEL[badgeStatus(item.id)]()}
 						</span>
 					{/if}
@@ -249,6 +254,7 @@
 						<button
 							type="button"
 							data-testid="take-attendance-btn"
+							aria-label={m.agenda_take_attendance_label({ event: item.name })}
 							class="self-start rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
 							onclick={() => ontakeattendance?.(item)}
 						>

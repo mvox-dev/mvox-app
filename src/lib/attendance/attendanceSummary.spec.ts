@@ -129,12 +129,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_recent: () => 'Recent',
 		agenda_take_attendance: () => 'Take attendance',
+		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
 		attendance_status_present: () => 'Present',
 		attendance_status_absent: () => 'Absent',
 		attendance_status_late: () => 'Late',
 		// #85 — the fourth badge state: a past event with no record for me.
 		attendance_status_not_recorded: () => 'Not recorded',
+		attendance_toggle_aria_label: (p: { name: string; status: string }) => `Mark ${p.name} as ${p.status}`,
+		attendance_badge_aria_label: (p: { status: string }) => `Attendance: ${p.status}`,
 		attendance_rsvp_none: () => 'No answer',
+		attendance_rsvp_aria_label: (p: { name: string; rsvp: string }) => `RSVP for ${p.name}: ${p.rsvp}`,
 		attendance_load_error: () => "Couldn't load attendance.",
 		attendance_save_failed: () => 'Could not save attendance.',
 		attendance_tally: (p: { present: number; absent: number; late: number }) =>
