@@ -38,6 +38,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_return: () => 'Return',
 		library_bulk_checkout_title: () => 'Bulk checkout',
 		library_bulk_checkout_edition_placeholder: () => 'Select edition',
+		library_bulk_checkout_work_placeholder: () => 'Select work',
+		library_bulk_checkout_availability: (p: { available: number; total: number }) => `${p.available}/${p.total} available`,
+		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
+		library_bulk_checkout_too_many: () => 'Not enough copies available',
 		library_bulk_return_title: () => 'Bulk return',
 		library_bulk_return_edition_placeholder: () => 'Select edition'
 	}
@@ -299,12 +303,14 @@ describe('#75 — a11y: error states use role="alert"', () => {
 // ---------------------------------------------------------------------------
 describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 	it('bulk checkout section contains checkboxes with aria-label or associated <label>', async () => {
-		listWorksMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue([
+			{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
+		]);
 		listLendingsMock.mockResolvedValue([]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedLibrarian();
 		listAllEditionsMock.mockResolvedValue([
-			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter' }
+			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter', workId: 'work-1' }
 		]);
 		listAllCopiesMock.mockResolvedValue([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },

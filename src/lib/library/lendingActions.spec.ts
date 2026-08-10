@@ -293,6 +293,75 @@ describe('bulkCheckout', () => {
 		expect(result.failed[0].error).toContain('member-2');
 	});
 
+	it('reports members already holding a copy of the edition in failed (no silent drop)', async () => {
+		const fetchImpl = makeFetchMock();
+		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }, { id: 'copy-2' }, { id: 'copy-3' }]);
+		// member-a already holds copy-1 of this edition (active lending)
+		const activeLendings = [
+			{ id: 'lend-existing', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		];
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-1',
+			memberIds: ['member-a', 'member-b'],
+			assignedAt: '2026-08-10'
+		};
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', payload, activeLendings, fetchImpl, resolveCopies);
+
+		// member-a should be in failed (already holding), member-b should succeed
+		expect(result.succeeded).toHaveLength(1);
+		expect(result.succeeded[0].memberId).toBe('member-b');
+		expect(result.failed).toHaveLength(1);
+		expect(result.failed[0].error).toContain('member-a');
+		expect(result.failed[0].error).toContain('already holds');
+	});
+
+	it('reports all already-holding members in failed when multiple members already hold copies', async () => {
+		const fetchImpl = makeFetchMock();
+		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }, { id: 'copy-2' }, { id: 'copy-3' }]);
+		const activeLendings = [
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'lend-2', copyId: 'copy-2', memberId: 'member-b', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		];
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-1',
+			memberIds: ['member-a', 'member-b', 'member-c'],
+			assignedAt: '2026-08-10'
+		};
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', payload, activeLendings, fetchImpl, resolveCopies);
+
+		expect(result.succeeded).toHaveLength(1);
+		expect(result.succeeded[0].memberId).toBe('member-c');
+		expect(result.failed).toHaveLength(2);
+		const failedErrors = result.failed.map((f) => f.error);
+		expect(failedErrors).toEqual(
+			expect.arrayContaining([
+				expect.stringContaining('member-a'),
+				expect.stringContaining('member-b')
+			])
+		);
+	});
+
+	it('does not double-count a member who already holds AND has no copy available', async () => {
+		const fetchImpl = makeFetchMock();
+		// Only 1 copy, and it's already held by member-a
+		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }]);
+		const activeLendings = [
+			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		];
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-1',
+			memberIds: ['member-a', 'member-b'],
+			assignedAt: '2026-08-10'
+		};
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', payload, activeLendings, fetchImpl, resolveCopies);
+
+		// member-a: already holding (failed), member-b: no available copy (failed)
+		expect(result.succeeded).toHaveLength(0);
+		expect(result.failed).toHaveLength(2);
+		expect(result.failed.find((f) => f.error.includes('member-a'))?.error).toContain('already holds');
+		expect(result.failed.find((f) => f.error.includes('member-b'))?.error).toContain('No available copy');
+	});
+
 	it('ignores returned lendings when filtering available copies', async () => {
 		const fetchImpl = makeFetchMock();
 		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }, { id: 'copy-2' }]);

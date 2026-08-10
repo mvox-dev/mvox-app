@@ -38,6 +38,8 @@ export interface Edition {
 	id: string;
 	name: string;
 	publisher: string;
+	/** Parent work ID; populated by listAllEditions, empty when loaded via listEditions. */
+	workId?: string;
 }
 
 export async function listEditions(
@@ -71,19 +73,20 @@ export async function listEditions(
 export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Edition[]> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=edition&props=name,publisher&limit=500',
+		'entity?_type.string=edition&props=name,publisher,_parent&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listAllEditions failed: ${res.status}`);
 	const body = (await res.json()) as {
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; publisher?: Array<{ string: string }> }>;
+		entities?: Array<{ _id: string; name?: Array<{ string: string }>; publisher?: Array<{ string: string }>; _parent?: Array<{ reference: string; entity_type?: string }> }>;
 	};
 	return (body.entities ?? []).map((raw) => ({
 		id: raw._id,
 		name: raw.name?.[0]?.string ?? '',
-		publisher: raw.publisher?.[0]?.string ?? ''
+		publisher: raw.publisher?.[0]?.string ?? '',
+		workId: (raw._parent ?? []).find((p) => p.entity_type === 'work')?.reference ?? ''
 	}));
 }
 
@@ -135,13 +138,13 @@ export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetc
 	);
 	if (!res.ok) throw new Error(`listAllCopies failed: ${res.status}`);
 	const body = (await res.json()) as {
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }>; _parent?: Array<{ reference: string }> }>;
+		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }>; _parent?: Array<{ reference: string; entity_type?: string }> }>;
 	};
 	return (body.entities ?? []).map((raw) => ({
 		id: raw._id,
 		name: raw.name?.[0]?.string ?? '',
 		copyNumber: raw.copy_number?.[0]?.number ?? 0,
-		editionId: raw._parent?.[0]?.reference ?? ''
+		editionId: (raw._parent ?? []).find((p) => p.entity_type === 'edition')?.reference ?? ''
 	}));
 }
 
@@ -261,6 +264,37 @@ export async function resolveBorrowerNames(
 		unique.map(async (id) => [id, await resolveBorrowerName(cfg, id, fetchImpl)] as const)
 	);
 	return new Map(pairs);
+}
+
+/**
+ * Pure — no fetch. Counts how many copies of a given edition are currently
+ * available (not actively lent). An active lending has `returnedAt === ''`.
+ */
+export function deriveEditionAvailability(
+	editionId: string,
+	copies: Copy[],
+	lendings: Lending[]
+): { available: number; total: number } {
+	const editionCopies = copies.filter((c) => c.editionId === editionId);
+	const available = editionCopies.filter(
+		(c) => deriveCopyAvailability(c.id, lendings).status === 'available'
+	).length;
+	return { available, total: editionCopies.length };
+}
+
+/**
+ * Pure — no fetch. Finds an active lending for a specific member within a set
+ * of edition copy IDs. Returns the lending if the member already holds a copy
+ * of that edition, undefined otherwise.
+ */
+export function activeLendingForMemberInEdition(
+	memberId: string,
+	editionCopyIds: Set<string>,
+	lendings: Lending[]
+): Lending | undefined {
+	return lendings.find(
+		(l) => l.memberId === memberId && editionCopyIds.has(l.copyId) && l.returnedAt === ''
+	);
 }
 
 // (*MVOX:Tallis* — RED spec)

@@ -15,6 +15,8 @@
 		listLendings,
 		resolveBorrowerNames,
 		deriveCopyAvailability,
+		deriveEditionAvailability,
+		activeLendingForMemberInEdition,
 		type Work,
 		type Edition,
 		type Copy,
@@ -60,6 +62,7 @@
 	let returnError = $state('');
 
 	// #74 — bulk checkout/return state (edition-first flow)
+	let bulkCheckoutWorkId = $state('');
 	let bulkCheckoutEditionId = $state('');
 	let bulkReturnEditionId = $state('');
 	let bulkCheckoutCheckedMembers = $state<Set<string>>(new Set());
@@ -67,12 +70,6 @@
 	let bulkCheckoutDueDate = $state('');
 	let bulkCheckoutError = $state('');
 	let bulkReturnError = $state('');
-
-	// #74 — element refs for select change handling (native addEventListener
-	// bypasses Svelte 5 event delegation, which doesn't reliably trigger in
-	// happy-dom test environments with fireEvent.change).
-	let bulkCheckoutSelectEl = $state<HTMLSelectElement | undefined>(undefined);
-	let bulkReturnSelectEl = $state<HTMLSelectElement | undefined>(undefined);
 
 	// #73/#74 — checkout form data (loaded when librarian confirmed)
 	let allEditions = $state<Edition[]>([]);
@@ -184,20 +181,17 @@
 		void loadCopiesFor(editionId);
 	}
 
-	// #74 — native change listeners for bulk edition selects
+	// #74 — auto-select work when there is exactly one
 	$effect(() => {
-		const el = bulkCheckoutSelectEl;
-		if (!el) return;
-		const handler = () => { bulkCheckoutEditionId = el.value; };
-		el.addEventListener('change', handler);
-		return () => el.removeEventListener('change', handler);
+		if (works.length === 1) {
+			bulkCheckoutWorkId = works[0].id;
+		}
 	});
+
+	// #74 — reset edition when work selection changes
 	$effect(() => {
-		const el = bulkReturnSelectEl;
-		if (!el) return;
-		const handler = () => { bulkReturnEditionId = el.value; };
-		el.addEventListener('change', handler);
-		return () => el.removeEventListener('change', handler);
+		void bulkCheckoutWorkId;
+		bulkCheckoutEditionId = '';
 	});
 
 	// #74 — reset checked state when edition selection changes
@@ -209,6 +203,27 @@
 		void bulkReturnEditionId;
 		bulkReturnCheckedLoans = new Set();
 	});
+
+	// #74 — derive editions filtered by selected work
+	let filteredBulkCheckoutEditions = $derived(
+		bulkCheckoutWorkId
+			? allEditions.filter((e) => e.workId === bulkCheckoutWorkId)
+			: []
+	);
+
+	// #74 — derive copy IDs belonging to the selected checkout edition
+	let bulkCheckoutEditionCopyIds = $derived(
+		bulkCheckoutEditionId
+			? new Set(allCopies.filter((c) => c.editionId === bulkCheckoutEditionId).map((c) => c.id))
+			: new Set<string>()
+	);
+
+	// #74 — derive availability counter for selected checkout edition
+	let bulkCheckoutEditionAvailability = $derived(
+		bulkCheckoutEditionId
+			? deriveEditionAvailability(bulkCheckoutEditionId, allCopies, lendings)
+			: { available: 0, total: 0 }
+	);
 
 	// #74 — derive copy IDs belonging to the selected return edition
 	let bulkReturnEditionCopyIds = $derived(
@@ -433,34 +448,56 @@
 					{/if}
 				</form>
 
-				<!-- #74 — bulk checkout section (edition-first, member-multi) -->
+				<!-- #74 — bulk checkout section (work→edition two-level picker) -->
 				<div data-testid="bulk-checkout" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_checkout_title()}</h3>
-					<select data-testid="bulk-checkout-edition-select" bind:this={bulkCheckoutSelectEl} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
-						<option value="">{m.library_bulk_checkout_edition_placeholder()}</option>
-						{#each allEditions as edition (edition.id)}
-							<option value={edition.id}>{edition.name}</option>
+					<select data-testid="bulk-checkout-work-select" aria-label={m.library_bulk_checkout_work_placeholder()} value={bulkCheckoutWorkId} onchange={(e) => (bulkCheckoutWorkId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+						<option value="">{m.library_bulk_checkout_work_placeholder()}</option>
+						{#each works as work (work.id)}
+							<option value={work.id}>{work.name}</option>
 						{/each}
 					</select>
+					{#if bulkCheckoutWorkId}
+						<select data-testid="bulk-checkout-edition-select" aria-label={m.library_bulk_checkout_edition_placeholder()} value={bulkCheckoutEditionId} onchange={(e) => (bulkCheckoutEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+							<option value="">{m.library_bulk_checkout_edition_placeholder()}</option>
+							{#each filteredBulkCheckoutEditions as edition (edition.id)}
+								<option value={edition.id}>{edition.name}</option>
+							{/each}
+						</select>
+					{/if}
 					{#if bulkCheckoutEditionId}
+						<p data-testid="bulk-checkout-availability" class="mt-1 text-xs" aria-live="polite">
+							{m.library_bulk_checkout_availability({ available: bulkCheckoutEditionAvailability.available, total: bulkCheckoutEditionAvailability.total })}
+						</p>
 						<div data-testid="bulk-checkout-member-list" class="mt-2 flex flex-col gap-1">
 							{#each allMembers as member (member.memberId)}
-								<label class="flex items-center gap-1 text-xs">
-									<input type="checkbox"
-										checked={bulkCheckoutCheckedMembers.has(member.memberId)}
-										onchange={() => {
-											const next = new Set(bulkCheckoutCheckedMembers);
-											if (next.has(member.memberId)) next.delete(member.memberId);
-											else next.add(member.memberId);
-											bulkCheckoutCheckedMembers = next;
-										}}
-									/>
-									<span>{memberNames.get(member.memberId) || member.memberId}</span>
-								</label>
+								{@const existingLending = activeLendingForMemberInEdition(member.memberId, bulkCheckoutEditionCopyIds, lendings)}
+								{#if existingLending}
+									<div class="flex items-center gap-1 text-xs">
+										<span>{memberNames.get(member.memberId) || member.memberId}</span>
+										<span data-testid="bulk-checkout-already-lent-{member.memberId}">{m.library_bulk_checkout_already_lent({ date: existingLending.assignedAt })}</span>
+									</div>
+								{:else}
+									<label class="flex items-center gap-1 text-xs">
+										<input type="checkbox"
+											checked={bulkCheckoutCheckedMembers.has(member.memberId)}
+											onchange={() => {
+												const next = new Set(bulkCheckoutCheckedMembers);
+												if (next.has(member.memberId)) next.delete(member.memberId);
+												else next.add(member.memberId);
+												bulkCheckoutCheckedMembers = next;
+											}}
+										/>
+										<span>{memberNames.get(member.memberId) || member.memberId}</span>
+									</label>
+								{/if}
 							{/each}
 						</div>
 						<input data-testid="bulk-checkout-due-date" type="date" bind:value={bulkCheckoutDueDate} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs" />
-						<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" onclick={handleBulkCheckout}>
+						{#if bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available}
+							<p data-testid="bulk-checkout-too-many" class="mt-1 text-xs text-red-700" role="alert">{m.library_bulk_checkout_too_many()}</p>
+						{/if}
+						<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" disabled={bulkCheckoutCheckedMembers.size === 0 || bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available} onclick={handleBulkCheckout}>
 							{m.library_checkout_submit()}
 						</button>
 						{#if bulkCheckoutError}
@@ -472,7 +509,7 @@
 				<!-- #74 — bulk return section (edition-grouped) -->
 				<div data-testid="bulk-return" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_return_title()}</h3>
-					<select data-testid="bulk-return-edition-select" bind:this={bulkReturnSelectEl} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+					<select data-testid="bulk-return-edition-select" aria-label={m.library_bulk_return_edition_placeholder()} value={bulkReturnEditionId} onchange={(e) => (bulkReturnEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
 						<option value="">{m.library_bulk_return_edition_placeholder()}</option>
 						{#each allEditions as edition (edition.id)}
 							<option value={edition.id}>{edition.name}</option>

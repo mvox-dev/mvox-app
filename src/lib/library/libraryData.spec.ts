@@ -4,10 +4,13 @@ import type { MyProfile } from '$lib/profile/profileData';
 import {
 	listWorks,
 	listEditions,
+	listAllEditions,
 	listCopies,
 	listLendings,
 	resolveBorrowerNames,
 	deriveCopyAvailability,
+	deriveEditionAvailability,
+	activeLendingForMemberInEdition,
 	type Work,
 	type Edition,
 	type Copy,
@@ -80,6 +83,50 @@ describe('listEditions', () => {
 		expect(url).toContain('_parent.reference=work-1');
 		expect(url).toContain('props=name,publisher');
 		expect(url).not.toMatch(/\bcost\b/);
+	});
+});
+
+// ── listAllEditions ───────────────────────────────────────────────────────
+
+describe('listAllEditions', () => {
+	it('maps name,publisher,_parent into Edition[] with workId from _parent[0].reference', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'edition-1',
+						name: [{ string: '40-part original' }],
+						publisher: [{ string: 'Bärenreiter' }],
+						_parent: [{ reference: 'work-1', entity_type: 'work' }]
+					},
+					{
+						_id: 'edition-2',
+						name: [{ string: 'Peters arrangement' }],
+						_parent: [{ reference: 'work-2', entity_type: 'work' }]
+					}
+				]
+			})
+		);
+		const editions = await listAllEditions(cfg, fetchImpl);
+		expect(editions).toEqual<Edition[]>([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' },
+			{ id: 'edition-2', name: 'Peters arrangement', publisher: '', workId: 'work-2' }
+		]);
+	});
+
+	it('URL: _type.string=edition, props includes _parent, limit=500 — never a private field', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listAllEditions(cfg, fetchImpl);
+		const url = String(fetchImpl.mock.calls[0][0]);
+		expect(url).toContain('_type.string=edition');
+		expect(url).toContain('props=name,publisher,_parent');
+		expect(url).toContain('limit=500');
+		expect(url).not.toMatch(/\bcost\b/);
+	});
+
+	it('fails loud on non-2xx', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
+		await expect(listAllEditions(cfg, fetchImpl)).rejects.toThrow(/500/);
 	});
 });
 
@@ -245,5 +292,64 @@ describe('resolveBorrowerNames', () => {
 	it('fails loud as a whole if any member lookup 500s', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		await expect(resolveBorrowerNames(cfg, ['member-4'], fetchImpl)).rejects.toThrow(/500/);
+	});
+});
+
+// ── deriveEditionAvailability — pure, no fetch ──────────────────────────────
+
+describe('deriveEditionAvailability', () => {
+	const copies: Copy[] = [
+		{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+		{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
+		{ id: 'copy-3', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' },
+		{ id: 'copy-other', name: 'Copy Other', copyNumber: 1, editionId: 'edition-2' }
+	];
+
+	it('counts available vs total for the given edition; ignores copies from other editions', () => {
+		const lendings: Lending[] = [
+			{ id: 'l1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'l2', copyId: 'copy-2', memberId: 'member-b', assignedAt: '2026-06-01', assignedUntil: '', returnedAt: '2026-06-15' }
+		];
+		expect(deriveEditionAvailability('edition-1', copies, lendings)).toEqual({ available: 2, total: 3 });
+	});
+
+	it('all copies available when no active lendings', () => {
+		expect(deriveEditionAvailability('edition-1', copies, [])).toEqual({ available: 3, total: 3 });
+	});
+
+	it('zero copies for a nonexistent edition', () => {
+		expect(deriveEditionAvailability('edition-unknown', copies, [])).toEqual({ available: 0, total: 0 });
+	});
+});
+
+// ── activeLendingForMemberInEdition — pure, no fetch ────────────────────────
+
+describe('activeLendingForMemberInEdition', () => {
+	const editionCopyIds = new Set(['copy-1', 'copy-2']);
+	const lendings: Lending[] = [
+		{ id: 'l1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' },
+		{ id: 'l2', copyId: 'copy-2', memberId: 'member-b', assignedAt: '2026-06-01', assignedUntil: '', returnedAt: '2026-06-15' },
+		{ id: 'l3', copyId: 'copy-3', memberId: 'member-a', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+	];
+
+	it('returns the active lending when the member holds a copy from the edition', () => {
+		const result = activeLendingForMemberInEdition('member-a', editionCopyIds, lendings);
+		expect(result).toEqual(lendings[0]);
+	});
+
+	it('returns undefined when the member has a returned lending (not active) for the edition', () => {
+		expect(activeLendingForMemberInEdition('member-b', editionCopyIds, lendings)).toBeUndefined();
+	});
+
+	it('returns undefined when the member has no lending for any copy in the edition', () => {
+		expect(activeLendingForMemberInEdition('member-c', editionCopyIds, lendings)).toBeUndefined();
+	});
+
+	it('ignores active lendings for copies outside the edition', () => {
+		// member-a has an active lending for copy-3, which is NOT in editionCopyIds
+		const outsideCopyIds = new Set(['copy-3']);
+		expect(activeLendingForMemberInEdition('member-a', outsideCopyIds, lendings)).toEqual(lendings[2]);
+		// But if we ask about a set that doesn't include copy-3:
+		expect(activeLendingForMemberInEdition('member-a', new Set(['copy-99']), lendings)).toBeUndefined();
 	});
 });

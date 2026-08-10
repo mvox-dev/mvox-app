@@ -127,19 +127,37 @@ export async function bulkCheckout(
 ): Promise<BulkResult> {
 	// Step 1: resolve copies for this edition, then exclude already-lent ones
 	const allCopies = await resolveCopies(cfg, payload.editionId, fetchImpl);
+	const editionCopyIds = new Set(allCopies.map((c) => c.id));
 	const lentCopyIds = new Set(
 		activeLendings.filter((l) => l.returnedAt === '').map((l) => l.copyId)
 	);
 	const copies = allCopies.filter((c) => !lentCopyIds.has(c.id));
 
+	// Step 1b: drop members who already hold an active lending for this edition
+	// (server-side enforcement of the no-double-lending rule — the view layer
+	// guards via checkbox suppression, but a stale snapshot could let a duplicate
+	// through without this check). Dropped members are reported in `failed` so
+	// the caller can surface feedback (finding 1 fix — fail loudly, don't drop).
+	const membersAlreadyHolding = new Set(
+		activeLendings
+			.filter((l) => l.returnedAt === '' && editionCopyIds.has(l.copyId))
+			.map((l) => l.memberId)
+	);
+	const eligibleMembers = payload.memberIds.filter((id) => !membersAlreadyHolding.has(id));
+
 	// Step 2: fail excess members who have no available copy
 	const failed: Array<{ copyId: string; error: string }> = [];
-	for (let i = copies.length; i < payload.memberIds.length; i++) {
-		failed.push({ copyId: '', error: `No available copy for member ${payload.memberIds[i]}` });
+	for (const memberId of payload.memberIds) {
+		if (membersAlreadyHolding.has(memberId)) {
+			failed.push({ copyId: '', error: `Member ${memberId} already holds a copy of this edition` });
+		}
+	}
+	for (let i = copies.length; i < eligibleMembers.length; i++) {
+		failed.push({ copyId: '', error: `No available copy for member ${eligibleMembers[i]}` });
 	}
 
 	// Step 3: attempt checkouts for feasible members (one copy per member)
-	const feasibleMembers = payload.memberIds.slice(0, copies.length);
+	const feasibleMembers = eligibleMembers.slice(0, copies.length);
 	const results = await Promise.allSettled(
 		feasibleMembers.map((memberId, i) =>
 			createLending(cfg, libraryId, {

@@ -116,5 +116,9 @@
 	"library_bulk_checkout_title": "Hulgilaenutus",
 	"library_bulk_checkout_edition_placeholder": "Vali väljaanne",
 	"library_bulk_return_title": "Hulgitagastus",
-	"library_bulk_return_edition_placeholder": "Vali väljaanne"
+	"library_bulk_return_edition_placeholder": "Vali väljaanne",
+	"library_bulk_checkout_work_placeholder": "Vali teos",
+	"library_bulk_checkout_availability": "{available}/{total} saadaval",
+	"library_bulk_checkout_already_lent": "Laenutatud alates {date}",
+	"library_bulk_checkout_too_many": "Pole piisavalt eksemplare"
 }
