@@ -102,5 +102,8 @@
 	"library_copy_available": "Pieejams",
 	"library_copy_lent_to": "Pie {name}",
 	"library_borrower_unknown": "Nezināms dalībnieks",
-	"library_lent_since": "kopš {date}"
+	"library_lent_since": "kopš {date}",
+	"library_librarian_tools": "Bibliotekāra rīki",
+	"library_librarian_load_error": "Neizdevās pārbaudīt piekļuvi.",
+	"library_librarian_retry": "Mēģināt vēlreiz"
 }

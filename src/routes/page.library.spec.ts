@@ -26,7 +26,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_borrower_unknown: () => 'an unnamed member',
 		library_lent_since: (p: { date: string }) => `since ${p.date}`,
 		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry'
+		library_node_retry: () => 'Retry',
+		library_librarian_tools: () => 'Librarian tools',
+		library_librarian_load_error: () => 'Could not check librarian access.',
+		library_librarian_retry: () => 'Retry'
 	}
 }));
 
@@ -57,6 +60,15 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // happy-dom. Same fix as page.profile.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 
+const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
+vi.mock('$lib/library/librarianStore', async () => {
+	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>('$lib/library/librarianStore');
+	return {
+		...actual, // keep the real writable store + resetLibrarian
+		resolveLibrarian: resolveLibrarianMock
+	};
+});
+
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
@@ -72,6 +84,8 @@ function setAuthedWithOneCollective() {
 	});
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set('polyphony');
+	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
+	resolveLibrarianMock.mockResolvedValue('not-librarian');
 }
 
 function setNoCollective() {
@@ -89,6 +103,7 @@ afterEach(() => {
 	listCopiesMock.mockReset();
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
+	resolveLibrarianMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -289,6 +304,78 @@ describe('/library — unresolved borrower name', () => {
 			expect(container.querySelector('[data-testid="library-copy-copy-1"]')?.textContent).toContain(
 				'an unnamed member'
 			);
+		});
+	});
+});
+
+describe('#72 — librarian tools composition', () => {
+	it('hides librarian tools while resolveLibrarian is loading (hidden-if-undeterminable)', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
+		expect(container.querySelector('[data-testid="librarian-load-error"]')).toBeNull();
+	});
+
+	it('shows the librarian placeholder section when resolveLibrarian resolves librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue('librarian');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="librarian-tools"]')?.textContent).toContain('Librarian tools');
+	});
+
+	it('hides librarian tools when resolveLibrarian resolves not-librarian (fail-closed)', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue('not-librarian');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
+	});
+
+	it('shows a retry action when resolveLibrarian errors; retry re-resolves and reveals tools', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue('error');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-load-error"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
+
+		resolveLibrarianMock.mockResolvedValue('librarian');
+		const retryBtn = container.querySelector('[data-testid="librarian-retry-load"]') as HTMLButtonElement;
+		expect(retryBtn).not.toBeNull();
+		await fireEvent.click(retryBtn);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
 		});
 	});
 });

@@ -102,5 +102,8 @@
 	"library_copy_available": "Available",
 	"library_copy_lent_to": "With {name}",
 	"library_borrower_unknown": "Unknown member",
-	"library_lent_since": "since {date}"
+	"library_lent_since": "since {date}",
+	"library_librarian_tools": "Librarian tools",
+	"library_librarian_load_error": "Couldn't check librarian access.",
+	"library_librarian_retry": "Retry"
 }

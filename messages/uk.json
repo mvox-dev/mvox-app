@@ -102,5 +102,8 @@
 	"library_copy_available": "Доступний",
 	"library_copy_lent_to": "У {name}",
 	"library_borrower_unknown": "Невідомий учасник",
-	"library_lent_since": "з {date}"
+	"library_lent_since": "з {date}",
+	"library_librarian_tools": "Інструменти бібліотекаря",
+	"library_librarian_load_error": "Не вдалося перевірити доступ.",
+	"library_librarian_retry": "Повторити"
 }

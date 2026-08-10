@@ -17,6 +17,7 @@
 		type Copy,
 		type Lending
 	} from '$lib/library/libraryData';
+	import { librarianStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -142,11 +143,56 @@
 			status = 'load-error';
 		});
 	});
+
+	// TL.1/#72 — librarian-only tools composition (placeholder; TL.2/TL.3 fill in
+	// real content). Same generation-guard discipline as +layout.svelte's
+	// adminStore wiring: keyed on `selected`, resetLibrarian() to 'loading' on
+	// every (re)selection so a stale collective's late resolve can't clobber a
+	// newer one. Hidden-if-undeterminable: 'loading' renders nothing.
+	let librarianGen = 0;
+	$effect(() => {
+		const current = selected;
+		const g = ++librarianGen;
+		if (!current) {
+			resetLibrarian();
+			return;
+		}
+		resetLibrarian();
+		const token = getToken();
+		const cfg = { db: current.db, token: token ?? '' };
+		resolveLibrarian(cfg, current.personId).then((state) => {
+			if (g === librarianGen) librarianStore.set(state);
+		});
+	});
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.library_title()}</h1>
+
+		{#if $librarianStore === 'librarian'}
+			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
+				{m.library_librarian_tools()}
+			</section>
+		{:else if $librarianStore === 'error'}
+			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
+				<p class="text-xs text-red-700">{m.library_librarian_load_error()}</p>
+				<button
+					type="button"
+					data-testid="librarian-retry-load"
+					class="text-xs underline"
+					onclick={() => {
+						if (!selected) return;
+						const token = getToken();
+						resolveLibrarian({ db: selected.db, token: token ?? '' }, selected.personId).then((state) => {
+							librarianStore.set(state);
+						});
+					}}
+				>
+					{m.library_librarian_retry()}
+				</button>
+			</div>
+		{/if}
 
 		{#if status === 'no-collective'}
 			<p data-testid="library-no-collective" class="text-sm">{m.library_no_collective()}</p>
