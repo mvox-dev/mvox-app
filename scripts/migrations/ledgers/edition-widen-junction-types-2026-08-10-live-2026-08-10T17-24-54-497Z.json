@@ -1,0 +1,263 @@
+{
+  "dryRun": false,
+  "authorization": "Schema freedom (standing ruling). Edition file widen: Mihkel ruling 2026-08-10. Polyphony db: dev/test, synthetic data, routine mutations pre-authorized.",
+  "workItem1": {
+    "description": "Edition prop-def _sharing widen to domain (file, external_link)",
+    "editionTypeId": "69c7ea4e8489bfcb0e819f9c",
+    "targets": [
+      {
+        "name": "edition.file",
+        "id": "69c7ea508489bfcb0e819fe2",
+        "status": "widened",
+        "before": "(absent/private)",
+        "after": "domain"
+      },
+      {
+        "name": "edition.external_link",
+        "id": "6a0d2e8890c8df7a1cc7e01f",
+        "status": "already-correct",
+        "before": "domain"
+      }
+    ]
+  },
+  "workItem2": {
+    "description": "Edition entity re-aggregation (touch-save to pick up new prop-def sharing)",
+    "editionCount": 17,
+    "touched": 17,
+    "failed": 0,
+    "entries": [
+      {
+        "id": "6a12036e4ff8277cd4306bc0",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203704ff8277cd4306c2b",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203714ff8277cd4306c72",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203764ff8277cd4306d6e",
+        "status": "touched"
+      },
+      {
+        "id": "6a12037a4ff8277cd4306e39",
+        "status": "touched"
+      },
+      {
+        "id": "6a12037b4ff8277cd4306e50",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203834ff8277cd4307030",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203864ff8277cd43070d7",
+        "status": "touched"
+      },
+      {
+        "id": "6a12038d4ff8277cd4307267",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203954ff8277cd4307441",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203994ff8277cd4307556",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203a04ff8277cd43076ec",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203a94ff8277cd43078e3",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203ad4ff8277cd43079b9",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203ad4ff8277cd43079cf",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203b54ff8277cd4307ba4",
+        "status": "touched"
+      },
+      {
+        "id": "6a1203bc4ff8277cd4307d4a",
+        "status": "touched"
+      }
+    ]
+  },
+  "workItem3": {
+    "description": "Junction types (repertoire_item, program_item) — verify + seed if missing",
+    "entries": [
+      {
+        "name": "repertoire_item",
+        "id": "69c7ea538489bfcb0e81a06e",
+        "status": "already-exists"
+      },
+      {
+        "name": "program_item",
+        "id": "69c7ea568489bfcb0e81a103",
+        "status": "already-exists"
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "action": "edition-propdef-widen",
+      "target": "edition.file",
+      "targetId": "69c7ea508489bfcb0e819fe2",
+      "status": "widened",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "edition-propdef-widen",
+      "target": "edition.external_link",
+      "targetId": "6a0d2e8890c8df7a1cc7e01f",
+      "status": "already-correct",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12036e4ff8277cd4306bc0",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1871"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203704ff8277cd4306c2b",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1872"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203714ff8277cd4306c72",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1873"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203764ff8277cd4306d6e",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1874"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12037a4ff8277cd4306e39",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1875"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12037b4ff8277cd4306e50",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1876"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203834ff8277cd4307030",
+      "status": "touched",
+      "newPropId": "6a7a096423dc1d97bb8f1877"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203864ff8277cd43070d7",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f1878"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12038d4ff8277cd4307267",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f1879"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203954ff8277cd4307441",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f187a"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203994ff8277cd4307556",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f187b"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203a04ff8277cd43076ec",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f187c"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203a94ff8277cd43078e3",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f187d"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203ad4ff8277cd43079b9",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f187e"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203ad4ff8277cd43079cf",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f187f"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203b54ff8277cd4307ba4",
+      "status": "touched",
+      "newPropId": "6a7a096523dc1d97bb8f1880"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203bc4ff8277cd4307d4a",
+      "status": "touched",
+      "newPropId": "6a7a096623dc1d97bb8f1881"
+    },
+    {
+      "action": "junction-type-check",
+      "target": "repertoire_item",
+      "targetId": "69c7ea538489bfcb0e81a06e",
+      "status": "already-exists"
+    },
+    {
+      "action": "junction-type-check",
+      "target": "program_item",
+      "targetId": "69c7ea568489bfcb0e81a103",
+      "status": "already-exists"
+    }
+  ],
+  "exitCode": 0
+}
