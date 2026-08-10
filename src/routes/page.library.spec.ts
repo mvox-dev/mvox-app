@@ -35,7 +35,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_checkout_copy_placeholder: () => 'Select copy',
 		library_checkout_member_placeholder: () => 'Select member',
 		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return'
+		library_return: () => 'Return',
+		library_bulk_checkout_title: () => 'Bulk checkout',
+		library_bulk_return_title: () => 'Bulk return'
 	}
 }));
 
@@ -587,6 +589,68 @@ describe('#73 — librarian checkout + return', () => {
 			expect(container.querySelector('[data-testid="library-copy-copy-2"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="library-return-copy-2"]')).toBeNull();
+	});
+});
+
+describe('#74 — bulk checkout + return', () => {
+	it('bulk checkout surface (button or section) visible to librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="bulk-checkout"]')).not.toBeNull();
+	});
+
+	it('bulk checkout surface hidden from non-librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="bulk-checkout"]')).toBeNull();
+	});
+
+	it('bulk return surface visible to librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="bulk-return"]')).not.toBeNull();
+	});
+
+	it('bulk return surface hidden from non-librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="bulk-return"]')).toBeNull();
 	});
 });
 

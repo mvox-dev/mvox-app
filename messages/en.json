@@ -111,5 +111,7 @@
 	"library_checkout_copy_placeholder": "Select copy",
 	"library_checkout_member_placeholder": "Select member",
 	"library_checkout_submit": "Checkout",
-	"library_return": "Return"
+	"library_return": "Return",
+	"library_bulk_checkout_title": "Bulk checkout",
+	"library_bulk_return_title": "Bulk return"
 }

@@ -81,4 +81,95 @@ export async function returnLending(
 	if (!res.ok) throw new Error(`returnLending failed: ${res.status}`);
 }
 
+// ── #74 bulk checkout + return ──────────────────────────────────────────────
+
+export interface BulkCheckoutPayload {
+	copyIds: string[];
+	memberId: string;
+	assignedAt: string;
+	assignedUntil?: string;
+}
+
+export interface BulkResult {
+	succeeded: Lending[];
+	failed: Array<{ copyId: string; error: string }>;
+}
+
+export interface BulkReturnResult {
+	succeeded: string[];
+	failed: Array<{ lendingId: string; error: string }>;
+}
+
+/**
+ * Check out multiple copies to the same member in one batch. Uses
+ * Promise.allSettled so partial failures don't abort the whole operation.
+ */
+export async function bulkCheckout(
+	cfg: EntuCfg,
+	libraryId: string,
+	payload: BulkCheckoutPayload,
+	fetchImpl: typeof fetch = fetch
+): Promise<BulkResult> {
+	const results = await Promise.allSettled(
+		payload.copyIds.map((copyId) =>
+			createLending(
+				cfg,
+				libraryId,
+				{
+					copyId,
+					memberId: payload.memberId,
+					assignedAt: payload.assignedAt,
+					...(payload.assignedUntil ? { assignedUntil: payload.assignedUntil } : {})
+				},
+				fetchImpl
+			)
+		)
+	);
+
+	const succeeded: Lending[] = [];
+	const failed: Array<{ copyId: string; error: string }> = [];
+
+	results.forEach((result, i) => {
+		if (result.status === 'fulfilled') {
+			succeeded.push(result.value);
+		} else {
+			failed.push({
+				copyId: payload.copyIds[i],
+				error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+			});
+		}
+	});
+
+	return { succeeded, failed };
+}
+
+/**
+ * Return multiple lendings in one batch. Same allSettled partial-failure pattern.
+ */
+export async function bulkReturn(
+	cfg: EntuCfg,
+	lendingIds: string[],
+	fetchImpl: typeof fetch = fetch
+): Promise<BulkReturnResult> {
+	const results = await Promise.allSettled(
+		lendingIds.map((id) => returnLending(cfg, id, fetchImpl))
+	);
+
+	const succeeded: string[] = [];
+	const failed: Array<{ lendingId: string; error: string }> = [];
+
+	results.forEach((result, i) => {
+		if (result.status === 'fulfilled') {
+			succeeded.push(lendingIds[i]);
+		} else {
+			failed.push({
+				lendingId: lendingIds[i],
+				error: result.reason instanceof Error ? result.reason.message : String(result.reason)
+			});
+		}
+	});
+
+	return { succeeded, failed };
+}
+
 // (*MVOX:Josquin*)

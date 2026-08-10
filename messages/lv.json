@@ -111,5 +111,7 @@
 	"library_checkout_copy_placeholder": "Izvēlēties eksemplāru",
 	"library_checkout_member_placeholder": "Izvēlēties dalībnieku",
 	"library_checkout_submit": "Izsniegt",
-	"library_return": "Atgriezt"
+	"library_return": "Atgriezt",
+	"library_bulk_checkout_title": "Vairāku izsniegšana",
+	"library_bulk_return_title": "Vairāku atgriešana"
 }

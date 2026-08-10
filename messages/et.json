@@ -111,5 +111,7 @@
 	"library_checkout_copy_placeholder": "Vali eksemplar",
 	"library_checkout_member_placeholder": "Vali liige",
 	"library_checkout_submit": "Laenuta",
-	"library_return": "Tagasta"
+	"library_return": "Tagasta",
+	"library_bulk_checkout_title": "Hulgilaenutus",
+	"library_bulk_return_title": "Hulgitagastus"
 }

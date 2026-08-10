@@ -309,6 +309,16 @@
 						<p data-testid="checkout-error" class="text-xs text-red-700" role="alert">{checkoutError}</p>
 					{/if}
 				</form>
+
+				<!-- #74 — bulk checkout section -->
+				<div data-testid="bulk-checkout" class="mt-3">
+					<h3 class="text-xs font-medium">{m.library_bulk_checkout_title()}</h3>
+				</div>
+
+				<!-- #74 — bulk return section -->
+				<div data-testid="bulk-return" class="mt-3">
+					<h3 class="text-xs font-medium">{m.library_bulk_return_title()}</h3>
+				</div>
 			</section>
 		{:else if $librarianStore === 'error'}
 			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">

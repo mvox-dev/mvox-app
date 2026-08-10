@@ -111,5 +111,7 @@
 	"library_checkout_copy_placeholder": "Обрати примірник",
 	"library_checkout_member_placeholder": "Обрати учасника",
 	"library_checkout_submit": "Видати",
-	"library_return": "Повернути"
+	"library_return": "Повернути",
+	"library_bulk_checkout_title": "Масова видача",
+	"library_bulk_return_title": "Масове повернення"
 }
