@@ -106,7 +106,7 @@ describe('createRsvp', () => {
 					{ type: 'member', reference: 'member-m' },
 					{ type: 'status', string: status },
 					{ type: sentinelType, reference: 'event-e' },
-					{ type: '_sharing', string: 'private' }
+					{ type: '_sharing', string: 'domain' }
 				])
 			);
 			const presentTypes = body.map((p) => p.type);
@@ -117,7 +117,7 @@ describe('createRsvp', () => {
 		}
 	);
 
-	it('POST body contains explicit _sharing:private (Pérotin live-probe finding: without it, Entu auto-inherits domain-shared from the person parent, leaking the answer)', async () => {
+	it('POST body contains explicit _sharing:domain (TA.1 #82: collective members see each other\'s answers; still EXPLICIT per v4E — every creating client sets _sharing at create time, never relies on inherit)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createRsvp(
 			cfg,
@@ -125,7 +125,10 @@ describe('createRsvp', () => {
 			fetchImpl
 		);
 		const body = createCallBody(fetchImpl);
-		expect(body).toEqual(expect.arrayContaining([{ type: '_sharing', string: 'private' }]));
+		expect(body).toEqual(expect.arrayContaining([{ type: '_sharing', string: 'domain' }]));
+		// The old private value must be gone — 'domain' above is not enough on its own,
+		// a body carrying BOTH would also satisfy arrayContaining.
+		expect(body).not.toEqual(expect.arrayContaining([{ type: '_sharing', string: 'private' }]));
 	});
 
 	it('returns the created rsvp _id', async () => {

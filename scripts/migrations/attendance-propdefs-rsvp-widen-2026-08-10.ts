@@ -4,7 +4,7 @@
 // data — routine mutations pre-authorized.
 //
 // Work items:
-//   1. conductor prop-def on season + event (reference, _sharing:domain)
+//   1. conductor prop-def on season + event (reference, _sharing:domain, list:true)
 //   2. attendance sentinel prop-defs: present_ref, absent_ref, late_ref (reference, _sharing:public)
 //   3. formula count prop-defs on event: attendance_present_count, attendance_absent_count, attendance_late_count
 //   4. RSVP sharing widen: all rsvp entities _sharing private→domain
@@ -35,6 +35,7 @@ interface PropDefSpec {
 	type: string;
 	sharing: string;
 	formula?: string;
+	list?: boolean;
 }
 
 interface LedgerEntry {
@@ -99,6 +100,9 @@ async function createPropDef(cfg: EntuCfg, spec: PropDefSpec): Promise<string> {
 		{ type: 'type', string: spec.type },
 		{ type: '_sharing', string: spec.sharing }
 	];
+	if (spec.list) {
+		body.push({ type: 'list', boolean: true });
+	}
 	if (spec.formula) {
 		body.push({ type: 'formula', string: spec.formula });
 	}
@@ -118,8 +122,8 @@ async function createPropDef(cfg: EntuCfg, spec: PropDefSpec): Promise<string> {
 }
 
 /** Read-back verify a created prop-def. */
-async function verifyPropDef(cfg: EntuCfg, id: string, expected: { name: string; type: string; sharing: string; formula?: string }): Promise<void> {
-	const res = await entuFetch(cfg.db, `entity/${id}?props=name,type,_sharing,formula`, cfg.token);
+async function verifyPropDef(cfg: EntuCfg, id: string, expected: { name: string; type: string; sharing: string; formula?: string; list?: boolean }): Promise<void> {
+	const res = await entuFetch(cfg.db, `entity/${id}?props=name,type,_sharing,formula,list`, cfg.token);
 	if (!res.ok) throw new Error(`verify GET ${id} failed: ${res.status}`);
 	const body = (await res.json()) as {
 		entity?: {
@@ -127,17 +131,20 @@ async function verifyPropDef(cfg: EntuCfg, id: string, expected: { name: string;
 			type?: Array<{ string: string }>;
 			_sharing?: Array<{ string: string }>;
 			formula?: Array<{ string: string }>;
+			list?: Array<{ boolean: boolean }>;
 		};
 	};
 	const liveName = body.entity?.name?.[0]?.string;
 	const liveType = body.entity?.type?.[0]?.string;
 	const liveSharing = body.entity?._sharing?.[0]?.string;
 	const liveFormula = body.entity?.formula?.[0]?.string;
+	const liveList = body.entity?.list?.[0]?.boolean;
 
 	if (liveName !== expected.name) throw new Error(`verify FAILED for ${id}: name=${liveName}, expected ${expected.name}`);
 	if (liveType !== expected.type) throw new Error(`verify FAILED for ${id}: type=${liveType}, expected ${expected.type}`);
 	if (liveSharing !== expected.sharing) throw new Error(`verify FAILED for ${id}: _sharing=${liveSharing}, expected ${expected.sharing}`);
 	if (expected.formula && liveFormula !== expected.formula) throw new Error(`verify FAILED for ${id}: formula=${liveFormula}, expected ${expected.formula}`);
+	if (expected.list && liveList !== true) throw new Error(`verify FAILED for ${id}: list=${liveList}, expected true`);
 }
 
 async function main(): Promise<void> {
@@ -153,9 +160,9 @@ async function main(): Promise<void> {
 
 	// Build the full spec list.
 	const propDefSpecs: PropDefSpec[] = [
-		// Work item 1: conductor on season + event
-		{ parentTypeName: 'season', parentTypeId: seasonTypeId, name: 'conductor', type: 'reference', sharing: 'domain' },
-		{ parentTypeName: 'event', parentTypeId: eventTypeId, name: 'conductor', type: 'reference', sharing: 'domain' },
+		// Work item 1: conductor on season + event (list: multi-value, per #82 acceptance criteria)
+		{ parentTypeName: 'season', parentTypeId: seasonTypeId, name: 'conductor', type: 'reference', sharing: 'domain', list: true },
+		{ parentTypeName: 'event', parentTypeId: eventTypeId, name: 'conductor', type: 'reference', sharing: 'domain', list: true },
 
 		// Work item 2: attendance sentinel refs
 		{ parentTypeName: 'attendance', parentTypeId: attendanceTypeId, name: 'present_ref', type: 'reference', sharing: 'public' },
@@ -209,7 +216,7 @@ async function main(): Promise<void> {
 					const newId = await createPropDef(cfg, spec);
 					console.log(`  CREATED: ${spec.parentTypeName}.${spec.name} → ${newId}`);
 					// Read-back verify
-					await verifyPropDef(cfg, newId, { name: spec.name, type: spec.type, sharing: spec.sharing, formula: spec.formula });
+					await verifyPropDef(cfg, newId, { name: spec.name, type: spec.type, sharing: spec.sharing, formula: spec.formula, list: spec.list });
 					console.log(`  VERIFIED: ${spec.parentTypeName}.${spec.name} (${newId})`);
 					ledger.push({ action: 'create-propdef', spec, createdId: newId, status: 'verified' });
 				} catch (err) {

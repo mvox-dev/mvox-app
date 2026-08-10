@@ -103,10 +103,10 @@ export function rsvpsByEventId(rsvps: MyRsvp[]): RsvpByEventId {
  * matching `status`; the other three sentinels are simply absent (a fresh create
  * has no stale values to clear).
  *
- * MUST send an explicit `{ type: '_sharing', string: 'private' }`. Omitting it
- * makes Entu auto-inherit `_sharing: domain` from the (domain-shared) person
- * parent — leaking the singer's private answer to every member. An explicit
- * value on create suppresses the inherit (Pérotin's live-probe finding, #10).
+ * MUST send an explicit `{ type: '_sharing', string: 'domain' }` at create time
+ * per v4E — never rely on inherit. Deliberate privacy widen (#82, Mihkel
+ * 2026-08-10): `domain` so collective members see each other's answers and the
+ * conductor can read individual RSVPs for the RSVP→attendance comparison (AC-3/AC-11).
  */
 export async function createRsvp(
 	cfg: EntuCfg,
@@ -115,8 +115,8 @@ export async function createRsvp(
 ): Promise<string> {
 	const rsvpTypeId = await resolveTypeId(cfg, 'rsvp', fetchImpl);
 	// One sentinel (`<status>_ref`) matching the chosen status; the other three are
-	// simply absent on a fresh create. Explicit `_sharing: private` suppresses the
-	// domain inherit from the person parent (Pérotin live-probe finding, #10).
+	// simply absent on a fresh create. Explicit `_sharing: domain` — never rely on
+	// inherit (#82: deliberate widen for conductor RSVP→attendance read, AC-3/AC-11).
 	const props = [
 		{ type: '_type', reference: rsvpTypeId },
 		{ type: '_parent', reference: input.personId },
@@ -124,7 +124,7 @@ export async function createRsvp(
 		{ type: 'member', reference: input.memberId },
 		{ type: 'status', string: input.status },
 		{ type: `${input.status}_ref`, reference: input.eventId },
-		{ type: '_sharing', string: 'private' }
+		{ type: '_sharing', string: 'domain' }
 	];
 	const res = await entuFetch(
 		cfg.db,
