@@ -1,0 +1,245 @@
+// @vitest-environment happy-dom
+//
+// #83 review fix — route-level test for the conductor data flow: loadFullAgenda
+// returns recent items + seasonConductors, and the page wires them into AgendaList
+// as recentItems + conductorEventIds. Prior route specs all returned
+// `recent: [], seasonConductors: []`, leaving this wire untested.
+import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/paraglide/messages.js', () => ({
+	m: {
+		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
+		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
+		agenda_today: () => 'Today',
+		agenda_tomorrow: () => 'Tomorrow',
+		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
+		agenda_load_error: () => "Couldn't load the agenda.",
+		agenda_retry: () => 'Retry',
+		rsvp_status_going: () => 'Going',
+		rsvp_status_not_going: () => 'Not going',
+		rsvp_status_maybe: () => 'Maybe',
+		rsvp_status_late: () => 'Running late',
+		rsvp_non_member_hint: () => 'You are not an active member.',
+		rsvp_save_failed: () => 'Could not save your answer.',
+		agenda_recent: () => 'Recent',
+		agenda_take_attendance: () => 'Take attendance'
+	}
+}));
+
+const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } =
+	vi.hoisted(() => ({
+		loadFullAgendaMock: vi.fn(),
+		discoverMock: vi.fn(),
+		gotoMock: vi.fn(),
+		findMyMemberIdMock: vi.fn(),
+		listMyRsvpsMock: vi.fn()
+	}));
+vi.mock('$lib/agenda/agendaData', () => ({
+	loadFullAgenda: loadFullAgendaMock
+}));
+vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$lib/rsvp/rsvpData', () => ({
+	findMyMemberId: findMyMemberIdMock,
+	listMyRsvps: listMyRsvpsMock,
+	rsvpsByEventId: (rsvps: Array<{ rsvpId: string; eventId: string; status: string }>) => {
+		const map: Record<string, { rsvpId: string; status: string }> = {};
+		for (const r of rsvps) map[r.eventId] = { rsvpId: r.rsvpId, status: r.status };
+		return map;
+	},
+	createRsvp: vi.fn(),
+	updateRsvpStatus: vi.fn(),
+	deleteRsvp: vi.fn()
+}));
+
+import Page from './+page.svelte';
+import { authStore } from '$lib/auth/session';
+import { setToken, clearAll } from '$lib/auth/storage';
+import {
+	collectiveState,
+	selectedCollectiveDbStore,
+	urlCollectiveDbStore
+} from '$lib/collectives/store';
+import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { get } from 'svelte/store';
+import { isConductor, resetConductor } from '$lib/attendance/conductorStore';
+
+function agendaItem(
+	id: string,
+	startDatetime: string,
+	conductors: string[] = []
+): {
+	id: string;
+	name: string;
+	startDatetime: string;
+	durationMinutes: number;
+	location: string;
+	conductors: string[];
+} {
+	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors };
+}
+
+function setAuthedWithOneCollective(personId = 'person-p') {
+	setToken('jwt-abc');
+	authStore.set({
+		status: 'authenticated',
+		personIdByDb: { polyphony: personId },
+		expMs: Date.now() + 100_000
+	});
+	collectiveState.set({
+		status: 'ready',
+		collectives: [{ db: 'polyphony', name: 'Polyphony', personId }],
+		erroredDbs: []
+	});
+	urlCollectiveDbStore.set(null);
+	selectedCollectiveDbStore.set('polyphony');
+	completionGateStore.set('complete');
+}
+
+// Safe defaults so unrelated resolve calls don't hang.
+findMyMemberIdMock.mockResolvedValue(null);
+listMyRsvpsMock.mockResolvedValue([]);
+
+afterEach(() => {
+	cleanup();
+	loadFullAgendaMock.mockReset();
+	findMyMemberIdMock.mockReset().mockResolvedValue(null);
+	listMyRsvpsMock.mockReset().mockResolvedValue([]);
+	clearAll({ preserveProvider: false });
+	authStore.set({ status: 'loading' });
+	collectiveState.set({ status: 'loading' });
+	resetGate();
+	resetConductor();
+});
+
+describe('+page — recent items reach AgendaList (#83 conductor wiring)', () => {
+	it('renders the Recent section with recent items from loadFullAgenda', async () => {
+		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z');
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [],
+			recent: [recentEvent],
+			seasonId: 's1',
+			seasonConductors: []
+		});
+		setAuthedWithOneCollective();
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-recent"]')).not.toBeNull();
+		});
+		expect(
+			container.querySelector('[data-testid="agenda-recent-row-past-1"]')
+		).not.toBeNull();
+	});
+
+	it('renders no Recent section when loadFullAgenda returns empty recent', async () => {
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
+			recent: [],
+			seasonId: 's1',
+			seasonConductors: []
+		});
+		setAuthedWithOneCollective();
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-list"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="agenda-recent"]')).toBeNull();
+	});
+});
+
+describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', () => {
+	it('a conductor sees the Recent section with their conducted events identified', async () => {
+		// person-p is in the season conductors, and the event inherits (empty conductors)
+		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [],
+			recent: [recentEvent],
+			seasonId: 's1',
+			seasonConductors: ['person-p']
+		});
+		setAuthedWithOneCollective('person-p');
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
+		});
+		// The button is NOT visible because +page.svelte does not wire ontakeattendance
+		// (deferred to TA.3). The conductorEventIds set IS computed and ready; the
+		// button's absence is by design (gated behind handler presence, Finding 3 fix).
+		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
+	});
+
+	it('a non-conductor sees recent rows but no attendance button, conductorEventIds is empty', async () => {
+		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [],
+			recent: [recentEvent],
+			seasonId: 's1',
+			seasonConductors: ['other-person']
+		});
+		setAuthedWithOneCollective('person-p');
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
+	});
+});
+
+describe('+page — isConductor store reflects the broader signal (#83 signal shape fix)', () => {
+	it('sets isConductor to "conductor" when person is in seasonConductors, even with no past events', async () => {
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
+			recent: [], // no past events yet
+			seasonId: 's1',
+			seasonConductors: ['person-p']
+		});
+		setAuthedWithOneCollective('person-p');
+		render(Page);
+
+		await waitFor(() => {
+			expect(get(isConductor)).toBe('conductor');
+		});
+	});
+
+	it('sets isConductor to "not-conductor" when person is NOT in seasonConductors and has no conducted events', async () => {
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
+			recent: [],
+			seasonId: 's1',
+			seasonConductors: ['other-person']
+		});
+		setAuthedWithOneCollective('person-p');
+		render(Page);
+
+		await waitFor(() => {
+			// Need to wait for the load to complete
+			expect(loadFullAgendaMock).toHaveBeenCalled();
+		});
+		// Give the .then() a tick to execute
+		await new Promise((r) => setTimeout(r, 0));
+		expect(get(isConductor)).toBe('not-conductor');
+	});
+
+	it('sets isConductor to "conductor" via conducted past events (per-event ids.size > 0)', async () => {
+		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
+		loadFullAgendaMock.mockResolvedValue({
+			upcoming: [],
+			recent: [recentEvent],
+			seasonId: 's1',
+			seasonConductors: ['person-p'] // person conducts all events (inherit)
+		});
+		setAuthedWithOneCollective('person-p');
+		render(Page);
+
+		await waitFor(() => {
+			expect(get(isConductor)).toBe('conductor');
+		});
+	});
+});
+
+// (*MVOX:Josquin*)

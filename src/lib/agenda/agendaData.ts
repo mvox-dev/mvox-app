@@ -2,58 +2,69 @@ import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
 import { selectedDbStore } from '$lib/collectives/store';
 import { listSeasons, listRehearsals, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { currentSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
 
-/**
- * The collective's upcoming agenda: every season's rehearsal events, flattened →
- * filtered to `startDatetime >= now` → sorted ascending.
- *
- * DE-FANNED from the old multi-org agenda: single-collective reads ONE collective's
- * seasons directly (no org fan-out, no per-org `orgId`/`orgLabel` stamping, no
- * per-org error partitioning).
- *
- * We fetch rehearsals for ALL seasons — NO season pre-filter. `season.end_date` is
- * an UNRELIABLE bound on event dates: a season whose end_date is past (or unset) can
- * still own real upcoming rehearsals — e.g. "Fila hooaeg" (end_date 2026-07-28) owns
- * ~20 events in Sept–Dec 2026. Pre-filtering seasons by end_date silently dropped
- * those. The event-level `startDatetime >= now` filter below is the ONLY correct
- * gate. (This also subsumes the old open-ended `endDate === ''` special case — an
- * open-ended season is just one more season we fetch.)
- *
- * Perf: this queries events for every season on each load. Fine for single-collective
- * slice-1. A future optimization is a single direct upcoming-events query, but ONLY
- * if Entu supports a datetime range filter on the event query — probe the API before
- * assuming it does.
- */
-export async function listAgenda(
-	cfg: EntuCfg,
-	now: Date,
-	fetchImpl: typeof fetch = fetch
-): Promise<AgendaItem[]> {
-	const nowIso = now.toISOString();
+// ── Combined load: upcoming + recent + conductor data in ONE fetch pass ────
 
-	const seasons = await listSeasons(cfg, fetchImpl);
-	const lists = await Promise.all(seasons.map((s) => listRehearsals(cfg, s.id, fetchImpl)));
-
-	return lists
-		.flat()
-		.filter((r) => r.startDatetime >= nowIso)
-		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));
+export interface FullAgendaResult {
+	upcoming: AgendaItem[];
+	/** ALL past events of the CURRENT season, reverse-chronological. */
+	recent: AgendaItem[];
+	/** The current season's entity id (null if no season is current). */
+	seasonId: string | null;
+	/** The current season's conductor person refs (for determineConductor). */
+	seasonConductors: string[];
 }
 
 /**
- * Convenience for callers (Byrd's route): resolve the runtime db from T4's
- * `selectedDbStore` and the token from storage, then load. Returns [] when there's
- * no selected collective or no token (nothing to read yet).
+ * #83 fix (F1+F2) -- combined load that fetches seasons + rehearsals ONCE (the
+ * same reads listAgenda already does), then splits the result into upcoming +
+ * recent items and carries the season's conductor data along. This eliminates:
+ *   - the duplicate listSeasons + listRehearsals calls that loadRecentEvents made
+ *   - the N+1 entity/{id}?props=conductor requests that resolveConductorEventIds
+ *     fired (conductor refs are now on the already-fetched AgendaItem/Season)
  */
-export async function loadAgenda(
+export async function listFullAgenda(
+	cfg: EntuCfg,
+	now: Date,
+	fetchImpl: typeof fetch = fetch
+): Promise<FullAgendaResult> {
+	const nowIso = now.toISOString();
+	const seasons = await listSeasons(cfg, fetchImpl);
+
+	// Fetch rehearsals for ALL seasons, paired with season id so we can isolate
+	// the current season's events for the Recent section without re-fetching.
+	const paired = await Promise.all(
+		seasons.map(async (s) => ({
+			seasonId: s.id,
+			items: await listRehearsals(cfg, s.id, fetchImpl)
+		}))
+	);
+
+	const upcoming = paired
+		.flatMap((p) => p.items)
+		.filter((r) => r.startDatetime >= nowIso)
+		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));
+
+	const season = currentSeason(seasons, now);
+	if (!season) return { upcoming, recent: [], seasonId: null, seasonConductors: [] };
+
+	const seasonData = paired.find((p) => p.seasonId === season.id);
+	const recent = recentEvents(seasonData?.items ?? [], now);
+
+	return { upcoming, recent, seasonId: season.id, seasonConductors: season.conductors };
+}
+
+/** Convenience for callers: resolve db/token from T4's stores, then delegate to listFullAgenda. */
+export async function loadFullAgenda(
 	now: Date = new Date(),
 	fetchImpl: typeof fetch = fetch
-): Promise<AgendaItem[]> {
+): Promise<FullAgendaResult> {
 	const db = get(selectedDbStore);
 	const token = getToken();
-	if (!db || !token) return [];
-	return listAgenda({ db, token }, now, fetchImpl);
+	if (!db || !token) return { upcoming: [], recent: [], seasonId: null, seasonConductors: [] };
+	return listFullAgenda({ db, token }, now, fetchImpl);
 }
 
 // (*MVOX:Josquin*)

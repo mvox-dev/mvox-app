@@ -30,21 +30,23 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 }));
 
 const {
-	loadAgendaMock,
+	loadFullAgendaMock,
 	discoverMock,
 	gotoMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	applyRsvpChangeMock
 } = vi.hoisted(() => ({
-	loadAgendaMock: vi.fn(),
+	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	applyRsvpChangeMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadAgenda: loadAgendaMock }));
+vi.mock('$lib/agenda/agendaData', () => ({
+	loadFullAgenda: loadFullAgendaMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
@@ -73,7 +75,8 @@ const EVENT = {
 	name: 'Rehearsal e1',
 	startDatetime: '2026-06-15T09:00:00.000Z',
 	durationMinutes: 90,
-	location: ''
+	location: '',
+	conductors: []
 };
 
 function setAuthedWithOneCollective() {
@@ -108,7 +111,7 @@ async function waitForGoingButton(container: HTMLElement) {
 
 afterEach(() => {
 	cleanup();
-	loadAgendaMock.mockReset();
+	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	applyRsvpChangeMock.mockReset();
@@ -120,7 +123,7 @@ afterEach(() => {
 
 describe('+page — membership 3-state gates the non-member hint', () => {
 	it('while membership is UNRESOLVED (findMyMemberId still in flight) the control is disabled with NO non-member hint', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {})); // never resolves — stays loading
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -133,7 +136,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a CONFIRMED non-member (findMyMemberId resolves null) shows disabled control + the hint', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue(null);
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -149,7 +152,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a CONFIRMED member (findMyMemberId resolves an id) enables the control and shows no hint', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -164,7 +167,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a lookup FAILURE (findMyMemberId rejects) does NOT assert non-member — disabled, no false hint (fail-safe)', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockRejectedValue(new Error('lookup boom'));
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -185,7 +188,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 
 describe('+page — write-failure feedback (a rejected rsvp save)', () => {
 	it('a rejected write surfaces a per-row save-failed error AND reverts the optimistic value', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		applyRsvpChangeMock.mockRejectedValue(new Error('save failed'));

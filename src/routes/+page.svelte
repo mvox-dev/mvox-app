@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { authStore } from '$lib/auth/session';
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
-	import { loadAgenda } from '$lib/agenda/agendaData';
+	import { loadFullAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { getToken } from '$lib/auth/storage';
 	import {
@@ -13,6 +13,7 @@
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import { computeConductorEventIds, isConductor, resetConductor } from '$lib/attendance/conductorStore';
 	import { completionGateStore } from '$lib/profile/completionGate';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
@@ -59,6 +60,14 @@
 	// fire against the '__optimistic__' placeholder and get the event stuck).
 	let pendingEventIds = $state<Set<string>>(new Set());
 
+	// #83 — the agenda's 'Recent' section: ALL past events of the CURRENT season.
+	// Loaded as part of loadFullAgenda (one fetch pass for upcoming + recent —
+	// F1+F2 fix: no duplicate listSeasons/listRehearsals calls, no N+1 conductor
+	// reads). `conductorEventIds` is computed PURELY from the already-loaded data
+	// (season.conductors + event.conductors on each AgendaItem).
+	let recentItems = $state<AgendaItem[]>([]);
+	let conductorEventIds = $state<Set<string>>(new Set());
+
 	// Load the selected collective's upcoming agenda; reload on every collective
 	// switch. `requestId` guards against a slow earlier fetch clobbering a later
 	// one if the user switches collectives before the first load resolves — the
@@ -74,38 +83,59 @@
 			membership = 'loading';
 			rsvpByEventId = {};
 			failedEventIds = new Set();
+			recentItems = [];
+			conductorEventIds = new Set();
+			resetConductor();
 			return;
 		}
 		const thisRequest = ++requestId;
 		agendaLoading = true;
 		agendaError = false;
-		// Fresh selection → membership is unresolved again (not carried over as a
+		// Fresh selection -> membership is unresolved again (not carried over as a
 		// stale member/non-member), and no event has a failed write yet.
 		memberId = null;
 		membership = 'loading';
 		failedEventIds = new Set();
 
-		const cfg = { db: current.db, token: getToken() ?? '' };
 		const personId = current.personId;
 
-		loadAgenda()
-			.then((items) => {
+		// #83 fix (F1+F2) — ONE combined load replaces the old loadAgenda() +
+		// loadRecentEvents() pair. Seasons and rehearsals are fetched once;
+		// conductor data rides on the already-fetched props (no separate reads).
+		loadFullAgenda()
+			.then(({ upcoming, recent, seasonConductors }) => {
 				if (thisRequest !== requestId) return; // superseded by a newer selection
-				agendaItems = items;
+				agendaItems = upcoming;
 				agendaLoading = false;
+				recentItems = recent;
+				// Conductor event IDs: pure computation on already-loaded data (no IO).
+				const ids = computeConductorEventIds(personId, seasonConductors, recent);
+				conductorEventIds = ids;
+				// F3 fix — wire isConductor from the broader signal: a season conductor
+				// IS a conductor even before any past events exist this season (the
+				// per-event Set gates rows; this store is the coarser "is a conductor
+				// at all" signal for TA.3).
+				isConductor.set(
+					ids.size > 0 || seasonConductors.includes(personId)
+						? 'conductor'
+						: 'not-conductor'
+				);
 			})
 			.catch(() => {
-				// M2 fix: without this catch, a rejected loadAgenda left agendaLoading
+				// M2 fix: without this catch, a rejected load left agendaLoading
 				// stuck at true forever — permanent skeleton, no error, no recovery.
 				if (thisRequest !== requestId) return;
 				agendaLoading = false;
 				agendaError = true;
+				recentItems = [];
+				conductorEventIds = new Set();
+				resetConductor();
 			});
 
-		findMyMemberId(cfg, personId)
+		findMyMemberId({ db: current.db, token: getToken() ?? '' }, personId)
 			.then((id) => {
 				if (thisRequest !== requestId) return;
-				// A genuine resolution: an id → member; null → CONFIRMED non-member.
+				// A genuine resolution: an id -> member; null -> CONFIRMED non-member.
 				memberId = id;
 				membership = id ? 'member' : 'non-member';
 			})
@@ -117,7 +147,7 @@
 				membership = 'loading';
 			});
 
-		listMyRsvps(cfg, personId)
+		listMyRsvps({ db: current.db, token: getToken() ?? '' }, personId)
 			.then((rsvps) => {
 				if (thisRequest !== requestId) return;
 				rsvpByEventId = rsvpsByEventId(rsvps);
@@ -246,6 +276,8 @@
 							membership={gatedMembership}
 							{pendingEventIds}
 							{failedEventIds}
+							{recentItems}
+							{conductorEventIds}
 							onrsvpchange={handleRsvpChange}
 						/>
 					{/if}

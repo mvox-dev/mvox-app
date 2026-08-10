@@ -9,6 +9,8 @@
 	"agenda_gap_weeks": "{weeks} nädalat hiljem",
 	"agenda_load_error": "Päevakorra laadimine ebaõnnestus.",
 	"agenda_retry": "Proovi uuesti",
+	"agenda_recent": "Hiljutised",
+	"agenda_take_attendance": "Märgi kohalolek",
 	"rsvp_non_member_hint": "Ainult liikmed saavad RSVP kinnitada.",
 	"rsvp_save_failed": "Salvestamine ebaõnnestus — puuduta uuesti proovimiseks.",
 	"invite_landing_title": "Oled kutsutud",

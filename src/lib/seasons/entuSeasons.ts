@@ -58,7 +58,7 @@ export function resetTypeIdCache(): void {
 export async function listSeasons(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Season[]> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=season&props=name,start_date,end_date&limit=200',
+		'entity?_type.string=season&props=name,start_date,end_date,conductor&limit=200',
 		cfg.token,
 		{},
 		fetchImpl
@@ -72,7 +72,8 @@ export async function listSeasons(cfg: EntuCfg, fetchImpl: typeof fetch = fetch)
 				id: raw._id,
 				name: raw.name?.[0]?.string ?? '',
 				startDate: raw.start_date?.[0]?.date?.slice(0, 10) ?? '',
-				endDate: raw.end_date?.[0]?.date?.slice(0, 10) ?? ''
+				endDate: raw.end_date?.[0]?.date?.slice(0, 10) ?? '',
+				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []))
 			})
 		)
 		.sort((a, b) => a.startDate.localeCompare(b.startDate));
@@ -96,7 +97,7 @@ export async function listRehearsals(
 ): Promise<AgendaItem[]> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=event&event_type.string=rehearsal&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,_parent&limit=500`,
+		`entity?_type.string=event&event_type.string=rehearsal&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,_parent,conductor&limit=500`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -138,7 +139,8 @@ export async function listRehearsals(
 				// event value wins; series fills the gap; else 0/''.
 				durationMinutes:
 					raw.duration_minutes?.[0]?.number ?? series?.duration_minutes?.[0]?.number ?? 0,
-				location: raw.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? ''
+				location: raw.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? '',
+				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []))
 			};
 		})
 		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));

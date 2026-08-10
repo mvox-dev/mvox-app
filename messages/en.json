@@ -9,6 +9,8 @@
 	"agenda_gap_weeks": "{weeks} weeks later",
 	"agenda_load_error": "Couldn't load the agenda.",
 	"agenda_retry": "Retry",
+	"agenda_recent": "Recent",
+	"agenda_take_attendance": "Take attendance",
 	"rsvp_non_member_hint": "Only members can RSVP.",
 	"rsvp_save_failed": "Couldn't save — tap to try again.",
 	"invite_landing_title": "You're invited",

@@ -4,6 +4,14 @@ Personal notes. Only Josquin writes here.
 
 ---
 
+## [CHECKPOINT] 2026-08-10 session MVOX-6 — #72 TL.1 librarian seat wiring GREEN + MERGE
+
+Implemented `src/lib/library/librarianStore.ts` (GREEN at `f5a34ee` on `feat/72-librarian-seat-wiring`). Mirrors `adminStore.ts` exactly: query `entity?_type.string=library` instead of `organization`, states `librarian`/`not-librarian`, same lazy `import('$lib/entu/request')` pattern. Bentham GREEN, squash-merged to main at `33189f2` (8 files, +289/−5). Branch deleted. Full suite 53/53 suites, 655/655 tests, check 0 errors. Closes #72.
+
+(*MVOX:Josquin*)
+
+---
+
 ## [CHECKPOINT] 2026-08-06 — T4.3/#24 profile-type DESIGN (design only; Pérotin executes live). Source-verified Entu sharing mechanics.
 
 Repo is `mvox-app` (~/workspace-app), NOT mvox_v4e_web. entu-api clone at `~/projects/entu-api`.

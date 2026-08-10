@@ -18,14 +18,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-const { loadAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
-	loadAgendaMock: vi.fn(),
+const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
+	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadAgenda: loadAgendaMock }));
+vi.mock('$lib/agenda/agendaData', () => ({
+	loadFullAgenda: loadFullAgendaMock
+}));
 // Same boundary as store.spec.ts: severs discover.ts's $env import under happy-dom
 // and stubs goto (can't run outside an app / not exercised by this spec).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
@@ -92,7 +94,7 @@ listMyRsvpsMock.mockResolvedValue([]);
 
 afterEach(() => {
 	cleanup();
-	loadAgendaMock.mockReset();
+	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
 	authStore.set({ status: 'loading' });
@@ -101,7 +103,7 @@ afterEach(() => {
 
 describe('+page — agenda load error + retry (M2)', () => {
 	it('surfaces an error + retry affordance on rejection, instead of a permanent skeleton', async () => {
-		loadAgendaMock.mockRejectedValueOnce(new Error('network down'));
+		loadFullAgendaMock.mockRejectedValueOnce(new Error('network down'));
 		setAuthedWithOneCollective();
 		const { container } = render(Page);
 
@@ -113,8 +115,8 @@ describe('+page — agenda load error + retry (M2)', () => {
 	});
 
 	it('retry re-invokes loadAgenda and recovers on success', async () => {
-		loadAgendaMock.mockRejectedValueOnce(new Error('network down'));
-		loadAgendaMock.mockResolvedValueOnce([]);
+		loadFullAgendaMock.mockRejectedValueOnce(new Error('network down'));
+		loadFullAgendaMock.mockResolvedValueOnce({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
 		setAuthedWithOneCollective();
 		const { container } = render(Page);
 
@@ -130,15 +132,15 @@ describe('+page — agenda load error + retry (M2)', () => {
 			expect(container.querySelector('[data-testid="agenda-error"]')).toBeNull();
 		});
 		expect(container.querySelector('[data-testid="agenda-empty"]')).not.toBeNull();
-		expect(loadAgendaMock).toHaveBeenCalledTimes(2);
+		expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
 	});
 
 	it('a later successful load is not clobbered by a stale rejection (requestId guard)', async () => {
 		let rejectFirst!: (err: Error) => void;
-		loadAgendaMock.mockImplementationOnce(
+		loadFullAgendaMock.mockImplementationOnce(
 			() => new Promise((_resolve, reject) => { rejectFirst = reject; })
 		);
-		loadAgendaMock.mockResolvedValueOnce([]);
+		loadFullAgendaMock.mockResolvedValueOnce({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
 		setAuthedWithTwoCollectives();
 		const { container } = render(Page);
 

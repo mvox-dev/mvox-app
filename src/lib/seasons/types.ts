@@ -7,6 +7,7 @@ export interface SeasonRaw {
 	name?: Array<{ string: string }>;
 	start_date?: Array<{ date: string }>;
 	end_date?: Array<{ date: string }>;
+	conductor?: Array<{ reference: string }>;
 }
 
 export interface Season {
@@ -14,6 +15,8 @@ export interface Season {
 	name: string;
 	startDate: string;
 	endDate: string;
+	/** Person entity ids of this season's conductors (empty if none set). */
+	conductors: string[];
 }
 
 export interface SeriesRaw {
@@ -31,6 +34,7 @@ export interface RehearsalRaw {
 	// `_parent` denormalizes each parent's `entity_type` (verified in the member-search
 	// contract) — used to find the event's `event_series` parent without an org arg.
 	_parent?: Array<{ reference: string; entity_type?: string }>;
+	conductor?: Array<{ reference: string }>;
 }
 
 // (*MVOX:Josquin*)

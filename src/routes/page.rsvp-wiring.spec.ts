@@ -23,14 +23,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-const { loadAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
-	loadAgendaMock: vi.fn(),
+const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
+	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadAgenda: loadAgendaMock }));
+vi.mock('$lib/agenda/agendaData', () => ({
+	loadFullAgenda: loadFullAgendaMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // #12 — mocked so the assertions below observe whether the page calls them, not
@@ -76,7 +78,7 @@ function setAuthedWithOneCollective() {
 
 afterEach(() => {
 	cleanup();
-	loadAgendaMock.mockReset();
+	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	clearAll({ preserveProvider: false });
@@ -86,7 +88,7 @@ afterEach(() => {
 
 describe('+page — resolves member id + existing rsvps alongside the agenda (#12 data half)', () => {
 	it('calls findMyMemberId with {db,token} for the selected collective and the selected person id', async () => {
-		loadAgendaMock.mockResolvedValue([]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -100,7 +102,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 	});
 
 	it('calls listMyRsvps with {db,token} for the selected collective and the selected person id', async () => {
-		loadAgendaMock.mockResolvedValue([]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();

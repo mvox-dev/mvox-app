@@ -27,7 +27,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 afterEach(cleanup);
 
 function item(id: string, startDatetime: string, overrides: Partial<AgendaItem> = {}): AgendaItem {
-	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', ...overrides };
+	return { id, name: `Rehearsal ${id}`, startDatetime, durationMinutes: 90, location: '', conductors: [], ...overrides };
 }
 
 // Europe/Tallinn is UTC+3 in summer (EEST). These two items are on the same calendar

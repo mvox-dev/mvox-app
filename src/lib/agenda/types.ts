@@ -12,6 +12,8 @@ export type AgendaItem = {
 	durationMinutes: number;
 	/** Location — event value, else inherited from its series, else empty string. */
 	location: string;
+	/** Person entity ids of this event's own conductors (empty = inherit season's). */
+	conductors: string[];
 };
 
 // (*MVOX:Josquin*)

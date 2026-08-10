@@ -33,14 +33,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-const { loadAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
-	loadAgendaMock: vi.fn(),
+const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
+	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadAgenda: loadAgendaMock }));
+vi.mock('$lib/agenda/agendaData', () => ({
+	loadFullAgenda: loadFullAgendaMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
@@ -67,7 +69,8 @@ const EVENT = {
 	name: 'Rehearsal e1',
 	startDatetime: '2026-06-15T09:00:00.000Z',
 	durationMinutes: 90,
-	location: ''
+	location: '',
+	conductors: []
 };
 
 function setAuthedWithOneCollective() {
@@ -95,7 +98,7 @@ async function waitForGoingButton(container: HTMLElement) {
 
 afterEach(() => {
 	cleanup();
-	loadAgendaMock.mockReset();
+	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	clearAll({ preserveProvider: false });
@@ -108,7 +111,7 @@ afterEach(() => {
 
 describe('+page — completion gate suppresses S1 (the member RSVP affordance)', () => {
 	it('an INCOMPLETE member (real member id, gate incomplete) is NOT shown as a member: control disabled AND no non-member hint (never mislabeled)', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1'); // she IS an active member
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('incomplete'); // ...but her domain name is missing
@@ -127,7 +130,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a COMPLETE member (gate complete) IS shown as a member: control enabled (the release path)', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('complete');
@@ -140,7 +143,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a member with the gate still LOADING is disabled with NO hint (no flash of the member affordance)', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('loading');
@@ -157,7 +160,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a GENUINE non-member is unaffected by the gate: disabled + the non-member hint (no over-reach)', async () => {
-		loadAgendaMock.mockResolvedValue([EVENT]);
+		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [] });
 		findMyMemberIdMock.mockResolvedValue(null); // confirmed non-member
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('complete');

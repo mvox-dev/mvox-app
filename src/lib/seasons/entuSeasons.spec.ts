@@ -45,7 +45,7 @@ describe('listSeasons (de-fanned — no org scoping)', () => {
 		);
 		const seasons = await listSeasons(cfg, fetchImpl);
 		expect(seasons.map((s) => s.id)).toEqual(['a', 'b']);
-		expect(seasons[0]).toEqual({ id: 'a', name: 'A', startDate: '2025-09-01', endDate: '2026-05-31' });
+		expect(seasons[0]).toEqual({ id: 'a', name: 'A', startDate: '2025-09-01', endDate: '2026-05-31', conductors: [] });
 	});
 
 	it('throws on a non-2xx response', async () => {
@@ -71,7 +71,8 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				name: 'Mon rehearsal',
 				startDatetime: '2026-09-01T16:00:00.000Z',
 				durationMinutes: 90,
-				location: 'Hall A'
+				location: 'Hall A',
+				conductors: []
 			}
 		]);
 	});

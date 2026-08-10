@@ -9,6 +9,8 @@
 	"agenda_gap_weeks": "{weeks} nedēļas vēlāk",
 	"agenda_load_error": "Neizdevās ielādēt darba kārtību.",
 	"agenda_retry": "Mēģināt vēlreiz",
+	"agenda_recent": "Nesenie",
+	"agenda_take_attendance": "Atzīmēt apmeklējumu",
 	"rsvp_non_member_hint": "Tikai dalībnieki var apstiprināt RSVP.",
 	"rsvp_save_failed": "Neizdevās saglabāt — pieskarieties, lai mēģinātu vēlreiz.",
 	"invite_landing_title": "Jums ir uzaicinājums",

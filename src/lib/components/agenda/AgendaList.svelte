@@ -34,6 +34,19 @@
 		// Events whose last write REJECTED — that row surfaces an inline save-failed
 		// error (the optimistic value having been reverted upstream).
 		failedEventIds?: ReadonlySet<string>;
+		// #83 — the 'Recent' section: ALL past events of the current season
+		// (already reverse-chronological — see conductorLogic.ts's recentEvents;
+		// this component renders in the order given, it does not re-sort). Empty/
+		// omitted → no Recent section at all (no heading, no empty-state row).
+		recentItems?: AgendaItem[];
+		// #83 — events where the signed-in person holds the conductor seat
+		// (per-event, because an event-level override can differ row by row — same
+		// per-event-Set shape as pendingEventIds/failedEventIds). A recent row
+		// whose id is in the set shows the 'Take attendance' button; upcoming rows
+		// never show it regardless of membership — attendance is taken after the
+		// fact only.
+		conductorEventIds?: ReadonlySet<string>;
+		ontakeattendance?: (item: AgendaItem) => void;
 	}
 	const {
 		items,
@@ -42,7 +55,10 @@
 		membership = 'loading',
 		onrsvpchange,
 		pendingEventIds = new Set<string>(),
-		failedEventIds = new Set<string>()
+		failedEventIds = new Set<string>(),
+		recentItems = [],
+		conductorEventIds = new Set<string>(),
+		ontakeattendance
 	}: Props = $props();
 
 	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
@@ -73,6 +89,14 @@
 		hour: '2-digit',
 		minute: '2-digit',
 		hour12: false
+	});
+
+	// Short date for recent rows (e.g. "14 Jun") — recent rows lack day-group
+	// headers, so each row needs its own date label to be distinguishable.
+	const shortDateFmt = new Intl.DateTimeFormat(undefined, {
+		timeZone: TZ,
+		day: 'numeric',
+		month: 'short'
 	});
 
 	/** Group items by Tallinn calendar date, preserving chronological order. */
@@ -133,6 +157,53 @@
 	});
 </script>
 
+{#if recentItems.length > 0}
+	<!-- #83 — 'Recent': ALL past events of the current season, reverse-chron (order
+	     as given, no re-sort here). Sits ABOVE the upcoming list (Byrd's brief).
+	     Each row: the existing (read-only, past) RsvpControl + a conductor-only
+	     'Take attendance' button, gated per-event via conductorEventIds. -->
+	<section data-testid="agenda-recent" class="flex flex-col">
+		<h2
+			data-testid="agenda-recent-header"
+			class="pt-4 pb-1 text-[10px] font-normal tracking-wide text-ink-2 uppercase"
+		>
+			{m.agenda_recent()}
+		</h2>
+		{#each recentItems as item (item.id)}
+			<div
+				data-testid="agenda-recent-row-{item.id}"
+				class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+			>
+				<div class="flex flex-col font-mono">
+					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{shortDateFmt.format(new Date(item.startDatetime))}</span>
+					<span class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
+					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
+				</div>
+				<div class="flex min-w-0 flex-col gap-1">
+					<span class="truncate text-sm text-ink">{item.name}</span>
+					{#if item.location}
+						<span class="truncate text-xs text-ink-2">{item.location}</span>
+					{/if}
+					<!-- Past event → the singer's own RsvpControl is read-only (always the
+					     'pending'/disabled reason — there is nothing left to answer, and no
+					     write is in flight either; reusing 'pending' keeps this a silent
+					     disable, no misleading non-member hint). -->
+					<RsvpControl status={rsvpByEventId[item.id]?.status ?? null} pending={true} />
+					{#if conductorEventIds.has(item.id) && ontakeattendance}
+						<button
+							type="button"
+							data-testid="take-attendance-btn"
+							class="self-start rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
+							onclick={() => ontakeattendance?.(item)}
+						>
+							{m.agenda_take_attendance()}
+						</button>
+					{/if}
+				</div>
+			</div>
+		{/each}
+	</section>
+{/if}
 <div data-testid="agenda-list" class="flex flex-col">
 	{#if loading}
 		<div data-testid="agenda-skeleton" class="flex flex-col" aria-hidden="true">

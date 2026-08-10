@@ -61,9 +61,11 @@ export const meta = {
   ]
 }
 
-const REPO = args.repoPath
-const CO_AUTHOR = args.coAuthor
-const tasks = args.tasks
+// args may arrive as a JSON string when invoked via scriptPath — parse if needed
+const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
+const REPO = _args.repoPath
+const CO_AUTHOR = _args.coAuthor
+const tasks = _args.tasks
 
 const VERDICT_SCHEMA = {
   type: 'object',
