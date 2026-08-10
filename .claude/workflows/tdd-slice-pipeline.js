@@ -27,19 +27,20 @@
  * args.coAuthor: string — co-author trailer for commits
  *
  * Model assignments per phase (Mihkel's ruling, 2026-08-10):
- *   SPIKE:  opus   — comprehension checkpoint, discover what RED should assert
- *   SEED:   opus   — careful execution, schema/data mutations with ledgers
- *   RED:    opus   — structural thinking, test design is the hard part
- *   GREEN:  sonnet — constrained execution, tests define the goal
- *   REVIEW: fable  — comprehension checkpoint, different model than writer/implementer
- *   FIX:    opus   — careful execution, resolve architectural findings
- *   MERGE:  sonnet — mechanical git ops
- *   PROBE:  sonnet — constrained execution, well-defined checks
+ *   SPIKE:  opus-5   — comprehension checkpoint, discover what RED should assert
+ *   SEED:   opus-4-6 — careful execution, schema/data mutations with ledgers
+ *   RED:    opus-4-6 — structural thinking, test design is the hard part
+ *   GREEN:  sonnet   — constrained execution, tests define the goal
+ *   REVIEW: opus-5   — comprehension checkpoint, different model than writer/implementer
+ *   FIX:    opus-4-6 — careful execution, resolve architectural findings
+ *   MERGE:  sonnet   — mechanical git ops
+ *   PROBE:  sonnet   — constrained execution, well-defined checks
  *
- * Three models, deliberately placed: opus at comprehension/careful-execution
- * checkpoints (SPIKE, SEED, RED, FIX), fable at independent-perspective
- * checkpoint (REVIEW), sonnet at constrained-execution checkpoints (GREEN,
- * MERGE, PROBE).
+ * Three models, deliberately placed: opus-5 at comprehension checkpoints
+ * (SPIKE, REVIEW), opus-4-6 at careful-execution checkpoints (SEED, RED,
+ * FIX), sonnet at constrained-execution checkpoints (GREEN, MERGE, PROBE).
+ * Full model IDs work inside workflow agent() — shorthand 'opus' resolves
+ * to the session's opus (4.6); 'claude-opus-5' reaches opus 5 explicitly.
  *
  * (*MVOX:Palestrina*)
  */
@@ -48,11 +49,11 @@ export const meta = {
   description: 'Full TDD pipeline for a slice epic — SPIKE/SEED/RED/GREEN/REVIEW/MERGE/PROBE per task',
   whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain',
   phases: [
-    { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'opus' },
+    { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5' },
     { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'opus' },
     { title: 'RED', detail: 'Write failing tests', model: 'opus' },
     { title: 'GREEN', detail: 'Implement to make tests pass', model: 'sonnet' },
-    { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'fable' },
+    { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'claude-opus-5' },
     { title: 'FIX', detail: 'Address review findings', model: 'opus' },
     { title: 'MERGE', detail: 'Squash-merge to main', model: 'sonnet' },
     { title: 'PROBE', detail: 'Post-merge live data verification', model: 'sonnet' }
@@ -134,7 +135,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const spike = await agent(
       `${task.spikePrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are researching to discover facts that tests should assert. Read source, probe API behavior, report structured findings. Do NOT write code or tests — only research and report.`,
-      { label: `spike-${task.issueNumber}`, phase: `${taskLabel} SPIKE`, schema: SPIKE_SCHEMA, model: 'opus' }
+      { label: `spike-${task.issueNumber}`, phase: `${taskLabel} SPIKE`, schema: SPIKE_SCHEMA, model: 'claude-opus-5' }
     )
 
     if (!spike || !spike.success) {
@@ -205,7 +206,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     verdict = await agent(
       `You are the architecture reviewer (Bentham) for mvox. Review branch ${task.branch} for issue #${task.issueNumber} (${task.title}).\n\nWORKING DIRECTORY: ${REPO}\n\n## Review checklist\n${task.reviewChecklist}\n\nRun: cd ${REPO} && git diff main...HEAD --stat\nRead changed files. Then: pnpm test -- --run && pnpm check\n\nIssue GREEN / YELLOW / RED. For non-GREEN: list specific findings.`,
-      { label: `review-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: VERDICT_SCHEMA, model: 'fable' }
+      { label: `review-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} REVIEW`, schema: VERDICT_SCHEMA, model: 'claude-opus-5' }
     )
 
     if (!verdict) verdict = { verdict: 'RED', summary: 'Review agent failed', findings: [] }
