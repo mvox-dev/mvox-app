@@ -50,11 +50,11 @@ export const meta = {
   whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain',
   phases: [
     { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5' },
-    { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'opus' },
-    { title: 'RED', detail: 'Write failing tests', model: 'opus' },
+    { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'claude-opus-4-6[1m]' },
+    { title: 'RED', detail: 'Write failing tests', model: 'claude-opus-4-6[1m]' },
     { title: 'GREEN', detail: 'Implement to make tests pass', model: 'sonnet' },
     { title: 'REVIEW', detail: 'Architecture review (model diversity)', model: 'claude-opus-5' },
-    { title: 'FIX', detail: 'Address review findings', model: 'opus' },
+    { title: 'FIX', detail: 'Address review findings', model: 'claude-opus-4-6[1m]' },
     { title: 'MERGE', detail: 'Squash-merge to main', model: 'sonnet' },
     { title: 'PROBE', detail: 'Post-merge live data verification', model: 'sonnet' }
   ]
@@ -152,7 +152,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const seed = await agent(
       `${task.seedPrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nYou are performing schema/data setup via the Entu API. Follow the §8.6 discipline: dry-run first, verify, then execute. Commit ledger artifacts to the repo. Report what was created/modified.`,
-      { label: `seed-${task.issueNumber}`, phase: `${taskLabel} SEED`, schema: RESULT_SCHEMA, model: 'opus' }
+      { label: `seed-${task.issueNumber}`, phase: `${taskLabel} SEED`, schema: RESULT_SCHEMA, model: 'claude-opus-4-6[1m]' }
     )
 
     if (!seed || !seed.success) {
@@ -169,7 +169,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const red = await agent(
       `${task.redPrompt}\n\nWORKING DIRECTORY: ${REPO}\n\nFIRST: cd ${REPO} && git checkout main && git pull && git checkout -b ${task.branch}\n\nAfter writing tests, verify they FAIL (RED), then commit:\ngit add -A && git commit -m "test(#${task.issueNumber}): RED — ${task.title}"`,
-      { label: `red-${task.issueNumber}`, phase: `${taskLabel} RED`, schema: RESULT_SCHEMA, model: 'opus' }
+      { label: `red-${task.issueNumber}`, phase: `${taskLabel} RED`, schema: RESULT_SCHEMA, model: 'claude-opus-4-6[1m]' }
     )
 
     if (!red || !red.success) {
@@ -215,7 +215,7 @@ for (let i = 0; i < tasks.length; i++) {
       log(`Review ${verdict.verdict}, fixing (attempt ${reviewAttempts})`)
       await agent(
         `Fix review findings for #${task.issueNumber} (${task.title}) in ${REPO} on branch ${task.branch}.\n\nVerdict: ${verdict.verdict}\nFindings:\n${(verdict.findings || []).join('\n')}\n\nFix, verify (pnpm test -- --run && pnpm check), commit.`,
-        { label: `fix-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} FIX`, schema: RESULT_SCHEMA, model: 'opus' }
+        { label: `fix-${task.issueNumber}-${reviewAttempts}`, phase: `${taskLabel} FIX`, schema: RESULT_SCHEMA, model: 'claude-opus-4-6[1m]' }
       )
     }
   }
