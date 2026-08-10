@@ -1,0 +1,316 @@
+{
+  "dryRun": true,
+  "typeIds": {
+    "season": "69c7ea528489bfcb0e81a044",
+    "event": "69c7ea548489bfcb0e81a0a2",
+    "attendance": "6a0d2e8690c8df7a1cc7df4b",
+    "rsvp": "6a0d2e8590c8df7a1cc7df1b"
+  },
+  "propDefSpecs": [
+    {
+      "parentTypeName": "season",
+      "parentTypeId": "69c7ea528489bfcb0e81a044",
+      "name": "conductor",
+      "type": "reference",
+      "sharing": "domain"
+    },
+    {
+      "parentTypeName": "event",
+      "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+      "name": "conductor",
+      "type": "reference",
+      "sharing": "domain"
+    },
+    {
+      "parentTypeName": "attendance",
+      "parentTypeId": "6a0d2e8690c8df7a1cc7df4b",
+      "name": "present_ref",
+      "type": "reference",
+      "sharing": "public"
+    },
+    {
+      "parentTypeName": "attendance",
+      "parentTypeId": "6a0d2e8690c8df7a1cc7df4b",
+      "name": "absent_ref",
+      "type": "reference",
+      "sharing": "public"
+    },
+    {
+      "parentTypeName": "attendance",
+      "parentTypeId": "6a0d2e8690c8df7a1cc7df4b",
+      "name": "late_ref",
+      "type": "reference",
+      "sharing": "public"
+    },
+    {
+      "parentTypeName": "event",
+      "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+      "name": "attendance_present_count",
+      "type": "number",
+      "sharing": "public",
+      "formula": "_referrer.attendance.present_ref COUNT"
+    },
+    {
+      "parentTypeName": "event",
+      "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+      "name": "attendance_absent_count",
+      "type": "number",
+      "sharing": "public",
+      "formula": "_referrer.attendance.absent_ref COUNT"
+    },
+    {
+      "parentTypeName": "event",
+      "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+      "name": "attendance_late_count",
+      "type": "number",
+      "sharing": "public",
+      "formula": "_referrer.attendance.late_ref COUNT"
+    }
+  ],
+  "rsvpPopulation": {
+    "total": 16,
+    "sharingDistribution": {
+      "(absent/private)": 6,
+      "private": 10
+    },
+    "needsWiden": 16
+  },
+  "ledger": [
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "season",
+        "parentTypeId": "69c7ea528489bfcb0e81a044",
+        "name": "conductor",
+        "type": "reference",
+        "sharing": "domain"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "event",
+        "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+        "name": "conductor",
+        "type": "reference",
+        "sharing": "domain"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "attendance",
+        "parentTypeId": "6a0d2e8690c8df7a1cc7df4b",
+        "name": "present_ref",
+        "type": "reference",
+        "sharing": "public"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "attendance",
+        "parentTypeId": "6a0d2e8690c8df7a1cc7df4b",
+        "name": "absent_ref",
+        "type": "reference",
+        "sharing": "public"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "attendance",
+        "parentTypeId": "6a0d2e8690c8df7a1cc7df4b",
+        "name": "late_ref",
+        "type": "reference",
+        "sharing": "public"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "event",
+        "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+        "name": "attendance_present_count",
+        "type": "number",
+        "sharing": "public",
+        "formula": "_referrer.attendance.present_ref COUNT"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "event",
+        "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+        "name": "attendance_absent_count",
+        "type": "number",
+        "sharing": "public",
+        "formula": "_referrer.attendance.absent_ref COUNT"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "create-propdef",
+      "spec": {
+        "parentTypeName": "event",
+        "parentTypeId": "69c7ea548489bfcb0e81a0a2",
+        "name": "attendance_late_count",
+        "type": "number",
+        "sharing": "public",
+        "formula": "_referrer.attendance.late_ref COUNT"
+      },
+      "status": "dry-run"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a2d415f4cd971291c5d56c5",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "(absent/private)"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a2d41624cd971291c5d56cd",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "(absent/private)"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a2d41664cd971291c5d56d5",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "(absent/private)"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a2d461a4cd971291c5d56e0",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "(absent/private)"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a2d50f04cd971291c5d56f4",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "(absent/private)"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a2d54854cd971291c5d575c",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "(absent/private)"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff236c951d9114ec6ce",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff336c951d9114ec6d9",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff436c951d9114ec6e4",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff536c951d9114ec6ef",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff536c951d9114ec6fa",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff636c951d9114ec705",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff836c951d9114ec710",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73dff836c951d9114ec71b",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73e73f36c951d9114ec795",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    },
+    {
+      "action": "rsvp-widen",
+      "spec": {
+        "entityId": "6a73e77336c951d9114ec7ca",
+        "type": "rsvp"
+      },
+      "status": "dry-run",
+      "before": "private"
+    }
+  ],
+  "exitCode": 0
+}
