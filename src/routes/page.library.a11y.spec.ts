@@ -204,16 +204,22 @@ describe('#75 — a11y: my-loans section', () => {
 		expect(toggle).not.toBeNull();
 		// aria-expanded should be present (false when collapsed)
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-		// aria-controls must reference the collapsible content's id
-		const controlsId = toggle.getAttribute('aria-controls');
-		expect(controlsId).not.toBeNull();
-		expect(controlsId).toBeTruthy();
+		// While COLLAPSED the loans list is not in the DOM, so aria-controls must
+		// either be absent or resolve — never dangle. (#86 SeasonSummary ruling,
+		// re-applied to this page in #93; this test used to demand the attribute
+		// unconditionally, which is exactly the dangling IDREF that ruling bans.)
+		const collapsedControls = toggle.getAttribute('aria-controls');
+		if (collapsedControls !== null) {
+			expect(container.querySelector(`#${collapsedControls}`)).not.toBeNull();
+		}
 
-		// The controlled element must exist when expanded
+		// Expanded, the relationship must be there and must resolve.
 		await fireEvent.click(toggle);
 		await waitFor(() => {
 			expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		});
+		const controlsId = toggle.getAttribute('aria-controls');
+		expect(controlsId).toBeTruthy();
 		const controlledEl = container.querySelector(`#${controlsId}`);
 		expect(controlledEl).not.toBeNull();
 	});
@@ -495,15 +501,18 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 
 		await waitFor(() => expect(container.querySelector('[data-testid="my-loans-toggle"]')).not.toBeNull());
 		const toggle = container.querySelector('[data-testid="my-loans-toggle"]') as HTMLElement;
-		const controlsId = toggle.getAttribute('aria-controls');
-		expect(controlsId).not.toBeNull();
-		expect(controlsId).toBeTruthy();
+		// Collapsed: absent or resolving, never dangling (see the note above).
+		const collapsedControls = toggle.getAttribute('aria-controls');
+		if (collapsedControls !== null) {
+			expect(container.querySelector(`#${collapsedControls}`)).not.toBeNull();
+		}
 
-		// Expand and verify the controlled element exists
+		// Expand and verify the aria-controls IDREF resolves to the loans list
 		await fireEvent.click(toggle);
 		await waitFor(() => {
-			const controlled = container.querySelector(`#${controlsId}`);
-			expect(controlled).not.toBeNull();
+			const controlsId = toggle.getAttribute('aria-controls');
+			expect(controlsId).toBeTruthy();
+			expect(container.querySelector(`#${controlsId}`)).not.toBeNull();
 		});
 	});
 });

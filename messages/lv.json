@@ -163,5 +163,19 @@
 	"repertoire_add_programme_label": "Pievienot programmai",
 	"repertoire_add_programme_button": "Pievienot",
 	"repertoire_inactive_count": "+{count} neaktīvi",
-	"repertoire_manage_error": "Neizdevās saglabāt izmaiņas — mēģini vēlreiz."
+	"repertoire_manage_error": "Neizdevās saglabāt izmaiņas — mēģini vēlreiz.",
+	"repertoire_pdf_link_aria_label": "Atvērt PDF: {work}",
+	"repertoire_borrow_link_aria_label": "Aizņemties: {work}",
+	"repertoire_external_link_aria_label": "Atvērt {domain}: {work} (atveras jaunā logā)",
+	"repertoire_status_select_aria_label": "Statuss: {work}",
+	"repertoire_remove_aria_label": "Noņemt: {work}",
+	"repertoire_move_up_aria_label": "Pārvietot augšup: {work}",
+	"repertoire_move_down_aria_label": "Pārvietot lejup: {work}",
+	"repertoire_pin_edition_select_aria_label": "Izdevums darbam {work}",
+	"repertoire_pin_edition_button_aria_label": "Piesaistīt izdevumu darbam {work}",
+	"repertoire_add_work_select_aria_label": "Repertuārā pievienojamais darbs",
+	"repertoire_add_work_aria_label": "Pievienot darbu repertuāram",
+	"repertoire_add_programme_select_aria_label": "Šā vakara programmai pievienojamais izdevums",
+	"repertoire_add_programme_aria_label": "Pievienot šā vakara programmai",
+	"repertoire_badge_aria_label": "Repertuārs: {status}"
 }

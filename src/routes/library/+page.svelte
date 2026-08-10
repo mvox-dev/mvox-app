@@ -623,7 +623,7 @@
 					data-testid="my-loans-toggle"
 					class="flex w-full items-center justify-between text-left text-sm font-medium"
 					aria-expanded={myLoansExpanded}
-					aria-controls="my-loans-list"
+					aria-controls={myLoansExpanded ? 'my-loans-list' : undefined}
 					onclick={() => { myLoansExpanded = !myLoansExpanded; }}
 				>
 					<span>{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
@@ -684,7 +684,7 @@
 							data-testid="library-work-toggle-{work.id}"
 							class="flex items-center justify-between text-left"
 							aria-expanded={isOpen}
-							aria-controls="library-editions-{work.id}"
+							aria-controls={isOpen ? `library-editions-${work.id}` : undefined}
 							onclick={() => toggleWork(work.id)}
 						>
 							<span class="flex flex-col">
@@ -704,7 +704,9 @@
 								data-testid="repertoire-badge-{work.id}"
 								data-status={repStatus}
 								role="img"
-								aria-label={REPERTOIRE_BADGE_LABEL[repStatus]?.() ?? repStatus}
+								aria-label={m.repertoire_badge_aria_label({
+									status: REPERTOIRE_BADGE_LABEL[repStatus]?.() ?? repStatus
+								})}
 								class="mt-1 inline-flex w-fit items-center gap-1 font-mono text-[9px] tracking-wide text-ink-2"
 							>
 								<span
@@ -741,7 +743,7 @@
 												data-testid="library-edition-toggle-{edition.id}"
 												class="flex items-center justify-between text-left"
 												aria-expanded={editionOpen}
-												aria-controls="library-copies-{edition.id}"
+												aria-controls={editionOpen ? `library-copies-${edition.id}` : undefined}
 												onclick={() => toggleEdition(edition.id)}
 											>
 												<span class="flex flex-col">

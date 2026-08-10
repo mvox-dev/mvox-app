@@ -163,5 +163,19 @@
 	"repertoire_add_programme_label": "Додати до програми",
 	"repertoire_add_programme_button": "Додати",
 	"repertoire_inactive_count": "+{count} неактивних",
-	"repertoire_manage_error": "Не вдалося зберегти зміну — спробуйте ще раз."
+	"repertoire_manage_error": "Не вдалося зберегти зміну — спробуйте ще раз.",
+	"repertoire_pdf_link_aria_label": "Відкрити PDF: {work}",
+	"repertoire_borrow_link_aria_label": "Позичити: {work}",
+	"repertoire_external_link_aria_label": "Відкрити {domain}: {work} (відкриється в новому вікні)",
+	"repertoire_status_select_aria_label": "Статус: {work}",
+	"repertoire_remove_aria_label": "Видалити: {work}",
+	"repertoire_move_up_aria_label": "Перемістити вгору: {work}",
+	"repertoire_move_down_aria_label": "Перемістити вниз: {work}",
+	"repertoire_pin_edition_select_aria_label": "Видання для закріплення: {work}",
+	"repertoire_pin_edition_button_aria_label": "Закріпити видання для {work}",
+	"repertoire_add_work_select_aria_label": "Твір для додавання до репертуару",
+	"repertoire_add_work_aria_label": "Додати твір до репертуару",
+	"repertoire_add_programme_select_aria_label": "Видання для додавання до сьогоднішньої програми",
+	"repertoire_add_programme_aria_label": "Додати до сьогоднішньої програми",
+	"repertoire_badge_aria_label": "Репертуар: {status}"
 }

@@ -163,5 +163,19 @@
 	"repertoire_add_programme_label": "Lisa kavasse",
 	"repertoire_add_programme_button": "Lisa",
 	"repertoire_inactive_count": "+{count} mitteaktiivset",
-	"repertoire_manage_error": "Muudatust ei õnnestunud salvestada — proovi uuesti."
+	"repertoire_manage_error": "Muudatust ei õnnestunud salvestada — proovi uuesti.",
+	"repertoire_pdf_link_aria_label": "Ava PDF: {work}",
+	"repertoire_borrow_link_aria_label": "Laenuta: {work}",
+	"repertoire_external_link_aria_label": "Ava {domain}: {work} (avaneb uues aknas)",
+	"repertoire_status_select_aria_label": "Staatus: {work}",
+	"repertoire_remove_aria_label": "Eemalda: {work}",
+	"repertoire_move_up_aria_label": "Liiguta üles: {work}",
+	"repertoire_move_down_aria_label": "Liiguta alla: {work}",
+	"repertoire_pin_edition_select_aria_label": "Trükiväljaanne teosele {work}",
+	"repertoire_pin_edition_button_aria_label": "Vali trükiväljaanne teosele {work}",
+	"repertoire_add_work_select_aria_label": "Repertuaari lisatav teos",
+	"repertoire_add_work_aria_label": "Lisa teos repertuaari",
+	"repertoire_add_programme_select_aria_label": "Tänase kava trükiväljaanne",
+	"repertoire_add_programme_aria_label": "Lisa tänasesse kavasse",
+	"repertoire_badge_aria_label": "Repertuaar: {status}"
 }

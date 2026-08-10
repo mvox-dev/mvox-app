@@ -31,8 +31,17 @@
 
 	Concert ordering: when every row carries an ordinal (a programmed concert),
 	renders numbered (ol/li) in ordinal order. When ordinals are absent (the
-	season-repertoire fallback, which carries no concert position), renders
-	unordered, in the given row order.
+	season-repertoire fallback, which carries no concert position), renders as
+	an unnumbered list (ul/li) in the given row order — a repertoire is still a
+	list of works, and a screen reader should get the "list, N items" count on
+	both surfaces; only the 1./2./3. positions are concert-specific.
+
+	Neither <li> may carry a display utility (`flex`, `grid`, `block`, …):
+	`display: flex` replaces the UA's `display: list-item`, ::marker is only
+	generated for list-item boxes, and the ol's numbering would disappear with
+	no test noticing (a DOM-shape spec cannot see computed display). Row layout
+	therefore lives on an inner <div>; a spec guard in
+	page.repertoire-a11y.spec.ts asserts the <li> class list stays display-free.
 
 	#91 TR.3 — management controls (rights-gated writes). Still prop-driven and
 	fetch-free: the page resolves rights (repertoireActions.resolveManageRights),
@@ -302,13 +311,19 @@
 				type="button"
 				data-testid="work-link-pdf"
 				class="text-xs text-ink underline"
+				aria-label={m.repertoire_pdf_link_aria_label({ work: row.workName })}
 				onclick={() => onpdfclick?.(row.fileId)}
 			>
 				{m.repertoire_pdf_link()}
 			</button>
 		{/if}
 		{#if row.canBorrow}
-			<a data-testid="work-link-borrow" href="/library" class="text-xs text-ink underline">
+			<a
+				data-testid="work-link-borrow"
+				href="/library"
+				class="text-xs text-ink underline"
+				aria-label={m.repertoire_borrow_link_aria_label({ work: row.workName })}
+			>
 				{m.repertoire_borrow_link()}
 			</a>
 		{/if}
@@ -325,6 +340,10 @@
 				target="_blank"
 				rel="noopener noreferrer"
 				class="text-xs text-ink underline"
+				aria-label={m.repertoire_external_link_aria_label({
+					domain: domainOf(link),
+					work: row.workName
+				})}
 			>
 				{domainOf(link)}
 			</a>
@@ -338,6 +357,7 @@
 		data-testid="work-manage-remove"
 		class="text-xs text-red underline disabled:cursor-default disabled:opacity-[0.45]"
 		disabled={pendingKeys.has(row.id)}
+		aria-label={m.repertoire_remove_aria_label({ work: row.workName })}
 		onclick={() => handleRemove(row.id)}
 	>
 		{m.repertoire_remove()}
@@ -353,6 +373,7 @@
 					class="text-xs"
 					value={row.status ?? 'active'}
 					disabled={pendingKeys.has(row.id)}
+					aria-label={m.repertoire_status_select_aria_label({ work: row.workName })}
 					onchange={(e) => handleStatusChange(row.id, (e.currentTarget as HTMLSelectElement).value)}
 				>
 					{#each STATUS_OPTIONS as opt (opt.value)}
@@ -365,6 +386,7 @@
 						class="text-xs"
 						value={selectedEditionByRow[row.id] ?? ''}
 						disabled={pendingKeys.has(row.id)}
+						aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
 						onchange={(e) => {
 							selectedEditionByRow[row.id] = (e.currentTarget as HTMLSelectElement).value;
 						}}
@@ -379,6 +401,7 @@
 						data-testid="work-manage-pin-edition-button"
 						class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
 						disabled={pendingKeys.has(row.id) || !selectedEditionByRow[row.id]}
+						aria-label={m.repertoire_pin_edition_button_aria_label({ work: row.workName })}
 						onclick={() => handlePinEdition(row.id)}
 					>
 						{m.repertoire_pin_edition_button()}
@@ -396,6 +419,7 @@
 					data-testid="work-manage-move-up"
 					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
 					disabled={pendingKeys.has(row.id) || index === 0}
+					aria-label={m.repertoire_move_up_aria_label({ work: row.workName })}
 					onclick={() => handleMove(row.id, 'up')}
 				>
 					{m.repertoire_move_up()}
@@ -405,6 +429,7 @@
 					data-testid="work-manage-move-down"
 					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
 					disabled={pendingKeys.has(row.id) || index === orderedRows.length - 1}
+					aria-label={m.repertoire_move_down_aria_label({ work: row.workName })}
 					onclick={() => handleMove(row.id, 'down')}
 				>
 					{m.repertoire_move_down()}
@@ -423,6 +448,7 @@
 				class="text-xs"
 				value={selectedWorkId}
 				disabled={pendingKeys.has(ADD_WORK_KEY)}
+				aria-label={m.repertoire_add_work_select_aria_label()}
 				onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
 			>
 				<option value="">{m.repertoire_add_work_label()}</option>
@@ -435,6 +461,7 @@
 				data-testid="work-manage-add-work-button"
 				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
 				disabled={pendingKeys.has(ADD_WORK_KEY) || !selectedWorkId}
+				aria-label={m.repertoire_add_work_aria_label()}
 				onclick={handleAddWork}
 			>
 				{m.repertoire_add_work_button()}
@@ -454,6 +481,7 @@
 				class="text-xs"
 				value={selectedEditionForAdd}
 				disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
+				aria-label={m.repertoire_add_programme_select_aria_label()}
 				onchange={(e) => (selectedEditionForAdd = (e.currentTarget as HTMLSelectElement).value)}
 			>
 				<option value="">{m.repertoire_add_programme_label()}</option>
@@ -466,6 +494,7 @@
 				data-testid="work-manage-add-programme-button"
 				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
 				disabled={pendingKeys.has(ADD_PROGRAMME_KEY) || !selectedEditionForAdd}
+				aria-label={m.repertoire_add_programme_aria_label()}
 				onclick={handleAddProgramItem}
 			>
 				{m.repertoire_add_programme_button()}
@@ -480,7 +509,7 @@
 		data-testid="works-line"
 		class="flex items-baseline gap-1.5 truncate text-left text-xs text-ink-2"
 		aria-expanded={expanded}
-		aria-controls={expandedRegionId}
+		aria-controls={expanded ? expandedRegionId : undefined}
 		onclick={() => (expanded = !expanded)}
 	>
 		<span aria-hidden="true">♫</span>
@@ -489,37 +518,45 @@
 	{#if expanded}
 		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-4">
 			{#if hasOrdinals}
-				<ol class="flex list-decimal flex-col gap-2 pl-4">
+				<ol class="list-decimal space-y-2 pl-4">
 					<!-- Keyed on the entity id, NEVER on ordinal: `mandatory: true` is a
 					     soft UI hint in Entu, so two program_items can both carry the
 					     default 0 — a duplicate key throws each_key_duplicate and takes
 					     down the whole agenda page, not just this element. -->
 					{#each orderedRows as row, index (row.id)}
+						<!-- No `flex` (or any display utility) on the <li>: `display: flex`
+						     replaces the UA's `display: list-item`, and ::marker is only
+						     generated for list-item boxes — the list-decimal numbering
+						     would silently vanish. Column layout lives on an inner div. -->
 						<li
 							data-testid="work-row"
 							data-inactive={isInactive(row) ? 'true' : undefined}
-							class="flex flex-col gap-0.5"
 							class:opacity-60={isInactive(row)}
 						>
-							{@render workRowContent(row)}
-							{@render manageRowControls(row, index)}
+							<div class="flex flex-col gap-0.5">
+								{@render workRowContent(row)}
+								{@render manageRowControls(row, index)}
+							</div>
 						</li>
 					{/each}
 				</ol>
 			{:else}
-				<div class="flex flex-col gap-2">
+				<!-- Season repertoire is still a list of works — it just has no concert
+				     position, so <ul> (no marker, no numbering) rather than <ol>. -->
+				<ul class="space-y-2">
 					{#each orderedRows as row, index (row.id)}
-						<div
+						<li
 							data-testid="work-row"
 							data-inactive={isInactive(row) ? 'true' : undefined}
-							class="flex flex-col gap-0.5"
 							class:opacity-60={isInactive(row)}
 						>
-							{@render workRowContent(row)}
-							{@render manageRowControls(row, index)}
-						</div>
+							<div class="flex flex-col gap-0.5">
+								{@render workRowContent(row)}
+								{@render manageRowControls(row, index)}
+							</div>
+						</li>
 					{/each}
-				</div>
+				</ul>
 			{/if}
 			{@render manageAddControls()}
 		</div>
