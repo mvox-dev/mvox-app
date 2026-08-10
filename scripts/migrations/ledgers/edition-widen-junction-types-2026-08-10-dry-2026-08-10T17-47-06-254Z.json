@@ -1,0 +1,365 @@
+{
+  "dryRun": true,
+  "authorization": "Schema freedom (standing ruling). Edition file widen: Mihkel ruling 2026-08-10. Polyphony db: dev/test, synthetic data, routine mutations pre-authorized.",
+  "workItem1": {
+    "description": "Edition prop-def _sharing widen to domain (file, external_link)",
+    "editionTypeId": "69c7ea4e8489bfcb0e819f9c",
+    "targets": [
+      {
+        "name": "edition.file",
+        "id": "69c7ea508489bfcb0e819fe2",
+        "status": "already-correct",
+        "before": "domain"
+      },
+      {
+        "name": "edition.external_link",
+        "id": "6a0d2e8890c8df7a1cc7e01f",
+        "status": "already-correct",
+        "before": "domain"
+      }
+    ]
+  },
+  "workItem2": {
+    "description": "Edition entity re-aggregation (touch-save to pick up new prop-def sharing)",
+    "editionCount": 17,
+    "touched": 0,
+    "failed": 0,
+    "entries": [
+      {
+        "id": "6a12036e4ff8277cd4306bc0",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203704ff8277cd4306c2b",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203714ff8277cd4306c72",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203764ff8277cd4306d6e",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a12037a4ff8277cd4306e39",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a12037b4ff8277cd4306e50",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203834ff8277cd4307030",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203864ff8277cd43070d7",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a12038d4ff8277cd4307267",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203954ff8277cd4307441",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203994ff8277cd4307556",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203a04ff8277cd43076ec",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203a94ff8277cd43078e3",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203ad4ff8277cd43079b9",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203ad4ff8277cd43079cf",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203b54ff8277cd4307ba4",
+        "status": "dry-run"
+      },
+      {
+        "id": "6a1203bc4ff8277cd4307d4a",
+        "status": "dry-run"
+      }
+    ]
+  },
+  "workItem3": {
+    "description": "Junction types (repertoire_item, program_item) — verify + seed if missing",
+    "entries": [
+      {
+        "name": "repertoire_item.name",
+        "id": "69c7ea538489bfcb0e81a075",
+        "status": "dry-run"
+      },
+      {
+        "name": "repertoire_item.work",
+        "id": "69c7ea538489bfcb0e81a081",
+        "status": "dry-run"
+      },
+      {
+        "name": "repertoire_item.edition",
+        "id": "69c7ea548489bfcb0e81a08d",
+        "status": "dry-run"
+      },
+      {
+        "name": "repertoire_item.ordinal",
+        "id": "69c7ea548489bfcb0e81a098",
+        "status": "dry-run"
+      },
+      {
+        "name": "repertoire_item",
+        "id": "69c7ea538489bfcb0e81a06e",
+        "status": "already-exists"
+      },
+      {
+        "name": "program_item.name",
+        "id": "69c7ea578489bfcb0e81a10a",
+        "status": "dry-run"
+      },
+      {
+        "name": "program_item.work",
+        "id": "69c7ea578489bfcb0e81a116",
+        "status": "dry-run"
+      },
+      {
+        "name": "program_item.edition",
+        "id": "69c7ea578489bfcb0e81a122",
+        "status": "dry-run"
+      },
+      {
+        "name": "program_item.ordinal",
+        "id": "69c7ea578489bfcb0e81a12d",
+        "status": "dry-run"
+      },
+      {
+        "name": "program_item",
+        "id": "69c7ea568489bfcb0e81a103",
+        "status": "already-exists"
+      }
+    ]
+  },
+  "ledger": [
+    {
+      "action": "edition-propdef-widen",
+      "target": "edition.file",
+      "targetId": "69c7ea508489bfcb0e819fe2",
+      "status": "already-correct",
+      "before": "domain"
+    },
+    {
+      "action": "edition-propdef-widen",
+      "target": "edition.external_link",
+      "targetId": "6a0d2e8890c8df7a1cc7e01f",
+      "status": "already-correct",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12036e4ff8277cd4306bc0",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203704ff8277cd4306c2b",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203714ff8277cd4306c72",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203764ff8277cd4306d6e",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12037a4ff8277cd4306e39",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12037b4ff8277cd4306e50",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203834ff8277cd4307030",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203864ff8277cd43070d7",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a12038d4ff8277cd4307267",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203954ff8277cd4307441",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203994ff8277cd4307556",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203a04ff8277cd43076ec",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203a94ff8277cd43078e3",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203ad4ff8277cd43079b9",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203ad4ff8277cd43079cf",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203b54ff8277cd4307ba4",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "edition-reaggregate",
+      "target": "edition",
+      "targetId": "6a1203bc4ff8277cd4307d4a",
+      "status": "dry-run",
+      "before": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "repertoire_item.name",
+      "targetId": "69c7ea538489bfcb0e81a075",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "repertoire_item.work",
+      "targetId": "69c7ea538489bfcb0e81a081",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "repertoire_item.edition",
+      "targetId": "69c7ea548489bfcb0e81a08d",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "repertoire_item.ordinal",
+      "targetId": "69c7ea548489bfcb0e81a098",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-type-check",
+      "target": "repertoire_item",
+      "targetId": "69c7ea538489bfcb0e81a06e",
+      "status": "already-exists"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "program_item.name",
+      "targetId": "69c7ea578489bfcb0e81a10a",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "program_item.work",
+      "targetId": "69c7ea578489bfcb0e81a116",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "program_item.edition",
+      "targetId": "69c7ea578489bfcb0e81a122",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-propdef-widen",
+      "target": "program_item.ordinal",
+      "targetId": "69c7ea578489bfcb0e81a12d",
+      "status": "dry-run",
+      "before": "(absent/private)",
+      "after": "domain"
+    },
+    {
+      "action": "junction-type-check",
+      "target": "program_item",
+      "targetId": "69c7ea568489bfcb0e81a103",
+      "status": "already-exists"
+    }
+  ],
+  "exitCode": 0
+}

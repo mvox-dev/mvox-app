@@ -6,8 +6,11 @@ import { listMyProfiles } from '$lib/profile/profileData';
 // entuFetch(..., { method: 'POST' | 'DELETE' }) anywhere in this module. Field set
 // is the T6.1/T6.2/T6.2b ruled set (design doc 2026-08-08-library-browse-design.md
 // §2) — queries here must never request a still-private field (barcode, condition,
-// notes, edition_type, license, year, file, genre, edition.cost, lending.renewed_at,
-// lending.name, lending.notes).
+// copy.notes, lending.notes, edition_type, license, year, genre, edition.cost,
+// lending.renewed_at, lending.name). EXCEPTION (#89 TR.1): `edition.file` was
+// widened to domain-visible 2026-08-10; `edition.external_link` was already domain
+// (see scripts/migrations/edition-widen-junction-types-2026-08-10.ts). Both are now
+// queried below alongside name/publisher.
 
 export interface Work {
 	id: string;
@@ -34,12 +37,47 @@ export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): 
 	}));
 }
 
+export interface EditionFile {
+	id: string;
+	filename: string;
+	filesize: number;
+	filetype: string;
+}
+
 export interface Edition {
 	id: string;
 	name: string;
 	publisher: string;
 	/** Parent work ID; populated by listAllEditions, empty when loaded via listEditions. */
 	workId?: string;
+	/** Multi-value `external_link` (#89 TR.1 widen); [] when absent, never undefined. */
+	externalLinks: string[];
+	/** Multi-value `file` prop metadata (#89 TR.1 widen); [] when absent, never undefined. */
+	files: EditionFile[];
+}
+
+type EditionRaw = {
+	_id: string;
+	name?: Array<{ string: string }>;
+	publisher?: Array<{ string: string }>;
+	external_link?: Array<{ string: string }>;
+	file?: Array<{ _id: string; filename: string; filesize: number; filetype: string }>;
+};
+
+function toEdition(raw: EditionRaw, workId?: string): Edition {
+	return {
+		id: raw._id,
+		name: raw.name?.[0]?.string ?? '',
+		publisher: raw.publisher?.[0]?.string ?? '',
+		...(workId !== undefined ? { workId } : {}),
+		externalLinks: (raw.external_link ?? []).map((v) => v.string),
+		files: (raw.file ?? []).map((f) => ({
+			id: f._id,
+			filename: f.filename,
+			filesize: f.filesize,
+			filetype: f.filetype
+		}))
+	};
 }
 
 export async function listEditions(
@@ -49,20 +87,14 @@ export async function listEditions(
 ): Promise<Edition[]> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=edition&_parent.reference=${encodeURIComponent(workId)}&props=name,publisher&limit=500`,
+		`entity?_type.string=edition&_parent.reference=${encodeURIComponent(workId)}&props=name,publisher,external_link,file&limit=500`,
 		cfg.token,
 		{},
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listEditions failed: ${res.status}`);
-	const body = (await res.json()) as {
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; publisher?: Array<{ string: string }> }>;
-	};
-	return (body.entities ?? []).map((raw) => ({
-		id: raw._id,
-		name: raw.name?.[0]?.string ?? '',
-		publisher: raw.publisher?.[0]?.string ?? ''
-	}));
+	const body = (await res.json()) as { entities?: EditionRaw[] };
+	return (body.entities ?? []).map((raw) => toEdition(raw));
 }
 
 /**
@@ -73,21 +105,18 @@ export async function listEditions(
 export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Edition[]> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=edition&props=name,publisher,_parent&limit=500',
+		'entity?_type.string=edition&props=name,publisher,_parent,external_link,file&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listAllEditions failed: ${res.status}`);
 	const body = (await res.json()) as {
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; publisher?: Array<{ string: string }>; _parent?: Array<{ reference: string; entity_type?: string }> }>;
+		entities?: Array<EditionRaw & { _parent?: Array<{ reference: string; entity_type?: string }> }>;
 	};
-	return (body.entities ?? []).map((raw) => ({
-		id: raw._id,
-		name: raw.name?.[0]?.string ?? '',
-		publisher: raw.publisher?.[0]?.string ?? '',
-		workId: (raw._parent ?? []).find((p) => p.entity_type === 'work')?.reference ?? ''
-	}));
+	return (body.entities ?? []).map((raw) =>
+		toEdition(raw, (raw._parent ?? []).find((p) => p.entity_type === 'work')?.reference ?? '')
+	);
 }
 
 export interface Copy {

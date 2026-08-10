@@ -78,13 +78,116 @@ describe('listEditions', () => {
 		);
 		const editions = await listEditions(cfg, 'work-1', fetchImpl);
 		expect(editions).toEqual<Edition[]>([
-			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }
+			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', externalLinks: [], files: [] }
 		]);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=edition');
 		expect(url).toContain('_parent.reference=work-1');
 		expect(url).toContain('props=name,publisher');
 		expect(url).not.toMatch(/\bcost\b/);
+	});
+});
+
+// ── #89 TR.1 — edition file/external_link visibility (post sharing-widen) ───
+// The #89 sharing widen makes `edition.file` and `edition.external_link`
+// domain-visible (previously still-private per the T6.1/T6.2 ruled set). The
+// browse data layer must now query both and surface them on Edition:
+//   external_link (multi-value string) → externalLinks: string[]
+//   file (Entu file prop: _id/filename/filesize/filetype, entu-www files doc)
+//     → files: Array<{ id, filename, filesize, filetype }>
+// Absent props → empty arrays, never undefined.
+
+describe('listEditions — file/external_link widen (#89)', () => {
+	it('props query includes external_link and file', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listEditions(cfg, 'work-1', fetchImpl);
+		const url = String(fetchImpl.mock.calls[0][0]);
+		const propList = (/[?&]props=([^&]*)/.exec(url)?.[1] ?? '').split(',');
+		expect(propList).toContain('external_link');
+		expect(propList).toContain('file');
+	});
+
+	it('maps multi-value external_link and file metadata; absent props → empty arrays', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'edition-1',
+						name: [{ string: '40-part original' }],
+						publisher: [{ string: 'Bärenreiter' }],
+						external_link: [
+							{ string: 'https://imslp.org/wiki/Spem_in_alium' },
+							{ string: 'https://www.youtube.com/watch?v=abc' }
+						],
+						file: [
+							{ _id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }
+						]
+					},
+					// neither prop present — still an empty-array shape, not undefined
+					{ _id: 'edition-2', name: [{ string: 'Peters arrangement' }] }
+				]
+			})
+		);
+		const editions = await listEditions(cfg, 'work-1', fetchImpl);
+		expect(editions).toEqual([
+			{
+				id: 'edition-1',
+				name: '40-part original',
+				publisher: 'Bärenreiter',
+				externalLinks: [
+					'https://imslp.org/wiki/Spem_in_alium',
+					'https://www.youtube.com/watch?v=abc'
+				],
+				files: [
+					{ id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }
+				]
+			},
+			{ id: 'edition-2', name: 'Peters arrangement', publisher: '', externalLinks: [], files: [] }
+		]);
+	});
+});
+
+describe('listAllEditions — file/external_link widen (#89)', () => {
+	it('props query includes external_link and file alongside _parent', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listAllEditions(cfg, fetchImpl);
+		const url = String(fetchImpl.mock.calls[0][0]);
+		const propList = (/[?&]props=([^&]*)/.exec(url)?.[1] ?? '').split(',');
+		expect(propList).toContain('external_link');
+		expect(propList).toContain('file');
+		expect(propList).toContain('_parent');
+	});
+
+	it('maps external_link and file with workId intact', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'edition-1',
+						name: [{ string: '40-part original' }],
+						publisher: [{ string: 'Bärenreiter' }],
+						_parent: [{ reference: 'work-1', entity_type: 'work' }],
+						external_link: [{ string: 'https://imslp.org/wiki/Spem_in_alium' }],
+						file: [
+							{ _id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }
+						]
+					}
+				]
+			})
+		);
+		const editions = await listAllEditions(cfg, fetchImpl);
+		expect(editions).toEqual([
+			{
+				id: 'edition-1',
+				name: '40-part original',
+				publisher: 'Bärenreiter',
+				workId: 'work-1',
+				externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
+				files: [
+					{ id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }
+				]
+			}
+		]);
 	});
 });
 
@@ -111,8 +214,8 @@ describe('listAllEditions', () => {
 		);
 		const editions = await listAllEditions(cfg, fetchImpl);
 		expect(editions).toEqual<Edition[]>([
-			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' },
-			{ id: 'edition-2', name: 'Peters arrangement', publisher: '', workId: 'work-2' }
+			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1', externalLinks: [], files: [] },
+			{ id: 'edition-2', name: 'Peters arrangement', publisher: '', workId: 'work-2', externalLinks: [], files: [] }
 		]);
 	});
 
@@ -360,9 +463,9 @@ describe('activeLendingForMemberInEdition', () => {
 
 describe('deriveWorkAvailability', () => {
 	const editions: Edition[] = [
-		{ id: 'ed-1', name: 'Ed 1', publisher: 'P1', workId: 'work-1' },
-		{ id: 'ed-2', name: 'Ed 2', publisher: 'P2', workId: 'work-1' },
-		{ id: 'ed-other', name: 'Ed Other', publisher: 'P3', workId: 'work-2' }
+		{ id: 'ed-1', name: 'Ed 1', publisher: 'P1', workId: 'work-1', externalLinks: [], files: [] },
+		{ id: 'ed-2', name: 'Ed 2', publisher: 'P2', workId: 'work-1', externalLinks: [], files: [] },
+		{ id: 'ed-other', name: 'Ed Other', publisher: 'P3', workId: 'work-2', externalLinks: [], files: [] }
 	];
 	const copies: Copy[] = [
 		{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'ed-1' },

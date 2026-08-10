@@ -59,11 +59,11 @@ function writeLedger(payload: Record<string, unknown>): string {
 	return filePath;
 }
 
-/** List prop-defs under a type, returning a map of name -> { id, sharing, sharingPropId }. */
-async function listPropDefs(cfg: EntuCfg, typeEntityId: string): Promise<Map<string, { id: string; sharing: string | null; sharingPropId: string | null }>> {
+/** List prop-defs under a type, returning a map of name -> { id, sharing, sharingPropId, list }. */
+async function listPropDefs(cfg: EntuCfg, typeEntityId: string): Promise<Map<string, { id: string; sharing: string | null; sharingPropId: string | null; list: boolean }>> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.reference=${PROPERTY_META_ID}&_parent.reference=${typeEntityId}&props=name,_sharing&limit=200`,
+		`entity?_type.reference=${PROPERTY_META_ID}&_parent.reference=${typeEntityId}&props=name,_sharing,list&limit=200`,
 		cfg.token
 	);
 	if (!res.ok) throw new Error(`listPropDefs(${typeEntityId}) failed: ${res.status}`);
@@ -72,16 +72,18 @@ async function listPropDefs(cfg: EntuCfg, typeEntityId: string): Promise<Map<str
 			_id: string;
 			name?: Array<{ string: string }>;
 			_sharing?: Array<{ _id: string; string: string }>;
+			list?: Array<{ boolean: boolean }>;
 		}>;
 	};
-	const map = new Map<string, { id: string; sharing: string | null; sharingPropId: string | null }>();
+	const map = new Map<string, { id: string; sharing: string | null; sharingPropId: string | null; list: boolean }>();
 	for (const e of body.entities) {
 		const name = e.name?.[0]?.string;
 		if (name) {
 			map.set(name, {
 				id: e._id,
 				sharing: e._sharing?.[0]?.string ?? null,
-				sharingPropId: e._sharing?.[0]?._id ?? null
+				sharingPropId: e._sharing?.[0]?._id ?? null,
+				list: e.list?.[0]?.boolean ?? false
 			});
 		}
 	}
@@ -457,24 +459,26 @@ interface JunctionTypeSpec {
 const JUNCTION_TYPES: JunctionTypeSpec[] = [
 	{
 		name: 'repertoire_item',
-		sharing: 'public',
+		sharing: 'domain',
 		parentTypeName: 'season',
 		propDefs: [
-			{ name: 'name', type: 'string', sharing: 'public', formula: 'work.*.name CONCAT' },
-			{ name: 'work', type: 'reference', sharing: 'public' },
-			{ name: 'edition', type: 'reference', sharing: 'public' },
-			{ name: 'status', type: 'string', sharing: 'public' }
+			{ name: 'name', type: 'string', sharing: 'domain', formula: 'work.*.name CONCAT' },
+			{ name: 'work', type: 'reference', sharing: 'domain' },
+			{ name: 'edition', type: 'reference', sharing: 'domain' },
+			{ name: 'ordinal', type: 'number', sharing: 'domain' },
+			{ name: 'status', type: 'string', sharing: 'domain' }
 		]
 	},
 	{
 		name: 'program_item',
-		sharing: 'public',
+		sharing: 'domain',
 		parentTypeName: 'event',
 		propDefs: [
-			{ name: 'name', type: 'string', sharing: 'public', formula: 'edition.*.work CONCAT' },
-			{ name: 'edition', type: 'reference', sharing: 'public' },
-			{ name: 'ordinal', type: 'number', sharing: 'public' },
-			{ name: 'notes', type: 'text', sharing: 'public' }
+			{ name: 'name', type: 'string', sharing: 'domain', formula: 'edition.*.work CONCAT' },
+			{ name: 'work', type: 'reference', sharing: 'domain' },
+			{ name: 'edition', type: 'reference', sharing: 'domain' },
+			{ name: 'ordinal', type: 'number', sharing: 'domain' },
+			{ name: 'notes', type: 'text', sharing: 'domain' }
 		]
 	}
 ];
@@ -499,7 +503,7 @@ async function verifyAndSeedJunctionTypes(cfg: EntuCfg): Promise<boolean> {
 			const existingPropDefs = await listPropDefs(cfg, existingTypeId);
 			console.log(`  Existing prop-defs on ${spec.name}:`);
 			for (const [name, info] of existingPropDefs) {
-				console.log(`    ${name} (${info.id}): _sharing=${info.sharing ?? '(absent/private)'}`);
+				console.log(`    ${name} (${info.id}): _sharing=${info.sharing ?? '(absent/private)'}${info.list ? ', list=true' : ''}`);
 			}
 
 			// Check for missing prop-defs.
@@ -527,6 +531,83 @@ async function verifyAndSeedJunctionTypes(cfg: EntuCfg): Promise<boolean> {
 				}
 			} else {
 				console.log(`  All expected prop-defs present.`);
+			}
+
+			// _sharing mismatch pass: for each spec prop-def that exists, compare
+			// live _sharing to spec sharing. On mismatch, widen (POST new _sharing).
+			const sharingMismatches = spec.propDefs.filter((pd) => {
+				const live = existingPropDefs.get(pd.name);
+				return live && live.sharing !== pd.sharing;
+			});
+			if (sharingMismatches.length > 0) {
+				console.log(`  _sharing mismatches: ${sharingMismatches.map((pd) => `${pd.name} (live=${existingPropDefs.get(pd.name)!.sharing ?? '(absent/private)'}, spec=${pd.sharing})`).join(', ')}`);
+				if (DRY_RUN) {
+					for (const pd of sharingMismatches) {
+						const live = existingPropDefs.get(pd.name)!;
+						ledger.push({
+							action: 'junction-propdef-widen',
+							target: `${spec.name}.${pd.name}`,
+							targetId: live.id,
+							status: 'dry-run',
+							before: live.sharing ?? '(absent/private)',
+							after: pd.sharing
+						});
+					}
+				} else {
+					for (const pd of sharingMismatches) {
+						const live = existingPropDefs.get(pd.name)!;
+						try {
+							const writeBody: Array<Record<string, unknown>> = [];
+							if (live.sharingPropId) {
+								writeBody.push({ _id: live.sharingPropId, type: '_sharing', string: pd.sharing });
+							} else {
+								writeBody.push({ type: '_sharing', string: pd.sharing });
+							}
+							const writeRes = await entuFetch(cfg.db, `entity/${live.id}`, cfg.token, {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify(writeBody)
+							});
+							if (!writeRes.ok) {
+								const text = await writeRes.text();
+								throw new Error(`POST failed: ${writeRes.status} -- ${text}`);
+							}
+
+							// Read-back verify.
+							const verifyEntity = (await readEntity(cfg, live.id, '_sharing')) as {
+								_sharing?: Array<{ string: string }>;
+							};
+							const newSharing = verifyEntity._sharing?.[0]?.string;
+							if (newSharing !== pd.sharing) {
+								throw new Error(`verify FAILED: _sharing=${newSharing}, expected ${pd.sharing}`);
+							}
+
+							console.log(`    WIDENED: ${spec.name}.${pd.name} (${live.id}): ${live.sharing ?? '(absent/private)'} -> ${pd.sharing}`);
+							ledger.push({
+								action: 'junction-propdef-widen',
+								target: `${spec.name}.${pd.name}`,
+								targetId: live.id,
+								status: 'widened',
+								before: live.sharing ?? '(absent/private)',
+								after: pd.sharing
+							});
+						} catch (err) {
+							const msg = err instanceof Error ? err.message : String(err);
+							console.error(`    FAILED: ${spec.name}.${pd.name} (${live.id}): ${msg}`);
+							ledger.push({
+								action: 'junction-propdef-widen',
+								target: `${spec.name}.${pd.name}`,
+								targetId: live.id,
+								status: 'failed',
+								before: live.sharing ?? '(absent/private)',
+								error: msg
+							});
+							allOk = false;
+						}
+					}
+				}
+			} else {
+				console.log(`  All prop-def _sharing values match spec.`);
 			}
 
 			ledger.push({ action: 'junction-type-check', target: spec.name, targetId: existingTypeId, status: 'already-exists' });

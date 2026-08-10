@@ -210,6 +210,36 @@ describe('/library — ready state', () => {
 		expect(row2?.textContent).toContain('Ave verum corpus');
 		expect(row2?.textContent).toContain('Unknown composer');
 	});
+
+	// #89 TR.1 regression guard — after the file/external_link sharing widen,
+	// Edition rows carry externalLinks + files. The browse tree must keep
+	// rendering name/publisher unchanged with the widened shape flowing through.
+	it('edition rows still render name + publisher when editions carry files and externalLinks (#89)', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		listEditionsMock.mockResolvedValue([
+			{
+				id: 'edition-1',
+				name: '40-part original',
+				publisher: 'Bärenreiter',
+				externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
+				files: [{ id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }]
+			}
+		]);
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+
+		await waitFor(() => {
+			const edition = container.querySelector('[data-testid="library-edition-edition-1"]');
+			expect(edition).not.toBeNull();
+			expect(edition?.textContent).toContain('40-part original');
+			expect(edition?.textContent).toContain('Bärenreiter');
+		});
+	});
 });
 
 describe('/library — empty state', () => {
