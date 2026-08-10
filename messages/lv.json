@@ -105,5 +105,11 @@
 	"library_lent_since": "kopš {date}",
 	"library_librarian_tools": "Bibliotekāra rīki",
 	"library_librarian_load_error": "Neizdevās pārbaudīt piekļuvi.",
-	"library_librarian_retry": "Mēģināt vēlreiz"
+	"library_librarian_retry": "Mēģināt vēlreiz",
+	"library_my_loans_title": "Mani izsniegumi ({count})",
+	"library_my_loans_overdue": "Kavēts",
+	"library_checkout_copy_placeholder": "Izvēlēties eksemplāru",
+	"library_checkout_member_placeholder": "Izvēlēties dalībnieku",
+	"library_checkout_submit": "Izsniegt",
+	"library_return": "Atgriezt"
 }

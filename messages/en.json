@@ -105,5 +105,11 @@
 	"library_lent_since": "since {date}",
 	"library_librarian_tools": "Librarian tools",
 	"library_librarian_load_error": "Couldn't check librarian access.",
-	"library_librarian_retry": "Retry"
+	"library_librarian_retry": "Retry",
+	"library_my_loans_title": "My loans ({count})",
+	"library_my_loans_overdue": "Overdue",
+	"library_checkout_copy_placeholder": "Select copy",
+	"library_checkout_member_placeholder": "Select member",
+	"library_checkout_submit": "Checkout",
+	"library_return": "Return"
 }

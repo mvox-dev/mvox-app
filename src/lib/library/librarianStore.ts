@@ -4,10 +4,17 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 export type LibrarianState = 'loading' | 'librarian' | 'not-librarian' | 'error';
 
+export interface LibrarianResult {
+	state: LibrarianState;
+	libraryId: string | null;
+}
+
 export const librarianStore: Writable<LibrarianState> = writable('loading');
+export const libraryEntityIdStore: Writable<string | null> = writable(null);
 
 export function resetLibrarian(): void {
 	librarianStore.set('loading');
+	libraryEntityIdStore.set(null);
 }
 
 // NOTE (module-graph): `$lib/entu/request` pulls in `$lib/entu-config`, which
@@ -22,7 +29,7 @@ export async function resolveLibrarian(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<LibrarianState> {
+): Promise<LibrarianResult> {
 	try {
 		const { entuFetch } = await import('$lib/entu/request');
 		const res = await entuFetch(
@@ -32,7 +39,7 @@ export async function resolveLibrarian(
 			{},
 			fetchImpl
 		);
-		if (!res.ok) return 'error';
+		if (!res.ok) return { state: 'error', libraryId: null };
 
 		const body = (await res.json()) as {
 			entities?: Array<{
@@ -42,12 +49,13 @@ export async function resolveLibrarian(
 			}>;
 		};
 		const lib = body.entities?.[0];
-		if (!lib) return 'not-librarian';
+		if (!lib) return { state: 'not-librarian', libraryId: null };
 
 		const isOwner = (lib._owner ?? []).some((p) => p.reference === personId);
 		const isEditor = (lib._editor ?? []).some((p) => p.reference === personId);
-		return isOwner || isEditor ? 'librarian' : 'not-librarian';
+		const state = isOwner || isEditor ? 'librarian' : 'not-librarian';
+		return { state, libraryId: lib._id };
 	} catch {
-		return 'error';
+		return { state: 'error', libraryId: null };
 	}
 }

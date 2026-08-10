@@ -6,7 +6,7 @@
 // path anywhere in the library surfaces (structural guard at the bottom of
 // this file).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -29,15 +29,22 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_node_retry: () => 'Retry',
 		library_librarian_tools: () => 'Librarian tools',
 		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry'
+		library_librarian_retry: () => 'Retry',
+		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
+		library_my_loans_overdue: () => 'Overdue',
+		library_checkout_copy_placeholder: () => 'Select copy',
+		library_checkout_member_placeholder: () => 'Select member',
+		library_checkout_submit: () => 'Checkout',
+		library_return: () => 'Return'
 	}
 }));
 
-const { listWorksMock, listEditionsMock, listCopiesMock, listLendingsMock, resolveBorrowerNamesMock } =
+const { listWorksMock, listEditionsMock, listCopiesMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock } =
 	vi.hoisted(() => ({
 		listWorksMock: vi.fn(),
 		listEditionsMock: vi.fn(),
 		listCopiesMock: vi.fn(),
+		listAllCopiesMock: vi.fn(),
 		listLendingsMock: vi.fn(),
 		resolveBorrowerNamesMock: vi.fn()
 	}));
@@ -48,6 +55,7 @@ vi.mock('$lib/library/libraryData', async () => {
 		listWorks: listWorksMock,
 		listEditions: listEditionsMock,
 		listCopies: listCopiesMock,
+		listAllCopies: listAllCopiesMock,
 		listLendings: listLendingsMock,
 		resolveBorrowerNames: resolveBorrowerNamesMock
 	};
@@ -60,6 +68,9 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // happy-dom. Same fix as page.profile.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 
+const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
+vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
+
 const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
 vi.mock('$lib/library/librarianStore', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>('$lib/library/librarianStore');
@@ -68,6 +79,12 @@ vi.mock('$lib/library/librarianStore', async () => {
 		resolveLibrarian: resolveLibrarianMock
 	};
 });
+
+// T6.4/#73 — "my loans" resolves the viewer's own active member the same way
+// RSVP already does (rsvpData.ts's findMyMemberId: person + status=active, no
+// org scoping in single-collective polyphony). Reused rather than re-derived.
+const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
+vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
@@ -85,7 +102,12 @@ function setAuthedWithOneCollective() {
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set('polyphony');
 	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
-	resolveLibrarianMock.mockResolvedValue('not-librarian');
+	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.
+	findMyMemberIdMock.mockResolvedValue(null);
+	// Default: empty checkout data, unless a test overrides.
+	listAllCopiesMock.mockResolvedValue([]);
+	listActiveMembersMock.mockResolvedValue([]);
 }
 
 function setNoCollective() {
@@ -104,6 +126,9 @@ afterEach(() => {
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
 	resolveLibrarianMock.mockReset();
+	findMyMemberIdMock.mockReset();
+	listAllCopiesMock.mockReset();
+	listActiveMembersMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -330,7 +355,7 @@ describe('#72 — librarian tools composition', () => {
 		listLendingsMock.mockResolvedValue([]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue('librarian');
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
 
@@ -345,7 +370,7 @@ describe('#72 — librarian tools composition', () => {
 		listLendingsMock.mockResolvedValue([]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue('not-librarian');
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -360,7 +385,7 @@ describe('#72 — librarian tools composition', () => {
 		listLendingsMock.mockResolvedValue([]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
-		resolveLibrarianMock.mockResolvedValue('error');
+		resolveLibrarianMock.mockResolvedValue({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
 
@@ -369,7 +394,7 @@ describe('#72 — librarian tools composition', () => {
 		});
 		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
 
-		resolveLibrarianMock.mockResolvedValue('librarian');
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		const retryBtn = container.querySelector('[data-testid="librarian-retry-load"]') as HTMLButtonElement;
 		expect(retryBtn).not.toBeNull();
 		await fireEvent.click(retryBtn);
@@ -377,6 +402,191 @@ describe('#72 — librarian tools composition', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull();
 		});
+	});
+});
+
+describe('#73 — my loans', () => {
+	it('renders the my-loans section when the current member has an active loan (returnedAt === "")', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+	});
+
+	it('does NOT render my-loans when the current member has no active loans', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-other', copyId: 'copy-1', memberId: 'member-other', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'lend-returned', copyId: 'copy-2', memberId: 'member-mine', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '2026-07-15' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="my-loans"]')).toBeNull();
+	});
+
+	it('shows an overdue indicator when assigned_until is in the past and the loan is still active', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2020-01-01', assignedUntil: '2020-02-01', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		// my-loans starts collapsed (see below) — expand it to reach the row.
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans-overdue-lend-mine"]')).not.toBeNull();
+		});
+	});
+
+	it.each([
+		['empty assigned_until', ''],
+		['future assigned_until', '2099-01-01']
+	])('does NOT show an overdue indicator when %s', async (_label, assignedUntil) => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2020-01-01', assignedUntil, returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans-item-lend-mine"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="my-loans-overdue-lend-mine"]')).toBeNull();
+	});
+
+	it('the my-loans section is collapsed by default — no loan rows until toggled', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="my-loans-item-lend-mine"]')).toBeNull();
+
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans-item-lend-mine"]')).not.toBeNull();
+		});
+	});
+});
+
+describe('#73 — librarian checkout + return', () => {
+	it('checkout form (copy picker + member picker + optional due date + submit) is visible to a librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="checkout-form"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="checkout-copy-select"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="checkout-member-select"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="checkout-due-date"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="checkout-submit"]')).not.toBeNull();
+	});
+
+	it('checkout form is hidden from a non-librarian', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-empty"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="checkout-form"]')).toBeNull();
+	});
+
+	it('a return button is visible on an active lending for a librarian', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]);
+		listCopiesMock.mockResolvedValue([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]);
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+
+		const { container } = render(Page);
+
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-return-copy-2"]')).not.toBeNull();
+		});
+	});
+
+	it('the return button is hidden from a non-librarian', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-1', copyId: 'copy-2', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
+		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]);
+		listCopiesMock.mockResolvedValue([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]);
+		setAuthedWithOneCollective();
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+
+		const { container } = render(Page);
+
+		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
+		await waitFor(() => expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull());
+		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-copy-copy-2"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="library-return-copy-2"]')).toBeNull();
 	});
 });
 

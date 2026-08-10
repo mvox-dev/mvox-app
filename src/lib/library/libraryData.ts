@@ -92,6 +92,30 @@ export async function listCopies(
 	}));
 }
 
+/**
+ * Flat list of ALL copies in the collective (no parent-edition filter). Used by
+ * the librarian checkout form where the copy picker must show every available
+ * copy regardless of which edition tree node the user has expanded.
+ */
+export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Copy[]> {
+	const res = await entuFetch(
+		cfg.db,
+		'entity?_type.string=copy&props=name,copy_number&limit=500',
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listAllCopies failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> }>;
+	};
+	return (body.entities ?? []).map((raw) => ({
+		id: raw._id,
+		name: raw.name?.[0]?.string ?? '',
+		copyNumber: raw.copy_number?.[0]?.number ?? 0
+	}));
+}
+
 export interface Lending {
 	id: string;
 	copyId: string;

@@ -2,6 +2,7 @@
 	// T6.3/#54 — the library browse page: works -> editions -> copies, availability
 	// derived from lending. Read-only throughout. Same state-machine shape as
 	// roster/+page.svelte (loading/no-collective/load-error/ready + generation guard).
+	// T6.4/#73 — my-loans section + librarian checkout/return UI.
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -9,6 +10,7 @@
 		listWorks,
 		listEditions,
 		listCopies,
+		listAllCopies,
 		listLendings,
 		resolveBorrowerNames,
 		deriveCopyAvailability,
@@ -17,7 +19,10 @@
 		type Copy,
 		type Lending
 	} from '$lib/library/libraryData';
-	import { librarianStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
+	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
+	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
+	import { findMyMemberId } from '$lib/rsvp/rsvpData';
+	import { createLending, returnLending } from '$lib/library/lendingActions';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -36,6 +41,27 @@
 	let copiesByEdition = $state<Map<string, Copy[]>>(new Map());
 	let editionNodeStatus = $state<Map<string, NodeStatus>>(new Map());
 	let copyNodeStatus = $state<Map<string, NodeStatus>>(new Map());
+
+	// #73 — my loans state
+	let myMemberId = $state<string | null>(null);
+	let myLoansExpanded = $state(false);
+
+	// Derived: active loans for the current member
+	let myActiveLoans = $derived(
+		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && l.returnedAt === '') : []
+	);
+
+	// #73 — checkout form state
+	let checkoutCopyId = $state('');
+	let checkoutMemberId = $state('');
+	let checkoutDueDate = $state('');
+	let checkoutError = $state('');
+	let returnError = $state('');
+
+	// #73 — checkout form data (loaded when librarian confirmed)
+	let allCopies = $state<Copy[]>([]);
+	let allMembers = $state<ActiveMember[]>([]);
+	let memberNames = $state<Map<string, string>>(new Map());
 
 	async function loadForSelected(): Promise<void> {
 		const current = selected;
@@ -67,6 +93,11 @@
 			lendings = lendingList;
 			borrowerNames = names;
 			status = 'ready';
+
+			// #73 — resolve current member for my-loans
+			findMyMemberId(cfg, current.personId).then((id) => {
+				if (g === generation) myMemberId = id;
+			});
 		} catch (e) {
 			if (g !== generation) return;
 			console.error('library: load failed', e);
@@ -160,10 +191,92 @@
 		resetLibrarian();
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
-		resolveLibrarian(cfg, current.personId).then((state) => {
-			if (g === librarianGen) librarianStore.set(state);
+		resolveLibrarian(cfg, current.personId).then((result) => {
+			if (g !== librarianGen) return;
+			librarianStore.set(result.state);
+			libraryEntityIdStore.set(result.libraryId);
+			// Load checkout form data when librarian confirmed
+			if (result.state === 'librarian') {
+				Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]).then(([copies, members]) => {
+					if (g !== librarianGen) return;
+					allCopies = copies;
+					allMembers = members;
+					const memberIdList = members.map((mbr) => mbr.memberId);
+					resolveBorrowerNames(cfg, memberIdList).then((names) => {
+						if (g === librarianGen) memberNames = names;
+					}).catch((e) => console.error('library: member name resolution failed', e));
+				}).catch((e) => console.error('library: checkout data load failed', e));
+			}
 		});
 	});
+
+	// #73 — checkout form submission
+	async function handleCheckout(event: Event): Promise<void> {
+		event.preventDefault();
+		checkoutError = '';
+		const current = selected;
+		if (!current) return;
+		const token = getToken();
+		if (!token) return;
+		if (!checkoutCopyId || !checkoutMemberId) return;
+		const libraryId = $libraryEntityIdStore;
+		if (!libraryId) return;
+		const cfg = { db: current.db, token };
+		const payload = {
+			copyId: checkoutCopyId,
+			memberId: checkoutMemberId,
+			assignedAt: new Date().toISOString().slice(0, 10),
+			...(checkoutDueDate ? { assignedUntil: checkoutDueDate } : {})
+		};
+		try {
+			await createLending(cfg, libraryId, payload);
+			// Refresh lending data after successful checkout
+			const lendingList = await listLendings(cfg);
+			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const names = await resolveBorrowerNames(cfg, activeMemberIds);
+			lendings = lendingList;
+			borrowerNames = names;
+			checkoutCopyId = '';
+			checkoutMemberId = '';
+			checkoutDueDate = '';
+		} catch (e) {
+			console.error('library: checkout failed', e);
+			checkoutError = e instanceof Error ? e.message : 'Checkout failed';
+		}
+	}
+
+	// #73 — return a lending
+	async function handleReturn(lendingId: string): Promise<void> {
+		returnError = '';
+		const current = selected;
+		if (!current) return;
+		const token = getToken();
+		if (!token) return;
+		const cfg = { db: current.db, token };
+		try {
+			await returnLending(cfg, lendingId);
+			// Refresh lending data after successful return
+			const lendingList = await listLendings(cfg);
+			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const names = await resolveBorrowerNames(cfg, activeMemberIds);
+			lendings = lendingList;
+			borrowerNames = names;
+		} catch (e) {
+			console.error('library: return failed', e);
+			returnError = e instanceof Error ? e.message : 'Return failed';
+		}
+	}
+
+	function isOverdue(assignedUntil: string): boolean {
+		if (!assignedUntil) return false;
+		const today = new Date().toISOString().slice(0, 10);
+		return assignedUntil < today;
+	}
+
+	// Find the active lending for a given copy (for return button)
+	function activeLendingForCopy(copyId: string): Lending | undefined {
+		return lendings.find((l) => l.copyId === copyId && l.returnedAt === '');
+	}
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
@@ -173,6 +286,29 @@
 		{#if $librarianStore === 'librarian'}
 			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
 				{m.library_librarian_tools()}
+
+				<!-- #73 — checkout form -->
+				<form data-testid="checkout-form" class="mt-3 flex flex-col gap-2" onsubmit={handleCheckout}>
+					<select data-testid="checkout-copy-select" bind:value={checkoutCopyId} required class="rounded border border-ink-5 px-2 py-1 text-xs">
+						<option value="">{m.library_checkout_copy_placeholder()}</option>
+						{#each allCopies as copy (copy.id)}
+							<option value={copy.id}>{copy.name || `#${copy.copyNumber}`}</option>
+						{/each}
+					</select>
+					<select data-testid="checkout-member-select" bind:value={checkoutMemberId} required class="rounded border border-ink-5 px-2 py-1 text-xs">
+						<option value="">{m.library_checkout_member_placeholder()}</option>
+						{#each allMembers as member (member.memberId)}
+							<option value={member.memberId}>{memberNames.get(member.memberId) || member.memberId}</option>
+						{/each}
+					</select>
+					<input data-testid="checkout-due-date" type="date" bind:value={checkoutDueDate} class="rounded border border-ink-5 px-2 py-1 text-xs" />
+					<button data-testid="checkout-submit" type="submit" class="self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper">
+						{m.library_checkout_submit()}
+					</button>
+					{#if checkoutError}
+						<p data-testid="checkout-error" class="text-xs text-red-700" role="alert">{checkoutError}</p>
+					{/if}
+				</form>
 			</section>
 		{:else if $librarianStore === 'error'}
 			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
@@ -184,14 +320,58 @@
 					onclick={() => {
 						if (!selected) return;
 						const token = getToken();
-						resolveLibrarian({ db: selected.db, token: token ?? '' }, selected.personId).then((state) => {
-							librarianStore.set(state);
+						const cfg = { db: selected.db, token: token ?? '' };
+						resolveLibrarian(cfg, selected.personId).then((result) => {
+							librarianStore.set(result.state);
+							libraryEntityIdStore.set(result.libraryId);
+							if (result.state === 'librarian') {
+								Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]).then(([copies, members]) => {
+									allCopies = copies;
+									allMembers = members;
+									const memberIdList = members.map((mbr) => mbr.memberId);
+									resolveBorrowerNames(cfg, memberIdList).then((names) => {
+										memberNames = names;
+									}).catch((e) => console.error('library: member name resolution failed', e));
+								}).catch((e) => console.error('library: checkout data load failed', e));
+							}
 						});
 					}}
 				>
 					{m.library_librarian_retry()}
 				</button>
 			</div>
+		{/if}
+
+		{#if returnError}
+			<p data-testid="return-error" class="text-xs text-red-700" role="alert">{returnError}</p>
+		{/if}
+
+		<!-- #73 — my loans section -->
+		{#if myActiveLoans.length > 0}
+			<section data-testid="my-loans" class="rounded-md border border-ink-5 px-4 py-3">
+				<button
+					type="button"
+					data-testid="my-loans-toggle"
+					class="flex w-full items-center justify-between text-left text-sm font-medium"
+					aria-expanded={myLoansExpanded}
+					onclick={() => { myLoansExpanded = !myLoansExpanded; }}
+				>
+					<span>{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
+					<span aria-hidden="true">{myLoansExpanded ? '▾' : '▸'}</span>
+				</button>
+				{#if myLoansExpanded}
+					<ul class="mt-2 flex flex-col gap-1">
+						{#each myActiveLoans as loan (loan.id)}
+							<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
+								<span>Copy: {loan.copyId}</span>
+								{#if isOverdue(loan.assignedUntil)}
+									<span data-testid="my-loans-overdue-{loan.id}" class="text-red-700">{m.library_my_loans_overdue()}</span>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</section>
 		{/if}
 
 		{#if status === 'no-collective'}
@@ -293,20 +473,33 @@
 													{:else}
 														{#each copiesByEdition.get(edition.id) ?? [] as copy (copy.id)}
 															{@const availability = deriveCopyAvailability(copy.id, lendings)}
+															{@const activeLending = activeLendingForCopy(copy.id)}
 															<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">
 																<span class="text-ink">{copy.name}</span>
-																{#if availability.status === 'available'}
-																	<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">{m.library_copy_available()}</span>
-																{:else}
-																	<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">
-																		{m.library_copy_lent_to({
-																			name: borrowerNames.get(availability.memberId) || m.library_borrower_unknown()
-																		})}
-																		{#if availability.assignedAt}
-																			· {m.library_lent_since({ date: availability.assignedAt })}
+																<span class="flex items-center gap-1">
+																	{#if availability.status === 'available'}
+																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">{m.library_copy_available()}</span>
+																	{:else}
+																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">
+																			{m.library_copy_lent_to({
+																				name: borrowerNames.get(availability.memberId) || m.library_borrower_unknown()
+																			})}
+																			{#if availability.assignedAt}
+																				· {m.library_lent_since({ date: availability.assignedAt })}
+																			{/if}
+																		</span>
+																		{#if $librarianStore === 'librarian' && activeLending}
+																			<button
+																				type="button"
+																				data-testid="library-return-{copy.id}"
+																				class="rounded-md border border-ink px-2 py-0.5 text-xs hover:bg-ink hover:text-paper"
+																				onclick={() => handleReturn(activeLending.id)}
+																			>
+																				{m.library_return()}
+																			</button>
 																		{/if}
-																	</span>
-																{/if}
+																	{/if}
+																</span>
 															</div>
 														{/each}
 													{/if}
