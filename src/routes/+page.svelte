@@ -28,6 +28,9 @@
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
+	import { loadWorksByEventId } from '$lib/repertoire/workRows';
+	import { signFileUrl } from '$lib/repertoire/fileUrls';
+	import type { WorkRow } from '$lib/repertoire/types';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -88,6 +91,15 @@
 	// (season.conductors + event.conductors on each AgendaItem).
 	let recentItems = $state<AgendaItem[]>([]);
 	let conductorEventIds = $state<Set<string>>(new Set());
+
+	// #90 TR.2 — the works view model per event id (upcoming AND recent rows),
+	// resolved once the agenda itself has loaded (it needs the event ids and the
+	// current season). Same supplementary-data posture as rsvpByEventId: a
+	// failure here leaves every row work-free rather than breaking the agenda.
+	let worksByEventId = $state<Record<string, WorkRow[]>>({});
+	// A PDF whose click-time signing rejected — surfaced inline rather than
+	// leaving the member staring at a tab that never navigated.
+	let pdfError = $state(false);
 
 	// #85 TA.4 — the season summary's expand state (conductor-only) + the
 	// full-roster rates it reveals. Loaded lazily on first expand (most visits
@@ -150,6 +162,8 @@
 			failedEventIds = new Set();
 			recentItems = [];
 			conductorEventIds = new Set();
+			worksByEventId = {};
+			pdfError = false;
 			resetConductor();
 			closeAttendancePanel();
 			rosterCache = null;
@@ -173,6 +187,8 @@
 		memberId = null;
 		membership = 'loading';
 		failedEventIds = new Set();
+		worksByEventId = {};
+		pdfError = false;
 		rosterCache = null;
 		attendanceFailedByEvent = new Map();
 		myAttendance = [];
@@ -188,11 +204,27 @@
 		// loadRecentEvents() pair. Seasons and rehearsals are fetched once;
 		// conductor data rides on the already-fetched props (no separate reads).
 		loadFullAgenda()
-			.then(({ upcoming, recent, seasonConductors }) => {
+			.then(({ upcoming, recent, seasonId, seasonConductors }) => {
 				if (thisRequest !== requestId) return; // superseded by a newer selection
 				agendaItems = upcoming;
 				agendaLoading = false;
 				recentItems = recent;
+
+				// #90 TR.2 — the Works element on every row. Resolved HERE (not in a
+				// parallel branch above) because it needs the event ids and the
+				// current season id the agenda load just produced. Supplementary:
+				// a rejection leaves rows work-free, it never fails the agenda.
+				const worksCfg = { db: current.db, token: getToken() ?? '' };
+				const eventIds = [...upcoming, ...recent].map((item) => item.id);
+				loadWorksByEventId(worksCfg, eventIds, seasonId)
+					.then((byEvent) => {
+						if (thisRequest !== requestId) return;
+						worksByEventId = byEvent;
+					})
+					.catch(() => {
+						if (thisRequest !== requestId) return;
+						worksByEventId = {};
+					});
 				// Conductor event IDs: pure computation on already-loaded data (no IO).
 				const ids = computeConductorEventIds(personId, seasonConductors, recent);
 				conductorEventIds = ids;
@@ -214,6 +246,7 @@
 				agendaError = true;
 				recentItems = [];
 				conductorEventIds = new Set();
+				worksByEventId = {};
 				resetConductor();
 			});
 
@@ -320,6 +353,32 @@
 			: null;
 
 		rsvpQueue.request({ cfg, personId, memberId, eventId: item.id, existing, newStatus });
+	}
+
+	// #90 TR.2 — the PDF download, signed AT CLICK TIME. Entu's signed S3 url is
+	// valid for 60 seconds (entu-www src/api/files/index.md), so it can never be
+	// resolved at agenda load and parked in an href; RepertoireElement hands up
+	// the file property id instead and this signs it now.
+	//
+	// The blank tab is opened SYNCHRONOUSLY, inside the click's user-gesture
+	// window — a window.open() issued after the signing await is swallowed by
+	// popup blockers. If the blocker took it anyway (tab === null) we navigate
+	// the current tab rather than silently dropping the download.
+	function handlePdfClick(fileId: string) {
+		if (!selected) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		pdfError = false;
+		const tab = window.open('', '_blank');
+		if (tab) tab.opener = null;
+		signFileUrl(cfg, fileId)
+			.then((url) => {
+				if (tab) tab.location.href = url;
+				else window.location.href = url;
+			})
+			.catch(() => {
+				tab?.close();
+				pdfError = true;
+			});
 	}
 
 	// #84 TA.3 — open/close the inline "Take attendance" panel and load its data
@@ -667,6 +726,8 @@
 							{recentItems}
 							{conductorEventIds}
 							{myAttendanceByEventId}
+							{worksByEventId}
+							onpdfclick={handlePdfClick}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}
 						>
@@ -682,6 +743,11 @@
 								/>
 							{/snippet}
 						</AgendaList>
+						{#if pdfError}
+							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red" role="alert">
+								{m.repertoire_pdf_error()}
+							</p>
+						{/if}
 						{#if attendanceItem}
 							<AttendanceSurface
 								item={attendanceItem}

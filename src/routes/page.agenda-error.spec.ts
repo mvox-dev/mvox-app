@@ -71,6 +71,14 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	}
 }));
 
+// #90 TR.2 — the page now resolves each row's Works element and signs PDFs on
+// click. Mocked here for the same reason agendaData/rsvpData are: both modules
+// pull in $lib/entu/request -> $env/dynamic/public, which is unavailable
+// outside a SvelteKit request context under happy-dom (and neither belongs in
+// these specs' subject).
+vi.mock('$lib/repertoire/workRows', () => ({ loadWorksByEventId: vi.fn().mockResolvedValue({}) }));
+vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';

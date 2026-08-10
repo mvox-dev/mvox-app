@@ -144,5 +144,9 @@
 	"library_work_availability": "{available}/{total}",
 	"library_inline_checkout_placeholder": "Vali liige",
 	"library_inline_checkout_already_lent": "Laenutatud alates {date}",
-	"library_inline_checkout_error": "Laenutamine ebaõnnestus"
+	"library_inline_checkout_error": "Laenutamine ebaõnnestus",
+	"repertoire_no_edition": "Trükiväljaanne valimata",
+	"repertoire_pdf_link": "PDF",
+	"repertoire_borrow_link": "Laenuta",
+	"repertoire_pdf_error": "PDF-i avamine ebaõnnestus — proovi uuesti."
 }

@@ -144,5 +144,9 @@
 	"library_work_availability": "{available}/{total}",
 	"library_inline_checkout_placeholder": "Select member",
 	"library_inline_checkout_already_lent": "Lent since {date}",
-	"library_inline_checkout_error": "Checkout failed"
+	"library_inline_checkout_error": "Checkout failed",
+	"repertoire_no_edition": "No pinned edition",
+	"repertoire_pdf_link": "PDF",
+	"repertoire_borrow_link": "Borrow",
+	"repertoire_pdf_error": "Could not open the PDF — try again."
 }

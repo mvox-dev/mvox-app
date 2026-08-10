@@ -144,5 +144,9 @@
 	"library_work_availability": "{available}/{total}",
 	"library_inline_checkout_placeholder": "Izvēlēties dalībnieku",
 	"library_inline_checkout_already_lent": "Izsniegts kopš {date}",
-	"library_inline_checkout_error": "Izsniegšana neizdevās"
+	"library_inline_checkout_error": "Izsniegšana neizdevās",
+	"repertoire_no_edition": "Izdevums nav norādīts",
+	"repertoire_pdf_link": "PDF",
+	"repertoire_borrow_link": "Aizņemties",
+	"repertoire_pdf_error": "Neizdevās atvērt PDF — mēģini vēlreiz."
 }

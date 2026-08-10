@@ -5,13 +5,13 @@ import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', () => {
+	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
 		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
-		agenda_duration_min: (params: { minutes: number }) => `${params.minutes} min`,
+		agenda_duration_min: (params) => `${(params as { minutes: number }).minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
-		agenda_gap_weeks: (params: { weeks: number }) => `${params.weeks} weeks later`,
+		agenda_gap_weeks: (params) => `${(params as { weeks: number }).weeks} weeks later`,
 		// #12 — RsvpControl's keys, added here up front so this mock stays valid once
 		// Byrd's GREEN wires the real RsvpControl (which imports the same module) into
 		// each row.
@@ -21,8 +21,17 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_late: () => 'Running late',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.'
-	}
-}));
+	};
+	return {
+		// #90 TR.2 — Proxy fallback: any key NOT enumerated above resolves to a
+		// `[key]` stub, so wiring RepertoireElement (which may add its own i18n
+		// keys) into a row can never crash this mock. Assertions on translated
+		// copy keep using the enumerated keys.
+		m: new Proxy(keys, {
+			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
+		})
+	};
+});
 
 afterEach(cleanup);
 
@@ -395,4 +404,61 @@ describe('AgendaList — per-event write-failure indicator (failedEventIds)', ()
 	});
 });
 
+// ── AgendaList — Works line per row (#90 TR.2) ──────────────────────────────
+// Wiring contract only — the collapsed/expanded Works behavior itself is
+// covered by RepertoireElement.spec.ts. Same seam as rsvpByEventId: the page
+// resolves the works view model (resolveEventWorks + edition details) and
+// hands it in as a plain prop, keyed by event id:
+//   worksByEventId: Record<string, WorkRow[]>  (WorkRow shape pinned in
+//   RepertoireElement.spec.ts)
+// An event with no entry (or an empty array) renders NO works line.
+
+describe('AgendaList — Works line per row (#90 TR.2)', () => {
+	const worksByEventId = {
+		r1: [
+			{
+				id: 'ri-1',
+				workName: 'Spem in alium',
+				composer: 'Thomas Tallis',
+				status: 'active' as const,
+				editionName: '40-part original',
+				ordinal: null,
+				fileId: '',
+				externalLinks: [],
+				canBorrow: false,
+				notes: ''
+			}
+		]
+	};
+
+	it("renders the Works line inside the row whose event id has works — and the line names that row's works", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const line = row?.querySelector('[data-testid="works-line"]');
+		expect(line).not.toBeNull();
+		expect(line?.textContent).toContain('Spem in alium');
+	});
+
+	it('renders NO Works line for a row without works — the element is per-event, absent when empty', () => {
+		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
+		const row2 = container.querySelector('[data-testid="agenda-row-r2"]'); // r2 has no entry
+		expect(row2?.querySelector('[data-testid="works-line"]')).toBeNull();
+	});
+
+	it('renders NO Works line anywhere when worksByEventId is not provided at all', () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
+	});
+
+	it('forwards onpdfclick down to the row\'s works element (the page signs the url at click time)', async () => {
+		const onpdfclick = vi.fn();
+		const works = { r1: [{ ...worksByEventId.r1[0], fileId: 'file-1' }] };
+		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId: works, onpdfclick });
+		await fireEvent.click(container.querySelector('[data-testid="works-line"]')!);
+		await fireEvent.click(container.querySelector('[data-testid="work-link-pdf"]')!);
+		expect(onpdfclick).toHaveBeenCalledWith('file-1');
+	});
+});
+
 // (*MVOX:Byrd*)
+// (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)

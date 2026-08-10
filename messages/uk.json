@@ -144,5 +144,9 @@
 	"library_work_availability": "{available}/{total}",
 	"library_inline_checkout_placeholder": "Обрати учасника",
 	"library_inline_checkout_already_lent": "Видано з {date}",
-	"library_inline_checkout_error": "Не вдалося видати"
+	"library_inline_checkout_error": "Не вдалося видати",
+	"repertoire_no_edition": "Видання не вказано",
+	"repertoire_pdf_link": "PDF",
+	"repertoire_borrow_link": "Позичити",
+	"repertoire_pdf_error": "Не вдалося відкрити PDF — спробуйте ще раз."
 }

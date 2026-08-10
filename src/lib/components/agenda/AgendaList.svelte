@@ -5,6 +5,11 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from './RsvpControl.svelte';
+	import RepertoireElement from './RepertoireElement.svelte';
+	// #90 TR.2 — ONE definition of the works view model, shared with
+	// RepertoireElement and its producer (repertoire/workRows.ts). Previously
+	// duplicated inline here, which let the two copies drift silently.
+	import type { WorkRow } from '$lib/repertoire/types';
 
 	/** #85 TA.4 — the four attendance-badge states a RECENT (past) row can carry.
 	 *  'not-recorded' is a genuine 4th state (a past event nobody marked for me),
@@ -63,6 +68,16 @@
 		// as a snippet so it sits inside this component's 'agenda-recent' markup
 		// without AgendaList taking on any attendance IO itself.
 		seasonSummary?: Snippet;
+		// #90 TR.2 — the page resolves the works view model per event (via
+		// repertoire/workRows.ts's loadWorksByEventId) and hands it in keyed by
+		// event id, same seam as rsvpByEventId. An event id absent from the map
+		// (or mapped to an empty array) renders NO Works line at all — the
+		// element is per-event, not a fixed slot.
+		worksByEventId?: Record<string, WorkRow[]>;
+		// #90 TR.2 — forwarded to every RepertoireElement: a tapped PDF is signed
+		// AT CLICK TIME by the page (the signed url lives 60s), never pre-resolved
+		// into an href.
+		onpdfclick?: (fileId: string) => void;
 	}
 	const {
 		items,
@@ -76,7 +91,9 @@
 		conductorEventIds = new Set<string>(),
 		ontakeattendance,
 		myAttendanceByEventId = {},
-		seasonSummary
+		seasonSummary,
+		worksByEventId = {},
+		onpdfclick
 	}: Props = $props();
 
 	const BADGE_DOT_CLASS: Record<BadgeStatus, string> = {
@@ -226,6 +243,9 @@
 					{#if item.location}
 						<span class="truncate text-xs text-ink-2">{item.location}</span>
 					{/if}
+					{#if worksByEventId[item.id]?.length}
+						<RepertoireElement rows={worksByEventId[item.id]} {onpdfclick} />
+					{/if}
 					<!-- Past event → the singer's own RsvpControl is read-only (always the
 					     'pending'/disabled reason — there is nothing left to answer, and no
 					     write is in flight either; reusing 'pending' keeps this a silent
@@ -313,6 +333,9 @@
 							<span class="truncate text-sm text-ink">{item.name}</span>
 							{#if item.location}
 								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
+							{/if}
+							{#if worksByEventId[item.id]?.length}
+								<RepertoireElement rows={worksByEventId[item.id]} {onpdfclick} />
 							{/if}
 							<RsvpControl
 								status={rsvpByEventId[item.id]?.status ?? null}
