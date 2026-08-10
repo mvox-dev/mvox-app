@@ -95,7 +95,7 @@ describe('listCopies', () => {
 			})
 		);
 		const copies = await listCopies(cfg, 'edition-1', fetchImpl);
-		expect(copies).toEqual<Copy[]>([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 }]);
+		expect(copies).toEqual<Copy[]>([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }]);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=copy');
 		expect(url).toContain('_parent.reference=edition-1');

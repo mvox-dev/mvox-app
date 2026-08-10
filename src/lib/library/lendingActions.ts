@@ -1,6 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Lending } from './libraryData';
+import { listCopies } from './libraryData';
 
 // T6.4/#73 — the library WRITE path (lending operations). Separated from
 // libraryData.ts which is explicitly read-only (see its module header).
@@ -83,9 +84,18 @@ export async function returnLending(
 
 // ── #74 bulk checkout + return ──────────────────────────────────────────────
 
+/** Default copy resolver for bulkCheckout — fetches copies under the given edition. */
+async function defaultResolveCopies(
+	cfg: EntuCfg,
+	editionId: string,
+	fetchImpl: typeof fetch
+): Promise<Array<{ id: string }>> {
+	return listCopies(cfg, editionId, fetchImpl);
+}
+
 export interface BulkCheckoutPayload {
-	copyIds: string[];
-	memberId: string;
+	editionId: string;
+	memberIds: string[];
 	assignedAt: string;
 	assignedUntil?: string;
 }
@@ -101,40 +111,53 @@ export interface BulkReturnResult {
 }
 
 /**
- * Check out multiple copies to the same member in one batch. Uses
- * Promise.allSettled so partial failures don't abort the whole operation.
+ * Check out copies of a single edition to multiple members. Resolves copies
+ * for the chosen edition internally, filters out copies already on loan
+ * (cross-checked against `activeLendings`), then creates one lending per
+ * ticked member. Uses Promise.allSettled so partial failures don't abort the
+ * whole operation.
  */
 export async function bulkCheckout(
 	cfg: EntuCfg,
 	libraryId: string,
 	payload: BulkCheckoutPayload,
-	fetchImpl: typeof fetch = fetch
+	activeLendings: Lending[],
+	fetchImpl: typeof fetch = fetch,
+	resolveCopies: (cfg: EntuCfg, editionId: string, fetchImpl: typeof fetch) => Promise<Array<{ id: string }>> = defaultResolveCopies
 ): Promise<BulkResult> {
+	// Step 1: resolve copies for this edition, then exclude already-lent ones
+	const allCopies = await resolveCopies(cfg, payload.editionId, fetchImpl);
+	const lentCopyIds = new Set(
+		activeLendings.filter((l) => l.returnedAt === '').map((l) => l.copyId)
+	);
+	const copies = allCopies.filter((c) => !lentCopyIds.has(c.id));
+
+	// Step 2: fail excess members who have no available copy
+	const failed: Array<{ copyId: string; error: string }> = [];
+	for (let i = copies.length; i < payload.memberIds.length; i++) {
+		failed.push({ copyId: '', error: `No available copy for member ${payload.memberIds[i]}` });
+	}
+
+	// Step 3: attempt checkouts for feasible members (one copy per member)
+	const feasibleMembers = payload.memberIds.slice(0, copies.length);
 	const results = await Promise.allSettled(
-		payload.copyIds.map((copyId) =>
-			createLending(
-				cfg,
-				libraryId,
-				{
-					copyId,
-					memberId: payload.memberId,
-					assignedAt: payload.assignedAt,
-					...(payload.assignedUntil ? { assignedUntil: payload.assignedUntil } : {})
-				},
-				fetchImpl
-			)
+		feasibleMembers.map((memberId, i) =>
+			createLending(cfg, libraryId, {
+				copyId: copies[i].id,
+				memberId,
+				assignedAt: payload.assignedAt,
+				...(payload.assignedUntil ? { assignedUntil: payload.assignedUntil } : {})
+			}, fetchImpl)
 		)
 	);
 
 	const succeeded: Lending[] = [];
-	const failed: Array<{ copyId: string; error: string }> = [];
-
 	results.forEach((result, i) => {
 		if (result.status === 'fulfilled') {
 			succeeded.push(result.value);
 		} else {
 			failed.push({
-				copyId: payload.copyIds[i],
+				copyId: copies[i].id,
 				error: result.reason instanceof Error ? result.reason.message : String(result.reason)
 			});
 		}

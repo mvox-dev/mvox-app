@@ -37,13 +37,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_checkout_submit: () => 'Checkout',
 		library_return: () => 'Return',
 		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_return_title: () => 'Bulk return'
+		library_bulk_checkout_edition_placeholder: () => 'Select edition',
+		library_bulk_return_title: () => 'Bulk return',
+		library_bulk_return_edition_placeholder: () => 'Select edition'
 	}
 }));
 
-const { listWorksMock, listEditionsMock, listCopiesMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock } =
+const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock } =
 	vi.hoisted(() => ({
 		listWorksMock: vi.fn(),
+		listAllEditionsMock: vi.fn(),
 		listEditionsMock: vi.fn(),
 		listCopiesMock: vi.fn(),
 		listAllCopiesMock: vi.fn(),
@@ -57,6 +60,7 @@ vi.mock('$lib/library/libraryData', async () => {
 		listWorks: listWorksMock,
 		listEditions: listEditionsMock,
 		listCopies: listCopiesMock,
+		listAllEditions: listAllEditionsMock,
 		listAllCopies: listAllCopiesMock,
 		listLendings: listLendingsMock,
 		resolveBorrowerNames: resolveBorrowerNamesMock
@@ -98,6 +102,7 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('polyphony');
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
+	listAllEditionsMock.mockResolvedValue([]);
 	listAllCopiesMock.mockResolvedValue([]);
 	listActiveMembersMock.mockResolvedValue([]);
 }
@@ -116,6 +121,7 @@ afterEach(() => {
 	resolveBorrowerNamesMock.mockReset();
 	resolveLibrarianMock.mockReset();
 	findMyMemberIdMock.mockReset();
+	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
 	listActiveMembersMock.mockReset();
 	clearAll({ preserveProvider: false });
@@ -297,6 +303,9 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 		listLendingsMock.mockResolvedValue([]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedLibrarian();
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter' }
+		]);
 		listAllCopiesMock.mockResolvedValue([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
@@ -308,20 +317,29 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 		const { container } = render(Page);
 
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-checkout"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="bulk-checkout-edition-select"]')).not.toBeNull();
 		});
 
-		const bulkCheckout = container.querySelector('[data-testid="bulk-checkout"]') as HTMLElement;
-		const checkboxes = bulkCheckout.querySelectorAll('input[type="checkbox"]');
-		// There should be checkboxes for selecting copies in bulk
+		// Select an edition to reveal the member checkboxes
+		const select = container.querySelector('[data-testid="bulk-checkout-edition-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'edition-1' } });
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-checkout-member-list"]')).not.toBeNull();
+		});
+
+		const memberList = container.querySelector('[data-testid="bulk-checkout-member-list"]') as HTMLElement;
+		const checkboxes = memberList.querySelectorAll('input[type="checkbox"]');
+		// There should be checkboxes for selecting members in bulk
 		expect(checkboxes.length).toBeGreaterThan(0);
 
-		// Each checkbox must have either an aria-label or an associated label
+		// Each checkbox must have either an aria-label, an associated label[for], or be inside a <label>
 		checkboxes.forEach((cb) => {
 			const hasAriaLabel = cb.getAttribute('aria-label') !== null && cb.getAttribute('aria-label') !== '';
 			const id = cb.getAttribute('id');
-			const hasLabel = id ? container.querySelector(`label[for="${id}"]`) !== null : false;
-			expect(hasAriaLabel || hasLabel).toBe(true);
+			const hasExplicitLabel = id ? container.querySelector(`label[for="${id}"]`) !== null : false;
+			const hasImplicitLabel = cb.closest('label') !== null;
+			expect(hasAriaLabel || hasExplicitLabel || hasImplicitLabel).toBe(true);
 		});
 	});
 
@@ -332,26 +350,38 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 		]);
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
 		setAuthedLibrarian();
-		listAllCopiesMock.mockResolvedValue([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 }]);
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter' }
+		]);
+		listAllCopiesMock.mockResolvedValue([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }]);
 		listActiveMembersMock.mockResolvedValue([{ memberId: 'member-a' }]);
 
 		const { container } = render(Page);
 
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="bulk-return"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="bulk-return-edition-select"]')).not.toBeNull();
 		});
 
-		const bulkReturn = container.querySelector('[data-testid="bulk-return"]') as HTMLElement;
-		const checkboxes = bulkReturn.querySelectorAll('input[type="checkbox"]');
+		// Select an edition to reveal the loan checkboxes
+		const select = container.querySelector('[data-testid="bulk-return-edition-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'edition-1' } });
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-return-loan-list"]')).not.toBeNull();
+		});
+
+		const loanList = container.querySelector('[data-testid="bulk-return-loan-list"]') as HTMLElement;
+		const checkboxes = loanList.querySelectorAll('input[type="checkbox"]');
 		// There should be checkboxes for selecting lendings to return in bulk
 		expect(checkboxes.length).toBeGreaterThan(0);
 
-		// Each checkbox must have either an aria-label or an associated label
+		// Each checkbox must have either an aria-label, an associated label[for], or be inside a <label>
 		checkboxes.forEach((cb) => {
 			const hasAriaLabel = cb.getAttribute('aria-label') !== null && cb.getAttribute('aria-label') !== '';
 			const id = cb.getAttribute('id');
-			const hasLabel = id ? container.querySelector(`label[for="${id}"]`) !== null : false;
-			expect(hasAriaLabel || hasLabel).toBe(true);
+			const hasExplicitLabel = id ? container.querySelector(`label[for="${id}"]`) !== null : false;
+			const hasImplicitLabel = cb.closest('label') !== null;
+			expect(hasAriaLabel || hasExplicitLabel || hasImplicitLabel).toBe(true);
 		});
 	});
 });

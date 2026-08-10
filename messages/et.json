@@ -114,5 +114,7 @@
 	"library_checkout_submit": "Laenuta",
 	"library_return": "Tagasta",
 	"library_bulk_checkout_title": "Hulgilaenutus",
-	"library_bulk_return_title": "Hulgitagastus"
+	"library_bulk_checkout_edition_placeholder": "Vali väljaanne",
+	"library_bulk_return_title": "Hulgitagastus",
+	"library_bulk_return_edition_placeholder": "Vali väljaanne"
 }

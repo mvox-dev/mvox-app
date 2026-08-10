@@ -145,21 +145,26 @@ describe('returnLending', () => {
 	});
 });
 
-// ── #74 bulkCheckout ─────────────────────────────────────────────────────────
+// ── #74 bulkCheckout (edition-first, member-multi) ──────────────────────────
 
 describe('bulkCheckout', () => {
-	function makeFetchMock(opts?: { failCopyIds?: string[] }) {
-		const failSet = new Set(opts?.failCopyIds ?? []);
+	// Mock copy resolver: returns N copies for a given edition
+	function makeResolveCopies(copies: Array<{ id: string }> = [{ id: 'copy-1' }, { id: 'copy-2' }, { id: 'copy-3' }]) {
+		return vi.fn().mockResolvedValue(copies);
+	}
+
+	function makeFetchMock(opts?: { failMemberIds?: string[] }) {
+		const failSet = new Set(opts?.failMemberIds ?? []);
 		let callIndex = 0;
 		return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 			// Type resolution call
 			if (url.includes('_type.string=entity')) {
 				return Promise.resolve(json({ entities: [{ _id: 'lending-type-id' }] }));
 			}
-			// Entity create call — check the body for copy reference to determine success/failure
+			// Entity create call — check the body for member reference to determine success/failure
 			const body = JSON.parse(String(init?.body)) as Array<{ type: string; reference?: string }>;
-			const copyProp = body.find((p) => p.type === 'copy');
-			if (copyProp && failSet.has(copyProp.reference!)) {
+			const memberProp = body.find((p) => p.type === 'member');
+			if (memberProp && failSet.has(memberProp.reference!)) {
 				return Promise.resolve(json({}, 500));
 			}
 			callIndex++;
@@ -168,46 +173,63 @@ describe('bulkCheckout', () => {
 	}
 
 	const basePayload: BulkCheckoutPayload = {
-		copyIds: ['copy-1', 'copy-2', 'copy-3'],
-		memberId: 'member-1',
+		editionId: 'edition-1',
+		memberIds: ['member-1', 'member-2', 'member-3'],
 		assignedAt: '2026-08-10'
 	};
 
-	it('all succeed — returns N Lendings in succeeded, empty failed', async () => {
+	it('all succeed — returns N Lendings in succeeded (one per member), empty failed', async () => {
 		const fetchImpl = makeFetchMock();
-		const result: BulkResult = await bulkCheckout(cfg, 'library-1', basePayload, fetchImpl);
+		const resolveCopies = makeResolveCopies();
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', basePayload, [], fetchImpl, resolveCopies);
 
 		expect(result.succeeded).toHaveLength(3);
 		expect(result.failed).toHaveLength(0);
-		expect(result.succeeded.map((l) => l.copyId)).toEqual(['copy-1', 'copy-2', 'copy-3']);
-		expect(result.succeeded.every((l) => l.memberId === 'member-1')).toBe(true);
+		expect(result.succeeded.map((l) => l.memberId)).toEqual(['member-1', 'member-2', 'member-3']);
 		expect(result.succeeded.every((l) => l.assignedAt === '2026-08-10')).toBe(true);
+		// Each lending got a copy from the resolved set
+		expect(result.succeeded.map((l) => l.copyId)).toEqual(['copy-1', 'copy-2', 'copy-3']);
 	});
 
-	it('partial failure — some succeed, some fail (errored copyIds end up in failed)', async () => {
-		const fetchImpl = makeFetchMock({ failCopyIds: ['copy-2'] });
-		const result: BulkResult = await bulkCheckout(cfg, 'library-1', basePayload, fetchImpl);
+	it('resolves copies for the given editionId (not raw copyIds in payload)', async () => {
+		const fetchImpl = makeFetchMock();
+		const resolveCopies = makeResolveCopies([{ id: 'copy-a' }, { id: 'copy-b' }]);
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-42',
+			memberIds: ['member-1', 'member-2'],
+			assignedAt: '2026-08-10'
+		};
+		await bulkCheckout(cfg, 'library-1', payload, [], fetchImpl, resolveCopies);
+
+		expect(resolveCopies).toHaveBeenCalledWith(cfg, 'edition-42', fetchImpl);
+	});
+
+	it('partial failure — some succeed, some fail (errored members end up in failed)', async () => {
+		const fetchImpl = makeFetchMock({ failMemberIds: ['member-2'] });
+		const resolveCopies = makeResolveCopies();
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', basePayload, [], fetchImpl, resolveCopies);
 
 		expect(result.succeeded).toHaveLength(2);
-		expect(result.succeeded.map((l) => l.copyId)).toEqual(['copy-1', 'copy-3']);
+		expect(result.succeeded.map((l) => l.memberId)).toEqual(['member-1', 'member-3']);
 		expect(result.failed).toHaveLength(1);
 		expect(result.failed[0].copyId).toBe('copy-2');
 		expect(result.failed[0].error).toBeTruthy();
 	});
 
 	it('all fail — empty succeeded, all in failed', async () => {
-		const fetchImpl = makeFetchMock({ failCopyIds: ['copy-1', 'copy-2', 'copy-3'] });
-		const result: BulkResult = await bulkCheckout(cfg, 'library-1', basePayload, fetchImpl);
+		const fetchImpl = makeFetchMock({ failMemberIds: ['member-1', 'member-2', 'member-3'] });
+		const resolveCopies = makeResolveCopies();
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', basePayload, [], fetchImpl, resolveCopies);
 
 		expect(result.succeeded).toHaveLength(0);
 		expect(result.failed).toHaveLength(3);
-		expect(result.failed.map((f) => f.copyId).sort()).toEqual(['copy-1', 'copy-2', 'copy-3']);
 		expect(result.failed.every((f) => f.error.length > 0)).toBe(true);
 	});
 
 	it('each create carries explicit _sharing (verify via mock inspection)', async () => {
 		const fetchImpl = makeFetchMock();
-		await bulkCheckout(cfg, 'library-1', basePayload, fetchImpl);
+		const resolveCopies = makeResolveCopies();
+		await bulkCheckout(cfg, 'library-1', basePayload, [], fetchImpl, resolveCopies);
 
 		// Filter calls to entity create (not type-resolution)
 		const createCalls = (fetchImpl.mock.calls as Array<[string, RequestInit]>).filter(
@@ -222,7 +244,8 @@ describe('bulkCheckout', () => {
 
 	it('passes assignedUntil through to each individual createLending call', async () => {
 		const fetchImpl = makeFetchMock();
-		await bulkCheckout(cfg, 'library-1', { ...basePayload, assignedUntil: '2026-09-15' }, fetchImpl);
+		const resolveCopies = makeResolveCopies();
+		await bulkCheckout(cfg, 'library-1', { ...basePayload, assignedUntil: '2026-09-15' }, [], fetchImpl, resolveCopies);
 
 		const createCalls = (fetchImpl.mock.calls as Array<[string, RequestInit]>).filter(
 			([url]) => !url.includes('_type.string=entity')
@@ -231,6 +254,64 @@ describe('bulkCheckout', () => {
 			const body = JSON.parse(String(init.body)) as Array<{ type: string; date?: string }>;
 			expect(body).toEqual(expect.arrayContaining([{ type: 'assigned_until', date: '2026-09-15' }]));
 		}
+	});
+
+	it('fails excess members when there are fewer copies than members', async () => {
+		const fetchImpl = makeFetchMock();
+		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }]); // only 1 copy
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-1',
+			memberIds: ['member-1', 'member-2', 'member-3'],
+			assignedAt: '2026-08-10'
+		};
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', payload, [], fetchImpl, resolveCopies);
+
+		// 1 succeeded (got the copy), 2 failed (no copy available)
+		expect(result.succeeded).toHaveLength(1);
+		expect(result.failed).toHaveLength(2);
+	});
+
+	it('excludes already-lent copies from assignment (double-lend prevention)', async () => {
+		const fetchImpl = makeFetchMock();
+		// 3 copies resolved, but copy-1 and copy-2 are already on loan
+		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }, { id: 'copy-2' }, { id: 'copy-3' }]);
+		const activeLendings = [
+			{ id: 'lend-existing-1', copyId: 'copy-1', memberId: 'member-x', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' },
+			{ id: 'lend-existing-2', copyId: 'copy-2', memberId: 'member-y', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		];
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-1',
+			memberIds: ['member-1', 'member-2'],
+			assignedAt: '2026-08-10'
+		};
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', payload, activeLendings, fetchImpl, resolveCopies);
+
+		// Only copy-3 is available, so 1 succeeds and 1 fails
+		expect(result.succeeded).toHaveLength(1);
+		expect(result.succeeded[0].copyId).toBe('copy-3');
+		expect(result.failed).toHaveLength(1);
+		expect(result.failed[0].error).toContain('member-2');
+	});
+
+	it('ignores returned lendings when filtering available copies', async () => {
+		const fetchImpl = makeFetchMock();
+		const resolveCopies = makeResolveCopies([{ id: 'copy-1' }, { id: 'copy-2' }]);
+		const activeLendings = [
+			// copy-1 was returned, so it IS available
+			{ id: 'lend-returned', copyId: 'copy-1', memberId: 'member-x', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '2026-07-15' },
+			// copy-2 is still out, NOT available
+			{ id: 'lend-active', copyId: 'copy-2', memberId: 'member-y', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		];
+		const payload: BulkCheckoutPayload = {
+			editionId: 'edition-1',
+			memberIds: ['member-1'],
+			assignedAt: '2026-08-10'
+		};
+		const result: BulkResult = await bulkCheckout(cfg, 'library-1', payload, activeLendings, fetchImpl, resolveCopies);
+
+		expect(result.succeeded).toHaveLength(1);
+		expect(result.succeeded[0].copyId).toBe('copy-1');
+		expect(result.failed).toHaveLength(0);
 	});
 });
 

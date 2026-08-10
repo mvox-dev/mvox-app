@@ -63,10 +63,36 @@ export async function listEditions(
 	}));
 }
 
+/**
+ * Flat list of ALL editions in the collective (no parent-work filter). Used by
+ * the librarian bulk checkout/return UI where the edition picker must show every
+ * edition regardless of which work tree node the user has expanded.
+ */
+export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Edition[]> {
+	const res = await entuFetch(
+		cfg.db,
+		'entity?_type.string=edition&props=name,publisher&limit=500',
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listAllEditions failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{ _id: string; name?: Array<{ string: string }>; publisher?: Array<{ string: string }> }>;
+	};
+	return (body.entities ?? []).map((raw) => ({
+		id: raw._id,
+		name: raw.name?.[0]?.string ?? '',
+		publisher: raw.publisher?.[0]?.string ?? ''
+	}));
+}
+
 export interface Copy {
 	id: string;
 	name: string;
 	copyNumber: number;
+	/** Parent edition ID; empty string when loaded without parent context. */
+	editionId: string;
 }
 
 export async function listCopies(
@@ -88,31 +114,34 @@ export async function listCopies(
 	return (body.entities ?? []).map((raw) => ({
 		id: raw._id,
 		name: raw.name?.[0]?.string ?? '',
-		copyNumber: raw.copy_number?.[0]?.number ?? 0
+		copyNumber: raw.copy_number?.[0]?.number ?? 0,
+		editionId
 	}));
 }
 
 /**
  * Flat list of ALL copies in the collective (no parent-edition filter). Used by
  * the librarian checkout form where the copy picker must show every available
- * copy regardless of which edition tree node the user has expanded.
+ * copy regardless of which edition tree node the user has expanded. Includes
+ * `_parent` so each copy carries its edition ID for bulk-return grouping.
  */
 export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Copy[]> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=copy&props=name,copy_number&limit=500',
+		'entity?_type.string=copy&props=name,copy_number,_parent&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listAllCopies failed: ${res.status}`);
 	const body = (await res.json()) as {
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> }>;
+		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }>; _parent?: Array<{ reference: string }> }>;
 	};
 	return (body.entities ?? []).map((raw) => ({
 		id: raw._id,
 		name: raw.name?.[0]?.string ?? '',
-		copyNumber: raw.copy_number?.[0]?.number ?? 0
+		copyNumber: raw.copy_number?.[0]?.number ?? 0,
+		editionId: raw._parent?.[0]?.reference ?? ''
 	}));
 }
 

@@ -114,5 +114,7 @@
 	"library_checkout_submit": "Izsniegt",
 	"library_return": "Atgriezt",
 	"library_bulk_checkout_title": "Vairāku izsniegšana",
-	"library_bulk_return_title": "Vairāku atgriešana"
+	"library_bulk_checkout_edition_placeholder": "Izvēlēties izdevumu",
+	"library_bulk_return_title": "Vairāku atgriešana",
+	"library_bulk_return_edition_placeholder": "Izvēlēties izdevumu"
 }

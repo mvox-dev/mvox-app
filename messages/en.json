@@ -114,5 +114,7 @@
 	"library_checkout_submit": "Checkout",
 	"library_return": "Return",
 	"library_bulk_checkout_title": "Bulk checkout",
-	"library_bulk_return_title": "Bulk return"
+	"library_bulk_checkout_edition_placeholder": "Select edition",
+	"library_bulk_return_title": "Bulk return",
+	"library_bulk_return_edition_placeholder": "Select edition"
 }

@@ -10,6 +10,7 @@
 		listWorks,
 		listEditions,
 		listCopies,
+		listAllEditions,
 		listAllCopies,
 		listLendings,
 		resolveBorrowerNames,
@@ -22,7 +23,7 @@
 	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
-	import { createLending, returnLending } from '$lib/library/lendingActions';
+	import { createLending, returnLending, bulkCheckout, bulkReturn } from '$lib/library/lendingActions';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -58,7 +59,23 @@
 	let checkoutError = $state('');
 	let returnError = $state('');
 
-	// #73 — checkout form data (loaded when librarian confirmed)
+	// #74 — bulk checkout/return state (edition-first flow)
+	let bulkCheckoutEditionId = $state('');
+	let bulkReturnEditionId = $state('');
+	let bulkCheckoutCheckedMembers = $state<Set<string>>(new Set());
+	let bulkReturnCheckedLoans = $state<Set<string>>(new Set());
+	let bulkCheckoutDueDate = $state('');
+	let bulkCheckoutError = $state('');
+	let bulkReturnError = $state('');
+
+	// #74 — element refs for select change handling (native addEventListener
+	// bypasses Svelte 5 event delegation, which doesn't reliably trigger in
+	// happy-dom test environments with fireEvent.change).
+	let bulkCheckoutSelectEl = $state<HTMLSelectElement | undefined>(undefined);
+	let bulkReturnSelectEl = $state<HTMLSelectElement | undefined>(undefined);
+
+	// #73/#74 — checkout form data (loaded when librarian confirmed)
+	let allEditions = $state<Edition[]>([]);
 	let allCopies = $state<Copy[]>([]);
 	let allMembers = $state<ActiveMember[]>([]);
 	let memberNames = $state<Map<string, string>>(new Map());
@@ -167,6 +184,39 @@
 		void loadCopiesFor(editionId);
 	}
 
+	// #74 — native change listeners for bulk edition selects
+	$effect(() => {
+		const el = bulkCheckoutSelectEl;
+		if (!el) return;
+		const handler = () => { bulkCheckoutEditionId = el.value; };
+		el.addEventListener('change', handler);
+		return () => el.removeEventListener('change', handler);
+	});
+	$effect(() => {
+		const el = bulkReturnSelectEl;
+		if (!el) return;
+		const handler = () => { bulkReturnEditionId = el.value; };
+		el.addEventListener('change', handler);
+		return () => el.removeEventListener('change', handler);
+	});
+
+	// #74 — reset checked state when edition selection changes
+	$effect(() => {
+		void bulkCheckoutEditionId;
+		bulkCheckoutCheckedMembers = new Set();
+	});
+	$effect(() => {
+		void bulkReturnEditionId;
+		bulkReturnCheckedLoans = new Set();
+	});
+
+	// #74 — derive copy IDs belonging to the selected return edition
+	let bulkReturnEditionCopyIds = $derived(
+		bulkReturnEditionId
+			? new Set(allCopies.filter((c) => c.editionId === bulkReturnEditionId).map((c) => c.id))
+			: new Set<string>()
+	);
+
 	$effect(() => {
 		void selected;
 		loadForSelected().catch((e) => {
@@ -195,11 +245,16 @@
 			if (g !== librarianGen) return;
 			libraryEntityIdStore.set(result.libraryId);
 			// Load checkout form data BEFORE revealing librarian tools so the
-			// bulk-checkout/return checkboxes are present on first render.
+			// bulk-checkout/return edition pickers are populated on first render.
 			if (result.state === 'librarian') {
 				try {
-					const [copies, members] = await Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]);
+					const [editions, copies, members] = await Promise.all([
+						listAllEditions(cfg),
+						listAllCopies(cfg),
+						listActiveMembers(cfg)
+					]);
 					if (g !== librarianGen) return;
+					allEditions = editions;
 					allCopies = copies;
 					allMembers = members;
 					const memberIdList = members.map((mbr) => mbr.memberId);
@@ -282,6 +337,69 @@
 	function activeLendingForCopy(copyId: string): Lending | undefined {
 		return lendings.find((l) => l.copyId === copyId && l.returnedAt === '');
 	}
+
+	// #74 — bulk checkout handler
+	async function handleBulkCheckout(): Promise<void> {
+		bulkCheckoutError = '';
+		const current = selected;
+		if (!current) return;
+		const token = getToken();
+		if (!token) return;
+		const libraryId = $libraryEntityIdStore;
+		if (!libraryId) return;
+		if (!bulkCheckoutEditionId || bulkCheckoutCheckedMembers.size === 0) return;
+		const cfg = { db: current.db, token };
+		const activeLendings = lendings.filter((l) => l.returnedAt === '');
+		try {
+			const result = await bulkCheckout(cfg, libraryId, {
+				editionId: bulkCheckoutEditionId,
+				memberIds: [...bulkCheckoutCheckedMembers],
+				assignedAt: new Date().toISOString().slice(0, 10),
+				...(bulkCheckoutDueDate ? { assignedUntil: bulkCheckoutDueDate } : {})
+			}, activeLendings);
+			if (result.failed.length > 0) {
+				bulkCheckoutError = `${result.failed.length} checkout(s) failed`;
+			}
+			// Refresh lending data
+			const lendingList = await listLendings(cfg);
+			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const names = await resolveBorrowerNames(cfg, activeMemberIds);
+			lendings = lendingList;
+			borrowerNames = names;
+			bulkCheckoutCheckedMembers = new Set();
+			bulkCheckoutDueDate = '';
+		} catch (e) {
+			console.error('library: bulk checkout failed', e);
+			bulkCheckoutError = e instanceof Error ? e.message : 'Bulk checkout failed';
+		}
+	}
+
+	// #74 — bulk return handler
+	async function handleBulkReturn(): Promise<void> {
+		bulkReturnError = '';
+		const current = selected;
+		if (!current) return;
+		const token = getToken();
+		if (!token) return;
+		if (bulkReturnCheckedLoans.size === 0) return;
+		const cfg = { db: current.db, token };
+		try {
+			const result = await bulkReturn(cfg, [...bulkReturnCheckedLoans]);
+			if (result.failed.length > 0) {
+				bulkReturnError = `${result.failed.length} return(s) failed`;
+			}
+			// Refresh lending data
+			const lendingList = await listLendings(cfg);
+			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const names = await resolveBorrowerNames(cfg, activeMemberIds);
+			lendings = lendingList;
+			borrowerNames = names;
+			bulkReturnCheckedLoans = new Set();
+		} catch (e) {
+			console.error('library: bulk return failed', e);
+			bulkReturnError = e instanceof Error ? e.message : 'Bulk return failed';
+		}
+	}
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
@@ -315,30 +433,75 @@
 					{/if}
 				</form>
 
-				<!-- #74 — bulk checkout section -->
+				<!-- #74 — bulk checkout section (edition-first, member-multi) -->
 				<div data-testid="bulk-checkout" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_checkout_title()}</h3>
-					<ul class="mt-1 flex flex-col gap-0.5">
-						{#each allCopies as copy (copy.id)}
-							<li class="flex items-center gap-1 text-xs">
-								<input type="checkbox" aria-label={copy.name || `#${copy.copyNumber}`} />
-								<span>{copy.name || `#${copy.copyNumber}`}</span>
-							</li>
+					<select data-testid="bulk-checkout-edition-select" bind:this={bulkCheckoutSelectEl} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+						<option value="">{m.library_bulk_checkout_edition_placeholder()}</option>
+						{#each allEditions as edition (edition.id)}
+							<option value={edition.id}>{edition.name}</option>
 						{/each}
-					</ul>
+					</select>
+					{#if bulkCheckoutEditionId}
+						<div data-testid="bulk-checkout-member-list" class="mt-2 flex flex-col gap-1">
+							{#each allMembers as member (member.memberId)}
+								<label class="flex items-center gap-1 text-xs">
+									<input type="checkbox"
+										checked={bulkCheckoutCheckedMembers.has(member.memberId)}
+										onchange={() => {
+											const next = new Set(bulkCheckoutCheckedMembers);
+											if (next.has(member.memberId)) next.delete(member.memberId);
+											else next.add(member.memberId);
+											bulkCheckoutCheckedMembers = next;
+										}}
+									/>
+									<span>{memberNames.get(member.memberId) || member.memberId}</span>
+								</label>
+							{/each}
+						</div>
+						<input data-testid="bulk-checkout-due-date" type="date" bind:value={bulkCheckoutDueDate} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs" />
+						<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" onclick={handleBulkCheckout}>
+							{m.library_checkout_submit()}
+						</button>
+						{#if bulkCheckoutError}
+							<p data-testid="bulk-checkout-error" class="text-xs text-red-700" role="alert">{bulkCheckoutError}</p>
+						{/if}
+					{/if}
 				</div>
 
-				<!-- #74 — bulk return section -->
+				<!-- #74 — bulk return section (edition-grouped) -->
 				<div data-testid="bulk-return" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_return_title()}</h3>
-					<ul class="mt-1 flex flex-col gap-0.5">
-						{#each lendings.filter(l => l.returnedAt === '') as loan (loan.id)}
-							<li class="flex items-center gap-1 text-xs">
-								<input type="checkbox" aria-label={borrowerNames.get(loan.memberId) || loan.copyId} />
-								<span>{borrowerNames.get(loan.memberId) || loan.copyId}</span>
-							</li>
+					<select data-testid="bulk-return-edition-select" bind:this={bulkReturnSelectEl} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+						<option value="">{m.library_bulk_return_edition_placeholder()}</option>
+						{#each allEditions as edition (edition.id)}
+							<option value={edition.id}>{edition.name}</option>
 						{/each}
-					</ul>
+					</select>
+					{#if bulkReturnEditionId}
+						<div data-testid="bulk-return-loan-list" class="mt-2 flex flex-col gap-1">
+							{#each lendings.filter(l => l.returnedAt === '' && bulkReturnEditionCopyIds.has(l.copyId)) as loan (loan.id)}
+								<label class="flex items-center gap-1 text-xs">
+									<input type="checkbox"
+										checked={bulkReturnCheckedLoans.has(loan.id)}
+										onchange={() => {
+											const next = new Set(bulkReturnCheckedLoans);
+											if (next.has(loan.id)) next.delete(loan.id);
+											else next.add(loan.id);
+											bulkReturnCheckedLoans = next;
+										}}
+									/>
+									<span>{borrowerNames.get(loan.memberId) || loan.copyId}</span>
+								</label>
+							{/each}
+						</div>
+						<button type="button" data-testid="bulk-return-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" onclick={handleBulkReturn}>
+							{m.library_return()}
+						</button>
+						{#if bulkReturnError}
+							<p data-testid="bulk-return-error" class="text-xs text-red-700" role="alert">{bulkReturnError}</p>
+						{/if}
+					{/if}
 				</div>
 			</section>
 		{:else if $librarianStore === 'error'}
@@ -356,7 +519,12 @@
 							libraryEntityIdStore.set(result.libraryId);
 							if (result.state === 'librarian') {
 								try {
-									const [copies, members] = await Promise.all([listAllCopies(cfg), listActiveMembers(cfg)]);
+									const [editions, copies, members] = await Promise.all([
+										listAllEditions(cfg),
+										listAllCopies(cfg),
+										listActiveMembers(cfg)
+									]);
+									allEditions = editions;
 									allCopies = copies;
 									allMembers = members;
 									const memberIdList = members.map((mbr) => mbr.memberId);
