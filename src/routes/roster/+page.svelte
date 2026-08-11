@@ -15,7 +15,8 @@
 	import {
 		assignMemberSection,
 		unassignMemberSection,
-		createSection
+		createSection,
+		reorderSections
 	} from '$lib/sections/sectionActions';
 	import { isSectionMembershipMissing } from '$lib/sections/sectionErrors';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
@@ -342,6 +343,316 @@
 		}
 		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), newId]);
 	}
+
+	// TS.4/#98 — drag-reorder on COLLAPSED section headers (admin only). ALL THREE
+	// input paths (native HTML5 drop, touch long-press drag, keyboard up/down)
+	// funnel into `performReorder`, which
+	// does the SAME optimistic-and-reconcile as `handlePick` above: the tree is
+	// patched immediately (`sections` is `$state`, `groups`/`groupById` are
+	// `$derived` off it), `reorderSections` fires, and a rejection reverts to
+	// the pre-move order and logs — no refetch of roster or sections either way.
+	//
+	// A "sibling group" is either the top-level `sections` array or one node's
+	// `children` array — `siblingsOf` walks the live tree to find whichever one
+	// holds a given id, so the same helpers work at any depth without the
+	// caller tracking parentage explicitly.
+
+	/** The live sibling array (top-level `sections`, or some node's `children`)
+	 *  that currently holds `id` — null if `id` isn't anywhere in the tree. */
+	function siblingsOf(nodes: SectionNode[], id: string): SectionNode[] | null {
+		if (nodes.some((n) => n.id === id)) return nodes;
+		for (const n of nodes) {
+			const found = siblingsOf(n.children, id);
+			if (found) return found;
+		}
+		return null;
+	}
+
+	/** Immutable reorder: whichever level's id SET matches `orderedIds` exactly
+	 *  gets rebuilt in that order (nodes themselves, incl. `children`, untouched
+	 *  — only the array's order changes); every ancestor on the path down to it
+	 *  is rebuilt too, so reassigning `sections` is enough to notify Svelte. */
+	function applySiblingOrder(nodes: SectionNode[], orderedIds: string[]): SectionNode[] {
+		if (nodes.length === orderedIds.length && orderedIds.every((id) => nodes.some((n) => n.id === id))) {
+			const byId = new Map(nodes.map((n) => [n.id, n]));
+			return orderedIds.map((id) => byId.get(id)!);
+		}
+		return nodes.map((n) =>
+			n.children.length === 0 ? n : { ...n, children: applySiblingOrder(n.children, orderedIds) }
+		);
+	}
+
+	// F2 code-review fix (#98 review): an IN-FLIGHT GUARD on the reorder write.
+	// `reorderSections` renumbers the WHOLE sibling group, so two overlapping
+	// runs write the same entities: both GET a section's display_order before
+	// either DELETEs, both then POST a new value and DELETE the same stale value
+	// id — the second DELETE 404s, the section is left holding TWO display_order
+	// values (the POST-appends multi-value trap), `listSections` reads
+	// `display_order[0]`, and the order on next load is whichever value Entu
+	// returns first. The throw also reverts the UI to a `beforeIds` that parts of
+	// the second write already invalidated server-side, so the screen lies — and
+	// this page never refetches, so both are permanent.
+	//
+	// Same fix as the programme reorder one slice earlier (#91 review F4, see
+	// `handleMoveItem` in routes/+page.svelte): the key is the SIBLING GROUP, not
+	// the row, because a reorder's blast radius is the whole group — and one
+	// page-wide flag is that key here, since only one group can be mid-move at a
+	// time on this page. The primary guard is the UI disabling the controls
+	// (`disabled` on ▲/▼, `draggable="false"` on the handle) so a double-tap is
+	// visibly refused rather than silently swallowed; the early return below is
+	// the defensive backstop for the paths the UI can't disable.
+	let reorderPending = $state(false);
+
+	// F3 code-review fix (#98 review): a reorder write is NOT all-or-nothing, so a
+	// blind revert can make the screen LIE. `reorderSections` renumbers the sibling
+	// group SERIALLY and throws on the first non-2xx — every section written before
+	// that throw keeps its NEW display_order server-side. Reverting the whole
+	// optimistic order then puts the screen back to an order the server no longer
+	// holds (e.g. Alto=1 landed, Soprano 403'd: the server sorts Alto first, the
+	// screen shows Soprano first), and this page never refetches, so the two
+	// disagree until the next full page load with nothing saying so.
+	//
+	// Fix: on failure STOP GUESSING — re-derive from the server. `listSections` is
+	// the same read the page loaded with, so whatever partial state landed is what
+	// renders. Guarded by `generation` (the collective-switch guard) so a refetch
+	// resolving after a switch can't clobber the newer collective's tree. The
+	// `beforeIds` revert survives only as the fallback for when the refetch ALSO
+	// fails — at that point there is no server truth to be had, and the pre-move
+	// order is the best available guess (logged loudly either way).
+	async function performReorder(beforeIds: string[], afterIds: string[]): Promise<void> {
+		if (reorderPending) return;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section reorder with no cfg', afterIds);
+			return;
+		}
+		const g = generation;
+		reorderPending = true;
+		sections = applySiblingOrder(sections, afterIds);
+		try {
+			await reorderSections(cfg, afterIds);
+		} catch (e) {
+			console.error('roster: section reorder failed', e);
+			try {
+				const fresh = await listSections(cfg);
+				if (g !== generation) return; // superseded by a newer collective selection
+				sections = fresh;
+			} catch (refetchError) {
+				console.error('roster: section refetch after a failed reorder failed', refetchError);
+				if (g === generation) sections = applySiblingOrder(sections, beforeIds);
+			}
+		} finally {
+			reorderPending = false;
+		}
+	}
+
+	// Drag source, tracked between dragstart and drop — a plain (non-`$state`)
+	// variable, same reasoning as `currentCfg`/`generation`: read at drop time,
+	// never needs to drive a render on its own.
+	let draggedSectionId: string | null = null;
+
+	// F1 code-review fix (#98 review): a dragstart handler MUST populate the drag
+	// data store. Firefox refuses to START a drag session at all when the store is
+	// left empty — dragstart fires, then no dragover/drop ever follows, so the
+	// whole drop path is dead there (silently: the ▲/▼ buttons still work).
+	// `draggedSectionId` stays the source of truth on drop — it survives the
+	// cross-handler hop just as it did before; `setData` is here to satisfy the
+	// browser's drag-initiation precondition, not to carry state.
+	function handleDragStart(id: string, event: DragEvent): void {
+		draggedSectionId = id;
+		if (event.dataTransfer) {
+			event.dataTransfer.setData('text/plain', id);
+			event.dataTransfer.effectAllowed = 'move';
+		}
+	}
+
+	// F1 code-review fix (#98 review): `dragend` ALWAYS fires — including on an
+	// aborted drag (Esc, or a release outside any drop zone), where `drop` never
+	// does. Without it `draggedSectionId` outlived its drag and stayed live
+	// forever, arming the next drop that reached a header with a stale source id.
+	function handleDragEnd(): void {
+		draggedSectionId = null;
+	}
+
+	function handleDragOver(event: DragEvent): void {
+		// F1 code-review fix (#98 review): accept the drop ONLY while one of OUR
+		// section handles is being dragged. `preventDefault()` is what MAKES an
+		// element a drop zone, so calling it unconditionally turned every collapsed
+		// admin header into a drop target for ANY drag — a file, a selection, a link
+		// from another window — and the resulting `drop` then reordered against
+		// whatever `draggedSectionId` happened to hold. Bail BEFORE preventDefault:
+		// a foreign drag must never be accepted as a drop in the first place.
+		if (draggedSectionId === null) return;
+		// Permits the drop in real browsers (a DragEvent target is not a drop
+		// zone by default); harmless no-op under the test harness's synthetic events.
+		event.preventDefault();
+		// Move cursor rather than the default copy affordance.
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+	}
+
+	/** The shared reorder computation behind BOTH pointer paths (native HTML5 drop
+	 *  and the touch long-press drag below): "the dragged section takes the drop
+	 *  target's ORIGINAL position". Silently does nothing for a non-sibling target
+	 *  (a sub-section dropped on a top-level header is a STRUCTURAL move, not an
+	 *  order change — #98) or a self-drop. */
+	function dropOnto(fromId: string, targetId: string): void {
+		if (!fromId || fromId === targetId) return;
+
+		const siblingNodes = siblingsOf(sections, fromId);
+		if (!siblingNodes) return;
+		const siblingIds = siblingNodes.map((n) => n.id);
+		const targetIndex = siblingIds.indexOf(targetId);
+		if (targetIndex === -1) return;
+
+		// Drop it back in at `targetId`'s pre-removal index (clamped to the
+		// shortened array's length so a drop past the end still lands last).
+		const withoutFrom = siblingIds.filter((id) => id !== fromId);
+		const insertAt = Math.min(targetIndex, withoutFrom.length);
+		const afterIds = [...withoutFrom.slice(0, insertAt), fromId, ...withoutFrom.slice(insertAt)];
+		void performReorder(siblingIds, afterIds);
+	}
+
+	function handleDrop(targetId: string, event: DragEvent): void {
+		const fromId = draggedSectionId;
+		draggedSectionId = null;
+		// Backstop only, now that `handleDragOver` refuses to accept foreign drags:
+		// no live internal drag → not our drop, so don't even swallow the browser's
+		// default handling of it.
+		if (!fromId) return;
+		event.preventDefault();
+		dropOnto(fromId, targetId);
+	}
+
+	// F2 code-review fix (#98 review): TOUCH drag-reorder. Native HTML5 `draggable`
+	// is a POINTER-ONLY protocol — a long-press on a `draggable="true"` element does
+	// not synthesise `dragstart` on Android Chrome or iOS Safari — so on a page this
+	// mobile-shaped (`max-w-md`) the drag half of #98's "works on mobile (long-press)
+	// and desktop" was simply absent. This is the pointer-event twin of the native
+	// path: long-press to pick up, move to hit-test sibling headers, release to drop.
+	// Only the INPUT layer is new — it funnels into the same `dropOnto` the native
+	// drop does, so both paths share one set of reorder semantics.
+	//
+	// Mouse pointers are deliberately EXCLUDED: the native path already owns them
+	// (and its `dragstart` would otherwise race this one on the same gesture).
+	const LONG_PRESS_MS = 400;
+	/** Finger drift (px) that cancels a pending long-press — that gesture was a scroll. */
+	const LONG_PRESS_SLOP_PX = 10;
+
+	// Active touch drag (both `$state` — unlike `draggedSectionId` these DO drive a
+	// render: the picked-up handle and the hovered target both need an affordance,
+	// since a touch drag has no browser-drawn drag image).
+	let touchDragId = $state<string | null>(null);
+	let touchOverId = $state<string | null>(null);
+	// Pending-press bookkeeping — read at gesture time, never rendered.
+	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+	let pressOrigin: { x: number; y: number } | null = null;
+	let pressHandle: HTMLElement | null = null;
+	let pressPointerId: number | null = null;
+
+	/** Drop every trace of an in-progress or pending touch drag. Idempotent — it is
+	 *  the single teardown for success, cancel, abort and pointer loss alike. */
+	function endTouchDrag(): void {
+		if (longPressTimer !== null) {
+			clearTimeout(longPressTimer);
+			longPressTimer = null;
+		}
+		if (pressHandle && pressPointerId !== null) {
+			// Releasing an uncaptured pointer throws in some engines — the capture is
+			// best-effort (touch pointers are implicitly captured anyway).
+			try {
+				if (pressHandle.hasPointerCapture?.(pressPointerId)) {
+					pressHandle.releasePointerCapture(pressPointerId);
+				}
+			} catch {
+				/* nothing to release */
+			}
+		}
+		pressOrigin = null;
+		pressHandle = null;
+		pressPointerId = null;
+		touchDragId = null;
+		touchOverId = null;
+	}
+
+	/** Hit-test: which SECTION group's header is under this point, if any. Returns
+	 *  the innermost match (sub-sections render nested inside their parent's
+	 *  `<section>`), and never the Unassigned pseudo-group — it is not a section
+	 *  entity and always sorts last (#98). */
+	function sectionIdUnderPointer(x: number, y: number): string | null {
+		const under = document.elementFromPoint?.(x, y);
+		const group = under?.closest('[data-testid^="section-group-"]') ?? null;
+		const testid = group?.getAttribute('data-testid') ?? '';
+		const id = testid.slice('section-group-'.length);
+		return id && id !== 'unassigned' ? id : null;
+	}
+
+	function handlePointerDown(id: string, event: PointerEvent): void {
+		if (event.pointerType === 'mouse') return; // the native dnd path owns mouse
+		if (reorderPending) return; // same in-flight refusal as `draggable="false"`
+		endTouchDrag();
+		// Derived from `target`, not `currentTarget`: Svelte 5 DELEGATES pointer
+		// events from the root, so `currentTarget` is a patched property rather than
+		// the real one — `closest` off the actual target is the version that cannot
+		// be wrong.
+		const handle = (event.target as HTMLElement | null)?.closest?.(
+			'[data-testid^="section-drag-handle-"]'
+		) as HTMLElement | null;
+		if (!handle) return;
+		pressHandle = handle;
+		pressPointerId = event.pointerId;
+		pressOrigin = { x: event.clientX, y: event.clientY };
+		longPressTimer = setTimeout(() => {
+			longPressTimer = null;
+			touchDragId = id;
+			touchOverId = id;
+			try {
+				handle.setPointerCapture(pressPointerId as number);
+			} catch {
+				/* pointer already gone — the implicit touch capture still routes moves here */
+			}
+		}, LONG_PRESS_MS);
+	}
+
+	function handlePointerMove(event: PointerEvent): void {
+		if (touchDragId === null) {
+			// Still in the long-press window: drift past the slop means the user is
+			// scrolling, not picking a section up.
+			if (longPressTimer === null || !pressOrigin) return;
+			const dx = event.clientX - pressOrigin.x;
+			const dy = event.clientY - pressOrigin.y;
+			if (Math.hypot(dx, dy) > LONG_PRESS_SLOP_PX) endTouchDrag();
+			return;
+		}
+		// Picked up — this gesture is a drag now, not a scroll.
+		event.preventDefault();
+		touchOverId = sectionIdUnderPointer(event.clientX, event.clientY);
+	}
+
+	function handlePointerUp(event: PointerEvent): void {
+		const fromId = touchDragId;
+		if (fromId === null) {
+			endTouchDrag(); // a plain tap (or an abandoned press) — nothing to drop
+			return;
+		}
+		// Prefer the release point; fall back to the last hovered header for engines
+		// that report a released pointer as over nothing.
+		const targetId = sectionIdUnderPointer(event.clientX, event.clientY) ?? touchOverId;
+		endTouchDrag();
+		if (targetId) dropOnto(fromId, targetId);
+	}
+
+	function moveSection(id: string, direction: 'up' | 'down'): void {
+		const siblingNodes = siblingsOf(sections, id);
+		if (!siblingNodes) return;
+		const siblingIds = siblingNodes.map((n) => n.id);
+		const idx = siblingIds.indexOf(id);
+		const swapWith = direction === 'up' ? idx - 1 : idx + 1;
+		if (swapWith < 0 || swapWith >= siblingIds.length) return; // boundary — no wraparound
+
+		const afterIds = [...siblingIds];
+		[afterIds[idx], afterIds[swapWith]] = [afterIds[swapWith], afterIds[idx]];
+		void performReorder(siblingIds, afterIds);
+	}
 </script>
 
 {#snippet memberRow(row: RosterRow, showSection: boolean)}
@@ -395,6 +706,11 @@
 {#snippet sectionGroup(node: SectionNode)}
 	{@const group = groupById.get(node.id)}
 	{@const isExpanded = !collapsedIds.has(node.id)}
+	<!-- TS.4/#98: reorder controls are per-header — COLLAPSED (a section must
+	     collapse to reorder) AND admin — fail-closed AND, never OR. -->
+	{@const canReorder = admin === 'admin' && !isExpanded}
+	{@const siblingIds = canReorder ? (siblingsOf(sections, node.id)?.map((n) => n.id) ?? []) : []}
+	{@const siblingIdx = siblingIds.indexOf(node.id)}
 	<!--
 		F2 code-review fix: a child's <section> is rendered NESTED inside its
 		parent's (below, `{#each node.children as child}{@render sectionGroup(child)}{/each}`
@@ -410,18 +726,91 @@
 		class="flex flex-col"
 		style="margin-left: {node.depth === 0 ? 0 : 1}rem"
 	>
-		<button
-			type="button"
-			data-testid="section-toggle-{node.id}"
-			aria-expanded={isExpanded}
-			class="flex items-center gap-2 py-1.5 text-left"
-			onclick={() => toggleSection(node.id)}
+		<!-- The touch-drag affordance stands in for the drag image the browser draws
+		     for a native drag and does not for a pointer one: without it a long-press
+		     drag has no visible drop target at all. -->
+		<div
+			role="group"
+			aria-label={node.name}
+			data-drop-target={touchDragId !== null && touchOverId === node.id && touchOverId !== touchDragId
+				? 'true'
+				: undefined}
+			class="flex items-center gap-2 py-1.5 {touchDragId !== null &&
+			touchOverId === node.id &&
+			touchOverId !== touchDragId
+				? 'bg-ink-5'
+				: ''}"
+			ondragover={canReorder ? handleDragOver : undefined}
+			ondrop={canReorder ? (event: DragEvent) => handleDrop(node.id, event) : undefined}
 		>
-			<span aria-hidden="true" class="text-ink-2">{isExpanded ? '▾' : '▸'}</span>
-			<span data-testid="section-header-{node.id}" class="text-sm font-medium text-ink">
-				{node.name} ({group?.memberCount ?? 0})
-			</span>
-		</button>
+			<button
+				type="button"
+				data-testid="section-toggle-{node.id}"
+				aria-expanded={isExpanded}
+				class="flex items-center gap-2 text-left"
+				onclick={() => toggleSection(node.id)}
+			>
+				<span aria-hidden="true" class="text-ink-2">{isExpanded ? '▾' : '▸'}</span>
+				<span data-testid="section-header-{node.id}" class="text-sm font-medium text-ink">
+					{node.name} ({group?.memberCount ?? 0})
+				</span>
+			</button>
+			{#if canReorder}
+				<!-- TWO drag protocols on one handle, because there is no single one that
+				     covers both: native `draggable` is DESKTOP-POINTER only (HTML5 dnd is
+				     not driven by touch events — a long-press on a `draggable="true"`
+				     element does NOT synthesise a dragstart on Android Chrome or iOS
+				     Safari), and the pointer-event long-press below is the touch twin
+				     (F2 code-review fix, #98 review — this page is mobile-shaped,
+				     `max-w-md`, so the drag half of "works on mobile (long-press) and
+				     desktop" cannot be desktop-only). `handlePointerDown` ignores mouse
+				     pointers so the two never race on one gesture; both funnel into the
+				     same `dropOnto`. The ▲/▼ buttons remain the keyboard/a11y path.
+				     `touch-action: none` is what lets a drag off the handle be a drag
+				     rather than a page scroll.
+				     Both paths are disabled while a reorder write is in flight — see
+				     `reorderPending`. -->
+				<span
+					data-testid="section-drag-handle-{node.id}"
+					draggable={reorderPending ? 'false' : 'true'}
+					aria-hidden="true"
+					title={m.roster_section_drag_handle({ name: node.name })}
+					style="touch-action: none"
+					class="px-1 text-ink-2 select-none {reorderPending
+						? 'cursor-default opacity-30'
+						: 'cursor-grab'} {touchDragId === node.id ? 'opacity-50' : ''}"
+					ondragstart={(event: DragEvent) => handleDragStart(node.id, event)}
+					ondragend={handleDragEnd}
+					onpointerdown={(event: PointerEvent) => handlePointerDown(node.id, event)}
+					onpointermove={handlePointerMove}
+					onpointerup={handlePointerUp}
+					onpointercancel={endTouchDrag}
+					onlostpointercapture={endTouchDrag}
+				>
+					≡
+				</span>
+				<button
+					type="button"
+					data-testid="section-move-up-{node.id}"
+					aria-label={m.roster_section_move_up({ name: node.name })}
+					class="rounded px-1 text-xs text-ink-2 hover:text-ink disabled:opacity-30"
+					disabled={siblingIdx <= 0 || reorderPending}
+					onclick={() => moveSection(node.id, 'up')}
+				>
+					▲
+				</button>
+				<button
+					type="button"
+					data-testid="section-move-down-{node.id}"
+					aria-label={m.roster_section_move_down({ name: node.name })}
+					class="rounded px-1 text-xs text-ink-2 hover:text-ink disabled:opacity-30"
+					disabled={siblingIdx === -1 || siblingIdx >= siblingIds.length - 1 || reorderPending}
+					onclick={() => moveSection(node.id, 'down')}
+				>
+					▼
+				</button>
+			{/if}
+		</div>
 		{#if isExpanded}
 			<ul class="flex flex-col pl-5">
 				{#each group?.members ?? [] as row (row.memberId)}

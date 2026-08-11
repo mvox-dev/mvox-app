@@ -228,7 +228,76 @@ export async function unassignMemberSection(
 	}
 }
 
+// TS.4/#98 — the section REORDER write layer. GREEN.
+//
+// CONTRACT (pinned by sectionActions.reorder.spec.ts):
+//
+//   - `reorderSections(cfg, orderedIds)` renumbers `display_order` on EVERY
+//     section in `orderedIds` to its 1-BASED position in the array (index 0 →
+//     display_order 1). `orderedIds` is ONE SIBLING GROUP in its new order —
+//     the top-level sections, or one parent's sub-sections — never a mix
+//     (display_order sorts within a parent; the UI enforces the sibling
+//     constraint, see page.roster-reorder.spec.ts).
+//   - Per section, the same replace shape as repertoireActions'
+//     `updateProgramItemOrdinal`: GET `entity/{id}?props=display_order` →
+//     POST `entity/{id}` body EXACTLY `[{ type: 'display_order', number: n }]`
+//     → DELETE `property/{valueId}` for EVERY old value id (Entu POST APPENDS
+//     to implicitly multi-valued props; duplicates from corrupted state all
+//     go). POST-BEFORE-DELETE is deliberate: a failed POST leaves the old
+//     value untouched (no DELETE fires for that section); a failed DELETE
+//     leaves a duplicate the next renumber sweeps — either beats an EMPTY
+//     display_order (which sorts the section to the end as Infinity).
+//   - A section with NO existing display_order value → POST only, no DELETE.
+//   - Old value ids go to `DELETE /property/{valueId}` ONLY — never
+//     `DELETE /entity/...` (the endpoint split: that would delete the section).
+//   - `orderedIds: []` resolves without any fetch.
+//   - Throws on any non-2xx (status surfaced).
+
+interface DisplayOrderValue {
+	_id: string;
+}
+
+/**
+ * Renumber `display_order` on one sibling group of sections to match
+ * `orderedIds`' order (1-based). See module contract above.
+ */
+export async function reorderSections(
+	cfg: EntuCfg,
+	orderedIds: string[],
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	for (let i = 0; i < orderedIds.length; i++) {
+		const id = orderedIds[i];
+		const number = i + 1;
+
+		const getRes = await entuFetch(cfg.db, `entity/${id}?props=display_order`, cfg.token, {}, fetchImpl);
+		if (!getRes.ok) throw new Error(`reorderSections lookup failed: ${getRes.status}`);
+		const body = (await getRes.json()) as { entity?: { display_order?: DisplayOrderValue[] } };
+		const existing = body.entity?.display_order ?? [];
+
+		const postRes = await entuFetch(
+			cfg.db,
+			`entity/${id}`,
+			cfg.token,
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify([{ type: 'display_order', number }])
+			},
+			fetchImpl
+		);
+		if (!postRes.ok) throw new Error(`reorderSections POST failed: ${postRes.status}`);
+
+		for (const value of existing) {
+			const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+			if (!delRes.ok) throw new Error(`reorderSections delete failed: ${delRes.status}`);
+		}
+	}
+}
+
 // (*MVOX:Tallis* — RED stubs + contract, TS.2/#96)
 // (*MVOX:Palestrina* — GREEN implementation, TS.2/#96)
 // (*MVOX:Tallis* — RED createSection stub + contract, TS.3/#97)
 // (*MVOX:Palestrina* — GREEN implementation, TS.3/#97)
+// (*MVOX:Tallis* — RED reorderSections stub + contract, TS.4/#98)
+// (*MVOX:Palestrina* — GREEN implementation, TS.4/#98)
