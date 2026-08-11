@@ -220,6 +220,11 @@
 	"event_type_meeting": "Збори",
 	"event_type_social": "Товариська зустріч",
 	"event_type_other": "Інше",
+	"event_detail_works_heading": "Твори",
+	"event_detail_attendance_heading": "Відвідуваність",
+	"event_detail_attendance_tally_present": "{count} присутніх",
+	"event_detail_attendance_tally_absent": "{count} відсутніх",
+	"event_detail_attendance_tally_late": "{count} запізнюється",
 	"agenda_row_link_label": "Переглянути деталі події {event}",
 	"agenda_row_link_label_unnamed": "Переглянути деталі події"
 }

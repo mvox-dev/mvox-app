@@ -220,6 +220,11 @@
 	"event_type_meeting": "Koosolek",
 	"event_type_social": "Seltskondlik üritus",
 	"event_type_other": "Muu",
+	"event_detail_works_heading": "Teosed",
+	"event_detail_attendance_heading": "Kohalolek",
+	"event_detail_attendance_tally_present": "{count} kohal",
+	"event_detail_attendance_tally_absent": "{count} puudub",
+	"event_detail_attendance_tally_late": "{count} hilineb",
 	"agenda_row_link_label": "Vaata sündmuse {event} üksikasju",
 	"agenda_row_link_label_unnamed": "Vaata sündmuse üksikasju"
 }

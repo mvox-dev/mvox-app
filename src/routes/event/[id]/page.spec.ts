@@ -223,8 +223,52 @@ describe('loadEventDetail — full header shape', () => {
 			// this caller — private-bucket, so a non-granted reader gets []).
 			capacity: 20,
 			ownerIds: [],
-			editorIds: []
+			editorIds: [],
+			// #103 TE.3 review F1/F2 — the contract grew again: the parent SEASON's
+			// id (already in hand from the event's `_parent` — no second GET of the
+			// same entity) and the season's own rights tiers, read on the SAME GET
+			// the conductor list comes from, so season management rights are pure
+			// computation for the caller instead of another round-trip.
+			seasonId: 'season1',
+			seasonOwnerIds: [],
+			seasonEditorIds: []
 		});
+	});
+
+	it('carries the parent season id and its rights tiers — asked for on the ONE season read, no second GET', async () => {
+		const fetchImpl = entuFetchStub({
+			season: seasonEntity({
+				_owner: [{ reference: 'p-boss' }],
+				_editor: [{ reference: 'p-viewer' }]
+			})
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.seasonId).toBe('season1');
+		expect(detail.seasonOwnerIds).toEqual(['p-boss']);
+		expect(detail.seasonEditorIds).toEqual(['p-viewer']);
+		// The rights props were actually REQUESTED — an unrequested prop comes back
+		// absent, which reads as "no rights" for every caller.
+		const seasonUrls = fetchImpl.mock.calls
+			.map((c) => String(c[0]))
+			.filter((u) => u.includes('/entity/season1'));
+		expect(seasonUrls).toHaveLength(1);
+		expect(seasonUrls[0]).toContain('_owner');
+		expect(seasonUrls[0]).toContain('_editor');
+		// …and the EVENT was read exactly once: `seasonId` comes off that read's
+		// `_parent`, never a second `entity/ev1?props=_parent`.
+		expect(
+			fetchImpl.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/entity/ev1'))
+		).toHaveLength(1);
+	});
+
+	it('seasonId is null (and the season rights empty) when the event has no season parent', async () => {
+		const fetchImpl = entuFetchStub({
+			event: eventEntity({ _parent: [{ reference: 'org1', entity_type: 'organization' }] })
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.seasonId).toBeNull();
+		expect(detail.seasonOwnerIds).toEqual([]);
+		expect(detail.seasonEditorIds).toEqual([]);
 	});
 
 	it('throws on a non-2xx event response (fail loud, no silent empty detail)', async () => {
@@ -1460,8 +1504,605 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 	});
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// #103 TE.3 (RED) — compose the WORKS and ATTENDANCE surfaces onto the detail
+// page from the components + data layers that ALREADY exist. Parent: #81
+// (Event detail 1.0). Nothing here invents a new renderer or a new read — the
+// contract is composition:
+//
+//   src/routes/event/[id]/+page.svelte grows two sections:
+//
+//   • data-testid="event-detail-works" — RepertoireElement (the agenda's works
+//     element, $lib/components/agenda/RepertoireElement.svelte), fed by the
+//     SAME read pipeline the agenda runs: resolveEventWorks/-Batch
+//     (repertoireData: program_items, else the parent SEASON's
+//     repertoire_items) joined through buildWorkRows (workRows.ts) against the
+//     library lookups (listWorks/listAllEditions/listAllCopies). The detail
+//     page IS the expanded view: work rows (RepertoireElement's own
+//     works-expanded / work-row testids) are visible with NO tap — never the
+//     collapsed one-liner a member must open first. Absent ENTIRELY when the
+//     event resolves no works (no empty "Works" placeholder, same rule
+//     RepertoireElement itself follows for members).
+//     Management controls (work-manage-*) render for a season rights-holder —
+//     `_owner`/`_editor` on the PARENT SEASON via manageRightsFrom, the app's
+//     one owner-or-editor rule — exactly as they do on the agenda.
+//
+//   • data-testid="event-detail-attendance" — PAST events only, the same
+//     start-instant boundary `isPast` already draws (attendance is recorded
+//     after the fact; a future event has nothing to show):
+//       - event-detail-attendance-badge — the viewer's OWN status (#85's
+//         badge), from the domain-shared attendance read;
+//       - event-detail-attendance-tally, with per-status counts in
+//         event-detail-attendance-tally-{present,absent,late} — from the
+//         child-of-event listAttendance read (attendanceData). Domain-visible
+//         data, so a plain member may see it — NOT gated on rights;
+//       - take-attendance-btn — CONDUCTORS only (the viewer is in
+//         detail.conductorIds — the SAME resolveConductors verdict the agenda
+//         gates its button on, #83), opening the SAME AttendanceSurface
+//         component (attendance-panel / attendance-row-{memberId} /
+//         attendance-toggle-{memberId}-{status}) fed by the real loadRoster +
+//         listAttendance + listAllRsvpsForEvent reads.
+//     The section is ABSENT on future events — no badge, no tally, no button.
+//
+// Assertions match on DATA (names, counts, pressed state) and on the
+// components' OWN internal testids — presence of works-expanded /
+// attendance-panel pins REUSE of the existing components, not lookalike markup.
+
+/** Yesterday relative to the pinned NOW — past by the same start-instant
+ *  boundary the agenda partitions on (and `isPast` reuses). */
+function pastEventEntity(over: Partial<Record<string, unknown>> = {}) {
+	return eventEntity({
+		start_datetime: [{ datetime: '2026-08-19T16:00:00.000Z' }],
+		...over
+	});
+}
+
+/** The viewer holds the conductor seat via the SEASON list (event.conductor
+ *  empty → inherit, resolveConductors' first branch). */
+function conductorSeason(over: Partial<Record<string, unknown>> = {}) {
+	return seasonEntity({
+		conductor: [{ reference: 'p-viewer' }, { reference: 'p-mihkel' }],
+		...over
+	});
+}
+
+/** The viewer holds `_editor` on the SEASON — the works-management gate. */
+function editorSeason(over: Partial<Record<string, unknown>> = {}) {
+	return seasonEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
+}
+
+/** The viewer's own shared profile — needed so the roster read (loadRoster
+ *  drops nameless members, #28) and the conductor line can name her. */
+const VIEWER_PROFILE: Record<string, unknown[]> = {
+	'p-viewer': [
+		{ _id: 'prof-v', name: [{ string: 'Viewer Vera' }], _sharing: [{ string: 'domain' }] }
+	]
+};
+
+/** Season repertoire fallback rows for season1 (the event carries no
+ *  program_items by default): two works, both member-visible statuses. */
+function repertoireItemsFixture(): unknown[] {
+	return [
+		{
+			_id: 'ri-1',
+			name: [{ string: 'Bogoróditse Djévo' }],
+			work: [{ reference: 'w-1' }],
+			status: [{ string: 'active' }]
+		},
+		{
+			_id: 'ri-2',
+			name: [{ string: 'Locus iste' }],
+			work: [{ reference: 'w-2' }],
+			status: [{ string: 'learning' }]
+		}
+	];
+}
+
+/** ev1's OWN programme (two program_items, ordinal-ordered) — the source
+ *  hierarchy's first branch, so these REPLACE the season-repertoire fallback
+ *  and the works element must switch to the programme surface. */
+function programItemsFixture(): unknown[] {
+	return [
+		{
+			_id: 'pi-1',
+			name: [{ string: 'Bogoróditse Djévo' }],
+			edition: [{ reference: 'ed-1' }],
+			ordinal: [{ number: 0 }]
+		},
+		{
+			_id: 'pi-2',
+			name: [{ string: 'Locus iste' }],
+			edition: [{ reference: 'ed-2' }],
+			ordinal: [{ number: 1 }]
+		}
+	];
+}
+
+/** The library works the rows join against — the composer can ONLY come from
+ *  here (repertoire_item carries just the name formula), so seeing it rendered
+ *  proves the buildWorkRows join ran over the real listWorks read. */
+function libraryWorksFixture(): unknown[] {
+	return [
+		{ _id: 'w-1', name: [{ string: 'Bogoróditse Djévo' }], composer: [{ string: 'Arvo Pärt' }] },
+		{ _id: 'w-2', name: [{ string: 'Locus iste' }], composer: [{ string: 'Anton Bruckner' }] }
+	];
+}
+
+/** Four active members: the viewer (member-1) + the three profiled persons. */
+function activeMembersFixture(): unknown[] {
+	const org = [{ reference: 'org1', entity_type: 'organization' }];
+	return [
+		{ _id: 'member-1', person: [{ reference: 'p-viewer' }], _parent: org },
+		{ _id: 'member-2', person: [{ reference: 'p-mihkel' }], _parent: org },
+		{ _id: 'member-3', person: [{ reference: 'p-alice' }], _parent: org },
+		{ _id: 'member-4', person: [{ reference: 'p-guest' }], _parent: org }
+	];
+}
+
+type AttendanceRaw = {
+	_id: string;
+	member?: Array<{ reference: string }>;
+	status?: Array<{ string: string }>;
+};
+
+/** ev1's recorded attendance: 2 present (the viewer among them), 1 absent,
+ *  1 late — the tally fixture AND the badge's source. */
+function attendanceForEv1(): AttendanceRaw[] {
+	return [
+		{ _id: 'att-1', member: [{ reference: 'member-1' }], status: [{ string: 'present' }] },
+		{ _id: 'att-2', member: [{ reference: 'member-2' }], status: [{ string: 'present' }] },
+		{ _id: 'att-3', member: [{ reference: 'member-3' }], status: [{ string: 'absent' }] },
+		{ _id: 'att-4', member: [{ reference: 'member-4' }], status: [{ string: 'late' }] }
+	];
+}
+
+type ComposeFixtures = Fixtures & {
+	programItems?: unknown[];
+	repertoireItems?: unknown[];
+	works?: unknown[];
+	editions?: unknown[];
+	copies?: unknown[];
+	members?: unknown[];
+	attendance?: AttendanceRaw[];
+};
+
+/**
+ * The TE.2 wire (rsvpWireStub) extended with every route the two new surfaces
+ * read: the works pipeline (program_item / repertoire_item / work / edition /
+ * copy), the roster read (active members WITHOUT a person filter —
+ * findMyMemberId's person-scoped query still falls through to the base), and
+ * the attendance reads. BOTH attendance roads are served — child-of-event
+ * scoping (listAttendance) and member-scoped (listMyAttendance), derived from
+ * the SAME records — so the tests pin the contract, not one choreography.
+ */
+function composeWireStub(fixtures: ComposeFixtures = {}) {
+	const profiles = { ...PROFILES, ...VIEWER_PROFILE, ...(fixtures.profiles ?? {}) };
+	const base = rsvpWireStub({
+		event: fixtures.event,
+		season: fixtures.season,
+		series: fixtures.series,
+		profiles
+	});
+	const programItems = fixtures.programItems ?? [];
+	const repertoireItems = fixtures.repertoireItems ?? repertoireItemsFixture();
+	const works = fixtures.works ?? libraryWorksFixture();
+	const editions = fixtures.editions ?? [];
+	const copies = fixtures.copies ?? [];
+	const members = fixtures.members ?? activeMembersFixture();
+	const attendance = fixtures.attendance ?? attendanceForEv1();
+	// listMyAttendance's shape for the viewer: her rows, event id on `_parent`.
+	const myAttendance = attendance
+		.filter((r) => r.member?.[0]?.reference === 'member-1')
+		.map((r) => ({ _id: r._id, _parent: [{ reference: 'ev1' }], status: r.status }));
+	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = String(input);
+		if (url.includes('_type.string=program_item')) return json({ entities: programItems });
+		if (url.includes('_type.string=repertoire_item')) return json({ entities: repertoireItems });
+		if (url.includes('_type.string=work')) return json({ entities: works });
+		if (url.includes('_type.string=edition')) return json({ entities: editions });
+		if (url.includes('_type.string=copy')) return json({ entities: copies });
+		// The ROSTER read (listActiveMembers) carries no person filter; the
+		// person-scoped findMyMemberId query keeps falling through to the base.
+		if (url.includes('_type.string=member') && !url.includes('person.reference'))
+			return json({ entities: members });
+		if (url.includes('_type.string=attendance')) {
+			if (url.includes('_parent.reference=ev1')) return json({ entities: attendance });
+			if (url.includes('member.reference=member-1')) return json({ entities: myAttendance });
+			return json({ entities: [] });
+		}
+		return base(input, init);
+	});
+}
+
+function renderComposePage(fixtures: ComposeFixtures = {}) {
+	return renderWithFetch(composeWireStub(fixtures));
+}
+
+// ── the works section ─────────────────────────────────────────────────────────
+
+describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always expanded)', () => {
+	it('renders the works section with the rows ALREADY expanded — work names + composers, no tap needed', async () => {
+		const { container, fetchStub } = renderComposePage();
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-works"]')).not.toBeNull();
+		});
+		const section = container.querySelector('[data-testid="event-detail-works"]')!;
+
+		// The EXPANDED region — RepertoireElement's OWN testid, pinning reuse of
+		// the component — is present without any interaction at all.
+		expect(section.querySelector('[data-testid="works-expanded"]')).not.toBeNull();
+		const rows = [...section.querySelectorAll('[data-testid="work-row"]')];
+		expect(rows).toHaveLength(2);
+		const text = rows.map((r) => r.textContent ?? '').join(' ');
+		expect(text).toContain('Bogoróditse Djévo');
+		expect(text).toContain('Locus iste');
+		// Composers come ONLY from the listWorks join (repertoire_item carries just
+		// the name formula) — seeing them proves the real buildWorkRows pipeline.
+		expect(text).toContain('Arvo Pärt');
+		expect(text).toContain('Anton Bruckner');
+
+		// If the collapsed one-line toggle renders at all, it must already SAY
+		// expanded — a member never has to open the works on their own page.
+		const line = section.querySelector('[data-testid="works-line"]');
+		if (line) expect(line.getAttribute('aria-expanded')).toBe('true');
+
+		// …and the rows were RESOLVED over the wire via the agenda's own source
+		// hierarchy: this event's program_items first, then the PARENT SEASON's
+		// repertoire as fallback — not some detail-page-only read.
+		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
+		expect(urls.some((u) => u.includes('_type.string=program_item') && u.includes('ev1'))).toBe(
+			true
+		);
+		expect(
+			urls.some((u) => u.includes('_type.string=repertoire_item') && u.includes('season1'))
+		).toBe(true);
+	});
+
+	it('management controls render for a season rights-holder (_editor on the parent season)', async () => {
+		const { container } = renderComposePage({ season: editorSeason() });
+		await waitFor(() => {
+			expect(
+				container.querySelectorAll('[data-testid="work-row"]').length
+			).toBeGreaterThan(0);
+		});
+		const section = container.querySelector('[data-testid="event-detail-works"]')!;
+		// Per-row repertoire controls (these are season-repertoire fallback rows,
+		// so the REPERTOIRE surface's controls are the ones that may touch them).
+		expect(section.querySelectorAll('[data-testid="work-manage-status-select"]')).toHaveLength(2);
+		expect(section.querySelectorAll('[data-testid="work-manage-remove"]')).toHaveLength(2);
+		// …and the Add-work picker, the same one the agenda's editor sees.
+		expect(section.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
+	});
+
+	// Review round 2 (F1/F2) — the works load used to sit at the end of a
+	// three-deep serial chain: a SECOND `entity/ev1?props=_parent` (for a parent
+	// the detail read already carried) → a SECOND `entity/season1` (for rights
+	// the season read could have carried) → the works. Both extra reads are
+	// gone, so the page reads each entity exactly once.
+	it('reads the event and the season ONCE each — no second GET for the parent id or for season rights', async () => {
+		const { container, fetchStub } = renderComposePage({ season: editorSeason() });
+		await waitFor(() => {
+			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+		});
+		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
+		expect(urls.filter((u) => u.includes('/entity/ev1'))).toHaveLength(1);
+		expect(urls.filter((u) => u.includes('/entity/season1'))).toHaveLength(1);
+	});
+
+	// Review round 2 (F3) — `includeInactive` used to hang off a rights read that
+	// could answer 'error', and 'error' was treated as 'not-editor': a real
+	// season editor whose rights GET blipped silently lost the retired/dropped
+	// rows (and the toggle that brings them back). Rights are computed from the
+	// season read now — no separate call, no error state to collapse.
+	it('a season editor sees the RETIRED rows too — includeInactive rides on the same read as the rights', async () => {
+		const { container } = renderComposePage({
+			season: editorSeason(),
+			repertoireItems: [
+				...repertoireItemsFixture(),
+				{
+					_id: 'ri-3',
+					name: [{ string: 'Ave Maria' }],
+					work: [{ reference: 'w-3' }],
+					status: [{ string: 'retired' }]
+				}
+			],
+			works: [
+				...libraryWorksFixture(),
+				{ _id: 'w-3', name: [{ string: 'Ave Maria' }], composer: [{ string: 'Josquin' }] }
+			]
+		});
+		await waitFor(() => {
+			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(3);
+		});
+		expect(
+			container.querySelector('[data-testid="event-detail-works"]')!.textContent
+		).toContain('Ave Maria');
+	});
+
+	it('a plain member reads the works with NO management controls (default season: no rights visible)', async () => {
+		const { container } = renderComposePage();
+		await waitFor(() => {
+			expect(
+				container.querySelectorAll('[data-testid="work-row"]').length
+			).toBeGreaterThan(0);
+		});
+		expect(container.querySelector('[data-testid="work-manage-status-select"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-remove"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
+	});
+
+	it('NO works section at all when the event resolves no works — never an empty placeholder', async () => {
+		const { container } = renderComposePage({ programItems: [], repertoireItems: [] });
+		// Settle: the page is fully loaded (header up, rsvp seeded) before the
+		// absence is asserted — this is "resolved to nothing", not "still loading".
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
+			).toBe('true');
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		expect(container.querySelector('[data-testid="event-detail-works"]')).toBeNull();
+		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-row"]')).toBeNull();
+	});
+
+	// Review F2 — `context` was hardcoded to 'repertoire' here, and
+	// RepertoireElement gates row controls on `context` matching the row's
+	// `kind`, so a PROGRAMMED event rendered no row controls at all on this page
+	// while the SAME event's agenda row rendered move/remove. The surface is
+	// derived from row provenance now, exactly as AgendaList.worksContext does.
+	it('a PROGRAMMED event shows the PROGRAMME surface — per-row move/remove for an event editor, as on the agenda', async () => {
+		const { container } = renderComposePage({
+			event: eventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: editorSeason(),
+			programItems: programItemsFixture()
+		});
+		await waitFor(() => {
+			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+		});
+		const section = container.querySelector('[data-testid="event-detail-works"]')!;
+		// The programme's own row controls — the ones handleMoveItem /
+		// handleRemoveItem's program branch are wired to.
+		expect(section.querySelectorAll('[data-testid="work-manage-move-up"]')).toHaveLength(2);
+		expect(section.querySelectorAll('[data-testid="work-manage-move-down"]')).toHaveLength(2);
+		expect(section.querySelectorAll('[data-testid="work-manage-remove"]')).toHaveLength(2);
+		expect(section.querySelector('[data-testid="work-manage-add-programme"]')).not.toBeNull();
+		// …and NOT the season-repertoire picker: these rows are program_items, and
+		// the agenda's programme surface does not offer "Add work" either.
+		expect(section.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
+		expect(section.querySelector('[data-testid="work-manage-status-select"]')).toBeNull();
+	});
+});
+
+// ── the attendance section (past events only) ─────────────────────────────────
+
+describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () => {
+	it("shows the viewer's OWN attendance badge (member-1 was recorded present)", async () => {
+		const { container, fetchStub } = renderComposePage({ event: pastEventEntity() });
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-attendance"]')).not.toBeNull();
+		});
+		const badge = container.querySelector('[data-testid="event-detail-attendance-badge"]');
+		expect(badge).not.toBeNull();
+		// Her status is 'present' and the label goes through paraglide — whether it
+		// lands in the visible text or the aria-label is presentation, not contract.
+		const rendered = `${badge!.textContent ?? ''} ${badge!.getAttribute('aria-label') ?? ''}`;
+		expect(rendered).toContain('attendance_status_present');
+		// …and it was RESOLVED from the attendance read, not hardcoded.
+		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
+		expect(urls.some((u) => u.includes('_type.string=attendance'))).toBe(true);
+	});
+
+	it('shows the attendance tally — per-status counts from the child-of-event read (2 present / 1 absent / 1 late)', async () => {
+		const { container } = renderComposePage({ event: pastEventEntity() });
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-detail-attendance-tally"]')
+			).not.toBeNull();
+		});
+		const count = (s: string) =>
+			container.querySelector(`[data-testid="event-detail-attendance-tally-${s}"]`);
+		expect(count('present'), 'tally-present missing').not.toBeNull();
+		expect(count('present')!.textContent).toContain('2');
+		expect(count('absent')!.textContent).toContain('1');
+		expect(count('late')!.textContent).toContain('1');
+	});
+
+	it("offers 'Take attendance' to a CONDUCTOR and opens the real AttendanceSurface over the real roster", async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			season: conductorSeason()
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+		});
+
+		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
+
+		// AttendanceSurface's OWN testids — reuse of the component, not a lookalike.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="attendance-panel"]')).not.toBeNull();
+		});
+		// The roster was loaded over the wire (loadRoster: members + profiles) —
+		// one row per named member, the viewer among them.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
+		});
+		expect(
+			container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
+		).toContain('Viewer Vera');
+		expect(container.querySelector('[data-testid="attendance-row-member-2"]')).not.toBeNull();
+
+		// The toggles are SEEDED from the event's existing records — member-1
+		// present, member-3 absent — not blank.
+		expect(
+			container
+				.querySelector('[data-testid="attendance-toggle-member-1-present"]')
+				?.getAttribute('aria-pressed')
+		).toBe('true');
+		expect(
+			container
+				.querySelector('[data-testid="attendance-toggle-member-3-absent"]')
+				?.getAttribute('aria-pressed')
+		).toBe('true');
+	});
+
+	it("a NON-conductor gets the badge and tally but NO 'Take attendance'", async () => {
+		// Default season: conductors are p-mihkel + p-alice — the viewer holds no seat.
+		const { container } = renderComposePage({ event: pastEventEntity() });
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-detail-attendance-tally"]')
+			).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
+		expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
+	});
+
+	// Review F1 — the section used to render for ANY resolved member, because
+	// `myAttendanceStatus` falls back to 'not-recorded' and was treated as
+	// evidence of data. Most past rehearsals have no attendance taken, so this
+	// was the COMMON case: an empty section with a 0/0/0 tally.
+	it('NO attendance section on a past event with NOTHING recorded — a plain member gets no empty placeholder', async () => {
+		const { container } = renderComposePage({ event: pastEventEntity(), attendance: [] });
+		// Settle: the page is fully loaded (works resolved from the same wire)
+		// before the absence is asserted — "resolved to nothing", not "loading".
+		await waitFor(() => {
+			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		expect(container.querySelector('[data-testid="event-detail-attendance"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-attendance-badge"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-attendance-tally"]')).toBeNull();
+	});
+
+	it("a CONDUCTOR still gets the section on a past event with nothing recorded — 'Take attendance' needs somewhere to live", async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			season: conductorSeason(),
+			attendance: []
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="event-detail-attendance"]')).not.toBeNull();
+		// Review round 2 (F4) — …but NOT a zeroed tally. '0 present · 0 absent ·
+		// 0 late' is the empty placeholder F1 removed for members, reappearing for
+		// the one viewer the section is kept open for. She gets the entry point,
+		// not a summary of nothing.
+		expect(container.querySelector('[data-testid="event-detail-attendance-tally"]')).toBeNull();
+		expect(
+			container.querySelector('[data-testid="event-detail-attendance-tally-present"]')
+		).toBeNull();
+	});
+
+	// Review F3 — the badge is the agenda's AttendanceBadge, not inline markup
+	// copied from it: the first copy shipped without the colour dot and without
+	// `data-status`, and no test could see the divergence.
+	it("the badge is the agenda's own component — colour dot (aria-hidden) + data-status", async () => {
+		const { container } = renderComposePage({ event: pastEventEntity() });
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-attendance-badge"]')).not.toBeNull();
+		});
+		const badge = container.querySelector('[data-testid="event-detail-attendance-badge"]')!;
+		expect(badge.getAttribute('data-status')).toBe('present');
+		const dot = badge.querySelector('.rounded-full');
+		expect(dot, 'the badge must carry the status dot the agenda badge carries').not.toBeNull();
+		expect(dot!.getAttribute('aria-hidden')).toBe('true');
+	});
+
+	it('NO attendance section on a FUTURE event — even for a conductor', async () => {
+		// Default event starts 2026-09-01, after the pinned NOW.
+		const { container } = renderComposePage({ season: conductorSeason() });
+		await waitFor(() => {
+			const going = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement;
+			expect(going).not.toBeNull();
+			expect(going.disabled).toBe(false);
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		expect(container.querySelector('[data-testid="event-detail-attendance"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-attendance-badge"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-attendance-tally"]')).toBeNull();
+		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
+	});
+});
+
+// ── composition: both sections, absent together, present together ─────────────
+
+describe('/event/[id] — composing both sections (#103 TE.3)', () => {
+	it('BOTH sections absent when there is nothing to show (future event, no works) — the page stays whole', async () => {
+		const { container } = renderComposePage({ programItems: [], repertoireItems: [] });
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
+			).toBe('true');
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		expect(container.querySelector('[data-testid="event-detail-works"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-attendance"]')).toBeNull();
+		// …and the existing surfaces did not go with them.
+		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
+			'Tuesday Rehearsal'
+		);
+		expect(container.querySelector('[data-testid="event-detail-rsvp"]')).not.toBeNull();
+	});
+
+	it('integration: ONE page composes header + rsvp + works (expanded, managed) + attendance (badge, tally, surface) from the existing components', async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			season: seasonEntity({
+				conductor: [{ reference: 'p-viewer' }],
+				_editor: [{ reference: 'p-viewer' }]
+			})
+		});
+
+		// Both sections mount on the SAME render of the actual route page.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-works"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="event-detail-attendance"]')).not.toBeNull();
+		});
+
+		// Works: expanded rows INSIDE the works section, with the season-editor's
+		// management controls live.
+		const worksSection = container.querySelector('[data-testid="event-detail-works"]')!;
+		await waitFor(() => {
+			expect(worksSection.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+		});
+		expect(worksSection.querySelector('[data-testid="works-expanded"]')).not.toBeNull();
+		expect(
+			worksSection.querySelector('[data-testid="work-manage-status-select"]')
+		).not.toBeNull();
+
+		// Attendance: badge + tally + the conductor's button INSIDE the section.
+		const attSection = container.querySelector('[data-testid="event-detail-attendance"]')!;
+		await waitFor(() => {
+			expect(
+				attSection.querySelector('[data-testid="event-detail-attendance-tally"]')
+			).not.toBeNull();
+		});
+		expect(attSection.querySelector('[data-testid="event-detail-attendance-badge"]')).not.toBeNull();
+		expect(attSection.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+
+		// The conductor's surface opens INSIDE the attendance section — the same
+		// AttendanceSurface component, composed on this page.
+		await fireEvent.click(attSection.querySelector('[data-testid="take-attendance-btn"]')!);
+		await waitFor(() => {
+			expect(attSection.querySelector('[data-testid="attendance-panel"]')).not.toBeNull();
+			expect(attSection.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
+		});
+
+		// …and the TE.1/TE.2 surfaces are intact alongside both.
+		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
+			'Tuesday Rehearsal'
+		);
+		expect(container.querySelector('[data-testid="event-detail-rsvp"]')).not.toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #101 TE.1 RED)
 // (*MVOX:Josquin* — #101 TE.1 review fixes F1/F3)
 // (*MVOX:Josquin* — #101 TE.1 review round 2, F1–F5)
 // (*MVOX:Tallis* — #102 TE.2 RED)
 // (*MVOX:Josquin* — #102 TE.2 review round 2, F1/F2)
+// (*MVOX:Tallis* — #103 TE.3 RED)
+// (*MVOX:Palestrina* — #103 TE.3 review round 2, F1–F4)

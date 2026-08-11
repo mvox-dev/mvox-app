@@ -15,11 +15,12 @@
 	// browse tree's editions-under-work), not below the whole agenda.
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
-
-	/** #85 TA.4 — the four attendance-badge states a RECENT (past) row can carry.
-	 *  'not-recorded' is a genuine 4th state (a past event nobody marked for me),
-	 *  never a blank and never defaulted onto 'absent'. */
-	type BadgeStatus = 'present' | 'absent' | 'late' | 'not-recorded';
+	// #103 review F3 — the badge and the conductor's button are SHARED with the
+	// event detail page (they were inline here and copied there, and the copies
+	// had already lost the dot + data-status). BadgeStatus is that component's
+	// own type now — #85 TA.4's four states, 'not-recorded' among them.
+	import AttendanceBadge, { type BadgeStatus } from '$lib/components/attendance/AttendanceBadge.svelte';
+	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
 
 	interface Props {
 		items: AgendaItem[];
@@ -146,18 +147,6 @@
 		return worksManage.seasonRights === 'editor' || eventRightsFor(eventId) === 'editor';
 	}
 
-	const BADGE_DOT_CLASS: Record<BadgeStatus, string> = {
-		present: 'bg-green',
-		absent: 'bg-red',
-		late: 'bg-amber',
-		'not-recorded': 'bg-ink-4'
-	};
-	const BADGE_LABEL: Record<BadgeStatus, () => string> = {
-		present: m.attendance_status_present,
-		absent: m.attendance_status_absent,
-		late: m.attendance_status_late,
-		'not-recorded': m.attendance_status_not_recorded
-	};
 	function badgeStatus(eventId: string): BadgeStatus {
 		return myAttendanceByEventId[eventId] ?? 'not-recorded';
 	}
@@ -358,30 +347,10 @@
 					     no badge — 'Not recorded' reads as 'you skipped' to someone who
 					     was never expected to attend). -->
 					{#if membership === 'member'}
-						<span
-							data-testid="attendance-badge-{item.id}"
-							data-status={badgeStatus(item.id)}
-							role="img"
-							aria-label={m.attendance_badge_aria_label({ status: BADGE_LABEL[badgeStatus(item.id)]() })}
-							class="inline-flex w-fit items-center gap-1 font-mono text-[9px] tracking-wide text-ink-2"
-						>
-							<span
-								class="h-1.5 w-1.5 rounded-full {BADGE_DOT_CLASS[badgeStatus(item.id)]}"
-								aria-hidden="true"
-							></span>
-							{BADGE_LABEL[badgeStatus(item.id)]()}
-						</span>
+						<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
 					{/if}
 					{#if conductorEventIds.has(item.id) && ontakeattendance}
-						<button
-							type="button"
-							data-testid="take-attendance-btn"
-							aria-label={m.agenda_take_attendance_label({ event: item.name })}
-							class="self-start rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
-							onclick={() => ontakeattendance?.(item)}
-						>
-							{m.agenda_take_attendance()}
-						</button>
+						<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
 					{/if}
 					<!-- #87 fix — the panel is a CHILD of the row that opened it, directly
 					     below the button, same inline-expansion pattern as the library

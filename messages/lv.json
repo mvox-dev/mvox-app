@@ -220,6 +220,11 @@
 	"event_type_meeting": "Sapulce",
 	"event_type_social": "Saviesīgs pasākums",
 	"event_type_other": "Cits",
+	"event_detail_works_heading": "Skaņdarbi",
+	"event_detail_attendance_heading": "Apmeklējums",
+	"event_detail_attendance_tally_present": "{count} klāt",
+	"event_detail_attendance_tally_absent": "{count} nav",
+	"event_detail_attendance_tally_late": "{count} kavējas",
 	"agenda_row_link_label": "Skatīt notikuma {event} detaļas",
 	"agenda_row_link_label_unnamed": "Skatīt notikuma detaļas"
 }

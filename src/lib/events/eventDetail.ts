@@ -60,6 +60,24 @@ export type EventDetail = {
 	 * editor roster.
 	 */
 	editorIds: string[];
+	/**
+	 * #103 TE.3 — the parent SEASON's id, null when the event has no season
+	 * parent (or it is not visible). Already known from the event's `_parent`
+	 * read; surfaced instead of discarded so no caller has to GET the same
+	 * entity a second time just to learn it.
+	 */
+	seasonId: string | null;
+	/**
+	 * #103 TE.3 — the parent season's `_owner`/`_editor` refs VISIBLE to this
+	 * caller, same private-bucket mechanics as `ownerIds`/`editorIds` above.
+	 * The season entity is ALREADY read here (conductor source), so its rights
+	 * props ride along on that same GET: the caller runs `manageRightsFrom`
+	 * over them as pure computation and spends no round-trip resolving season
+	 * management rights (#91 review F1's rule, applied to one event instead of
+	 * 500). [] whenever `seasonId` is null or the season read failed.
+	 */
+	seasonOwnerIds: string[];
+	seasonEditorIds: string[];
 };
 
 /**
@@ -115,6 +133,10 @@ interface EventRaw {
 interface SeasonRaw {
 	_id: string;
 	conductor?: Array<{ reference: string }>;
+	/** #103 TE.3 — the season's rights tiers, read on the SAME GET the conductor
+	 *  list comes from; private-bucket, so a non-granted reader gets neither. */
+	_owner?: Array<{ reference: string }>;
+	_editor?: Array<{ reference: string }>;
 }
 
 interface SeriesRaw {
@@ -175,7 +197,9 @@ export async function loadEventDetail(
 		);
 
 	const parents = event._parent ?? [];
-	const seasonId = parents.find((p) => p.entity_type === 'season')?.reference ?? '';
+	// null (not '') is the surfaced "no season parent" — `seasonId` is part of
+	// the returned contract now, and '' would read as a real id to a caller.
+	const seasonId = parents.find((p) => p.entity_type === 'season')?.reference ?? null;
 	const seriesId = parents.find((p) => p.entity_type === 'event_series')?.reference ?? '';
 
 	const [season, series] = await Promise.all([
@@ -210,6 +234,8 @@ export async function loadEventDetail(
 	const capacity = event.capacity?.[0]?.number ?? null;
 	const ownerIds = (event._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
 	const editorIds = (event._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+	const seasonOwnerIds = (season?._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+	const seasonEditorIds = (season?._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
 
 	return {
 		id: event._id,
@@ -223,16 +249,33 @@ export async function loadEventDetail(
 		conductorNames,
 		capacity,
 		ownerIds,
-		editorIds
+		editorIds,
+		seasonId,
+		seasonOwnerIds,
+		seasonEditorIds
 	};
 }
 
+/**
+ * The parent season: conductor source AND (since #103 TE.3) season-rights
+ * source. `_owner`/`_editor` are asked for on this SAME GET — an unrequested
+ * prop comes back absent, which every caller would read as "no rights", and a
+ * second `entity/{seasonId}?props=_owner,_editor` round-trip to learn what this
+ * read could have carried is the per-entity rights fan-out #91 review F1
+ * removed from the agenda.
+ */
 async function fetchSeason(
 	cfg: EntuCfg,
 	seasonId: string,
 	fetchImpl: typeof fetch
 ): Promise<SeasonRaw | undefined> {
-	const res = await entuFetch(cfg.db, `entity/${seasonId}?props=conductor`, cfg.token, {}, fetchImpl);
+	const res = await entuFetch(
+		cfg.db,
+		`entity/${seasonId}?props=conductor,_owner,_editor`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
 	if (!res.ok) return undefined;
 	const body = (await res.json()) as { entity?: SeasonRaw };
 	return body.entity;
@@ -259,3 +302,5 @@ async function fetchSeries(
 // (*MVOX:Josquin* — #101 TE.1 review round 2, F5: typed EventDetailLoadError)
 // (*MVOX:Byrd* — #102 TE.2 GREEN: capacity + editorIds)
 // (*MVOX:Byrd* — #102 TE.2 review F1: ownerIds alongside editorIds — owner-or-editor)
+// (*MVOX:Palestrina* — #103 TE.3 review round 2, F1/F2: seasonId + season rights
+//  on the one read that already happened; loadEventSeasonId deleted)

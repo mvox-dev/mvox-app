@@ -26,9 +26,49 @@
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
-	import { listAllRsvpsForEvent } from '$lib/attendance/attendanceData';
-	import { manageRightsFrom } from '$lib/repertoire/repertoireActions';
+	import {
+		listAllRsvpsForEvent,
+		listAttendance,
+		attendanceByMemberId,
+		type AttendanceStatus,
+		type EventAttendance
+	} from '$lib/attendance/attendanceData';
+	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
+	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import type { AgendaItem } from '$lib/agenda/types';
+	// #103 TE.3 — the works pipeline: the SAME producer the agenda uses
+	// (workRows.ts joins repertoireData's resolved items against the library
+	// lookups), plus the write layer (repertoireActions) and its picker source
+	// (repertoireData.listRepertoireItems, library.listWorks/-Editions).
+	import { loadWorksByEventId } from '$lib/repertoire/workRows';
+	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
+	import {
+		createProgramItem,
+		createRepertoireItem,
+		createRepertoireWriteQueue,
+		deleteProgramItem,
+		deleteRepertoireItem,
+		manageRightsFrom,
+		pickableWorks,
+		pinEdition,
+		planProgramMove,
+		reorderProgramItems,
+		updateRepertoireStatus
+	} from '$lib/repertoire/repertoireActions';
+	import { listWorks, listAllEditions, type Edition, type Work } from '$lib/library/libraryData';
+	import type { ManageRightsState, PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
+	import { signFileUrl } from '$lib/repertoire/fileUrls';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
+	import RepertoireElement, {
+		ADD_PROGRAMME_KEY,
+		ADD_WORK_KEY
+	} from '$lib/components/agenda/RepertoireElement.svelte';
+	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
+	// #103 review F3 — the badge and the conductor's button are the AGENDA's, not
+	// lookalikes: both surfaces render the same extracted components, so the dot,
+	// the data-status, the aria-label shape and the chrome cannot drift again.
+	import AttendanceBadge from '$lib/components/attendance/AttendanceBadge.svelte';
+	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -104,6 +144,51 @@
 	// error+retry treatment this page already gives the event read.
 	let tallyError = $state(false);
 
+	// ── #103 TE.3 — Works section state ───────────────────────────────────────
+	// The event's parent season id and the season's management rights — BOTH
+	// carried by `loadEventDetail` itself (`seasonId` off the event's `_parent`,
+	// the rights off the season read it already makes for the conductor list) —
+	// plus the resolved works for THIS event (program_items, else the season's
+	// repertoire — TR.2's hierarchy, run through the same producer the agenda
+	// uses).
+	//
+	// Review F1/F2/F3 — this used to be a three-deep serial waterfall on top of
+	// the detail load: loadEventSeasonId (a SECOND GET of the event, for a
+	// `_parent` the detail read already had) → resolveManageRights (a SECOND GET
+	// of the season) → loadWorksByEventId, each awaiting the last because
+	// `includeInactive` depended on the rights answer. Both extra reads are gone:
+	// rights are pure computation on data already in hand (#91 review F1's rule),
+	// so the works load fires immediately — and `manageRightsFrom` has no 'error'
+	// state, so a rights blip can no longer silently demote a season editor to
+	// read-only with the retired/dropped rows filtered out.
+	let seasonId = $state<string | null>(null);
+	let seasonManageRights = $state<ManageRightsState>('not-editor');
+	let workRows = $state<WorkRow[]>([]);
+	// Management picker sources — only ever fetched for a rights-holder (season
+	// OR event editor), same economy as the agenda's loadManagePickers.
+	let libraryWorks = $state<Work[]>([]);
+	let libraryEditions = $state<Edition[]>([]);
+	let seasonRepertoire = $state<RepertoireItem[]>([]);
+	let managePendingKeys = $state<Set<string>>(new Set());
+
+	// ── #103 TE.3 — Attendance section state ──────────────────────────────────
+	// Domain-visible (attendance is `_sharing: domain` at create time, #82-style
+	// widen) — loaded unconditionally for a PAST event, never rights-gated. Feeds
+	// both the viewer's own badge and the per-status tally.
+	let attendanceMap = $state<Record<string, { attendanceId: string; status: AttendanceStatus }>>(
+		{}
+	);
+	// The conductor's inline "Take attendance" panel — one event on this page, so
+	// a plain boolean (not the agenda's per-event `attendanceItem`) is enough.
+	let attendancePanelOpen = $state(false);
+	let attendancePanelLoading = $state(false);
+	let attendancePanelError = $state(false);
+	let attendanceRoster = $state<RosterRow[]>([]);
+	let attendanceRsvpMap = $state<Record<string, { rsvpId: string; status: string }>>({});
+	// #15-shaped guard, per member id (attendanceChangeQueue.ts doc).
+	let attendancePendingMemberIds = $state<Set<string>>(new Set());
+	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
+
 	/**
 	 * The ONE rights predicate this page owns — `manageRightsFrom`, the app's
 	 * single owner-OR-editor rule (repertoireActions.ts; ownership subsumes
@@ -133,11 +218,13 @@
 			status = 'no-collective';
 			detail = null;
 			resetRsvpState();
+			resetComposeState();
 			return;
 		}
 		status = 'loading';
 		detail = null;
 		resetRsvpState();
+		resetComposeState();
 		try {
 			const cfg = { db: current.db, token: getToken() ?? '' };
 			const loaded = await loadEventDetail(cfg, id);
@@ -148,6 +235,7 @@
 			if (canSeeTally(loaded, current.personId)) {
 				loadTally(cfg, id, g);
 			}
+			loadComposeSurfaces(cfg, loaded, current.personId, g);
 		} catch (e) {
 			if (g !== generation) return;
 			console.error('event detail: load failed', e);
@@ -167,6 +255,27 @@
 		rsvpFailed = false;
 		tally = null;
 		tallyError = false;
+	}
+
+	/** #103 TE.3 — mirrors resetRsvpState for the works + attendance surfaces:
+	 *  a fresh load (or a superseded one) must not carry the PREVIOUS event's
+	 *  rows, rights, or attendance panel across the switch. */
+	function resetComposeState(): void {
+		seasonId = null;
+		seasonManageRights = 'not-editor';
+		workRows = [];
+		libraryWorks = [];
+		libraryEditions = [];
+		seasonRepertoire = [];
+		managePendingKeys = new Set();
+		attendanceMap = {};
+		attendancePanelOpen = false;
+		attendancePanelLoading = false;
+		attendancePanelError = false;
+		attendanceRoster = [];
+		attendanceRsvpMap = {};
+		attendancePendingMemberIds = new Set();
+		attendanceFailedMemberIds = new Set();
 	}
 
 	/** Membership + the viewer's own rsvp — the SAME primitives the agenda seeds
@@ -360,12 +469,18 @@
 	 * failed to mount. Resolved once, here, so the template only ever formats a
 	 * Date it has already proven valid.
 	 */
-	const startAt = $derived.by(() => {
-		const raw = detail?.startDatetime ?? '';
+	/** '' or an unparseable value -> null (never throws — see the callers'
+	 *  docs). Pulled out to a plain function so `isPastDetail` below (used by
+	 *  `loadComposeSurfaces`, which runs on the just-resolved `EventDetail`
+	 *  BEFORE relying on `$derived` to have caught up) shares the exact same
+	 *  parse rule as the template's own `startAt`. */
+	function parseStartAt(raw: string): Date | null {
 		if (raw === '') return null;
 		const parsed = new Date(raw);
 		return Number.isNaN(parsed.getTime()) ? null : parsed;
-	});
+	}
+
+	const startAt = $derived.by(() => parseStartAt(detail?.startDatetime ?? ''));
 
 	/**
 	 * #102 review fix (F3) — this event has already started, so its RSVP is
@@ -384,6 +499,13 @@
 	 * does not re-split while the page stays open).
 	 */
 	const isPast = $derived(startAt !== null && startAt.getTime() < Date.now());
+	/** Same rule as `isPast`, computed straight off an `EventDetail` rather than
+	 *  the reactive `startAt` — used the instant a load resolves, before this
+	 *  page's own `$derived`s are guaranteed to have re-run. */
+	function isPastDetail(d: EventDetail): boolean {
+		const start = parseStartAt(d.startDatetime);
+		return start !== null && start.getTime() < Date.now();
+	}
 
 	/**
 	 * "19:00–20:30" — start, then start + duration, both Tallinn-zoned. #101 review
@@ -414,6 +536,533 @@
 	};
 	function eventTypeLabel(eventType: string): string {
 		return EVENT_TYPE_LABEL[eventType]?.() ?? eventType;
+	}
+
+	// ═══════════════════════════════════════════════════════════════════════
+	// #103 TE.3 — compose the WORKS and ATTENDANCE surfaces. Shape mirrors the
+	// RSVP wiring above: this page owns the reads, the rights, the optimistic
+	// local mutation and its inverse; repertoireActions/attendanceData own the
+	// wire calls; the write queues own the pending guard and the settle path;
+	// RepertoireElement/AttendanceSurface only render and forward taps — the
+	// exact same components + producers the agenda uses, never a lookalike.
+	// ═══════════════════════════════════════════════════════════════════════
+
+	type ComposeCfg = { db: string; token: string };
+
+	/** `_editor` (or `_owner`) on THIS event — the app's one rights rule, run
+	 *  over data this page already loaded. Governs the "Add to programme" /
+	 *  programme-row controls RepertoireElement renders regardless of `context`
+	 *  (see that component's doc); `seasonManageRights` below governs the
+	 *  season-repertoire ones. */
+	const eventManageRights = $derived<ManageRightsState>(isEditor ? 'editor' : 'not-editor');
+
+	/**
+	 * The works + attendance reads for one just-loaded event. Called from
+	 * `loadForSelected` alongside `loadRsvpControl`/`loadTally` — same `g`
+	 * generation guard throughout, so a superseded load (collective switch,
+	 * second event link tapped) can never land its rows on the page that has
+	 * since moved on.
+	 *
+	 * Review F1/F2 — the season id and BOTH rights answers ride on `loaded`
+	 * (see EventDetail's `seasonId`/`seasonOwnerIds`/`seasonEditorIds`), so
+	 * everything below is pure computation and the works read is the FIRST
+	 * request this function makes, not the third link of a serial chain.
+	 */
+	function loadComposeSurfaces(cfg: ComposeCfg, loaded: EventDetail, personId: string, g: number): void {
+		const sid = loaded.seasonId;
+		seasonId = sid;
+		// The app's one owner-OR-editor rule, run over the reads that already
+		// happened — no round-trip, and therefore no 'error' state to mistake for
+		// 'not-editor' (repertoire/types.ts on why that collapse is forbidden).
+		const seasonRights: ManageRightsState =
+			sid === null
+				? 'not-editor'
+				: manageRightsFrom(loaded.seasonOwnerIds, loaded.seasonEditorIds, personId);
+		seasonManageRights = seasonRights;
+		const eventEditor = manageRightsFrom(loaded.ownerIds, loaded.editorIds, personId) === 'editor';
+
+		loadWorksByEventId(cfg, [loaded.id], sid, fetch, {
+			includeInactive: seasonRights === 'editor'
+		})
+			.then((byEvent) => {
+				if (g !== generation) return;
+				workRows = byEvent[loaded.id] ?? [];
+			})
+			.catch(() => {
+				if (g !== generation) return;
+				workRows = [];
+			});
+
+		if (seasonRights === 'editor' || eventEditor) loadManagePickers(cfg, sid, g);
+
+		// Attendance — domain-visible, so read unconditionally for a past event
+		// (never rights-gated); absent entirely on a future one (nothing to show).
+		if (isPastDetail(loaded)) {
+			listAttendance(cfg, loaded.id)
+				.then((records) => {
+					if (g !== generation) return;
+					attendanceMap = attendanceByMemberId(records);
+				})
+				.catch((e) => {
+					console.error('event detail: attendance load failed', e);
+					if (g !== generation) return;
+					attendanceMap = {};
+				});
+		}
+	}
+
+	/** The management picker sources — only fetched for a rights-holder. */
+	function loadManagePickers(cfg: ComposeCfg, sid: string | null, g: number): void {
+		Promise.all([
+			listWorks(cfg),
+			listAllEditions(cfg),
+			sid === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, sid)
+		])
+			.then(([works, editions, repertoire]) => {
+				if (g !== generation) return;
+				libraryWorks = works;
+				libraryEditions = editions;
+				seasonRepertoire = repertoire;
+			})
+			.catch(() => {
+				if (g !== generation) return;
+				libraryWorks = [];
+				libraryEditions = [];
+				seasonRepertoire = [];
+			});
+	}
+
+	// ── the works management write layer ──────────────────────────────────
+
+	function manageCfg(): ComposeCfg | null {
+		return selected ? { db: selected.db, token: getToken() ?? '' } : null;
+	}
+
+	/** The PDF download, signed AT CLICK TIME — Entu's signed S3 url is valid
+	 *  for 60 seconds (entu-www src/api/files/index.md), so it can never be
+	 *  resolved ahead of the click and parked in an href (RepertoireElement
+	 *  hands up the file property id instead). Verbatim the agenda's own
+	 *  `handlePdfClick`: the blank tab opens SYNCHRONOUSLY, inside the click's
+	 *  user-gesture window, so a popup blocker cannot swallow it. */
+	function handlePdfClick(fileId: string): void {
+		if (!selected) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const tab = window.open('', '_blank');
+		if (tab) tab.opener = null;
+		signFileUrl(cfg, fileId)
+			.then((url) => {
+				if (tab) tab.location.href = url;
+				else window.location.href = url;
+			})
+			.catch((e) => {
+				console.error('event detail: pdf signing failed', e);
+				tab?.close();
+			});
+	}
+
+	/** Re-read what a settled write changed — the rows are a join over four
+	 *  collections (workRows.ts), so only worth paying after a CREATE (whose
+	 *  server-assigned id exists nowhere else) or a FAILED write (the screen
+	 *  must show the truth, not a stale local fiction). Mirrors the agenda's
+	 *  own `refreshWorksAfterWrite`. */
+	function refreshWorks(): void {
+		const cfg = manageCfg();
+		if (!cfg || !detail) return;
+		const evId = detail.id;
+		const g = generation;
+		loadWorksByEventId(cfg, [evId], seasonId, fetch, { includeInactive: seasonManageRights === 'editor' })
+			.then((byEvent) => {
+				if (g !== generation) return;
+				workRows = byEvent[evId] ?? [];
+			})
+			.catch(() => {
+				/* keep the optimistic rows; the next load reconciles */
+			});
+		if (seasonId !== null && seasonManageRights === 'editor') {
+			listRepertoireItems(cfg, seasonId)
+				.then((items) => {
+					if (g !== generation) return;
+					seasonRepertoire = items;
+				})
+				.catch(() => {
+					/* the picker keeps its previous exclusion set */
+				});
+		}
+	}
+
+	const repertoireQueue = createRepertoireWriteQueue({
+		setPending(key, pending) {
+			const next = new Set(managePendingKeys);
+			if (pending) next.add(key);
+			else next.delete(key);
+			managePendingKeys = next;
+		},
+		reconcile(key) {
+			// Only a CREATE needs the server (its id is assigned there); every
+			// other write kind already holds the authoritative value locally —
+			// same economy the agenda's own queue callbacks apply.
+			if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorks();
+		},
+		revert(key) {
+			console.error('event detail: repertoire write failed', key);
+			// None of these writes is atomic — refetch shows the TRUTH rather than
+			// a rolled-back-but-possibly-wrong local guess (agenda's own F5 rule).
+			refreshWorks();
+		}
+	});
+
+	function findWorkRow(itemId: string): WorkRow | undefined {
+		return workRows.find((row) => row.id === itemId);
+	}
+	function patchWorkRow(itemId: string, patch: Partial<WorkRow>): void {
+		workRows = workRows.map((row) => (row.id === itemId ? { ...row, ...patch } : row));
+	}
+	function dropWorkRow(itemId: string): void {
+		workRows = workRows.filter((row) => row.id !== itemId);
+	}
+	function restoreWorkRow(index: number, row: WorkRow): void {
+		if (workRows.some((r) => r.id === row.id)) return;
+		const next = [...workRows];
+		next.splice(Math.min(index, next.length), 0, row);
+		workRows = next;
+	}
+	function setWorkOrdinals(ordinalById: Map<string, number>): void {
+		workRows = workRows.map((row) =>
+			ordinalById.has(row.id) ? { ...row, ordinal: ordinalById.get(row.id)! } : row
+		);
+	}
+
+	function handleAddWork(workId: string): void {
+		const cfg = manageCfg();
+		if (!cfg || seasonId === null) return;
+		const sid = seasonId;
+		repertoireQueue.request(ADD_WORK_KEY, async () => {
+			await createRepertoireItem(cfg, { seasonId: sid, workId });
+		});
+	}
+
+	function handleStatusChange(itemId: string, status: RepertoireStatus): void {
+		const cfg = manageCfg();
+		const row = findWorkRow(itemId);
+		if (!cfg || !row || row.kind !== 'repertoire') return;
+		const before = row.status;
+		repertoireQueue.request(itemId, () => updateRepertoireStatus(cfg, itemId, status), {
+			apply: () => patchWorkRow(itemId, { status }),
+			rollback: () => patchWorkRow(itemId, { status: before })
+		});
+	}
+
+	function handlePinEdition(itemId: string, editionId: string): void {
+		const cfg = manageCfg();
+		const row = findWorkRow(itemId);
+		if (!cfg || !row || row.kind !== 'repertoire') return;
+		const before = { editionId: row.editionId, editionName: row.editionName };
+		const editionName = libraryEditions.find((e) => e.id === editionId)?.name ?? '';
+		repertoireQueue.request(itemId, () => pinEdition(cfg, itemId, editionId), {
+			apply: () => patchWorkRow(itemId, { editionId, editionName }),
+			rollback: () => patchWorkRow(itemId, before)
+		});
+	}
+
+	/** WHICH delete this is comes from the row's own `kind`, never from the
+	 *  surface it was tapped on — a repertoire-context row can be a fallback
+	 *  program-item-free event, but the row itself always states its own
+	 *  provenance (same rule the agenda's handleRemoveItem follows). */
+	function handleRemoveItem(itemId: string): void {
+		const cfg = manageCfg();
+		const row = findWorkRow(itemId);
+		if (!cfg || !row) return;
+		const index = workRows.findIndex((r) => r.id === itemId);
+		if (row.kind === 'program') {
+			repertoireQueue.request(itemId, () => deleteProgramItem(cfg, itemId), {
+				apply: () => dropWorkRow(itemId),
+				rollback: () => restoreWorkRow(index, row)
+			});
+			return;
+		}
+		const repertoireBefore = seasonRepertoire;
+		repertoireQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
+			apply: () => {
+				dropWorkRow(itemId);
+				seasonRepertoire = seasonRepertoire.filter((item) => item.id !== itemId);
+			},
+			rollback: () => {
+				restoreWorkRow(index, row);
+				seasonRepertoire = repertoireBefore;
+			}
+		});
+	}
+
+	function handleMoveItem(itemId: string, direction: 'up' | 'down'): void {
+		const cfg = manageCfg();
+		if (!cfg || !detail) return;
+		const items = workRows
+			.filter((row) => row.kind === 'program')
+			.map((row) => ({ id: row.id, ordinal: row.ordinal ?? 0 }));
+		const plan = planProgramMove(items, itemId, direction);
+		if (plan.length === 0) return; // boundary row, or not in this programme
+		const key = `move:${detail.id}`;
+		const before = new Map(
+			plan.map((entry) => [entry.id, items.find((i) => i.id === entry.id)?.ordinal ?? 0])
+		);
+		const after = new Map(plan.map((entry) => [entry.id, entry.ordinal]));
+		repertoireQueue.request(key, () => reorderProgramItems(cfg, plan), {
+			apply: () => setWorkOrdinals(after),
+			rollback: () => setWorkOrdinals(before)
+		});
+	}
+
+	function handleAddProgramItem(editionId: string, ordinal: number): void {
+		const cfg = manageCfg();
+		if (!cfg || !detail) return;
+		const eventIdForProgram = detail.id;
+		repertoireQueue.request(ADD_PROGRAMME_KEY, async () => {
+			await createProgramItem(cfg, { eventId: eventIdForProgram, editionId, ordinal });
+		});
+	}
+
+	// ── derived picker sources (single event/season, unlike the agenda's
+	//    per-event maps — this page only ever has ONE of each) ────────────
+
+	const editionsByWorkId = $derived.by(() => {
+		const map = new Map<string, Edition[]>();
+		for (const edition of libraryEditions) {
+			const workId = edition.workId ?? '';
+			if (workId === '') continue;
+			const list = map.get(workId);
+			if (list) list.push(edition);
+			else map.set(workId, [edition]);
+		}
+		return map;
+	});
+
+	function editionLabel(edition: Edition): string {
+		return edition.name || edition.publisher || edition.id;
+	}
+
+	/** Per repertoire ROW: the editions of that row's work ("pin edition"). */
+	const editionOptionsByRowId = $derived.by(() => {
+		const out: Record<string, PickerOption[]> = {};
+		for (const row of workRows) {
+			if (row.kind !== 'repertoire' || row.workId === '') continue;
+			const options = (editionsByWorkId.get(row.workId) ?? []).map((edition) => ({
+				id: edition.id,
+				label: editionLabel(edition)
+			}));
+			if (options.length > 0) out[row.id] = options;
+		}
+		return out;
+	});
+
+	/** Editions not already on THIS event's programme, labelled "Work — Edition". */
+	const pickableEditionsList = $derived.by(() => {
+		const workNameById = new Map(libraryWorks.map((work) => [work.id, work.name]));
+		const programmed = new Set(
+			workRows.filter((row) => row.kind === 'program').map((row) => row.editionId)
+		);
+		return libraryEditions
+			.filter((edition) => !programmed.has(edition.id))
+			.map((edition) => {
+				const workName = workNameById.get(edition.workId ?? '') ?? '';
+				return {
+					id: edition.id,
+					label: workName === '' ? editionLabel(edition) : `${workName} — ${editionLabel(edition)}`
+				};
+			});
+	});
+
+	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
+
+	/** Absent entirely for a viewer with no works AND no rights anywhere on
+	 *  this event — never an empty "Works" placeholder (same rule
+	 *  RepertoireElement itself follows for a plain member). A rights-holder on
+	 *  an otherwise-empty event still gets the section, so "Add work"/"Add to
+	 *  programme" has somewhere to render (the agenda's own `showWorks`). */
+	const showWorksSection = $derived(
+		workRows.length > 0 || seasonManageRights === 'editor' || eventManageRights === 'editor'
+	);
+
+	/** Which management surface the works element shows, from the PROVENANCE of
+	 *  its rows — the SAME rule AgendaList.worksContext applies (an event with
+	 *  its own program_items shows the programme; one without falls back to the
+	 *  season repertoire and therefore shows the repertoire surface).
+	 *
+	 *  Review F2 — this was hardcoded to 'repertoire', and RepertoireElement
+	 *  gates its per-row controls on `context` matching the row's `kind`, so a
+	 *  programmed event rendered NO row controls at all here (move/remove
+	 *  unreachable) while the SAME event's agenda row rendered them, and offered
+	 *  the season's "Add work" where the agenda did not. `seasonRights` /
+	 *  `eventRights` are passed independently, so both surfaces stay correctly
+	 *  gated in either mode. */
+	const worksContext = $derived<'repertoire' | 'programme'>(
+		workRows.some((row) => row.kind === 'program') ? 'programme' : 'repertoire'
+	);
+
+	// ── the attendance section ─────────────────────────────────────────────
+
+	/** The viewer's own attendance for this event, or 'not-recorded' once her
+	 *  member id is known but no record exists — never a blank, and never
+	 *  computed before her member id has resolved (an unresolved membership is
+	 *  not "not recorded", it's "don't know yet"). */
+	const myAttendanceStatus = $derived<AttendanceStatus | 'not-recorded' | null>(
+		memberId === null ? null : (attendanceMap[memberId]?.status ?? 'not-recorded')
+	);
+
+	/** Anyone at all was marked for this event — the ONE "there is data" test
+	 *  both the section gate and the tally gate run (review F1 and F4). */
+	const hasAttendanceRecords = $derived(Object.keys(attendanceMap).length > 0);
+
+	const attendanceTally = $derived.by(() => {
+		let present = 0;
+		let absent = 0;
+		let late = 0;
+		for (const entry of Object.values(attendanceMap)) {
+			if (entry.status === 'present') present++;
+			else if (entry.status === 'absent') absent++;
+			else if (entry.status === 'late') late++;
+		}
+		return { present, absent, late };
+	});
+
+	/** The viewer holds the conductor seat for THIS event — resolveConductors'
+	 *  verdict (#77), already resolved into `detail.conductorIds` by
+	 *  loadEventDetail. Same gate the agenda's 'Take attendance' button uses. */
+	const isConductorForEvent = $derived(
+		detail !== null && selected !== null && detail.conductorIds.includes(selected.personId)
+	);
+
+	/** Hidden entirely on a future event (nothing to show yet — the task spec's
+	 *  rule), and hidden on a past one with NO attendance recorded at all unless
+	 *  the viewer can actually do something about it (take attendance).
+	 *
+	 *  Review F1 — "the viewer is a member" is NOT a stand-in for "there is
+	 *  attendance data": `myAttendanceStatus` is non-null for ANY resolved
+	 *  member (it falls back to 'not-recorded'), so including it here gave every
+	 *  member an empty section with a 0/0/0 tally on every past event nobody had
+	 *  taken attendance for — which is most past rehearsals, and the exact
+	 *  "no empty placeholders" rule #103 asks for. A member who DOES have a
+	 *  record is already covered by the non-empty map.
+	 *
+	 *  Review F4 — a conductor admitted here by the second branch has NO tally
+	 *  to read (the tally is gated on `hasAttendanceRecords` too); she gets the
+	 *  heading and the Take-attendance button, nothing zeroed. */
+	const showAttendanceSection = $derived(
+		isPast && detail !== null && (hasAttendanceRecords || isConductorForEvent)
+	);
+
+	/** A minimal `AgendaItem` view of `detail` — AttendanceSurface's `item` prop
+	 *  is the agenda's own view model (name shown in the panel header); this
+	 *  page has no AgendaItem of its own, only EventDetail, so it maps the
+	 *  fields that shape actually carries. */
+	const agendaItemForPanel = $derived<AgendaItem | null>(
+		detail === null
+			? null
+			: {
+					id: detail.id,
+					name: detail.name,
+					startDatetime: detail.startDatetime,
+					durationMinutes: detail.durationMinutes,
+					location: detail.location,
+					conductors: detail.conductorIds,
+					owners: detail.ownerIds,
+					editors: detail.editorIds
+				}
+	);
+
+	function openAttendancePanel(): void {
+		if (!selected || !detail || !isConductorForEvent) return;
+		attendancePanelOpen = true;
+		attendancePanelLoading = true;
+		attendancePanelError = false;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const evId = detail.id;
+		const g = generation;
+		Promise.all([loadRoster(cfg), listAttendance(cfg, evId), listAllRsvpsForEvent(cfg, evId)])
+			.then(([roster, records, rsvps]) => {
+				if (g !== generation || detail?.id !== evId) return;
+				attendanceRoster = roster;
+				attendanceMap = attendanceByMemberId(records);
+				const rsvpMap: Record<string, { rsvpId: string; status: string }> = {};
+				for (const r of rsvps) rsvpMap[r.memberId] = { rsvpId: r.rsvpId, status: r.status };
+				attendanceRsvpMap = rsvpMap;
+				attendancePanelLoading = false;
+			})
+			.catch((e) => {
+				console.error('event detail: attendance panel load failed', e);
+				if (g !== generation || detail?.id !== evId) return;
+				attendancePanelLoading = false;
+				attendancePanelError = true;
+			});
+	}
+
+	function closeAttendancePanel(): void {
+		attendancePanelOpen = false;
+	}
+
+	// The write-generation guard, same shape as `writeGenerations` above (the
+	// RSVP queue's F1 fix): a write started under a PREVIOUS event/collective
+	// must never land its optimistic value on the page that has since moved on.
+	const attendanceWriteGenerations = new Map<string, number>();
+	function isCurrentAttendanceWrite(evId: string, targetMemberId: string): boolean {
+		return (
+			detail !== null &&
+			evId === detail.id &&
+			attendanceWriteGenerations.get(targetMemberId) === generation
+		);
+	}
+
+	const attendanceQueue = createAttendanceChangeQueue({
+		setOptimistic(evId, targetMemberId, entry) {
+			if (!isCurrentAttendanceWrite(evId, targetMemberId)) return;
+			const next = { ...attendanceMap };
+			if (entry) next[targetMemberId] = entry;
+			else delete next[targetMemberId];
+			attendanceMap = next;
+		},
+		setPending(evId, targetMemberId, pending) {
+			if (pending) attendanceWriteGenerations.set(targetMemberId, generation);
+			if (!isCurrentAttendanceWrite(evId, targetMemberId)) return;
+			const next = new Set(attendancePendingMemberIds);
+			if (pending) next.add(targetMemberId);
+			else next.delete(targetMemberId);
+			attendancePendingMemberIds = next;
+			if (pending) {
+				const failed = new Set(attendanceFailedMemberIds);
+				failed.delete(targetMemberId);
+				attendanceFailedMemberIds = failed;
+			}
+		},
+		reconcile(evId, targetMemberId, entry) {
+			const stillCurrent = isCurrentAttendanceWrite(evId, targetMemberId);
+			attendanceWriteGenerations.delete(targetMemberId);
+			if (!stillCurrent) return;
+			const next = { ...attendanceMap };
+			if (entry) next[targetMemberId] = entry;
+			else delete next[targetMemberId];
+			attendanceMap = next;
+		},
+		revert(evId, targetMemberId, before) {
+			const stillCurrent = isCurrentAttendanceWrite(evId, targetMemberId);
+			attendanceWriteGenerations.delete(targetMemberId);
+			if (!stillCurrent) return;
+			const next = { ...attendanceMap };
+			if (before) next[targetMemberId] = before;
+			else delete next[targetMemberId];
+			attendanceMap = next;
+			const failed = new Set(attendanceFailedMemberIds);
+			failed.add(targetMemberId);
+			attendanceFailedMemberIds = failed;
+		}
+	});
+
+	function handleAttendanceToggle(targetMemberId: string, newStatus: AttendanceStatus | null): void {
+		if (!selected || !detail) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const current = attendanceMap[targetMemberId];
+		const existing: EventAttendance | null = current
+			? { attendanceId: current.attendanceId, memberId: targetMemberId, status: current.status }
+			: null;
+		attendanceQueue.request({ cfg, eventId: detail.id, memberId: targetMemberId, existing, newStatus });
 	}
 </script>
 
@@ -585,6 +1234,93 @@
 						</p>
 					{/if}
 				</div>
+
+				<!-- #103 TE.3 — Works: the SAME RepertoireElement the agenda uses, fed
+				     by the SAME producer (workRows.ts). Always expanded on this page —
+				     the detail page IS the expanded view, no tap needed. Absent
+				     entirely when the event resolves no works and the viewer has no
+				     rights to add any (never an empty "Works" placeholder). -->
+				{#if showWorksSection}
+					<div data-testid="event-detail-works" class="mt-4 flex flex-col gap-2">
+						<h2 class="font-display text-sm text-ink-2">{m.event_detail_works_heading()}</h2>
+						<RepertoireElement
+							rows={workRows}
+							expanded={true}
+							onpdfclick={handlePdfClick}
+							manageRights={seasonManageRights}
+							seasonRights={seasonManageRights}
+							eventRights={eventManageRights}
+							context={worksContext}
+							{pickableWorksList}
+							pickableEditions={pickableEditionsList}
+							{editionOptionsByRowId}
+							pendingKeys={managePendingKeys}
+							onaddwork={handleAddWork}
+							onstatuschange={handleStatusChange}
+							onpinedition={handlePinEdition}
+							onremoveitem={handleRemoveItem}
+							onmoveitem={handleMoveItem}
+							onaddprogramitem={handleAddProgramItem}
+						/>
+					</div>
+				{/if}
+
+				<!-- #103 TE.3 — Attendance: PAST events only. The badge + tally are
+				     domain-visible data (no rights gate); "Take attendance" opens the
+				     SAME AttendanceSurface the agenda's recent rows use, fed by the
+				     real loadRoster + listAttendance + listAllRsvpsForEvent reads. -->
+				{#if showAttendanceSection}
+					<div data-testid="event-detail-attendance" class="mt-4 flex flex-col gap-2">
+						<h2 class="font-display text-sm text-ink-2">{m.event_detail_attendance_heading()}</h2>
+						{#if myAttendanceStatus !== null}
+							<AttendanceBadge status={myAttendanceStatus} testid="event-detail-attendance-badge" />
+						{/if}
+						<!-- Review round 2 (F4) — the tally only renders when there is
+						     something to count. `showAttendanceSection` admits a CONDUCTOR
+						     onto a past event with nothing recorded (the Take-attendance
+						     button needs somewhere to live), and an unconditional tally
+						     greeted her with '0 present · 0 absent · 0 late' — the same
+						     empty placeholder F1 removed for members. The works section
+						     already models the shape: an empty rights-holder gets the Add
+						     control, never a zeroed summary. -->
+						{#if hasAttendanceRecords}
+							<p
+								data-testid="event-detail-attendance-tally"
+								class="text-xs text-ink-2"
+								aria-live="polite"
+							>
+								<span data-testid="event-detail-attendance-tally-present"
+									>{m.event_detail_attendance_tally_present({ count: attendanceTally.present })}</span
+								>
+								·
+								<span data-testid="event-detail-attendance-tally-absent"
+									>{m.event_detail_attendance_tally_absent({ count: attendanceTally.absent })}</span
+								>
+								·
+								<span data-testid="event-detail-attendance-tally-late"
+									>{m.event_detail_attendance_tally_late({ count: attendanceTally.late })}</span
+								>
+							</p>
+						{/if}
+						{#if isConductorForEvent && !attendancePanelOpen}
+							<TakeAttendanceButton eventName={detail.name} onclick={openAttendancePanel} />
+						{/if}
+						{#if attendancePanelOpen && agendaItemForPanel}
+							<AttendanceSurface
+								item={agendaItemForPanel}
+								members={attendanceRoster}
+								attendanceByMemberId={attendanceMap}
+								rsvpByMemberId={attendanceRsvpMap}
+								loading={attendancePanelLoading}
+								error={attendancePanelError}
+								pendingMemberIds={attendancePendingMemberIds}
+								failedMemberIds={attendanceFailedMemberIds}
+								ontoggle={handleAttendanceToggle}
+								onclose={closeAttendancePanel}
+							/>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{/if}
 	</div>

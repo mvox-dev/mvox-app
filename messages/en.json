@@ -220,6 +220,11 @@
 	"event_type_meeting": "Meeting",
 	"event_type_social": "Social",
 	"event_type_other": "Other",
+	"event_detail_works_heading": "Works",
+	"event_detail_attendance_heading": "Attendance",
+	"event_detail_attendance_tally_present": "{count} present",
+	"event_detail_attendance_tally_absent": "{count} absent",
+	"event_detail_attendance_tally_late": "{count} late",
 	"agenda_row_link_label": "View details for {event}",
 	"agenda_row_link_label_unnamed": "View event details"
 }

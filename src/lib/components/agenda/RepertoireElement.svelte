@@ -154,6 +154,13 @@
 		 *  pick from. */
 		editionOptionsByRowId?: Record<string, PickerOption[]>;
 		pendingKeys?: ReadonlySet<string>;
+		/** #103 TE.3 — force the expanded region open with NO tap needed. The event
+		 *  detail page IS the expanded view (a member never has to open her own
+		 *  event's works), so it passes `true`; default `false` preserves the
+		 *  agenda row's own collapsed-until-tapped behaviour verbatim. When true,
+		 *  the collapsed `works-line` toggle does not render at all — there being
+		 *  no "collapsed" state on this surface for it to reveal. */
+		expanded?: boolean;
 		onaddwork?: (workId: string) => void;
 		onstatuschange?: (itemId: string, status: RepertoireStatus) => void;
 		onpinedition?: (itemId: string, editionId: string) => void;
@@ -174,6 +181,7 @@
 		pickableEditions = [],
 		editionOptionsByRowId = {},
 		pendingKeys = new Set<string>(),
+		expanded: forceExpanded = false,
 		onaddwork,
 		onstatuschange,
 		onpinedition,
@@ -205,7 +213,10 @@
 		return canManageProgramme && context === 'programme' && row.kind === 'program';
 	}
 
-	let expanded = $state(false);
+	let expandedState = $state(false);
+	/** #103 TE.3 — `forceExpanded` short-circuits the toggle entirely (see the
+	 *  Props doc); otherwise this is exactly the old `expanded` local. */
+	const isExpanded = $derived(forceExpanded || expandedState);
 
 	let selectedWorkId = $state('');
 	let selectedEditionForAdd = $state('');
@@ -504,18 +515,20 @@
 {/snippet}
 
 {#if rows.length > 0}
-	<button
-		type="button"
-		data-testid="works-line"
-		class="flex items-baseline gap-1.5 truncate text-left text-xs text-ink-2"
-		aria-expanded={expanded}
-		aria-controls={expanded ? expandedRegionId : undefined}
-		onclick={() => (expanded = !expanded)}
-	>
-		<span aria-hidden="true">♫</span>
-		<span class="truncate">{collapsedLine}</span>
-	</button>
-	{#if expanded}
+	{#if !forceExpanded}
+		<button
+			type="button"
+			data-testid="works-line"
+			class="flex items-baseline gap-1.5 truncate text-left text-xs text-ink-2"
+			aria-expanded={isExpanded}
+			aria-controls={isExpanded ? expandedRegionId : undefined}
+			onclick={() => (expandedState = !expandedState)}
+		>
+			<span aria-hidden="true">♫</span>
+			<span class="truncate">{collapsedLine}</span>
+		</button>
+	{/if}
+	{#if isExpanded}
 		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-4">
 			{#if hasOrdinals}
 				<ol class="list-decimal space-y-2 pl-4">
