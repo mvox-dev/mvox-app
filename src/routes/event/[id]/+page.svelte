@@ -12,6 +12,7 @@
 	// (`token: getToken() ?? ''`, see routes/+page.svelte:271) rather than
 	// roster's stricter one — the token is threaded straight through to Entu,
 	// which is the actual authority on whether it's valid.
+	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
@@ -1098,18 +1099,73 @@
 	let editErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
 	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
 
+	// #105 TE.5 — focus management (WAI-ARIA edit-in-place). Plain (non-$state)
+	// DOM refs, same posture as any `bind:this` target: these are imperative
+	// handles, not values the template reads reactively. Keyed by field so
+	// Escape can send focus back to the SAME pencil that opened the editor —
+	// start_datetime has two possible pencil sites (with/without a rendered
+	// time line) but only ever one on screen at a time, so one slot per field
+	// is enough.
+	let pencilRefs: Partial<Record<EditableEventField, HTMLButtonElement>> = {};
+
+	// #105 review R2-F1 — does the IN-FLIGHT write for this field owe the pencil
+	// its focus back when it settles? Set from the dismissal that started the
+	// write: a keyboard dismissal (Enter) does, a blur does NOT — the viewer
+	// already moved focus somewhere deliberate. Without this the settle could
+	// only ask "is any editor open?", which says nothing about whether focus
+	// now sits on an RSVP button, a works control or the back link — all of
+	// which a late restore would rip focus away from mid-interaction. Plain
+	// (non-$state) like `pencilRefs`: imperative bookkeeping the template never
+	// reads. Keyed by field because writes are queued per field and can settle
+	// out of order.
+	let pendingFocusRestore: Partial<Record<EditableEventField, boolean>> = {};
+
+	/** A field's write has settled (either way): hand the pencil its focus back
+	 *  IF the dismissal that started the write was the kind that owes it, and
+	 *  no editor has been opened since. The flag is spent either way — a write
+	 *  settles exactly once. */
+	function settleFieldFocus(field: EditableEventField): void {
+		const owed = pendingFocusRestore[field] === true;
+		delete pendingFocusRestore[field];
+		if (owed && editingField === null) restorePencilFocus(field);
+	}
+
+	/** Svelte action: focus the element the instant it mounts. Used on every
+	 *  edit input/textarea — activating a pencil must move focus INTO the
+	 *  control it becomes, never leave it stranded on the unmounted button
+	 *  (which drops focus to <body>). */
+	function focusOnMount(node: HTMLElement): void {
+		node.focus();
+	}
+
 	// The optimistic apply/rollback ride in as `hooks` per request (they close
 	// over that confirm's `before` value); this queue only carries the pending
 	// flag and the inline-error surface.
+	//
+	// #105 review F1 — the pencil is DISABLED for exactly the window this
+	// queue's own `pending` set covers (`editWritePending[field]`, the
+	// `disabled={...}` on every pencil button above). A disabled element cannot
+	// take focus (HTMLElementUtility.focus is a no-op on one) — so restoring
+	// focus the instant `editingField` clears, back in `confirmFieldEdit`,
+	// would race the SAME synchronous `request()` call that just disabled the
+	// button and silently fail. `reconcile`/`revert` fire once the pending flag
+	// has already flipped back to `false` (see `setPending` above, which the
+	// queue always calls before either), so the pencil is enabled again by the
+	// time these run — the right place to land the restore. Both hand off to
+	// `settleFieldFocus`, which restores only when the dismissal that STARTED
+	// this write asked for it (`pendingFocusRestore`, #105 review R2-F1) and no
+	// editor has been opened since.
 	const editWriteQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
 			editWritePending = { ...editWritePending, [key as EditableEventField]: pending };
 		},
 		reconcile(key) {
 			editErrors = { ...editErrors, [key as EditableEventField]: false };
+			settleFieldFocus(key as EditableEventField);
 		},
 		revert(key) {
 			editErrors = { ...editErrors, [key as EditableEventField]: true };
+			settleFieldFocus(key as EditableEventField);
 		}
 	});
 
@@ -1245,9 +1301,32 @@
 		editingField = field;
 	}
 
-	function cancelFieldEdit(): void {
+	/** Restores focus to the pencil button for `field`, once it has remounted
+	 *  (the `{#if editingField === field}` branch flips on the tick AFTER
+	 *  `editingField` is cleared, so the focus call waits for `tick()` rather
+	 *  than firing synchronously against a not-yet-mounted button). Shared by
+	 *  every editor-dismissal path that owes the pencil focus back: Escape,
+	 *  Enter (both the commit and the no-change-cancel branches) — see the
+	 *  `restoreFocus` param on `cancelFieldEdit`/`confirmFieldEdit` for who
+	 *  does NOT call this (#105 review F1/F2). */
+	function restorePencilFocus(field: EditableEventField): void {
+		tick().then(() => pencilRefs[field]?.focus());
+	}
+
+	/** `field` is the editor being closed — required so focus can be sent back
+	 *  to the pencil that opened it (#105: an unmounted activeElement would
+	 *  otherwise drop focus to <body>, forcing a keyboard user to Tab back
+	 *  from the top of the page).
+	 *
+	 *  `restoreFocus` — #105 review F2: a blur means the user ALREADY moved
+	 *  focus somewhere else deliberately (tapped another field, clicked away),
+	 *  and yanking it back to the pencil fights that choice. Only a KEYBOARD
+	 *  dismissal (Escape, or an Enter that turned out to carry no change) owes
+	 *  the pencil its focus back — blur handlers pass `false`. */
+	function cancelFieldEdit(field: EditableEventField, restoreFocus: boolean): void {
 		editingField = null;
 		editDraft = '';
+		if (restoreFocus) restorePencilFocus(field);
 	}
 
 	/** The draft, coerced to the value that would go on the wire — or `null`
@@ -1312,16 +1391,33 @@
 	 *  removal in some browsers) or a second confirm cannot double-fire.
 	 *  A confirm that carries no change (issue #104: "Cancel: Escape or blur
 	 *  without change") — or no writable value at all — closes the editor and
-	 *  touches the wire not at all. */
-	function confirmFieldEdit(field: EditableEventField): void {
+	 *  touches the wire not at all; that branch defers to `cancelFieldEdit`,
+	 *  passing `restoreFocus` straight through (#105 review F2: still a blur
+	 *  when it was one).
+	 *
+	 *  `restoreFocus` — #105 review F1/F2 + R2-F1: it governs BOTH branches the
+	 *  same way. The no-change branch hands it straight to `cancelFieldEdit`. The
+	 *  write branch cannot act on it here — the pencil is DISABLED for the
+	 *  write's duration, so an immediate focus attempt would race the very
+	 *  `request()` call below that disables it and silently no-op — so it rides
+	 *  along in `pendingFocusRestore[field]` and is honoured by
+	 *  `settleFieldFocus` once `reconcile`/`revert` fires. Enter (`true`) gets
+	 *  its focus back; a blur (`false`) leaves focus wherever the viewer put it,
+	 *  which after a real change is very often another live control on this page
+	 *  (an RSVP button, the back link) that a late restore would yank away from
+	 *  mid-interaction. */
+	function confirmFieldEdit(field: EditableEventField, restoreFocus: boolean): void {
 		if (!selected || !detail || editingField !== field) return;
 		const before = fieldValue(detail, field);
 		const value = draftWireValue(field);
 		if (value === null || isUnchanged(field, value, before)) {
-			cancelFieldEdit();
+			cancelFieldEdit(field, restoreFocus);
 			return;
 		}
 		editingField = null;
+		// Set BEFORE `request()` — a write that resolves synchronously would
+		// otherwise settle against a flag that is not there yet.
+		pendingFocusRestore[field] = restoreFocus;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const evId = detail.id;
 		editWriteQueue.request(
@@ -1343,10 +1439,12 @@
 	function handleFieldKeydown(e: KeyboardEvent, field: EditableEventField, multiline: boolean): void {
 		if (e.key === 'Escape') {
 			e.preventDefault();
-			cancelFieldEdit();
+			// Keyboard dismissal — the pencil owes this focus back (#105 review F2).
+			cancelFieldEdit(field, true);
 		} else if (e.key === 'Enter' && !multiline) {
 			e.preventDefault();
-			confirmFieldEdit(field);
+			// Keyboard dismissal — same rule, whichever branch confirmFieldEdit takes.
+			confirmFieldEdit(field, true);
 		}
 	}
 </script>
@@ -1418,8 +1516,9 @@
 						aria-label={m.event_edit_name_aria_label()}
 						class="border-b border-ink bg-transparent font-display text-2xl focus:outline-none"
 						value={editDraft}
+						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('name')}
+						onblur={() => confirmFieldEdit('name', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'name', false)}
 					/>
 				{:else}
@@ -1432,6 +1531,7 @@
 								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 								aria-label={m.event_edit_name_aria_label()}
 								disabled={editWritePending.name === true}
+								bind:this={pencilRefs.name}
 								onclick={() => beginFieldEdit('name')}
 							>
 								<span aria-hidden="true">✎</span>
@@ -1456,8 +1556,9 @@
 						aria-label={m.event_edit_start_datetime_aria_label()}
 						class="border-b border-ink bg-transparent text-sm text-ink-2 focus:outline-none"
 						value={editDraft}
+						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('start_datetime')}
+						onblur={() => confirmFieldEdit('start_datetime', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
 					/>
 				{:else if startAt}
@@ -1476,6 +1577,7 @@
 								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 								aria-label={m.event_edit_start_datetime_aria_label()}
 								disabled={editWritePending.start_datetime === true}
+								bind:this={pencilRefs.start_datetime}
 								onclick={() => beginFieldEdit('start_datetime')}
 							>
 								<span aria-hidden="true">✎</span>
@@ -1489,6 +1591,7 @@
 						class="w-fit text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 						aria-label={m.event_edit_start_datetime_aria_label()}
 						disabled={editWritePending.start_datetime === true}
+						bind:this={pencilRefs.start_datetime}
 						onclick={() => beginFieldEdit('start_datetime')}
 					>
 						<span aria-hidden="true">✎</span>
@@ -1511,8 +1614,9 @@
 						aria-label={m.event_edit_duration_minutes_aria_label()}
 						class="w-24 border-b border-ink bg-transparent text-xs text-ink-2 focus:outline-none"
 						value={editDraft}
+						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('duration_minutes')}
+						onblur={() => confirmFieldEdit('duration_minutes', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
 					/>
 				{:else if detail.durationMinutes > 0 || isEditor}
@@ -1529,6 +1633,7 @@
 								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 								aria-label={m.event_edit_duration_minutes_aria_label()}
 								disabled={editWritePending.duration_minutes === true}
+								bind:this={pencilRefs.duration_minutes}
 								onclick={() => beginFieldEdit('duration_minutes')}
 							>
 								<span aria-hidden="true">✎</span>
@@ -1551,8 +1656,9 @@
 						aria-label={m.event_edit_location_aria_label()}
 						class="border-b border-ink bg-transparent text-sm text-ink-2 focus:outline-none"
 						value={editDraft}
+						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('location')}
+						onblur={() => confirmFieldEdit('location', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'location', false)}
 					/>
 				{:else if detail.location || isEditor}
@@ -1567,6 +1673,7 @@
 								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 								aria-label={m.event_edit_location_aria_label()}
 								disabled={editWritePending.location === true}
+								bind:this={pencilRefs.location}
 								onclick={() => beginFieldEdit('location')}
 							>
 								<span aria-hidden="true">✎</span>
@@ -1595,8 +1702,9 @@
 						aria-label={m.event_edit_description_aria_label()}
 						class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-sm text-ink focus:outline-none"
 						value={editDraft}
+						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLTextAreaElement).value)}
-						onblur={() => confirmFieldEdit('description')}
+						onblur={() => confirmFieldEdit('description', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'description', true)}
 					></textarea>
 				{:else if detail.description || isEditor}
@@ -1611,6 +1719,7 @@
 								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 								aria-label={m.event_edit_description_aria_label()}
 								disabled={editWritePending.description === true}
+								bind:this={pencilRefs.description}
 								onclick={() => beginFieldEdit('description')}
 							>
 								<span aria-hidden="true">✎</span>
@@ -1627,7 +1736,14 @@
 				<!-- #102 TE.2 — the RSVP section: the SAME RsvpControl component and
 				     rsvp entity the agenda rows use, plus (for a viewer visible in this
 				     event's `_owner`/`_editor` list) the tally and capacity. -->
-				<div data-testid="event-detail-rsvp" class="mt-3 flex flex-col gap-2">
+				<section
+					data-testid="event-detail-rsvp"
+					class="mt-3 flex flex-col gap-2"
+					aria-labelledby="event-detail-rsvp-heading"
+				>
+					<h2 id="event-detail-rsvp-heading" class="font-display text-sm text-ink-2">
+						{m.event_detail_rsvp_heading()}
+					</h2>
 					<!-- Three silent-disable reasons collapse into `pending`, exactly as
 					     the agenda maps them (AgendaList: `membership === 'loading' ||
 					     pendingEventIds.has(id)` on upcoming rows, `pending={true}` on
@@ -1696,7 +1812,7 @@
 							</button>
 						</p>
 					{/if}
-				</div>
+				</section>
 
 				<!-- #103 TE.3 — Works: the SAME RepertoireElement the agenda uses, fed
 				     by the SAME producer (workRows.ts). Always expanded on this page —
@@ -1704,8 +1820,14 @@
 				     entirely when the event resolves no works and the viewer has no
 				     rights to add any (never an empty "Works" placeholder). -->
 				{#if showWorksSection}
-					<div data-testid="event-detail-works" class="mt-4 flex flex-col gap-2">
-						<h2 class="font-display text-sm text-ink-2">{m.event_detail_works_heading()}</h2>
+					<section
+						data-testid="event-detail-works"
+						class="mt-4 flex flex-col gap-2"
+						aria-labelledby="event-detail-works-heading"
+					>
+						<h2 id="event-detail-works-heading" class="font-display text-sm text-ink-2">
+							{m.event_detail_works_heading()}
+						</h2>
 						<RepertoireElement
 							rows={workRows}
 							expanded={true}
@@ -1725,7 +1847,7 @@
 							onmoveitem={handleMoveItem}
 							onaddprogramitem={handleAddProgramItem}
 						/>
-					</div>
+					</section>
 				{/if}
 
 				<!-- #103 TE.3 — Attendance: PAST events only. The badge + tally are
@@ -1733,8 +1855,14 @@
 				     SAME AttendanceSurface the agenda's recent rows use, fed by the
 				     real loadRoster + listAttendance + listAllRsvpsForEvent reads. -->
 				{#if showAttendanceSection}
-					<div data-testid="event-detail-attendance" class="mt-4 flex flex-col gap-2">
-						<h2 class="font-display text-sm text-ink-2">{m.event_detail_attendance_heading()}</h2>
+					<section
+						data-testid="event-detail-attendance"
+						class="mt-4 flex flex-col gap-2"
+						aria-labelledby="event-detail-attendance-heading"
+					>
+						<h2 id="event-detail-attendance-heading" class="font-display text-sm text-ink-2">
+							{m.event_detail_attendance_heading()}
+						</h2>
 						{#if myAttendanceStatus !== null}
 							<AttendanceBadge status={myAttendanceStatus} testid="event-detail-attendance-badge" />
 						{/if}
@@ -1782,7 +1910,7 @@
 								onclose={closeAttendancePanel}
 							/>
 						{/if}
-					</div>
+					</section>
 				{/if}
 			</div>
 		{/if}
