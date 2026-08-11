@@ -41,6 +41,25 @@ export type EventDetail = {
 	conductorIds: string[];
 	/** Display names, same order as `conductorIds`; a nameless conductor is dropped. */
 	conductorNames: string[];
+	/** #102 TE.2 — event.capacity, null when unset (0 is a real, distinct value). */
+	capacity: number | null;
+	/**
+	 * #102 TE.2 — the `_owner` refs VISIBLE to this caller. Same private-bucket
+	 * mechanics as `editorIds` below. Carried ALONGSIDE the editors (never
+	 * merged into one list) so the caller can run the app's single rights rule,
+	 * `manageRightsFrom(owners, editors, personId)` — ownership subsumes editing
+	 * (repertoireActions.ts), and an owner-only conductor must not be told she
+	 * is not an editor of her own event.
+	 */
+	ownerIds: string[];
+	/**
+	 * #102 TE.2 — the `_editor` refs VISIBLE to this caller. Rights props live in
+	 * the private bucket (rights-visibility memory note), so a non-granted
+	 * reader gets [] — indistinguishable from "no editors set" by design; the
+	 * caller only ever uses this to test membership, never to assert the full
+	 * editor roster.
+	 */
+	editorIds: string[];
 };
 
 /**
@@ -84,6 +103,13 @@ interface EventRaw {
 	// seasons/types.ts) — how the season/series parents are told apart without an
 	// org arg.
 	_parent?: Array<{ reference: string; entity_type?: string }>;
+	/** #102 TE.2 — seat capacity, absent/empty means unset. */
+	capacity?: Array<{ number: number }>;
+	/** #102 TE.2 — rights props; visible only to a caller with rights on this event.
+	 *  BOTH tiers are read: the app's rule is owner-OR-editor everywhere else
+	 *  (manageRightsFrom, entuSeasons's `_owner,_editor` per season/event). */
+	_owner?: Array<{ reference: string }>;
+	_editor?: Array<{ reference: string }>;
 }
 
 interface SeasonRaw {
@@ -133,7 +159,7 @@ export async function loadEventDetail(
 ): Promise<EventDetail> {
 	const eventRes = await entuFetch(
 		cfg.db,
-		`entity/${eventId}?props=name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent`,
+		`entity/${eventId}?props=name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent,capacity,_owner,_editor`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -180,6 +206,11 @@ export async function loadEventDetail(
 		.map((id) => domainOrPublicName(profilesById.get(id) ?? []))
 		.filter((resolvedName) => resolvedName !== '');
 
+	// 0 is a real, representable capacity — only an ABSENT prop means "unset".
+	const capacity = event.capacity?.[0]?.number ?? null;
+	const ownerIds = (event._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+	const editorIds = (event._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+
 	return {
 		id: event._id,
 		name,
@@ -189,7 +220,10 @@ export async function loadEventDetail(
 		location,
 		description,
 		conductorIds,
-		conductorNames
+		conductorNames,
+		capacity,
+		ownerIds,
+		editorIds
 	};
 }
 
@@ -223,3 +257,5 @@ async function fetchSeries(
 
 // (*MVOX:Josquin* — #101 TE.1 GREEN)
 // (*MVOX:Josquin* — #101 TE.1 review round 2, F5: typed EventDetailLoadError)
+// (*MVOX:Byrd* — #102 TE.2 GREEN: capacity + editorIds)
+// (*MVOX:Byrd* — #102 TE.2 review F1: ownerIds alongside editorIds — owner-or-editor)
