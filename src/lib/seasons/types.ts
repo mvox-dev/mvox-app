@@ -38,6 +38,11 @@ export interface Season {
 
 export interface SeriesRaw {
 	_id: string;
+	// #101 review fix (F2) — an event with no `name` of its own inherits the
+	// series' name, exactly as `loadEventDetail` already does. Without it the
+	// agenda and the detail page disagreed about the same event's name, and the
+	// agenda row's link had no accessible name to announce.
+	name?: Array<{ string: string }>;
 	duration_minutes?: Array<{ number: number }>;
 	default_location?: Array<{ string: string }>;
 }

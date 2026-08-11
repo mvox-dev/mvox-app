@@ -20,7 +20,11 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
 		rsvp_non_member_hint: () => 'You are not an active member.',
-		rsvp_save_failed: () => 'Could not save your answer.'
+		rsvp_save_failed: () => 'Could not save your answer.',
+		// #101 — the row link's accessible name, plus its nameless-event floor
+		// (review fix F2). Enumerated so the tests can tell the two apart.
+		agenda_row_link_label: (params) => `View details for ${(params as { event: string }).event}`,
+		agenda_row_link_label_unnamed: () => 'View event details'
 	};
 	return {
 		// #90 TR.2 — Proxy fallback: any key NOT enumerated above resolves to a
@@ -473,5 +477,93 @@ describe('AgendaList — Works line per row (#90 TR.2)', () => {
 	});
 });
 
+describe('AgendaList — event detail links (#101 TE.1)', () => {
+	// The issue's widget spec: every agenda row becomes tappable and navigates to
+	// /event/{id}, with a ▸ tap indicator; "Row stays functionally identical
+	// (RSVP stays, works line stays)" — so the RSVP buttons must NOT end up
+	// nested inside the anchor (nested interactive controls: a tap on 'Going'
+	// must record an RSVP, never navigate).
+
+	it('upcoming row carries a link to /event/{id}', () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
+		// The link may wrap the row or sit inside it — either satisfies "tappable".
+		const link = row.querySelector('a[href="/event/r1"]') ?? row.closest('a[href="/event/r1"]');
+		expect(link).not.toBeNull();
+	});
+
+	it('each upcoming row links to ITS OWN event id', () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		for (const id of ['r1', 'r2']) {
+			const row = container.querySelector(`[data-testid="agenda-row-${id}"]`)!;
+			const link =
+				row.querySelector(`a[href="/event/${id}"]`) ?? row.closest(`a[href="/event/${id}"]`);
+			expect(link, `link for ${id}`).not.toBeNull();
+		}
+	});
+
+	it('shows a ▸ tap indicator on the row', () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
+		const scope = row.closest('a[href="/event/r1"]') ?? row;
+		expect(scope.textContent).toContain('▸');
+	});
+
+	it('the RSVP control stays functional: its buttons are NEVER nested inside an event link', () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
+		// The control itself is still there for a member…
+		const rowScope = row.closest('a') ?? row;
+		const host = rowScope.parentElement ?? rowScope;
+		expect(host.querySelectorAll('button').length).toBeGreaterThan(0);
+		// …and no event-detail anchor swallows ANY button (a button inside an <a>
+		// is invalid HTML and makes an RSVP tap navigate away).
+		for (const anchor of container.querySelectorAll('a[href^="/event/"]')) {
+			expect(anchor.querySelector('button')).toBeNull();
+		}
+	});
+
+	it('recent (past) rows link to their event detail too', () => {
+		const recent = [item('p9', '2026-06-01T16:00:00.000Z')];
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
+		const link = row.querySelector('a[href="/event/p9"]') ?? row.closest('a[href="/event/p9"]');
+		expect(link).not.toBeNull();
+	});
+
+	// #101 review fix (F2) — a link with no accessible name is announced as an
+	// unnamed link. `listRehearsals` now inherits a missing name from the parent
+	// series, but an event with no name ANYWHERE must still get a generic label
+	// rather than the bare "View details for ".
+	it('labels the row link with the event name', () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const link = container.querySelector('a[href="/event/r1"][aria-label]')!;
+		expect(link.getAttribute('aria-label')).toBe('View details for Rehearsal r1');
+	});
+
+	it('a nameless event falls back to a generic label, never a dangling "for "', () => {
+		const nameless = [item('n1', '2026-06-15T09:00:00.000Z', { name: '' })];
+		const { container } = render(AgendaList, { items: nameless });
+		const link = container.querySelector('a[href="/event/n1"][aria-label]')!;
+		expect(link.getAttribute('aria-label')).toBe('View event details');
+	});
+
+	it('a whitespace-only name is treated as nameless too', () => {
+		const blank = [item('n2', '2026-06-15T09:00:00.000Z', { name: '   ' })];
+		const { container } = render(AgendaList, { items: blank });
+		const link = container.querySelector('a[href="/event/n2"][aria-label]')!;
+		expect(link.getAttribute('aria-label')).toBe('View event details');
+	});
+
+	it('recent rows get the same labelling treatment', () => {
+		const recent = [item('p8', '2026-06-01T16:00:00.000Z', { name: '' })];
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+		const link = container.querySelector('a[href="/event/p8"][aria-label]')!;
+		expect(link.getAttribute('aria-label')).toBe('View event details');
+	});
+});
+
 // (*MVOX:Byrd*)
 // (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)
+// (*MVOX:Tallis* — #101 TE.1 event-detail row links RED)
+// (*MVOX:Josquin* — #101 TE.1 review fix F2: row-link accessible name)

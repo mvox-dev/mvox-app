@@ -129,7 +129,7 @@ export async function listRehearsals(
 		uniqueSeriesIds.map(async (sid) => {
 			const sRes = await entuFetch(
 				cfg.db,
-				`entity/${sid}?props=default_location,duration_minutes`,
+				`entity/${sid}?props=name,default_location,duration_minutes`,
 				cfg.token,
 				{},
 				fetchImpl
@@ -145,7 +145,12 @@ export async function listRehearsals(
 			const series = seriesCache.get(seriesIdFor(raw));
 			return {
 				id: raw._id,
-				name: raw.name?.[0]?.string ?? '',
+				// #101 review fix (F2) — name inherits from the series exactly like
+				// duration/location do (and exactly like `loadEventDetail` does for
+				// the detail page). Before this, an event carrying its name only on
+				// its series rendered a BLANK agenda row whose detail link had no
+				// accessible name, then opened a page showing a populated name.
+				name: raw.name?.[0]?.string ?? series?.name?.[0]?.string ?? '',
 				startDatetime: raw.start_datetime?.[0]?.datetime ?? '',
 				// event value wins; series fills the gap; else 0/''.
 				durationMinutes:

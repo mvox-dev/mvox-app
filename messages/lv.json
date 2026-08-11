@@ -199,5 +199,21 @@
 	"repertoire_add_work_aria_label": "Pievienot darbu repertuāram",
 	"repertoire_add_programme_select_aria_label": "Šā vakara programmai pievienojamais izdevums",
 	"repertoire_add_programme_aria_label": "Pievienot šā vakara programmai",
-	"repertoire_badge_aria_label": "Repertuārs: {status}"
+	"repertoire_badge_aria_label": "Repertuārs: {status}",
+	"event_detail_back": "Atpakaļ uz darba kārtību",
+	"event_detail_load_error": "Neizdevās ielādēt šo notikumu.",
+	"event_detail_retry": "Mēģināt vēlreiz",
+	"event_detail_no_collective": "Lai skatītu šo notikumu, izvēlieties kolektīvu.",
+	"event_detail_conductor_label": "Diriģents",
+	"event_detail_not_in_collective": "Šis notikums nav izvēlētajā kolektīvā.",
+	"event_type_rehearsal": "Mēģinājums",
+	"event_type_concert": "Koncerts",
+	"event_type_festival": "Festivāls",
+	"event_type_retreat": "Nometne",
+	"event_type_workshop": "Darbnīca",
+	"event_type_meeting": "Sapulce",
+	"event_type_social": "Saviesīgs pasākums",
+	"event_type_other": "Cits",
+	"agenda_row_link_label": "Skatīt notikuma {event} detaļas",
+	"agenda_row_link_label_unnamed": "Skatīt notikuma detaļas"
 }

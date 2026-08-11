@@ -42,6 +42,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_late: () => 'Running late',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
+		// #101 TE.1 -- every agenda row now carries an event-detail link.
+		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		// #83 — the two new keys this slice introduces.
 		agenda_recent: () => 'Recent',
 		agenda_take_attendance: () => 'Take attendance',

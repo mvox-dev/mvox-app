@@ -200,6 +200,20 @@
 		month: 'short'
 	});
 
+	/**
+	 * Accessible name for a row's event-detail link. #101 review fix (F2): the
+	 * primary fix is upstream — `listRehearsals` now inherits a missing name from
+	 * the parent series, same as `loadEventDetail` — but an event with no name
+	 * ANYWHERE (Entu's `mandatory` is a UI hint, not enforced) would still yield
+	 * the bare "View details for ", i.e. a link a screen reader announces
+	 * unnamed. The generic label is the floor, never a silent blank.
+	 */
+	function rowLinkLabel(name: string): string {
+		return name.trim() === ''
+			? m.agenda_row_link_label_unnamed()
+			: m.agenda_row_link_label({ event: name });
+	}
+
 	/** Group items by Tallinn calendar date, preserving chronological order. */
 	const groups = $derived.by(() => {
 		const seen = new Map<string, AgendaItem[]>();
@@ -310,13 +324,26 @@
 				data-testid="agenda-recent-row-{item.id}"
 				class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
 			>
-				<div class="flex flex-col font-mono">
+				<!-- #101 TE.1 -- a decorative, non-focusable twin of the named link below
+				     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
+				     second tab stop announcing the same destination. -->
+				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{shortDateFmt.format(new Date(item.startDatetime))}</span>
 					<span class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
-				</div>
+				</a>
 				<div class="flex min-w-0 flex-col gap-1">
-					<span class="truncate text-sm text-ink">{item.name}</span>
+					<!-- #101 TE.1 -- the row's ACCESSIBLE tap target: name + tap indicator only
+					     (never location/works/RSVP/attendance controls), so no interactive
+					     control ever ends up NESTED inside an <a>. -->
+					<a
+						href="/event/{item.id}"
+						aria-label={rowLinkLabel(item.name)}
+						class="flex min-w-0 items-baseline gap-1"
+					>
+						<span class="truncate text-sm text-ink">{item.name}</span>
+						<span aria-hidden="true" class="text-ink-3">▸</span>
+					</a>
 					{#if item.location}
 						<span class="truncate text-xs text-ink-2">{item.location}</span>
 					{/if}
@@ -420,12 +447,26 @@
 				</div>
 				{#each group.rows as item (item.id)}
 					<div data-testid="agenda-row-{item.id}" class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0">
-						<div class="flex flex-col font-mono">
+						<!-- #101 TE.1 — a decorative, non-focusable twin of the named link below
+						     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
+						     second tab stop announcing the same destination. -->
+						<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 							<span data-testid="row-time" class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
 							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
-						</div>
+						</a>
 						<div class="flex min-w-0 flex-col gap-1">
-							<span class="truncate text-sm text-ink">{item.name}</span>
+							<!-- #101 TE.1 — the row's ACCESSIBLE tap target: name + ▸ indicator only
+							     (never location/works/RSVP), so no interactive control (RsvpControl's
+							     buttons, RepertoireElement's) ever ends up NESTED inside an <a> — a
+							     tap on 'Going' must record an RSVP, never navigate. -->
+							<a
+								href="/event/{item.id}"
+								aria-label={rowLinkLabel(item.name)}
+								class="flex min-w-0 items-baseline gap-1"
+							>
+								<span class="truncate text-sm text-ink">{item.name}</span>
+								<span aria-hidden="true" class="text-ink-3">▸</span>
+							</a>
 							{#if item.location}
 								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
 							{/if}

@@ -199,5 +199,21 @@
 	"repertoire_add_work_aria_label": "Додати твір до репертуару",
 	"repertoire_add_programme_select_aria_label": "Видання для додавання до сьогоднішньої програми",
 	"repertoire_add_programme_aria_label": "Додати до сьогоднішньої програми",
-	"repertoire_badge_aria_label": "Репертуар: {status}"
+	"repertoire_badge_aria_label": "Репертуар: {status}",
+	"event_detail_back": "Назад до порядку денного",
+	"event_detail_load_error": "Не вдалося завантажити цю подію.",
+	"event_detail_retry": "Повторити",
+	"event_detail_no_collective": "Щоб переглянути цю подію, виберіть колектив.",
+	"event_detail_conductor_label": "Диригент",
+	"event_detail_not_in_collective": "Ця подія не належить до вибраного колективу.",
+	"event_type_rehearsal": "Репетиція",
+	"event_type_concert": "Концерт",
+	"event_type_festival": "Фестиваль",
+	"event_type_retreat": "Виїзний збір",
+	"event_type_workshop": "Майстер-клас",
+	"event_type_meeting": "Збори",
+	"event_type_social": "Товариська зустріч",
+	"event_type_other": "Інше",
+	"agenda_row_link_label": "Переглянути деталі події {event}",
+	"agenda_row_link_label_unnamed": "Переглянути деталі події"
 }

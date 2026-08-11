@@ -199,5 +199,21 @@
 	"repertoire_add_work_aria_label": "Lisa teos repertuaari",
 	"repertoire_add_programme_select_aria_label": "Tänase kava trükiväljaanne",
 	"repertoire_add_programme_aria_label": "Lisa tänasesse kavasse",
-	"repertoire_badge_aria_label": "Repertuaar: {status}"
+	"repertoire_badge_aria_label": "Repertuaar: {status}",
+	"event_detail_back": "Tagasi päevakorda",
+	"event_detail_load_error": "Selle sündmuse laadimine ebaõnnestus.",
+	"event_detail_retry": "Proovi uuesti",
+	"event_detail_no_collective": "Selle sündmuse vaatamiseks vali kollektiiv.",
+	"event_detail_conductor_label": "Dirigent",
+	"event_detail_not_in_collective": "See sündmus ei kuulu valitud kollektiivi.",
+	"event_type_rehearsal": "Proov",
+	"event_type_concert": "Kontsert",
+	"event_type_festival": "Festival",
+	"event_type_retreat": "Laager",
+	"event_type_workshop": "Töötuba",
+	"event_type_meeting": "Koosolek",
+	"event_type_social": "Seltskondlik üritus",
+	"event_type_other": "Muu",
+	"agenda_row_link_label": "Vaata sündmuse {event} üksikasju",
+	"agenda_row_link_label_unnamed": "Vaata sündmuse üksikasju"
 }

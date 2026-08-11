@@ -136,6 +136,44 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 		expect(items[0]).toMatchObject({ durationMinutes: 120, location: 'Church Hall' });
 	});
 
+	// #101 review fix (F2) — `loadEventDetail` (the detail page) already inherited
+	// `name` from the parent series while `listRehearsals` (the agenda) did not.
+	// The asymmetry rendered a BLANK agenda row — and, once #101 made the row a
+	// link, an anchor with no accessible name — that opened a detail page showing
+	// a populated name.
+	it('merges an absent name from the parent series, same as duration + location', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1'))
+				return json({ entity: { _id: 'series1', name: [{ string: 'Tuesday Series' }] } });
+			// event has NO name of its own → inherited from the series
+			return json({ entities: [eventRaw({ name: [] })] });
+		});
+		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(items[0].name).toBe('Tuesday Series');
+		// …and the series GET must actually ASK for the name (props list).
+		const seriesCall = fetchImpl.mock.calls.find((c) => String(c[0]).includes('/entity/series1'))!;
+		expect(String(seriesCall[0])).toContain('name');
+	});
+
+	it('the event own name still wins over the series name', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1'))
+				return json({ entity: { _id: 'series1', name: [{ string: 'Tuesday Series' }] } });
+			return json({ entities: [eventRaw()] }); // eventRaw carries 'Mon rehearsal'
+		});
+		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(items[0].name).toBe('Mon rehearsal');
+	});
+
+	it('no name on the event AND none on the series → "" (never undefined)', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
+			return json({ entities: [eventRaw({ name: [] })] });
+		});
+		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(items[0].name).toBe('');
+	});
+
 	it('event value overrides the series default', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1'))
@@ -259,3 +297,5 @@ describe('resolveTypeId', () => {
 		await expect(resolveTypeId(cfg, 'rsvp', fetchImpl)).rejects.toThrow(/resolveTypeId failed: 500/);
 	});
 });
+
+// (*MVOX:Josquin* — #101 TE.1 review fix F2: series name inheritance)

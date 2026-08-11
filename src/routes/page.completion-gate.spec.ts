@@ -24,6 +24,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
+		// #101 TE.1 -- every agenda row now carries an event-detail link.
+		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',

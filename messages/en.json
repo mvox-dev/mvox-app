@@ -199,5 +199,21 @@
 	"repertoire_add_work_aria_label": "Add work to repertoire",
 	"repertoire_add_programme_select_aria_label": "Edition to add to tonight's programme",
 	"repertoire_add_programme_aria_label": "Add to tonight's programme",
-	"repertoire_badge_aria_label": "Repertoire: {status}"
+	"repertoire_badge_aria_label": "Repertoire: {status}",
+	"event_detail_back": "Back to agenda",
+	"event_detail_load_error": "Couldn't load this event.",
+	"event_detail_retry": "Retry",
+	"event_detail_no_collective": "Select a collective to view this event.",
+	"event_detail_conductor_label": "Conductor",
+	"event_detail_not_in_collective": "This event isn't in the selected collective.",
+	"event_type_rehearsal": "Rehearsal",
+	"event_type_concert": "Concert",
+	"event_type_festival": "Festival",
+	"event_type_retreat": "Retreat",
+	"event_type_workshop": "Workshop",
+	"event_type_meeting": "Meeting",
+	"event_type_social": "Social",
+	"event_type_other": "Other",
+	"agenda_row_link_label": "View details for {event}",
+	"agenda_row_link_label_unnamed": "View event details"
 }
