@@ -56,8 +56,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
-	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
+	import type { AttendancePanel } from '$lib/attendance/types';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -1176,6 +1176,27 @@
 		attendanceQueue.request({ cfg, eventId: attendanceItem.id, memberId, existing, newStatus });
 	}
 
+	// #87 fix — everything AttendanceSurface needs, bundled into ONE prop
+	// (mirrors `worksManage` above) so AgendaList can render the panel INLINE
+	// as a child of the recent row that opened it, instead of the page
+	// rendering it itself below the whole agenda. `undefined` when no panel is
+	// open — AgendaList then renders nothing extra on any row.
+	const attendancePanel = $derived.by<AttendancePanel | undefined>(() => {
+		if (!attendanceItem) return undefined;
+		return {
+			item: attendanceItem,
+			members: attendanceRoster,
+			attendanceByMemberId: attendanceMap,
+			rsvpByMemberId: attendanceRsvpMap,
+			loading: attendanceLoading,
+			error: attendanceError,
+			pendingMemberIds: attendancePendingMemberIds,
+			failedMemberIds: attendanceFailedMemberIds,
+			ontoggle: handleAttendanceToggle,
+			onclose: closeAttendancePanel
+		};
+	});
+
 	// #85 TA.4 — my own attendance per RECENT event id (absent = badge renders
 	// 'not-recorded' — see AgendaList's badgeStatus fallback), and my season
 	// rate (late counts as attended; total is the season's past-event count,
@@ -1287,6 +1308,7 @@
 							{myAttendanceByEventId}
 							{worksByEventId}
 							{worksManage}
+							{attendancePanel}
 							onpdfclick={handlePdfClick}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}
@@ -1315,20 +1337,6 @@
 							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red" role="alert">
 								{m.repertoire_manage_error()}
 							</p>
-						{/if}
-						{#if attendanceItem}
-							<AttendanceSurface
-								item={attendanceItem}
-								members={attendanceRoster}
-								attendanceByMemberId={attendanceMap}
-								rsvpByMemberId={attendanceRsvpMap}
-								loading={attendanceLoading}
-								error={attendanceError}
-								pendingMemberIds={attendancePendingMemberIds}
-								failedMemberIds={attendanceFailedMemberIds}
-								ontoggle={handleAttendanceToggle}
-								onclose={closeAttendancePanel}
-							/>
 						{/if}
 					{/if}
 				</div>

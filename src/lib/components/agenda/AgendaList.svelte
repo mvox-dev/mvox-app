@@ -10,6 +10,11 @@
 	// RepertoireElement and its producer (repertoire/workRows.ts). Previously
 	// duplicated inline here, which let the two copies drift silently.
 	import type { WorkRow, WorksManage } from '$lib/repertoire/types';
+	// #87 fix — the attendance panel now renders INLINE, as a child of the
+	// recent row that opened it (same inline-expansion pattern as the library
+	// browse tree's editions-under-work), not below the whole agenda.
+	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
+	import type { AttendancePanel } from '$lib/attendance/types';
 
 	/** #85 TA.4 — the four attendance-badge states a RECENT (past) row can carry.
 	 *  'not-recorded' is a genuine 4th state (a past event nobody marked for me),
@@ -58,6 +63,12 @@
 		// fact only.
 		conductorEventIds?: ReadonlySet<string>;
 		ontakeattendance?: (item: AgendaItem) => void;
+		// #87 fix — the currently-open attendance panel (undefined = none open
+		// anywhere). Rendered directly beneath the 'Take attendance' button of
+		// the ONE recent row whose id matches `attendancePanel.item.id` — the
+		// page owns all the panel's data/IO (exactly as it always did), this
+		// component only decides WHERE the resulting markup lands.
+		attendancePanel?: AttendancePanel;
 		// #85 — my own attendance badge state per RECENT event id. An event id
 		// absent from the map (never marked for me) renders as 'not-recorded' —
 		// the same explicit 4th state, not a blank.
@@ -99,6 +110,7 @@
 		recentItems = [],
 		conductorEventIds = new Set<string>(),
 		ontakeattendance,
+		attendancePanel,
 		myAttendanceByEventId = {},
 		seasonSummary,
 		worksByEventId = {},
@@ -343,6 +355,26 @@
 						>
 							{m.agenda_take_attendance()}
 						</button>
+					{/if}
+					<!-- #87 fix — the panel is a CHILD of the row that opened it, directly
+					     below the button, same inline-expansion pattern as the library
+					     browse tree. Only the one row whose id matches the open panel's
+					     event renders it — exactly one panel at a time, structurally (the
+					     page never hands two rows a match, since `attendanceItem` is a
+					     single value). -->
+					{#if attendancePanel && attendancePanel.item.id === item.id}
+						<AttendanceSurface
+							item={attendancePanel.item}
+							members={attendancePanel.members}
+							attendanceByMemberId={attendancePanel.attendanceByMemberId}
+							rsvpByMemberId={attendancePanel.rsvpByMemberId}
+							loading={attendancePanel.loading}
+							error={attendancePanel.error}
+							pendingMemberIds={attendancePanel.pendingMemberIds}
+							failedMemberIds={attendancePanel.failedMemberIds}
+							ontoggle={attendancePanel.ontoggle}
+							onclose={attendancePanel.onclose}
+						/>
 					{/if}
 				</div>
 			</div>
