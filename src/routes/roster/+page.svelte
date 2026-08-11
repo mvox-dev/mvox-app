@@ -12,7 +12,11 @@
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import { listSections, groupBySection, type SectionNode, type SectionGroup } from '$lib/sections/sectionData';
-	import { assignMemberSection, unassignMemberSection } from '$lib/sections/sectionActions';
+	import {
+		assignMemberSection,
+		unassignMemberSection,
+		createSection
+	} from '$lib/sections/sectionActions';
 	import { isSectionMembershipMissing } from '$lib/sections/sectionErrors';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
 	import { adminStore } from '$lib/nav/adminStore';
@@ -36,6 +40,20 @@
 	// failed (rows loaded fine); the page then renders the flat list plus a
 	// visible banner — still loud (console.error + banner), never silent.
 	let sectionsError = $state(false);
+
+	// F5 code-review fix: a failed "Create + assign" used to be INVISIBLE. The
+	// picker closes synchronously on a valid submit (its pinned contract), and
+	// both writes then failed into a bare console.error — the user tapped, the
+	// dropdown vanished, and nothing appeared: no group, no error, no reopened
+	// form. There is no optimistic state to revert here either (unlike a pick,
+	// where the row visibly snaps back), so the failure has to be SAID. Rendered
+	// inline in the member's own row rather than as a page-top banner: that is
+	// where the user is looking, and a long roster can scroll a top banner out of
+	// sight entirely.
+	//   'create' — createSection rejected (or there was no cfg): nothing was written.
+	//   'assign' — the section WAS created (it is in the tree) but the member could
+	//              not be put into it.
+	let sectionWriteError = $state<{ memberId: string; kind: 'create' | 'assign' } | null>(null);
 
 	// TS.1/#95 — grouped ↔ flat toggle, default grouped. groupBySection is the
 	// GENUINE data-layer function (sectionData.ts) — the page never re-derives
@@ -242,6 +260,88 @@
 			else dropBack(memberId, sectionId);
 		}
 	}
+
+	// TS.3/#97 — inline "+ New section…" wiring. Two ordered, SERVER-CONFIRMED
+	// writes: createSection resolves with the new id first, only THEN
+	// assignMemberSection fires (the id doesn't exist to assign against until
+	// the create round-trips — no optimism on the create half). On success the
+	// new node is inserted into the LOCAL tree + the member's local row —
+	// `loadRoster`/`listSections` are never refetched (same "runs once at load"
+	// contract as the rest of this page).
+
+	/** Depth-first search for a node by id — used to derive the new node's depth. */
+	function findSectionNode(nodes: SectionNode[], id: string): SectionNode | null {
+		for (const node of nodes) {
+			if (node.id === id) return node;
+			const found = findSectionNode(node.children, id);
+			if (found) return found;
+		}
+		return null;
+	}
+
+	/** Immutable insert: appended as a new ROOT when parentId is null, else spliced
+	 *  into the matching ancestor's `children` (rebuilding every node on the path
+	 *  so `sections` reassignment is enough to notify Svelte). */
+	function insertSectionNode(
+		nodes: SectionNode[],
+		newNode: SectionNode,
+		parentId: string | null
+	): SectionNode[] {
+		if (parentId === null) return [...nodes, newNode];
+		return nodes.map((node) => {
+			if (node.id === parentId) return { ...node, children: [...node.children, newNode] };
+			if (node.children.length === 0) return node;
+			return { ...node, children: insertSectionNode(node.children, newNode, parentId) };
+		});
+	}
+
+	async function handleCreate(
+		memberId: string,
+		input: { name: string; parentId: string | null }
+	): Promise<void> {
+		// A fresh attempt owns the error slot — a previous failure's message must not
+		// outlive the retry that fixed it.
+		sectionWriteError = null;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section create with no cfg', memberId, input);
+			sectionWriteError = { memberId, kind: 'create' };
+			return;
+		}
+
+		let newId: string;
+		try {
+			newId = await createSection(cfg, input);
+		} catch (e) {
+			console.error('roster: section create failed', memberId, input, e);
+			sectionWriteError = { memberId, kind: 'create' };
+			return;
+		}
+
+		const depth = input.parentId ? (findSectionNode(sections, input.parentId)?.depth ?? 0) + 1 : 0;
+		const newNode: SectionNode = {
+			id: newId,
+			name: input.name,
+			displayOrder: Number.POSITIVE_INFINITY,
+			parentId: input.parentId,
+			depth,
+			children: []
+		};
+		// The section itself was genuinely created server-side — it belongs in the
+		// tree regardless of how the assign below goes.
+		sections = insertSectionNode(sections, newNode, input.parentId);
+
+		try {
+			await assignMemberSection(cfg, memberId, newId);
+		} catch (e) {
+			console.error('roster: assigning the newly-created section failed', memberId, newId, e);
+			// The section itself is real and already in the tree — say precisely that,
+			// so the user doesn't retry the create and end up with a duplicate.
+			sectionWriteError = { memberId, kind: 'assign' };
+			return;
+		}
+		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), newId]);
+	}
 </script>
 
 {#snippet memberRow(row: RosterRow, showSection: boolean)}
@@ -272,7 +372,22 @@
 				{sections}
 				selectedIds={row.sectionIds ?? []}
 				onpick={(sectionId) => handlePick(row.memberId, sectionId)}
+				oncreate={(input) => handleCreate(row.memberId, input)}
 			/>
+			{#if sectionWriteError?.memberId === row.memberId}
+				<!-- F5 code-review fix — the create path's loud failure (see
+				     `sectionWriteError` above). role="alert" because it appears after the
+				     picker has already closed, with nothing else on screen changing. -->
+				<p
+					data-testid="section-write-error-{row.memberId}"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{sectionWriteError.kind === 'create'
+						? m.roster_section_create_failed()
+						: m.roster_section_assign_failed()}
+				</p>
+			{/if}
 		{/if}
 	</li>
 {/snippet}

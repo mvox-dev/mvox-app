@@ -1,6 +1,120 @@
 import { entuFetch } from '$lib/entu/request';
 import { SectionMembershipMissingError } from './sectionErrors';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+
+// TS.3/#97 — the section CREATE write layer. GREEN.
+//
+// CONTRACT (pinned by sectionActions.create.spec.ts):
+//
+//   - `createSection(cfg, { name, parentId? })` creates ONE `section` entity and
+//     resolves to the NEW ENTITY's id.
+//   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, 'section')
+//     (#10 pinned wire-shape — never `{ string: 'section' }`).
+//   - `parentId` present → `_parent` reference = that SECTION id (sub-section).
+//   - `parentId` absent/null → "(top level)": the section is a direct child of
+//     the ORGANIZATION. The org is resolved the same way inviteData's
+//     resolveInviteOrg does — `entity?_type.string=organization&limit=1`
+//     (single-collective de-fan; polyphony's extra org entities are unreadable
+//     to non-admin callers) — and FAILS LOUD naming the db when none is
+//     readable (a parent is REQUIRED: v4E `parentConstraint: 'exactly_one_of'`).
+//   - `_sharing: 'public'` EXPLICIT at create time — v4E pins section sharing
+//     as public (federation discoverability); never rely on inherit.
+//   - `name` sent trimmed; an empty/whitespace-only name throws WITHOUT any
+//     fetch (defense in depth — the form validates too, but the data layer must
+//     not create a nameless section).
+//   - Full create body is EXACTLY: _type + _parent + name + _sharing — no
+//     display_order (v4E marks it optional; ordering-by-name is the fallback),
+//     no voice, no description.
+//   - Duplicate-name detection is NOT here — the picker already holds the full
+//     section tree, so the duplicate check is a LOCAL compare in the component
+//     (see SectionPicker.create.spec.ts); the data layer stays one POST.
+//   - Throws on any non-2xx (status surfaced).
+
+export interface CreateSectionInput {
+	/** Section name (required; trimmed before sending). */
+	name: string;
+	/** Parent SECTION id; absent/null = top level (direct child of the org). */
+	parentId?: string | null;
+}
+
+/**
+ * Create a `section` entity — under the given parent section, or under the
+ * (sole readable) organization when `parentId` is absent. Resolves to the new
+ * section's entity id. See module contract above.
+ */
+export async function createSection(
+	cfg: EntuCfg,
+	input: CreateSectionInput,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	// Name hygiene BEFORE any fetch — a nameless section is never created, and
+	// the caller gets a message naming what's wrong (not a bare stub-shaped throw).
+	const name = input.name.trim();
+	if (!name) {
+		throw new Error('createSection: name must not be empty');
+	}
+
+	const typeId = await resolveTypeId(cfg, 'section', fetchImpl);
+
+	let parentRef: string;
+	if (input.parentId) {
+		// Sub-section: the given section IS the parent, no org lookup at all.
+		parentRef = input.parentId;
+	} else {
+		// Top level: the section's parent is the sole readable organization —
+		// same single-collective de-fan as inviteData.resolveOrgId
+		// (`_type.string=organization&limit=1`). v4E pins
+		// `parentConstraint: 'exactly_one_of'` — a parentless section is not a
+		// thing, so an unreadable org fails loud naming the db.
+		const orgRes = await entuFetch(
+			cfg.db,
+			'entity?_type.string=organization&limit=1',
+			cfg.token,
+			{},
+			fetchImpl
+		);
+		if (!orgRes.ok) {
+			throw new Error(`createSection: organization lookup failed: HTTP ${orgRes.status}`);
+		}
+		const orgBody = (await orgRes.json()) as { entities?: Array<{ _id?: string }> };
+		const orgId = orgBody.entities?.[0]?._id;
+		if (!orgId) {
+			throw new Error(
+				`createSection: no organization entity is readable in db '${cfg.db}' — a section requires a parent`
+			);
+		}
+		parentRef = orgId;
+	}
+
+	// Full create body, exactly: _type + _parent + name + _sharing — no
+	// display_order, no voice, no description (see module contract above).
+	const props: Array<{ type: string; reference?: string; string?: string }> = [
+		{ type: '_type', reference: typeId },
+		{ type: '_parent', reference: parentRef },
+		{ type: 'name', string: name },
+		{ type: '_sharing', string: 'public' }
+	];
+
+	const createRes = await entuFetch(
+		cfg.db,
+		'entity',
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(props)
+		},
+		fetchImpl
+	);
+	if (!createRes.ok) {
+		throw new Error(`createSection: create failed: HTTP ${createRes.status}`);
+	}
+	const createBody = (await createRes.json()) as { _id?: string };
+	if (!createBody._id) {
+		throw new Error('createSection: create returned 2xx without _id (apparent-success trap)');
+	}
+	return createBody._id;
+}
 
 // TS.2/#96 — the section ASSIGNMENT write layer. GREEN.
 //
@@ -116,3 +230,5 @@ export async function unassignMemberSection(
 
 // (*MVOX:Tallis* — RED stubs + contract, TS.2/#96)
 // (*MVOX:Palestrina* — GREEN implementation, TS.2/#96)
+// (*MVOX:Tallis* — RED createSection stub + contract, TS.3/#97)
+// (*MVOX:Palestrina* — GREEN implementation, TS.3/#97)
