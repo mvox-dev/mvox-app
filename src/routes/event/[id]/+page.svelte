@@ -69,6 +69,11 @@
 	// the data-status, the aria-label shape and the chrome cannot drift again.
 	import AttendanceBadge from '$lib/components/attendance/AttendanceBadge.svelte';
 	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
+	// #104 TE.4 — inline event editing: the write half (updateEventField) plus
+	// this page's own optimistic-and-reconcile wiring, same posture as the
+	// rsvp/attendance/repertoire queues above (per-tap immediate writes, no
+	// "save all"). See eventFieldEdit.ts for the replace-semantics contract.
+	import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -1064,6 +1069,286 @@
 			: null;
 		attendanceQueue.request({ cfg, eventId: detail.id, memberId: targetMemberId, existing, newStatus });
 	}
+
+	// ── #104 TE.4 — inline event editing ──────────────────────────────────────
+	// The ONE rights predicate is `isEditor` (already derived above from
+	// manageRightsFrom — the app's owner-OR-editor rule). Per-tap: tap a pencil,
+	// the field becomes an input seeded with the CURRENT value, blur/Enter
+	// confirms with an immediate optimistic write (eventFieldEdit.ts owns the
+	// replace-semantics wire choreography), Escape cancels writing nothing, and
+	// a failed write reverts the display and shows an inline error. Same
+	// optimistic-mutate-then-reconcile-or-revert shape as every other write
+	// queue on this page — and literally the same primitive: the write goes
+	// through `createRepertoireWriteQueue` keyed on the FIELD NAME.
+	//
+	// #104 review F1 — `editingField` is NOT a write guard. It guards concurrent
+	// EDITING (one input open at a time), but it is cleared synchronously on
+	// confirm, so the pencil is back before the write it fired has landed. A
+	// second edit of the same field while the first is still in flight would run
+	// a second GET-POST-DELETE against the SAME pre-existing value id: both GETs
+	// see the old value, both POST (the entity ends with two values for the
+	// field), and whichever DELETE loses the race 404s — surfacing a false inline
+	// error over a value the server actually accepted. The queue's per-key
+	// pending set drops the second write exactly like every other control here,
+	// and `editWritePending` disables the pencil while it is in flight (the
+	// primary guard; the queue's own set is the backstop).
+
+	let editingField = $state<EditableEventField | null>(null);
+	let editDraft = $state('');
+	let editErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
+	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
+
+	// The optimistic apply/rollback ride in as `hooks` per request (they close
+	// over that confirm's `before` value); this queue only carries the pending
+	// flag and the inline-error surface.
+	const editWriteQueue = createRepertoireWriteQueue({
+		setPending(key, pending) {
+			editWritePending = { ...editWritePending, [key as EditableEventField]: pending };
+		},
+		reconcile(key) {
+			editErrors = { ...editErrors, [key as EditableEventField]: false };
+		},
+		revert(key) {
+			editErrors = { ...editErrors, [key as EditableEventField]: true };
+		}
+	});
+
+	/** Current display value for a field, read off `detail` — the single
+	 *  source of truth both the header and the edit-draft seed from. */
+	function fieldValue(d: EventDetail, field: EditableEventField): string | number {
+		switch (field) {
+			case 'name':
+				return d.name;
+			case 'start_datetime':
+				return d.startDatetime;
+			case 'duration_minutes':
+				return d.durationMinutes;
+			case 'location':
+				return d.location;
+			case 'description':
+				return d.description;
+		}
+	}
+
+	/** Apply a field's value onto `detail` — the SAME optimistic-mutation shape
+	 *  every other write on this page uses (rsvpQueue/attendanceQueue/
+	 *  repertoireQueue callbacks): a plain reassignment, so the header re-renders
+	 *  immediately, identically on the optimistic apply and the (identical)
+	 *  post-success value — no forced re-read. */
+	function applyFieldLocally(field: EditableEventField, value: string | number): void {
+		if (!detail) return;
+		switch (field) {
+			case 'name':
+				detail = { ...detail, name: value as string };
+				break;
+			case 'start_datetime':
+				detail = { ...detail, startDatetime: value as string };
+				break;
+			case 'duration_minutes':
+				detail = { ...detail, durationMinutes: value as number };
+				break;
+			case 'location':
+				detail = { ...detail, location: value as string };
+				break;
+			case 'description':
+				detail = { ...detail, description: value as string };
+				break;
+		}
+	}
+
+	/** The Tallinn wall-clock offset (minutes, e.g. +180 in EEST) in effect AT
+	 *  `date` — rendering `date`'s Tallinn wall clock, then re-reading those same
+	 *  digits as if THEY were UTC and diffing against the real instant, gives
+	 *  exactly the offset. DST-aware because the formatter is. */
+	function tallinnOffsetMinutes(date: Date): number {
+		const parts = new Intl.DateTimeFormat('en-US', {
+			timeZone: TZ,
+			hourCycle: 'h23',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		}).formatToParts(date);
+		const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+		const asUtc = Date.UTC(
+			get('year'),
+			get('month') - 1,
+			get('day'),
+			get('hour'),
+			get('minute'),
+			get('second')
+		);
+		return (asUtc - date.getTime()) / 60_000;
+	}
+
+	/** ISO instant → the `datetime-local` input value seeded from the TALLINN
+	 *  wall clock the header itself displays (never raw UTC — TE.4 contract).
+	 *  '' on an unparseable instant. */
+	function toTallinnLocalInputValue(iso: string): string {
+		const date = new Date(iso);
+		if (Number.isNaN(date.getTime())) return '';
+		const parts = new Intl.DateTimeFormat('en-CA', {
+			timeZone: TZ,
+			hourCycle: 'h23',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit'
+		}).formatToParts(date);
+		const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+		return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+	}
+
+	/** The inverse: a `datetime-local` value the user typed AS TALLINN wall
+	 *  clock → the UTC instant to write on the wire. Two passes because the
+	 *  Tallinn offset (EET/EEST) itself depends on the INSTANT being converted —
+	 *  the first pass reads the offset at the UTC-as-if-Tallinn guess, the second
+	 *  re-reads it at the instant that guess produced. On the two DST transition
+	 *  days the guess sits on the far side of the changeover (a 01:30 EET wall
+	 *  clock on 29 March guesses 01:30Z, still EET-side, and one pass would write
+	 *  22:30Z — 00:30 Tallinn, an hour off), so the second pass is what makes
+	 *  every valid wall clock in the year round-trip. Only 03:00–03:59 on
+	 *  spring-forward day stays off, and those wall clocks do not exist locally.
+	 *
+	 *  TOTAL on purpose — '' for an empty or unparseable draft, mirroring
+	 *  `toTallinnLocalInputValue`'s own NaN guard. An empty draft is a REACHABLE
+	 *  state (a timeless event's pencil seeds '', and an editor can clear the
+	 *  input), and `Date.UTC(NaN, …)` would feed an Invalid Date into
+	 *  `formatToParts`, which THROWS — escaping the onblur handler and stranding
+	 *  the page in edit mode with no inline error. */
+	function tallinnLocalToUtcIso(local: string): string {
+		const [datePart, timePart] = local.split('T');
+		const [y, mo, d] = (datePart ?? '').split('-').map(Number);
+		const [h, mi] = (timePart ?? '00:00').split(':').map(Number);
+		const guessUtcMs = Date.UTC(y, mo - 1, d, h, mi);
+		if (Number.isNaN(guessUtcMs)) return '';
+		const firstOffset = tallinnOffsetMinutes(new Date(guessUtcMs));
+		let instantMs = guessUtcMs - firstOffset * 60_000;
+		const secondOffset = tallinnOffsetMinutes(new Date(instantMs));
+		if (secondOffset !== firstOffset) instantMs = guessUtcMs - secondOffset * 60_000;
+		return new Date(instantMs).toISOString();
+	}
+
+	function beginFieldEdit(field: EditableEventField): void {
+		// A field whose previous write is still in flight cannot be re-opened —
+		// the pencil is disabled for exactly this window, this is the backstop for
+		// a tap that beat the re-render (#104 review F1).
+		if (!detail || editWritePending[field]) return;
+		editErrors = { ...editErrors, [field]: false };
+		editDraft =
+			field === 'start_datetime'
+				? toTallinnLocalInputValue(detail.startDatetime)
+				: String(fieldValue(detail, field));
+		editingField = field;
+	}
+
+	function cancelFieldEdit(): void {
+		editingField = null;
+		editDraft = '';
+	}
+
+	/** The draft, coerced to the value that would go on the wire — or `null`
+	 *  when the draft is not writable at all and the confirm must degrade to a
+	 *  cancel:
+	 *    • start_datetime — an empty/unparseable `datetime-local` (the timeless
+	 *      event's pencil seeds '', and an editor can clear the input). There is
+	 *      no "unset the start" gesture in TE.4, so a blur on an untouched empty
+	 *      picker writes NOTHING rather than throwing or clearing.
+	 *    • duration_minutes — a cleared, non-finite or NEGATIVE number. A
+	 *      cleared input coerces to 0, and `eventDetail` reads the event's own
+	 *      `duration_minutes` with `??`, so a literal 0 is not nullish and would
+	 *      permanently MASK the series' inherited duration instead of restoring
+	 *      it. (Clearing back to inherited would need the empty-list clear POST
+	 *      — a separate gesture, not this one.)
+	 *    • name/location/description — an EMPTY (or whitespace-only) text draft,
+	 *      for the very same reason (#104 review F2). Posting `string: ''` is not
+	 *      the documented clear gesture (that is the empty-LIST POST), and its
+	 *      outcome is unspecified either way: if Entu stores the empty value,
+	 *      `eventDetail` reads `event.location?.[0]?.string ?? series
+	 *      .default_location` and '' is not nullish, so the blank permanently
+	 *      masks the series default; if Entu drops it, the trailing DELETEs still
+	 *      remove the old value and the field silently reverts to the series
+	 *      default server-side while the page shows '' optimistically. TE.4 has
+	 *      no "unset" gesture, so a cleared text field CANCELS, exactly like a
+	 *      cleared picker or a cleared duration. */
+	function draftWireValue(field: EditableEventField): string | number | null {
+		if (field === 'start_datetime') {
+			const iso = tallinnLocalToUtcIso(editDraft);
+			return iso === '' ? null : iso;
+		}
+		if (field === 'duration_minutes') {
+			if (editDraft.trim() === '') return null;
+			const n = Number(editDraft);
+			return Number.isFinite(n) && n >= 0 ? n : null;
+		}
+		if (editDraft.trim() === '') return null;
+		return editDraft;
+	}
+
+	/** True when confirming would write back exactly what is displayed. Note
+	 *  `before` is the DISPLAYED value, which for `name`/`duration_minutes`/
+	 *  `location`/`description` may be INHERITED from the parent event_series —
+	 *  so this comparison is what stops an idle pencil tap from materialising
+	 *  the series default as a permanent event-level override and silently
+	 *  severing inheritance. start_datetime compares INSTANTS, not strings:
+	 *  the wire ISO and Entu's stored ISO can name the same moment in different
+	 *  serialisations. */
+	function isUnchanged(field: EditableEventField, value: string | number, before: string | number): boolean {
+		if (field === 'start_datetime') {
+			const a = new Date(String(value)).getTime();
+			const b = new Date(String(before)).getTime();
+			return !Number.isNaN(a) && !Number.isNaN(b) && a === b;
+		}
+		return value === before;
+	}
+
+	/** Blur/Enter confirm: applies the draft OPTIMISTICALLY (the header updates
+	 *  before the write even lands) and fires `updateEventField` at once — a
+	 *  failed write reverts to `before` and surfaces `editErrors[field]`. Guards
+	 *  on `editingField === field` so a stray blur firing after Escape (element
+	 *  removal in some browsers) or a second confirm cannot double-fire.
+	 *  A confirm that carries no change (issue #104: "Cancel: Escape or blur
+	 *  without change") — or no writable value at all — closes the editor and
+	 *  touches the wire not at all. */
+	function confirmFieldEdit(field: EditableEventField): void {
+		if (!selected || !detail || editingField !== field) return;
+		const before = fieldValue(detail, field);
+		const value = draftWireValue(field);
+		if (value === null || isUnchanged(field, value, before)) {
+			cancelFieldEdit();
+			return;
+		}
+		editingField = null;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const evId = detail.id;
+		editWriteQueue.request(
+			field,
+			() =>
+				updateEventField(cfg, evId, field, value, fetch).catch((e) => {
+					console.error('event detail: field edit failed', field, e);
+					throw e;
+				}),
+			{
+				apply: () => applyFieldLocally(field, value),
+				rollback: () => applyFieldLocally(field, before)
+			}
+		);
+	}
+
+	/** Escape cancels on every field; Enter confirms on single-line inputs only
+	 *  — the textarea's Enter is a newline, not a submit (TE.4 contract). */
+	function handleFieldKeydown(e: KeyboardEvent, field: EditableEventField, multiline: boolean): void {
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			cancelFieldEdit();
+		} else if (e.key === 'Enter' && !multiline) {
+			e.preventDefault();
+			confirmFieldEdit(field);
+		}
+	}
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
@@ -1125,12 +1410,58 @@
 						{eventTypeLabel(detail.eventType)}
 					</span>
 				{/if}
-				<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
-				<!-- Guarded like every other optional field: an event with no parseable
-				     start_datetime shows no time line at all (formatting an Invalid Date
-				     would throw mid-render and take the whole header down with it). -->
-				{#if startAt}
-					<p data-testid="event-detail-time" class="text-sm text-ink-2">
+				<!-- #104 TE.4 — name: always present, no empty-guard needed. -->
+				{#if editingField === 'name'}
+					<input
+						type="text"
+						data-testid="event-edit-input-name"
+						aria-label={m.event_edit_name_aria_label()}
+						class="border-b border-ink bg-transparent font-display text-2xl focus:outline-none"
+						value={editDraft}
+						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
+						onblur={() => confirmFieldEdit('name')}
+						onkeydown={(e) => handleFieldKeydown(e, 'name', false)}
+					/>
+				{:else}
+					<div class="flex items-center gap-2">
+						<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
+						{#if isEditor}
+							<button
+								type="button"
+								data-testid="event-edit-btn-name"
+								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+								aria-label={m.event_edit_name_aria_label()}
+								disabled={editWritePending.name === true}
+								onclick={() => beginFieldEdit('name')}
+							>
+								<span aria-hidden="true">✎</span>
+							</button>
+						{/if}
+					</div>
+				{/if}
+				{#if editErrors.name}
+					<p data-testid="event-edit-error-name" role="alert" class="text-xs text-red-700">
+						{m.event_edit_save_error()}
+					</p>
+				{/if}
+
+				<!-- #104 TE.4 — start_datetime: guarded like the original (no parseable
+				     start shows no time line — formatting an Invalid Date would throw
+				     mid-render), but a rights-holder still gets the pencil even then, so
+				     a timeless event can have a start set inline. -->
+				{#if editingField === 'start_datetime'}
+					<input
+						type="datetime-local"
+						data-testid="event-edit-input-start_datetime"
+						aria-label={m.event_edit_start_datetime_aria_label()}
+						class="border-b border-ink bg-transparent text-sm text-ink-2 focus:outline-none"
+						value={editDraft}
+						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
+						onblur={() => confirmFieldEdit('start_datetime')}
+						onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
+					/>
+				{:else if startAt}
+					<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-sm text-ink-2">
 						<!-- The comma is plain text, NOT an aria-hidden decoration like the
 						     back link's ←: it is real punctuation, and hiding it would run
 						     "September 1" straight into "19:00" for a screen reader. -->
@@ -1138,26 +1469,158 @@
 							startAt,
 							detail.durationMinutes
 						)}
+						{#if isEditor}
+							<button
+								type="button"
+								data-testid="event-edit-btn-start_datetime"
+								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+								aria-label={m.event_edit_start_datetime_aria_label()}
+								disabled={editWritePending.start_datetime === true}
+								onclick={() => beginFieldEdit('start_datetime')}
+							>
+								<span aria-hidden="true">✎</span>
+							</button>
+						{/if}
+					</p>
+				{:else if isEditor}
+					<button
+						type="button"
+						data-testid="event-edit-btn-start_datetime"
+						class="w-fit text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+						aria-label={m.event_edit_start_datetime_aria_label()}
+						disabled={editWritePending.start_datetime === true}
+						onclick={() => beginFieldEdit('start_datetime')}
+					>
+						<span aria-hidden="true">✎</span>
+					</button>
+				{/if}
+				{#if editErrors.start_datetime}
+					<p data-testid="event-edit-error-start_datetime" role="alert" class="text-xs text-red-700">
+						{m.event_edit_save_error()}
 					</p>
 				{/if}
-				<!-- Guarded too: an unknown duration (0) is not "0 min", it is nothing
-				     to say — the time line already collapsed to the start time alone. -->
-				{#if detail.durationMinutes > 0}
-					<p data-testid="event-detail-duration" class="text-xs text-ink-2">
-						{m.agenda_duration_min({ minutes: detail.durationMinutes })}
+
+				<!-- #104 TE.4 — duration_minutes: an unknown duration (0) still shows no
+				     "0 min" text (nothing to say), but a rights-holder gets the pencil
+				     regardless, so the duration can be SET inline from unset. -->
+				{#if editingField === 'duration_minutes'}
+					<input
+						type="number"
+						min="0"
+						data-testid="event-edit-input-duration_minutes"
+						aria-label={m.event_edit_duration_minutes_aria_label()}
+						class="w-24 border-b border-ink bg-transparent text-xs text-ink-2 focus:outline-none"
+						value={editDraft}
+						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
+						onblur={() => confirmFieldEdit('duration_minutes')}
+						onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
+					/>
+				{:else if detail.durationMinutes > 0 || isEditor}
+					<p class="flex items-center gap-2 text-xs text-ink-2">
+						{#if detail.durationMinutes > 0}
+							<span data-testid="event-detail-duration">
+								{m.agenda_duration_min({ minutes: detail.durationMinutes })}
+							</span>
+						{/if}
+						{#if isEditor}
+							<button
+								type="button"
+								data-testid="event-edit-btn-duration_minutes"
+								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+								aria-label={m.event_edit_duration_minutes_aria_label()}
+								disabled={editWritePending.duration_minutes === true}
+								onclick={() => beginFieldEdit('duration_minutes')}
+							>
+								<span aria-hidden="true">✎</span>
+							</button>
+						{/if}
 					</p>
 				{/if}
-				{#if detail.location}
-					<p data-testid="event-detail-location" class="text-sm text-ink-2">{detail.location}</p>
+				{#if editErrors.duration_minutes}
+					<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
+						{m.event_edit_save_error()}
+					</p>
 				{/if}
+
+				<!-- #104 TE.4 — location: a rights-holder gets the pencil even with no
+				     location set, so it can be SET inline. -->
+				{#if editingField === 'location'}
+					<input
+						type="text"
+						data-testid="event-edit-input-location"
+						aria-label={m.event_edit_location_aria_label()}
+						class="border-b border-ink bg-transparent text-sm text-ink-2 focus:outline-none"
+						value={editDraft}
+						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
+						onblur={() => confirmFieldEdit('location')}
+						onkeydown={(e) => handleFieldKeydown(e, 'location', false)}
+					/>
+				{:else if detail.location || isEditor}
+					<p class="flex items-center gap-2 text-sm text-ink-2">
+						{#if detail.location}
+							<span data-testid="event-detail-location">{detail.location}</span>
+						{/if}
+						{#if isEditor}
+							<button
+								type="button"
+								data-testid="event-edit-btn-location"
+								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+								aria-label={m.event_edit_location_aria_label()}
+								disabled={editWritePending.location === true}
+								onclick={() => beginFieldEdit('location')}
+							>
+								<span aria-hidden="true">✎</span>
+							</button>
+						{/if}
+					</p>
+				{/if}
+				{#if editErrors.location}
+					<p data-testid="event-edit-error-location" role="alert" class="text-xs text-red-700">
+						{m.event_edit_save_error()}
+					</p>
+				{/if}
+
 				{#if detail.conductorNames.length > 0}
 					<p data-testid="event-detail-conductors" class="text-sm text-ink-2">
 						{m.event_detail_conductor_label()}: {detail.conductorNames.join(', ')}
 					</p>
 				{/if}
-				{#if detail.description}
-					<p data-testid="event-detail-description" class="mt-2 text-sm text-ink">
-						{detail.description}
+
+				<!-- #104 TE.4 — description: the RED spec's explicit empty-optional-field
+				     case — an event with none still gets the pencil for a rights-holder,
+				     otherwise the field could never be SET inline. -->
+				{#if editingField === 'description'}
+					<textarea
+						data-testid="event-edit-input-description"
+						aria-label={m.event_edit_description_aria_label()}
+						class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-sm text-ink focus:outline-none"
+						value={editDraft}
+						oninput={(e) => (editDraft = (e.currentTarget as HTMLTextAreaElement).value)}
+						onblur={() => confirmFieldEdit('description')}
+						onkeydown={(e) => handleFieldKeydown(e, 'description', true)}
+					></textarea>
+				{:else if detail.description || isEditor}
+					<p class="mt-2 flex items-start gap-2 text-sm text-ink">
+						{#if detail.description}
+							<span data-testid="event-detail-description">{detail.description}</span>
+						{/if}
+						{#if isEditor}
+							<button
+								type="button"
+								data-testid="event-edit-btn-description"
+								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+								aria-label={m.event_edit_description_aria_label()}
+								disabled={editWritePending.description === true}
+								onclick={() => beginFieldEdit('description')}
+							>
+								<span aria-hidden="true">✎</span>
+							</button>
+						{/if}
+					</p>
+				{/if}
+				{#if editErrors.description}
+					<p data-testid="event-edit-error-description" role="alert" class="text-xs text-red-700">
+						{m.event_edit_save_error()}
 					</p>
 				{/if}
 
