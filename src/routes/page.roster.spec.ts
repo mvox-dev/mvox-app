@@ -6,7 +6,7 @@
 // whatever loadRoster returns" (correct separation: page tests shouldn't re-derive
 // business rules the data layer already owns).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -14,17 +14,43 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		roster_no_collective: () => 'Select a collective to view the roster.',
 		roster_load_error: () => 'Something went wrong loading the roster.',
 		roster_retry: () => 'Retry',
-		roster_empty: () => 'No members to show yet.'
+		roster_empty: () => 'No members to show yet.',
+		// TS.1/#95 — this file's own concerns (loading/ready/empty/error/
+		// no-collective/staleness) are section-agnostic; these three keys exist
+		// only so the grouped rewrite renders without throwing here.
+		roster_unassigned: () => 'Unassigned',
+		roster_column_name: () => 'Name',
+		roster_sort_alphabetical: () => 'Sort A–Z',
+		roster_sort_grouped: () => 'Group by section',
+		// F3 code-review fix — banner shown when the section-tree load fails but
+		// the roster itself loaded fine.
+		roster_sections_load_error: () => 'Section grouping failed to load.'
 	}
 }));
 
-const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
+const { loadRosterMock, listSectionsMock } = vi.hoisted(() => ({
+	loadRosterMock: vi.fn(),
+	listSectionsMock: vi.fn()
+}));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// TS.1/#95 — the page now ALSO loads the section tree; this file's concerns
+// (loading/ready/empty/error/no-collective/staleness) are section-agnostic, so
+// listSections is pinned to an empty tree (every member renders under Unassigned;
+// roster-row-* testids must survive the grouped rewrite). groupBySection stays REAL
+// (partial mock) — the page must run the genuine grouping.
+vi.mock('$lib/sections/sectionData', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
+	return { ...actual, listSections: listSectionsMock };
+});
 // Severs the entu-config → $env/dynamic/public import under happy-dom (same pattern
 // as page.rsvp-membership.spec.ts / page.profile.spec.ts / collectives/store.spec.ts):
 // $lib/collectives/store imports discoverCollectives (real chain touches $env, which
 // throws outside a SvelteKit request context under this environment).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+// Same severing, for the OTHER real chain this page now pulls in: sectionData's
+// mock below keeps groupBySection real (importOriginal), which loads sectionData.ts's
+// own `entuFetch` import (→ $lib/entu-config → $env/dynamic/public) at module scope.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
@@ -60,9 +86,14 @@ function setNoCollective() {
 	selectedCollectiveDbStore.set(null);
 }
 
+beforeEach(() => {
+	listSectionsMock.mockResolvedValue([]);
+});
+
 afterEach(() => {
 	cleanup();
 	loadRosterMock.mockReset();
+	listSectionsMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });

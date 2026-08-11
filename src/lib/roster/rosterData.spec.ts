@@ -41,33 +41,80 @@ beforeEach(() => {
 // members are _sharing:'domain'). Widened variant of findMyMemberId's query.
 
 describe('listActiveMembers — lists ALL active members, domain-wide (no person filter)', () => {
-	it('happy path — maps member,current_section into ActiveMember[]; a member with no current_section → currentSection: \'\'', async () => {
+	it('happy path — maps member,_parent into ActiveMember[]; a member with no section _parent → sectionIds: []', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
 					{
 						_id: 'member-1',
 						person: [{ reference: 'person-a' }],
-						current_section: [{ string: 'soprano' }]
+						_parent: [{ reference: 'sec-sop', entity_type: 'section' }]
 					},
-					{ _id: 'member-2', person: [{ reference: 'person-b' }] } // no current_section
+					{
+						_id: 'member-2',
+						person: [{ reference: 'person-b' }],
+						_parent: [{ reference: 'org-1', entity_type: 'organization' }]
+					} // no section among _parent
 				]
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
 		expect(members).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', currentSection: 'soprano' },
-			{ memberId: 'member-2', personId: 'person-b', currentSection: '' }
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'] },
+			{ memberId: 'member-2', personId: 'person-b', sectionIds: [] }
 		]);
 	});
 
-	it('URL: _type.string=member, status.string=active, props=person,current_section, explicit limit=500', async () => {
+	it('PO ruling 2026-08-11 (#95/#80): sections resolve to the ENTITY IDs of every `_parent` entry that is entity_type=section — never current_section (dropped, dead code)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-1',
+						person: [{ reference: 'person-a' }],
+						_parent: [
+							{ reference: 'org-1', entity_type: 'organization' },
+							{ reference: 'sec-sop', entity_type: 'section' }
+						]
+					}
+				]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		expect(members).toEqual<ActiveMember[]>([
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'] }
+		]);
+	});
+
+	it('F1 code-review fix: a member with MULTIPLE section _parent entries keeps ALL of them, in wire order — not just the first', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-1',
+						person: [{ reference: 'person-a' }],
+						_parent: [
+							{ reference: 'sec-sop', entity_type: 'section' },
+							{ reference: 'org-1', entity_type: 'organization' },
+							{ reference: 'sec-lead', entity_type: 'section' }
+						]
+					}
+				]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		expect(members).toEqual<ActiveMember[]>([
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop', 'sec-lead'] }
+		]);
+	});
+
+	it('URL: _type.string=member, status.string=active, props=person,_parent, explicit limit=500', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
 		await listActiveMembers(cfg, fetchImpl);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=member');
 		expect(url).toContain('status.string=active');
-		expect(url).toContain('props=person,current_section');
+		expect(url).toContain('props=person,_parent');
 		expect(url).toContain('limit=500');
 	});
 
@@ -137,15 +184,32 @@ describe('listProfilesForPerson — reuses listMyProfiles\'s exact query for an 
 // ── toRosterRow — pure per-member resolver (literal fixtures, no fetch) ──────────
 
 describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
-	const member: ActiveMember = { memberId: 'member-1', personId: 'person-a', currentSection: '' };
+	const member: ActiveMember = { memberId: 'member-1', personId: 'person-a', sectionIds: [] };
 
-	it('domain profile with name+email → full row', () => {
+	it('domain profile with name+email → full row (TS.1/#95: sectionIds carried through — [] here)', () => {
 		const row = toRosterRow(member, [profile('domain', 'Ada Lovelace', 'ada@example.com')]);
 		expect(row).toEqual<RosterRow>({
 			memberId: 'member-1',
 			personId: 'person-a',
 			name: 'Ada Lovelace',
-			email: 'ada@example.com'
+			email: 'ada@example.com',
+			sectionIds: []
+		});
+	});
+
+	it('TS.1/#95, F1: a member\'s sectionIds (section entity ids) are carried onto the row verbatim, including multiple sections', () => {
+		const sectioned: ActiveMember = {
+			memberId: 'member-1',
+			personId: 'person-a',
+			sectionIds: ['sec-sop', 'sec-lead']
+		};
+		const row = toRosterRow(sectioned, [profile('domain', 'Ada Lovelace', 'ada@example.com')]);
+		expect(row).toEqual<RosterRow>({
+			memberId: 'member-1',
+			personId: 'person-a',
+			name: 'Ada Lovelace',
+			email: 'ada@example.com',
+			sectionIds: ['sec-sop', 'sec-lead']
 		});
 	});
 
@@ -158,7 +222,8 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 			memberId: 'member-1',
 			personId: 'person-a',
 			name: 'Ada Lovelace',
-			email: 'ada-public@example.com'
+			email: 'ada-public@example.com',
+			sectionIds: []
 		});
 	});
 
@@ -177,7 +242,8 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 			memberId: 'member-1',
 			personId: 'person-a',
 			name: 'Ada',
-			email: 'ada@example.com'
+			email: 'ada@example.com',
+			sectionIds: []
 		});
 	});
 
@@ -190,7 +256,8 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 			memberId: 'member-1',
 			personId: 'person-a',
 			name: 'Ada',
-			email: 'ada@example.com'
+			email: 'ada@example.com',
+			sectionIds: []
 		});
 	});
 
@@ -212,7 +279,8 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 			memberId: 'member-1',
 			personId: 'person-a',
 			name: 'Ada Lovelace',
-			email: ''
+			email: '',
+			sectionIds: []
 		});
 	});
 
@@ -222,7 +290,8 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 			memberId: 'member-1',
 			personId: 'person-a',
 			name: 'Ada',
-			email: 'pub@x.com'
+			email: 'pub@x.com',
+			sectionIds: []
 		});
 	});
 
@@ -276,7 +345,47 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		);
 		const rows = await loadRoster(cfg, fetchImpl);
 		expect(rows).toEqual<RosterRow[]>([
-			{ memberId: 'member-1', personId: 'person-a', name: 'Ada Lovelace', email: 'ada@example.com' }
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				name: 'Ada Lovelace',
+				email: 'ada@example.com',
+				sectionIds: []
+			}
+		]);
+	});
+
+	it('TS.1/#95, F1: a member\'s section _parent entries flow all the way through to the row (the section entity ids groupBySection joins on), including more than one', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('_type.string=member')) {
+				return Promise.resolve(
+					json({
+						entities: [
+							{
+								_id: 'member-1',
+								person: [{ reference: 'person-a' }],
+								_parent: [
+									{ reference: 'sec-sop', entity_type: 'section' },
+									{ reference: 'sec-lead', entity_type: 'section' }
+								]
+							}
+						]
+					})
+				);
+			}
+			return Promise.resolve(
+				json({ entities: [rawProfile('domain', 'Ada Lovelace', 'ada@example.com')] })
+			);
+		});
+		const rows = await loadRoster(cfg, fetchImpl);
+		expect(rows).toEqual<RosterRow[]>([
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				name: 'Ada Lovelace',
+				email: 'ada@example.com',
+				sectionIds: ['sec-sop', 'sec-lead']
+			}
 		]);
 	});
 

@@ -649,7 +649,7 @@ describe('#73 — librarian return', () => {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-a', personId: 'p-a', currentSection: '' }
+			{ memberId: 'member-a', personId: 'p-a', sectionIds: [] }
 		]);
 		returnLendingMock.mockResolvedValue(undefined);
 
@@ -724,8 +724,8 @@ describe('#76 — inline checkout on browse tree', () => {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-a', personId: 'p-a', currentSection: '' },
-			{ memberId: 'member-b', personId: 'p-b', currentSection: '' }
+			{ memberId: 'member-a', personId: 'p-a', sectionIds: [] },
+			{ memberId: 'member-b', personId: 'p-b', sectionIds: [] }
 		]);
 	}
 
@@ -984,7 +984,7 @@ describe('#74 — bulk checkout + return', () => {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-1', personId: 'person-1', currentSection: '' }
+			{ memberId: 'member-1', personId: 'person-1', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);
@@ -1037,8 +1037,8 @@ describe('#74 — bulk checkout + return', () => {
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-1', personId: 'person-1', currentSection: '' },
-			{ memberId: 'member-2', personId: 'person-2', currentSection: '' }
+			{ memberId: 'member-1', personId: 'person-1', sectionIds: [] },
+			{ memberId: 'member-2', personId: 'person-2', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);
@@ -1078,8 +1078,8 @@ describe('#74 — bulk checkout + return', () => {
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-1', personId: 'person-1', currentSection: '' },
-			{ memberId: 'member-2', personId: 'person-2', currentSection: '' }
+			{ memberId: 'member-1', personId: 'person-1', sectionIds: [] },
+			{ memberId: 'member-2', personId: 'person-2', sectionIds: [] }
 		]);
 		bulkCheckoutMock.mockResolvedValue({ succeeded: [], failed: [] });
 		// After bulk checkout, the page refreshes lendings
@@ -1233,8 +1233,8 @@ describe('#74 — bulk checkout refinements', () => {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-a', personId: 'person-a', currentSection: '' },
-			{ memberId: 'member-b', personId: 'person-b', currentSection: '' }
+			{ memberId: 'member-a', personId: 'person-a', sectionIds: [] },
+			{ memberId: 'member-b', personId: 'person-b', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);
@@ -1278,9 +1278,9 @@ describe('#74 — bulk checkout refinements', () => {
 		]);
 		// 3 members
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-1', personId: 'person-1', currentSection: '' },
-			{ memberId: 'member-2', personId: 'person-2', currentSection: '' },
-			{ memberId: 'member-3', personId: 'person-3', currentSection: '' }
+			{ memberId: 'member-1', personId: 'person-1', sectionIds: [] },
+			{ memberId: 'member-2', personId: 'person-2', sectionIds: [] },
+			{ memberId: 'member-3', personId: 'person-3', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);
@@ -1410,7 +1410,7 @@ describe('#76 — consolidated corrections', () => {
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: hexId, personId: 'person-1', currentSection: '' }
+			{ memberId: hexId, personId: 'person-1', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);
@@ -1549,7 +1549,7 @@ describe('#76 — correction 9: localized lending dates', () => {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-a', personId: 'person-a', currentSection: '' }
+			{ memberId: 'member-a', personId: 'person-a', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);
@@ -1589,8 +1589,8 @@ describe('#76 — correction 9: localized lending dates', () => {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]);
 		listActiveMembersMock.mockResolvedValue([
-			{ memberId: 'member-a', personId: 'p-a', currentSection: '' },
-			{ memberId: 'member-b', personId: 'p-b', currentSection: '' }
+			{ memberId: 'member-a', personId: 'p-a', sectionIds: [] },
+			{ memberId: 'member-b', personId: 'p-b', sectionIds: [] }
 		]);
 
 		const { container } = render(Page);

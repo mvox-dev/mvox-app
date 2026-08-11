@@ -40,12 +40,22 @@ export interface ActiveMember {
 	memberId: string;
 	personId: string;
 	/**
-	 * Optional per the RULED target member shape; '' when absent. No query precedent
-	 * exists for this field anywhere in src/ (grep confirms) — queried defensively
-	 * (cheap, same request) but deliberately NOT carried into RosterRow/rendered —
-	 * T3.2/T3.3's AC is name+email only.
+	 * PO ruling 2026-08-11 (#95/#80): the SOLE source of a member's sections is
+	 * `_parent.filter(p => p.entity_type === 'section')` — there is no
+	 * `current_section` property on member (0/132 members carry it in the dev db;
+	 * dead code, removed). [] when the member has no section parent — no
+	 * fallback.
+	 *
+	 * F1 code-review fix: a member can belong to MULTIPLE sections at once (e.g.
+	 * a section leader who also sings in the section) — every matching `_parent`
+	 * entry is kept, in wire order, not just the first (the earlier single-value
+	 * `.find()` collapsed a multi-section member down to one section and silently
+	 * dropped her from the rest). `.filter()` widening of the same `.find()`
+	 * pattern used at libraryData.ts:118 and entuSeasons.ts:123 — those call
+	 * sites' properties genuinely ARE single-valued; a member's section
+	 * membership is not.
 	 */
-	currentSection: string;
+	sectionIds: string[];
 }
 
 /**
@@ -61,6 +71,13 @@ export interface ActiveMember {
  * shared subset's name comes solely from the person's domain profile (below). The
  * SHIPPED create path (inviteData.ts:290-299) still puts `name` on `member` — this
  * function targets the RULED shape, not the pre-#29 live one (deliberate).
+ *
+ * PO ruling 2026-08-11 (#95/#80): sections come SOLELY from
+ * `_parent.filter(p => p.entity_type === 'section')` — `current_section` is not
+ * a real member property (0/132 members carry it in the dev db) and is never
+ * read here. No fallback — YAGNI. F1: EVERY matching `_parent` entry is kept
+ * (a member can be in more than one section), widening the `.find()` pattern
+ * used at `libraryData.ts:118` and `entuSeasons.ts:123`.
  */
 export async function listActiveMembers(
 	cfg: EntuCfg,
@@ -68,7 +85,7 @@ export async function listActiveMembers(
 ): Promise<ActiveMember[]> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=member&status.string=active&props=person,current_section&limit=500',
+		'entity?_type.string=member&status.string=active&props=person,_parent&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
@@ -78,7 +95,7 @@ export async function listActiveMembers(
 		entities?: Array<{
 			_id: string;
 			person?: Array<{ reference: string }>;
-			current_section?: Array<{ string: string }>;
+			_parent?: Array<{ reference: string; entity_type?: string }>;
 		}>;
 	};
 	return (body.entities ?? []).map((raw) => {
@@ -92,10 +109,16 @@ export async function listActiveMembers(
 				`listActiveMembers: member ${raw._id} — cannot read person reference (visible fields insufficient for this reader's rights; may be a narrower-than-entity sharing tier, not necessarily absent data)`
 			);
 		}
+		// PO ruling 2026-08-11 (#95/#80) — every `_parent` entry that is a section
+		// is a section this member belongs to; [] when she has none. Sole source,
+		// no current_section fallback. F1: kept ALL matches, not just the first.
+		const sectionIds = (raw._parent ?? [])
+			.filter((p) => p.entity_type === 'section')
+			.map((p) => p.reference);
 		return {
 			memberId: raw._id,
 			personId,
-			currentSection: raw.current_section?.[0]?.string ?? ''
+			sectionIds
 		};
 	});
 }
@@ -130,6 +153,15 @@ export interface RosterRow {
 	personId: string;
 	name: string;
 	email: string;
+	/**
+	 * TS.1/#95, widened by F1 — every section ENTITY ID this member belongs to
+	 * ([] when unassigned), carried through from `ActiveMember.sectionIds` so the
+	 * roster page can join rows to the section tree (`groupBySection`,
+	 * sectionData.ts) and have a multi-section member land in EVERY one of her
+	 * sections' groups, not just one. Optional at the type level for pre-GREEN /
+	 * legacy fixtures; `groupBySection` treats undefined the same as [] (Unassigned).
+	 */
+	sectionIds?: string[];
 }
 
 /**
@@ -170,7 +202,11 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 		personId: member.personId,
 		// hasVisibleName === 'complete' guarantees at least one of these is non-blank.
 		name: domainName !== '' ? domainName : publicName,
-		email: resolveField(profiles, 'email').value
+		email: resolveField(profiles, 'email').value,
+		// TS.1/#95, F1 — carried through verbatim from the member (section entity
+		// ids, [] when unassigned) so groupBySection can join rows to the section
+		// tree and place a multi-section member in every matching group.
+		sectionIds: member.sectionIds
 	};
 }
 
@@ -201,3 +237,4 @@ export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch):
 // (*MVOX:Tallis* — RED stubs + interface)
 // (*MVOX:Josquin* — GREEN implementation)
 // (*MVOX:Palestrina* — #58: toRosterRow accepts domain OR public name)
+// (*MVOX:Palestrina* — F1 code-review fix: multi-section members, TS.1/#95)
