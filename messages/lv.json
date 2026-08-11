@@ -233,5 +233,7 @@
 	"event_detail_attendance_tally_absent": "{count} nav",
 	"event_detail_attendance_tally_late": "{count} kavējas",
 	"agenda_row_link_label": "Skatīt notikuma {event} detaļas",
-	"agenda_row_link_label_unnamed": "Skatīt notikuma detaļas"
+	"agenda_row_link_label_unnamed": "Skatīt notikuma detaļas",
+	"session_expired_message": "Jūsu sesija ir beigusies. Lūdzu, piesakieties vēlreiz.",
+	"session_expired_signin": "Pieteikties"
 }

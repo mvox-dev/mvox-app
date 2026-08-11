@@ -27,12 +27,18 @@
 	} from '$lib/invite/inviteData';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
+	// #107 review F2 — a 401 here used to land in the generic 'load-error'
+	// (Retry against a token already deleted from localStorage) or, on the write
+	// path, in 'create-error'. Both are misleading: the session is gone.
+	import { isAuthExpiredError } from '$lib/entu/request';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
 	type Status =
 		| 'loading'
 		| 'no-collective'
 		| 'no-access'
 		| 'load-error'
+		| 'session-expired'
 		| 'ready'
 		| 'creating'
 		| 'done'
@@ -89,6 +95,11 @@
 			status = 'ready';
 			hasShownForm = true;
 		} catch (e) {
+			// Checked FIRST: a 401 is not "not admin" and not a load failure.
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			if (e instanceof InviteCreateError && e.reason === 'not-visible') {
 				// Labeled HEURISTIC: the prerequisites are not visible to this account.
 				// The authoritative admin gate stays Entu's parent-expander check on the
@@ -154,6 +165,10 @@
 			copyFailed = false;
 			status = 'done';
 		} catch (e) {
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('admin/invite: create failed', e);
 			if (e instanceof InviteCreateError) {
 				createError = { personId: e.personId };
@@ -204,6 +219,8 @@
 			<p data-testid="invite-admin-no-access" class="text-sm" role="alert">
 				{m.admin_invite_no_access()}
 			</p>
+		{:else if status === 'session-expired'}
+			<SessionExpiredNotice />
 		{:else if status === 'load-error'}
 			<div data-testid="invite-admin-load-error" class="flex flex-col gap-2" role="alert">
 				<p class="text-sm text-red-700">{m.admin_invite_load_error()}</p>

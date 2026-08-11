@@ -35,6 +35,8 @@
 	import { listSeasons } from '$lib/seasons/entuSeasons';
 	import { currentSeason } from '$lib/attendance/conductorLogic';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
+	import { isAuthExpiredError } from '$lib/entu/request';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -57,7 +59,7 @@
 		return _dateFmt.format(new Date(isoDate));
 	}
 
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'ready';
+	type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';
 	type NodeStatus = 'idle' | 'loading' | 'error';
 
 	let generation = 0;
@@ -179,6 +181,13 @@
 				});
 		} catch (e) {
 			if (g !== generation) return;
+			// #107 — a session-expired rejection is a DIFFERENT failure class than
+			// a generic load error: the entuFetch layer already cleared the stale
+			// session and fired the sign-in redirect, so this just says why.
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('library: load failed', e);
 			status = 'load-error';
 		}
@@ -198,6 +207,14 @@
 			editionsByWork = new Map(editionsByWork).set(workId, editions);
 			editionNodeStatus = new Map(editionNodeStatus).set(workId, 'idle');
 		} catch (e) {
+			// #107 (review R2/F3) — a node expand is a READ, so it gets the same
+			// treatment as the page-level load above: collapse to the shared
+			// session-expired notice instead of leaving a dead "couldn't load" badge
+			// inside a tree that is about to unmount behind the sign-in redirect.
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('library: editions load failed', workId, e);
 			editionNodeStatus = new Map(editionNodeStatus).set(workId, 'error');
 		}
@@ -228,6 +245,11 @@
 			copiesByEdition = new Map(copiesByEdition).set(editionId, copies);
 			copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'idle');
 		} catch (e) {
+			// #107 (review R2/F3) — same READ-path rule as loadEditionsFor.
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('library: copies load failed', editionId, e);
 			copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'error');
 		}
@@ -658,6 +680,8 @@
 					</div>
 				{/each}
 			</div>
+		{:else if status === 'session-expired'}
+			<SessionExpiredNotice />
 		{:else if status === 'load-error'}
 			<div data-testid="library-load-error" class="flex flex-col gap-2" role="alert">
 				<p class="text-sm text-red-700">{m.library_load_error()}</p>

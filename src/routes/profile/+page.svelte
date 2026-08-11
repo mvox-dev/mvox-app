@@ -16,6 +16,8 @@
 	import { createAutosave } from '$lib/profile/autosave';
 	import ProfileField from '$lib/components/profile/ProfileField.svelte';
 	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
+	import { isAuthExpiredError } from '$lib/entu/request';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
@@ -44,7 +46,7 @@
 
 	const selected = $derived($selectedCollectiveStore);
 
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'ready';
+	type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';
 
 	let generation = 0;
 	let status = $state<Status>('loading');
@@ -176,6 +178,13 @@
 			status = 'ready';
 		} catch (e) {
 			if (g !== generation) return;
+			// #107 — a session-expired rejection is a DIFFERENT failure class than
+			// a generic load error: the entuFetch layer already cleared the stale
+			// session and fired the sign-in redirect, so this just says why.
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('profile: load failed', e);
 			status = 'load-error';
 		}
@@ -409,6 +418,8 @@
 			<p data-testid="profile-no-collective" class="text-sm">{m.profile_no_collective()}</p>
 		{:else if status === 'loading'}
 			<p class="text-sm" aria-busy="true">...</p>
+		{:else if status === 'session-expired'}
+			<SessionExpiredNotice />
 		{:else if status === 'load-error'}
 			<div data-testid="profile-load-error" class="flex flex-col gap-2" role="alert">
 				<p class="text-sm text-red-700">{m.profile_load_error()}</p>

@@ -233,5 +233,7 @@
 	"event_detail_attendance_tally_absent": "{count} absent",
 	"event_detail_attendance_tally_late": "{count} late",
 	"agenda_row_link_label": "View details for {event}",
-	"agenda_row_link_label_unnamed": "View event details"
+	"agenda_row_link_label_unnamed": "View event details",
+	"session_expired_message": "Your session has expired. Please sign in again.",
+	"session_expired_signin": "Sign in"
 }

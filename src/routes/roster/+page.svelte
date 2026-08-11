@@ -23,11 +23,13 @@
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
 	import { adminStore } from '$lib/nav/adminStore';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import { isAuthExpiredError } from '$lib/entu/request';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const admin = $derived($adminStore);
 
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'ready';
+	type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';
 
 	// Non-reactive generation guard — mirrors profile/+page.svelte's `let generation`
 	// exactly (never $state, so bumping it doesn't retrigger the load effect). Guards
@@ -104,6 +106,13 @@
 		if (g !== generation) return; // superseded by a newer collective selection
 
 		if (rowResult.status === 'rejected') {
+			// #107 — a dead token kills BOTH parallel reads uniformly; say so
+			// truthfully instead of the generic load error (whose Retry can never
+			// succeed against a dead token).
+			if (isAuthExpiredError(rowResult.reason)) {
+				status = 'session-expired';
+				return;
+			}
 			// The roster itself couldn't be read — nothing presentable regardless of
 			// how the section load went. Full loud error, matching pre-F3 behavior.
 			console.error('roster: load failed', rowResult.reason);
@@ -113,6 +122,10 @@
 		rows = rowResult.value;
 
 		if (sectionResult.status === 'rejected') {
+			if (isAuthExpiredError(sectionResult.reason)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('roster: section tree load failed', sectionResult.reason);
 			sections = [];
 			sectionsError = true;
@@ -969,6 +982,8 @@
 					</div>
 				{/each}
 			</div>
+		{:else if status === 'session-expired'}
+			<SessionExpiredNotice />
 		{:else if status === 'load-error'}
 			<div data-testid="roster-load-error" class="flex flex-col gap-2" role="alert">
 				<p class="text-sm text-red-700">{m.roster_load_error()}</p>

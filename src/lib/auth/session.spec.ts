@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { authStore, hydrateAuth } from './session';
-import { getToken, setToken } from './storage';
+import { authStore, endSession, hydrateAuth } from './session';
+import { getLastProvider, getToken, getUser, setLastProvider, setToken, setUser } from './storage';
 
 // Build an unsigned JWT (base64url) with a given payload — mirrors Entu's issued
 // token so the decode path is exercised for real.
@@ -58,5 +58,39 @@ describe('hydrateAuth', () => {
 		const state = hydrateAuth(NOW);
 		expect(state).toEqual({ status: 'anonymous' });
 		expect(getToken()).toBeNull();
+	});
+});
+
+// #107 review F1 — the ONE teardown both exit paths share. Before it existed,
+// the 401 recovery cleared localStorage but left `authStore` asserting
+// 'authenticated' (the client-side `goto` never reloads the document, so
+// nothing re-hydrates it): the signed-in nav kept rendering on the sign-in
+// page, and the layout's auth-keyed effects kept firing Entu reads with an
+// empty Bearer.
+describe('endSession', () => {
+	it('clears storage AND flips the in-memory store to anonymous', () => {
+		setUser({ _id: 'u1', email: 'ada@example.com' });
+		setToken(jwt({ accounts: { polyphony: 'p1' }, exp: futureExp }));
+		setLastProvider('google');
+		hydrateAuth(NOW);
+		expect(get(authStore).status).toBe('authenticated');
+
+		endSession({ preserveProvider: true });
+
+		expect(getToken()).toBeNull();
+		expect(getUser()).toBeNull();
+		expect(get(authStore)).toEqual({ status: 'anonymous' });
+		// preserveProvider: true is the 401-recovery choice — re-auth pre-selects it.
+		expect(getLastProvider()).toBe('google');
+	});
+
+	it('drops the remembered provider when preserveProvider is false (explicit sign-out)', () => {
+		setToken(jwt({ accounts: { polyphony: 'p1' }, exp: futureExp }));
+		setLastProvider('google');
+
+		endSession({ preserveProvider: false });
+
+		expect(get(authStore)).toEqual({ status: 'anonymous' });
+		expect(getLastProvider()).toBeNull();
 	});
 });

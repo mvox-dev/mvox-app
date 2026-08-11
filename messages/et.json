@@ -233,5 +233,7 @@
 	"event_detail_attendance_tally_absent": "{count} puudub",
 	"event_detail_attendance_tally_late": "{count} hilineb",
 	"agenda_row_link_label": "Vaata sündmuse {event} üksikasju",
-	"agenda_row_link_label_unnamed": "Vaata sündmuse üksikasju"
+	"agenda_row_link_label_unnamed": "Vaata sündmuse üksikasju",
+	"session_expired_message": "Sinu seanss on aegunud. Palun logi uuesti sisse.",
+	"session_expired_signin": "Logi sisse"
 }

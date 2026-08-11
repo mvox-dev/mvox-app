@@ -603,7 +603,15 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 		await vi.waitFor(() => {
 			expect(postsTo(fetchMock, 'entity/pi-b').length).toBe(1);
 		});
-		expect(postsTo(fetchMock, 'entity/pi-a').length).toBe(1);
+		// #107 — entuFetch now inspects every response's status (401 recovery),
+		// which adds a promise hop between the fetch call and its resolution; the
+		// pi-a write can therefore still be in flight the instant pi-b's is
+		// observed. Same wait, not a weaker assertion — the write always happens
+		// (it's part of the FIRST move's sequential plan), this just stops
+		// asserting on it a tick early.
+		await vi.waitFor(() => {
+			expect(postsTo(fetchMock, 'entity/pi-a').length).toBe(1);
+		});
 		expect(postsTo(fetchMock, 'entity/pi-c').length).toBe(0);
 	});
 

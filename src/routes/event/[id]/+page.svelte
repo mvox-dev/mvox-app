@@ -75,6 +75,12 @@
 	// rsvp/attendance/repertoire queues above (per-tap immediate writes, no
 	// "save all"). See eventFieldEdit.ts for the replace-semantics contract.
 	import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
+	// #107 review F2 — the detail page is a primary member surface (reachable
+	// from every agenda row), and it was the one load surface the first pass
+	// missed: a 401 landed in 'load-error', offering a Retry against a token that
+	// had already been deleted from localStorage.
+	import { isAuthExpiredError } from '$lib/entu/request';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -84,7 +90,13 @@
 	// the newly selected db, where it does not exist (403/404). Offering Retry
 	// there is offering an action that can never succeed — this state offers the
 	// back link instead (#101 review fix F5).
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'not-available' | 'ready';
+	type Status =
+		| 'loading'
+		| 'no-collective'
+		| 'load-error'
+		| 'not-available'
+		| 'session-expired'
+		| 'ready';
 
 	// Non-reactive generation guard — same pattern as roster/+page.svelte's
 	// `generation` (never `$state`, so bumping it doesn't retrigger the effect).
@@ -244,6 +256,16 @@
 			loadComposeSurfaces(cfg, loaded, current.personId, g);
 		} catch (e) {
 			if (g !== generation) return;
+			// ORDER MATTERS: entuFetch throws AuthExpiredError BEFORE loadEventDetail
+			// ever inspects `eventRes.ok`, so a 401 never becomes an
+			// EventDetailLoadError — it must be recognised ahead of the
+			// unavailable/load-error split, or it falls through to the misleading
+			// generic error whose Retry can never succeed against a dead token.
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				detail = null;
+				return;
+			}
 			console.error('event detail: load failed', e);
 			// A 403/404 (or a 2xx carrying no entity) means this id is not readable
 			// in THIS db — retrying cannot change that. Anything else (network,
@@ -439,6 +461,10 @@
 		void selected;
 		void eventId;
 		loadForSelected().catch((e) => {
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
 			console.error('event detail: load failed', e);
 			status = 'load-error';
 		});
@@ -1473,6 +1499,8 @@
 				<div class="h-4 w-1/2 rounded bg-ink-5"></div>
 				<div class="h-4 w-1/3 rounded bg-ink-5"></div>
 			</div>
+		{:else if status === 'session-expired'}
+			<SessionExpiredNotice />
 		{:else if status === 'load-error'}
 			<div data-testid="event-detail-load-error" role="alert" class="flex flex-col gap-2">
 				<p class="text-sm text-red-700">{m.event_detail_load_error()}</p>

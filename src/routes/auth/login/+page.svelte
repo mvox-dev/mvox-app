@@ -7,6 +7,12 @@
 	// Provider list shared with the invite landing (T4.5) — extracted verbatim to
 	// $lib/auth/providers.
 	import { AUTH_PROVIDERS } from '$lib/auth/providers';
+	// #107 review F4 — the session-expired copy is the DURABLE surface (the
+	// per-page notice only flashes past before the redirect completes), so it
+	// must come from the four locale files, not a hardcoded English literal that
+	// can drift from `session_expired_message`. The page's other error branches
+	// stay un-i18n'd — pre-existing, out of #107's scope.
+	import { m } from '$lib/paraglide/messages.js';
 
 	const error = $derived(page.url.searchParams.get('error'));
 	// The guard redirects here with `?redirect=<path>`; fall back to `return_to`.
@@ -38,6 +44,7 @@
 		<p class="text-sm text-red-700" role="alert">
 			{#if error === 'csrf_mismatch'}Your sign-in link expired or was invalid. Please try again.
 			{:else if error === 'missing_session_token'}Sign-in did not complete. Please try again.
+			{:else if error === 'session_expired'}{m.session_expired_message()}
 			{:else}Something went wrong. Please try again.{/if}
 		</p>
 	{/if}

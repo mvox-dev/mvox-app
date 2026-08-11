@@ -1,3 +1,15 @@
+<script module lang="ts">
+	import { install401Recovery } from '$lib/auth/install-401-recovery';
+
+	// #107 — register the browser-side 401 recovery (session teardown + sign-in
+	// redirect) into the shared `entuFetch` seam. Module scope, not `onMount`:
+	// this runs once when the root layout module is first evaluated, which is
+	// before any page component can instantiate and issue an Entu read. Keeping
+	// the effects OUT of $lib/entu/request is what lets the node migration
+	// scripts keep importing that module (see install-401-recovery.ts).
+	install401Recovery();
+</script>
+
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';

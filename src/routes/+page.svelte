@@ -53,6 +53,8 @@
 	} from '$lib/repertoire/repertoireActions';
 	import { listWorks, listAllEditions, type Edition, type Work } from '$lib/library/libraryData';
 	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
+	import { isAuthExpiredError } from '$lib/entu/request';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -70,6 +72,10 @@
 	let agendaItems = $state<AgendaItem[]>([]);
 	let agendaLoading = $state(true);
 	let agendaError = $state(false);
+	// #107 — a 401-driven rejection (session_expired) is a DIFFERENT failure class
+	// than a generic data-loading error: the entuFetch layer already cleared the
+	// stale session and fired the sign-in redirect, so this just needs to say why.
+	let sessionExpired = $state(false);
 
 	// #12 — the singer's own member id (needed for the write path) and existing
 	// rsvps (seeds each row's initial answer). Resolved alongside the agenda, same
@@ -234,6 +240,7 @@
 		closeAttendancePanel();
 		agendaLoading = true;
 		agendaError = false;
+		sessionExpired = false;
 		// Fresh selection -> membership is unresolved again (not carried over as a
 		// stale member/non-member), and no event has a failed write yet.
 		memberId = null;
@@ -297,12 +304,20 @@
 						: 'not-conductor'
 				);
 			})
-			.catch(() => {
+			.catch((err) => {
 				// M2 fix: without this catch, a rejected load left agendaLoading
 				// stuck at true forever — permanent skeleton, no error, no recovery.
 				if (thisRequest !== requestId) return;
 				agendaLoading = false;
-				agendaError = true;
+				// #107 — a session-expired rejection is truthfully a DIFFERENT state
+				// than "couldn't load": a Retry against a dead token can never
+				// succeed, so it must not render alongside/instead of the generic
+				// error+retry affordance.
+				if (isAuthExpiredError(err)) {
+					sessionExpired = true;
+				} else {
+					agendaError = true;
+				}
 				recentItems = [];
 				conductorEventIds = new Set();
 				worksByEventId = {};
@@ -1283,7 +1298,9 @@
 					</nav>
 				</header>
 				<div class="rounded-lg bg-paper p-4">
-					{#if agendaError}
+					{#if sessionExpired}
+						<SessionExpiredNotice centered />
+					{:else if agendaError}
 						<div data-testid="agenda-error" class="flex flex-col items-center gap-3 py-10 text-center">
 							<p class="text-sm text-ink-2">{m.agenda_load_error()}</p>
 							<button

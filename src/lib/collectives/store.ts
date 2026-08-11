@@ -2,7 +2,8 @@ import { writable, derived, get, type Readable, type Writable } from 'svelte/sto
 import { goto } from '$app/navigation';
 import { getToken } from '$lib/auth/storage';
 import { authStore } from '$lib/auth/session';
-import { discoverCollectives } from './discover';
+import { isAuthExpiredError } from '$lib/entu/auth-expired';
+import { discoverCollectives, type DiscoverResult } from './discover';
 import type { Collective, CollectiveState } from './types';
 
 // Repoints the old polyphony org-picker precedence (URL → localStorage → default)
@@ -34,7 +35,27 @@ export async function hydrateCollectives(fetchImpl: typeof fetch = fetch): Promi
 		return state;
 	}
 
-	const { collectives, erroredDbs } = await discoverCollectives(auth.personIdByDb, token, fetchImpl);
+	let discovered: DiscoverResult;
+	try {
+		discovered = await discoverCollectives(auth.personIdByDb, token, fetchImpl);
+	} catch (err) {
+		// #107 (review R2/F2) — the token died mid-discovery. entuFetch has already
+		// torn the session down and fired the sign-in redirect, so the truthful
+		// terminal state here is 'anonymous', not 'error'.
+		//
+		// The layout's `becameAnonymous` edge would normally re-hydrate us into
+		// exactly that state, but it cannot: `endSession` flips authStore while THIS
+		// call is still in flight, so the edge is suppressed by the `hydrating`
+		// guard and a stale state would survive the navigation. Settling it here
+		// removes that timing dependency entirely.
+		if (isAuthExpiredError(err)) {
+			const state: CollectiveState = { status: 'anonymous' };
+			collectiveState.set(state);
+			return state;
+		}
+		throw err;
+	}
+	const { collectives, erroredDbs } = discovered;
 
 	let state: CollectiveState;
 	if (collectives.length > 0) {

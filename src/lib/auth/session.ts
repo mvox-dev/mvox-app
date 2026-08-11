@@ -49,4 +49,25 @@ export function hydrateAuth(nowMs: number = Date.now()): AuthState {
 	return state;
 }
 
+/**
+ * Tear a session down COMPLETELY: storage AND the in-memory store, in that
+ * order. The two halves must never be done separately — clearing storage alone
+ * leaves `authStore` asserting 'authenticated', so the nav still renders the
+ * signed-in shell and the layout's auth-keyed effects keep firing Entu reads
+ * with an empty Bearer (there is no document reload on a client-side `goto` to
+ * re-hydrate them). Flipping the store is also what drives +layout.svelte's
+ * `becameAnonymous` edge, which re-runs `hydrateCollectives()` and clears the
+ * stale collective selection.
+ *
+ * The single teardown for BOTH exit paths: explicit sign-out
+ * (`performLogout`, preserveProvider: false) and the 401 recovery
+ * (`handleAuthExpired401` in $lib/entu/request, preserveProvider: true, so
+ * re-auth pre-selects the provider). Keeping them on one function is what stops
+ * the two from drifting apart again (#107 review F1).
+ */
+export function endSession(opts: { preserveProvider: boolean }): void {
+	clearAll({ preserveProvider: opts.preserveProvider });
+	authStore.set({ status: 'anonymous' });
+}
+
 // (*MVOX:Josquin*)

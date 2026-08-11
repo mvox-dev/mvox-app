@@ -8,7 +8,7 @@
 // collectiveState. This is the resilience test class the original 118 green
 // tests missed (they never exercised a post-mount auth flip).
 import { render, cleanup } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 const { discoverMock, gotoMock } = vi.hoisted(() => ({
@@ -19,8 +19,13 @@ const { discoverMock, gotoMock } = vi.hoisted(() => ({
 // discover.ts's $env import under happy-dom, and goto can't run outside an app.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+// #107 review F1 — entuFetch (imported below to fire a REAL 401) reaches
+// $lib/entu-config, which reads $env/dynamic/public: unavailable under
+// happy-dom outside a SvelteKit request context.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 
 import Layout from './+layout.svelte';
+import { entuFetch } from '$lib/entu/request';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState } from '$lib/collectives/store';
@@ -34,8 +39,21 @@ function setAuthedAuthStore() {
 	authStore.set({ status: 'authenticated', personIdByDb: { polyphony: 'p1' }, expMs: Date.now() + 100_000 });
 }
 
+beforeEach(() => {
+	// The layout's completion-gate and admin effects fire entuFetch against the
+	// GLOBAL fetch the moment auth resolves. Left unstubbed, happy-dom issues REAL
+	// requests to api.entu.app — which answer 401 and, since #107's recovery, quite
+	// correctly tear the session down mid-test. Pin them to a benign 200 so the
+	// only 401 in this file is the one a test fires deliberately.
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async () => new Response(JSON.stringify({ entities: [] }), { status: 200 }))
+	);
+});
+
 afterEach(() => {
 	cleanup();
+	vi.unstubAllGlobals();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
 	clearAll({ preserveProvider: false });
@@ -137,4 +155,54 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 	});
 });
 
-// (*MVOX:Byrd*)
+describe('+layout — a 401 tears the whole session down, not just localStorage (#107 review F1)', () => {
+	it('the signed-in nav disappears and collectiveState resets after an Entu 401 — no reload involved', async () => {
+		discoverMock.mockResolvedValue({
+			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			erroredDbs: []
+		});
+
+		const { container } = render(Layout);
+		setAuthedAuthStore();
+		await vi.waitFor(() => {
+			expect(get(collectiveState).status).toBe('ready');
+		});
+		expect(
+			container.querySelector('nav[aria-label="Main navigation"]'),
+			'the signed-in nav renders while authenticated'
+		).not.toBeNull();
+
+		// A real 401 through the real entuFetch — the recovery is a client-side
+		// `goto`, so NOTHING re-hydrates the layout. Before the fix, clearAll ran
+		// but authStore stayed 'authenticated': the full signed-in nav kept
+		// rendering (on the sign-in page the user had just been sent to) and the
+		// layout's auth-keyed effects kept firing Entu reads with an empty Bearer.
+		await entuFetch(
+			'polyphony',
+			'entity?limit=1',
+			'jwt-abc',
+			{},
+			vi.fn().mockResolvedValue(new Response('{}', { status: 401 })) as unknown as typeof fetch
+		).catch(() => {});
+
+		await vi.waitFor(() => {
+			expect(get(authStore)).toEqual({ status: 'anonymous' });
+		});
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('nav[aria-label="Main navigation"]'),
+				'the signed-in nav must NOT survive a destroyed session'
+			).toBeNull();
+		});
+		// The becameAnonymous edge re-runs hydrateCollectives, which clears the
+		// stale 'ready' selection for free.
+		await vi.waitFor(() => {
+			expect(get(collectiveState).status).toBe('anonymous');
+		});
+		// (the completion gate may also have fired its own /profile redirect — the
+		// session-expired one is the assertion, not the call index)
+		expect(gotoMock.mock.calls.map((c) => String(c[0])).some((u) => u.includes('session_expired'))).toBe(true);
+	});
+});
+
+// (*MVOX:Byrd*), #107 review block (*MVOX:Josquin*)

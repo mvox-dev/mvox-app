@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, isAuthExpiredError } from '$lib/entu/request';
 import type { MarkerResult } from './types';
 
 // ─── The mvox-collective MARKER ──────────────────────────────────────────────
@@ -70,6 +70,14 @@ export async function checkCollectiveMarker(
 		const name = hit?.name?.[0]?.string?.trim() || db;
 		return { db, kind: 'collective', name, personId };
 	} catch (err) {
+		// #107 (review R2/F2) — an expired session is NOT a per-db marker failure.
+		// Collective discovery is the FIRST authenticated Entu call on app load, so
+		// it is the likeliest place a revoked / IP-mismatched token first shows
+		// itself; mapping it to `kind: 'error'` made every db look broken and drove
+		// the "Some collectives could not be checked… Please retry." copy — exactly
+		// the misleading data-error class #107 exists to remove. Re-raise so
+		// discoverCollectives -> hydrateCollectives can settle at 'anonymous'.
+		if (isAuthExpiredError(err)) throw err;
 		return { db, kind: 'error', reason: err instanceof Error ? err.message : String(err) };
 	}
 }
