@@ -15,8 +15,11 @@
 //   section-picker-menu-<memberId>      open menu (absent while closed)
 //   section-picker-option-<sectionId>   one per section, flattened PRE-ORDER
 //                                       over the tree; data-depth="<n>";
-//                                       aria-pressed = currently assigned
-//                                       (several may be pressed — multi-section)
+//                                       role="option", aria-selected = currently
+//                                       assigned (several may be selected —
+//                                       multi-section; #99/TS.5 — supersedes the
+//                                       original aria-pressed pin here, an
+//                                       invalid ARIA mix on role="option")
 //   section-picker-option-unassigned    LAST option; fires onpick(null)
 //
 // Toggle semantics: tapping ANY section option fires onpick(sectionId) — the
@@ -125,16 +128,15 @@ describe('SectionPicker — open menu: hierarchical options, Unassigned last', (
 		expect(opt('sec-alto').textContent).toContain('Alto');
 	});
 
-	it('CURRENT sections are pre-selected — aria-pressed="true" on EVERY selected id (member may have several), "false" on the rest', async () => {
+	it('CURRENT sections are pre-selected — role="option" with aria-selected="true" on EVERY selected id (member may have several), "false" on the rest (#99/TS.5 — supersedes the original aria-pressed pin)', async () => {
 		const { container } = renderPicker(['sec-sop', 'sec-alto']);
 		await open(container);
-		const pressed = (id: string) =>
-			container
-				.querySelector(`[data-testid="section-picker-option-${id}"]`)
-				?.getAttribute('aria-pressed');
-		expect(pressed('sec-sop')).toBe('true');
-		expect(pressed('sec-alto')).toBe('true');
-		expect(pressed('sec-sop1')).toBe('false');
+		const option = (id: string) =>
+			container.querySelector(`[data-testid="section-picker-option-${id}"]`) as HTMLElement;
+		expect(option('sec-sop').getAttribute('role')).toBe('option');
+		expect(option('sec-sop').getAttribute('aria-selected')).toBe('true');
+		expect(option('sec-alto').getAttribute('aria-selected')).toBe('true');
+		expect(option('sec-sop1').getAttribute('aria-selected')).toBe('false');
 	});
 });
 

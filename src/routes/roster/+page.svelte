@@ -7,6 +7,7 @@
 	// application of #28 is the layout's redirect; the OTHER-members application (a
 	// nameless member never appearing as a row) lives entirely in `rosterData.ts`'s
 	// `toRosterRow` — this component only renders whatever `loadRoster` returns.
+	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -70,6 +71,12 @@
 	async function loadForSelected(): Promise<void> {
 		const current = selected;
 		const g = ++generation;
+		// #99 review F2/F3 — a reload re-derives the tree from scratch, so neither a
+		// previous reorder's alert nor its "moved to position 2" announcement is
+		// about anything on screen any more (a collective switch replaces the tree
+		// outright).
+		reorderError = false;
+		reorderStatus = '';
 		if (!current) {
 			status = 'no-collective';
 			rows = [];
@@ -403,6 +410,22 @@
 	// the defensive backstop for the paths the UI can't disable.
 	let reorderPending = $state(false);
 
+	// #99 review F2 — a failed reorder used to be SILENT to the user: the catch
+	// path below logs, refetches, and swaps `sections`, so the list visibly snaps
+	// to a different order (the server's partial truth) with nothing on screen
+	// saying why, and a screen-reader user gets nothing at all. Every other write
+	// path on this page surfaces `role="alert"` (section-write-error-*,
+	// roster-load-error, roster-sections-load-error) — the reorder path, the one
+	// TS.4 added, had none.
+	let reorderError = $state(false);
+
+	// #99 review F3 — the keyboard reorder path had no result announcement at all:
+	// ▲/▼ moved the section, the DOM reordered silently, and a screen-reader user
+	// pressing ▲ got no confirmation anything happened (the DRAG path at least
+	// announces state via aria-grabbed/aria-dropeffect). Rendered into a
+	// visually-hidden role="status" region — see `roster-reorder-status` below.
+	let reorderStatus = $state('');
+
 	// F3 code-review fix (#98 review): a reorder write is NOT all-or-nothing, so a
 	// blind revert can make the screen LIE. `reorderSections` renumbers the sibling
 	// group SERIALLY and throws on the first non-2xx — every section written before
@@ -419,20 +442,42 @@
 	// `beforeIds` revert survives only as the fallback for when the refetch ALSO
 	// fails — at that point there is no server truth to be had, and the pre-move
 	// order is the best available guess (logged loudly either way).
-	async function performReorder(beforeIds: string[], afterIds: string[]): Promise<void> {
+	//
+	// #99 review F2/F3: the same run owns BOTH user-visible outcomes — the
+	// `role="alert"` on failure and the `role="status"` announcement on success —
+	// so every input path (native drop, touch drop, ▲/▼) gets them for free.
+	// `movedId` is the section the user acted on; it is what the announcement has
+	// to name (`afterIds` alone can't say which one moved).
+	async function performReorder(
+		beforeIds: string[],
+		afterIds: string[],
+		movedId: string
+	): Promise<void> {
 		if (reorderPending) return;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section reorder with no cfg', afterIds);
+			reorderError = true;
 			return;
 		}
 		const g = generation;
 		reorderPending = true;
+		// A fresh attempt owns both slots — a previous failure's alert must not
+		// outlive the retry that fixed it, and a stale "moved to position 2" must
+		// not sit in the live region while a new move is in flight.
+		reorderError = false;
+		reorderStatus = '';
 		sections = applySiblingOrder(sections, afterIds);
 		try {
 			await reorderSections(cfg, afterIds);
+			reorderStatus = m.roster_section_moved({
+				name: findSectionNode(sections, movedId)?.name ?? movedId,
+				position: afterIds.indexOf(movedId) + 1,
+				total: afterIds.length
+			});
 		} catch (e) {
 			console.error('roster: section reorder failed', e);
+			reorderError = true;
 			try {
 				const fresh = await listSections(cfg);
 				if (g !== generation) return; // superseded by a newer collective selection
@@ -446,10 +491,12 @@
 		}
 	}
 
-	// Drag source, tracked between dragstart and drop — a plain (non-`$state`)
-	// variable, same reasoning as `currentCfg`/`generation`: read at drop time,
-	// never needs to drive a render on its own.
-	let draggedSectionId: string | null = null;
+	// Drag source, tracked between dragstart and drop. #99/TS.5 — now `$state`
+	// (was a plain variable, read only at drop time): the drag handle's
+	// `aria-grabbed` and the sibling headers' `aria-dropeffect` both need to
+	// reflect it live, in the DOM, the instant a drag starts/ends — not just at
+	// the moment of drop.
+	let draggedSectionId = $state<string | null>(null);
 
 	// F1 code-review fix (#98 review): a dragstart handler MUST populate the drag
 	// data store. Firefox refuses to START a drag session at all when the store is
@@ -509,7 +556,7 @@
 		const withoutFrom = siblingIds.filter((id) => id !== fromId);
 		const insertAt = Math.min(targetIndex, withoutFrom.length);
 		const afterIds = [...withoutFrom.slice(0, insertAt), fromId, ...withoutFrom.slice(insertAt)];
-		void performReorder(siblingIds, afterIds);
+		void performReorder(siblingIds, afterIds, fromId);
 	}
 
 	function handleDrop(targetId: string, event: DragEvent): void {
@@ -641,7 +688,29 @@
 		if (targetId) dropOnto(fromId, targetId);
 	}
 
-	function moveSection(id: string, direction: 'up' | 'down'): void {
+	// #99 review F3 — the ▲/▼ buttons DESTROY THEIR OWN FOCUS TARGET: `performReorder`
+	// flips `reorderPending` synchronously, so the button the user just activated is
+	// `disabled` in the same update, and a browser blurs an element that becomes
+	// disabled while focused — focus drops to <body> and the next Tab restarts at the
+	// top of the document (WCAG 2.4.3, the same defect class F1 fixed for the picker).
+	// At a boundary it is permanent: ▲ on the second sibling moves it to index 0, so
+	// the button STAYS disabled once the write settles and there is nothing to return
+	// to.
+	//
+	// The `disabled` attribute stays (a refused control is the honest affordance, and
+	// it is pinned) — focus is restored explicitly instead: back onto the same button
+	// if it is still operable, otherwise onto `section-toggle-<id>`, which always
+	// renders, is always focusable, and names the section that moved. Looked up by
+	// data-testid rather than off the click event: Svelte 5 DELEGATES click, so
+	// `currentTarget` is a patched property, and the id+direction already identify
+	// the button exactly.
+	function reorderButton(id: string, direction: 'up' | 'down'): HTMLButtonElement | null {
+		return document.querySelector<HTMLButtonElement>(
+			`[data-testid="section-move-${direction}-${id}"]`
+		);
+	}
+
+	async function moveSection(id: string, direction: 'up' | 'down'): Promise<void> {
 		const siblingNodes = siblingsOf(sections, id);
 		if (!siblingNodes) return;
 		const siblingIds = siblingNodes.map((n) => n.id);
@@ -649,9 +718,24 @@
 		const swapWith = direction === 'up' ? idx - 1 : idx + 1;
 		if (swapWith < 0 || swapWith >= siblingIds.length) return; // boundary — no wraparound
 
+		// Only restore focus if the reorder is what LOST it: focus already sitting on
+		// something else is the user's own doing, and yanking it back would fight them
+		// (the same `hadFocus` discipline as the picker's `closeMenu`).
+		const activated = reorderButton(id, direction);
+		const active = document.activeElement;
+		const ownsFocus = !active || active === document.body || active === activated;
+
 		const afterIds = [...siblingIds];
 		[afterIds[idx], afterIds[swapWith]] = [afterIds[swapWith], afterIds[idx]];
-		void performReorder(siblingIds, afterIds);
+		await performReorder(siblingIds, afterIds, id);
+		if (!ownsFocus) return;
+		await tick(); // let the re-enabled/boundary-disabled buttons settle first
+		const settled = reorderButton(id, direction);
+		if (settled && !settled.disabled) {
+			settled.focus();
+			return;
+		}
+		document.querySelector<HTMLElement>(`[data-testid="section-toggle-${id}"]`)?.focus();
 	}
 </script>
 
@@ -680,6 +764,7 @@
 			     offer one whose options are known-incomplete. -->
 			<SectionPicker
 				memberId={row.memberId}
+				memberName={row.name}
 				{sections}
 				selectedIds={row.sectionIds ?? []}
 				onpick={(sectionId) => handlePick(row.memberId, sectionId)}
@@ -711,6 +796,25 @@
 	{@const canReorder = admin === 'admin' && !isExpanded}
 	{@const siblingIds = canReorder ? (siblingsOf(sections, node.id)?.map((n) => n.id) ?? []) : []}
 	{@const siblingIdx = siblingIds.indexOf(node.id)}
+	<!-- #99 review F4: whether this header can actually TAKE the live drag.
+	     `dropOnto` silently refuses any non-sibling target (a sub-section dropped
+	     on a top-level header is a STRUCTURAL move, not an order change — #98), so
+	     the sibling test belongs on every affordance that says "drop here":
+	     aria-dropeffect (AT), the ondragover/ondrop pair (the browser only fires
+	     `drop` where dragover was prevented), and the touch highlight. Without it a
+	     screen-reader user was told a foreign header would accept the move, the
+	     drop was accepted, and nothing happened — with no feedback either way. -->
+	{@const acceptsDrop =
+		canReorder &&
+		draggedSectionId !== null &&
+		draggedSectionId !== node.id &&
+		siblingIds.includes(draggedSectionId)}
+	{@const acceptsTouchDrop =
+		canReorder &&
+		touchDragId !== null &&
+		touchOverId === node.id &&
+		touchOverId !== touchDragId &&
+		siblingIds.includes(touchDragId)}
 	<!--
 		F2 code-review fix: a child's <section> is rendered NESTED inside its
 		parent's (below, `{#each node.children as child}{@render sectionGroup(child)}{/each}`
@@ -732,21 +836,17 @@
 		<div
 			role="group"
 			aria-label={node.name}
-			data-drop-target={touchDragId !== null && touchOverId === node.id && touchOverId !== touchDragId
-				? 'true'
-				: undefined}
-			class="flex items-center gap-2 py-1.5 {touchDragId !== null &&
-			touchOverId === node.id &&
-			touchOverId !== touchDragId
-				? 'bg-ink-5'
-				: ''}"
-			ondragover={canReorder ? handleDragOver : undefined}
-			ondrop={canReorder ? (event: DragEvent) => handleDrop(node.id, event) : undefined}
+			aria-dropeffect={acceptsDrop ? 'move' : undefined}
+			data-drop-target={acceptsTouchDrop ? 'true' : undefined}
+			class="flex items-center gap-2 py-1.5 {acceptsTouchDrop ? 'bg-ink-5' : ''}"
+			ondragover={acceptsDrop ? handleDragOver : undefined}
+			ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(node.id, event) : undefined}
 		>
 			<button
 				type="button"
 				data-testid="section-toggle-{node.id}"
 				aria-expanded={isExpanded}
+				aria-controls={isExpanded ? `section-region-${node.id}` : undefined}
 				class="flex items-center gap-2 text-left"
 				onclick={() => toggleSection(node.id)}
 			>
@@ -770,10 +870,19 @@
 				     rather than a page scroll.
 				     Both paths are disabled while a reorder write is in flight — see
 				     `reorderPending`. -->
+				<!-- #99 review F5: role="img", NOT role="button". The handle is deliberately
+				     not focusable and implements no activation of its own (the keyboard
+				     path is the labelled ▲/▼ buttons below), so announcing it as a button
+				     promised a screen-reader user a control they could never operate.
+				     role="img" + aria-label keeps it a NAMED, non-hidden object that can
+				     still carry the drag state. -->
 				<span
 					data-testid="section-drag-handle-{node.id}"
 					draggable={reorderPending ? 'false' : 'true'}
-					aria-hidden="true"
+					role="img"
+					tabindex="-1"
+					aria-grabbed={draggedSectionId === node.id ? 'true' : 'false'}
+					aria-label={m.roster_section_drag_handle({ name: node.name })}
 					title={m.roster_section_drag_handle({ name: node.name })}
 					style="touch-action: none"
 					class="px-1 text-ink-2 select-none {reorderPending
@@ -795,7 +904,7 @@
 					aria-label={m.roster_section_move_up({ name: node.name })}
 					class="rounded px-1 text-xs text-ink-2 hover:text-ink disabled:opacity-30"
 					disabled={siblingIdx <= 0 || reorderPending}
-					onclick={() => moveSection(node.id, 'up')}
+					onclick={() => void moveSection(node.id, 'up')}
 				>
 					▲
 				</button>
@@ -805,21 +914,28 @@
 					aria-label={m.roster_section_move_down({ name: node.name })}
 					class="rounded px-1 text-xs text-ink-2 hover:text-ink disabled:opacity-30"
 					disabled={siblingIdx === -1 || siblingIdx >= siblingIds.length - 1 || reorderPending}
-					onclick={() => moveSection(node.id, 'down')}
+					onclick={() => void moveSection(node.id, 'down')}
 				>
 					▼
 				</button>
 			{/if}
 		</div>
 		{#if isExpanded}
-			<ul class="flex flex-col pl-5">
-				{#each group?.members ?? [] as row (row.memberId)}
-					{@render memberRow(row, false)}
+			<!-- #99/TS.5 — the id the toggle's aria-controls points at. `display:
+			     contents` (Tailwind `contents`) keeps this wrapper invisible to
+			     layout: the ul and the nested child sections flow exactly as they
+			     did as bare siblings before — only a real DOM node (with an id) was
+			     added, nothing about the flex column changed. -->
+			<div id="section-region-{node.id}" class="contents">
+				<ul class="flex flex-col pl-5">
+					{#each group?.members ?? [] as row (row.memberId)}
+						{@render memberRow(row, false)}
+					{/each}
+				</ul>
+				{#each node.children as child (child.id)}
+					{@render sectionGroup(child)}
 				{/each}
-			</ul>
-			{#each node.children as child (child.id)}
-				{@render sectionGroup(child)}
-			{/each}
+			</div>
 		{/if}
 	</section>
 {/snippet}
@@ -827,6 +943,15 @@
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.roster_title()}</h1>
+
+		<!-- #99 review F3 — the reorder result, for the keyboard/AT path. Present from
+		     first render (a live region announces only CHANGES to its contents, so one
+		     mounted alongside its own text is announced by nothing) and visually
+		     hidden: sighted users already SEE the row move. `sr-only` is absolutely
+		     positioned, so it takes no slot in this flex column. -->
+		<div data-testid="roster-reorder-status" role="status" aria-live="polite" class="sr-only">
+			{reorderStatus}
+		</div>
 
 		{#if status === 'no-collective'}
 			<p data-testid="roster-no-collective" class="text-sm">{m.roster_no_collective()}</p>
@@ -874,6 +999,17 @@
 					<p class="text-sm text-red-700">{m.roster_sections_load_error()}</p>
 				</div>
 			{/if}
+			{#if reorderError}
+				<!-- #99 review F2 — the reorder path's loud failure. The list has already
+				     been re-derived from the server by then (see `performReorder`), so
+				     without this the user watches the order snap to something they did
+				     not choose with no explanation. role="alert" for the same reason the
+				     create-failure paragraph carries it: nothing else on screen names the
+				     cause. -->
+				<p data-testid="section-reorder-error" role="alert" class="text-sm text-red-700">
+					{m.roster_section_reorder_failed()}
+				</p>
+			{/if}
 			<div class="flex items-center justify-between border-b border-ink-5 pb-1.5">
 				<span class="text-xs tracking-wide text-ink-2 uppercase">{m.roster_column_name()}</span>
 				{#if !sectionsError}
@@ -903,6 +1039,7 @@
 								type="button"
 								data-testid="section-toggle-unassigned"
 								aria-expanded={isExpanded}
+								aria-controls={isExpanded ? 'section-region-unassigned' : undefined}
 								class="flex items-center gap-2 py-1.5 text-left"
 								onclick={() => toggleSection('unassigned')}
 							>
@@ -912,7 +1049,7 @@
 								</span>
 							</button>
 							{#if isExpanded}
-								<ul class="flex flex-col pl-5">
+								<ul id="section-region-unassigned" class="flex flex-col pl-5">
 									{#each unassignedGroup.members as row (row.memberId)}
 										{@render memberRow(row, false)}
 									{/each}
