@@ -300,7 +300,12 @@
 {#snippet workRowContent(row: WorkRow)}
 	<span data-testid="work-name" class="text-sm text-ink">{row.workName}</span>
 	<span data-testid="work-composer" class="text-xs text-ink-2">{row.composer}</span>
-	{#if row.status !== null}
+	{#if row.status !== null && !canEditRepertoireRow(row)}
+		<!-- #111 finding 3 — where the bottom status/actions row renders (an
+		     editor on the repertoire surface), its status <select> IS the
+		     status display; a separate header chip would show the same value
+		     twice. A plain member (no manage row) keeps the chip as her only
+		     status surface. -->
 		<span
 			data-testid="work-status-badge"
 			class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
@@ -377,7 +382,13 @@
 
 {#snippet manageRowControls(row: WorkRow, index: number)}
 	{#if canEditRepertoireRow(row) || canEditProgrammeRow(row)}
-		<div data-testid="work-manage-row" class="flex flex-wrap items-center gap-2 pt-1">
+		<!-- #111 finding 3 — status picker + Remove (or move + Remove) share ONE
+		     row, set apart from the content above with its own border + padding
+		     so it reads as the panel's action bar, not another content line. -->
+		<div
+			data-testid="work-manage-row"
+			class="flex flex-wrap items-center gap-2 border-t border-ink-5 pt-2 mt-1"
+		>
 			{#if canEditRepertoireRow(row)}
 				<select
 					data-testid="work-manage-status-select"
@@ -394,7 +405,7 @@
 				{#if (editionOptionsByRowId[row.id] ?? []).length > 0}
 					<select
 						data-testid="work-manage-pin-edition-select"
-						class="text-xs"
+						class="w-full text-xs sm:w-auto"
 						value={selectedEditionByRow[row.id] ?? ''}
 						disabled={pendingKeys.has(row.id)}
 						aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
@@ -456,7 +467,7 @@
 		<div data-testid="work-manage-add-work" class="flex flex-wrap items-center gap-2 pt-1">
 			<select
 				data-testid="work-manage-add-work-select"
-				class="text-xs"
+				class="w-full text-xs sm:w-auto"
 				value={selectedWorkId}
 				disabled={pendingKeys.has(ADD_WORK_KEY)}
 				aria-label={m.repertoire_add_work_select_aria_label()}
@@ -489,7 +500,7 @@
 		<div data-testid="work-manage-add-programme" class="flex flex-wrap items-center gap-2 pt-1">
 			<select
 				data-testid="work-manage-add-programme-select"
-				class="text-xs"
+				class="w-full text-xs sm:w-auto"
 				value={selectedEditionForAdd}
 				disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
 				aria-label={m.repertoire_add_programme_select_aria_label()}
@@ -531,7 +542,7 @@
 	{#if isExpanded}
 		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-4">
 			{#if hasOrdinals}
-				<ol class="list-decimal space-y-2 pl-4">
+				<ol class="list-decimal divide-y divide-dashed divide-ink-5 pl-4">
 					<!-- Keyed on the entity id, NEVER on ordinal: `mandatory: true` is a
 					     soft UI hint in Entu, so two program_items can both carry the
 					     default 0 — a duplicate key throws each_key_duplicate and takes
@@ -544,6 +555,8 @@
 						<li
 							data-testid="work-row"
 							data-inactive={isInactive(row) ? 'true' : undefined}
+							data-status={row.status ?? undefined}
+							class="py-2 first:pt-0 last:pb-0"
 							class:opacity-60={isInactive(row)}
 						>
 							<div class="flex flex-col gap-0.5">
@@ -556,11 +569,22 @@
 			{:else}
 				<!-- Season repertoire is still a list of works — it just has no concert
 				     position, so <ul> (no marker, no numbering) rather than <ol>. -->
-				<ul class="space-y-2">
+				<!-- #111 review — `data-status` mirrors the row's own status onto a
+				     surface the COMPONENT renders. Since finding 3 removed the chip on
+				     the editor surface, the <select> was the only remaining status
+				     display — and a test cannot assert on it, because
+				     fireEvent.change writes the DOM value itself, so the assertion
+				     holds whether or not the optimistic patch ever ran. The attribute
+				     is only ever written by the render, so it is a real guard for the
+				     optimistic-and-reconcile path. Absent (not 'active') when the row
+				     carries no status, e.g. a programme row. -->
+				<ul class="divide-y divide-dashed divide-ink-5">
 					{#each orderedRows as row, index (row.id)}
 						<li
 							data-testid="work-row"
 							data-inactive={isInactive(row) ? 'true' : undefined}
+							data-status={row.status ?? undefined}
+							class="py-2 first:pt-0 last:pb-0"
 							class:opacity-60={isInactive(row)}
 						>
 							<div class="flex flex-col gap-0.5">

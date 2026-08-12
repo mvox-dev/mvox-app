@@ -210,6 +210,23 @@ async function renderAndExpand() {
 	return rendered;
 }
 
+/**
+ * The status a named work row RENDERS (`data-status` on the <li>).
+ *
+ * Deliberately not the <select>'s `value`: `fireEvent.change(select, { target:
+ * { value } })` writes that value onto the DOM node itself before dispatching,
+ * and the component's `value={row.status ?? 'active'}` expression is unchanged
+ * when the optimistic patch never happens — so Svelte patches nothing, the
+ * test-written value survives, and the assertion passes whether the feature
+ * works or not. `data-status` is only ever written by the render (#111 review).
+ */
+function rowStatus(container: HTMLElement, workName: string): string | null {
+	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
+		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
+	);
+	return li?.getAttribute('data-status') ?? null;
+}
+
 function postsTo(fetchMock: ReturnType<typeof installWorld>, fragment: string) {
 	return fetchMock.mock.calls.filter(
 		([url, init]) =>
@@ -305,22 +322,20 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		]);
 	});
 
-	it('the status change lands OPTIMISTICALLY — the badge updates on tap, before any refetch', async () => {
+	it('the status change lands OPTIMISTICALLY — the picker updates on tap, before any refetch', async () => {
 		installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
 
+		// Asserted through `rowStatus` (the rendered `data-status`), never the
+		// <select>'s value — see the helper's note.
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="work-status-badge"]')?.textContent).toContain(
-				'active'
-			);
+			expect(rowStatus(container, 'Spem in alium')).toBe('active');
 		});
 		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
 			target: { value: 'learning' }
 		});
-		expect(container.querySelector('[data-testid="work-status-badge"]')?.textContent).toContain(
-			'learning'
-		);
+		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 	});
 
 	it('adding a work creates a repertoire_item under the SEASON, with an explicit domain _sharing', async () => {
@@ -456,9 +471,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
 			target: { value: 'learning' }
 		});
-		expect(container.querySelector('[data-testid="work-status-badge"]')?.textContent).toContain(
-			'learning'
-		);
+		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 
 		// Now a create settles and refetches the (stale) repertoire.
 		await fireEvent.change(container.querySelector('[data-testid="work-manage-add-work-select"]')!, {
@@ -481,9 +494,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		});
 
 		// The in-flight status is still on screen — not snapped back to 'active'.
-		expect(container.querySelector('[data-testid="work-status-badge"]')?.textContent).toContain(
-			'learning'
-		);
+		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 		releaseStatusPost!();
 	});
 
