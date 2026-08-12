@@ -1,0 +1,1105 @@
+{
+  "dryRun": false,
+  "authorization": "Polyphony db is dev/test with synthetic data -- routine mutations pre-authorized. Per-run team-lead + PO authorization obtained.",
+  "discoveredTypes": [
+    {
+      "typeName": "event",
+      "typeId": "69c7ea548489bfcb0e81a0a2",
+      "typeSharing": "public",
+      "namePropDefId": "69c7ea548489bfcb0e81a0a9",
+      "namePropDefSharing": null,
+      "isFormula": false,
+      "plannedSharing": "public"
+    },
+    {
+      "typeName": "lending",
+      "typeId": "6a0d2e8190c8df7a1cc7dde8",
+      "typeSharing": "domain",
+      "namePropDefId": "6a0d2e8190c8df7a1cc7ddf1",
+      "namePropDefSharing": null,
+      "isFormula": true,
+      "plannedSharing": "domain"
+    },
+    {
+      "typeName": "library",
+      "typeId": "6a0d2e8090c8df7a1cc7dd9d",
+      "typeSharing": "domain",
+      "namePropDefId": "6a0d2e8090c8df7a1cc7dda6",
+      "namePropDefSharing": null,
+      "isFormula": false,
+      "plannedSharing": "domain"
+    },
+    {
+      "typeName": "organization",
+      "typeId": "69c7ea478489bfcb0e819e3d",
+      "typeSharing": "domain",
+      "namePropDefId": "69c7ea478489bfcb0e819e44",
+      "namePropDefSharing": null,
+      "isFormula": false,
+      "plannedSharing": "domain"
+    },
+    {
+      "typeName": "season",
+      "typeId": "69c7ea528489bfcb0e81a044",
+      "typeSharing": "domain",
+      "namePropDefId": "69c7ea528489bfcb0e81a04b",
+      "namePropDefSharing": null,
+      "isFormula": false,
+      "plannedSharing": "domain"
+    },
+    {
+      "typeName": "section",
+      "typeId": "69c7ea498489bfcb0e819ea3",
+      "typeSharing": "domain",
+      "namePropDefId": "69c7ea498489bfcb0e819eaa",
+      "namePropDefSharing": null,
+      "isFormula": false,
+      "plannedSharing": "domain"
+    }
+  ],
+  "instancesByType": {
+    "event": {
+      "count": 22
+    },
+    "lending": {
+      "count": 8
+    },
+    "library": {
+      "count": 1
+    },
+    "organization": {
+      "count": 6
+    },
+    "season": {
+      "count": 2
+    },
+    "section": {
+      "count": 16
+    }
+  },
+  "propdefResults": {
+    "widened": 6,
+    "failed": 0,
+    "skipped": 0
+  },
+  "touchSaveResults": {
+    "touched": 55,
+    "failed": 0,
+    "total": 55
+  },
+  "postSweepGateVerification": [
+    {
+      "type": "event",
+      "gate1": {
+        "propDefId": "69c7ea548489bfcb0e81a0a9",
+        "sharing": "public",
+        "passes": true
+      },
+      "gate2": {
+        "typeId": "69c7ea548489bfcb0e81a0a2",
+        "sharing": "public",
+        "passes": true
+      },
+      "gate1and2Pass": true,
+      "instancesWithFullAnd": 22,
+      "totalInstances": 22,
+      "gate3Summary": {
+        "domainOrPublic": 22,
+        "privateOrAbsent": 0
+      }
+    },
+    {
+      "type": "lending",
+      "gate1": {
+        "propDefId": "6a0d2e8190c8df7a1cc7ddf1",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate2": {
+        "typeId": "6a0d2e8190c8df7a1cc7dde8",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate1and2Pass": true,
+      "instancesWithFullAnd": 8,
+      "totalInstances": 8,
+      "gate3Summary": {
+        "domainOrPublic": 8,
+        "privateOrAbsent": 0
+      }
+    },
+    {
+      "type": "library",
+      "gate1": {
+        "propDefId": "6a0d2e8090c8df7a1cc7dda6",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate2": {
+        "typeId": "6a0d2e8090c8df7a1cc7dd9d",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate1and2Pass": true,
+      "instancesWithFullAnd": 1,
+      "totalInstances": 1,
+      "gate3Summary": {
+        "domainOrPublic": 1,
+        "privateOrAbsent": 0
+      }
+    },
+    {
+      "type": "organization",
+      "gate1": {
+        "propDefId": "69c7ea478489bfcb0e819e44",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate2": {
+        "typeId": "69c7ea478489bfcb0e819e3d",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate1and2Pass": true,
+      "instancesWithFullAnd": 6,
+      "totalInstances": 6,
+      "gate3Summary": {
+        "domainOrPublic": 6,
+        "privateOrAbsent": 0
+      }
+    },
+    {
+      "type": "season",
+      "gate1": {
+        "propDefId": "69c7ea528489bfcb0e81a04b",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate2": {
+        "typeId": "69c7ea528489bfcb0e81a044",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate1and2Pass": true,
+      "instancesWithFullAnd": 2,
+      "totalInstances": 2,
+      "gate3Summary": {
+        "domainOrPublic": 2,
+        "privateOrAbsent": 0
+      }
+    },
+    {
+      "type": "section",
+      "gate1": {
+        "propDefId": "69c7ea498489bfcb0e819eaa",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate2": {
+        "typeId": "69c7ea498489bfcb0e819ea3",
+        "sharing": "domain",
+        "passes": true
+      },
+      "gate1and2Pass": true,
+      "instancesWithFullAnd": 16,
+      "totalInstances": 16,
+      "gate3Summary": {
+        "domainOrPublic": 16,
+        "privateOrAbsent": 0
+      }
+    }
+  ],
+  "nonOmniscientVerification": {
+    "passed": true,
+    "detail": "Unauthenticated GET shows name=\"Test rehearsal\" in public bucket for event 6a7a164e23dc1d97bb8f18a1 -- end-to-end verification PASSED"
+  },
+  "ledger": [
+    {
+      "action": "propdef-widen",
+      "type": "organization",
+      "targetId": "69c7ea478489bfcb0e819e44",
+      "targetName": "organization.name propdef",
+      "status": "widened",
+      "before": "(absent)",
+      "after": "domain",
+      "newPropId": "6a7c35ec23dc1d97bb8f1cb6"
+    },
+    {
+      "action": "touch-save",
+      "type": "organization",
+      "targetId": "69c7f8718489bfcb0e81b05a",
+      "targetName": "Eesti Kammerkooride Liit",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ec23dc1d97bb8f1cb7"
+    },
+    {
+      "action": "propdef-widen",
+      "type": "lending",
+      "targetId": "6a0d2e8190c8df7a1cc7ddf1",
+      "targetName": "lending.name propdef",
+      "status": "widened",
+      "before": "(absent)",
+      "after": "domain",
+      "newPropId": "6a7c35ec23dc1d97bb8f1cb8"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a1203c24ff8277cd4307ed5",
+      "targetName": "Copy #14",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ec23dc1d97bb8f1cb9"
+    },
+    {
+      "action": "propdef-widen",
+      "type": "event",
+      "targetId": "69c7ea548489bfcb0e81a0a9",
+      "targetName": "event.name propdef",
+      "status": "widened",
+      "before": "(absent)",
+      "after": "public",
+      "newPropId": "6a7c35ed23dc1d97bb8f1cba"
+    },
+    {
+      "action": "propdef-widen",
+      "type": "library",
+      "targetId": "6a0d2e8090c8df7a1cc7dda6",
+      "targetName": "library.name propdef",
+      "status": "widened",
+      "before": "(absent)",
+      "after": "domain",
+      "newPropId": "6a7c35ed23dc1d97bb8f1cbb"
+    },
+    {
+      "action": "propdef-widen",
+      "type": "season",
+      "targetId": "69c7ea528489bfcb0e81a04b",
+      "targetName": "season.name propdef",
+      "status": "widened",
+      "before": "(absent)",
+      "after": "domain",
+      "newPropId": "6a7c35ed23dc1d97bb8f1cbc"
+    },
+    {
+      "action": "propdef-widen",
+      "type": "section",
+      "targetId": "69c7ea498489bfcb0e819eaa",
+      "targetName": "section.name propdef",
+      "status": "widened",
+      "before": "(absent)",
+      "after": "domain",
+      "newPropId": "6a7c35ed23dc1d97bb8f1cbd"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6210cc20db24e7ce70",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ed23dc1d97bb8f1cbe"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6310cc20db24e7ce88",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ee23dc1d97bb8f1cbf"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6310cc20db24e7ce94",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ee23dc1d97bb8f1cc0"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6310cc20db24e7cea0",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ee23dc1d97bb8f1cc1"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6310cc20db24e7ceac",
+      "targetName": "Tuesday rehearsal fun",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ee23dc1d97bb8f1cc2"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6310cc20db24e7ceb8",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ef23dc1d97bb8f1cc3"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6310cc20db24e7cec4",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ef23dc1d97bb8f1cc4"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7ced0",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ef23dc1d97bb8f1cc5"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7cedc",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35ef23dc1d97bb8f1cc6"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7cee8",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f023dc1d97bb8f1cc7"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7cef4",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f023dc1d97bb8f1cc8"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7cf00",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f023dc1d97bb8f1cc9"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7cf0c",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f023dc1d97bb8f1cca"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6410cc20db24e7cf18",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f023dc1d97bb8f1ccb"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a1d6b6510cc20db24e7cf24",
+      "targetName": "Tuesday rehearsals",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f123dc1d97bb8f1ccc"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a2d546d4cd971291c5d5714",
+      "targetName": "october sprint ssss",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f123dc1d97bb8f1ccd"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a2d546e4cd971291c5d5720",
+      "targetName": "october sprint",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f123dc1d97bb8f1cce"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a2d546e4cd971291c5d572c",
+      "targetName": "october sprint",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f123dc1d97bb8f1ccf"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a2d546e4cd971291c5d5738",
+      "targetName": "october sprint",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f223dc1d97bb8f1cd0"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a2d546f4cd971291c5d5744",
+      "targetName": "october sprint",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f223dc1d97bb8f1cd1"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a2d546f4cd971291c5d5750",
+      "targetName": "october sprint",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f223dc1d97bb8f1cd2"
+    },
+    {
+      "action": "touch-save",
+      "type": "event",
+      "targetId": "6a7a164e23dc1d97bb8f18a1",
+      "targetName": "Test rehearsal",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f223dc1d97bb8f1cd3"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a1203c34ff8277cd4307ede",
+      "targetName": "Copy #15",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f323dc1d97bb8f1cd4"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a1203c34ff8277cd4307ee7",
+      "targetName": "Copy #22",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f323dc1d97bb8f1cd5"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a1203c34ff8277cd4307ef0",
+      "targetName": "Copy #23",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f323dc1d97bb8f1cd6"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a797aa423dc1d97bb8f173e",
+      "targetName": "Copy #1",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f323dc1d97bb8f1cd7"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a7986c723dc1d97bb8f1769",
+      "targetName": "Copy #3",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f323dc1d97bb8f1cd8"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a7986f723dc1d97bb8f1773",
+      "targetName": "Copy #2",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f423dc1d97bb8f1cd9"
+    },
+    {
+      "action": "touch-save",
+      "type": "lending",
+      "targetId": "6a79916423dc1d97bb8f1784",
+      "targetName": "Mibiro — Copy #1",
+      "touchMechanic": "_sharing-based (formula name bypass)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f423dc1d97bb8f1cda"
+    },
+    {
+      "action": "touch-save",
+      "type": "library",
+      "targetId": "6a12036c4ff8277cd4306b26",
+      "targetName": "EPCC Library",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f423dc1d97bb8f1cdb"
+    },
+    {
+      "action": "touch-save",
+      "type": "organization",
+      "targetId": "69c7f8718489bfcb0e81b065",
+      "targetName": "Eesti Filharmoonia Kammerkoor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f423dc1d97bb8f1cdc"
+    },
+    {
+      "action": "touch-save",
+      "type": "organization",
+      "targetId": "69c7f8788489bfcb0e81b1a9",
+      "targetName": "Kammernaiskoor Sireen",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f423dc1d97bb8f1cdd"
+    },
+    {
+      "action": "touch-save",
+      "type": "organization",
+      "targetId": "69c7f87d8489bfcb0e81b2d9",
+      "targetName": "Eesti Meeskooride Liit",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f523dc1d97bb8f1cde"
+    },
+    {
+      "action": "touch-save",
+      "type": "organization",
+      "targetId": "69c7f87d8489bfcb0e81b2e4",
+      "targetName": "Eesti Rahvusmeeskoor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f523dc1d97bb8f1cdf"
+    },
+    {
+      "action": "touch-save",
+      "type": "organization",
+      "targetId": "69c7f8868489bfcb0e81b4f0",
+      "targetName": "Tartu Akadeemiline Meeskoor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f523dc1d97bb8f1ce0"
+    },
+    {
+      "action": "touch-save",
+      "type": "season",
+      "targetId": "6a1d6b6210cc20db24e7ce58",
+      "targetName": "Fila hooaeg",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f523dc1d97bb8f1ce1"
+    },
+    {
+      "action": "touch-save",
+      "type": "season",
+      "targetId": "6a1d789c10cc20db24e7cf40",
+      "targetName": "suvekool '26",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f523dc1d97bb8f1ce2"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8728489bfcb0e81b07b",
+      "targetName": "Soprano",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f623dc1d97bb8f1ce3"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8748489bfcb0e81b0cd",
+      "targetName": "Alto",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f623dc1d97bb8f1ce4"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8758489bfcb0e81b113",
+      "targetName": "Tenor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f623dc1d97bb8f1ce5"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8768489bfcb0e81b163",
+      "targetName": "Bass",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f623dc1d97bb8f1ce6"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8788489bfcb0e81b1bf",
+      "targetName": "Soprano I",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f723dc1d97bb8f1ce7"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8798489bfcb0e81b207",
+      "targetName": "Soprano II",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f723dc1d97bb8f1ce8"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f87b8489bfcb0e81b257",
+      "targetName": "Alto I",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f723dc1d97bb8f1ce9"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f87c8489bfcb0e81b2a7",
+      "targetName": "Alto II",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f723dc1d97bb8f1cea"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f87e8489bfcb0e81b2fa",
+      "targetName": "I Tenor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f723dc1d97bb8f1ceb"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8808489bfcb0e81b374",
+      "targetName": "II Tenor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f823dc1d97bb8f1cec"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8828489bfcb0e81b3ec",
+      "targetName": "Baritone",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f823dc1d97bb8f1ced"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8848489bfcb0e81b46e",
+      "targetName": "Bass",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f823dc1d97bb8f1cee"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8878489bfcb0e81b506",
+      "targetName": "I Tenor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f823dc1d97bb8f1cef"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8888489bfcb0e81b544",
+      "targetName": "II Tenor",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f923dc1d97bb8f1cf0"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f8898489bfcb0e81b580",
+      "targetName": "Baritone",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f923dc1d97bb8f1cf1"
+    },
+    {
+      "action": "touch-save",
+      "type": "section",
+      "targetId": "69c7f88a8489bfcb0e81b5bc",
+      "targetName": "Bass",
+      "touchMechanic": "name-based",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1
+      },
+      "newPropId": "6a7c35f923dc1d97bb8f1cf2"
+    }
+  ],
+  "exitCode": 0,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root), which always reads the private bucket regardless of tier. \"widened\"/\"touched\" here means the write landed, the property _id rotated (proof aggregateEntity ran), and the 3-check canary (prop _id + name present + count=1) passed. The non-omniscient verification confirms the public event name is readable without authentication. The post-sweep 3-gate-AND verification confirms all structural gates are in place."
+}

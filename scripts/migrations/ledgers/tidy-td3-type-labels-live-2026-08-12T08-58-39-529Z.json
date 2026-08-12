@@ -1,0 +1,396 @@
+{
+  "dryRun": false,
+  "scope": "labels-only (description field NOT touched -- already populated EN+ET from #48)",
+  "labels": {
+    "preflightVerified": 18,
+    "preflightMismatches": [],
+    "canaries": [
+      "voice",
+      "section"
+    ],
+    "totalFixed": 18,
+    "totalFailed": 0
+  },
+  "totalMutationApiCalls": 36,
+  "ledger": [
+    {
+      "action": "post-new-labels",
+      "typeName": "voice",
+      "typeEntityId": "6a0d2e8090c8df7a1cc7dd6a",
+      "status": "ok",
+      "detail": "posted label en=\"Voice\" et=\"Hääl\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "voice",
+      "typeEntityId": "6a0d2e8090c8df7a1cc7dd6a",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8090c8df7a1cc7dd6e (was: \"Global vocal-range taxonomy (one source of truth referenced)"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "voice",
+      "typeEntityId": "6a0d2e8090c8df7a1cc7dd6a",
+      "status": "ok",
+      "detail": "verified: en=\"Voice\" et=\"Hääl\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "section",
+      "typeEntityId": "69c7ea498489bfcb0e819ea3",
+      "status": "ok",
+      "detail": "posted label en=\"Section\" et=\"Hääleliik\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "section",
+      "typeEntityId": "69c7ea498489bfcb0e819ea3",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea498489bfcb0e819ea6 (was: \"Section\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "section",
+      "typeEntityId": "69c7ea498489bfcb0e819ea3",
+      "status": "ok",
+      "detail": "verified: en=\"Section\" et=\"Hääleliik\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "library",
+      "typeEntityId": "6a0d2e8090c8df7a1cc7dd9d",
+      "status": "ok",
+      "detail": "posted label en=\"Library\" et=\"Noodikogu\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "library",
+      "typeEntityId": "6a0d2e8090c8df7a1cc7dd9d",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8090c8df7a1cc7dda1 (was: \"1:1 container for an org's catalog + lending. Root of the l)"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "library",
+      "typeEntityId": "6a0d2e8090c8df7a1cc7dd9d",
+      "status": "ok",
+      "detail": "verified: en=\"Library\" et=\"Noodikogu\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "copy",
+      "typeEntityId": "6a0d2e8190c8df7a1cc7ddb0",
+      "status": "ok",
+      "detail": "posted label en=\"Copy\" et=\"Eksemplar\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "copy",
+      "typeEntityId": "6a0d2e8190c8df7a1cc7ddb0",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8190c8df7a1cc7ddb4 (was: \"Physical copy of an edition (was `inventory_copy` in v3).\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "copy",
+      "typeEntityId": "6a0d2e8190c8df7a1cc7ddb0",
+      "status": "ok",
+      "detail": "verified: en=\"Copy\" et=\"Eksemplar\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "lending",
+      "typeEntityId": "6a0d2e8190c8df7a1cc7dde8",
+      "status": "ok",
+      "detail": "posted label en=\"Loan\" et=\"Laenutus\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "lending",
+      "typeEntityId": "6a0d2e8190c8df7a1cc7dde8",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8190c8df7a1cc7ddec (was: \"First-class loan record. Replaces v3 inline `inventory_copy)"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "lending",
+      "typeEntityId": "6a0d2e8190c8df7a1cc7dde8",
+      "status": "ok",
+      "detail": "verified: en=\"Loan\" et=\"Laenutus\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "invitation",
+      "typeEntityId": "6a0d2e8290c8df7a1cc7de3e",
+      "status": "ok",
+      "detail": "posted label en=\"Invitation\" et=\"Kutse\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "invitation",
+      "typeEntityId": "6a0d2e8290c8df7a1cc7de3e",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8290c8df7a1cc7de42 (was: \"Org's consent. Admin creates; user accepts → member created)"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "invitation",
+      "typeEntityId": "6a0d2e8290c8df7a1cc7de3e",
+      "status": "ok",
+      "detail": "verified: en=\"Invitation\" et=\"Kutse\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "event_series",
+      "typeEntityId": "6a0d2e8490c8df7a1cc7deb1",
+      "status": "ok",
+      "detail": "posted label en=\"Event series\" et=\"Sündmuste sari\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "event_series",
+      "typeEntityId": "6a0d2e8490c8df7a1cc7deb1",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8490c8df7a1cc7deb5 (was: \"Recurring pattern that materialises into events. Series def)"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "event_series",
+      "typeEntityId": "6a0d2e8490c8df7a1cc7deb1",
+      "status": "ok",
+      "detail": "verified: en=\"Event series\" et=\"Sündmuste sari\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "rsvp",
+      "typeEntityId": "6a0d2e8590c8df7a1cc7df1b",
+      "status": "ok",
+      "detail": "posted label en=\"RSVP\" et=\"Osalusteade\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "rsvp",
+      "typeEntityId": "6a0d2e8590c8df7a1cc7df1b",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8590c8df7a1cc7df1f (was: \"Member's pre-event commitment. Lives under person so member)"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "rsvp",
+      "typeEntityId": "6a0d2e8590c8df7a1cc7df1b",
+      "status": "ok",
+      "detail": "verified: en=\"RSVP\" et=\"Osalusteade\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "attendance",
+      "typeEntityId": "6a0d2e8690c8df7a1cc7df4b",
+      "status": "ok",
+      "detail": "posted label en=\"Attendance\" et=\"Kohalolek\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "attendance",
+      "typeEntityId": "6a0d2e8690c8df7a1cc7df4b",
+      "status": "ok",
+      "detail": "deleted prop-value 6a0d2e8690c8df7a1cc7df4f (was: \"Conductor's post-event record.\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "attendance",
+      "typeEntityId": "6a0d2e8690c8df7a1cc7df4b",
+      "status": "ok",
+      "detail": "verified: en=\"Attendance\" et=\"Kohalolek\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "mvox_collective",
+      "typeEntityId": "6a73880336c951d9114ec63d",
+      "status": "ok",
+      "detail": "posted label en=\"Collective marker\" et=\"Kollektiivi märgis\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "mvox_collective",
+      "typeEntityId": "6a73880336c951d9114ec63d",
+      "status": "ok",
+      "detail": "deleted prop-value 6a73880336c951d9114ec641 (was: \"Mvox Collective (marker)\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "mvox_collective",
+      "typeEntityId": "6a73880336c951d9114ec63d",
+      "status": "ok",
+      "detail": "verified: en=\"Collective marker\" et=\"Kollektiivi märgis\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "event",
+      "typeEntityId": "69c7ea548489bfcb0e81a0a2",
+      "status": "ok",
+      "detail": "posted label en=\"Event\" et=\"Sündmus\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "event",
+      "typeEntityId": "69c7ea548489bfcb0e81a0a2",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea548489bfcb0e81a0a5 (was: \"Event\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "event",
+      "typeEntityId": "69c7ea548489bfcb0e81a0a2",
+      "status": "ok",
+      "detail": "verified: en=\"Event\" et=\"Sündmus\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "season",
+      "typeEntityId": "69c7ea528489bfcb0e81a044",
+      "status": "ok",
+      "detail": "posted label en=\"Season\" et=\"Hooaeg\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "season",
+      "typeEntityId": "69c7ea528489bfcb0e81a044",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea528489bfcb0e81a047 (was: \"Season\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "season",
+      "typeEntityId": "69c7ea528489bfcb0e81a044",
+      "status": "ok",
+      "detail": "verified: en=\"Season\" et=\"Hooaeg\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "organization",
+      "typeEntityId": "69c7ea478489bfcb0e819e3d",
+      "status": "ok",
+      "detail": "posted label en=\"Organisation\" et=\"Organisatsioon\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "organization",
+      "typeEntityId": "69c7ea478489bfcb0e819e3d",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea478489bfcb0e819e40 (was: \"Organization\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "organization",
+      "typeEntityId": "69c7ea478489bfcb0e819e3d",
+      "status": "ok",
+      "detail": "verified: en=\"Organisation\" et=\"Organisatsioon\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "member",
+      "typeEntityId": "69c7ea4a8489bfcb0e819edd",
+      "status": "ok",
+      "detail": "posted label en=\"Member\" et=\"Liige\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "member",
+      "typeEntityId": "69c7ea4a8489bfcb0e819edd",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea4a8489bfcb0e819ee0 (was: \"Member\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "member",
+      "typeEntityId": "69c7ea4a8489bfcb0e819edd",
+      "status": "ok",
+      "detail": "verified: en=\"Member\" et=\"Liige\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "work",
+      "typeEntityId": "69c7ea4c8489bfcb0e819f3e",
+      "status": "ok",
+      "detail": "posted label en=\"Work\" et=\"Teos\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "work",
+      "typeEntityId": "69c7ea4c8489bfcb0e819f3e",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea4c8489bfcb0e819f41 (was: \"Work\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "work",
+      "typeEntityId": "69c7ea4c8489bfcb0e819f3e",
+      "status": "ok",
+      "detail": "verified: en=\"Work\" et=\"Teos\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "edition",
+      "typeEntityId": "69c7ea4e8489bfcb0e819f9c",
+      "status": "ok",
+      "detail": "posted label en=\"Edition\" et=\"Väljaanne\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "edition",
+      "typeEntityId": "69c7ea4e8489bfcb0e819f9c",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea4e8489bfcb0e819f9f (was: \"Edition\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "edition",
+      "typeEntityId": "69c7ea4e8489bfcb0e819f9c",
+      "status": "ok",
+      "detail": "verified: en=\"Edition\" et=\"Väljaanne\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "repertoire_item",
+      "typeEntityId": "69c7ea538489bfcb0e81a06e",
+      "status": "ok",
+      "detail": "posted label en=\"Repertoire item\" et=\"Repertuaarikirje\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "repertoire_item",
+      "typeEntityId": "69c7ea538489bfcb0e81a06e",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea538489bfcb0e81a071 (was: \"RepertoireItem\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "repertoire_item",
+      "typeEntityId": "69c7ea538489bfcb0e81a06e",
+      "status": "ok",
+      "detail": "verified: en=\"Repertoire item\" et=\"Repertuaarikirje\", 2 total values"
+    },
+    {
+      "action": "post-new-labels",
+      "typeName": "program_item",
+      "typeEntityId": "69c7ea568489bfcb0e81a103",
+      "status": "ok",
+      "detail": "posted label en=\"Programme item\" et=\"Kavakirje\""
+    },
+    {
+      "action": "delete-old-label",
+      "typeName": "program_item",
+      "typeEntityId": "69c7ea568489bfcb0e81a103",
+      "status": "ok",
+      "detail": "deleted prop-value 69c7ea568489bfcb0e81a106 (was: \"ProgramItem\")"
+    },
+    {
+      "action": "verify-readback",
+      "typeName": "program_item",
+      "typeEntityId": "69c7ea568489bfcb0e81a103",
+      "status": "ok",
+      "detail": "verified: en=\"Programme item\" et=\"Kavakirje\", 2 total values"
+    }
+  ],
+  "exitCode": 0
+}

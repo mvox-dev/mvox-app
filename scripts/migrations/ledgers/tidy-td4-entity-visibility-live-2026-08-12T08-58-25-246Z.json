@@ -1,0 +1,309 @@
+{
+  "dryRun": false,
+  "authorization": "Polyphony db is dev/test with synthetic data — routine mutations pre-authorized. Per-run team-lead + PO authorization obtained.",
+  "gate2": [
+    {
+      "type": "library",
+      "typeId": "6a0d2e8090c8df7a1cc7dd9d",
+      "sharing": "domain",
+      "passesGate2": true
+    },
+    {
+      "type": "event",
+      "typeId": "69c7ea548489bfcb0e81a0a2",
+      "sharing": "public",
+      "passesGate2": true
+    },
+    {
+      "type": "event_series",
+      "typeId": "6a0d2e8490c8df7a1cc7deb1",
+      "sharing": "public",
+      "passesGate2": true
+    },
+    {
+      "type": "member",
+      "typeId": "69c7ea4a8489bfcb0e819edd",
+      "sharing": "domain",
+      "passesGate2": true
+    }
+  ],
+  "populationByType": {
+    "library": {
+      "total": 1,
+      "private": 1,
+      "nonPrivate": 0
+    },
+    "event": {
+      "total": 22,
+      "private": 21,
+      "nonPrivate": 1
+    },
+    "event_series": {
+      "total": 2,
+      "private": 2,
+      "nonPrivate": 0
+    },
+    "member": {
+      "total": 241,
+      "private": 109,
+      "nonPrivate": 132
+    }
+  },
+  "targetCount": 25,
+  "widenedCount": 25,
+  "failedCount": 0,
+  "ledger": [
+    {
+      "action": "instance-widen",
+      "type": "library",
+      "id": "6a12036c4ff8277cd4306b26",
+      "name": "EPCC Library",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ab23dc1d97bb8f1c79"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6210cc20db24e7ce70",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ab23dc1d97bb8f1c7a"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event_series",
+      "id": "6a1d6b6210cc20db24e7ce61",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ac23dc1d97bb8f1c7b"
+    },
+    {
+      "action": "instance-widen",
+      "type": "member",
+      "id": "6a7591cd36c951d9114ec8e7",
+      "name": "Mibiro",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ac23dc1d97bb8f1c7c"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6310cc20db24e7ce88",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ac23dc1d97bb8f1c7d"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6310cc20db24e7ce94",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ac23dc1d97bb8f1c7e"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6310cc20db24e7cea0",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ad23dc1d97bb8f1c7f"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6310cc20db24e7ceac",
+      "name": "Tuesday rehearsal fun",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ad23dc1d97bb8f1c80"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6310cc20db24e7ceb8",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ad23dc1d97bb8f1c81"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6310cc20db24e7cec4",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ad23dc1d97bb8f1c82"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7ced0",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ad23dc1d97bb8f1c83"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7cedc",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ae23dc1d97bb8f1c84"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7cee8",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ae23dc1d97bb8f1c85"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7cef4",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ae23dc1d97bb8f1c86"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7cf00",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35ae23dc1d97bb8f1c87"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7cf0c",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35af23dc1d97bb8f1c88"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6410cc20db24e7cf18",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35af23dc1d97bb8f1c89"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a1d6b6510cc20db24e7cf24",
+      "name": "Tuesday rehearsals",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35af23dc1d97bb8f1c8a"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a2d546d4cd971291c5d5714",
+      "name": "october sprint ssss",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35af23dc1d97bb8f1c8b"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a2d546e4cd971291c5d5720",
+      "name": "october sprint",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35af23dc1d97bb8f1c8c"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a2d546e4cd971291c5d572c",
+      "name": "october sprint",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35b023dc1d97bb8f1c8d"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a2d546e4cd971291c5d5738",
+      "name": "october sprint",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35b023dc1d97bb8f1c8e"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a2d546f4cd971291c5d5744",
+      "name": "october sprint",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35b023dc1d97bb8f1c8f"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event",
+      "id": "6a2d546f4cd971291c5d5750",
+      "name": "october sprint",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35b023dc1d97bb8f1c90"
+    },
+    {
+      "action": "instance-widen",
+      "type": "event_series",
+      "id": "6a2d546d4cd971291c5d5705",
+      "name": "october sprint",
+      "status": "widened",
+      "before": "private",
+      "after": "domain",
+      "newPropId": "6a7c35b123dc1d97bb8f1c91"
+    }
+  ],
+  "exitCode": 0,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root), which always reads the private bucket regardless of tier. \"widened\" here means the write landed, the read-back confirms _sharing='domain', and the property _id rotated (fresh aggregation) — NOT an empirically-confirmed non-owner domain read. That last-mile confirmation requires a member-seat test."
+}
