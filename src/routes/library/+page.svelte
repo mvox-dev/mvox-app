@@ -98,19 +98,28 @@
 		return lending.assignedAt || null;
 	}
 
-	/** Stable sort: nulls last, numbers compare numerically, everything else
-	 *  (names, ISO date strings) compares lexically — ISO dates sort correctly
-	 *  as strings. */
+	/** Stable comparator for a single key: nulls last, numbers compare
+	 *  numerically, everything else (names, ISO date strings) compares
+	 *  lexically — ISO dates sort correctly as strings. */
+	function compareByKey(a: Copy, b: Copy, key: CopySortKey): number {
+		const av = copySortValue(a, key);
+		const bv = copySortValue(b, key);
+		if (av === null && bv === null) return 0;
+		if (av === null) return 1;
+		if (bv === null) return -1;
+		if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+		return String(av).localeCompare(String(bv));
+	}
+
+	/** Partition-then-sort: lent-out copies first (sorted by the active key),
+	 *  available copies below, always sorted by nr regardless of the active
+	 *  key. #114 F6 — the two groups never intermix. */
 	function sortCopies(copies: Copy[], key: CopySortKey): Copy[] {
-		return [...copies].sort((a, b) => {
-			const av = copySortValue(a, key);
-			const bv = copySortValue(b, key);
-			if (av === null && bv === null) return 0;
-			if (av === null) return 1;
-			if (bv === null) return -1;
-			if (typeof av === 'number' && typeof bv === 'number') return av - bv;
-			return String(av).localeCompare(String(bv));
-		});
+		const lent = copies.filter((c) => activeLendingForCopy(c.id));
+		const available = copies.filter((c) => !activeLendingForCopy(c.id));
+		lent.sort((a, b) => compareByKey(a, b, key));
+		available.sort((a, b) => compareByKey(a, b, 'nr'));
+		return [...lent, ...available];
 	}
 
 	// #92 TR.4 — current season's active/learning repertoire, keyed by work id.

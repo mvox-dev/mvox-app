@@ -1,24 +1,21 @@
 // @vitest-environment happy-dom
 //
-// #126 (#114 F6) RED — copy-list sort: nulls last under EVERY key and EVERY
-// direction, for the null shapes the live gate actually surfaced.
+// #126 (#114 F6) RED — copy-list sort: PARTITION-THEN-SORT, not uniform
+// nulls-last. Corrected spec (PO, supersedes the earlier nulls-last spec):
 //
-// The #112 sort shipped with a nulls-last comparator, but the live walk
-// (#114 Check 11) still saw null values intermixed. Two real shapes defeat it:
+//   1. LENT-OUT copies first, sorted by the ACTIVE sort key (nr/member/since).
+//      The sort buttons control only this group's ordering.
+//   2. AVAILABLE copies below — ALWAYS sorted by nr, regardless of which key
+//      is active. A static block at the bottom.
 //
-//   1. NAMELESS BORROWER — resolveBorrowerName (libraryData.ts) returns ''
-//      (empty string, NOT null) when a member has no readable domain/public
-//      profile name. The page's `?? null` fallback never fires on '', and
-//      ''.localeCompare(anything) sorts it FIRST — an "Out — an unnamed
-//      member" row lands ABOVE every real name under the member key.
-//   2. UNDATED ACTIVE LENDING — live polyphony has active lendings with no
-//      assigned_at (probed 2026-08-12: lendings …307ed5, …307ee7). Under the
-//      since key that copy must sort with the nulls, at the bottom.
-//
-// And the direction contract: clicking the ACTIVE sort key toggles
-// ascending ↔ descending. Nulls stay LAST in BOTH directions — a naive
-// comparator reversal would flip them to the top. (No direction toggle
-// exists today at all, so every descending test here is RED.)
+// Within each partition the existing nulls-last comparator still applies:
+//   - a lent copy with a nameless borrower (resolveBorrowerName -> '', not
+//     null — see libraryData.ts) sorts LAST among the lent group under 'member';
+//   - a lent copy with no assigned_at (undated active lending, live shape
+//     probed 2026-08-12 on polyphony) sorts LAST among the lent group under
+//     'since';
+//   - an available copy with no copy number sorts LAST among the available
+//     group (which is always nr-sorted).
 //
 // Route-level on the REAL /library +page.svelte, same composition as
 // page.library-copy-sort.spec.ts — order is asserted on rendered DOM rows, so
@@ -176,27 +173,32 @@ function setAuthedWithOneCollective() {
 }
 
 /**
- * One work, one edition, FOUR copies — every null shape the live gate hit,
- * delivered deliberately OUT of order so stable-sort artifacts can't fake a
- * pass:
+ * One work, one edition, SIX copies — three LENT (active lending), three
+ * AVAILABLE (no active lending) — delivered deliberately OUT of order so
+ * neither partition nor within-partition order can pass by fetch-order
+ * accident.
  *
- *   fetch order:  copy-three (nr 3, lent to Alpha Person, NO assigned_at)
- *                 copy-none  (no nr, unassigned)          ← null on EVERY key
- *                 copy-two   (nr 2, lent to Beta Person,  since 2026-07-01)
- *                 copy-one   (nr 1, lent to a NAMELESS member, since 2026-06-15)
+ *   LENT (nr 5, 2, 8):
+ *     lent-beta  — nr 5, "Beta Person",  since 2026-07-01
+ *     lent-none  — nr 2, nameless member (resolves to ''), since 2026-06-15
+ *     lent-alpha — nr 8, "Alpha Person", since '' (undated — live shape,
+ *                  active lending with no assigned_at, e.g. polyphony
+ *                  lendings …307ed5/…307ee7)
  *
- * member-noname resolves to '' — the exact resolveBorrowerName contract for a
- * member with no readable domain/public profile name (libraryData.ts). The
- * page must treat that '' as "no value": nulls-LAST, not empty-string-first.
+ *   AVAILABLE (nr 1, 3, 0/none):
+ *     avail-one  — nr 1
+ *     avail-three— nr 3
+ *     avail-none — nr 0 (falsy — "no nr")
  *
- *   by nr   asc:  one(1), two(2), three(3) | none
- *   by nr   desc: three(3), two(2), one(1) | none               ← STILL last
- *   member  asc:  three(Alpha), two(Beta)  | {one(nameless), none}
- *   member  desc: two(Beta), three(Alpha)  | {one(nameless), none}
- *   since   asc:  one(06-15), two(07-01)   | {three(undated), none}
- *   since   desc: two(07-01), one(06-15)   | {three(undated), none}
+ * Expected DOM order under every key: the three lent copies ALWAYS precede
+ * the three available copies. Only the lent group's internal order changes
+ * with the active key; the available group is always nr-sorted:
+ *
+ *   by nr:     lent-none(2), lent-beta(5), lent-alpha(8) | avail-one(1), avail-three(3), avail-none(-)
+ *   by member: lent-alpha(Alpha), lent-beta(Beta), lent-none(nameless, last) | avail-one, avail-three, avail-none
+ *   by since:  lent-none(06-15), lent-beta(07-01), lent-alpha(undated, last) | avail-one, avail-three, avail-none
  */
-function setNullShapesFixture() {
+function setPartitionFixture() {
 	listWorksMock.mockResolvedValue([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
 	]);
@@ -204,32 +206,34 @@ function setNullShapesFixture() {
 		{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }
 	]);
 	listCopiesMock.mockResolvedValue([
-		{ id: 'copy-three', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' },
-		{ id: 'copy-none', name: '', copyNumber: 0, editionId: 'edition-1' },
-		{ id: 'copy-two', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
-		{ id: 'copy-one', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
+		{ id: 'lent-alpha', name: 'Copy #8', copyNumber: 8, editionId: 'edition-1' },
+		{ id: 'avail-none', name: '', copyNumber: 0, editionId: 'edition-1' },
+		{ id: 'avail-three', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' },
+		{ id: 'lent-none', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
+		{ id: 'avail-one', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
+		{ id: 'lent-beta', name: 'Copy #5', copyNumber: 5, editionId: 'edition-1' }
 	]);
 	listLendingsMock.mockResolvedValue([
 		{
-			id: 'lend-three',
-			copyId: 'copy-three',
+			id: 'lend-alpha',
+			copyId: 'lent-alpha',
 			memberId: 'member-alpha',
-			// live shape: active lending, assigned_at absent (e.g. lending …307ed5)
+			// live shape: active lending, assigned_at absent
 			assignedAt: '',
 			assignedUntil: '',
 			returnedAt: ''
 		},
 		{
-			id: 'lend-two',
-			copyId: 'copy-two',
+			id: 'lend-beta',
+			copyId: 'lent-beta',
 			memberId: 'member-beta',
 			assignedAt: '2026-07-01',
 			assignedUntil: '',
 			returnedAt: ''
 		},
 		{
-			id: 'lend-one',
-			copyId: 'copy-one',
+			id: 'lend-none',
+			copyId: 'lent-none',
 			memberId: 'member-noname',
 			assignedAt: '2026-06-15',
 			assignedUntil: '',
@@ -260,7 +264,7 @@ function copyOrder(container: HTMLElement): string[] {
 }
 
 async function renderWithEditionUnfolded() {
-	setNullShapesFixture();
+	setPartitionFixture();
 	const { container } = render(Page);
 	await waitFor(() =>
 		expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull()
@@ -275,7 +279,7 @@ async function renderWithEditionUnfolded() {
 		container.querySelector('[data-testid="library-edition-toggle-edition-1"]')!
 	);
 	await waitFor(() =>
-		expect(container.querySelector('[data-testid="library-copy-copy-one"]')).not.toBeNull()
+		expect(container.querySelector('[data-testid="library-copy-lent-alpha"]')).not.toBeNull()
 	);
 	return container;
 }
@@ -287,6 +291,8 @@ async function activate(container: HTMLElement, key: 'nr' | 'member' | 'since') 
 		expect(container.querySelector(sortBtn(key))!.getAttribute('aria-pressed')).toBe('true');
 	});
 }
+
+const LENT_IDS = new Set(['lent-alpha', 'lent-beta', 'lent-none']);
 
 afterEach(() => {
 	cleanup();
@@ -309,34 +315,54 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-describe('/library — copy sort pushes nulls LAST, ascending (#126 / #114 F6)', () => {
-	it('nr ascending: numbered copies in order, the number-less copy last', async () => {
+describe('/library — copy sort is PARTITION-then-sort: lent group first, available group always nr-sorted (#126 / #114 F6)', () => {
+	it('nr: lent copies sorted by nr, then available copies sorted by nr — partition boundary holds', async () => {
 		const container = await renderWithEditionUnfolded();
-		// default key is nr, ascending — no click needed
-		expect(copyOrder(container)).toEqual(['copy-one', 'copy-two', 'copy-three', 'copy-none']);
+		// default key is nr — no click needed
+		expect(copyOrder(container)).toEqual([
+			'lent-none',
+			'lent-beta',
+			'lent-alpha',
+			'avail-one',
+			'avail-three',
+			'avail-none'
+		]);
 	});
 
-	it("member ascending: a borrower whose name resolved to '' counts as NO value — that copy sorts LAST with the unassigned one, never above real names", async () => {
+	it("member: lent copies sorted by borrower name (nameless sorts last WITHIN the lent group), then available copies sorted by nr", async () => {
 		const container = await renderWithEditionUnfolded();
 		await activate(container, 'member');
 
 		const order = copyOrder(container);
-		// Real names first, A→Z: Alpha Person (copy-three), Beta Person (copy-two)…
-		expect(order.slice(0, 2)).toEqual(['copy-three', 'copy-two']);
-		// …then BOTH no-name copies — the nameless borrower's copy (copy-one) and
-		// the unassigned copy — at the bottom. Today copy-one's '' localeCompares
-		// BEFORE 'Alpha Person' and surfaces at the top: the F6 intermix.
-		expect(new Set(order.slice(2))).toEqual(new Set(['copy-one', 'copy-none']));
+		// Lent group, by member: Alpha, Beta, then the nameless borrower last —
+		// nulls-last still applies WITHIN the partition.
+		expect(order.slice(0, 3)).toEqual(['lent-alpha', 'lent-beta', 'lent-none']);
+		// Available group, unaffected by the 'member' key — still nr order.
+		expect(order.slice(3)).toEqual(['avail-one', 'avail-three', 'avail-none']);
 	});
 
-	it('since ascending: dated loans oldest-first, the undated active loan and the never-lent copy LAST', async () => {
+	it('since: lent copies sorted by lending date (undated active lending sorts last WITHIN the lent group), then available copies sorted by nr', async () => {
 		const container = await renderWithEditionUnfolded();
 		await activate(container, 'since');
 
 		const order = copyOrder(container);
-		expect(order.slice(0, 2)).toEqual(['copy-one', 'copy-two']);
-		expect(new Set(order.slice(2))).toEqual(new Set(['copy-three', 'copy-none']));
+		// Lent group, by since: oldest loan first, undated loan last.
+		expect(order.slice(0, 3)).toEqual(['lent-none', 'lent-beta', 'lent-alpha']);
+		// Available group, unaffected by the 'since' key — still nr order.
+		expect(order.slice(3)).toEqual(['avail-one', 'avail-three', 'avail-none']);
+	});
+
+	it('partition boundary holds under every key: no available copy ever appears before a lent copy', async () => {
+		const container = await renderWithEditionUnfolded();
+
+		for (const key of ['nr', 'member', 'since'] as const) {
+			await activate(container, key);
+			const order = copyOrder(container);
+			const lastLentIndex = Math.max(...order.map((id, i) => (LENT_IDS.has(id) ? i : -1)));
+			const firstAvailableIndex = order.findIndex((id) => !LENT_IDS.has(id));
+			expect(firstAvailableIndex, `key=${key}`).toBeGreaterThan(lastLentIndex);
+		}
 	});
 });
 
-// (*MVOX:Tallis chain — RED by red-126*)
+// (*MVOX:Tallis chain — RED by red-126, corrected to partition-then-sort by fix-f6*)
