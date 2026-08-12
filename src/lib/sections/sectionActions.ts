@@ -3,20 +3,32 @@ import { SectionMembershipMissingError } from './sectionErrors';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
 // TS.3/#97 — the section CREATE write layer. GREEN.
+// TU.1/#109 (finding #10) — top-level parent org threading + fail-loud on a
+// multi-org db. GREEN.
 //
-// CONTRACT (pinned by sectionActions.create.spec.ts):
+// CONTRACT (pinned by sectionActions.create.spec.ts + sectionActions.create-org.spec.ts):
 //
-//   - `createSection(cfg, { name, parentId? })` creates ONE `section` entity and
-//     resolves to the NEW ENTITY's id.
+//   - `createSection(cfg, { name, parentId?, orgId? })` creates ONE `section`
+//     entity and resolves to the NEW ENTITY's id.
 //   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, 'section')
 //     (#10 pinned wire-shape — never `{ string: 'section' }`).
-//   - `parentId` present → `_parent` reference = that SECTION id (sub-section).
+//   - `parentId` present → `_parent` reference = that SECTION id (sub-section);
+//     `orgId` is irrelevant, no org lookup happens.
 //   - `parentId` absent/null → "(top level)": the section is a direct child of
-//     the ORGANIZATION. The org is resolved the same way inviteData's
-//     resolveInviteOrg does — `entity?_type.string=organization&limit=1`
-//     (single-collective de-fan; polyphony's extra org entities are unreadable
-//     to non-admin callers) — and FAILS LOUD naming the db when none is
-//     readable (a parent is REQUIRED: v4E `parentConstraint: 'exactly_one_of'`).
+//     the ORGANIZATION.
+//       - `orgId` present → `_parent` = that org id VERBATIM, ZERO org-lookup
+//         fetches. The caller (the roster page) already knows the collective
+//         org from the member's own `_parent` — the data layer must not guess.
+//       - `orgId` absent → legacy sole-org resolution:
+//         `entity?_type.string=organization&limit=1`. A MULTI-ORG db
+//         (response `count` > 1) FAILS LOUD naming the db — live-verified
+//         2026-08-12: polyphony has SIX `_sharing:domain` org entities and
+//         `limit=1` returns the UMBRELLA FEDERATION first, not the collective,
+//         so the old silent guess parented every top-level section under the
+//         wrong org. A single readable org still resolves as before
+//         (unchanged regression guard). No readable org at all fails loud
+//         naming the db (a parent is REQUIRED: v4E
+//         `parentConstraint: 'exactly_one_of'`).
 //   - `_sharing: 'public'` EXPLICIT at create time — v4E pins section sharing
 //     as public (federation discoverability); never rely on inherit.
 //   - `name` sent trimmed; an empty/whitespace-only name throws WITHOUT any
@@ -35,6 +47,29 @@ export interface CreateSectionInput {
 	name: string;
 	/** Parent SECTION id; absent/null = top level (direct child of the org). */
 	parentId?: string | null;
+	/**
+	 * TU.1/#109 (finding #10) — the COLLECTIVE ORGANIZATION id the caller already
+	 * holds, used as `_parent` for a TOP-LEVEL create (parentId absent/null).
+	 *
+	 * WHY (live-verified 2026-08-12): the `entity?_type.string=organization&limit=1`
+	 * fallback's premise — "polyphony's extra org entities are unreadable to
+	 * non-admin callers" — is FALSE. All 6 org entities in live polyphony are
+	 * `_sharing: domain`, so every authenticated member reads all 6, and `limit=1`
+	 * returns "Eesti Kammerkooride Liit" — the UMBRELLA FEDERATION, not the
+	 * collective (EFK). Top-level sections were being parented under the wrong
+	 * org (and refused outright for callers without rights on the umbrella).
+	 *
+	 * The roster page ALREADY holds the right org: every member's `_parent`
+	 * carries an `entity_type: 'organization'` entry (live-verified: 133/133
+	 * active members → EFK). The caller threads it here; the data layer must not
+	 * guess. Contract pinned by sectionActions.create-org.spec.ts:
+	 *   - orgId present + no parentId → `_parent` = orgId, ZERO lookup fetches.
+	 *   - orgId absent + no parentId → legacy sole-org resolution, but a
+	 *     MULTI-ORG db (response `count` > 1) FAILS LOUD naming the db — never
+	 *     silently picks whichever org the API returned first.
+	 *   - parentId present → orgId is irrelevant (sub-section, parent IS the section).
+	 */
+	orgId?: string | null;
 }
 
 /**
@@ -58,14 +93,30 @@ export async function createSection(
 
 	let parentRef: string;
 	if (input.parentId) {
-		// Sub-section: the given section IS the parent, no org lookup at all.
+		// Sub-section: the given section IS the parent, no org lookup at all —
+		// orgId is irrelevant here (see CreateSectionInput.orgId doc).
 		parentRef = input.parentId;
+	} else if (input.orgId) {
+		// TU.1/#109 (finding #10 root cause A) — the caller already knows the
+		// collective org (the roster page reads it off the member's own
+		// `_parent`); use it verbatim, ZERO org-lookup fetches. The data layer
+		// must not guess — a `limit=1` guess live-verifiably returns the
+		// UMBRELLA federation, not the collective, on a multi-org db.
+		parentRef = input.orgId;
 	} else {
-		// Top level: the section's parent is the sole readable organization —
-		// same single-collective de-fan as inviteData.resolveOrgId
-		// (`_type.string=organization&limit=1`). v4E pins
-		// `parentConstraint: 'exactly_one_of'` — a parentless section is not a
-		// thing, so an unreadable org fails loud naming the db.
+		// Legacy sole-org resolution — the LAST `_type.string=organization&limit=1`
+		// in the app, kept ONLY as a guarded fallback for callers that genuinely
+		// hold no org (single-org dbs). It is NOT a pattern to copy:
+		// `inviteData.resolveOrgId` and `adminStore.resolveAdmin` both used to
+		// resolve this way and BOTH were wrong live — polyphony answers `count: 6`
+		// with the umbrella federation first (probe-67). They now derive the org
+		// from the acting person's own member `_parent` via
+		// `resolveMyOrgId` ($lib/org/myOrg), which is what a new call site should
+		// do. v4E pins `parentConstraint: 'exactly_one_of'` — a parentless section
+		// is not a thing, so an unreadable org fails loud naming the db.
+		// TU.1/#109 — a MULTI-ORG db (`count` > 1) ALSO fails loud naming the db:
+		// the old behavior silently parented under whichever org the API returned
+		// first (live-verifiably the umbrella federation, not the collective).
 		const orgRes = await entuFetch(
 			cfg.db,
 			'entity?_type.string=organization&limit=1',
@@ -76,7 +127,16 @@ export async function createSection(
 		if (!orgRes.ok) {
 			throw new Error(`createSection: organization lookup failed: HTTP ${orgRes.status}`);
 		}
-		const orgBody = (await orgRes.json()) as { entities?: Array<{ _id?: string }> };
+		const orgBody = (await orgRes.json()) as {
+			entities?: Array<{ _id?: string }>;
+			count?: number;
+		};
+		const orgCount = orgBody.count ?? orgBody.entities?.length ?? 0;
+		if (orgCount > 1) {
+			throw new Error(
+				`createSection: db '${cfg.db}' has ${orgCount} organization entities readable — cannot guess which is the collective; pass orgId explicitly`
+			);
+		}
 		const orgId = orgBody.entities?.[0]?._id;
 		if (!orgId) {
 			throw new Error(

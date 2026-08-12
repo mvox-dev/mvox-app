@@ -18,6 +18,7 @@
 // the caller exactly once and never logged or persisted here.
 
 import { entuFetch } from '$lib/entu/request';
+import { MyOrgLookupError, resolveMyOrgId } from '$lib/org/myOrg';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
 // #34 — the person-create `entu_user` property carries this fixed mint-trigger
@@ -115,56 +116,64 @@ export async function resolvePersonParentId(
 }
 
 /**
- * Resolve the invite target org: the SOLE organization entity a member gets
- * created under, within the given db. Mirrors `resolvePersonParentId`'s single-
- * resolve shape — NOT an enumeration.
+ * Resolve the invite target org: the organization entity the new member gets
+ * created under — the ACTING ADMIN'S OWN collective, read off her own active
+ * `member` row's `_parent` (`resolveMyOrgId`, $lib/org/myOrg). No guessing.
  *
- * #67 (Mihkel ruling, 2026-08-08): the invite picker enumerates DATABASES, not
- * organization entities. polyphony verifiably carries 6 `organization` entities
- * (EFK + 5 unreferenced v4E-era legacy, #41 inventory) — offering all 6 in a
- * select misrepresented five ghosts as real invite targets. This resolves the
- * SAME `limit=1` "first organization" that `adminStore.ts`'s own admin-rights
- * check (`resolveAdmin`) already treats as canonical, rather than listing every
- * org entity for a user-facing choice that never should have existed. Disposal
- * of the 5 legacy entities stays on #37 — out of scope here.
+ * #67 (Mihkel ruling, 2026-08-08) stands as far as the UI goes: the invite
+ * picker enumerates DATABASES, never organization entities — this is a single
+ * internal resolve, not a user-facing list.
+ *
+ * TU.1/#109 review — what CHANGED, and why: this used to resolve
+ * `entity?_type.string=organization&limit=1` and take the first hit, on the
+ * premise that polyphony's extra org entities are ghosts nobody can read. That
+ * premise is DISPROVEN (probe-67, 2026-08-12): the search answers `count: 6`,
+ * all six org entities are `_sharing: domain` (so every authenticated member
+ * reads all six), and the first hit is "Eesti Kammerkooride Liit"
+ * (69c7f8718489bfcb0e81b05a) — the UMBRELLA FEDERATION — not the collective
+ * "Eesti Filharmoonia Kammerkoor" (69c7f8718489bfcb0e81b065). Every member
+ * created through /admin/invite was therefore parented under the umbrella, and
+ * that wrong org then threads onward: the roster derives `RosterRow.orgId` from
+ * the member's organization `_parent` and hands it to `createSection`, so the
+ * bad parent would come straight back as a section under the umbrella. The
+ * `limit=1` shape is retired here (and in `adminStore.resolveAdmin`); the one
+ * remaining instance, `createSection`'s no-orgId fallback, now fails loud when
+ * `count` > 1.
+ *
+ * Disposal of the legacy org entities stays on #37 — out of scope here.
  */
 export async function resolveOrgId(
 	cfg: EntuCfg,
+	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-	const res = await entuFetch(
-		cfg.db,
-		'entity?_type.string=organization&limit=1',
-		cfg.token,
-		{},
-		fetchImpl
-	);
-	if (!res.ok) {
-		throw new InviteCreateError(`resolving the invite org failed: HTTP ${res.status}`, {
+	if (!personId) {
+		throw new InviteCreateError('resolveOrgId: personId must not be empty', {
 			phase: 'org-resolve',
-			reason: 'http'
+			reason: 'contract'
 		});
 	}
-	const body = (await res.json()) as {
-		entities?: Array<{ _id?: string }>;
-	};
-	const entity = body.entities?.[0];
-	if (!entity) {
+	let orgId: string | null;
+	try {
+		orgId = await resolveMyOrgId(cfg, personId, fetchImpl);
+	} catch (e) {
+		if (e instanceof MyOrgLookupError) {
+			// 'http' keeps the retryable-load-error shape the page already renders;
+			// an ambiguous membership is a contract problem, never "not admin".
+			throw new InviteCreateError(`resolving the invite org failed: ${e.message}`, {
+				phase: 'org-resolve',
+				reason: e.reason === 'http' ? 'http' : 'contract'
+			});
+		}
+		throw e; // e.g. AuthExpiredError — must reach the page's 401 branch untouched
+	}
+	if (!orgId) {
 		throw new InviteCreateError(
-			`no organization entity is readable in db '${cfg.db}' — the member needs an organization parent`,
+			`no organization parent is readable for person ${personId} in db '${cfg.db}' — inviting requires an active membership whose organization parent this account can see`,
 			{ phase: 'org-resolve', reason: 'not-visible' }
 		);
 	}
-	// A 2xx that read back an entity without an `_id` is a contract violation
-	// (apparent-success trap) — fail loud rather than POST a member with an
-	// empty `_parent`.
-	if (!entity._id) {
-		throw new InviteCreateError(
-			'the organization entity read back without an _id — cannot resolve the invite org',
-			{ phase: 'org-resolve', reason: 'contract' }
-		);
-	}
-	return entity._id;
+	return orgId;
 }
 
 /**

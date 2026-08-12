@@ -330,9 +330,18 @@
 			return;
 		}
 
+		// TU.1/#109 (finding #10 root cause A) — the page threads the MEMBER'S OWN
+		// org id into every create (the data layer ignores it when parentId is
+		// set, so uniform threading is correct and simplest — see
+		// page.roster-create-section-org.spec.ts). The page already knows it
+		// (RosterRow.orgId, carried from the member's `_parent`) — never let the
+		// data layer fall back to its `limit=1` guess, which live-verifiably
+		// returns the umbrella federation, not the collective.
+		const orgId = rows.find((r) => r.memberId === memberId)?.orgId;
+
 		let newId: string;
 		try {
-			newId = await createSection(cfg, input);
+			newId = await createSection(cfg, { ...input, orgId });
 		} catch (e) {
 			console.error('roster: section create failed', memberId, input, e);
 			sectionWriteError = { memberId, kind: 'create' };
@@ -345,6 +354,13 @@
 			name: input.name,
 			displayOrder: Number.POSITIVE_INFINITY,
 			parentId: input.parentId,
+			// TU.1/#109 review — mirror what `listSections` would read back for it: a
+			// top-level section is parented to THIS member's org, a sub-section is
+			// section-parented and carries no org `_parent` at all (v4E
+			// `parentConstraint: 'exactly_one_of'`). Without this the just-created
+			// root would have an unknown org and the next top-level create in the
+			// same session couldn't tell it apart from another org's roots.
+			orgId: input.parentId ? null : (orgId ?? null),
 			depth,
 			children: []
 		};
@@ -780,6 +796,7 @@
 				memberName={row.name}
 				{sections}
 				selectedIds={row.sectionIds ?? []}
+				orgId={row.orgId}
 				onpick={(sectionId) => handlePick(row.memberId, sectionId)}
 				oncreate={(input) => handleCreate(row.memberId, input)}
 			/>

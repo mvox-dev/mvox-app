@@ -56,6 +56,17 @@ export interface ActiveMember {
 	 * membership is not.
 	 */
 	sectionIds: string[];
+	/**
+	 * TU.1/#109 (finding #10) — the member's COLLECTIVE ORGANIZATION id: the
+	 * `_parent` entry with `entity_type === 'organization'` (live-verified:
+	 * 133/133 active polyphony members carry exactly one, → EFK). Threaded
+	 * through to `RosterRow` so the roster page can hand `createSection` the
+	 * correct top-level parent org instead of the data layer guessing via
+	 * `limit=1` (which live-verifiably returns the umbrella federation, not the
+	 * collective). Optional: undefined when this reader cannot see an org parent.
+	 * Contract pinned by rosterData.org.spec.ts.
+	 */
+	orgId?: string;
 }
 
 /**
@@ -115,10 +126,16 @@ export async function listActiveMembers(
 		const sectionIds = (raw._parent ?? [])
 			.filter((p) => p.entity_type === 'section')
 			.map((p) => p.reference);
+		// TU.1/#109 (finding #10) — the FIRST `_parent` entry that is an
+		// organization is the member's collective org; undefined when none is
+		// visible to this reader (never a throw — org visibility must not gate
+		// the roster, see rosterData.org.spec.ts).
+		const orgId = (raw._parent ?? []).find((p) => p.entity_type === 'organization')?.reference;
 		return {
 			memberId: raw._id,
 			personId,
-			sectionIds
+			sectionIds,
+			orgId
 		};
 	});
 }
@@ -162,6 +179,13 @@ export interface RosterRow {
 	 * legacy fixtures; `groupBySection` treats undefined the same as [] (Unassigned).
 	 */
 	sectionIds?: string[];
+	/**
+	 * TU.1/#109 (finding #10) — carried through verbatim from
+	 * `ActiveMember.orgId` (see its doc): the member's collective-organization
+	 * id, so the page's create wiring can pass `createSection` an explicit
+	 * top-level parent org. Optional for pre-TU.1 fixtures.
+	 */
+	orgId?: string;
 }
 
 /**
@@ -206,7 +230,9 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 		// TS.1/#95, F1 — carried through verbatim from the member (section entity
 		// ids, [] when unassigned) so groupBySection can join rows to the section
 		// tree and place a multi-section member in every matching group.
-		sectionIds: member.sectionIds
+		sectionIds: member.sectionIds,
+		// TU.1/#109 (finding #10) — carried through verbatim, see RosterRow.orgId doc.
+		orgId: member.orgId
 	};
 }
 

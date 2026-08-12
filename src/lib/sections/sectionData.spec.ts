@@ -61,6 +61,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Soprano',
 				displayOrder: 1,
 				parentId: null,
+				orgId: 'org-1',
 				depth: 0,
 				children: []
 			},
@@ -69,6 +70,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Alto',
 				displayOrder: 2,
 				parentId: null,
+				orgId: 'org-1',
 				depth: 0,
 				children: []
 			}
@@ -95,6 +97,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Soprano',
 				displayOrder: 1,
 				parentId: null,
+				orgId: 'org-1',
 				depth: 0,
 				children: [
 					{
@@ -102,6 +105,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 						name: 'Soprano 1',
 						displayOrder: 1,
 						parentId: 'sec-sop',
+						orgId: null,
 						depth: 1,
 						children: [
 							{
@@ -109,6 +113,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 								name: 'Soprano 1a',
 								displayOrder: 1,
 								parentId: 'sec-sop1',
+								orgId: null,
 								depth: 2,
 								children: []
 							}
@@ -119,6 +124,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 						name: 'Soprano 2',
 						displayOrder: 2,
 						parentId: 'sec-sop',
+						orgId: null,
 						depth: 1,
 						children: []
 					}
@@ -129,6 +135,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Alto',
 				displayOrder: 2,
 				parentId: null,
+				orgId: 'org-1',
 				depth: 0,
 				children: []
 			}
@@ -147,12 +154,21 @@ describe('listSections — parses section entities into a recursive tree sorted 
 		);
 		const tree = await listSections(cfg, fetchImpl);
 		expect(tree).toEqual<SectionNode[]>([
-			{ id: 'sec-a', name: 'Alto', displayOrder: 1, parentId: null, depth: 0, children: [] },
+			{
+				id: 'sec-a',
+				name: 'Alto',
+				displayOrder: 1,
+				parentId: null,
+				orgId: 'org-1',
+				depth: 0,
+				children: []
+			},
 			{
 				id: 'sec-b',
 				name: 'Bass',
 				displayOrder: Number.POSITIVE_INFINITY,
 				parentId: null,
+				orgId: 'org-1',
 				depth: 0,
 				children: []
 			},
@@ -161,10 +177,49 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Chorus C',
 				displayOrder: Number.POSITIVE_INFINITY,
 				parentId: null,
+				orgId: 'org-1',
 				depth: 0,
 				children: []
 			}
 		]);
+	});
+
+	// TU.1/#109 review — the org must SURVIVE the parse. Live polyphony holds 16
+	// sections across four test orgs, all org-parented: with the org discarded
+	// they were one indistinguishable set of "siblings", which is what made the
+	// picker refuse a top-level name that only exists in another org.
+	it("carries each root's OWNING ORG (`_parent` entity_type 'organization'); a sub-section, being section-parented, has orgId null", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					// EFK's root + its child, and another org's same-named root.
+					{
+						_id: 'sec-efk-sop',
+						name: [{ string: 'Soprano' }],
+						display_order: [{ number: 1 }],
+						_parent: [{ reference: 'org-efk', entity_type: 'organization' }]
+					},
+					{
+						_id: 'sec-efk-sop2',
+						name: [{ string: 'Soprano II' }],
+						display_order: [{ number: 2 }],
+						_parent: [{ reference: 'sec-efk-sop', entity_type: 'section' }]
+					},
+					{
+						_id: 'sec-sireen-sop',
+						name: [{ string: 'Soprano' }],
+						display_order: [{ number: 3 }],
+						_parent: [{ reference: 'org-sireen', entity_type: 'organization' }]
+					}
+				]
+			})
+		);
+		const tree = await listSections(cfg, fetchImpl);
+		expect(tree.map((n) => [n.id, n.orgId])).toEqual([
+			['sec-efk-sop', 'org-efk'],
+			['sec-sireen-sop', 'org-sireen']
+		]);
+		expect(tree[0].children[0].orgId).toBeNull();
 	});
 
 	it('fails loud on a non-2xx response, with the status surfaced', async () => {

@@ -28,9 +28,21 @@
 //                                   empty/whitespace submit and
 //                                   m.roster_section_duplicate() when the
 //                                   trimmed name case-insensitively equals an
-//                                   EXISTING section's name (anywhere in the
-//                                   tree — the duplicate check is LOCAL, the
-//                                   component already holds the whole tree)
+//                                   existing SIBLING's name — TU.1/#109
+//                                   (finding #10) SUPERSEDES the TS.3 "anywhere
+//                                   in the tree" pin: the check is scoped to
+//                                   the CHOSEN PARENT'S DIRECT CHILDREN (or the
+//                                   top-level sections when "(top level)" is
+//                                   chosen). The global check live-verifiably
+//                                   refused EVERY real-world voice name —
+//                                   polyphony's tree holds all four test orgs'
+//                                   sections flat (Soprano I/II, Alto I/II,
+//                                   I/II Tenor, Baritone, Bass…), so "Soprano
+//                                   II" under Soprano was rejected as a
+//                                   duplicate of ANOTHER org's flat section.
+//                                   That is finding #10's "creation doesn't
+//                                   work in live". The check stays LOCAL (the
+//                                   component holds the whole tree).
 //
 // A VALID submit fires oncreate ONCE ({ name: trimmed, parentId: id | null })
 // and closes the WHOLE picker (menu gone, aria-expanded=false) — same
@@ -219,10 +231,31 @@ describe('SectionPicker — validation: name required, duplicate name', () => {
 		}
 	);
 
-	it('a name equal to an EXISTING section (trimmed, case-insensitive — "  soprano 1 " vs "Soprano 1", a NESTED section) shows roster_section_duplicate; oncreate NOT fired; form stays', async () => {
+	// TU.1/#109 (finding #10) — the duplicate check is SIBLING-scoped, not global.
+	// This test SUPERSEDES the TS.3 pin that "soprano 1" was a duplicate ANYWHERE
+	// in the tree: "Soprano 1" exists only NESTED under Soprano, so a TOP-LEVEL
+	// "soprano 1" has no name conflict among its actual siblings and must be
+	// allowed through. (The live consequence of the global check: every standard
+	// voice name was already taken by some other test org's flat section, so NO
+	// section could be created at all.)
+	it("TU.1/#109: a name that exists only as a NESTED section elsewhere ('soprano 1' under Soprano) is NOT a duplicate for a TOP-LEVEL create — oncreate fires, no error", async () => {
 		const { container, oncreate } = renderPicker();
 		await openForm(container);
 		await typeName(container, '  soprano 1 ');
+		await submit(container);
+
+		expect(q(container, 'section-create-error')).toBeNull();
+		expect(oncreate).toHaveBeenCalledTimes(1);
+		expect(oncreate).toHaveBeenCalledWith({ name: 'soprano 1', parentId: null });
+	});
+
+	it('a name equal to an existing DIRECT CHILD of the chosen parent (trimmed, case-insensitive — "  soprano 1 " under Soprano vs its child "Soprano 1") shows roster_section_duplicate; oncreate NOT fired; form stays', async () => {
+		const { container, oncreate } = renderPicker();
+		await openForm(container);
+		await typeName(container, '  soprano 1 ');
+		await fireEvent.change(q(container, 'section-create-parent') as HTMLElement, {
+			target: { value: 'sec-sop' }
+		});
 		await submit(container);
 
 		const error = q(container, 'section-create-error');
@@ -230,6 +263,18 @@ describe('SectionPicker — validation: name required, duplicate name', () => {
 		expect(error?.textContent).toContain('roster_section_duplicate');
 		expect(oncreate).not.toHaveBeenCalled();
 		expect(q(container, 'section-create-form')).not.toBeNull();
+	});
+
+	it('a TOP-LEVEL name equal to an existing TOP-LEVEL section ("alto" vs "Alto") shows roster_section_duplicate; oncreate NOT fired — the sibling scope still catches real duplicates', async () => {
+		const { container, oncreate } = renderPicker();
+		await openForm(container);
+		await typeName(container, 'alto');
+		await submit(container);
+
+		const error = q(container, 'section-create-error');
+		expect(error).not.toBeNull();
+		expect(error?.textContent).toContain('roster_section_duplicate');
+		expect(oncreate).not.toHaveBeenCalled();
 	});
 
 	it('no error region is rendered before any invalid submit', async () => {
@@ -266,3 +311,4 @@ describe('SectionPicker — Cancel returns to the picker', () => {
 });
 
 // (*MVOX:Tallis* — TS.3/#97 RED)
+// (*MVOX:Tallis* — TU.1/#109 RED: duplicate check re-scoped to SIBLINGS, finding #10)

@@ -251,6 +251,14 @@ describe('/admin/invite — ready form', () => {
 		// #67 — the org-entity resolve happened ONCE, internally, never as a list
 		// the admin picks from.
 		expect(h.resolveOrgMock).toHaveBeenCalledTimes(1);
+		// TU.1/#109 review — and it is PERSON-SCOPED: the acting admin's own person
+		// id in the chosen db (Collective.personId) is passed, so the org comes off
+		// her own member row instead of an `organization&limit=1` guess (which live
+		// returns the umbrella federation, not the collective).
+		expect(h.resolveOrgMock).toHaveBeenCalledWith(
+			expect.objectContaining({ db: 'polyphony', token: 'jwt-admin' }),
+			'admin-p'
+		);
 	});
 
 	it('with multiple collectives, nothing is preselected and submit stays disabled until one is picked — picking one resolves its org internally', async () => {

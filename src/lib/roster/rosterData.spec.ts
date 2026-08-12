@@ -59,9 +59,13 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
+		// TU.1/#109 (finding #10) — orgId now rides along too: member-2's fixture
+		// happens to carry an organization _parent, so she picks one up here even
+		// though this test predates that contract (see rosterData.org.spec.ts for
+		// the dedicated pins).
 		expect(members).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'] },
-			{ memberId: 'member-2', personId: 'person-b', sectionIds: [] }
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], orgId: undefined },
+			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], orgId: 'org-1' }
 		]);
 	});
 
@@ -81,8 +85,9 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
+		// TU.1/#109 (finding #10) — orgId rides along (see comment above).
 		expect(members).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'] }
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], orgId: 'org-1' }
 		]);
 	});
 
@@ -103,8 +108,14 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
+		// TU.1/#109 (finding #10) — orgId rides along (see comment above).
 		expect(members).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop', 'sec-lead'] }
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				sectionIds: ['sec-sop', 'sec-lead'],
+				orgId: 'org-1'
+			}
 		]);
 	});
 

@@ -162,46 +162,88 @@ describe('resolvePersonParentId', () => {
 // ── resolveOrgId ─────────────────────────────────────────────────────────────
 
 describe('resolveOrgId', () => {
-	// #67 (Mihkel ruling) — replaces the old `listOrganizations` enumeration. This
-	// resolves the SOLE org id a member gets created under (a single `limit=1`
-	// read, same shape adminStore.ts's admin-rights check already relies on) —
-	// never a list for a UI picker.
+	// #67 (Mihkel ruling) — replaces the old `listOrganizations` enumeration: a
+	// single internal resolve, never a list for a UI picker.
+	//
+	// TU.1/#109 review — the resolve is now PERSON-SCOPED (the acting admin's own
+	// active member row's organization `_parent`), NOT
+	// `_type.string=organization&limit=1`. Live (probe-67, 2026-08-12) that search
+	// answers `count: 6` and returns the UMBRELLA FEDERATION first, so every
+	// invited member was being parented under the wrong org.
 
-	it('resolves the first organization entity id with the admin Bearer token', async () => {
-		const fetchImpl = vi
-			.fn()
-			.mockResolvedValue(json({ entities: [{ _id: 'org-1', name: [{ string: 'EFK' }] }] }));
-		const id = await resolveOrgId(cfg, fetchImpl);
-		expect(id).toBe('org-1');
+	const ADMIN_PERSON = 'person-admin';
+	const ORG_EFK = '69c7f8718489bfcb0e81b065';
+
+	function memberLookup(body: unknown, status = 200) {
+		return vi.fn().mockImplementation(() => Promise.resolve(json(body, status)));
+	}
+
+	function memberBody(orgId: string | null, count = 1) {
+		return {
+			entities: [
+				{
+					_id: 'm-admin',
+					_parent: [
+						{ reference: 'sec-sop', entity_type: 'section' },
+						...(orgId ? [{ reference: orgId, entity_type: 'organization' }] : [])
+					]
+				}
+			],
+			count
+		};
+	}
+
+	it("resolves the acting admin's OWN organization from her member row — never an organization search", async () => {
+		const fetchImpl = memberLookup(memberBody(ORG_EFK));
+		const id = await resolveOrgId(cfg, ADMIN_PERSON, fetchImpl);
+		expect(id).toBe(ORG_EFK);
+
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-		expect(String(url)).toContain('/polyphony/entity?_type.string=organization');
-		expect(String(url)).toContain('limit=1');
+		expect(String(url)).toContain('/polyphony/entity?_type.string=member');
+		expect(String(url)).toContain(`person.reference=${ADMIN_PERSON}`);
+		expect(String(url)).not.toContain('_type.string=organization');
 		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jwt-admin');
 	});
 
+	it('rejects an empty personId before any fetch (contract) — no org is ever guessed', async () => {
+		const fetchImpl = vi.fn();
+		const err = await captureError(resolveOrgId(cfg, '', fetchImpl));
+		expect(err).toBeInstanceOf(InviteCreateError);
+		expect(err.phase).toBe('org-resolve');
+		expect(err.reason).toBe('contract');
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
+
 	it('throws http (with the status) on a non-2xx response', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({}, 502));
-		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+		const fetchImpl = memberLookup({}, 502);
+		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
 		expect(err).toBeInstanceOf(InviteCreateError);
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('http');
 		expect(err.message).toMatch(/502/);
 	});
 
-	it('throws not-visible when no organization entity is readable', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
-		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+	it('throws not-visible when the acting admin has no visible active membership', async () => {
+		const fetchImpl = memberLookup({ entities: [], count: 0 });
+		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('not-visible');
 		expect(err.message).toMatch(/organization/i);
 	});
 
-	it('throws contract when the organization entity read back without an _id (apparent-success trap)', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [{}] }));
-		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+	it('throws not-visible when her member row carries no organization `_parent`', async () => {
+		const fetchImpl = memberLookup(memberBody(null));
+		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
+		expect(err.phase).toBe('org-resolve');
+		expect(err.reason).toBe('not-visible');
+	});
+
+	it('throws contract on an AMBIGUOUS membership (two active member rows in one db) — never picks the first', async () => {
+		const fetchImpl = memberLookup(memberBody(ORG_EFK, 2));
+		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('contract');
-		expect(err.message).toMatch(/_id/i);
+		expect(err.message).toMatch(/2/);
 	});
 });
 

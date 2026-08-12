@@ -10,11 +10,20 @@
 	// #67 (Mihkel ruling, 2026-08-08): the picker enumerates DATABASES (the
 	// collectives this account has a person in, from the collective store — same
 	// source the root layout already hydrates), never `organization` entities —
-	// polyphony verifiably carries 6 org entities (EFK + 5 unreferenced v4E-era
-	// legacy, #41), so offering all 6 for pick misrepresented five ghosts as real
-	// invite targets. The member's required org-entity `_parent` is still resolved
-	// (via `resolveOrgId`, a single `limit=1` read, NOT a user-facing list) once a
-	// target database is chosen.
+	// polyphony carries 6 org entities (#41 inventory) and offering all 6 for pick
+	// asked the admin a question about Entu internals she cannot answer. The
+	// member's required org-entity `_parent` is still resolved internally (via
+	// `resolveOrgId`, NOT a user-facing list) once a target database is chosen.
+	// (The #67-era gloss "5 of the 6 are unreadable legacy ghosts" is DISPROVEN —
+	// all six are `_sharing: domain`, every authenticated member reads all six,
+	// and orgs other than EFK own live sections. See $lib/org/myOrg.)
+	//
+	// TU.1/#109 review — that internal resolve is now PERSON-SCOPED: `resolveOrgId`
+	// takes the acting admin's own person id in the chosen db (the collective
+	// store already carries it, `Collective.personId`) and reads the org off her
+	// own member row's `_parent`. The old `organization&limit=1` read returned the
+	// UMBRELLA FEDERATION on live polyphony (probe-67: count 6, all domain-shared),
+	// so every invited member was being parented under the wrong org.
 	// Contract: src/routes/page.admin-invite.spec.ts.
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
@@ -85,11 +94,20 @@
 			status = 'load-error';
 			return;
 		}
+		// The acting admin's own person id IN THIS DB — `resolveOrgId` reads her
+		// collective off her own member row, so a missing person id is a broken
+		// prerequisite (load error), never an org guess.
+		const personId = availableDbs.find((c) => c.db === targetDb)?.personId;
+		if (!personId) {
+			console.error('admin/invite: no person id for db', targetDb);
+			status = 'load-error';
+			return;
+		}
 		const cfg = { db: targetDb, token };
 		try {
 			const [, resolvedOrgId] = await Promise.all([
 				resolvePersonParentId(cfg),
-				resolveOrgId(cfg)
+				resolveOrgId(cfg, personId)
 			]);
 			orgId = resolvedOrgId;
 			status = 'ready';

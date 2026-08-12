@@ -51,6 +51,17 @@
 		sections: SectionNode[];
 		/** The member's CURRENT section entity ids ([] = unassigned). */
 		selectedIds: string[];
+		/**
+		 * TU.1/#109 review — the member's OWN organization id (`RosterRow.orgId`).
+		 * Used for ONE thing: scoping the TOP-LEVEL duplicate check to this org's
+		 * own roots. `sections` is the whole db's section tree, and live polyphony
+		 * holds 16 sections across FOUR test orgs, all org-parented — without the
+		 * org, every root is a "sibling" of every other and an EFK admin typing a
+		 * top-level "Soprano II" is refused because Kammernaiskoor Sireen has one.
+		 * Undefined/null = org unknown → the check falls back to comparing all
+		 * roots (conservative: a possible false duplicate beats a wrong create).
+		 */
+		orgId?: string | null;
 		/** Fired per tap: a section id, or null for "(Unassigned)". */
 		onpick: (sectionId: string | null) => void;
 		/**
@@ -65,7 +76,7 @@
 		oncreate?: (input: { name: string; parentId: string | null }) => void;
 	}
 
-	const { memberId, memberName, sections, selectedIds, onpick, oncreate }: Props = $props();
+	const { memberId, memberName, sections, selectedIds, orgId, onpick, oncreate }: Props = $props();
 
 	let open = $state(false);
 	/** The component root — the "inside" an outside-click is measured against. */
@@ -117,12 +128,30 @@
 			createError = m.roster_section_name_required;
 			return;
 		}
-		const isDuplicate = flatSections.some((node) => node.name.toLowerCase() === name.toLowerCase());
+		const parentId = createParentId === '' ? null : createParentId;
+		// TU.1/#109 (finding #10 root cause B) — SIBLING-scoped, not global: the
+		// live tree holds every standard voice name SOMEWHERE across four test
+		// orgs, so a global check refused every real-world create. Siblings are
+		// the chosen parent's DIRECT CHILDREN (or the top-level roots when
+		// parentId is null) — see SectionPicker.create.spec.ts /
+		// SectionPicker.create-live-shape.spec.ts.
+		//
+		// TU.1/#109 review — and at TOP LEVEL, "sibling" also means SAME ORG.
+		// `sections` is the whole db's tree; the live db's 16 sections are FOUR
+		// orgs' roots, so parent-scoping alone still lumped them into one sibling
+		// set (that same fixture carries three "Bass" and two "Baritone" roots —
+		// proof they are not siblings). A root of another org is skipped. Both
+		// orgs must be KNOWN to skip: an unknown org falls back to the previous
+		// conservative behaviour rather than silently allowing a real duplicate.
+		const isDuplicate = flatSections.some((node) => {
+			if (node.parentId !== parentId) return false;
+			if (parentId === null && orgId && node.orgId && node.orgId !== orgId) return false;
+			return node.name.toLowerCase() === name.toLowerCase();
+		});
 		if (isDuplicate) {
 			createError = m.roster_section_duplicate;
 			return;
 		}
-		const parentId = createParentId === '' ? null : createParentId;
 		oncreate?.({ name, parentId });
 		// Close-after-action — the WHOLE picker closes, same semantics as onpick
 		// (via closeMenu, so the submit button's focus lands back on the trigger
@@ -478,3 +507,5 @@
      the trigger, valid listbox children) -->
 <!-- (*MVOX:Palestrina* — #99 review fixes round 2: named listbox + aria-controls,
      honest aria-haspopup, "+ New section…" is a button again) -->
+<!-- (*MVOX:Palestrina* — TU.1/#109 review: top-level duplicate check scoped to the
+     member's OWN org, so another org's root is no longer a "sibling") -->
