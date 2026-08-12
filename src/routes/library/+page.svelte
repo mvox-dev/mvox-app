@@ -94,7 +94,7 @@
 		if (key === 'nr') return copy.copyNumber ? copy.copyNumber : null;
 		const lending = activeLendingForCopy(copy.id);
 		if (!lending) return null;
-		if (key === 'member') return borrowerNames.get(lending.memberId) ?? null;
+		if (key === 'member') return borrowerNames.get(lending.memberId) || null;
 		return lending.assignedAt || null;
 	}
 
