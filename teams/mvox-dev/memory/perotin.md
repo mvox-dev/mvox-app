@@ -6,6 +6,46 @@
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
 > committed artifact / findings doc / issue-comment thread carries the detail.
 
+## [CHECKPOINT] Session close 2026-08-12 — #117 TD.1 audit (read-only, no writes)
+
+Full 3-dimension `_sharing` audit for epic #116 (member-seat readability), posted as two comments on
+issue #117 (audit trail lives there, not re-narrated here): name visibility, entity type labels,
+entity-level visibility. Feeds TD.2 (#118 name propdefs), TD.3 (#119 labels), TD.4 (#120 instance
+visibility). Durable findings worth keeping independent of the issue thread:
+
+- **Two root-cause classes for member-seat hex-IDs**: (a) no `name` propdef exists at all — by
+  design (attendance/invitation/member/rsvp; member's identity path is via `member.person`, already
+  domain-readable) — not fixable by a `_sharing` write. (b) `name` propdef exists, carries real
+  values, but sits at private/absent tier (event/lending/library/organization/season/section) — same
+  shape as the #20 roster-crash root cause and the T6.2 "propdef widen ≠ instance re-aggregation"
+  lesson; needs BOTH a propdef `_sharing` write AND a re-aggregation touch-save sweep on existing
+  instances.
+- **`label` field 3-way split** (feeds TD.3): every type entity carries `name` (machine key, fine),
+  `description` (already fully populated EN+ET for all 20 types — #48 work, NOT a gap), and `label`
+  (short UI display name — the actual problem). Only `person`+`profile` have a correct short-bilingual
+  `label`. The other 18 have exactly one value, **zero language tag** — 9 are short-but-untranslated
+  (2 of those, repertoire_item/program_item, are raw un-humanized camelCase), 9 have the full
+  `description` text duplicated into `label` instead of short chrome.
+- **Event creation defaults to private**: 21/22 live events are `_sharing:private`; only one test row
+  is public. Looks like the create path never sets `_sharing` explicitly — flagged to team-lead as a
+  Josquin-territory question, not something I fixed (read-only task).
+- **Library "empty for member" root cause is instance-level, not propdef**: the ONE `library` entity
+  in the db is itself `_sharing:private` — that alone hides it regardless of the propdef state.
+- **Organization structure confirmed via `_parent`**: 2 umbrella federations (Eesti Kammerkooride
+  Liit, Eesti Meeskooride Liit) + 4 real collectives under them, no test/throwaway orgs, all already
+  `_sharing:domain` — should all stay member-visible; only gap is the name propdef.
+- **[GOTCHA] my own startup prompt has a stale path**: `perotin.md` startup step 4 points at
+  `$REPO/docs/migration/findings/*.md` (`$REPO`=workspace-app) but that directory has zero git
+  history in workspace-app — the two referenced findings docs (phase-b-api-probes-2026-05-20.md,
+  entu-api-key-expiry-2026-05-20.md) only exist in the legacy `~/workspace` schema repo, never
+  migrated in the 2026-08-07 split. Read them from there this session; flagged to team-lead, not
+  self-corrected (not my file to edit under current scope rules). **Fixed this session** — team-lead
+  committed `9991309` correcting the path.
+- **[DEFERRED, not mine]** an uncommitted, read-only, all-PASS probe pair sits in the legacy
+  `~/workspace` repo (`probes/probe-tr1-prereq-verify-2026-08-10.ts` + result artifact), authored
+  Palestrina, apparently superseded by the already-merged `#78` (`4f5eef1`) in workspace-app. Flagged,
+  not actioned — wrong repo, wrong author under the current split.
+
 ## [CHECKPOINT] Session MVOX-5 close (2026-08-09/10)
 
 Four items this session, all committed to main, no active WIP:

@@ -1,42 +1,47 @@
 # Palestrina — Team Lead Scratchpad
 
-> **Trimmed 2026-08-11 (session MVOX-7).** Full history in git.
+> **Trimmed 2026-08-12 (session MVOX-8).** Full history in git.
 
-### [NEXT SESSION] 2026-08-11 — session MVOX-7 → MVOX-8
+### [NEXT SESSION] 2026-08-12 — session MVOX-8 → MVOX-9
 
-mvox-app main @ `63143e2`. **v1.0 code complete.**
+mvox-app main @ `fb1759f`. **v1.0 code complete + UX polish + database tidiness delivered.**
 
-**What happened this session (MVOX-7, 2026-08-10 12:32 EEST → 2026-08-11 ~23:00 EEST):**
+**What happened this session (MVOX-8, 2026-08-11 23:15 EEST → 2026-08-12 ~17:00 EEST):**
 
-Massive delivery session — all four v1.0 epics delivered through the TDD pipeline. 21 tasks merged, 191 agents, ~21h elapsed.
+Two major epics delivered in parallel. ~80 agents, ~18h elapsed, 611 Entu data mutations.
 
 **Delivered:**
-- #77 Attendance 1.0: #82–#86 pipeline + #87 gate fix (57 agents, ~5.5h)
-- #78 Repertoire 1.0: #89–#93 pipeline (42 agents, ~5h, two runs — blockerType:data caught junction prop-def gap)
-- #80 Sections 1.0: #95–#99 pipeline (46 agents, ~5h, three runs — _parent vs current_section data mismatch + org-scoping false positive)
-- #81 Event detail 1.0: #101–#105 pipeline (46 agents, ~5.5h, two runs — locale register mis-tagged as data blocker)
+- #107 Auth token recovery: TDD pipeline (10 agents, ~94 min). Fix: 401 → clear cookie → redirect to sign-in
+- #108 UX polish 1.0: TDD pipeline, 5 tasks #109–#113 (40 agents, ~4.7h). Section defects, sections UX, repertoire UX, attendance+library (#88), i18n+a11y
+- #116 Database tidiness 2.0: data-tidy-pipeline, TD.1–TD.5 (30+ agents, 611 mutations). Name visibility (6 propdef widens + 55 touch-saves), type labels (18 bilingual), entity visibility (25 instance widens), tier alignment (130 narrow public→domain), member name formula, RSVP name formula
+- #106 Event detail live gate: 14/14 clean, zero findings (PO walked)
 
-**Template evolution (3 major upgrades):**
-1. **8 improvements** (PO-approved debrief): blockerType/fixShape, opus-5 FIX, SEED trailer guard, probeGates, PREFLIGHT, remote branch cleanup, phase() title matching
-2. **INTEGRATION phase** + RED integration test requirement — eliminated "correct but unreachable" class entirely (zero wiring gaps in Sections + Event detail)
-3. **PO rulings in review checklist** — prevents reviewer re-raising already-decided questions
+**New workflow template:** `data-tidy-pipeline.js` — PREPARE/REVIEW/EXECUTE/VERIFY with §8.6 discipline. 4 iterations to get through opus reviewer (tier inversion discovery, PO label direction ruling, lending formula edge case). Proven pattern for Entu data ops.
 
-**Template is now 11 phases:** SPIKE → SEED → PREFLIGHT → RED → GREEN → INTEGRATION → GREEN-FIX → REVIEW → FIX → MERGE → PROBE
+**Issues closed this session:** #88, #106, #107, #109, #110, #111, #112, #113, #116, #117, #118, #119, #120, #121
 
-**Args-parsing bug fixed:** root cause was Workflow tool passing args as JSON string via scriptPath. Added typeof/JSON.parse guard.
-
-**Key learnings saved to memory:**
-- `feedback_report_to_gama.md` — always include PO team in progress reports
+**Key findings saved to team knowledge:**
+- Tier inversion pattern: instance _sharing wider than propdef _sharing → name invisible in the served bucket. Season+person had this. Fix: align tiers (narrow instances or widen propdef).
+- Person names were NOT missing — 128 real names existed, masked by tier inversion. #115 root cause retroactively explained.
+- lending.name is a FORMULA — can't touch-save by re-POSTing name (no _id). Use non-formula property as touch vector.
+- Event create path never sets _sharing explicitly → new events default to private. Needs follow-up issue.
 
 **FIRST ACTION next session:**
-1. Four live gates pending (manual PO walks): #87, #94, #100, #106
+1. #114 UX polish live gate FAILED (7 findings). Fix 1-6, #7 may be filed separately:
+   1. Section creation broken — [+ New section] does nothing in live. TU.1 fix didn't hold.
+   2. Sub-section test blocked (depends on #1)
+   3. Empty section remove inconsistent — two Bass(0) rows, only one shows remove
+   4. Work separators: unindent title for clearer visual separation
+   5. Status row: (a) inline buttons not dropdown; (b) remove [pin], replace with unified edition picker
+   6. Copy sort: nulls-last not working
+   7. Language selector on profile page (NEW — PO may file separately)
+   5 checks passed (spinner, collapse-all, drop-target, native picker, attendance hide)
 2. #37 cleanup epic — still open, needs PO verification
-3. Comms hub was down at end of session (SSH timeout to 100.102.133.125:2222) — check on wake
-4. Commit scratchpads + template changes if not done before shutdown
+3. Event create _sharing follow-up — file issue for the create-path default-to-private problem
+4. Dry-run ledger cleanup — 12 dry-run JSON files in scripts/migrations/ledgers/ (only live ledgers committed)
 5. Standing teammates (finn, bentham, perotin) need respawn
+6. Perotin prompt path fixed this session (committed `9991309`)
 
 **Standing teammates this session:** finn, bentham, perotin (always-on, spawned at session start)
-
-**Known template issue:** Reviewer occasionally mis-tags locale/message-file fixes as `blockerType: data` instead of `code`, causing false non-code-blocker exits. Workaround: explicit "do NOT flag as blockerType: data" in review checklist for message-file fixes. [speculative] Could add a template-level guard that only treats findings with fixShape mentioning "migration" or "Entu API" as genuine data blockers.
 
 (*MVOX:Palestrina*)
