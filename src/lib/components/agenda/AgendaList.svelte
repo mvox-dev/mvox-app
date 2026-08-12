@@ -349,7 +349,7 @@
 					{#if membership === 'member'}
 						<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
 					{/if}
-					{#if conductorEventIds.has(item.id) && ontakeattendance}
+					{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
 						<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
 					{/if}
 					<!-- #87 fix — the panel is a CHILD of the row that opened it, directly

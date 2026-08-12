@@ -48,7 +48,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// #76 — inline checkout on browse tree
 		library_inline_checkout_placeholder: () => 'Select member',
 		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed'
+		library_inline_checkout_error: () => 'Checkout failed',
+		// #112/#88 — copy-list sort controls
+		library_copy_sort_label: () => 'Sort copies by',
+		library_copy_sort_nr: () => 'Nr',
+		library_copy_sort_member: () => 'Member',
+		library_copy_sort_since: () => 'Since'
 	}
 }));
 

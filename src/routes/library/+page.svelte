@@ -75,6 +75,44 @@
 	let editionNodeStatus = $state<Map<string, NodeStatus>>(new Map());
 	let copyNodeStatus = $state<Map<string, NodeStatus>>(new Map());
 
+	// #112/#88 — copy-list sort key, ONE control shared across every unfolded
+	// edition (a view concern, not per-edition state — re-sorting never
+	// refetches). Default 'nr' ascending.
+	type CopySortKey = 'nr' | 'member' | 'since';
+	let copySortKey = $state<CopySortKey>('nr');
+
+	/**
+	 * Sort value for a single copy under the given key, or null when the copy
+	 * has nothing to sort on there. Null ALWAYS sorts last, regardless of key:
+	 *   - 'nr': the copy's number (a falsy/zero copyNumber counts as "no nr",
+	 *     matching the same falsy check the row's own label already uses).
+	 *   - 'member' / 'since': drawn from the copy's ACTIVE lending, if any —
+	 *     an available (unassigned) copy has no lending, so both keys fall
+	 *     back to null together.
+	 */
+	function copySortValue(copy: Copy, key: CopySortKey): string | number | null {
+		if (key === 'nr') return copy.copyNumber ? copy.copyNumber : null;
+		const lending = activeLendingForCopy(copy.id);
+		if (!lending) return null;
+		if (key === 'member') return borrowerNames.get(lending.memberId) ?? null;
+		return lending.assignedAt || null;
+	}
+
+	/** Stable sort: nulls last, numbers compare numerically, everything else
+	 *  (names, ISO date strings) compares lexically — ISO dates sort correctly
+	 *  as strings. */
+	function sortCopies(copies: Copy[], key: CopySortKey): Copy[] {
+		return [...copies].sort((a, b) => {
+			const av = copySortValue(a, key);
+			const bv = copySortValue(b, key);
+			if (av === null && bv === null) return 0;
+			if (av === null) return 1;
+			if (bv === null) return -1;
+			if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+			return String(av).localeCompare(String(bv));
+		});
+	}
+
 	// #92 TR.4 — current season's active/learning repertoire, keyed by work id.
 	// Retired/dropped items never enter this map — filtered at resolution time
 	// (AC-8: members never see those statuses, same discipline as TR.2/TR.3).
@@ -791,7 +829,49 @@
 													{:else if (copiesByEdition.get(edition.id) ?? []).length === 0}
 														<p class="text-xs text-ink-2">{m.library_copies_empty()}</p>
 													{:else}
-														{#each copiesByEdition.get(edition.id) ?? [] as copy (copy.id)}
+														<!-- #112/#88 — compact sort control group: nr / member / since,
+														     aria-pressed marks the active key. -->
+														<div
+															data-testid="copy-sort-{edition.id}"
+															role="group"
+															aria-label={m.library_copy_sort_label()}
+															class="mb-1 flex items-center gap-1"
+														>
+															<button
+																type="button"
+																data-testid="copy-sort-nr-{edition.id}"
+																aria-pressed={copySortKey === 'nr'}
+																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'nr'
+																	? 'border-ink bg-ink text-paper'
+																	: 'border-ink-5 text-ink-2'}"
+																onclick={() => (copySortKey = 'nr')}
+															>
+																{m.library_copy_sort_nr()}
+															</button>
+															<button
+																type="button"
+																data-testid="copy-sort-member-{edition.id}"
+																aria-pressed={copySortKey === 'member'}
+																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'member'
+																	? 'border-ink bg-ink text-paper'
+																	: 'border-ink-5 text-ink-2'}"
+																onclick={() => (copySortKey = 'member')}
+															>
+																{m.library_copy_sort_member()}
+															</button>
+															<button
+																type="button"
+																data-testid="copy-sort-since-{edition.id}"
+																aria-pressed={copySortKey === 'since'}
+																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'since'
+																	? 'border-ink bg-ink text-paper'
+																	: 'border-ink-5 text-ink-2'}"
+																onclick={() => (copySortKey = 'since')}
+															>
+																{m.library_copy_sort_since()}
+															</button>
+														</div>
+														{#each sortCopies(copiesByEdition.get(edition.id) ?? [], copySortKey) as copy (copy.id)}
 															{@const availability = deriveCopyAvailability(copy.id, lendings)}
 															{@const activeLending = activeLendingForCopy(copy.id)}
 															<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">

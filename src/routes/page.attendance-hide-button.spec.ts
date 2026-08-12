@@ -1,24 +1,20 @@
 // @vitest-environment happy-dom
 //
-// #87 RED — the inline attendance panel must render INSIDE the recent-event
-// row it was opened from, not at the bottom of the page.
+// #112/#1 RED — while the inline attendance panel is OPEN, the 'Take
+// attendance' button that opened it must be HIDDEN.
 //
-// The bug: +page.svelte renders <AttendanceSurface> OUTSIDE <AgendaList>,
-// below every event. A conductor tapping 'Take attendance' on a row near the
-// top of a long Recent section gets a panel that opens off-screen at the
-// bottom — she sees no visible change and taps again, concluding the button
-// is broken.
+// The bug: AgendaList renders <TakeAttendanceButton> unconditionally for every
+// conducted recent row — the row whose panel is open keeps showing the button
+// directly ABOVE the expanded panel. Tapping it again is a no-op that looks
+// broken, and the control reads as "attendance not yet taken" while the taking
+// surface sits right under it. The event detail page already got this right
+// (`{#if isConductorForEvent && !attendancePanelOpen}`); the agenda did not.
 //
 // These are route-level integration tests on the REAL +page.svelte (the same
-// composition page.attendance-panel.spec.ts drives): they render the actual
-// page route, click the actual button, and assert on where the panel lands in
-// the DOM — so an implementation that merely makes some component unit test
-// pass without re-wiring the page cannot go green here.
-//
-// Every query for the panel is SCOPED TO THE EVENT ROW element
-// (`[data-testid="agenda-recent-row-<id>"] [data-testid="attendance-panel"]`).
-// That scoping is the whole point: the current bottom-of-page panel exists in
-// the document but is NOT a descendant of any row, so these fail RED today.
+// composition page.attendance-inline-placement.spec.ts drives): they render
+// the actual page route, click the actual button, and assert on the button's
+// presence INSIDE the owning row — so an implementation that only patches a
+// component unit test without re-wiring AgendaList cannot go green here.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -31,7 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #101 TE.1 -- every agenda row now carries an event-detail link.
 		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
@@ -94,9 +89,10 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// Same stubs page.attendance-panel.spec.ts uses: the repertoire write layer
-// reaches $env/dynamic/public (unavailable under happy-dom outside a SvelteKit
-// request context), and the works/rights loads are not this file's subject.
+// Same stubs page.attendance-inline-placement.spec.ts uses: the repertoire
+// write layer reaches $env/dynamic/public (unavailable under happy-dom outside
+// a SvelteKit request context), and the works/rights loads are not this file's
+// subject.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
@@ -177,42 +173,36 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 	completionGateStore.set('complete');
 }
 
-/**
- * THREE conducted recent events — enough rows that the top row's panel opening
- * at the very bottom of the page is a real off-screen bug, and enough distinct
- * ids to pin WHICH row the panel belongs to. Reverse-chron, as the page
- * delivers them: past-1 is the MOST RECENT (top) row.
- */
-function setThreeConductedRecentEventsFixture() {
+/** TWO conducted recent events — enough to prove the hide is scoped to the ONE
+ *  row whose panel is open, not a page-wide blanket. Reverse-chron, as the
+ *  page delivers them. */
+function setTwoConductedRecentEventsFixture() {
 	loadFullAgendaMock.mockResolvedValue({
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
-			agendaItem('past-2', '2026-06-03T16:00:00.000Z', []),
-			agendaItem('past-3', '2026-05-27T16:00:00.000Z', [])
+			agendaItem('past-2', '2026-06-03T16:00:00.000Z', [])
 		],
 		seasonId: 's1',
-		seasonConductors: ['person-p'], // seat inherited season-wide — all three rows conducted
+		seasonConductors: ['person-p'], // seat inherited season-wide — both rows conducted
 		seasonOwners: [],
 		seasonEditors: []
 	});
 	loadRosterMock.mockResolvedValue([
-		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
-		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
+		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
 	]);
 	listAttendanceMock.mockResolvedValue([]);
-	listAllRsvpsForEventMock.mockResolvedValue([
-		{ rsvpId: 'r1', memberId: 'm1', status: 'going' } // m2 deliberately absent — no answer
-	]);
+	listAllRsvpsForEventMock.mockResolvedValue([]);
 	setAuthedWithOneCollective('person-p');
 }
 
 const rowSelector = (eventId: string) => `[data-testid="agenda-recent-row-${eventId}"]`;
-const panelInRow = (eventId: string) =>
-	`${rowSelector(eventId)} [data-testid="attendance-panel"]`;
+const buttonInRow = (eventId: string) =>
+	`${rowSelector(eventId)} [data-testid="take-attendance-btn"]`;
+const panelInRow = (eventId: string) => `${rowSelector(eventId)} [data-testid="attendance-panel"]`;
 
 async function renderPageWithRecentRows() {
-	setThreeConductedRecentEventsFixture();
+	setTwoConductedRecentEventsFixture();
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector(rowSelector('past-1'))).not.toBeNull();
@@ -221,13 +211,11 @@ async function renderPageWithRecentRows() {
 }
 
 async function openPanelOnRow(container: HTMLElement, eventId: string) {
-	const btn = container.querySelector(
-		`${rowSelector(eventId)} [data-testid="take-attendance-btn"]`
-	);
+	const btn = container.querySelector(buttonInRow(eventId));
 	expect(btn).not.toBeNull();
 	await fireEvent.click(btn!);
 	await waitFor(() => {
-		expect(container.querySelector('[data-testid="attendance-panel"]')).not.toBeNull();
+		expect(container.querySelector(panelInRow(eventId))).not.toBeNull();
 	});
 }
 
@@ -253,99 +241,72 @@ afterEach(() => {
 	resetConductor();
 });
 
-describe('+page — the attendance panel opens INSIDE the tapped event row (#87)', () => {
-	it("tapping 'Take attendance' on the TOP recent row renders the panel inside THAT row — not below the whole agenda", async () => {
+describe("+page — the 'Take attendance' button hides while its panel is open (#112/#1)", () => {
+	it('with every panel CLOSED, each conducted recent row shows its button (guard: the hide must not become a blanket removal)', async () => {
+		const container = await renderPageWithRecentRows();
+
+		// No panel open anywhere → both conducted rows carry the entry point.
+		expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
+		expect(container.querySelector(buttonInRow('past-1'))).not.toBeNull();
+		expect(container.querySelector(buttonInRow('past-2'))).not.toBeNull();
+	});
+
+	it("opening a row's panel HIDES that row's 'Take attendance' button — the panel replaces the entry point, they never render together", async () => {
 		const container = await renderPageWithRecentRows();
 		await openPanelOnRow(container, 'past-1');
 
-		// The panel is a DESCENDANT of the tapped row's element.
+		// The tapped row's button is GONE while its panel is expanded.
 		expect(container.querySelector(panelInRow('past-1'))).not.toBeNull();
-
-		// And it does NOT float outside every row (the current bug: a panel that
-		// exists in the document but belongs to no row — i.e., bottom of the page).
-		const panel = container.querySelector('[data-testid="attendance-panel"]')!;
-		const owningRow = panel.closest('[data-testid^="agenda-recent-row-"]');
-		expect(owningRow).not.toBeNull();
-		expect(owningRow!.getAttribute('data-testid')).toBe('agenda-recent-row-past-1');
+		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
 	});
 
-	it("the panel renders where the 'Take attendance' button was, in the same row — #112/#1 hides that button while its own panel is open, so the panel is what the conductor now sees in its place", async () => {
+	it("the hide is scoped to the OPEN row — the other conducted row keeps its button", async () => {
 		const container = await renderPageWithRecentRows();
 		await openPanelOnRow(container, 'past-1');
 
-		const row = container.querySelector(rowSelector('past-1'))!;
-		const btn = row.querySelector('[data-testid="take-attendance-btn"]');
-		const panel = row.querySelector('[data-testid="attendance-panel"]');
-		// #112/#1 — the entry point and the panel never render together.
-		expect(btn).toBeNull();
-		expect(panel).not.toBeNull();
+		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
+		// past-2's panel is closed → its entry point stays.
+		expect(container.querySelector(panelInRow('past-2'))).toBeNull();
+		expect(container.querySelector(buttonInRow('past-2'))).not.toBeNull();
 	});
 
-	it('opening a SECOND event closes the first panel — exactly one panel, inside the newly tapped row', async () => {
+	it('closing the panel brings the button back; reopening hides it again — visibility tracks the panel across the full toggle cycle', async () => {
 		const container = await renderPageWithRecentRows();
+
+		// open → hidden
 		await openPanelOnRow(container, 'past-1');
-		expect(container.querySelector(panelInRow('past-1'))).not.toBeNull();
+		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
 
-		// Now tap 'Take attendance' on a DIFFERENT event (the third row).
-		await fireEvent.click(
-			container.querySelector(`${rowSelector('past-3')} [data-testid="take-attendance-btn"]`)!
-		);
-		await waitFor(() => {
-			expect(container.querySelector(panelInRow('past-3'))).not.toBeNull();
-		});
-
-		// The previous row's panel is GONE — one panel at a time.
-		expect(container.querySelector(panelInRow('past-1'))).toBeNull();
-		expect(container.querySelectorAll('[data-testid="attendance-panel"]')).toHaveLength(1);
-	});
-
-	it('the relocated panel still renders the member list with P/A/L toggles and the RSVP comparison — scoped INSIDE the row', async () => {
-		const container = await renderPageWithRecentRows();
-		await openPanelOnRow(container, 'past-2');
-
-		// One row per roster member, INSIDE the event row's panel.
-		await waitFor(() => {
-			expect(
-				container.querySelector(`${panelInRow('past-2')} [data-testid="attendance-row-m1"]`)
-			).not.toBeNull();
-		});
-		expect(
-			container.querySelector(`${panelInRow('past-2')} [data-testid="attendance-row-m2"]`)
-		).not.toBeNull();
-		// P/A/L toggles per member, all within the row-scoped panel.
-		for (const memberId of ['m1', 'm2']) {
-			for (const status of ['present', 'absent', 'late']) {
-				expect(
-					container.querySelector(
-						`${panelInRow('past-2')} [data-testid="attendance-toggle-${memberId}-${status}"]`
-					)
-				).not.toBeNull();
-			}
-		}
-		// The RSVP comparison column survived the relocation too.
-		expect(
-			container.querySelector(`${panelInRow('past-2')} [data-testid="attendance-rsvp-m1"]`)!
-				.textContent
-		).toContain('Going');
-		expect(
-			container.querySelector(`${panelInRow('past-2')} [data-testid="attendance-rsvp-m2"]`)!
-				.textContent
-		).toContain('No answer');
-
-		// And a toggle tap still fires the write for THIS event — the relocation
-		// must not have severed the page-owned queue wiring.
-		createAttendanceMock.mockResolvedValue('new-att-1');
+		// close (the panel's own collapse control) → visible again
 		await fireEvent.click(
 			container.querySelector(
-				`${panelInRow('past-2')} [data-testid="attendance-toggle-m1-present"]`
+				`${rowSelector('past-1')} [data-testid="attendance-collapse-btn"]`
 			)!
 		);
 		await waitFor(() => {
-			expect(createAttendanceMock).toHaveBeenCalledTimes(1);
+			expect(container.querySelector(panelInRow('past-1'))).toBeNull();
 		});
-		expect(createAttendanceMock.mock.calls[0][1]).toEqual(
-			expect.objectContaining({ eventId: 'past-2', memberId: 'm1', status: 'present' })
-		);
+		expect(container.querySelector(buttonInRow('past-1'))).not.toBeNull();
+
+		// reopen → hidden again (the restored button is live, not a dead clone)
+		await openPanelOnRow(container, 'past-1');
+		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
+	});
+
+	it("switching the panel to a DIFFERENT row restores the first row's button and hides the newly opened row's", async () => {
+		const container = await renderPageWithRecentRows();
+		await openPanelOnRow(container, 'past-1');
+		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
+
+		// Open the second event — one panel at a time, so past-1's panel closes.
+		await fireEvent.click(container.querySelector(buttonInRow('past-2'))!);
+		await waitFor(() => {
+			expect(container.querySelector(panelInRow('past-2'))).not.toBeNull();
+		});
+
+		expect(container.querySelector(buttonInRow('past-2'))).toBeNull();
+		expect(container.querySelector(panelInRow('past-1'))).toBeNull();
+		expect(container.querySelector(buttonInRow('past-1'))).not.toBeNull();
 	});
 });
 
