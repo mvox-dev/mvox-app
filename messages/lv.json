@@ -21,6 +21,8 @@
 	"attendance_rsvp_none": "Nav atbildes",
 	"attendance_rsvp_aria_label": "RSVP {name}: {rsvp}",
 	"attendance_load_error": "Neizdevās ielādēt apmeklējumu.",
+	"attendance_loading": "Ielādē apmeklējumu…",
+	"attendance_ready": "Apmeklējums ielādēts, {count} dalībnieki",
 	"attendance_save_failed": "Neizdevās saglabāt apmeklējumu.",
 	"attendance_tally": "{present} klāt · {absent} nav · {late} kavējas",
 	"attendance_close": "Aizvērt",
@@ -132,6 +134,7 @@
 	"roster_section_remove_cancel": "Paturēt {name}",
 	"roster_section_remove_failed": "Neizdevās noņemt {name} — balss grupa joprojām pastāv.",
 	"roster_section_remove_not_empty": "Balss grupā {name} joprojām ir dalībnieki vai apakšgrupas — nekas netika noņemts.",
+	"roster_section_removed": "{name} noņemts.",
 	"roster_sections_expand_all": "Izvērst visas balss grupas",
 	"roster_sections_collapse_all": "Sakļaut visas balss grupas",
 	"roster_section_assign_failed": "Balss grupa tika izveidota, taču dalībnieku tai nevarēja pievienot.",
@@ -249,5 +252,12 @@
 	"agenda_row_link_label": "Skatīt notikuma {event} detaļas",
 	"agenda_row_link_label_unnamed": "Skatīt notikuma detaļas",
 	"session_expired_message": "Jūsu sesija ir beigusies. Lūdzu, piesakieties vēlreiz.",
-	"session_expired_signin": "Pieteikties"
+	"session_expired_signin": "Pieteikties",
+	"agenda_switch_collective": "Mainīt kolektīvu",
+	"agenda_signed_in": "Pieteicies",
+	"agenda_signed_out": "Neesat pieteicies",
+	"agenda_sign_in": "Pieteikties",
+	"agenda_collectives_none": "Vēl nav kolektīvu",
+	"agenda_collectives_error_retry": "Neizdevās ielādēt kolektīvus — mēģināt vēlreiz",
+	"agenda_collectives_loading": "Ielādē kolektīvus…"
 }

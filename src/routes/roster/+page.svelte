@@ -467,22 +467,104 @@
 	// one at a time, and arming one disarms the other.
 	let pendingRemoveId = $state<string | null>(null);
 
-	function armRemove(id: string): void {
+	// #113 RED — arming/disarming the two-step confirm each unmount the very
+	// button that held focus (the ✕ → confirm/cancel swap, and the reverse on
+	// cancel), so without explicit placement focus drops to <body> (WCAG
+	// 2.4.3) — the same defect class as `moveSection`'s boundary case above.
+	// Both are async: `tick()` lets the swapped-in button render before the
+	// query for it runs.
+	async function armRemove(id: string): Promise<void> {
 		// A fresh attempt owns the error slot — a previous failure's message must
 		// not outlive the retry that fixed it (same discipline as `handleCreate`
 		// and `performReorder`).
 		removeError = null;
 		pendingRemoveId = id;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-testid="section-remove-confirm-${id}"]`)?.focus();
 	}
 
+	async function disarmRemove(id: string): Promise<void> {
+		pendingRemoveId = null;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-testid="section-remove-${id}"]`)?.focus();
+	}
+
+	// #113 review F1 — the COMPLETING half of the same WCAG 2.4.3 story as
+	// `armRemove`/`disarmRemove`, and the only irreversible one: a SUCCESSFUL
+	// remove unmounts the focused Confirm button together with the whole
+	// `section-group-<id>` subtree, so unlike the cancel path there is no
+	// restored twin to hand focus back to and it drops to <body>. The neighbour
+	// has to be resolved from the PRE-removal tree — afterwards the node is gone
+	// and its parentage with it.
+
+	/** The section whose header should catch focus once `id` is gone: its
+	 *  PREVIOUS sibling (focus moves UP the list rather than jumping across it),
+	 *  else its parent, else null — "no neighbouring header", and the caller
+	 *  falls back to the collapse-all control that always renders above the
+	 *  groups. */
+	function removeFocusFallbackId(id: string): string | null {
+		const siblingNodes = siblingsOf(sections, id);
+		if (!siblingNodes) return null;
+		const idx = siblingNodes.findIndex((n) => n.id === id);
+		if (idx > 0) return siblingNodes[idx - 1].id;
+		return findSectionNode(sections, id)?.parentId ?? null;
+	}
+
+	/** Place focus once a SUCCESSFUL removal has settled. `tick()` first, same
+	 *  shape as `armRemove`/`moveSection`: the group only leaves the DOM after
+	 *  the `sections` reassignment renders. */
+	async function placeFocusAfterRemove(targetId: string | null): Promise<void> {
+		await tick();
+		const neighbour = targetId
+			? document.querySelector<HTMLElement>(`[data-testid="section-toggle-${targetId}"]`)
+			: null;
+		(neighbour ?? document.querySelector<HTMLElement>('[data-testid="sections-toggle-all"]'))?.focus();
+	}
+
+	/** …and after a REFUSED one: nothing was removed, so the ✕ that the Confirm
+	 *  button replaced is back in the header row and is the honest landing (the
+	 *  header itself only as a fallback — `canRemove` could have gone false under
+	 *  a concurrent refetch). The error text is announced separately by
+	 *  `section-remove-error`'s role="alert". */
+	async function placeFocusAfterFailedRemove(id: string): Promise<void> {
+		await tick();
+		(
+			document.querySelector<HTMLElement>(`[data-testid="section-remove-${id}"]`) ??
+			document.querySelector<HTMLElement>(`[data-testid="section-toggle-${id}"]`)
+		)?.focus();
+	}
+
+	// #113 review F1 — a SUCCESSFUL remove was also the one outcome with no
+	// announcement at all: the failure path has `section-remove-error`
+	// (role="alert") and the reorder path has `roster-reorder-status`, so the
+	// delete that actually worked was the one thing a screen-reader user got no
+	// confirmation of (WCAG 4.1.3). Its own visually-hidden role="status"
+	// region, mirroring `reorderStatus` — see `roster-section-remove-status`.
+	let removeStatus = $state('');
+
 	async function handleRemoveSection(id: string): Promise<void> {
+		// Both resolved BEFORE `pendingRemoveId` is cleared and the tree mutated —
+		// each of those destroys the evidence this needs.
+		const fallbackId = removeFocusFallbackId(id);
+		const active = document.activeElement;
+		// Only restore focus if the REMOVAL is what lost it — the same `ownsFocus`
+		// discipline as `moveSection`: focus already sitting elsewhere is the
+		// user's own doing and yanking it back would fight them.
+		const ownsFocus =
+			!active ||
+			active === document.body ||
+			active === document.querySelector(`[data-testid="section-remove-confirm-${id}"]`);
 		pendingRemoveId = null;
 		removeError = null;
+		// A fresh attempt owns the live region too — a previous "Tenor removed."
+		// must not sit in it while a new removal is in flight.
+		removeStatus = '';
 		const name = findSectionNode(sections, id)?.name ?? id;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section remove with no cfg', id);
 			removeError = { name, kind: 'write' };
+			if (ownsFocus) await placeFocusAfterFailedRemove(id);
 			return;
 		}
 		const before = sections;
@@ -500,6 +582,8 @@
 				next.delete(id);
 				expandedIds = next;
 			}
+			removeStatus = m.roster_section_removed({ name });
+			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
 		} catch (e) {
 			console.error('roster: section remove failed', id, e);
 			sections = before;
@@ -507,6 +591,7 @@
 			// its own message: nothing was written, and "it's not actually empty" is
 			// a different instruction to the user than "the delete was refused".
 			removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
+			if (ownsFocus) await placeFocusAfterFailedRemove(id);
 		}
 	}
 
@@ -1216,7 +1301,7 @@
 						data-testid="section-remove-cancel-{node.id}"
 						aria-label={m.roster_section_remove_cancel({ name: node.name })}
 						class="rounded px-1 text-xs text-ink-2 underline hover:text-ink"
-						onclick={() => (pendingRemoveId = null)}
+						onclick={() => void disarmRemove(node.id)}
 					>
 						{m.roster_section_remove_cancel_short()}
 					</button>
@@ -1227,7 +1312,7 @@
 						aria-label={m.roster_section_remove({ name: node.name })}
 						title={m.roster_section_remove({ name: node.name })}
 						class="rounded px-1 text-xs text-ink-2 hover:text-red-700"
-						onclick={() => armRemove(node.id)}
+						onclick={() => void armRemove(node.id)}
 					>
 						✕
 					</button>
@@ -1334,6 +1419,20 @@
 			{reorderStatus}
 		</div>
 
+		<!-- #113 review F1 — the removal result, same contract as the reorder region
+		     above: mounted from first render (a live region announces only CHANGES
+		     to its contents) and visually hidden, because a sighted user watched the
+		     group vanish. Only the SUCCESS text lands here; a refused remove is a
+		     role="alert" (`section-remove-error`), not a status. -->
+		<div
+			data-testid="roster-section-remove-status"
+			role="status"
+			aria-live="polite"
+			class="sr-only"
+		>
+			{removeStatus}
+		</div>
+
 		{#if status === 'no-collective'}
 			<p data-testid="roster-no-collective" class="text-sm">{m.roster_no_collective()}</p>
 		{:else if status === 'loading'}
@@ -1416,6 +1515,7 @@
 					data-testid="section-reorder-pending"
 					role="status"
 					aria-busy="true"
+					aria-live="polite"
 					class="flex items-center gap-2 text-xs text-ink-2"
 				>
 					<span

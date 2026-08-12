@@ -405,6 +405,54 @@ describe('#105 — a11y: landmarks and headings', () => {
 		expect(heading!.textContent).toContain('[event_detail_attendance_heading]');
 	});
 
+	// #113 review F2 — the attendance entry point unmounts while its panel is
+	// open and the panel's Close button unmounts itself, so BOTH transitions
+	// have to place focus (WCAG 2.4.3). The agenda route got the pair; this
+	// route renders the SAME AttendanceSurface behind the SAME gate and had only
+	// the open half (the component's own onMount), stranding focus on <body> on
+	// the way back out.
+	it('opening the attendance panel moves focus INTO it, and closing returns focus to the restored entry point', async () => {
+		const { container } = renderEventPage(pastConductorEvent());
+		const attendance = await waitForTestid(container, 'event-detail-attendance');
+		const open = await waitFor(() => {
+			const el = attendance.querySelector('[data-testid="take-attendance-btn"]');
+			expect(el, 'the conductor entry point').not.toBeNull();
+			return el as HTMLElement;
+		});
+		open.focus();
+		await fireEvent.click(open);
+		const panel = await waitFor(() => {
+			const el = attendance.querySelector('[data-testid="attendance-panel"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+		expect(
+			attendance.querySelector('[data-testid="take-attendance-btn"]'),
+			'the entry point unmounts while the panel is open'
+		).toBeNull();
+		expect(
+			panel.contains(panel.ownerDocument.activeElement),
+			`focus must land inside the panel, was on <${panel.ownerDocument.activeElement?.tagName}>`
+		).toBe(true);
+
+		const close = panel.querySelector('[data-testid="attendance-collapse-btn"]') as HTMLElement;
+		expect(close, "the panel's close control").not.toBeNull();
+		close.focus();
+		await fireEvent.click(close);
+		const restored = await waitFor(() => {
+			expect(attendance.querySelector('[data-testid="attendance-panel"]')).toBeNull();
+			const el = attendance.querySelector('[data-testid="take-attendance-btn"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+		await waitFor(() => {
+			expect(
+				restored.ownerDocument.activeElement,
+				'focus must return to the restored entry point'
+			).toBe(restored);
+		});
+	});
+
 	it('heading levels never skip (h1 → h2 → h3, no jumps) — on the editor view with every section rendered', async () => {
 		const { container } = renderEventPage(pastConductorEvent());
 		await waitForTestid(container, 'event-detail-attendance');

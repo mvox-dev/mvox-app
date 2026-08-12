@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
 	import { authStore } from '$lib/auth/session';
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
@@ -1046,10 +1047,26 @@
 	}
 
 	function closeAttendancePanel() {
+		// #113 fix-forward — `closeAttendancePanel` is called from INSIDE the
+		// `selected`-tracking $effect below (via `loadForSelected`'s cleanup
+		// path). Reading `attendanceItem` here without `untrack` would make
+		// `attendanceItem` itself a dependency of THAT effect — the effect would
+		// then re-run (and re-close the panel) the instant `openAttendancePanel`
+		// sets `attendanceItem`, closing a panel the very click that opened it.
+		const closedItemId = untrack(() => attendanceItem?.id);
 		attendanceRequestId++; // invalidate any in-flight load
 		attendanceItem = null;
 		attendanceLoading = false;
 		attendanceError = false;
+		if (closedItemId) {
+			tick().then(() => {
+				document
+					.querySelector<HTMLElement>(
+						`[data-testid="agenda-recent-row-${closedItemId}"] [data-testid="take-attendance-btn"]`
+					)
+					?.focus();
+			});
+		}
 	}
 
 	// Same #15 shape as rsvpQueue above, keyed by an eventId:memberId composite
@@ -1293,7 +1310,7 @@
 					<p class="font-display text-xl text-ink" data-testid="selected-collective">{selected.name}</p>
 					<nav class="flex items-center gap-3 text-xs text-ink-3">
 						{#if pickerMode === 'picker'}
-							<a class="underline" href="/collectives">Switch collective</a>
+							<a class="underline" href="/collectives">{m.agenda_switch_collective()}</a>
 						{/if}
 					</nav>
 				</header>
@@ -1361,19 +1378,19 @@
 		</DeskSurface>
 	{:else}
 		<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper text-ink">
-			<p class="text-sm text-ink" data-testid="auth-status">Signed in</p>
+			<p class="text-sm text-ink" data-testid="auth-status">{m.agenda_signed_in()}</p>
 			{#if collectives.status === 'none'}
-				<a class="text-sm underline" href="/collectives">No collectives yet</a>
+				<a class="text-sm underline" href="/collectives">{m.agenda_collectives_none()}</a>
 			{:else if collectives.status === 'error'}
-				<a class="text-sm underline" href="/collectives">Couldn't load collectives — retry</a>
+				<a class="text-sm underline" href="/collectives">{m.agenda_collectives_error_retry()}</a>
 			{:else}
-				<p class="text-sm text-ink">Loading collectives…</p>
+				<p class="text-sm text-ink">{m.agenda_collectives_loading()}</p>
 			{/if}
 		</main>
 	{/if}
 {:else if auth.status === 'anonymous'}
 	<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper text-ink">
-		<p class="text-sm text-ink" data-testid="auth-status">Signed out</p>
-		<a class="text-sm underline" href="/auth/login">Sign in</a>
+		<p class="text-sm text-ink" data-testid="auth-status">{m.agenda_signed_out()}</p>
+		<a class="text-sm underline" href="/auth/login">{m.agenda_sign_in()}</a>
 	</main>
 {/if}

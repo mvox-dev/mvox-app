@@ -12,6 +12,7 @@
 	keys (attendance_close, attendance_tally) added in the #84 review pass.
 -->
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
@@ -55,6 +56,17 @@
 		onclose
 	}: Props = $props();
 
+	// #113 RED — the 'Take attendance' button that opened this panel unmounts
+	// the instant it does (the #112/#1 hide-while-open behaviour), so without
+	// explicit placement focus drops to <body> (WCAG 2.4.3). The close button
+	// is the natural landing: first focusable element in the panel, and the
+	// symmetric undo (`closeAttendancePanel` in +page.svelte returns focus to
+	// the restored 'Take attendance' button on the way back out).
+	let closeButtonEl = $state<HTMLButtonElement | undefined>(undefined);
+	onMount(() => {
+		closeButtonEl?.focus();
+	});
+
 	const STATUSES: { value: AttendanceStatus; label: () => string }[] = [
 		{ value: 'present', label: m.attendance_status_present },
 		{ value: 'absent', label: m.attendance_status_absent },
@@ -81,6 +93,25 @@
 		ontoggle(memberId, current === status ? null : status);
 	}
 
+	/** Text of the panel's always-mounted sr-only live region.
+	 *
+	 *  #113 review F1 — a live region announces CHANGES to its contents, so it
+	 *  must already be in the DOM before the text it should announce arrives.
+	 *  The first cut mounted the region together with its loading text inside
+	 *  the `{#if loading}` branch, which is the one shape that never announces:
+	 *  the panel mounts with `loading` already true, so there is no empty→text
+	 *  transition on the way in, and on the way out the region unmounted
+	 *  entirely (aria-busy falling off a non-live container is not spoken), so
+	 *  there was no completion cue either. Mounted once for the panel's whole
+	 *  life and driven by state, both edges become real content changes. Same
+	 *  rule the roster regions already follow (roster/+page.svelte).
+	 *
+	 *  The error branch deliberately yields '' — the visible error line already
+	 *  carries role="alert", and two regions saying the same thing double-speak. */
+	const statusText = $derived(
+		loading ? m.attendance_loading() : error ? '' : m.attendance_ready({ count: members.length })
+	);
+
 	/** Live tally of the currently-known statuses across the roster. Pure. */
 	const tally = $derived.by(() => {
 		let present = 0;
@@ -96,10 +127,26 @@
 	});
 </script>
 
-<div data-testid="attendance-panel" class="mt-3 flex flex-col gap-2 rounded-lg border border-ink-4 bg-paper p-3">
+<!-- #113 review F4 — `aria-busy` belongs on the CONTAINER the focused control
+     lives in, not on the skeleton: the open-focus above parks the user on the
+     Close button while `loading` is true, so without it a screen-reader user
+     hears "Close, button" and then silence until the roster resolves, with
+     nothing saying a wait is in progress. The skeleton itself stays
+     aria-hidden (decoration); the sr-only role="status" below is what carries
+     the words — the same role="status" + aria-live + m.* text + aria-hidden
+     glyph split as the roster's reorder spinner. It sits OUTSIDE the
+     loading/error/loaded branches on purpose (review F1, see `statusText`):
+     mounted for the panel's whole life, so both the arrival of the loading
+     text and its replacement by the loaded text are announced. -->
+<div
+	data-testid="attendance-panel"
+	aria-busy={loading ? 'true' : undefined}
+	class="mt-3 flex flex-col gap-2 rounded-lg border border-ink-4 bg-paper p-3"
+>
 	<div class="flex items-center justify-between">
 		<span class="truncate font-display text-sm text-ink">{item.name}</span>
 		<button
+			bind:this={closeButtonEl}
 			type="button"
 			data-testid="attendance-collapse-btn"
 			aria-label={m.attendance_close()}
@@ -109,6 +156,10 @@
 			&times;
 		</button>
 	</div>
+
+	<span data-testid="attendance-panel-status" role="status" aria-live="polite" class="sr-only"
+		>{statusText}</span
+	>
 
 	{#if loading}
 		<div data-testid="attendance-panel-loading" class="flex flex-col gap-2" aria-hidden="true">

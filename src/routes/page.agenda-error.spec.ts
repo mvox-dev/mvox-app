@@ -14,7 +14,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_tomorrow: () => 'Tomorrow',
 		agenda_gap_weeks: (params: { weeks: number }) => `In ${params.weeks} weeks`,
 		agenda_load_error: () => "Couldn't load the agenda.",
-		agenda_retry: () => 'Retry'
+		agenda_retry: () => 'Retry',
+		// #113 review F3 — the page header's collectives link is a paraglide key
+		// now (it was hardcoded English); this spec renders that header.
+		agenda_switch_collective: () => 'Switch collective'
 	}
 }));
 

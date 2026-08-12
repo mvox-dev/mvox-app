@@ -381,4 +381,44 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// #113 TU.5 — a11y pass over the sort controls: they must be a NAMED group of
+// native (keyboard-operable) toggle buttons, with aria-pressed as the single
+// source of "which key is active". Route-level, same composition as above.
+// ---------------------------------------------------------------------------
+describe('/library — copy-sort controls a11y (#113)', () => {
+	it('the three controls live in a role="group" with an m.* accessible name', async () => {
+		const container = await renderWithEditionUnfolded();
+		const group = container.querySelector('[data-testid="copy-sort-edition-1"]');
+		expect(group, 'the sort control group').not.toBeNull();
+		expect(group!.getAttribute('role')).toBe('group');
+		expect(group!.getAttribute('aria-label')).toBe('Sort copies by');
+		for (const key of ['nr', 'member', 'since'] as const) {
+			expect(container.querySelector(sortBtn(key))!.closest('[role="group"]')).toBe(group);
+		}
+	});
+
+	it('every sort control is a native <button type="button"> — Enter/Space operability for free, and no accidental form submits', async () => {
+		const container = await renderWithEditionUnfolded();
+		for (const key of ['nr', 'member', 'since'] as const) {
+			const btn = container.querySelector(sortBtn(key)) as HTMLElement;
+			expect(btn.tagName, `copy-sort-${key}`).toBe('BUTTON');
+			expect(btn.getAttribute('type')).toBe('button');
+		}
+	});
+
+	it('exactly ONE control reports aria-pressed="true" at any time, and the marker follows a key switch', async () => {
+		const container = await renderWithEditionUnfolded();
+		const pressed = () =>
+			(['nr', 'member', 'since'] as const).filter(
+				(key) => container.querySelector(sortBtn(key))!.getAttribute('aria-pressed') === 'true'
+			);
+		expect(pressed()).toEqual(['nr']);
+		await fireEvent.click(container.querySelector(sortBtn('since'))!);
+		await waitFor(() => {
+			expect(pressed()).toEqual(['since']);
+		});
+	});
+});
+
 // (*MVOX:Tallis*)

@@ -1027,8 +1027,25 @@
 			});
 	}
 
+	// #113 review F2 — the symmetric half of AttendanceSurface's open-focus
+	// (`onMount` puts focus on the panel's Close button). This page renders the
+	// same surface behind the same hide-while-open gate as the agenda, so the
+	// Close button unmounts ITSELF and the entry point remounts with nothing
+	// focused — focus drops to <body> (WCAG 2.4.3). Same fix as the agenda's
+	// `closeAttendancePanel`, minus its `untrack` guard: that one is called from
+	// inside a tracking `$effect` (`loadForSelected`'s cleanup path) and must not
+	// register a dependency; this one is only ever the AttendanceSurface
+	// `onclose` callback (`resetComposeState` clears `attendancePanelOpen`
+	// directly, without going through here).
 	function closeAttendancePanel(): void {
 		attendancePanelOpen = false;
+		tick().then(() => {
+			document
+				.querySelector<HTMLElement>(
+					'[data-testid="event-detail-attendance"] [data-testid="take-attendance-btn"]'
+				)
+				?.focus();
+		});
 	}
 
 	// The write-generation guard, same shape as `writeGenerations` above (the
@@ -1542,7 +1559,7 @@
 						type="text"
 						data-testid="event-edit-input-name"
 						aria-label={m.event_edit_name_aria_label()}
-						class="border-b border-ink bg-transparent font-display text-2xl focus:outline-none"
+						class="border-b border-ink bg-transparent font-display text-2xl"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1582,7 +1599,7 @@
 						type="datetime-local"
 						data-testid="event-edit-input-start_datetime"
 						aria-label={m.event_edit_start_datetime_aria_label()}
-						class="border-b border-ink bg-transparent text-sm text-ink-2 focus:outline-none"
+						class="border-b border-ink bg-transparent text-sm text-ink-2"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1640,7 +1657,7 @@
 						min="0"
 						data-testid="event-edit-input-duration_minutes"
 						aria-label={m.event_edit_duration_minutes_aria_label()}
-						class="w-24 border-b border-ink bg-transparent text-xs text-ink-2 focus:outline-none"
+						class="w-24 border-b border-ink bg-transparent text-xs text-ink-2"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1682,7 +1699,7 @@
 						type="text"
 						data-testid="event-edit-input-location"
 						aria-label={m.event_edit_location_aria_label()}
-						class="border-b border-ink bg-transparent text-sm text-ink-2 focus:outline-none"
+						class="border-b border-ink bg-transparent text-sm text-ink-2"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1728,7 +1745,7 @@
 					<textarea
 						data-testid="event-edit-input-description"
 						aria-label={m.event_edit_description_aria_label()}
-						class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-sm text-ink focus:outline-none"
+						class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-sm text-ink"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLTextAreaElement).value)}

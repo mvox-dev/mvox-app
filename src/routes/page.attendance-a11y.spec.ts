@@ -45,6 +45,10 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		attendance_rsvp_none: () => 'No answer',
 		attendance_rsvp_aria_label: (p?: Record<string, unknown>) => `RSVP for ${p?.name}: ${p?.rsvp}`,
 		attendance_load_error: () => "Couldn't load attendance.",
+		// #113 review F4 — the panel's loading state now carries an sr-only
+		// role="status" saying so (focus lands in the panel while it loads).
+		attendance_loading: () => 'Loading attendance…',
+		attendance_ready: (p) => `Attendance loaded, ${p?.count} members`,
 		attendance_save_failed: () => "Couldn't save attendance.",
 		attendance_tally: (p) => `${p?.present} present · ${p?.absent} absent · ${p?.late} late`,
 		attendance_close: () => 'Close',

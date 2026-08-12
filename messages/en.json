@@ -21,6 +21,8 @@
 	"attendance_rsvp_none": "No answer",
 	"attendance_rsvp_aria_label": "RSVP for {name}: {rsvp}",
 	"attendance_load_error": "Couldn't load attendance.",
+	"attendance_loading": "Loading attendance…",
+	"attendance_ready": "Attendance loaded, {count} members",
 	"attendance_save_failed": "Couldn't save attendance.",
 	"attendance_tally": "{present} present · {absent} absent · {late} late",
 	"attendance_close": "Close",
@@ -133,6 +135,7 @@
 	"roster_section_remove_cancel": "Keep {name}",
 	"roster_section_remove_failed": "{name} couldn't be removed — the section is still there.",
 	"roster_section_remove_not_empty": "{name} still has members or sub-sections — nothing was removed.",
+	"roster_section_removed": "{name} removed.",
 	"roster_sections_expand_all": "Expand all sections",
 	"roster_sections_collapse_all": "Collapse all sections",
 	"nav_agenda": "Agenda",
@@ -249,5 +252,12 @@
 	"agenda_row_link_label": "View details for {event}",
 	"agenda_row_link_label_unnamed": "View event details",
 	"session_expired_message": "Your session has expired. Please sign in again.",
-	"session_expired_signin": "Sign in"
+	"session_expired_signin": "Sign in",
+	"agenda_switch_collective": "Switch collective",
+	"agenda_signed_in": "Signed in",
+	"agenda_signed_out": "Signed out",
+	"agenda_sign_in": "Sign in",
+	"agenda_collectives_none": "No collectives yet",
+	"agenda_collectives_error_retry": "Couldn't load collectives — retry",
+	"agenda_collectives_loading": "Loading collectives…"
 }
