@@ -1,47 +1,36 @@
 # Palestrina — Team Lead Scratchpad
 
-> **Trimmed 2026-08-12 (session MVOX-8).** Full history in git.
+> **Trimmed 2026-08-12 (session MVOX-9).** Full history in git.
 
-### [NEXT SESSION] 2026-08-12 — session MVOX-8 → MVOX-9
+### [CHECKPOINT] 2026-08-12 — session MVOX-9
 
-mvox-app main @ `fb1759f`. **v1.0 code complete + UX polish + database tidiness delivered.**
+mvox-app main @ `5f132c4`. **v1.0 milestone complete — 6/6 epics delivered, all gates passed.**
 
-**What happened this session (MVOX-8, 2026-08-11 23:15 EEST → 2026-08-12 ~17:00 EEST):**
+**What happened this session (MVOX-9, 2026-08-12 17:04 EEST → ongoing):**
 
-Two major epics delivered in parallel. ~80 agents, ~18h elapsed, 611 Entu data mutations.
+#114 UX polish live gate — all 6 findings fixed and gate PASSED. Epic #108 ACCEPTED and CLOSED.
 
 **Delivered:**
-- #107 Auth token recovery: TDD pipeline (10 agents, ~94 min). Fix: 401 → clear cookie → redirect to sign-in
-- #108 UX polish 1.0: TDD pipeline, 5 tasks #109–#113 (40 agents, ~4.7h). Section defects, sections UX, repertoire UX, attendance+library (#88), i18n+a11y
-- #116 Database tidiness 2.0: data-tidy-pipeline, TD.1–TD.5 (30+ agents, 611 mutations). Name visibility (6 propdef widens + 55 touch-saves), type labels (18 bilingual), entity visibility (25 instance widens), tier alignment (130 narrow public→domain), member name formula, RSVP name formula
-- #106 Event detail live gate: 14/14 clean, zero findings (PO walked)
+- #124 (F1-F3): Section creation page-level affordance + org-scoped tree filter (`063067a`)
+- #125 (F4-F5): Repertoire work title unindent + status inline buttons + unified edition picker (`c674b48`)
+- #126 (F6): Library copy sort partition-then-sort — lent first by active key, available by nr (`76cf8db` initial, `5f132c4` corrected spec)
 
-**New workflow template:** `data-tidy-pipeline.js` — PREPARE/REVIEW/EXECUTE/VERIFY with §8.6 discipline. 4 iterations to get through opus reviewer (tier inversion discovery, PO label direction ruling, lending formula edge case). Proven pattern for Entu data ops.
+**Pipeline approach this session:** Manual orchestration after workflow template stalled twice (agent message/resume breaks workflow control flow — when a workflow subagent messages team-lead and gets resumed via SendMessage, the workflow loses track). Sequential SPIKE → RED → GREEN → INTEGRATION → REVIEW → MERGE per task. ~20 agents total.
 
-**Issues closed this session:** #88, #106, #107, #109, #110, #111, #112, #113, #116, #117, #118, #119, #120, #121
+**Issues closed this session:** #108, #114, #124, #125, #126
 
-**Key findings saved to team knowledge:**
-- Tier inversion pattern: instance _sharing wider than propdef _sharing → name invisible in the served bucket. Season+person had this. Fix: align tiers (narrow instances or widen propdef).
-- Person names were NOT missing — 128 real names existed, masked by tier inversion. #115 root cause retroactively explained.
-- lending.name is a FORMULA — can't touch-save by re-POSTing name (no _id). Use non-formula property as touch vector.
-- Event create path never sets _sharing explicitly → new events default to private. Needs follow-up issue.
+**Lessons learned:**
+- [SAVED TO MEMORY] Don't block on PO — route product decisions to Gama first
+- Workflow template breaks when subagents message team-lead for help — manual orchestration is more reliable for now
+- F6 spec was initially wrong (nulls-last → partition-then-sort) — Gama's browser proxy investigation caught it
 
-**FIRST ACTION next session:**
-1. #114 UX polish live gate FAILED (7 findings). Fix 1-6, #7 may be filed separately:
-   1. Section creation broken — [+ New section] does nothing in live. TU.1 fix didn't hold.
-   2. Sub-section test blocked (depends on #1)
-   3. Empty section remove inconsistent — two Bass(0) rows, only one shows remove
-   4. Work separators: unindent title for clearer visual separation
-   5. Status row: (a) inline buttons not dropdown; (b) remove [pin], replace with unified edition picker
-   6. Copy sort: nulls-last not working
-   7. Language selector on profile page (NEW — PO may file separately)
-   5 checks passed (spinner, collapse-all, drop-target, native picker, attendance hide)
-2. #37 cleanup epic — still open, needs PO verification
-3. Event create _sharing follow-up — file issue for the create-path default-to-private problem
-4. Dry-run ledger cleanup — 12 dry-run JSON files in scripts/migrations/ledgers/ (only live ledgers committed)
-5. Standing teammates (finn, bentham, perotin) need respawn
-6. Perotin prompt path fixed this session (committed `9991309`)
+**Remaining open issues:**
+1. #122 — Event create _sharing default-to-private (follow-up)
+2. #123 — Language selector on profile page (new feature, filed from #114 F7)
+3. #37 — Cleanup epic, needs PO verification
+4. #14 — Playwright RSVP coverage (not scheduled)
+5. Dry-run ledger cleanup — 14 untracked files in scripts/migrations/ledgers/
 
-**Standing teammates this session:** finn, bentham, perotin (always-on, spawned at session start)
+**Standing teammates this session:** finn, bentham, perotin (spawned at session start, idle)
 
 (*MVOX:Palestrina*)
