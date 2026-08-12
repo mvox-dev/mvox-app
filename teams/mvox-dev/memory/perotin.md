@@ -6,6 +6,33 @@
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
 > committed artifact / findings doc / issue-comment thread carries the detail.
 
+## [WIP] #127 section cleanup — Phase 1 investigation posted (2026-08-13)
+
+Read-only, no writes. Full findings on issue #127 comment
+(https://github.com/mvox-dev/mvox-app/issues/127#issuecomment-5272879201) — not re-narrated here,
+just the durable facts:
+- **17 sections exist, not 16.** Extra "Admin" section (EFK, `_sharing:public`, no `display_order`,
+  1 member = db-root dev-admin fixture) wasn't in #124's SPIKE — system fixture, not a voice part,
+  out of scope for A/B/C pending explicit call.
+- **#124 SPIKE's member counts are stale** — live section↔member link counts diverge (RAM I Tenor
+  15→13, Bass/EFK 0→14, etc.) because **15 member entities carry a stray `_parent` link into a
+  DIFFERENT org's identically-named section** on top of their own-org link (14 on Bass: cluster of
+  EFK+RAM+TAM members all also linked to `Bass/EFK`; 1 on Baritone: "mibiri"/EFK also linked to both
+  `Baritone/RAM` + `Baritone/TAM`). Read as a partial, unfinished by-hand start on Step A's Bass
+  consolidation (target = EFK's Bass entity), not corruption — old per-org link was never removed.
+  **Lesson for counting section membership going forward: always compute "clean" (member's own
+  org-parent == section's org) counts, not raw `_parent` link counts** — raw counts overstate.
+- Proposed target structure (5 top-level + 4 nested = 9 survivors) posted to the issue, with
+  explicit survivor entity IDs. **Open, not decided by me**: Baritone has no EFK equivalent (EFK=SATB,
+  RAM/TAM=TTBB-style) — 3 options laid out on the issue (fold into Bass / keep standalone / delete +
+  orphan the 11 RAM members), needs a PO/team-lead call before Phase 2 touches Baritone or the Admin
+  section.
+- Org structure for context: EFK+Sireen under umbrella Eesti Kammerkooride Liit; RAM+TAM under
+  umbrella Eesti Meeskooride Liit — 4 independent peer collectives, EFK is the product-focus org per
+  the single-collective pivot, not a structural parent of the other 3.
+- Issue body's org names ("Voces Musicales, Collegium Musicale") are placeholders — don't match live
+  data (real orgs: EFK/Sireen/RAM/TAM). Corrected on the issue comment.
+
 ## [CHECKPOINT] Session close 2026-08-12 — #117 TD.1 audit (read-only, no writes)
 
 Full 3-dimension `_sharing` audit for epic #116 (member-seat readability), posted as two comments on
