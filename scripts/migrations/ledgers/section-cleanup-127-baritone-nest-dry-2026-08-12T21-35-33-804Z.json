@@ -1,0 +1,50 @@
+{
+  "dryRun": true,
+  "generatedAt": "2026-08-12T21:35:33.803Z",
+  "summary": {
+    "ok": 3,
+    "skipped": 0,
+    "dryRun": 2,
+    "failed": 0
+  },
+  "ledger": [
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8768489bfcb0e81b163",
+      "targetLabel": "BASS_EFK (target parent)",
+      "status": "ok",
+      "detail": "name=Bass org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8828489bfcb0e81b3ec",
+      "targetLabel": "RAM_BARITONE",
+      "status": "ok",
+      "detail": "name=Baritone org=Eesti Rahvusmeeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8898489bfcb0e81b580",
+      "targetLabel": "TAM_BARITONE",
+      "status": "ok",
+      "detail": "name=Baritone org=Tartu Akadeemiline Meeskoor"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f8828489bfcb0e81b3ec",
+      "targetLabel": "Baritone/Eesti Rahvusmeeskoor -> parent Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "dry-run"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f8898489bfcb0e81b580",
+      "targetLabel": "Baritone/Tartu Akadeemiline Meeskoor -> parent Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "dry-run"
+    }
+  ]
+}
