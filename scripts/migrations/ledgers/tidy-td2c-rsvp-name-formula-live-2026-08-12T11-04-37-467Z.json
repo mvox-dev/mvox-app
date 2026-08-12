@@ -1,0 +1,297 @@
+{
+  "dryRun": false,
+  "authorization": "Polyphony db is dev/test with synthetic data -- routine mutations pre-authorized. Per-run team-lead + PO authorization obtained.",
+  "formula": "_parent.*.name event.*.name ' — ' CONCAT_WS",
+  "discovered": {
+    "typeId": "6a0d2e8590c8df7a1cc7df1b",
+    "typeSharing": "domain",
+    "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048"
+  },
+  "propdefCreation": {
+    "newEntityId": "6a7c534223dc1d97bb8f1f54",
+    "status": "created"
+  },
+  "touchSaveResults": {
+    "total": 17,
+    "touched": 17,
+    "failed": 0,
+    "skipped": 0
+  },
+  "resolvedNames": [
+    "db-root (mvox dev admin) — Tuesday rehearsals",
+    "db-root (mvox dev admin) — october sprint",
+    "Mihkel Putrinš — Tuesday rehearsals",
+    "Mihkel Putrinš — october sprint ssss",
+    "Mihkel Putrinš — Tuesday rehearsal fun",
+    "Mihkel Putrinš — october sprint",
+    "db-root (mvox dev admin) — october sprint ssss"
+  ],
+  "ledger": [
+    {
+      "action": "create-propdef",
+      "targetId": "6a7c534223dc1d97bb8f1f54",
+      "targetName": "rsvp.name propdef",
+      "status": "created",
+      "newEntityId": "6a7c534223dc1d97bb8f1f54",
+      "before": "(absent)",
+      "after": "formula: _parent.*.name event.*.name ' — ' CONCAT_WS, _sharing: domain, label: name, description: en+et"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2d415f4cd971291c5d56c5",
+      "targetName": "rsvp 6a2d415f4cd971291c5d56c5",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — Tuesday rehearsals"
+      },
+      "after": "db-root (mvox dev admin) — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2d41624cd971291c5d56cd",
+      "targetName": "rsvp 6a2d41624cd971291c5d56cd",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — Tuesday rehearsals"
+      },
+      "after": "db-root (mvox dev admin) — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2d41664cd971291c5d56d5",
+      "targetName": "rsvp 6a2d41664cd971291c5d56d5",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — Tuesday rehearsals"
+      },
+      "after": "db-root (mvox dev admin) — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2d461a4cd971291c5d56e0",
+      "targetName": "rsvp 6a2d461a4cd971291c5d56e0",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — Tuesday rehearsals"
+      },
+      "after": "db-root (mvox dev admin) — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2d50f04cd971291c5d56f4",
+      "targetName": "rsvp 6a2d50f04cd971291c5d56f4",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — Tuesday rehearsals"
+      },
+      "after": "db-root (mvox dev admin) — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2d54854cd971291c5d575c",
+      "targetName": "rsvp 6a2d54854cd971291c5d575c",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — october sprint"
+      },
+      "after": "db-root (mvox dev admin) — october sprint"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff236c951d9114ec6ce",
+      "targetName": "rsvp 6a73dff236c951d9114ec6ce",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — Tuesday rehearsals"
+      },
+      "after": "Mihkel Putrinš — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff336c951d9114ec6d9",
+      "targetName": "rsvp 6a73dff336c951d9114ec6d9",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — Tuesday rehearsals"
+      },
+      "after": "Mihkel Putrinš — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff436c951d9114ec6e4",
+      "targetName": "rsvp 6a73dff436c951d9114ec6e4",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — october sprint ssss"
+      },
+      "after": "Mihkel Putrinš — october sprint ssss"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff536c951d9114ec6ef",
+      "targetName": "rsvp 6a73dff536c951d9114ec6ef",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — Tuesday rehearsal fun"
+      },
+      "after": "Mihkel Putrinš — Tuesday rehearsal fun"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff536c951d9114ec6fa",
+      "targetName": "rsvp 6a73dff536c951d9114ec6fa",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — october sprint"
+      },
+      "after": "Mihkel Putrinš — october sprint"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff636c951d9114ec705",
+      "targetName": "rsvp 6a73dff636c951d9114ec705",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — october sprint"
+      },
+      "after": "Mihkel Putrinš — october sprint"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff836c951d9114ec710",
+      "targetName": "rsvp 6a73dff836c951d9114ec710",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — october sprint"
+      },
+      "after": "Mihkel Putrinš — october sprint"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73dff836c951d9114ec71b",
+      "targetName": "rsvp 6a73dff836c951d9114ec71b",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — october sprint"
+      },
+      "after": "Mihkel Putrinš — october sprint"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73e73f36c951d9114ec795",
+      "targetName": "rsvp 6a73e73f36c951d9114ec795",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — Tuesday rehearsals"
+      },
+      "after": "Mihkel Putrinš — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a73e77336c951d9114ec7ca",
+      "targetName": "rsvp 6a73e77336c951d9114ec7ca",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš — Tuesday rehearsals"
+      },
+      "after": "Mihkel Putrinš — Tuesday rehearsals"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a7aa42423dc1d97bb8f18b3",
+      "targetName": "rsvp 6a7aa42423dc1d97bb8f18b3",
+      "touchMechanic": "_sharing-based (formula name)",
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin) — october sprint ssss"
+      },
+      "after": "db-root (mvox dev admin) — october sprint ssss"
+    }
+  ],
+  "exitCode": 0,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root seat). Formula name verification is 3-check canary: (a) _sharing prop _id rotated, (b) name present on read-back, (c) name count = 1. The resolved name value is logged for visual confirmation."
+}

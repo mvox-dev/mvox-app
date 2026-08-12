@@ -1,0 +1,4022 @@
+{
+  "dryRun": false,
+  "authorization": "Polyphony db is dev/test with synthetic data -- routine mutations pre-authorized. Per-run team-lead + PO authorization obtained.",
+  "formula": "person.*.name",
+  "discovered": {
+    "typeId": "69c7ea4a8489bfcb0e819edd",
+    "typeSharing": "domain",
+    "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048"
+  },
+  "propdefCreation": {
+    "newEntityId": "6a7c526d23dc1d97bb8f1e55",
+    "status": "created"
+  },
+  "touchSaveResults": {
+    "total": 241,
+    "touched": 239,
+    "domainTouched": 131,
+    "privateTouched": 108,
+    "failed": 2,
+    "skipped": 0
+  },
+  "resolvedNames": [
+    "Aino Kask",
+    "Liis Mägi",
+    "Kadri Tamm",
+    "Eve Lepik",
+    "Moonika Ots",
+    "Triin Pärn",
+    "Siiri Laan",
+    "Mari Koger",
+    "Ingrid Luik",
+    "Kätlin Saar",
+    "Piret Laas",
+    "Tiiu Rand",
+    "Ülle Ojala",
+    "Jaan Kõrv",
+    "Toomas Mets",
+    "Aivar Nurk",
+    "Priit Lepp",
+    "Raivo Põld",
+    "Lauri Kivi",
+    "Tarmo Sild",
+    "Ott Mänd",
+    "Andres Tamm",
+    "Kalev Ojala",
+    "Tiit Saar",
+    "Mati Rand",
+    "Rein Lepp",
+    "Peeter Mägi",
+    "Raul Kask",
+    "Maret Kask",
+    "Piia Tamm",
+    "Siiri Lepik",
+    "Moonika Mägi",
+    "Kerli Ots",
+    "Liisa Pärn",
+    "Kaire Luik",
+    "Anett Laan",
+    "Reelika Rand",
+    "Reet Karu",
+    "Tiina Nurk",
+    "Külli Saar",
+    "Marika Lepp",
+    "Triinu Rand",
+    "Aire Kivi",
+    "Katre Mets",
+    "Ene Tamm",
+    "Kaja Mets",
+    "Leelo Luik",
+    "Sirje Koger",
+    "Merike Laas",
+    "Viive Ojala",
+    "Helle Kask",
+    "Tiiu Mägi",
+    "Silvi Rand",
+    "Anne Lepp",
+    "Aleksander Kask",
+    "Kirill Tamm",
+    "Aivar Kaldre",
+    "Priidu Mägi",
+    "Reio Lepik",
+    "Taavi Kivisik",
+    "Mihkel Kõrv",
+    "Jaan Lattik",
+    "Tarmo Evestus",
+    "Hannes Kont",
+    "Mikk Dede",
+    "Kaspar Kaljuste",
+    "Toomas Lunge",
+    "Arvo Meier",
+    "Ott Indermitte",
+    "Raul Põld",
+    "Lauri Rand",
+    "Siim Saar",
+    "Kaido Nurk",
+    "Meelis Lepp",
+    "Olev Luik",
+    "Peeter Hillep",
+    "Hanno Hint",
+    "Alar Kask",
+    "Tõnis Mägi",
+    "Meelis Kubits",
+    "Tiit Koger",
+    "Rein Laas",
+    "Sulev Mets",
+    "Tanel Kõrv",
+    "Mihail Sepp",
+    "Kaur Nurk",
+    "Indrek Laan",
+    "Andres Alamaa",
+    "Jüri Eensoo",
+    "Rasmus Erismaa",
+    "Vello Tamm",
+    "Lembit Kask",
+    "Enn Lepik",
+    "Elmar Saar",
+    "Hugo Rand",
+    "Karl Heinz",
+    "Ülo Ojala",
+    "Heino Luik",
+    "Jüri Tamm",
+    "Tõnis Kask",
+    "Ants Mägi",
+    "Kalle Lepik",
+    "Ain Saar",
+    "Ülo Rand",
+    "Kalmer Pärn",
+    "Olev Kivi",
+    "Heino Ots",
+    "Veiko Laas",
+    "Hannes Mets",
+    "Priit Koger",
+    "Tiit Nurk",
+    "Rein Kõrv",
+    "Kaur Laan",
+    "Toivo Rand",
+    "Mait Saar",
+    "Erkki Luik",
+    "Valdur Tamm",
+    "Tauno Kask",
+    "Ülo Mägi",
+    "Arvo Lepp",
+    "Maris Tamm",
+    "Liina Saar",
+    "Ave Lepp",
+    "Kärt Põld",
+    "Toomas Mägi",
+    "Andres Vahar",
+    "Margus Roos",
+    "Henn Kuusik",
+    "db-root (mvox dev admin)",
+    "Mihkel Putrinš",
+    "mibiri"
+  ],
+  "ledger": [
+    {
+      "action": "create-propdef",
+      "targetId": "6a7c526d23dc1d97bb8f1e55",
+      "targetName": "member.name propdef",
+      "status": "created",
+      "newEntityId": "6a7c526d23dc1d97bb8f1e55",
+      "before": "(absent)",
+      "after": "formula: person.*.name, _sharing: domain, label: en+et, description: en+et"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24b4ff8277cd4306172",
+      "targetName": "member 6a0dd24b4ff8277cd4306172 (Aino Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aino Kask"
+      },
+      "after": "Aino Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24b4ff8277cd430617c",
+      "targetName": "member 6a0dd24b4ff8277cd430617c (Liis Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Liis Mägi"
+      },
+      "after": "Liis Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24b4ff8277cd4306186",
+      "targetName": "member 6a0dd24b4ff8277cd4306186 (Kadri Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kadri Tamm"
+      },
+      "after": "Kadri Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24c4ff8277cd4306190",
+      "targetName": "member 6a0dd24c4ff8277cd4306190 (Eve Lepik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Eve Lepik"
+      },
+      "after": "Eve Lepik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24c4ff8277cd430619a",
+      "targetName": "member 6a0dd24c4ff8277cd430619a (Moonika Ots)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Moonika Ots"
+      },
+      "after": "Moonika Ots"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24c4ff8277cd43061a4",
+      "targetName": "member 6a0dd24c4ff8277cd43061a4 (Triin Pärn)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Triin Pärn"
+      },
+      "after": "Triin Pärn"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24c4ff8277cd43061ae",
+      "targetName": "member 6a0dd24c4ff8277cd43061ae (Siiri Laan)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Siiri Laan"
+      },
+      "after": "Siiri Laan"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24c4ff8277cd43061b8",
+      "targetName": "member 6a0dd24c4ff8277cd43061b8 (Mari Koger)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mari Koger"
+      },
+      "after": "Mari Koger"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061c2",
+      "targetName": "member 6a0dd24d4ff8277cd43061c2 (Ingrid Luik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ingrid Luik"
+      },
+      "after": "Ingrid Luik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061cc",
+      "targetName": "member 6a0dd24d4ff8277cd43061cc (Kätlin Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kätlin Saar"
+      },
+      "after": "Kätlin Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061d6",
+      "targetName": "member 6a0dd24d4ff8277cd43061d6 (Piret Laas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Piret Laas"
+      },
+      "after": "Piret Laas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061e0",
+      "targetName": "member 6a0dd24d4ff8277cd43061e0 (Tiiu Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tiiu Rand"
+      },
+      "after": "Tiiu Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061ea",
+      "targetName": "member 6a0dd24d4ff8277cd43061ea (Ülle Ojala)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ülle Ojala"
+      },
+      "after": "Ülle Ojala"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061f4",
+      "targetName": "member 6a0dd24d4ff8277cd43061f4 (Jaan Kõrv)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Jaan Kõrv"
+      },
+      "after": "Jaan Kõrv"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24d4ff8277cd43061fe",
+      "targetName": "member 6a0dd24d4ff8277cd43061fe (Toomas Mets)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Toomas Mets"
+      },
+      "after": "Toomas Mets"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24e4ff8277cd4306208",
+      "targetName": "member 6a0dd24e4ff8277cd4306208 (Aivar Nurk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aivar Nurk"
+      },
+      "after": "Aivar Nurk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24e4ff8277cd4306212",
+      "targetName": "member 6a0dd24e4ff8277cd4306212 (Priit Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Priit Lepp"
+      },
+      "after": "Priit Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24e4ff8277cd430621c",
+      "targetName": "member 6a0dd24e4ff8277cd430621c (Raivo Põld)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raivo Põld"
+      },
+      "after": "Raivo Põld"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24e4ff8277cd4306226",
+      "targetName": "member 6a0dd24e4ff8277cd4306226 (Lauri Kivi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Lauri Kivi"
+      },
+      "after": "Lauri Kivi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd4306230",
+      "targetName": "member 6a0dd24f4ff8277cd4306230 (Tarmo Sild)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tarmo Sild"
+      },
+      "after": "Tarmo Sild"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd430623a",
+      "targetName": "member 6a0dd24f4ff8277cd430623a (Ott Mänd)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ott Mänd"
+      },
+      "after": "Ott Mänd"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd4306244",
+      "targetName": "member 6a0dd24f4ff8277cd4306244 (Andres Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Andres Tamm"
+      },
+      "after": "Andres Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd430624e",
+      "targetName": "member 6a0dd24f4ff8277cd430624e (Kalev Ojala)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kalev Ojala"
+      },
+      "after": "Kalev Ojala"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd4306258",
+      "targetName": "member 6a0dd24f4ff8277cd4306258 (Tiit Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tiit Saar"
+      },
+      "after": "Tiit Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd4306262",
+      "targetName": "member 6a0dd24f4ff8277cd4306262 (Mati Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mati Rand"
+      },
+      "after": "Mati Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd24f4ff8277cd430626c",
+      "targetName": "member 6a0dd24f4ff8277cd430626c (Rein Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Rein Lepp"
+      },
+      "after": "Rein Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2504ff8277cd4306276",
+      "targetName": "member 6a0dd2504ff8277cd4306276 (Peeter Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Peeter Mägi"
+      },
+      "after": "Peeter Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2504ff8277cd4306280",
+      "targetName": "member 6a0dd2504ff8277cd4306280 (Raul Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raul Kask"
+      },
+      "after": "Raul Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2504ff8277cd430628a",
+      "targetName": "member 6a0dd2504ff8277cd430628a (Maret Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Maret Kask"
+      },
+      "after": "Maret Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2504ff8277cd4306294",
+      "targetName": "member 6a0dd2504ff8277cd4306294 (Piia Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Piia Tamm"
+      },
+      "after": "Piia Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2504ff8277cd430629e",
+      "targetName": "member 6a0dd2504ff8277cd430629e (Siiri Lepik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Siiri Lepik"
+      },
+      "after": "Siiri Lepik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2504ff8277cd43062a8",
+      "targetName": "member 6a0dd2504ff8277cd43062a8 (Moonika Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Moonika Mägi"
+      },
+      "after": "Moonika Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2514ff8277cd43062b2",
+      "targetName": "member 6a0dd2514ff8277cd43062b2 (Kerli Ots)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kerli Ots"
+      },
+      "after": "Kerli Ots"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2514ff8277cd43062bc",
+      "targetName": "member 6a0dd2514ff8277cd43062bc (Liisa Pärn)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Liisa Pärn"
+      },
+      "after": "Liisa Pärn"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2514ff8277cd43062c6",
+      "targetName": "member 6a0dd2514ff8277cd43062c6 (Kaire Luik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaire Luik"
+      },
+      "after": "Kaire Luik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2514ff8277cd43062d0",
+      "targetName": "member 6a0dd2514ff8277cd43062d0 (Anett Laan)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Anett Laan"
+      },
+      "after": "Anett Laan"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2524ff8277cd43062da",
+      "targetName": "member 6a0dd2524ff8277cd43062da (Reelika Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Reelika Rand"
+      },
+      "after": "Reelika Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2524ff8277cd43062e4",
+      "targetName": "member 6a0dd2524ff8277cd43062e4 (Reet Karu)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Reet Karu"
+      },
+      "after": "Reet Karu"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2524ff8277cd43062ee",
+      "targetName": "member 6a0dd2524ff8277cd43062ee (Tiina Nurk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tiina Nurk"
+      },
+      "after": "Tiina Nurk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2524ff8277cd43062f8",
+      "targetName": "member 6a0dd2524ff8277cd43062f8 (Külli Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Külli Saar"
+      },
+      "after": "Külli Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2524ff8277cd4306302",
+      "targetName": "member 6a0dd2524ff8277cd4306302 (Marika Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Marika Lepp"
+      },
+      "after": "Marika Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2524ff8277cd430630c",
+      "targetName": "member 6a0dd2524ff8277cd430630c (Triinu Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Triinu Rand"
+      },
+      "after": "Triinu Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2534ff8277cd4306316",
+      "targetName": "member 6a0dd2534ff8277cd4306316 (Aire Kivi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aire Kivi"
+      },
+      "after": "Aire Kivi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2534ff8277cd4306320",
+      "targetName": "member 6a0dd2534ff8277cd4306320 (Katre Mets)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Katre Mets"
+      },
+      "after": "Katre Mets"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2534ff8277cd430632a",
+      "targetName": "member 6a0dd2534ff8277cd430632a (Ene Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ene Tamm"
+      },
+      "after": "Ene Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2534ff8277cd4306334",
+      "targetName": "member 6a0dd2534ff8277cd4306334 (Kaja Mets)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaja Mets"
+      },
+      "after": "Kaja Mets"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2534ff8277cd430633e",
+      "targetName": "member 6a0dd2534ff8277cd430633e (Leelo Luik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Leelo Luik"
+      },
+      "after": "Leelo Luik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2544ff8277cd4306348",
+      "targetName": "member 6a0dd2544ff8277cd4306348 (Sirje Koger)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Sirje Koger"
+      },
+      "after": "Sirje Koger"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2544ff8277cd4306352",
+      "targetName": "member 6a0dd2544ff8277cd4306352 (Merike Laas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Merike Laas"
+      },
+      "after": "Merike Laas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2544ff8277cd430635c",
+      "targetName": "member 6a0dd2544ff8277cd430635c (Viive Ojala)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Viive Ojala"
+      },
+      "after": "Viive Ojala"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2544ff8277cd4306366",
+      "targetName": "member 6a0dd2544ff8277cd4306366 (Helle Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Helle Kask"
+      },
+      "after": "Helle Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2544ff8277cd4306370",
+      "targetName": "member 6a0dd2544ff8277cd4306370 (Tiiu Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tiiu Mägi"
+      },
+      "after": "Tiiu Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2554ff8277cd430637a",
+      "targetName": "member 6a0dd2554ff8277cd430637a (Silvi Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Silvi Rand"
+      },
+      "after": "Silvi Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2554ff8277cd4306384",
+      "targetName": "member 6a0dd2554ff8277cd4306384 (Anne Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Anne Lepp"
+      },
+      "after": "Anne Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2554ff8277cd430638e",
+      "targetName": "member 6a0dd2554ff8277cd430638e (Aleksander Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aleksander Kask"
+      },
+      "after": "Aleksander Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2554ff8277cd4306398",
+      "targetName": "member 6a0dd2554ff8277cd4306398 (Kirill Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kirill Tamm"
+      },
+      "after": "Kirill Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2564ff8277cd43063a2",
+      "targetName": "member 6a0dd2564ff8277cd43063a2 (Aivar Kaldre)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aivar Kaldre"
+      },
+      "after": "Aivar Kaldre"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2564ff8277cd43063ac",
+      "targetName": "member 6a0dd2564ff8277cd43063ac (Priidu Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Priidu Mägi"
+      },
+      "after": "Priidu Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2564ff8277cd43063b6",
+      "targetName": "member 6a0dd2564ff8277cd43063b6 (Reio Lepik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Reio Lepik"
+      },
+      "after": "Reio Lepik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2564ff8277cd43063c0",
+      "targetName": "member 6a0dd2564ff8277cd43063c0 (Taavi Kivisik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Taavi Kivisik"
+      },
+      "after": "Taavi Kivisik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2574ff8277cd43063ca",
+      "targetName": "member 6a0dd2574ff8277cd43063ca (Mihkel Kõrv)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Kõrv"
+      },
+      "after": "Mihkel Kõrv"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2574ff8277cd43063d4",
+      "targetName": "member 6a0dd2574ff8277cd43063d4 (Jaan Lattik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Jaan Lattik"
+      },
+      "after": "Jaan Lattik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2574ff8277cd43063de",
+      "targetName": "member 6a0dd2574ff8277cd43063de (Tarmo Evestus)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tarmo Evestus"
+      },
+      "after": "Tarmo Evestus"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2574ff8277cd43063e8",
+      "targetName": "member 6a0dd2574ff8277cd43063e8 (Hannes Kont)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Hannes Kont"
+      },
+      "after": "Hannes Kont"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2574ff8277cd43063f2",
+      "targetName": "member 6a0dd2574ff8277cd43063f2 (Mikk Dede)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mikk Dede"
+      },
+      "after": "Mikk Dede"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2574ff8277cd43063fc",
+      "targetName": "member 6a0dd2574ff8277cd43063fc (Kaspar Kaljuste)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaspar Kaljuste"
+      },
+      "after": "Kaspar Kaljuste"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2584ff8277cd4306406",
+      "targetName": "member 6a0dd2584ff8277cd4306406 (Toomas Lunge)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Toomas Lunge"
+      },
+      "after": "Toomas Lunge"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2584ff8277cd4306410",
+      "targetName": "member 6a0dd2584ff8277cd4306410 (Arvo Meier)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Arvo Meier"
+      },
+      "after": "Arvo Meier"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2584ff8277cd430641a",
+      "targetName": "member 6a0dd2584ff8277cd430641a (Ott Indermitte)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ott Indermitte"
+      },
+      "after": "Ott Indermitte"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2584ff8277cd4306424",
+      "targetName": "member 6a0dd2584ff8277cd4306424 (Raul Põld)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raul Põld"
+      },
+      "after": "Raul Põld"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2584ff8277cd430642e",
+      "targetName": "member 6a0dd2584ff8277cd430642e (Lauri Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Lauri Rand"
+      },
+      "after": "Lauri Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2584ff8277cd4306438",
+      "targetName": "member 6a0dd2584ff8277cd4306438 (Siim Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Siim Saar"
+      },
+      "after": "Siim Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2594ff8277cd4306442",
+      "targetName": "member 6a0dd2594ff8277cd4306442 (Kaido Nurk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaido Nurk"
+      },
+      "after": "Kaido Nurk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2594ff8277cd430644c",
+      "targetName": "member 6a0dd2594ff8277cd430644c (Meelis Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Meelis Lepp"
+      },
+      "after": "Meelis Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2594ff8277cd4306456",
+      "targetName": "member 6a0dd2594ff8277cd4306456 (Olev Luik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Olev Luik"
+      },
+      "after": "Olev Luik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2594ff8277cd4306460",
+      "targetName": "member 6a0dd2594ff8277cd4306460 (Peeter Hillep)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Peeter Hillep"
+      },
+      "after": "Peeter Hillep"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2594ff8277cd430646a",
+      "targetName": "member 6a0dd2594ff8277cd430646a (Hanno Hint)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Hanno Hint"
+      },
+      "after": "Hanno Hint"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2594ff8277cd4306474",
+      "targetName": "member 6a0dd2594ff8277cd4306474 (Alar Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Alar Kask"
+      },
+      "after": "Alar Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25a4ff8277cd430647e",
+      "targetName": "member 6a0dd25a4ff8277cd430647e (Tõnis Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tõnis Mägi"
+      },
+      "after": "Tõnis Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25a4ff8277cd4306488",
+      "targetName": "member 6a0dd25a4ff8277cd4306488 (Meelis Kubits)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Meelis Kubits"
+      },
+      "after": "Meelis Kubits"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25a4ff8277cd4306492",
+      "targetName": "member 6a0dd25a4ff8277cd4306492 (Tiit Koger)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tiit Koger"
+      },
+      "after": "Tiit Koger"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25a4ff8277cd430649c",
+      "targetName": "member 6a0dd25a4ff8277cd430649c (Rein Laas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Rein Laas"
+      },
+      "after": "Rein Laas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25a4ff8277cd43064a6",
+      "targetName": "member 6a0dd25a4ff8277cd43064a6 (Sulev Mets)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Sulev Mets"
+      },
+      "after": "Sulev Mets"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25a4ff8277cd43064b0",
+      "targetName": "member 6a0dd25a4ff8277cd43064b0 (Tanel Kõrv)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tanel Kõrv"
+      },
+      "after": "Tanel Kõrv"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25b4ff8277cd43064ba",
+      "targetName": "member 6a0dd25b4ff8277cd43064ba (Mihail Sepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihail Sepp"
+      },
+      "after": "Mihail Sepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25b4ff8277cd43064c4",
+      "targetName": "member 6a0dd25b4ff8277cd43064c4 (Kaur Nurk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaur Nurk"
+      },
+      "after": "Kaur Nurk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25b4ff8277cd43064ce",
+      "targetName": "member 6a0dd25b4ff8277cd43064ce (Indrek Laan)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Indrek Laan"
+      },
+      "after": "Indrek Laan"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25b4ff8277cd43064d8",
+      "targetName": "member 6a0dd25b4ff8277cd43064d8 (Andres Alamaa)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Andres Alamaa"
+      },
+      "after": "Andres Alamaa"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25b4ff8277cd43064e2",
+      "targetName": "member 6a0dd25b4ff8277cd43064e2 (Jüri Eensoo)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Jüri Eensoo"
+      },
+      "after": "Jüri Eensoo"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25b4ff8277cd43064ec",
+      "targetName": "member 6a0dd25b4ff8277cd43064ec (Rasmus Erismaa)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Rasmus Erismaa"
+      },
+      "after": "Rasmus Erismaa"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25c4ff8277cd43064f6",
+      "targetName": "member 6a0dd25c4ff8277cd43064f6 (Vello Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Vello Tamm"
+      },
+      "after": "Vello Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25c4ff8277cd4306500",
+      "targetName": "member 6a0dd25c4ff8277cd4306500 (Lembit Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Lembit Kask"
+      },
+      "after": "Lembit Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25c4ff8277cd430650a",
+      "targetName": "member 6a0dd25c4ff8277cd430650a (Enn Lepik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Enn Lepik"
+      },
+      "after": "Enn Lepik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25c4ff8277cd4306514",
+      "targetName": "member 6a0dd25c4ff8277cd4306514 (Elmar Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Elmar Saar"
+      },
+      "after": "Elmar Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25c4ff8277cd430651e",
+      "targetName": "member 6a0dd25c4ff8277cd430651e (Hugo Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Hugo Rand"
+      },
+      "after": "Hugo Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25d4ff8277cd4306528",
+      "targetName": "member 6a0dd25d4ff8277cd4306528 (Karl Heinz)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Karl Heinz"
+      },
+      "after": "Karl Heinz"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25d4ff8277cd4306532",
+      "targetName": "member 6a0dd25d4ff8277cd4306532 (Ülo Ojala)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ülo Ojala"
+      },
+      "after": "Ülo Ojala"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25d4ff8277cd430653c",
+      "targetName": "member 6a0dd25d4ff8277cd430653c (Heino Luik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Heino Luik"
+      },
+      "after": "Heino Luik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25d4ff8277cd4306546",
+      "targetName": "member 6a0dd25d4ff8277cd4306546 (Jüri Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Jüri Tamm"
+      },
+      "after": "Jüri Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25d4ff8277cd4306550",
+      "targetName": "member 6a0dd25d4ff8277cd4306550 (Tõnis Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tõnis Kask"
+      },
+      "after": "Tõnis Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25d4ff8277cd430655a",
+      "targetName": "member 6a0dd25d4ff8277cd430655a (Ants Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ants Mägi"
+      },
+      "after": "Ants Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd4306564",
+      "targetName": "member 6a0dd25e4ff8277cd4306564 (Kalle Lepik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kalle Lepik"
+      },
+      "after": "Kalle Lepik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd430656e",
+      "targetName": "member 6a0dd25e4ff8277cd430656e (Ain Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ain Saar"
+      },
+      "after": "Ain Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd4306578",
+      "targetName": "member 6a0dd25e4ff8277cd4306578 (Ülo Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ülo Rand"
+      },
+      "after": "Ülo Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd4306582",
+      "targetName": "member 6a0dd25e4ff8277cd4306582 (Kalmer Pärn)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kalmer Pärn"
+      },
+      "after": "Kalmer Pärn"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd430658c",
+      "targetName": "member 6a0dd25e4ff8277cd430658c (Olev Kivi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Olev Kivi"
+      },
+      "after": "Olev Kivi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd4306596",
+      "targetName": "member 6a0dd25e4ff8277cd4306596 (Heino Ots)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Heino Ots"
+      },
+      "after": "Heino Ots"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25e4ff8277cd43065a0",
+      "targetName": "member 6a0dd25e4ff8277cd43065a0 (Veiko Laas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Veiko Laas"
+      },
+      "after": "Veiko Laas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25f4ff8277cd43065aa",
+      "targetName": "member 6a0dd25f4ff8277cd43065aa (Hannes Mets)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Hannes Mets"
+      },
+      "after": "Hannes Mets"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25f4ff8277cd43065b4",
+      "targetName": "member 6a0dd25f4ff8277cd43065b4 (Priit Koger)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Priit Koger"
+      },
+      "after": "Priit Koger"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25f4ff8277cd43065be",
+      "targetName": "member 6a0dd25f4ff8277cd43065be (Tiit Nurk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tiit Nurk"
+      },
+      "after": "Tiit Nurk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25f4ff8277cd43065c8",
+      "targetName": "member 6a0dd25f4ff8277cd43065c8 (Rein Kõrv)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Rein Kõrv"
+      },
+      "after": "Rein Kõrv"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25f4ff8277cd43065d2",
+      "targetName": "member 6a0dd25f4ff8277cd43065d2 (Kaur Laan)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaur Laan"
+      },
+      "after": "Kaur Laan"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd25f4ff8277cd43065dc",
+      "targetName": "member 6a0dd25f4ff8277cd43065dc (Toivo Rand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Toivo Rand"
+      },
+      "after": "Toivo Rand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2604ff8277cd43065e6",
+      "targetName": "member 6a0dd2604ff8277cd43065e6 (Mait Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mait Saar"
+      },
+      "after": "Mait Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2604ff8277cd43065f0",
+      "targetName": "member 6a0dd2604ff8277cd43065f0 (Erkki Luik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Erkki Luik"
+      },
+      "after": "Erkki Luik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2604ff8277cd43065fa",
+      "targetName": "member 6a0dd2604ff8277cd43065fa (Valdur Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Valdur Tamm"
+      },
+      "after": "Valdur Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2604ff8277cd4306604",
+      "targetName": "member 6a0dd2604ff8277cd4306604 (Tauno Kask)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tauno Kask"
+      },
+      "after": "Tauno Kask"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2604ff8277cd430660e",
+      "targetName": "member 6a0dd2604ff8277cd430660e (Ülo Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ülo Mägi"
+      },
+      "after": "Ülo Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a0dd2604ff8277cd4306618",
+      "targetName": "member 6a0dd2604ff8277cd4306618 (Arvo Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Arvo Lepp"
+      },
+      "after": "Arvo Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036c4ff8277cd4306b34",
+      "targetName": "member 6a12036c4ff8277cd4306b34 (Maris Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Maris Tamm"
+      },
+      "after": "Maris Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036c4ff8277cd4306b45",
+      "targetName": "member 6a12036c4ff8277cd4306b45 (Liina Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Liina Saar"
+      },
+      "after": "Liina Saar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036d4ff8277cd4306b56",
+      "targetName": "member 6a12036d4ff8277cd4306b56 (Ave Lepp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ave Lepp"
+      },
+      "after": "Ave Lepp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036d4ff8277cd4306b67",
+      "targetName": "member 6a12036d4ff8277cd4306b67 (Kärt Põld)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kärt Põld"
+      },
+      "after": "Kärt Põld"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036d4ff8277cd4306b78",
+      "targetName": "member 6a12036d4ff8277cd4306b78 (Toomas Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Toomas Mägi"
+      },
+      "after": "Toomas Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036d4ff8277cd4306b89",
+      "targetName": "member 6a12036d4ff8277cd4306b89 (Andres Vahar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Andres Vahar"
+      },
+      "after": "Andres Vahar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036e4ff8277cd4306b9a",
+      "targetName": "member 6a12036e4ff8277cd4306b9a (Margus Roos)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Margus Roos"
+      },
+      "after": "Margus Roos"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a12036e4ff8277cd4306bab",
+      "targetName": "member 6a12036e4ff8277cd4306bab (Henn Kuusik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Henn Kuusik"
+      },
+      "after": "Henn Kuusik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2ba6c84cd971291c5d5320",
+      "targetName": "member 6a2ba6c84cd971291c5d5320 (db-root (mvox dev admin))",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "db-root (mvox dev admin)"
+      },
+      "after": "db-root (mvox dev admin)"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a2fdb434cd971291c5d5e85",
+      "targetName": "member 6a2fdb434cd971291c5d5e85 (Mihkel Putrinš)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Putrinš"
+      },
+      "after": "Mihkel Putrinš"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a7591cd36c951d9114ec8e7",
+      "targetName": "member 6a7591cd36c951d9114ec8e7 (mibiri)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "mibiri"
+      },
+      "after": "mibiri"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a785fd523dc1d97bb8f1687",
+      "targetName": "member 6a785fd523dc1d97bb8f1687 (unknown)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "failed",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": false,
+        "nameCount": 0
+      },
+      "error": "3-check (b) FAILED: domain member with person ref but read-back shows NO name -- formula may not have resolved"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "6a7b7efb23dc1d97bb8f1bc4",
+      "targetName": "member 6a7b7efb23dc1d97bb8f1bc4 (unknown)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": true,
+      "status": "failed",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": false,
+        "nameCount": 0
+      },
+      "error": "3-check (b) FAILED: domain member with person ref but read-back shows NO name -- formula may not have resolved"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8728489bfcb0e81b085",
+      "targetName": "member 69c7f8728489bfcb0e81b085 (Yena Choi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Yena Choi"
+      },
+      "after": "Yena Choi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8728489bfcb0e81b091",
+      "targetName": "member 69c7f8728489bfcb0e81b091 (Birke Elisabeth Jakobson)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Birke Elisabeth Jakobson"
+      },
+      "after": "Birke Elisabeth Jakobson"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8728489bfcb0e81b09b",
+      "targetName": "member 69c7f8728489bfcb0e81b09b (Mirell Jakobson)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mirell Jakobson"
+      },
+      "after": "Mirell Jakobson"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8738489bfcb0e81b0a5",
+      "targetName": "member 69c7f8738489bfcb0e81b0a5 (Eleri-Kristel Kuimet)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Eleri-Kristel Kuimet"
+      },
+      "after": "Eleri-Kristel Kuimet"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8738489bfcb0e81b0af",
+      "targetName": "member 69c7f8738489bfcb0e81b0af (Annika Lõhmus)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Annika Lõhmus"
+      },
+      "after": "Annika Lõhmus"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8738489bfcb0e81b0b9",
+      "targetName": "member 69c7f8738489bfcb0e81b0b9 (Marie Roos)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Marie Roos"
+      },
+      "after": "Marie Roos"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8738489bfcb0e81b0c3",
+      "targetName": "member 69c7f8738489bfcb0e81b0c3 (Laura Štoma)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Laura Štoma"
+      },
+      "after": "Laura Štoma"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8748489bfcb0e81b0d7",
+      "targetName": "member 69c7f8748489bfcb0e81b0d7 (Ave Hännikäinen)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ave Hännikäinen"
+      },
+      "after": "Ave Hännikäinen"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8748489bfcb0e81b0e1",
+      "targetName": "member 69c7f8748489bfcb0e81b0e1 (Annely Leinberg)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Annely Leinberg"
+      },
+      "after": "Annely Leinberg"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8748489bfcb0e81b0eb",
+      "targetName": "member 69c7f8748489bfcb0e81b0eb (Kristel Marand)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kristel Marand"
+      },
+      "after": "Kristel Marand"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8748489bfcb0e81b0f5",
+      "targetName": "member 69c7f8748489bfcb0e81b0f5 (Marianne Pärna)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Marianne Pärna"
+      },
+      "after": "Marianne Pärna"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8748489bfcb0e81b0ff",
+      "targetName": "member 69c7f8748489bfcb0e81b0ff (Anni Marie Rea)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Anni Marie Rea"
+      },
+      "after": "Anni Marie Rea"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8758489bfcb0e81b109",
+      "targetName": "member 69c7f8758489bfcb0e81b109 (Cätly Talvik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Cätly Talvik"
+      },
+      "after": "Cätly Talvik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8758489bfcb0e81b11d",
+      "targetName": "member 69c7f8758489bfcb0e81b11d (Danila Frantou)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Danila Frantou"
+      },
+      "after": "Danila Frantou"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8758489bfcb0e81b127",
+      "targetName": "member 69c7f8758489bfcb0e81b127 (Kaido Janke)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaido Janke"
+      },
+      "after": "Kaido Janke"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8758489bfcb0e81b131",
+      "targetName": "member 69c7f8758489bfcb0e81b131 (Raul Mikson)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raul Mikson"
+      },
+      "after": "Raul Mikson"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8768489bfcb0e81b13b",
+      "targetName": "member 69c7f8768489bfcb0e81b13b (Miguel Gonçalves Silva)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Miguel Gonçalves Silva"
+      },
+      "after": "Miguel Gonçalves Silva"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8768489bfcb0e81b145",
+      "targetName": "member 69c7f8768489bfcb0e81b145 (Kaarel Telgmaa)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaarel Telgmaa"
+      },
+      "after": "Kaarel Telgmaa"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8768489bfcb0e81b14f",
+      "targetName": "member 69c7f8768489bfcb0e81b14f (Toomas Tohert)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Toomas Tohert"
+      },
+      "after": "Toomas Tohert"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8768489bfcb0e81b159",
+      "targetName": "member 69c7f8768489bfcb0e81b159 (Danny Zhizhong Xie)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Danny Zhizhong Xie"
+      },
+      "after": "Danny Zhizhong Xie"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8778489bfcb0e81b16d",
+      "targetName": "member 69c7f8778489bfcb0e81b16d (Geir Luht)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Geir Luht"
+      },
+      "after": "Geir Luht"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8778489bfcb0e81b177",
+      "targetName": "member 69c7f8778489bfcb0e81b177 (Kristjan-Jaanek Mölder)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kristjan-Jaanek Mölder"
+      },
+      "after": "Kristjan-Jaanek Mölder"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8778489bfcb0e81b181",
+      "targetName": "member 69c7f8778489bfcb0e81b181 (Kim Sargsyan)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kim Sargsyan"
+      },
+      "after": "Kim Sargsyan"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8778489bfcb0e81b18b",
+      "targetName": "member 69c7f8778489bfcb0e81b18b (Aarne Talvik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aarne Talvik"
+      },
+      "after": "Aarne Talvik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8778489bfcb0e81b195",
+      "targetName": "member 69c7f8778489bfcb0e81b195 (Henry Tiisma)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Henry Tiisma"
+      },
+      "after": "Henry Tiisma"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8778489bfcb0e81b19f",
+      "targetName": "member 69c7f8778489bfcb0e81b19f (Rainer Vilu)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Rainer Vilu"
+      },
+      "after": "Rainer Vilu"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8788489bfcb0e81b1c9",
+      "targetName": "member 69c7f8788489bfcb0e81b1c9 (Anu Einberg)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Anu Einberg"
+      },
+      "after": "Anu Einberg"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8788489bfcb0e81b1d5",
+      "targetName": "member 69c7f8788489bfcb0e81b1d5 (Margit Kont)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Margit Kont"
+      },
+      "after": "Margit Kont"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8798489bfcb0e81b1df",
+      "targetName": "member 69c7f8798489bfcb0e81b1df (Liis Rull)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Liis Rull"
+      },
+      "after": "Liis Rull"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8798489bfcb0e81b1e9",
+      "targetName": "member 69c7f8798489bfcb0e81b1e9 (Kleer Keret Tali)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kleer Keret Tali"
+      },
+      "after": "Kleer Keret Tali"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8798489bfcb0e81b1f3",
+      "targetName": "member 69c7f8798489bfcb0e81b1f3 (Yoko Tees)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Yoko Tees"
+      },
+      "after": "Yoko Tees"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8798489bfcb0e81b1fd",
+      "targetName": "member 69c7f8798489bfcb0e81b1fd (Silvia Toomet)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Silvia Toomet"
+      },
+      "after": "Silvia Toomet"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8798489bfcb0e81b211",
+      "targetName": "member 69c7f8798489bfcb0e81b211 (Mari Jurtom)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mari Jurtom"
+      },
+      "after": "Mari Jurtom"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87a8489bfcb0e81b21b",
+      "targetName": "member 69c7f87a8489bfcb0e81b21b (Iris Kallas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Iris Kallas"
+      },
+      "after": "Iris Kallas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87a8489bfcb0e81b225",
+      "targetName": "member 69c7f87a8489bfcb0e81b225 (Kirstin Karis)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kirstin Karis"
+      },
+      "after": "Kirstin Karis"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87a8489bfcb0e81b22f",
+      "targetName": "member 69c7f87a8489bfcb0e81b22f (Laura Komp)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Laura Komp"
+      },
+      "after": "Laura Komp"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87a8489bfcb0e81b239",
+      "targetName": "member 69c7f87a8489bfcb0e81b239 (Teele Raimla)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Teele Raimla"
+      },
+      "after": "Teele Raimla"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87a8489bfcb0e81b243",
+      "targetName": "member 69c7f87a8489bfcb0e81b243 (Dagmar Talmar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Dagmar Talmar"
+      },
+      "after": "Dagmar Talmar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87b8489bfcb0e81b24d",
+      "targetName": "member 69c7f87b8489bfcb0e81b24d (Helene Uppin)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Helene Uppin"
+      },
+      "after": "Helene Uppin"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87b8489bfcb0e81b261",
+      "targetName": "member 69c7f87b8489bfcb0e81b261 (Kadri Järvelaid)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kadri Järvelaid"
+      },
+      "after": "Kadri Järvelaid"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87b8489bfcb0e81b26b",
+      "targetName": "member 69c7f87b8489bfcb0e81b26b (Mariel Luuk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mariel Luuk"
+      },
+      "after": "Mariel Luuk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87b8489bfcb0e81b275",
+      "targetName": "member 69c7f87b8489bfcb0e81b275 (Janika Mandel)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Janika Mandel"
+      },
+      "after": "Janika Mandel"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87b8489bfcb0e81b27f",
+      "targetName": "member 69c7f87b8489bfcb0e81b27f (Kristel Pedak)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kristel Pedak"
+      },
+      "after": "Kristel Pedak"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87c8489bfcb0e81b289",
+      "targetName": "member 69c7f87c8489bfcb0e81b289 (Kadri Schüts)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kadri Schüts"
+      },
+      "after": "Kadri Schüts"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87c8489bfcb0e81b293",
+      "targetName": "member 69c7f87c8489bfcb0e81b293 (Ene Smorodina)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ene Smorodina"
+      },
+      "after": "Ene Smorodina"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87c8489bfcb0e81b29d",
+      "targetName": "member 69c7f87c8489bfcb0e81b29d (Kaisa Summel)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaisa Summel"
+      },
+      "after": "Kaisa Summel"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87c8489bfcb0e81b2b1",
+      "targetName": "member 69c7f87c8489bfcb0e81b2b1 (Kertu Aksiim)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kertu Aksiim"
+      },
+      "after": "Kertu Aksiim"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87c8489bfcb0e81b2bb",
+      "targetName": "member 69c7f87c8489bfcb0e81b2bb (Brett Lemsalu)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Brett Lemsalu"
+      },
+      "after": "Brett Lemsalu"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87d8489bfcb0e81b2c5",
+      "targetName": "member 69c7f87d8489bfcb0e81b2c5 (Sandra Leon)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Sandra Leon"
+      },
+      "after": "Sandra Leon"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87d8489bfcb0e81b2cf",
+      "targetName": "member 69c7f87d8489bfcb0e81b2cf (Madli Sursu)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Madli Sursu"
+      },
+      "after": "Madli Sursu"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87e8489bfcb0e81b304",
+      "targetName": "member 69c7f87e8489bfcb0e81b304 (Aleksander Arder)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aleksander Arder"
+      },
+      "after": "Aleksander Arder"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87e8489bfcb0e81b310",
+      "targetName": "member 69c7f87e8489bfcb0e81b310 (Kirill Gorjušin)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kirill Gorjušin"
+      },
+      "after": "Kirill Gorjušin"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87e8489bfcb0e81b324",
+      "targetName": "member 69c7f87e8489bfcb0e81b324 (Andrus Kirss)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Andrus Kirss"
+      },
+      "after": "Andrus Kirss"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87f8489bfcb0e81b32e",
+      "targetName": "member 69c7f87f8489bfcb0e81b32e (Mart Kroon)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mart Kroon"
+      },
+      "after": "Mart Kroon"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87f8489bfcb0e81b338",
+      "targetName": "member 69c7f87f8489bfcb0e81b338 (Priit Lehto)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Priit Lehto"
+      },
+      "after": "Priit Lehto"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87f8489bfcb0e81b342",
+      "targetName": "member 69c7f87f8489bfcb0e81b342 (Lennart Mängli)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Lennart Mängli"
+      },
+      "after": "Lennart Mängli"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87f8489bfcb0e81b34c",
+      "targetName": "member 69c7f87f8489bfcb0e81b34c (Valnar Neidre)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Valnar Neidre"
+      },
+      "after": "Valnar Neidre"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87f8489bfcb0e81b356",
+      "targetName": "member 69c7f87f8489bfcb0e81b356 (Oliver Povel)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Oliver Povel"
+      },
+      "after": "Oliver Povel"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f87f8489bfcb0e81b360",
+      "targetName": "member 69c7f87f8489bfcb0e81b360 (Kuldar Schüts)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kuldar Schüts"
+      },
+      "after": "Kuldar Schüts"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8808489bfcb0e81b36a",
+      "targetName": "member 69c7f8808489bfcb0e81b36a (Karel Tohv)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Karel Tohv"
+      },
+      "after": "Karel Tohv"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8808489bfcb0e81b37e",
+      "targetName": "member 69c7f8808489bfcb0e81b37e (Priidu Aardam)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Priidu Aardam"
+      },
+      "after": "Priidu Aardam"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8808489bfcb0e81b392",
+      "targetName": "member 69c7f8808489bfcb0e81b392 (Reio Blond)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Reio Blond"
+      },
+      "after": "Reio Blond"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8808489bfcb0e81b39c",
+      "targetName": "member 69c7f8808489bfcb0e81b39c (Madis Enson)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Madis Enson"
+      },
+      "after": "Madis Enson"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8808489bfcb0e81b3a6",
+      "targetName": "member 69c7f8808489bfcb0e81b3a6 (Ero Esko)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ero Esko"
+      },
+      "after": "Ero Esko"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8818489bfcb0e81b3b0",
+      "targetName": "member 69c7f8818489bfcb0e81b3b0 (Olev Koit)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Olev Koit"
+      },
+      "after": "Olev Koit"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8818489bfcb0e81b3ba",
+      "targetName": "member 69c7f8818489bfcb0e81b3ba (Markus Leppoja)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Markus Leppoja"
+      },
+      "after": "Markus Leppoja"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8818489bfcb0e81b3c4",
+      "targetName": "member 69c7f8818489bfcb0e81b3c4 (Grigori Rutškin)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Grigori Rutškin"
+      },
+      "after": "Grigori Rutškin"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8818489bfcb0e81b3ce",
+      "targetName": "member 69c7f8818489bfcb0e81b3ce (Margus Vaht)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Margus Vaht"
+      },
+      "after": "Margus Vaht"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8818489bfcb0e81b3d8",
+      "targetName": "member 69c7f8818489bfcb0e81b3d8 (Margus Vellmann)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Margus Vellmann"
+      },
+      "after": "Margus Vellmann"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8818489bfcb0e81b3e2",
+      "targetName": "member 69c7f8818489bfcb0e81b3e2 (Rihards Zariṇš)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Rihards Zariṇš"
+      },
+      "after": "Rihards Zariṇš"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8828489bfcb0e81b40a",
+      "targetName": "member 69c7f8828489bfcb0e81b40a (Ott Indermitte)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ott Indermitte"
+      },
+      "after": "Ott Indermitte"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8828489bfcb0e81b414",
+      "targetName": "member 69c7f8828489bfcb0e81b414 (Oleksandr Kadyrov)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Oleksandr Kadyrov"
+      },
+      "after": "Oleksandr Kadyrov"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8828489bfcb0e81b41e",
+      "targetName": "member 69c7f8828489bfcb0e81b41e (René Keldo)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "René Keldo"
+      },
+      "after": "René Keldo"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8828489bfcb0e81b428",
+      "targetName": "member 69c7f8828489bfcb0e81b428 (Kaarel Kukk)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaarel Kukk"
+      },
+      "after": "Kaarel Kukk"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8838489bfcb0e81b432",
+      "targetName": "member 69c7f8838489bfcb0e81b432 (Igor Nikiforov)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Igor Nikiforov"
+      },
+      "after": "Igor Nikiforov"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8838489bfcb0e81b43c",
+      "targetName": "member 69c7f8838489bfcb0e81b43c (Andrus Poolma)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Andrus Poolma"
+      },
+      "after": "Andrus Poolma"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8838489bfcb0e81b446",
+      "targetName": "member 69c7f8838489bfcb0e81b446 (Alo Rammo)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Alo Rammo"
+      },
+      "after": "Alo Rammo"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8838489bfcb0e81b450",
+      "targetName": "member 69c7f8838489bfcb0e81b450 (Ants Reinhold)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ants Reinhold"
+      },
+      "after": "Ants Reinhold"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8838489bfcb0e81b45a",
+      "targetName": "member 69c7f8838489bfcb0e81b45a (Andrus Siimon)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Andrus Siimon"
+      },
+      "after": "Andrus Siimon"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8838489bfcb0e81b464",
+      "targetName": "member 69c7f8838489bfcb0e81b464 (Stanislav Šeljahhovski)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Stanislav Šeljahhovski"
+      },
+      "after": "Stanislav Šeljahhovski"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8858489bfcb0e81b496",
+      "targetName": "member 69c7f8858489bfcb0e81b496 (Arno Jürjens)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Arno Jürjens"
+      },
+      "after": "Arno Jürjens"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8858489bfcb0e81b4a0",
+      "targetName": "member 69c7f8858489bfcb0e81b4a0 (Taavi Kendra)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Taavi Kendra"
+      },
+      "after": "Taavi Kendra"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8858489bfcb0e81b4aa",
+      "targetName": "member 69c7f8858489bfcb0e81b4aa (Aare Kruusimäe)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Aare Kruusimäe"
+      },
+      "after": "Aare Kruusimäe"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8858489bfcb0e81b4b4",
+      "targetName": "member 69c7f8858489bfcb0e81b4b4 (John William Mathre)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "John William Mathre"
+      },
+      "after": "John William Mathre"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8858489bfcb0e81b4be",
+      "targetName": "member 69c7f8858489bfcb0e81b4be (Nikita Mištšenko)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Nikita Mištšenko"
+      },
+      "after": "Nikita Mištšenko"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8858489bfcb0e81b4c8",
+      "targetName": "member 69c7f8858489bfcb0e81b4c8 (Mait Männik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mait Männik"
+      },
+      "after": "Mait Männik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8868489bfcb0e81b4d2",
+      "targetName": "member 69c7f8868489bfcb0e81b4d2 (Juss Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Juss Tamm"
+      },
+      "after": "Juss Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8868489bfcb0e81b4dc",
+      "targetName": "member 69c7f8868489bfcb0e81b4dc (Ranno Tamm)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Ranno Tamm"
+      },
+      "after": "Ranno Tamm"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8868489bfcb0e81b4e6",
+      "targetName": "member 69c7f8868489bfcb0e81b4e6 (Roland Viilukas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Roland Viilukas"
+      },
+      "after": "Roland Viilukas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8878489bfcb0e81b510",
+      "targetName": "member 69c7f8878489bfcb0e81b510 (Taavi Kivisik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Taavi Kivisik"
+      },
+      "after": "Taavi Kivisik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8878489bfcb0e81b51c",
+      "targetName": "member 69c7f8878489bfcb0e81b51c (Mihkel Kõrvits)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Mihkel Kõrvits"
+      },
+      "after": "Mihkel Kõrvits"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8878489bfcb0e81b526",
+      "targetName": "member 69c7f8878489bfcb0e81b526 (Jaan Lattik)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Jaan Lattik"
+      },
+      "after": "Jaan Lattik"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8878489bfcb0e81b530",
+      "targetName": "member 69c7f8878489bfcb0e81b530 (Argo Moor)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Argo Moor"
+      },
+      "after": "Argo Moor"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8888489bfcb0e81b53a",
+      "targetName": "member 69c7f8888489bfcb0e81b53a (Raul Ojassaar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raul Ojassaar"
+      },
+      "after": "Raul Ojassaar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8888489bfcb0e81b54e",
+      "targetName": "member 69c7f8888489bfcb0e81b54e (Tarmo Evestus)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tarmo Evestus"
+      },
+      "after": "Tarmo Evestus"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8888489bfcb0e81b558",
+      "targetName": "member 69c7f8888489bfcb0e81b558 (Kaspar Kaljuste)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Kaspar Kaljuste"
+      },
+      "after": "Kaspar Kaljuste"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8888489bfcb0e81b562",
+      "targetName": "member 69c7f8888489bfcb0e81b562 (Hannes Kont)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Hannes Kont"
+      },
+      "after": "Hannes Kont"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8888489bfcb0e81b56c",
+      "targetName": "member 69c7f8888489bfcb0e81b56c (Peep Laansalu)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Peep Laansalu"
+      },
+      "after": "Peep Laansalu"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8898489bfcb0e81b576",
+      "targetName": "member 69c7f8898489bfcb0e81b576 (Margus Pärtlas)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Margus Pärtlas"
+      },
+      "after": "Margus Pärtlas"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8898489bfcb0e81b58a",
+      "targetName": "member 69c7f8898489bfcb0e81b58a (Alar Karis)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Alar Karis"
+      },
+      "after": "Alar Karis"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8898489bfcb0e81b594",
+      "targetName": "member 69c7f8898489bfcb0e81b594 (Meelis Kubits)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Meelis Kubits"
+      },
+      "after": "Meelis Kubits"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f8898489bfcb0e81b59e",
+      "targetName": "member 69c7f8898489bfcb0e81b59e (Tõnis Mägi)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Tõnis Mägi"
+      },
+      "after": "Tõnis Mägi"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f88a8489bfcb0e81b5a8",
+      "targetName": "member 69c7f88a8489bfcb0e81b5a8 (Arvo Pärn)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Arvo Pärn"
+      },
+      "after": "Arvo Pärn"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f88a8489bfcb0e81b5b2",
+      "targetName": "member 69c7f88a8489bfcb0e81b5b2 (Raul Talmar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raul Talmar"
+      },
+      "after": "Raul Talmar"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f88a8489bfcb0e81b5c6",
+      "targetName": "member 69c7f88a8489bfcb0e81b5c6 (Karl Heinz)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Karl Heinz"
+      },
+      "after": "Karl Heinz"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f88a8489bfcb0e81b5d0",
+      "targetName": "member 69c7f88a8489bfcb0e81b5d0 (Toomas Lunge)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Toomas Lunge"
+      },
+      "after": "Toomas Lunge"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f88b8489bfcb0e81b5da",
+      "targetName": "member 69c7f88b8489bfcb0e81b5da (Arvo Meier)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Arvo Meier"
+      },
+      "after": "Arvo Meier"
+    },
+    {
+      "action": "touch-save",
+      "targetId": "69c7f88b8489bfcb0e81b5e4",
+      "targetName": "member 69c7f88b8489bfcb0e81b5e4 (Raul Saar)",
+      "touchMechanic": "_sharing-based (formula name)",
+      "hasPersonRef": false,
+      "status": "touched",
+      "canaryChecks": {
+        "postHasPropId": true,
+        "propIdRotated": true,
+        "namePresent": true,
+        "nameCount": 1,
+        "nameValue": "Raul Saar"
+      },
+      "after": "Raul Saar"
+    }
+  ],
+  "exitCode": 1,
+  "verificationCaveat": "Run under ENTU_API_KEY (PO/db-root seat). Formula name verification is 3-check canary: (a) _sharing prop _id rotated, (b) name present on read-back, (c) name count = 1. Domain members (with person ref) get full 3-check; private members (no person ref) get relaxed check (name absence is expected). The resolved name value is logged for visual confirmation."
+}
