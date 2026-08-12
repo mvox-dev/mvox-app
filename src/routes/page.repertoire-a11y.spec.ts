@@ -452,7 +452,8 @@ describe('#93 — a11y: functional links are proper anchors with descriptive nam
 
 // ---------------------------------------------------------------------------
 // 4 — status control: accessible name naming the work (the "or equivalent"
-//     for a native <select>, whose selected option already announces state)
+//     for a toggle-button group, whose aria-pressed state already announces
+//     which one is current)
 // ---------------------------------------------------------------------------
 describe('#93 — a11y: the status control has an accessible name per work', () => {
 	const editorProps = {
@@ -461,23 +462,25 @@ describe('#93 — a11y: the status control has an accessible name per work', () 
 		context: 'repertoire' as const
 	};
 
-	it('guard: the status select reflects the current status as its value', async () => {
+	it('guard: the current status button reflects the row status via aria-pressed', async () => {
 		const container = await renderElementExpanded({
 			...editorProps,
 			rows: [workRow('r1', { workName: 'Spem in alium', status: 'learning' })]
 		});
-		const select = container.querySelector('[data-testid="work-manage-status-select"]') as HTMLSelectElement;
-		expect(select).not.toBeNull();
-		expect(select.value).toBe('learning');
+		const learning = container.querySelector('[data-testid="work-status-learning"]');
+		const active = container.querySelector('[data-testid="work-status-active"]');
+		expect(learning).not.toBeNull();
+		expect(learning!.getAttribute('aria-pressed')).toBe('true');
+		expect(active!.getAttribute('aria-pressed')).toBe('false');
 	});
 
-	it("every status select has an aria-label naming its work — a bare select with a list of statuses doesn't say WHICH work's status it sets", async () => {
+	it("every status button has an aria-label naming its work — a row of bare 'Active'/'Learning'/… buttons doesn't say WHICH work's status it sets", async () => {
 		const container = await renderElementExpanded(editorProps);
 		const labels = Array.from(
-			container.querySelectorAll('[data-testid="work-manage-status-select"]')
+			container.querySelectorAll('[data-testid="work-status-active"]')
 		).map((s) => s.getAttribute('aria-label'));
 		expect(labels.length).toBe(2);
-		labels.forEach((label) => expect(label, 'status select is missing aria-label').toBeTruthy());
+		labels.forEach((label) => expect(label, 'status button is missing aria-label').toBeTruthy());
 		expect(labels[0]).toContain('Spem in alium');
 		expect(labels[1]).toContain('Ave verum corpus');
 		expect(new Set(labels).size).toBe(2);
@@ -577,7 +580,7 @@ describe('#93 — a11y: management controls identify their work', () => {
 		expect(new Set(upLabels).size).toBe(3);
 	});
 
-	it("the Pin button's aria-label names its work", async () => {
+	it("the unified edition picker's aria-label names its work", async () => {
 		const container = await renderElementExpanded({
 			rows: twoLinkedRows,
 			manageRights: 'editor',
@@ -588,12 +591,30 @@ describe('#93 — a11y: management controls identify their work', () => {
 			}
 		});
 		const labels = Array.from(
-			container.querySelectorAll('[data-testid="work-manage-pin-edition-button"]')
+			container.querySelectorAll('[data-testid="work-edition-picker"]')
 		).map((b) => b.getAttribute('aria-label'));
 		expect(labels.length).toBe(2);
-		labels.forEach((label) => expect(label, 'Pin button is missing aria-label').toBeTruthy());
+		labels.forEach((label) => expect(label, 'edition picker is missing aria-label').toBeTruthy());
 		expect(labels[0]).toContain('Spem in alium');
 		expect(labels[1]).toContain('Ave verum corpus');
+	});
+
+	it('every status button has an accessible name (aria-label) — a bare status word is a value, not the name of the control', async () => {
+		const container = await renderElementExpanded({
+			rows: twoLinkedRows,
+			manageRights: 'editor',
+			context: 'repertoire'
+		});
+		for (const status of ['learning', 'active', 'retired', 'dropped']) {
+			const buttons = container.querySelectorAll(`[data-testid="work-status-${status}"]`);
+			expect(buttons.length, `work-status-${status} must render`).toBeGreaterThan(0);
+			buttons.forEach((btn) => {
+				expect(
+					btn.getAttribute('aria-label'),
+					`work-status-${status} is missing aria-label`
+				).toBeTruthy();
+			});
+		}
 	});
 
 	it('every management select has an accessible name (aria-label) — a placeholder <option> is a value, not the name of the control', async () => {
@@ -607,8 +628,7 @@ describe('#93 — a11y: management controls identify their work', () => {
 			editionOptionsByRowId: { r1: [{ id: 'ed-1', label: 'Urtext' }] }
 		});
 		for (const testid of [
-			'work-manage-status-select',
-			'work-manage-pin-edition-select',
+			'work-edition-picker',
 			'work-manage-add-work-select',
 			'work-manage-add-programme-select'
 		]) {

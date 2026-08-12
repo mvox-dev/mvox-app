@@ -207,17 +207,17 @@ describe('+page — repertoire UX corrections on the real agenda route (#111)', 
 		}
 	});
 
-	it('an editor gets ONE status/actions row per panel — picker + Remove at the bottom, no separate header chip (finding 3)', async () => {
+	it('an editor gets ONE status/actions row per panel — status buttons + Remove at the bottom, no separate header chip (finding 3)', async () => {
 		const { container } = await renderExpandedAsEditor();
 		// No chip anywhere on the editor surface …
 		expect(container.querySelector('[data-testid="work-status-badge"]')).toBeNull();
 		// … because the bottom row is the single status surface, Remove beside it.
 		for (const li of container.querySelectorAll('[data-testid="work-row"]')) {
-			const select = li.querySelector('[data-testid="work-manage-status-select"]');
+			const statusButton = li.querySelector('[data-testid="work-status-active"]');
 			const remove = li.querySelector('[data-testid="work-manage-remove"]');
-			expect(select).not.toBeNull();
+			expect(statusButton).not.toBeNull();
 			expect(remove).not.toBeNull();
-			const manageRow = select!.closest('[data-testid="work-manage-row"]');
+			const manageRow = statusButton!.closest('[data-testid="work-manage-row"]');
 			expect(remove!.closest('[data-testid="work-manage-row"]')).toBe(manageRow);
 			expect(manageRow!.parentElement!.lastElementChild).toBe(manageRow);
 		}

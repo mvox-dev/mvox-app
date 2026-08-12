@@ -382,23 +382,24 @@ async function renderExpandedManaged(rows: WorkRow[], extra: Record<string, unkn
 }
 
 describe('RepertoireElement — management: repertoire status + remove', () => {
-	it('status select is seeded with the row status and calls onstatuschange on change', async () => {
+	it('the current status button is pressed, and clicking another calls onstatuschange', async () => {
 		const onstatuschange = vi.fn();
 		const { container } = await renderExpandedManaged([row({ id: 'ri-1', status: 'active' })], {
 			onstatuschange
 		});
-		const select = container.querySelector('[data-testid="work-manage-status-select"]') as HTMLSelectElement;
-		expect(select.value).toBe('active');
-		await fireEvent.change(select, { target: { value: 'retired' } });
+		expect(
+			container.querySelector('[data-testid="work-status-active"]')!.getAttribute('aria-pressed')
+		).toBe('true');
+		await fireEvent.click(container.querySelector('[data-testid="work-status-retired"]')!);
 		expect(onstatuschange).toHaveBeenCalledWith('ri-1', 'retired');
 	});
 
-	it('status select disables while its row id is pending', async () => {
+	it('status buttons disable while their row id is pending', async () => {
 		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
 			pendingKeys: new Set(['ri-1'])
 		});
-		const select = container.querySelector('[data-testid="work-manage-status-select"]') as HTMLSelectElement;
-		expect(select.disabled).toBe(true);
+		const btn = container.querySelector('[data-testid="work-status-active"]') as HTMLButtonElement;
+		expect(btn.disabled).toBe(true);
 	});
 
 	it('Remove button calls onremoveitem with the row id, and is disabled while pending', async () => {
@@ -410,31 +411,22 @@ describe('RepertoireElement — management: repertoire status + remove', () => {
 		expect(onremoveitem).toHaveBeenCalledWith('ri-1');
 	});
 
-	it('pin-edition picker is absent when editionOptionsByRowId has no options for the row', async () => {
-		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })]);
-		expect(container.querySelector('[data-testid="work-manage-pin-edition-select"]')).toBeNull();
+	it('the edition picker is absent when editionOptionsByRowId has no options for the row', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
+			editionOptionsByRowId: {}
+		});
+		expect(container.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
 	});
 
-	it('picking an edition and tapping Pin calls onpinedition with the row id + chosen edition id', async () => {
+	it('changing the unified edition picker calls onpinedition with the row id + chosen edition id, no confirm step', async () => {
 		const onpinedition = vi.fn();
 		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
 			onpinedition,
 			editionOptionsByRowId: { 'ri-1': [{ id: 'ed-1', label: 'Bärenreiter' }] }
 		});
-		const select = container.querySelector('[data-testid="work-manage-pin-edition-select"]') as HTMLSelectElement;
-		await fireEvent.change(select, { target: { value: 'ed-1' } });
-		const btn = container.querySelector('[data-testid="work-manage-pin-edition-button"]') as HTMLButtonElement;
-		expect(btn.disabled).toBe(false);
-		await fireEvent.click(btn);
+		const picker = container.querySelector('[data-testid="work-edition-picker"]') as HTMLSelectElement;
+		await fireEvent.change(picker, { target: { value: 'ed-1' } });
 		expect(onpinedition).toHaveBeenCalledWith('ri-1', 'ed-1');
-	});
-
-	it('Pin button stays disabled until an edition is picked', async () => {
-		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
-			editionOptionsByRowId: { 'ri-1': [{ id: 'ed-1', label: 'Bärenreiter' }] }
-		});
-		const btn = container.querySelector('[data-testid="work-manage-pin-edition-button"]') as HTMLButtonElement;
-		expect(btn.disabled).toBe(true);
 	});
 });
 
@@ -579,15 +571,16 @@ describe('RepertoireElement — management: row provenance (kind) gates the cont
 });
 
 describe('RepertoireElement — management: the status toggle round-trips', () => {
-	it('a RETIRED row still renders the status select, seeded with retired — the toggle is two-way', async () => {
+	it('a RETIRED row still renders the status buttons, retired pressed — the toggle is two-way', async () => {
 		const { container } = await renderExpandedManaged([
 			row({ id: 'ri-1', kind: 'repertoire', status: 'retired' })
 		]);
-		const select = container.querySelector(
-			'[data-testid="work-manage-status-select"]'
-		) as HTMLSelectElement;
-		expect(select).not.toBeNull();
-		expect(select.value).toBe('retired');
+		expect(
+			container.querySelector('[data-testid="work-status-retired"]')?.getAttribute('aria-pressed')
+		).toBe('true');
+		expect(
+			container.querySelector('[data-testid="work-status-active"]')?.getAttribute('aria-pressed')
+		).toBe('false');
 	});
 
 	it('a retired row can be set back to active', async () => {
@@ -596,22 +589,17 @@ describe('RepertoireElement — management: the status toggle round-trips', () =
 			[row({ id: 'ri-1', kind: 'repertoire', status: 'dropped' })],
 			{ onstatuschange }
 		);
-		const select = container.querySelector(
-			'[data-testid="work-manage-status-select"]'
-		) as HTMLSelectElement;
-		await fireEvent.change(select, { target: { value: 'active' } });
+		await fireEvent.click(container.querySelector('[data-testid="work-status-active"]')!);
 		expect(onstatuschange).toHaveBeenCalledWith('ri-1', 'active');
 	});
 
-	it('a row whose status did not narrow (bad data) still gets the control, seeded to the schema default', async () => {
+	it('a row whose status did not narrow (bad data) still gets the controls, seeded to the schema default', async () => {
 		const { container } = await renderExpandedManaged([
 			row({ id: 'ri-1', kind: 'repertoire', status: null })
 		]);
-		const select = container.querySelector(
-			'[data-testid="work-manage-status-select"]'
-		) as HTMLSelectElement;
-		expect(select).not.toBeNull();
-		expect(select.value).toBe('active');
+		expect(
+			container.querySelector('[data-testid="work-status-active"]')?.getAttribute('aria-pressed')
+		).toBe('true');
 	});
 });
 
@@ -645,7 +633,7 @@ describe('RepertoireElement — management: per-surface rights', () => {
 			eventRights: 'editor',
 			context: 'repertoire'
 		});
-		expect(container.querySelector('[data-testid="work-manage-status-select"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-status-active"]')).toBeNull();
 		expect(container.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
 	});
 
@@ -655,7 +643,7 @@ describe('RepertoireElement — management: per-surface rights', () => {
 			eventRights: 'not-editor',
 			context: 'repertoire'
 		});
-		expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="work-manage-add-programme"]')).toBeNull();
 	});
 

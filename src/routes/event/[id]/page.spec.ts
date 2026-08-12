@@ -1768,7 +1768,7 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 		const section = container.querySelector('[data-testid="event-detail-works"]')!;
 		// Per-row repertoire controls (these are season-repertoire fallback rows,
 		// so the REPERTOIRE surface's controls are the ones that may touch them).
-		expect(section.querySelectorAll('[data-testid="work-manage-status-select"]')).toHaveLength(2);
+		expect(section.querySelectorAll('[data-testid="work-status-active"]')).toHaveLength(2);
 		expect(section.querySelectorAll('[data-testid="work-manage-remove"]')).toHaveLength(2);
 		// …and the Add-work picker, the same one the agenda's editor sees.
 		expect(section.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
@@ -1826,7 +1826,7 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 				container.querySelectorAll('[data-testid="work-row"]').length
 			).toBeGreaterThan(0);
 		});
-		expect(container.querySelector('[data-testid="work-manage-status-select"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-status-active"]')).toBeNull();
 		expect(container.querySelector('[data-testid="work-manage-remove"]')).toBeNull();
 		expect(container.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
 	});
@@ -1870,7 +1870,7 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 		// …and NOT the season-repertoire picker: these rows are program_items, and
 		// the agenda's programme surface does not offer "Add work" either.
 		expect(section.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
-		expect(section.querySelector('[data-testid="work-manage-status-select"]')).toBeNull();
+		expect(section.querySelector('[data-testid="work-status-active"]')).toBeNull();
 	});
 });
 
@@ -2070,7 +2070,7 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 		});
 		expect(worksSection.querySelector('[data-testid="works-expanded"]')).not.toBeNull();
 		expect(
-			worksSection.querySelector('[data-testid="work-manage-status-select"]')
+			worksSection.querySelector('[data-testid="work-status-active"]')
 		).not.toBeNull();
 
 		// Attendance: badge + tally + the conductor's button INSIDE the section.

@@ -13,7 +13,7 @@
 	it is counted instead ("+N inactive") and shown, de-emphasised, on expand.
 
 	Expanded: one row per work — name + composer, status badge (translated via
-	the same STATUS_OPTIONS lookup the management select uses), pinned edition (or a
+	the same STATUS_OPTIONS lookup the management buttons use), pinned edition (or a
 	work-no-edition placeholder), program notes when present, and the functional
 	links: PDF, Borrow (static /library link, present only when copies exist),
 	and one link per external_link value (text = the link's domain; the producer
@@ -115,7 +115,7 @@
 		{ value: 'dropped', label: m.repertoire_status_dropped }
 	];
 
-	/** The badge text. Routed through the SAME lookup the management select uses
+	/** The badge text. Routed through the SAME lookup the management buttons use
 	 *  (#91 review F6) — printing `row.status` verbatim leaked raw 'retired' /
 	 *  'dropped' into all four locales, two snippets away from the translated
 	 *  options. An unknown value would fall back to itself, but narrowStatus
@@ -220,7 +220,6 @@
 
 	let selectedWorkId = $state('');
 	let selectedEditionForAdd = $state('');
-	let selectedEditionByRow = $state<Record<string, string>>({});
 
 	function handleAddWork() {
 		if (!selectedWorkId || pendingKeys.has(ADD_WORK_KEY)) return;
@@ -236,16 +235,14 @@
 		selectedEditionForAdd = '';
 	}
 
-	function handleStatusChange(rowId: string, value: string) {
+	function handleStatusChange(rowId: string, status: RepertoireStatus) {
 		if (pendingKeys.has(rowId)) return;
-		onstatuschange?.(rowId, value as RepertoireStatus);
+		onstatuschange?.(rowId, status);
 	}
 
-	function handlePinEdition(rowId: string) {
-		const editionId = selectedEditionByRow[rowId];
-		if (!editionId || pendingKeys.has(rowId)) return;
+	function handlePinEdition(rowId: string, editionId: string) {
+		if (pendingKeys.has(rowId)) return;
 		onpinedition?.(rowId, editionId);
-		selectedEditionByRow[rowId] = '';
 	}
 
 	function handleRemove(rowId: string) {
@@ -302,7 +299,7 @@
 	<span data-testid="work-composer" class="text-xs text-ink-2">{row.composer}</span>
 	{#if row.status !== null && !canEditRepertoireRow(row)}
 		<!-- #111 finding 3 — where the bottom status/actions row renders (an
-		     editor on the repertoire surface), its status <select> IS the
+		     editor on the repertoire surface), its status buttons ARE the
 		     status display; a separate header chip would show the same value
 		     twice. A plain member (no manage row) keeps the chip as her only
 		     status surface. -->
@@ -313,7 +310,25 @@
 			{statusLabel(row.status)}
 		</span>
 	{/if}
-	{#if row.editionName !== ''}
+	{#if canEditRepertoireRow(row) && (editionOptionsByRowId[row.id] ?? []).length > 0}
+		<!-- #125 F5b — ONE unified picker replaces the old pick-select + [Pin]
+		     button pair AND this row's read-only edition line: its VALUE is the
+		     currently pinned edition ('' when none), and a change fires
+		     onpinedition immediately, no confirm step. -->
+		<select
+			data-testid="work-edition-picker"
+			class="w-full text-xs sm:w-auto"
+			value={row.editionId}
+			disabled={pendingKeys.has(row.id)}
+			aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
+			onchange={(e) => handlePinEdition(row.id, (e.currentTarget as HTMLSelectElement).value)}
+		>
+			<option value="">{m.repertoire_pin_edition_label()}</option>
+			{#each editionOptionsByRowId[row.id] ?? [] as opt (opt.id)}
+				<option value={opt.id}>{opt.label}</option>
+			{/each}
+		</select>
+	{:else if row.editionName !== ''}
 		<span data-testid="work-edition" class="text-xs text-ink-2">{row.editionName}</span>
 	{:else}
 		<span data-testid="work-no-edition" class="text-xs text-ink-3 italic">{m.repertoire_no_edition()}</span>
@@ -390,45 +405,28 @@
 			class="flex flex-wrap items-center gap-2 border-t border-ink-5 pt-2 mt-1"
 		>
 			{#if canEditRepertoireRow(row)}
-				<select
-					data-testid="work-manage-status-select"
-					class="text-xs"
-					value={row.status ?? 'active'}
-					disabled={pendingKeys.has(row.id)}
-					aria-label={m.repertoire_status_select_aria_label({ work: row.workName })}
-					onchange={(e) => handleStatusChange(row.id, (e.currentTarget as HTMLSelectElement).value)}
-				>
+				<!-- #125 F5a — four inline toggle buttons replace the status <select>:
+				     the CURRENT status is exposed via aria-pressed, not just a class,
+				     so it stays legible to assistive tech. Labels still route through
+				     STATUS_OPTIONS — no raw schema string leaks into a locale. -->
+				<div class="flex flex-wrap gap-1">
 					{#each STATUS_OPTIONS as opt (opt.value)}
-						<option value={opt.value}>{opt.label()}</option>
+						<button
+							type="button"
+							data-testid={`work-status-${opt.value}`}
+							class="rounded-full border border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase disabled:cursor-default disabled:opacity-[0.45] aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper"
+							aria-pressed={(row.status ?? 'active') === opt.value}
+							disabled={pendingKeys.has(row.id)}
+							aria-label={m.repertoire_status_button_aria_label({
+								status: opt.label(),
+								work: row.workName
+							})}
+							onclick={() => handleStatusChange(row.id, opt.value)}
+						>
+							{opt.label()}
+						</button>
 					{/each}
-				</select>
-				{#if (editionOptionsByRowId[row.id] ?? []).length > 0}
-					<select
-						data-testid="work-manage-pin-edition-select"
-						class="w-full text-xs sm:w-auto"
-						value={selectedEditionByRow[row.id] ?? ''}
-						disabled={pendingKeys.has(row.id)}
-						aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
-						onchange={(e) => {
-							selectedEditionByRow[row.id] = (e.currentTarget as HTMLSelectElement).value;
-						}}
-					>
-						<option value="">{m.repertoire_pin_edition_label()}</option>
-						{#each editionOptionsByRowId[row.id] ?? [] as opt (opt.id)}
-							<option value={opt.id}>{opt.label}</option>
-						{/each}
-					</select>
-					<button
-						type="button"
-						data-testid="work-manage-pin-edition-button"
-						class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-						disabled={pendingKeys.has(row.id) || !selectedEditionByRow[row.id]}
-						aria-label={m.repertoire_pin_edition_button_aria_label({ work: row.workName })}
-						onclick={() => handlePinEdition(row.id)}
-					>
-						{m.repertoire_pin_edition_button()}
-					</button>
-				{/if}
+				</div>
 				<!-- Remove lives INSIDE each branch, never alongside them: the id it
 				     forwards is a repertoire_item id here and a program_item id below,
 				     and the two go to different DELETE handlers. A single shared button
@@ -540,7 +538,7 @@
 		</button>
 	{/if}
 	{#if isExpanded}
-		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-4">
+		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-2">
 			{#if hasOrdinals}
 				<ol class="list-decimal divide-y divide-dashed divide-ink-5 pl-4">
 					<!-- Keyed on the entity id, NEVER on ordinal: `mandatory: true` is a

@@ -50,6 +50,13 @@
 // review). The
 // member-surface chip specs in RepertoireElement.spec.ts render WITHOUT manage
 // rights and must keep passing untouched.
+//
+// #125 GREEN note — work-manage-status-select and work-manage-pin-edition-select
+// no longer exist (see RepertoireElement.status-edition.spec.ts): status is four
+// inline buttons (work-status-learning|active|retired|dropped) and edition is
+// ONE unified work-edition-picker select. The specs below assert on those
+// surfaces; the mobile-width treatment moved with the pin-edition select onto
+// work-edition-picker.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RepertoireElement from './RepertoireElement.svelte';
@@ -149,40 +156,39 @@ describe('RepertoireElement — unified status/actions row (#111 finding 3)', ()
 		});
 	}
 
-	it('renders NO separate status chip in the panel header when the status picker row is present', () => {
+	it('renders NO separate status chip in the panel header when the status buttons row is present', () => {
 		const { container } = renderAsSeasonEditor();
-		// The picker row is on screen …
-		expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
-		// … so the chip must NOT be: the picker is the single status surface.
+		// The buttons row is on screen …
+		expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
+		// … so the chip must NOT be: the buttons are the single status surface.
 		expect(container.querySelector('[data-testid="work-status-badge"]')).toBeNull();
 	});
 
-	it('the status picker lives in a single row that is the LAST element of the work panel', () => {
+	it('the status buttons live in a single row that is the LAST element of the work panel', () => {
 		const { container } = renderAsSeasonEditor();
 		const workRows = container.querySelectorAll('[data-testid="work-row"]');
 		expect(workRows.length).toBe(3);
 		for (const li of workRows) {
-			const select = li.querySelector('[data-testid="work-manage-status-select"]');
-			expect(select).not.toBeNull();
-			const manageRow = select!.closest('[data-testid="work-manage-row"]');
+			const manageRow = li.querySelector('[data-testid="work-manage-row"]');
 			expect(manageRow).not.toBeNull();
 			// Last element of the panel: nothing renders below the actions row.
 			expect(manageRow!.parentElement!.lastElementChild).toBe(manageRow);
-			// The picker carries all four statuses (learn / active / retire / drop).
-			const values = [...select!.querySelectorAll('option')].map((o) => o.getAttribute('value'));
-			expect(values).toEqual(['learning', 'active', 'retired', 'dropped']);
+			// All four statuses (learn / active / retire / drop) get a button.
+			for (const status of ['learning', 'active', 'retired', 'dropped']) {
+				expect(manageRow!.querySelector(`[data-testid="work-status-${status}"]`)).not.toBeNull();
+			}
 		}
 	});
 
-	it('Remove sits on the SAME row as the status picker', () => {
+	it('Remove sits on the SAME row as the status buttons', () => {
 		const { container } = renderAsSeasonEditor();
 		for (const li of container.querySelectorAll('[data-testid="work-row"]')) {
-			const select = li.querySelector('[data-testid="work-manage-status-select"]');
+			const statusButton = li.querySelector('[data-testid="work-status-active"]');
 			const remove = li.querySelector('[data-testid="work-manage-remove"]');
-			expect(select).not.toBeNull();
+			expect(statusButton).not.toBeNull();
 			expect(remove).not.toBeNull();
 			expect(remove!.closest('[data-testid="work-manage-row"]')).toBe(
-				select!.closest('[data-testid="work-manage-row"]')
+				statusButton!.closest('[data-testid="work-manage-row"]')
 			);
 		}
 	});
@@ -332,8 +338,8 @@ describe('RepertoireElement — native mobile pickers, repertoire surface (#111 
 		]);
 	});
 
-	it('"Pin edition" is a native <select>, full width on mobile, inline at ≥640px, options intact', () => {
-		const el = select(renderAsSeasonEditor(), 'work-manage-pin-edition-select');
+	it('the unified edition picker is a native <select>, full width on mobile, inline at ≥640px, options intact', () => {
+		const el = select(renderAsSeasonEditor(), 'work-edition-picker');
 		expect(el.tagName).toBe('SELECT');
 		expect(el.className).toMatch(/(^|\s)w-full(\s|$)/);
 		expect(el.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
@@ -345,9 +351,9 @@ describe('RepertoireElement — native mobile pickers, repertoire surface (#111 
 		]);
 	});
 
-	it('every pin-edition picker on the surface carries the treatment, not just the first row', () => {
+	it('every edition picker on the surface carries the treatment, not just the first row', () => {
 		const container = renderAsSeasonEditor();
-		const pickers = [...container.querySelectorAll('[data-testid="work-manage-pin-edition-select"]')];
+		const pickers = [...container.querySelectorAll('[data-testid="work-edition-picker"]')];
 		expect(pickers.length).toBe(3); // one per work row
 		for (const el of pickers) {
 			expect(el.className).toMatch(/(^|\s)w-full(\s|$)/);

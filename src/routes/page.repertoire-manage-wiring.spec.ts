@@ -227,6 +227,15 @@ function rowStatus(container: HTMLElement, workName: string): string | null {
 	return li?.getAttribute('data-status') ?? null;
 }
 
+/** The <li> rendering the named work, for scoping a status-button click to it. */
+function rowEl(container: HTMLElement, workName: string): HTMLElement {
+	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
+		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
+	);
+	if (!li) throw new Error(`no work-row for ${workName}`);
+	return li as HTMLElement;
+}
+
 function postsTo(fetchMock: ReturnType<typeof installWorld>, fragment: string) {
 	return fetchMock.mock.calls.filter(
 		([url, init]) =>
@@ -260,7 +269,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		const { container } = await renderAndExpand();
 
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="work-manage-remove"]')).not.toBeNull();
@@ -287,10 +296,12 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		await vi.waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-manage-row"]').length).toBe(2);
 		});
-		const selects = container.querySelectorAll('[data-testid="work-manage-status-select"]');
-		expect((selects[1] as HTMLSelectElement).value).toBe('retired');
+		const retiredRow = rowEl(container, 'Old warhorse');
+		expect(
+			retiredRow.querySelector('[data-testid="work-status-retired"]')!.getAttribute('aria-pressed')
+		).toBe('true');
 
-		await fireEvent.change(selects[1], { target: { value: 'active' } });
+		await fireEvent.click(retiredRow.querySelector('[data-testid="work-status-active"]')!);
 		await vi.waitFor(() => {
 			expect(postsTo(fetchMock, 'entity/ri-2').length).toBe(1);
 		});
@@ -305,11 +316,9 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		const { container } = await renderAndExpand();
 
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
-		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
-			target: { value: 'learning' }
-		});
+		await fireEvent.click(rowEl(container, 'Spem in alium').querySelector('[data-testid="work-status-learning"]')!);
 
 		await vi.waitFor(() => {
 			expect(postsTo(fetchMock, 'entity/ri-1').length).toBe(1);
@@ -327,14 +336,12 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
 
-		// Asserted through `rowStatus` (the rendered `data-status`), never the
-		// <select>'s value — see the helper's note.
+		// Asserted through `rowStatus` (the rendered `data-status`), never a
+		// button's aria-pressed — see the helper's note.
 		await vi.waitFor(() => {
 			expect(rowStatus(container, 'Spem in alium')).toBe('active');
 		});
-		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
-			target: { value: 'learning' }
-		});
+		await fireEvent.click(container.querySelector('[data-testid="work-status-learning"]')!);
 		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 	});
 
@@ -377,7 +384,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		const { container } = await renderAndExpand();
 
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
 		const rightsProbes = fetchMock.mock.calls.filter(([url]) =>
 			String(url).includes('props=_owner,_editor')
@@ -394,15 +401,13 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		const { container } = await renderAndExpand();
 
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
 		const worksReadsBefore = fetchMock.mock.calls.filter(([url]) =>
 			String(url).includes('_type.string=work')
 		).length;
 
-		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
-			target: { value: 'learning' }
-		});
+		await fireEvent.click(container.querySelector('[data-testid="work-status-learning"]')!);
 		await vi.waitFor(() => {
 			expect(postsTo(fetchMock, 'entity/ri-1').length).toBe(1);
 		});
@@ -420,11 +425,9 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		const { container } = await renderAndExpand();
 
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="work-manage-status-select"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
-		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
-			target: { value: 'learning' }
-		});
+		await fireEvent.click(container.querySelector('[data-testid="work-status-learning"]')!);
 		await vi.waitFor(() => {
 			const calls = fetchMock.mock.calls.map(
 				([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`
@@ -468,9 +471,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-manage-add-work-select"]')).not.toBeNull();
 		});
-		await fireEvent.change(container.querySelector('[data-testid="work-manage-status-select"]')!, {
-			target: { value: 'learning' }
-		});
+		await fireEvent.click(container.querySelector('[data-testid="work-status-learning"]')!);
 		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 
 		// Now a create settles and refetches the (stale) repertoire.
