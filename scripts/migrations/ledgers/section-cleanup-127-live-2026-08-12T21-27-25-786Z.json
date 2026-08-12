@@ -1,0 +1,427 @@
+{
+  "dryRun": false,
+  "generatedAt": "2026-08-12T21:27:25.786Z",
+  "summary": {
+    "ok": 53,
+    "skipped": 0,
+    "dryRun": 0,
+    "failed": 0,
+    "aborted": 0
+  },
+  "ledger": [
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8728489bfcb0e81b07b",
+      "targetLabel": "EFK_SOPRANO",
+      "status": "ok",
+      "detail": "name=Soprano org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8748489bfcb0e81b0cd",
+      "targetLabel": "EFK_ALTO",
+      "status": "ok",
+      "detail": "name=Alto org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8758489bfcb0e81b113",
+      "targetLabel": "EFK_TENOR",
+      "status": "ok",
+      "detail": "name=Tenor org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8768489bfcb0e81b163",
+      "targetLabel": "EFK_BASS",
+      "status": "ok",
+      "detail": "name=Bass org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8788489bfcb0e81b1bf",
+      "targetLabel": "SIREEN_SOPRANO_I",
+      "status": "ok",
+      "detail": "name=Soprano I org=Kammernaiskoor Sireen"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8798489bfcb0e81b207",
+      "targetLabel": "SIREEN_SOPRANO_II",
+      "status": "ok",
+      "detail": "name=Soprano II org=Kammernaiskoor Sireen"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f87b8489bfcb0e81b257",
+      "targetLabel": "SIREEN_ALTO_I",
+      "status": "ok",
+      "detail": "name=Alto I org=Kammernaiskoor Sireen"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f87c8489bfcb0e81b2a7",
+      "targetLabel": "SIREEN_ALTO_II",
+      "status": "ok",
+      "detail": "name=Alto II org=Kammernaiskoor Sireen"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f87e8489bfcb0e81b2fa",
+      "targetLabel": "RAM_I_TENOR",
+      "status": "ok",
+      "detail": "name=I Tenor org=Eesti Rahvusmeeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8808489bfcb0e81b374",
+      "targetLabel": "RAM_II_TENOR",
+      "status": "ok",
+      "detail": "name=II Tenor org=Eesti Rahvusmeeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8848489bfcb0e81b46e",
+      "targetLabel": "RAM_BASS",
+      "status": "ok",
+      "detail": "name=Bass org=Eesti Rahvusmeeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8878489bfcb0e81b506",
+      "targetLabel": "TAM_I_TENOR",
+      "status": "ok",
+      "detail": "name=I Tenor org=Tartu Akadeemiline Meeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8888489bfcb0e81b544",
+      "targetLabel": "TAM_II_TENOR",
+      "status": "ok",
+      "detail": "name=II Tenor org=Tartu Akadeemiline Meeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f88a8489bfcb0e81b5bc",
+      "targetLabel": "TAM_BASS",
+      "status": "ok",
+      "detail": "name=Bass org=Tartu Akadeemiline Meeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8828489bfcb0e81b3ec",
+      "targetLabel": "RAM_BARITONE (untouched)",
+      "status": "ok",
+      "detail": "name=Baritone org=Eesti Rahvusmeeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8898489bfcb0e81b580",
+      "targetLabel": "TAM_BARITONE (untouched)",
+      "status": "ok",
+      "detail": "name=Baritone org=Tartu Akadeemiline Meeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "6a7cc04e23dc1d97bb8f203b",
+      "targetLabel": "ADMIN (untouched)",
+      "status": "ok",
+      "detail": "name=Admin org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd24f4ff8277cd4306244",
+      "targetLabel": "member 6a0dd24f4ff8277cd4306244 (Andres Tamm): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd24f4ff8277cd430624e",
+      "targetLabel": "member 6a0dd24f4ff8277cd430624e (Kalev Ojala): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd24f4ff8277cd4306258",
+      "targetLabel": "member 6a0dd24f4ff8277cd4306258 (Tiit Saar): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd24f4ff8277cd4306262",
+      "targetLabel": "member 6a0dd24f4ff8277cd4306262 (Mati Rand): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd24f4ff8277cd430626c",
+      "targetLabel": "member 6a0dd24f4ff8277cd430626c (Rein Lepp): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2504ff8277cd4306276",
+      "targetLabel": "member 6a0dd2504ff8277cd4306276 (Peeter Mägi): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2504ff8277cd4306280",
+      "targetLabel": "member 6a0dd2504ff8277cd4306280 (Raul Kask): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25b4ff8277cd43064d8",
+      "targetLabel": "member 6a0dd25b4ff8277cd43064d8 (Andres Alamaa): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25b4ff8277cd43064e2",
+      "targetLabel": "member 6a0dd25b4ff8277cd43064e2 (Jüri Eensoo): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25b4ff8277cd43064ec",
+      "targetLabel": "member 6a0dd25b4ff8277cd43064ec (Rasmus Erismaa): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25c4ff8277cd43064f6",
+      "targetLabel": "member 6a0dd25c4ff8277cd43064f6 (Vello Tamm): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25c4ff8277cd4306500",
+      "targetLabel": "member 6a0dd25c4ff8277cd4306500 (Lembit Kask): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25c4ff8277cd430650a",
+      "targetLabel": "member 6a0dd25c4ff8277cd430650a (Enn Lepik): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25c4ff8277cd4306514",
+      "targetLabel": "member 6a0dd25c4ff8277cd4306514 (Elmar Saar): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25c4ff8277cd430651e",
+      "targetLabel": "member 6a0dd25c4ff8277cd430651e (Hugo Rand): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25d4ff8277cd4306528",
+      "targetLabel": "member 6a0dd25d4ff8277cd4306528 (Karl Heinz): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25d4ff8277cd4306532",
+      "targetLabel": "member 6a0dd25d4ff8277cd4306532 (Ülo Ojala): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25d4ff8277cd430653c",
+      "targetLabel": "member 6a0dd25d4ff8277cd430653c (Heino Luik): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2604ff8277cd43065fa",
+      "targetLabel": "member 6a0dd2604ff8277cd43065fa (Valdur Tamm): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2604ff8277cd4306604",
+      "targetLabel": "member 6a0dd2604ff8277cd4306604 (Tauno Kask): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2604ff8277cd430660e",
+      "targetLabel": "member 6a0dd2604ff8277cd430660e (Ülo Mägi): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2604ff8277cd4306618",
+      "targetLabel": "member 6a0dd2604ff8277cd4306618 (Arvo Lepp): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a12036e4ff8277cd4306b9a",
+      "targetLabel": "member 6a12036e4ff8277cd4306b9a (Margus Roos): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a12036e4ff8277cd4306bab",
+      "targetLabel": "member 6a12036e4ff8277cd4306bab (Henn Kuusik): Bass/Eesti Rahvusmeeskoor -> Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "ok",
+      "detail": "deduped stray dual-link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2554ff8277cd430638e",
+      "targetLabel": "member 6a0dd2554ff8277cd430638e (Aleksander Kask): I Tenor/Tartu Akadeemiline Meeskoor -> I Tenor/Eesti Rahvusmeeskoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd25e4ff8277cd430656e",
+      "targetLabel": "member 6a0dd25e4ff8277cd430656e (Ain Saar): I Tenor/Tartu Akadeemiline Meeskoor -> I Tenor/Eesti Rahvusmeeskoor",
+      "status": "ok",
+      "detail": "moved to survivor, verified"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f8788489bfcb0e81b1bf",
+      "targetLabel": "Soprano I/Kammernaiskoor Sireen -> parent Soprano/Eesti Filharmoonia Kammerkoor",
+      "status": "ok"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f8798489bfcb0e81b207",
+      "targetLabel": "Soprano II/Kammernaiskoor Sireen -> parent Soprano/Eesti Filharmoonia Kammerkoor",
+      "status": "ok"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f87b8489bfcb0e81b257",
+      "targetLabel": "Alto I/Kammernaiskoor Sireen -> parent Alto/Eesti Filharmoonia Kammerkoor",
+      "status": "ok"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f87c8489bfcb0e81b2a7",
+      "targetLabel": "Alto II/Kammernaiskoor Sireen -> parent Alto/Eesti Filharmoonia Kammerkoor",
+      "status": "ok"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f87e8489bfcb0e81b2fa",
+      "targetLabel": "I Tenor/Eesti Rahvusmeeskoor -> parent Tenor/Eesti Filharmoonia Kammerkoor",
+      "status": "ok"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f8808489bfcb0e81b374",
+      "targetLabel": "II Tenor/Eesti Rahvusmeeskoor -> parent Tenor/Eesti Filharmoonia Kammerkoor",
+      "status": "ok"
+    },
+    {
+      "phase": "B-delete-section",
+      "action": "delete-section",
+      "targetId": "69c7f8848489bfcb0e81b46e",
+      "targetLabel": "Bass/Eesti Rahvusmeeskoor",
+      "status": "ok"
+    },
+    {
+      "phase": "B-delete-section",
+      "action": "delete-section",
+      "targetId": "69c7f8878489bfcb0e81b506",
+      "targetLabel": "I Tenor/Tartu Akadeemiline Meeskoor",
+      "status": "ok"
+    },
+    {
+      "phase": "B-delete-section",
+      "action": "delete-section",
+      "targetId": "69c7f8888489bfcb0e81b544",
+      "targetLabel": "II Tenor/Tartu Akadeemiline Meeskoor",
+      "status": "ok"
+    },
+    {
+      "phase": "B-delete-section",
+      "action": "delete-section",
+      "targetId": "69c7f88a8489bfcb0e81b5bc",
+      "targetLabel": "Bass/Tartu Akadeemiline Meeskoor",
+      "status": "ok"
+    }
+  ]
+}

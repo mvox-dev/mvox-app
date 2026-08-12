@@ -6,6 +6,29 @@
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
 > committed artifact / findings doc / issue-comment thread carries the detail.
 
+## [CHECKPOINT] #127 section cleanup — Phase 2 LIVE, complete, verified (2026-08-13)
+
+Executed `scripts/migrations/section-cleanup-127-2026-08-13.ts` with `DRY_RUN=false` after
+team-lead's "I authorize this run". 53/53 ok, 0 failed, 0 aborted. Full result + independent
+post-execution verification (fresh queries, not just the script's self-report) posted to
+https://github.com/mvox-dev/mvox-app/issues/127#issuecomment-5272996731 — not re-narrated here.
+Durable facts:
+- **17 sections → 13**: 4 orphan sections deleted (RAM Bass, TAM I/II Tenor, TAM Bass), all
+  gated on a live re-check finding zero members still linked before delete.
+- **0 dangling `_parent` refs** to the deleted section IDs across all 241 members (full re-scan);
+  **241 members unchanged** — no loss/duplication. Consolidated counts matched predicted math
+  exactly (e.g. Bass/EFK 14→24 = 14+24-14 dual-link overlap, confirming the #124-SPIKE-divergence
+  read from Phase 1 was correct).
+- Hierarchy nesting is ADDITIVE (`_parent` gains the new parent-section link, org-parent link
+  stays) — Soprano I/II now `_parent=[Sireen org, EFK Soprano]`, same pattern for Alto I/II and
+  RAM I/II Tenor under EFK Tenor.
+- Baritone (RAM 18 + TAM 2) and Admin (1) confirmed untouched — same ids/counts pre/post, per
+  PO ruling (no EFK equivalent for Baritone; Admin is a system fixture, out of scope for all 3).
+- Script pattern worth reusing: Phase-0 drift check (re-verify every frozen id's name+org against
+  live before any write) + retire→survivor map + additive nest map + not-empty-gated delete, all
+  in one script, ledger-per-run. Clean template for the next "merge N near-duplicate entities into
+  one canonical" task.
+
 ## [WIP] #127 section cleanup — Phase 1 investigation posted (2026-08-13)
 
 Read-only, no writes. Full findings on issue #127 comment
