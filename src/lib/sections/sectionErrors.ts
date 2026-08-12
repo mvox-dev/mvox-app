@@ -47,4 +47,60 @@ export function isSectionMembershipMissing(reason: unknown): boolean {
 	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_PARENT_MISSING;
 }
 
+// ── #110 review F3: the section-delete emptiness refusal ────────────────────────
+//
+// `deleteSection` verifies server-side that the section holds NOTHING before it
+// deletes. The page's `canRemove` gate cannot carry that on its own, for two
+// structural reasons:
+//
+//   - `group.memberCount` counts the ROSTER's rows, and the roster is a
+//     deliberately NARROWED set — `loadRoster` queries `status.string=active`
+//     only and `toRosterRow` drops every name-incomplete member (the #28
+//     completeness gate). A section whose only occupants are inactive or
+//     nameless therefore reads "(0)" on screen and offers the remove control.
+//   - the page never refetches, so the tree it gates on is as old as the tab: a
+//     member (or a sub-section) added by anyone else since load is invisible to
+//     it.
+//
+// Entu's delete "soft-deletes all properties across all entities referencing the
+// deleted entity" (entu/www docs, db-mutations "Deletion"), and section
+// membership IS a member `_parent` reference — so a wrongly-permitted delete
+// silently strips those members' section assignment with nothing on screen
+// saying it happened. The refusal is a TAGGED rejection so the caller can say
+// "that section is not empty" instead of the generic write-failed message.
+
+/** Discriminator carried on the fail-loud "section still has children" rejection. */
+export const SECTION_NOT_EMPTY = 'section-not-empty';
+
+/**
+ * Thrown by `deleteSection` when the server still reports members and/or
+ * sub-sections parented to the section. NOTHING has been written when this
+ * throws — the DELETE never fires.
+ */
+export class SectionNotEmptyError extends Error {
+	readonly code = SECTION_NOT_EMPTY;
+
+	constructor(
+		readonly sectionId: string,
+		readonly memberCount: number,
+		readonly childSectionCount: number
+	) {
+		super(
+			`deleteSection: section ${sectionId} is not empty — ${memberCount} member(s) and ${childSectionCount} sub-section(s) are still parented to it; nothing was deleted`
+		);
+		this.name = 'SectionNotEmptyError';
+	}
+}
+
+/**
+ * True when a rejection reason means the delete was REFUSED because the section
+ * still holds members/sub-sections (nothing was written). Duck-typed on `code`
+ * for the same reason `isSectionMembershipMissing` is — the roster spec's mocked
+ * write layer rejects with a plain tagged object.
+ */
+export function isSectionNotEmpty(reason: unknown): boolean {
+	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_NOT_EMPTY;
+}
+
 // (*MVOX:Palestrina* — F1 code-review fix, TS.2/#96)
+// (*MVOX:Palestrina* — #110 review F3: SectionNotEmptyError)

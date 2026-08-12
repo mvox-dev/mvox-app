@@ -188,9 +188,12 @@ function groupOrder(container: HTMLElement): string[] {
 	);
 }
 
+// TU.2/#110 finding #9 — sections now default COLLAPSED, so this helper is
+// STATE-AGNOSTIC (only clicks when currently expanded) rather than assuming an
+// expanded start.
 async function collapse(container: HTMLElement, id: string): Promise<void> {
 	const toggle = q(container, `section-toggle-${id}`) as HTMLElement;
-	await fireEvent.click(toggle);
+	if (toggle.getAttribute('aria-expanded') === 'true') await fireEvent.click(toggle);
 	await waitFor(() => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
 	});
@@ -198,6 +201,15 @@ async function collapse(container: HTMLElement, id: string): Promise<void> {
 
 async function collapseAllTopLevel(container: HTMLElement): Promise<void> {
 	for (const id of ['sec-sop', 'sec-alto', 'sec-tenor']) await collapse(container, id);
+}
+
+/** Companion to `collapse` — expand `id` regardless of the current default. */
+async function expand(container: HTMLElement, id: string): Promise<void> {
+	const toggle = q(container, `section-toggle-${id}`) as HTMLElement;
+	if (toggle.getAttribute('aria-expanded') === 'false') await fireEvent.click(toggle);
+	await waitFor(() => {
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+	});
 }
 
 /** Minimal DataTransfer stand-in — happy-dom has no native one. */
@@ -227,8 +239,15 @@ async function dragAndDrop(container: HTMLElement, fromId: string, toId: string)
 // ── visibility: collapsed-only, admin-only, integration presence ────────────────
 
 describe('/roster — drag handles render on the actual page: collapsed headers only, admin only (integration)', () => {
-	it('admin + everything EXPANDED (the default) → NO drag handle and NO move buttons anywhere', async () => {
+	it('admin + everything EXPANDED (explicitly — TU.2/#110 finding #9 supersedes the old expanded-by-default default) → NO drag handle and NO move buttons anywhere', async () => {
 		const container = await renderReady('admin');
+		// Expand every section (incl. sub-sections) via the same toggle-all
+		// control finding #9 shipped — the exhaustive "expand literally
+		// everything" this test's premise needs.
+		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-toggle-sec-sop1')).not.toBeNull();
+		});
 		expect(container.querySelector('[data-testid^="section-drag-handle-"]')).toBeNull();
 		expect(container.querySelector('[data-testid^="section-move-up-"]')).toBeNull();
 		expect(container.querySelector('[data-testid^="section-move-down-"]')).toBeNull();
@@ -236,6 +255,11 @@ describe('/roster — drag handles render on the actual page: collapsed headers 
 
 	it('admin + Soprano collapsed → Soprano\'s header gets the handle (draggable="true", INSIDE its group) plus up/down buttons with an accessible name; still-expanded Alto/Tenor stay bare', async () => {
 		const container = await renderReady('admin');
+		// TU.2/#110 finding #9 — sections default collapsed now; explicitly
+		// expand Alto/Tenor so "still-expanded" is genuinely true, isolating
+		// Soprano's collapse as the only reorder-enabling state.
+		await expand(container, 'sec-alto');
+		await expand(container, 'sec-tenor');
 		await collapse(container, 'sec-sop');
 
 		const handle = q(container, 'section-drag-handle-sec-sop');
@@ -338,9 +362,12 @@ describe('/roster — dropping a dragged header triggers ONE immediate reorderSe
 
 	it('a SUB-SECTION dropped onto a top-level (non-sibling) header does NOTHING — no reorderSections call, order unchanged (structural change, not an order change)', async () => {
 		const container = await renderReady('admin');
-		// Soprano stays EXPANDED so its sub-sections are on screen; the sub-section
-		// and the foreign target are both collapsed (both carry handles — that is
-		// not enough: the sibling constraint must still reject the drop).
+		// Soprano must be EXPANDED so its sub-sections are on screen at all
+		// (TU.2/#110 finding #9 — collapsed by default now, so this is no longer
+		// automatic); the sub-section and the foreign target are both collapsed
+		// (both carry handles — that is not enough: the sibling constraint must
+		// still reject the drop).
+		await expand(container, 'sec-sop');
 		await collapse(container, 'sec-sop1');
 		await collapse(container, 'sec-alto');
 		const before = groupOrder(container);
@@ -404,8 +431,10 @@ describe('/roster — keyboard fallback: up/down buttons fire the same reorderSe
 describe('/roster — sub-sections reorder within their PARENT group only', () => {
 	it('move-down on collapsed Soprano 1 calls reorderSections with EXACTLY the sibling ids ["sec-sop2","sec-sop1"] — never top-level ids; the two sub-groups swap on screen', async () => {
 		const container = await renderReady('admin');
-		// Parent stays expanded (its children must be on screen); both sub-sections
-		// collapsed so their handles/buttons show.
+		// Parent must be EXPANDED first (its children must be on screen — TU.2/
+		// #110 finding #9, no longer automatic); both sub-sections then collapsed
+		// so their handles/buttons show.
+		await expand(container, 'sec-sop');
 		await collapse(container, 'sec-sop1');
 		await collapse(container, 'sec-sop2');
 
@@ -733,8 +762,10 @@ describe('/roster — TOUCH long-press drag reorders too (#98 review F2)', () =>
 
 	it('releasing a long-press over a NON-SIBLING header does nothing — the sibling constraint holds on touch exactly as it does on drop', async () => {
 		const container = await renderReady('admin');
-		// Soprano expanded (its children on screen), the sub-section and the foreign
+		// Soprano must be expanded first (its children on screen — TU.2/#110
+		// finding #9, no longer automatic), then the sub-section and the foreign
 		// top-level target both collapsed so both carry handles.
+		await expand(container, 'sec-sop');
 		await collapse(container, 'sec-sop1');
 		await collapse(container, 'sec-alto');
 		stubHitTest(container, { 10: 'sec-sop1', 50: 'sec-alto' });

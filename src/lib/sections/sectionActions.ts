@@ -1,5 +1,5 @@
 import { entuFetch } from '$lib/entu/request';
-import { SectionMembershipMissingError } from './sectionErrors';
+import { SectionMembershipMissingError, SectionNotEmptyError } from './sectionErrors';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
 // TS.3/#97 — the section CREATE write layer. GREEN.
@@ -355,9 +355,85 @@ export async function reorderSections(
 	}
 }
 
+// TU.2/#110 (finding #7) — the section DELETE write layer. GREEN.
+//
+// CONTRACT (pinned by sectionActions.delete.spec.ts):
+//
+//   - `deleteSection(cfg, sectionId)` first VERIFIES SERVER-SIDE that the
+//     section is empty, then deletes the SECTION ENTITY:
+//       1. two scoped counting GETs, issued in parallel —
+//          `entity?_type.string=member&_parent.reference={id}&limit=1` and
+//          `entity?_type.string=section&_parent.reference={id}&limit=1`. Only
+//          the response `count` is read (`limit=1` keeps the payload to one
+//          entity; the count is of the whole match set).
+//       2. either count > 0 → throw `SectionNotEmptyError` (tagged
+//          `section-not-empty`) and DO NOT DELETE. Nothing is written.
+//       3. otherwise `DELETE entity/{sectionId}` — the entity side of the
+//          endpoint split (a section id is an ENTITY id; a `/property/{id}`
+//          DELETE here would 404 and leave the section standing — see the
+//          delete-shape doc on `unassignMemberSection`/`reorderSections` above
+//          for the split in general).
+//   - #110 review F3 — the verification is NOT redundant with the page's
+//     `canRemove` gate, and does not replace it either (a control that never
+//     appears beats a refused tap). `canRemove` measures emptiness against the
+//     ROSTER, which is `status.string=active` + name-complete ONLY (rosterData's
+//     query + `toRosterRow`'s #28 gate), and against a tree the page fetched
+//     once and never refreshes. Both blind spots put a "(0)" and a ✕ on a
+//     section that is not actually empty, and Entu's delete soft-deletes every
+//     property REFERENCING the deleted entity — i.e. exactly those members'
+//     section `_parent` values, silently. The counts here are the only
+//     authority that is neither narrowed nor stale.
+//   - Throws on non-2xx (of the lookups or the delete) with the status surfaced.
+
+interface CountBody {
+	count?: number;
+	entities?: unknown[];
+}
+
+/** `count` of a scoped `entity?…` response, preferring the server's own count
+ *  over the (limit-capped) entities array length. */
+async function countOf(res: Response): Promise<number> {
+	const body = (await res.json()) as CountBody;
+	return body.count ?? body.entities?.length ?? 0;
+}
+
+/**
+ * Delete a `section` entity ("Remove" — #110/#7) after verifying server-side
+ * that nothing is parented to it. Rejects with `SectionNotEmptyError` (nothing
+ * written) when it still holds members or sub-sections. The caller still owns
+ * the admin-only + on-screen-empty gate. See module contract above.
+ */
+export async function deleteSection(
+	cfg: EntuCfg,
+	sectionId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	const scoped = `_parent.reference=${encodeURIComponent(sectionId)}&limit=1`;
+	const [memberRes, childRes] = await Promise.all([
+		entuFetch(cfg.db, `entity?_type.string=member&${scoped}`, cfg.token, {}, fetchImpl),
+		entuFetch(cfg.db, `entity?_type.string=section&${scoped}`, cfg.token, {}, fetchImpl)
+	]);
+	if (!memberRes.ok) {
+		throw new Error(`deleteSection: member lookup failed: HTTP ${memberRes.status}`);
+	}
+	if (!childRes.ok) {
+		throw new Error(`deleteSection: sub-section lookup failed: HTTP ${childRes.status}`);
+	}
+	const [memberCount, childCount] = await Promise.all([countOf(memberRes), countOf(childRes)]);
+	if (memberCount > 0 || childCount > 0) {
+		throw new SectionNotEmptyError(sectionId, memberCount, childCount);
+	}
+
+	const res = await entuFetch(cfg.db, `entity/${sectionId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+	if (!res.ok) throw new Error(`deleteSection failed: ${res.status}`);
+}
+
 // (*MVOX:Tallis* — RED stubs + contract, TS.2/#96)
 // (*MVOX:Palestrina* — GREEN implementation, TS.2/#96)
 // (*MVOX:Tallis* — RED createSection stub + contract, TS.3/#97)
 // (*MVOX:Palestrina* — GREEN implementation, TS.3/#97)
 // (*MVOX:Tallis* — RED reorderSections stub + contract, TS.4/#98)
 // (*MVOX:Palestrina* — GREEN implementation, TS.4/#98)
+// (*MVOX:Tallis* — RED deleteSection stub + contract, TU.2/#110 finding #7)
+// (*MVOX:Palestrina* — GREEN implementation, TU.2/#110 finding #7)
+// (*MVOX:Palestrina* — #110 review F3: server-side emptiness verification on delete)

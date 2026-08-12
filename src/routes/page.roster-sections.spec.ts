@@ -142,11 +142,40 @@ function groupIds(container: HTMLElement): string[] {
 	);
 }
 
+// TU.2/#110 finding #9 — sections (a sub-section's own GROUP included — it
+// only renders once its parent is expanded) default COLLAPSED now; this file's
+// concerns (grouping/counts/depth) need everything OPEN to inspect, so expand
+// every id up front. State-agnostic (only clicks when collapsed) so it is safe
+// to call regardless of a given test's starting point.
+async function expand(container: HTMLElement, id: string): Promise<void> {
+	const toggle = container.querySelector(`[data-testid="section-toggle-${id}"]`) as HTMLElement;
+	if (toggle.getAttribute('aria-expanded') === 'false') await fireEvent.click(toggle);
+	await waitFor(() => {
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+	});
+}
+
+/** Expand Soprano (revealing Soprano 1's toggle), then Soprano 1, Alto and
+ *  Unassigned (when present) — every group this file's fixtures can produce. */
+async function expandAll(container: HTMLElement): Promise<void> {
+	await expand(container, 'sec-sop');
+	if (container.querySelector('[data-testid="section-toggle-sec-sop1"]')) {
+		await expand(container, 'sec-sop1');
+	}
+	if (container.querySelector('[data-testid="section-toggle-sec-alto"]')) {
+		await expand(container, 'sec-alto');
+	}
+	if (container.querySelector('[data-testid="section-toggle-unassigned"]')) {
+		await expand(container, 'unassigned');
+	}
+}
+
 // ── grouped layout (default view) ───────────────────────────────────────────────
 
 describe('/roster — section-grouped layout (integration: real groupBySection behind the actual page)', () => {
 	it('renders groups in display_order pre-order with Unassigned LAST; each member row sits inside ITS section\'s group; sub-sections carry data-depth', async () => {
 		const container = await renderReady();
+		await expandAll(container); // TU.2/#110 finding #9 — collapsed by default now
 
 		expect(groupIds(container)).toEqual([
 			'section-group-sec-sop',
@@ -180,6 +209,7 @@ describe('/roster — section-grouped layout (integration: real groupBySection b
 
 	it('section headers show RECURSIVE member counts — "Soprano (3)" = 2 direct + 1 in Soprano 1', async () => {
 		const container = await renderReady();
+		await expand(container, 'sec-sop'); // TU.2/#110 finding #9 — Soprano 1's own header only renders once Soprano is expanded
 		const headerText = (id: string) =>
 			container.querySelector(`[data-testid="section-header-${id}"]`)?.textContent ?? '';
 		expect(headerText('sec-sop')).toMatch(/Soprano\s*\(3\)/);
@@ -188,21 +218,41 @@ describe('/roster — section-grouped layout (integration: real groupBySection b
 		expect(headerText('unassigned')).toMatch(/\(1\)/);
 	});
 
-	it('all sections are EXPANDED by default (every toggle aria-expanded="true", every member row present); collapsing a parent hides its subtree (direct rows AND sub-section groups); re-expanding restores it', async () => {
+	it('all sections are COLLAPSED by default (every toggle aria-expanded="false", no member row present — TU.2/#110 finding #9 supersedes the old expanded-by-default default); expanding shows rows/subtree, collapsing a parent hides it again (direct rows AND sub-section groups), re-expanding restores it', async () => {
 		const container = await renderReady();
 
 		const toggles = [...container.querySelectorAll('[data-testid^="section-toggle-"]')];
 		expect(toggles.length).toBeGreaterThan(0);
-		for (const t of toggles) expect(t.getAttribute('aria-expanded')).toBe('true');
+		for (const t of toggles) expect(t.getAttribute('aria-expanded')).toBe('false');
+		expect(container.querySelectorAll('[data-testid^="roster-row-"]')).toHaveLength(0);
+
+		// Expand every section (Soprano 1's toggle only appears once Soprano itself
+		// is expanded) plus Unassigned, to get every row on screen.
+		const sopToggle = container.querySelector(
+			'[data-testid="section-toggle-sec-sop"]'
+		) as HTMLElement;
+		await fireEvent.click(sopToggle);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="section-toggle-sec-sop1"]')).not.toBeNull();
+		});
+		await fireEvent.click(
+			container.querySelector('[data-testid="section-toggle-sec-sop1"]') as HTMLElement
+		);
+		await fireEvent.click(
+			container.querySelector('[data-testid="section-toggle-sec-alto"]') as HTMLElement
+		);
+		await fireEvent.click(
+			container.querySelector('[data-testid="section-toggle-unassigned"]') as HTMLElement
+		);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="roster-row-m-ada"]')).not.toBeNull();
+		});
 		for (const m of ['m-ada', 'm-bea', 'm-carol', 'm-eva', 'm-pete']) {
 			expect(container.querySelector(`[data-testid="roster-row-${m}"]`)).not.toBeNull();
 		}
 
 		// Collapse Soprano → its direct rows AND its sub-section's content disappear;
 		// other sections are untouched.
-		const sopToggle = container.querySelector(
-			'[data-testid="section-toggle-sec-sop"]'
-		) as HTMLElement;
 		await fireEvent.click(sopToggle);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-row-m-ada"]')).toBeNull();
@@ -214,9 +264,7 @@ describe('/roster — section-grouped layout (integration: real groupBySection b
 		expect(container.querySelector('[data-testid="roster-row-m-pete"]')).not.toBeNull();
 
 		// Re-expand → everything back.
-		await fireEvent.click(
-			container.querySelector('[data-testid="section-toggle-sec-sop"]') as HTMLElement
-		);
+		await fireEvent.click(sopToggle);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-row-m-ada"]')).not.toBeNull();
 		});
@@ -281,6 +329,10 @@ describe('/roster — F1 code-review fix: a member in MULTIPLE sections appears 
 			}
 		]);
 		const container = await renderReady();
+		// TU.2/#110 finding #9 — collapsed by default now; expand both groups to
+		// see their rows.
+		await expand(container, 'sec-sop');
+		await expand(container, 'sec-alto');
 
 		const sop = container.querySelector('[data-testid="section-group-sec-sop"]');
 		const alto = container.querySelector('[data-testid="section-group-sec-alto"]');
@@ -340,6 +392,10 @@ describe('/roster — F2 code-review fix: sub-section indentation is a constant 
 		loadRosterMock.mockResolvedValue([]);
 		listSectionsMock.mockResolvedValue(deepTree);
 		const container = await renderReady();
+		// TU.2/#110 finding #9 — a sub-section's own GROUP element only renders
+		// once its parent is expanded; collapsed by default now.
+		await expand(container, 'sec-sop');
+		await expand(container, 'sec-sop1');
 
 		const root = container.querySelector('[data-testid="section-group-sec-sop"]') as HTMLElement;
 		const mid = container.querySelector('[data-testid="section-group-sec-sop1"]') as HTMLElement;
@@ -399,6 +455,7 @@ describe('/roster — F4 code-review fix: the empty placeholder is gated on rows
 		loadRosterMock.mockResolvedValue([]);
 		listSectionsMock.mockResolvedValue(fixtureTree());
 		const container = await renderReady();
+		await expand(container, 'sec-sop'); // TU.2/#110 finding #9 — Soprano 1's header needs its parent open
 
 		expect(container.querySelector('[data-testid="roster-empty"]')).toBeNull();
 		const headerText = (id: string) =>

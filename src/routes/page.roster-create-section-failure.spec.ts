@@ -123,6 +123,17 @@ async function renderReady() {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
 	});
+	// TU.2/#110 finding #9 — sections default COLLAPSED now (member rows, and
+	// this file's picker triggers, don't render until expanded); this file's
+	// concern is the create/assign FAILURE path, not the collapse default, so
+	// expand everything up front via the same toggle-all control #9 shipped.
+	const toggleAll = container.querySelector('[data-testid="sections-toggle-all"]') as HTMLElement | null;
+	if (toggleAll) {
+		await fireEvent.click(toggleAll);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid^="roster-row-"]')).not.toBeNull();
+		});
+	}
 	return container;
 }
 

@@ -199,14 +199,41 @@ async function renderReady(admin: AdminState = 'admin'): Promise<HTMLElement> {
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
 	});
+	// TU.2/#110 finding #9 — sections default COLLAPSED now (member rows, and
+	// this file's picker triggers, don't render until expanded); this file's
+	// concern is a11y semantics on the ALREADY-OPEN surfaces, not the collapse
+	// default itself (that's page.roster-sections-ux.spec.ts's job), so expand
+	// everything up front via the same toggle-all control #9 shipped. Individual
+	// tests that need a COLLAPSED starting point (the drag/reorder and
+	// disclosure-contract tests) call `collapse()`/`expand()` explicitly, which
+	// stay state-agnostic either way.
+	const toggleAll = q(container, 'sections-toggle-all') as HTMLElement | null;
+	if (toggleAll) {
+		await fireEvent.click(toggleAll);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid^="roster-row-"]')).not.toBeNull();
+		});
+	}
 	return container;
 }
 
+// TU.2/#110 finding #9 — sections now default COLLAPSED, so this helper is
+// STATE-AGNOSTIC (only clicks when currently expanded) rather than assuming an
+// expanded start.
 async function collapse(container: HTMLElement, id: string): Promise<void> {
 	const toggle = q(container, `section-toggle-${id}`) as HTMLElement;
-	await fireEvent.click(toggle);
+	if (toggle.getAttribute('aria-expanded') === 'true') await fireEvent.click(toggle);
 	await waitFor(() => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	});
+}
+
+/** Companion to `collapse` — expand `id` regardless of the current default. */
+async function expand(container: HTMLElement, id: string): Promise<void> {
+	const toggle = q(container, `section-toggle-${id}`) as HTMLElement;
+	if (toggle.getAttribute('aria-expanded') === 'false') await fireEvent.click(toggle);
+	await waitFor(() => {
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 	});
 }
 
@@ -336,6 +363,9 @@ describe('#99 — a11y: section collapse toggles are proper disclosures', () => 
 		const container = await renderReady();
 		const toggle = q(container, 'section-toggle-sec-sop') as HTMLElement;
 		expect(toggle.tagName).toBe('BUTTON');
+		// TU.2/#110 finding #9 — sections default COLLAPSED now; expand explicitly
+		// before asserting the "expanded" half of the contract.
+		await expand(container, 'sec-sop');
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		await collapse(container, 'sec-sop');
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
@@ -344,6 +374,7 @@ describe('#99 — a11y: section collapse toggles are proper disclosures', () => 
 	it('the EXPANDED toggle references its disclosed region via aria-controls resolving to an element in the document — aria-expanded with no relationship does not say WHAT is disclosed', async () => {
 		const container = await renderReady();
 		for (const id of ['sec-sop', 'sec-alto', 'sec-tenor']) {
+			await expand(container, id); // TU.2/#110 finding #9 — collapsed by default now
 			const toggle = q(container, `section-toggle-${id}`) as HTMLElement;
 			expect(toggle.getAttribute('aria-expanded')).toBe('true');
 			const controls = toggle.getAttribute('aria-controls');
@@ -372,6 +403,8 @@ describe('#99 — a11y: section collapse toggles are proper disclosures', () => 
 		const container = await renderReady();
 		const toggle = q(container, 'section-toggle-unassigned') as HTMLElement;
 		expect(toggle, 'unassigned toggle must render (fixture has an unassigned member)').not.toBeNull();
+		// TU.2/#110 finding #9 — collapsed by default now.
+		await expand(container, 'unassigned');
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		const controls = toggle.getAttribute('aria-controls');
 		expect(controls, 'expanded unassigned toggle must carry aria-controls').toBeTruthy();

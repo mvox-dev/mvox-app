@@ -24,7 +24,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		roster_sort_grouped: () => 'Group by section',
 		// F3 code-review fix — banner shown when the section-tree load fails but
 		// the roster itself loaded fine.
-		roster_sections_load_error: () => 'Section grouping failed to load.'
+		roster_sections_load_error: () => 'Section grouping failed to load.',
+		// TU.2/#110 finding #9 — the collapse-all/expand-all toggle above the
+		// groups; this file's concerns don't touch it, the keys just need to
+		// resolve so the grouped view renders without throwing.
+		roster_sections_expand_all: () => 'Expand all sections',
+		roster_sections_collapse_all: () => 'Collapse all sections'
 	}
 }));
 
@@ -122,6 +127,15 @@ describe('/roster — ready state', () => {
 
 		const { container } = render(Page);
 
+		// TU.2/#110 finding #9 — sections (incl. the Unassigned pseudo-group, which
+		// is where every member here lands — `listSectionsMock` is pinned to an
+		// empty tree) default COLLAPSED; expand it to get rows on screen.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull();
+		});
+		await fireEvent.click(
+			container.querySelector('[data-testid="section-toggle-unassigned"]') as HTMLElement
+		);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-row-member-1"]')).not.toBeNull();
 			expect(container.querySelector('[data-testid="roster-row-member-2"]')).not.toBeNull();
@@ -234,6 +248,15 @@ describe('/roster — staleness guard (generation discipline)', () => {
 
 		// Now resolve the FIRST (stale) call, with a member from the earlier collective.
 		resolveFirst([{ memberId: 'member-1', personId: 'person-a', name: 'Stale Member', email: '' }]);
+
+		// TU.2/#110 finding #9 — expand Unassigned to get member-2's row on screen
+		// (every member here is Unassigned; listSectionsMock is pinned to []).
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull();
+		});
+		await fireEvent.click(
+			container.querySelector('[data-testid="section-toggle-unassigned"]') as HTMLElement
+		);
 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-row-member-2"]')).not.toBeNull();

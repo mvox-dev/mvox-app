@@ -29,7 +29,7 @@
 // app-level route to creating it is pinned RED in
 // page.roster-create-section-org.spec.ts). If either test here FAILS, the
 // verdict was wrong and there IS a rendering bug — fix the code, not the data.
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
@@ -197,6 +197,14 @@ async function renderReady() {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
 	});
+	// TU.2/#110 finding #9 — sections default COLLAPSED now (a sub-section's own
+	// GROUP, and member rows, don't render until expanded); this file's concern
+	// is the live-shaped tree's nesting, not the collapse default, so expand
+	// everything up front via the same toggle-all control #9 shipped.
+	const toggleAll = container.querySelector('[data-testid="sections-toggle-all"]') as HTMLElement | null;
+	if (toggleAll) {
+		await fireEvent.click(toggleAll);
+	}
 	return container;
 }
 

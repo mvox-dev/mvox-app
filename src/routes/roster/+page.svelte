@@ -17,9 +17,10 @@
 		assignMemberSection,
 		unassignMemberSection,
 		createSection,
-		reorderSections
+		reorderSections,
+		deleteSection
 	} from '$lib/sections/sectionActions';
-	import { isSectionMembershipMissing } from '$lib/sections/sectionErrors';
+	import { isSectionMembershipMissing, isSectionNotEmpty } from '$lib/sections/sectionErrors';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
 	import { adminStore } from '$lib/nav/adminStore';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -79,10 +80,23 @@
 		// outright).
 		reorderError = false;
 		reorderStatus = '';
+		// #110 review F1/F4 — the remove path's two pieces of transient state are
+		// about a tree that is being replaced: a failure message naming a section
+		// the next tree may not even contain, and a half-armed confirm on a header
+		// that is about to be re-rendered from different data. Both drop here,
+		// alongside the reorder pair, for the same reason.
+		removeError = null;
+		pendingRemoveId = null;
 		if (!current) {
 			status = 'no-collective';
 			rows = [];
 			sections = [];
+			// #110 review F3 — collapse state is keyed by section id, so it must never
+			// outlive the tree it describes. Ids from the previous collective would
+			// otherwise keep `expandedIds` non-empty over a tree that has none of them
+			// on screen, and accumulate across every switch. Every site that REPLACES
+			// the tree wholesale drops the set (see the two below).
+			expandedIds = new Set();
 			sectionsError = false;
 			currentCfg = null;
 			return;
@@ -128,12 +142,14 @@
 			}
 			console.error('roster: section tree load failed', sectionResult.reason);
 			sections = [];
+			expandedIds = new Set();
 			sectionsError = true;
 			// Grouping is meaningless without a tree — fall back to the flat view so
 			// the toggle button's label stays truthful about what's on screen.
 			view = 'flat';
 		} else {
 			sections = sectionResult.value;
+			expandedIds = new Set();
 			sectionsError = false;
 		}
 		status = 'ready';
@@ -174,15 +190,101 @@
 
 	const flatRows = $derived([...rows].sort((a, b) => a.name.localeCompare(b.name)));
 
-	// Collapse state — an OPT-OUT set (every section starts expanded; collapsing
-	// adds its id). Same `new Set(...)` copy-then-reassign pattern as the library
-	// browse tree (library/+page.svelte's expandedWorks/expandedEditions).
-	let collapsedIds = $state<Set<string>>(new Set());
+	// ── #110 review F2: which sections belong to THIS collective ────────────────
+	//
+	// `listSections` queries `entity?_type.string=section&…&limit=500` with NO org
+	// scoping, and sections are created `_sharing: 'public'` (federation
+	// discoverability, v4E) — so EVERY readable section in the db lands in
+	// `sections`, not just this collective's. Live polyphony holds 16 sections
+	// across FOUR test orgs (sectionData.ts:44-49); `SectionPicker` already has to
+	// filter foreign-org roots out of its duplicate check for exactly this reason.
+	//
+	// A foreign org's sections have `memberCount === 0` BY CONSTRUCTION — `rows`
+	// only ever holds the SELECTED collective's members — so the empty-section
+	// gate below would hang a DELETE control off every other collective's empty
+	// sections. Scope it.
+	//
+	// The whole grouped tree arguably wants the same filter (a display bug that
+	// predates #110), but widening the render is out of this fix's scope; what
+	// must not ship is a destructive affordance on another org's entity.
+	/** The collective's organization id, read off the members' own `_parent`
+	 *  (rosterData carries it) — null when no row exposes one to this reader. */
+	const currentOrgId = $derived(rows.find((r) => r.orgId)?.orgId ?? null);
+
+	/** section id → the OWNING org id of its top-level root. Sub-sections carry no
+	 *  org `_parent` of their own (v4E `parentConstraint: 'exactly_one_of'`), so
+	 *  the root's org is propagated down the subtree. */
+	const rootOrgBySectionId = $derived.by(() => {
+		const map = new Map<string, string | null>();
+		function walk(nodes: SectionNode[], rootOrg: string | null): void {
+			for (const n of nodes) {
+				const org = n.parentId === null ? (n.orgId ?? null) : rootOrg;
+				map.set(n.id, org);
+				walk(n.children, org);
+			}
+		}
+		walk(sections, null);
+		return map;
+	});
+
+	/**
+	 * True when `id` is NOT known to belong to a different organization. Permissive
+	 * when either side is unknown — a reader who cannot see any org `_parent`
+	 * (rosterData never throws on that) or a tree from a pre-TU.1 fixture must not
+	 * lose its own controls; the check exists to exclude sections we can POSITIVELY
+	 * place in another org.
+	 */
+	function isOwnOrgSection(id: string): boolean {
+		const org = rootOrgBySectionId.get(id) ?? null;
+		if (org === null || currentOrgId === null) return true;
+		return org === currentOrgId;
+	}
+
+	// TU.2/#110 (finding #9) — collapse state is an OPT-IN set (every section
+	// starts COLLAPSED; expanding adds its id). Supersedes the TS.1/#95
+	// opt-out/expanded-by-default shape per PO decision in #110 — see
+	// page.roster-sections-ux.spec.ts. Same `new Set(...)` copy-then-reassign
+	// pattern as the library browse tree (library/+page.svelte's
+	// expandedWorks/expandedEditions).
+	let expandedIds = $state<Set<string>>(new Set());
 	function toggleSection(id: string): void {
-		const next = new Set(collapsedIds);
+		const next = new Set(expandedIds);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
-		collapsedIds = next;
+		expandedIds = next;
+	}
+
+	/** Every section id in the live tree, recursively, plus 'unassigned' when
+	 *  that pseudo-group is on screen — the full set collapse-all/expand-all
+	 *  operates over. */
+	const allSectionIdsList = $derived.by(() => {
+		const ids: string[] = [];
+		function walk(nodes: SectionNode[]): void {
+			for (const n of nodes) {
+				ids.push(n.id);
+				walk(n.children);
+			}
+		}
+		walk(sections);
+		if (unassignedGroup) ids.push('unassigned');
+		return ids;
+	});
+
+	// Whether ANY section is currently expanded — not "all", because a single
+	// manually-expanded section (finding #9's "manually part-expanded" case)
+	// must still read as "there's something open" and collapse fully on the
+	// next toggle-all tap, not expand further.
+	//
+	// #110 review F3 — derived from what is actually ON SCREEN
+	// (`allSectionIdsList` walks the live tree plus the unassigned pseudo-group),
+	// NOT from `expandedIds.size`. A set member whose section is gone (removed
+	// leaf, or a leftover from a previous collective) must not make the toggle
+	// read "Collapse all sections" over a fully-collapsed tree, where the first
+	// tap would visibly do nothing but clear the stale set.
+	const anySectionExpanded = $derived(allSectionIdsList.some((id) => expandedIds.has(id)));
+
+	function toggleAllSections(): void {
+		expandedIds = anySectionExpanded ? new Set() : new Set(allSectionIdsList);
 	}
 
 	// TS.2/#96 — section-picker wiring. Per-tap immediate write + optimistic-and-
@@ -316,6 +418,98 @@
 		});
 	}
 
+	// TU.2/#110 (finding #7) — "Remove" wiring. `canRemove` in `sectionGroup`
+	// already enforces admin-only + zero-members + zero-children before this
+	// control even renders, so this handler trusts its `id` argument the same
+	// way `handleCreate`'s `assignMemberSection` call trusts its just-created
+	// section id. Optimistic-and-reconcile, same shape as `performReorder`: the
+	// LOCAL tree is patched immediately (no roster/section refetch anywhere on
+	// this page), and a rejected write reverts the WHOLE snapshot taken before
+	// the patch — safe here (unlike the per-membership reverts above) because a
+	// remove touches exactly one node with no concurrent writes racing it.
+
+	/** Immutable remove: drops `id` wherever it sits in the tree (top level or
+	 *  nested inside some ancestor's `children`). */
+	function removeSectionNode(nodes: SectionNode[], id: string): SectionNode[] {
+		return nodes
+			.filter((n) => n.id !== id)
+			.map((n) => (n.children.length === 0 ? n : { ...n, children: removeSectionNode(n.children, id) }));
+	}
+
+	// #110 review F1 — a FAILED remove used to be SILENT: the catch reverted
+	// `sections` and logged, so the user tapped ✕, watched the group vanish, and
+	// watched it reappear with nothing on screen explaining why. That is precisely
+	// the failure mode this page's own F5 fix (`sectionWriteError`) and #99's F2
+	// fix (`reorderError`) were added to eliminate — the remove path, added last,
+	// had neither. It is not a rare path either: Entu only lets `_owner` delete an
+	// entity, `_owner` is auto-assigned to the CREATOR, and `createSection`'s body
+	// deliberately carries no `_inheritrights` — so an admin who did not
+	// personally create the section (every seeded or migration-created one, and
+	// every section made by another admin) gets a 403.
+	//
+	//   'write'     — the delete was attempted and rejected (403, network, no cfg).
+	//   'not-empty' — REFUSED before any write: the server still reports members
+	//                 or sub-sections under it (see deleteSection's contract). The
+	//                 on-screen "(0)" is the roster's active-and-named-only count,
+	//                 which is not the same question.
+	//
+	// Carries the NAME, not the id: it is rendered once, above the groups (next to
+	// the reorder alert), and by then the section it names is back on screen but
+	// not otherwise marked.
+	let removeError = $state<{ name: string; kind: 'write' | 'not-empty' } | null>(null);
+
+	// #110 review F4 — a two-step inline confirm, because a section delete is
+	// IRREVERSIBLE and this page is mobile-shaped (`max-w-md`): the ✕ sat one
+	// mis-tap away from destroying an entity. Inline rather than a blocking
+	// `confirm()` — the page's own idiom (SectionPicker's inline create form) and
+	// testable without stubbing a window global. `pendingRemoveId` is the section
+	// whose header is currently showing "confirm / cancel" instead of the ✕; only
+	// one at a time, and arming one disarms the other.
+	let pendingRemoveId = $state<string | null>(null);
+
+	function armRemove(id: string): void {
+		// A fresh attempt owns the error slot — a previous failure's message must
+		// not outlive the retry that fixed it (same discipline as `handleCreate`
+		// and `performReorder`).
+		removeError = null;
+		pendingRemoveId = id;
+	}
+
+	async function handleRemoveSection(id: string): Promise<void> {
+		pendingRemoveId = null;
+		removeError = null;
+		const name = findSectionNode(sections, id)?.name ?? id;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section remove with no cfg', id);
+			removeError = { name, kind: 'write' };
+			return;
+		}
+		const before = sections;
+		sections = removeSectionNode(sections, id);
+		try {
+			await deleteSection(cfg, id);
+			// #110 review F3 — the node is gone for good, so its collapse-state entry
+			// is dead weight. Pruned only AFTER the write lands: a rejected delete
+			// restores the tree, and the section's expanded state must come back with
+			// it. (`anySectionExpanded` no longer depends on this pruning for
+			// correctness — it reads the live tree — but the set should not keep
+			// growing across removals either.)
+			if (expandedIds.has(id)) {
+				const next = new Set(expandedIds);
+				next.delete(id);
+				expandedIds = next;
+			}
+		} catch (e) {
+			console.error('roster: section remove failed', id, e);
+			sections = before;
+			// #110 review F1/F3 — say it, don't just log it. `section-not-empty` is
+			// its own message: nothing was written, and "it's not actually empty" is
+			// a different instruction to the user than "the delete was refused".
+			removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
+		}
+	}
+
 	async function handleCreate(
 		memberId: string,
 		input: { name: string; parentId: string | null }
@@ -367,6 +561,10 @@
 		// The section itself was genuinely created server-side — it belongs in the
 		// tree regardless of how the assign below goes.
 		sections = insertSectionNode(sections, newNode, input.parentId);
+		// TU.2/#110 (finding #9) — a freshly created section starts EXPANDED (not
+		// the new collapsed-by-default), so the member the caller is about to be
+		// assigned into it is visible immediately, no manual toggle needed.
+		expandedIds = new Set(expandedIds).add(newId);
 
 		try {
 			await assignMemberSection(cfg, memberId, newId);
@@ -527,6 +725,14 @@
 	// the moment of drop.
 	let draggedSectionId = $state<string | null>(null);
 
+	// TU.2/#110 (finding #11) — the section currently under the drag, native
+	// path only (`handleDragOver` below); the touch long-press path already has
+	// its own equivalent (`touchOverId`). Drives the dashed drop-target hint in
+	// `sectionGroup`'s `showDropIndicator`. Cleared on dragend AND on drop —
+	// synthetic test drops don't always fire a trailing dragend, so both paths
+	// own the clear (see `handleDragEnd`/`handleDrop`).
+	let dragOverId = $state<string | null>(null);
+
 	// F1 code-review fix (#98 review): a dragstart handler MUST populate the drag
 	// data store. Firefox refuses to START a drag session at all when the store is
 	// left empty — dragstart fires, then no dragover/drop ever follows, so the
@@ -536,6 +742,7 @@
 	// browser's drag-initiation precondition, not to carry state.
 	function handleDragStart(id: string, event: DragEvent): void {
 		draggedSectionId = id;
+		dragOverId = null; // a fresh drag owns its own hover trail, not a stale one
 		if (event.dataTransfer) {
 			event.dataTransfer.setData('text/plain', id);
 			event.dataTransfer.effectAllowed = 'move';
@@ -548,9 +755,10 @@
 	// forever, arming the next drop that reached a header with a stale source id.
 	function handleDragEnd(): void {
 		draggedSectionId = null;
+		dragOverId = null; // TU.2/#110 finding #11 — no stale hint after an aborted drag
 	}
 
-	function handleDragOver(event: DragEvent): void {
+	function handleDragOver(id: string, event: DragEvent): void {
 		// F1 code-review fix (#98 review): accept the drop ONLY while one of OUR
 		// section handles is being dragged. `preventDefault()` is what MAKES an
 		// element a drop zone, so calling it unconditionally turned every collapsed
@@ -564,6 +772,33 @@
 		event.preventDefault();
 		// Move cursor rather than the default copy affordance.
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		// TU.2/#110 (finding #11) — this header is now the drop-target hint's
+		// home; the binding (`ondragover={acceptsDrop ? ... : undefined}`) already
+		// restricts calls here to valid sibling targets, so `id` is always a legal
+		// hover target.
+		dragOverId = id;
+	}
+
+	// #110 review F4 — the hint has to LEAVE when the cursor does. `dragOverId` was
+	// only ever cleared on dragstart/dragend/drop, so moving off a sibling header
+	// into a non-target area (the gap between groups, a member row, the page
+	// margin) left the dashed line pinned to the last hovered header for the rest
+	// of the drag — promising a landing slot a release right there would not
+	// produce. Guarded on the id: `dragleave` on the header being left fires AFTER
+	// `dragenter`/`dragover` on the header being entered, so an unguarded clear
+	// would blank a hint that had just legitimately moved.
+	function handleDragLeave(id: string, event: DragEvent): void {
+		if (dragOverId !== id) return;
+		// `dragleave` BUBBLES, so a pointer travelling between this header's own
+		// descendants (the toggle button, the name span, the ▲/▼ buttons) reports
+		// one too. Only a leave whose destination is OUTSIDE the header row counts
+		// — otherwise the hint flickers off and back on across every internal hop.
+		// (`relatedTarget` is null when the pointer leaves for nothing, and under
+		// the synthetic events of the test harness; both mean "gone".)
+		const row = event.currentTarget as HTMLElement | null;
+		const to = event.relatedTarget as Node | null;
+		if (row && to && row.contains(to)) return;
+		dragOverId = null;
 	}
 
 	/** The shared reorder computation behind BOTH pointer paths (native HTML5 drop
@@ -591,6 +826,7 @@
 	function handleDrop(targetId: string, event: DragEvent): void {
 		const fromId = draggedSectionId;
 		draggedSectionId = null;
+		dragOverId = null; // TU.2/#110 finding #11 — the hint doesn't outlive the drop
 		// Backstop only, now that `handleDragOver` refuses to accept foreign drags:
 		// no live internal drag → not our drop, so don't even swallow the browser's
 		// default handling of it.
@@ -818,9 +1054,21 @@
 	</li>
 {/snippet}
 
+<!-- TU.2/#110 (finding #11) — the dashed landing-position hint. ONE definition
+     rendered from ONE of two slots in `sectionGroup` (above or below the target's
+     header row, per the drag's direction — see `hintBefore`), so "one indicator,
+     never two" holds by construction. -->
+{#snippet dropIndicator()}
+	<div
+		data-testid="section-drop-indicator"
+		aria-hidden="true"
+		class="mx-2 h-0.5 border-t-2 border-dashed border-ink-3"
+	></div>
+{/snippet}
+
 {#snippet sectionGroup(node: SectionNode)}
 	{@const group = groupById.get(node.id)}
-	{@const isExpanded = !collapsedIds.has(node.id)}
+	{@const isExpanded = expandedIds.has(node.id)}
 	<!-- TS.4/#98: reorder controls are per-header — COLLAPSED (a section must
 	     collapse to reorder) AND admin — fail-closed AND, never OR. -->
 	{@const canReorder = admin === 'admin' && !isExpanded}
@@ -845,6 +1093,59 @@
 		touchOverId === node.id &&
 		touchOverId !== touchDragId &&
 		siblingIds.includes(touchDragId)}
+	<!-- TU.2/#110 (finding #11) — this section is the live drag's current hover
+	     target: render the dashed drop-target hint inside ITS OWN group. Native
+	     drag (`dragOverId`) and the touch long-press path (`touchOverId`) both
+	     feed it, so the hint shows for either input.
+
+	     #110 review F2 — BOTH branches gate on the same `acceptsDrop`/
+	     `acceptsTouchDrop` the drop itself does. The touch branch used to restate
+	     a weaker condition (no `canReorder`, no sibling test), and
+	     `handlePointerMove` sets `touchOverId` from whatever section group is
+	     under the finger regardless of parentage or expansion — so dragging a
+	     sub-section handle across a top-level header painted "drop here" on a
+	     target `dropOnto` silently refuses, and an EXPANDED sibling got the hint
+	     wedged between its header and its member rows. That is exactly the
+	     misleading affordance #99's F4 fix removed from aria-dropeffect; the hint
+	     must not reintroduce it. Reusing the guards also means the hint and the
+	     `bg-ink-5` highlight can never disagree about whether a drop will act. -->
+	{@const showDropIndicator = (acceptsDrop && dragOverId === node.id) || acceptsTouchDrop}
+	<!-- #110 review F1 — WHICH SIDE of this header the hint belongs on. `dropOnto`
+	     gives the dragged section the target's ORIGINAL index, so an UPWARD move
+	     (source below the target) lands the item ABOVE the target and a downward
+	     move lands it BELOW. A hint pinned after the header row therefore pointed
+	     one slot too low for every upward drag. `siblingIds` membership is already
+	     implied by `showDropIndicator`, so `dragFromIdx` is a real index whenever
+	     this is read. -->
+	{@const dragFromIdx = siblingIds.indexOf(draggedSectionId ?? touchDragId ?? '')}
+	{@const hintBefore = dragFromIdx > siblingIdx}
+	<!-- TU.2/#110 (finding #7) — a REMOVE control on ZERO-MEMBER, ZERO-CHILDREN
+	     ("leaf") sections only: deleting a section with sub-sections would orphan
+	     them, so an empty PARENT stays bare — only its empty LEAF children get
+	     the control. `memberCount` is the section's RECURSIVE roll-up
+	     (sectionData.ts), so an empty parent with a non-empty child never
+	     qualifies either way; the children.length===0 check is what actually
+	     draws the "has sub-sections" line. Admin-only, same fail-closed pattern
+	     as every other admin control on this page.
+
+	     #110 review F2 — plus `isOwnOrgSection`: `listSections` is not org-scoped
+	     and sections are `_sharing: public`, so the tree holds EVERY readable
+	     collective's sections, and a foreign org's are all `memberCount === 0` by
+	     construction (`rows` holds only the selected collective's members). Without
+	     this an EFK admin's /roster offered a delete button on every other
+	     collective's empty sections.
+
+	     #110 review F3 — `memberCount` is the ROSTER's count: active + name-complete
+	     members only (rosterData's query + `toRosterRow`'s #28 gate), over a tree
+	     fetched once at load. A section holding only inactive/nameless members, or
+	     one that gained a member since the tab opened, still reads (0) here. That is
+	     why `deleteSection` re-verifies emptiness server-side and can refuse — this
+	     gate decides what to OFFER, not what is safe to delete. -->
+	{@const canRemove =
+		admin === 'admin' &&
+		(group?.memberCount ?? 0) === 0 &&
+		node.children.length === 0 &&
+		isOwnOrgSection(node.id)}
 	<!--
 		F2 code-review fix: a child's <section> is rendered NESTED inside its
 		parent's (below, `{#each node.children as child}{@render sectionGroup(child)}{/each}`
@@ -860,6 +1161,9 @@
 		class="flex flex-col"
 		style="margin-left: {node.depth === 0 ? 0 : 1}rem"
 	>
+		{#if showDropIndicator && hintBefore}
+			{@render dropIndicator()}
+		{/if}
 		<!-- The touch-drag affordance stands in for the drag image the browser draws
 		     for a native drag and does not for a pointer one: without it a long-press
 		     drag has no visible drop target at all. -->
@@ -869,7 +1173,10 @@
 			aria-dropeffect={acceptsDrop ? 'move' : undefined}
 			data-drop-target={acceptsTouchDrop ? 'true' : undefined}
 			class="flex items-center gap-2 py-1.5 {acceptsTouchDrop ? 'bg-ink-5' : ''}"
-			ondragover={acceptsDrop ? handleDragOver : undefined}
+			ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(node.id, event) : undefined}
+			ondragleave={acceptsDrop
+				? (event: DragEvent) => handleDragLeave(node.id, event)
+				: undefined}
 			ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(node.id, event) : undefined}
 		>
 			<button
@@ -885,6 +1192,47 @@
 					{node.name} ({group?.memberCount ?? 0})
 				</span>
 			</button>
+			{#if canRemove}
+				<!-- #110 review F4 — a TWO-STEP inline confirm, superseding the original
+				     single-activation shape. No blocking `confirm()`: the two-step lives
+				     in the header row itself, matching SectionPicker's inline create form
+				     and testable without stubbing a window global. The delete is
+				     IRREVERSIBLE (Entu soft-deletes every property referencing the
+				     entity) on a `max-w-md`, thumb-driven page — one stray tap was one
+				     tap too few. `armRemove` only arms; only
+				     `section-remove-confirm-<id>` writes. -->
+				{#if pendingRemoveId === node.id}
+					<button
+						type="button"
+						data-testid="section-remove-confirm-{node.id}"
+						aria-label={m.roster_section_remove_confirm({ name: node.name })}
+						class="rounded px-1 text-xs text-red-700 underline"
+						onclick={() => void handleRemoveSection(node.id)}
+					>
+						{m.roster_section_remove_confirm_short()}
+					</button>
+					<button
+						type="button"
+						data-testid="section-remove-cancel-{node.id}"
+						aria-label={m.roster_section_remove_cancel({ name: node.name })}
+						class="rounded px-1 text-xs text-ink-2 underline hover:text-ink"
+						onclick={() => (pendingRemoveId = null)}
+					>
+						{m.roster_section_remove_cancel_short()}
+					</button>
+				{:else}
+					<button
+						type="button"
+						data-testid="section-remove-{node.id}"
+						aria-label={m.roster_section_remove({ name: node.name })}
+						title={m.roster_section_remove({ name: node.name })}
+						class="rounded px-1 text-xs text-ink-2 hover:text-red-700"
+						onclick={() => armRemove(node.id)}
+					>
+						✕
+					</button>
+				{/if}
+			{/if}
 			{#if canReorder}
 				<!-- TWO drag protocols on one handle, because there is no single one that
 				     covers both: native `draggable` is DESKTOP-POINTER only (HTML5 dnd is
@@ -950,6 +1298,9 @@
 				</button>
 			{/if}
 		</div>
+		{#if showDropIndicator && !hintBefore}
+			{@render dropIndicator()}
+		{/if}
 		{#if isExpanded}
 			<!-- #99/TS.5 — the id the toggle's aria-controls points at. `display:
 			     contents` (Tailwind `contents`) keeps this wrapper invisible to
@@ -1042,6 +1393,38 @@
 					{m.roster_section_reorder_failed()}
 				</p>
 			{/if}
+			{#if removeError}
+				<!-- #110 review F1/F3 — the remove path's loud failure, mirroring the
+				     reorder alert directly above. The section is already back on screen
+				     by the time this renders (the catch reverts the tree), so without it
+				     the whole event reads as "nothing happened". Names the section: the
+				     alert sits above the groups, not in the header that was tapped. -->
+				<p data-testid="section-remove-error" role="alert" class="text-sm text-red-700">
+					{removeError.kind === 'not-empty'
+						? m.roster_section_remove_not_empty({ name: removeError.name })
+						: m.roster_section_remove_failed({ name: removeError.name })}
+				</p>
+			{/if}
+			{#if reorderPending}
+				<!-- TU.2/#110 (finding #6) — a visible loading indicator while the
+				     display_order write is outstanding. `reorderPending` already gates
+				     both drag/keyboard controls (disables them, see `sectionGroup`
+				     below); this is the same flag surfaced as an on-screen affordance,
+				     clearing on both success AND failure (see `performReorder`'s
+				     finally). -->
+				<div
+					data-testid="section-reorder-pending"
+					role="status"
+					aria-busy="true"
+					class="flex items-center gap-2 text-xs text-ink-2"
+				>
+					<span
+						aria-hidden="true"
+						class="h-3 w-3 animate-spin rounded-full border-2 border-ink-3 border-t-transparent"
+					></span>
+					{m.roster_section_reorder_pending()}
+				</div>
+			{/if}
 			<div class="flex items-center justify-between border-b border-ink-5 pb-1.5">
 				<span class="text-xs tracking-wide text-ink-2 uppercase">{m.roster_column_name()}</span>
 				{#if !sectionsError}
@@ -1060,12 +1443,26 @@
 			</div>
 
 			{#if view === 'grouped' && !sectionsError}
+				<!-- TU.2/#110 (finding #9) — collapse-all/expand-all, ABOVE the groups
+				     (pinned document-order contract) so it acts as a single entry point
+				     before diving into a (now collapsed-by-default) tree. -->
+				<button
+					type="button"
+					data-testid="sections-toggle-all"
+					aria-label={anySectionExpanded
+						? m.roster_sections_collapse_all()
+						: m.roster_sections_expand_all()}
+					class="self-start text-xs tracking-wide text-ink-2 uppercase underline hover:text-ink"
+					onclick={toggleAllSections}
+				>
+					{anySectionExpanded ? m.roster_sections_collapse_all() : m.roster_sections_expand_all()}
+				</button>
 				<div data-testid="roster-groups" class="flex flex-col">
 					{#each sections as node (node.id)}
 						{@render sectionGroup(node)}
 					{/each}
 					{#if unassignedGroup}
-						{@const isExpanded = !collapsedIds.has('unassigned')}
+						{@const isExpanded = expandedIds.has('unassigned')}
 						<section data-testid="section-group-unassigned" data-depth="0" class="flex flex-col">
 							<button
 								type="button"

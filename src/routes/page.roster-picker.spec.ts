@@ -151,6 +151,18 @@ async function renderReady(admin: AdminState = 'admin') {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
 	});
+	// TU.2/#110 finding #9 — sections default COLLAPSED now (member rows, and
+	// this file's picker triggers, don't render until expanded); this file's
+	// concern is picker WIRING, not the collapse default (that is
+	// page.roster-sections-ux.spec.ts's / page.roster-sections.spec.ts's job),
+	// so expand everything up front via the same toggle-all control #9 shipped.
+	const toggleAll = container.querySelector('[data-testid="sections-toggle-all"]') as HTMLElement | null;
+	if (toggleAll) {
+		await fireEvent.click(toggleAll);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid^="roster-row-"]')).not.toBeNull();
+		});
+	}
 	return container;
 }
 
