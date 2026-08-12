@@ -212,20 +212,25 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-describe('/roster over the REAL listSections — current live data: org-parented sections are FLAT (the rendering faithfully shows the broken data)', () => {
-	it('Soprano and Soprano II both render as TOP-LEVEL groups (depth 0), Soprano II NOT inside Soprano — exactly what the live gate walk showed', async () => {
+describe('/roster over the REAL listSections — current live data: org-parented sections are FLAT (#124/F3 supersedes the earlier "renders flat, proving a data defect" pin)', () => {
+	// #124 (F3, 2026-08-12 gate walk) — this test used to pin that Soprano II
+	// rendered as a SIBLING top-level group of Soprano (proving finding #8 was a
+	// DATA defect — no section _parent to draw — rather than a rendering bug).
+	// That verdict about the DATA still stands (nothing about the fix touches
+	// how listSections/groupBySection interpret `_parent`), but the OBSERVABLE
+	// rendering changed: #124/F3 now filters the whole-db tree to the viewer's
+	// own org before it ever reaches groupBySection (same invariant
+	// page.roster-empty-remove.spec.ts pins), so Soprano II — org-parented to
+	// Kammernaiskoor Sireen, not the viewer's EFK — no longer renders on this
+	// roster AT ALL, flat sibling or otherwise.
+	it("Soprano (the viewer's own EFK root) renders top-level; Soprano II (Kammernaiskoor Sireen's org-parented root) doesn't render here at all — the foreign flat data never reaches the screen", async () => {
 		stubSectionsFetch(currentLiveWire());
 		const container = await renderReady();
 
 		const soprano = q(container, `section-group-${SEC_SOPRANO}`) as HTMLElement;
-		const sopranoII = q(container, `section-group-${SEC_SOPRANO_II}`) as HTMLElement;
 		expect(soprano).not.toBeNull();
-		expect(sopranoII).not.toBeNull();
 		expect(soprano.getAttribute('data-depth')).toBe('0');
-		expect(sopranoII.getAttribute('data-depth')).toBe('0');
-		expect(
-			soprano.querySelector(`[data-testid="section-group-${SEC_SOPRANO_II}"]`)
-		).toBeNull();
+		expect(q(container, `section-group-${SEC_SOPRANO_II}`)).toBeNull();
 	});
 });
 

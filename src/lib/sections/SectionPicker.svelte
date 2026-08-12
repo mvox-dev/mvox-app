@@ -258,7 +258,17 @@
 	function onWindowClick(event: MouseEvent): void {
 		if (!open) return;
 		const target = event.target;
-		if (root && target instanceof Node && root.contains(target)) return;
+		if (root && target instanceof Node) {
+			// #124 F1 root cause — a TRUSTED click's window leg arrives after
+			// Svelte's microtask flush, which may have already unmounted the
+			// tapped element (e.g. "+ New section…" swapping for the create
+			// form). A detached target is not evidence of an outside click —
+			// it was inside `root` at the moment the user actually tapped, and
+			// only left the DOM as a RESULT of that same tap. Treat it as
+			// inside rather than misreading the flush as a dismissal.
+			if (!target.isConnected) return;
+			if (root.contains(target)) return;
+		}
 		// `dismiss`, NOT `closeMenu`: the click that dismissed this menu has already
 		// put focus where the user pointed it (typically another member's trigger).
 		// Yanking focus back to THIS trigger would fight the user's own click.

@@ -135,6 +135,7 @@
 	"roster_section_remove_failed": "{name} eemaldamine ebaõnnestus — hääleliik on endiselt alles.",
 	"roster_section_remove_not_empty": "Hääleliigis {name} on veel liikmeid või alamhääleliike — midagi ei eemaldatud.",
 	"roster_section_removed": "{name} eemaldatud.",
+	"roster_section_created": "{name} loodud.",
 	"roster_sections_expand_all": "Ava kõik hääleliigid",
 	"roster_sections_collapse_all": "Sulge kõik hääleliigid",
 	"roster_section_assign_failed": "Hääleliik loodi, kuid liikme lisamine sellesse ebaõnnestus.",

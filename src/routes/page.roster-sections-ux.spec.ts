@@ -527,17 +527,27 @@ describe("/roster — the remove control never appears on another org's sections
 		] satisfies SectionNode[];
 	}
 
-	it("our own empty section keeps its ✕; the foreign org's empty leaf gets none", async () => {
+	it("our own empty section keeps its ✕; the foreign org's section is not rendered here AT ALL (#124/F3 supersedes 'render it, just hide the control')", async () => {
+		// #124 (F3, 2026-08-12 gate walk) — this test used to assert the foreign
+		// group STILL RENDERED, just without its remove control. That let a
+		// foreign org's empty "(0)" section sit on screen next to the viewer's
+		// own empty "(0)" with nothing visually distinguishing "removable" from
+		// "not" — exactly the two-headers-disagreeing inconsistency the gate
+		// walk caught. The #110 review F2 ruling itself stands (a destructive
+		// affordance on another org's entity must never ship); the only way to
+		// make that consistent is to not render the foreign group at all.
 		listSectionsMock.mockResolvedValue(foreignTree());
 		loadRosterMock.mockResolvedValue(fixtureRows().map((r) => ({ ...r, orgId: 'org-efk' })));
 		const container = await renderReady('admin');
-		await ensureExpanded(container, 'sec-other'); // put the child's header on screen
 
 		expect(q(container, 'section-remove-sec-bass')).not.toBeNull();
+		// Neither the foreign ROOT nor its sub-section (which carries no org
+		// `_parent` of its own — v4E `parentConstraint: 'exactly_one_of'` — its
+		// ROOT's org is what places it, and the whole subtree is excluded with
+		// the root) renders at all, control or no control.
+		expect(q(container, 'section-group-sec-other')).toBeNull();
 		expect(q(container, 'section-remove-sec-other')).toBeNull();
-		// A sub-section carries no org `_parent` of its own (v4E
-		// `parentConstraint: 'exactly_one_of'`) — its ROOT's org is what places it,
-		// so the walk must resolve upwards rather than read `orgId` flat.
+		expect(q(container, 'section-group-sec-other-sub')).toBeNull();
 		expect(q(container, 'section-remove-sec-other-sub')).toBeNull();
 	});
 

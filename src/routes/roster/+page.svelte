@@ -166,7 +166,66 @@
 		});
 	});
 
-	const groups = $derived(groupBySection(rows, sections));
+	// ── #124 (F3) — which sections belong to THIS collective ────────────────────
+	//
+	// `listSections` queries `entity?_type.string=section&…&limit=500` with NO org
+	// scoping, and sections are created `_sharing: 'public'` (federation
+	// discoverability, v4E) — so EVERY readable section in the db lands in
+	// `sections`, not just this collective's. Live polyphony holds 16 sections
+	// across FOUR test orgs, all org-parented.
+	//
+	// SPIKE root cause (2026-08-12, #124 check 4): `currentOrgId` used to read
+	// `rows.find((r) => r.orgId)?.orgId` — i.e. whichever roster row `loadRoster`
+	// happened to sort first (alphabetically), NOT the viewer. `loadRoster`'s
+	// member query is not org-scoped either, so on a multi-org db the first row
+	// can legitimately belong to another org, silently migrating every
+	// destructive control onto the wrong collective's sections and rendering a
+	// FOREIGN org's empty "(0)" section without its remove control while the
+	// viewer's own kept one — two headers reading identically, disagreeing.
+	// "Whose roster is this?" is answered from the AUTHENTICATED VIEWER's own
+	// roster row (matched by `personId`, carried on `selected` from the token's
+	// accounts map — see `Collective.personId`), never a guess from row order.
+	/** The collective's organization id, read off the VIEWER's own roster row
+	 *  (matched by `personId`) — falls back to the first row exposing an
+	 *  `orgId` ONLY when the viewer has no row of her own on this roster (an
+	 *  admin auditing a roster she isn't a member of, or a single-org fixture
+	 *  that never gave the viewer a matching `personId`); null when neither
+	 *  answers anything (org unknown to this reader entirely). The fallback is
+	 *  intentionally the OLD heuristic, kept as a last resort rather than
+	 *  removed outright: on the single-org fixtures it always ran against, "the
+	 *  first row's org" and "the viewer's org" are the same answer — the
+	 *  multi-org ambiguity #124/F3 fixes only bites when the viewer's OWN row
+	 *  is present but sorts non-first, which the primary lookup above already
+	 *  handles before the fallback is ever reached. */
+	const currentOrgId = $derived(
+		rows.find((r) => r.personId === selected?.personId)?.orgId ??
+			rows.find((r) => r.orgId)?.orgId ??
+			null
+	);
+
+	/** #124 (F3) — the section tree filtered to the viewer's OWN org: a
+	 *  top-level (root) section is kept only when its `orgId` matches
+	 *  `currentOrgId`; a kept root's WHOLE subtree comes along with it (a
+	 *  sub-section carries no org `_parent` of its own — v4E
+	 *  `parentConstraint: 'exactly_one_of'` — so it can never be split from its
+	 *  root). Permissive when `currentOrgId` is unknown (an unauthenticated
+	 *  reader, or a pre-#124 fixture with no `orgId` on any row) — keeps
+	 *  everything, same "unknown means don't restrict" rule `isOwnOrgSection`
+	 *  below already followed. This is what actually fixes the F3
+	 *  inconsistency: a foreign org's section is no longer RENDERED at all, so
+	 *  there is no "(0)" without a ✕ left on screen to disagree with the
+	 *  viewer's own — pinned as-is (no membership exception) by
+	 *  page.roster-sections-live-wire.spec.ts: a member the live DATA bug
+	 *  mis-parents into another org's flat section (TU.1/#109's own
+	 *  investigation-verdict fixture) is meant to surface as the data defect it
+	 *  is, not be masked by keeping a foreign-org group on screen for her sake —
+	 *  the fix for that is the data fix (reparent to a REAL sub-section),
+	 *  tracked separately, not a rendering carve-out here. */
+	const visibleSections = $derived(
+		currentOrgId === null ? sections : sections.filter((n) => (n.orgId ?? null) === currentOrgId)
+	);
+
+	const groups = $derived(groupBySection(rows, visibleSections));
 	const groupById = $derived.by(() => {
 		const map = new Map<string, SectionGroup>();
 		for (const g of groups) if (g.sectionId !== null) map.set(g.sectionId, g);
@@ -190,27 +249,15 @@
 
 	const flatRows = $derived([...rows].sort((a, b) => a.name.localeCompare(b.name)));
 
-	// ── #110 review F2: which sections belong to THIS collective ────────────────
+	// ── #110 review F2 / #124 F3: `isOwnOrgSection` — a defense-in-depth backstop.
 	//
-	// `listSections` queries `entity?_type.string=section&…&limit=500` with NO org
-	// scoping, and sections are created `_sharing: 'public'` (federation
-	// discoverability, v4E) — so EVERY readable section in the db lands in
-	// `sections`, not just this collective's. Live polyphony holds 16 sections
-	// across FOUR test orgs (sectionData.ts:44-49); `SectionPicker` already has to
-	// filter foreign-org roots out of its duplicate check for exactly this reason.
-	//
-	// A foreign org's sections have `memberCount === 0` BY CONSTRUCTION — `rows`
-	// only ever holds the SELECTED collective's members — so the empty-section
-	// gate below would hang a DELETE control off every other collective's empty
-	// sections. Scope it.
-	//
-	// The whole grouped tree arguably wants the same filter (a display bug that
-	// predates #110), but widening the render is out of this fix's scope; what
-	// must not ship is a destructive affordance on another org's entity.
-	/** The collective's organization id, read off the members' own `_parent`
-	 *  (rosterData carries it) — null when no row exposes one to this reader. */
-	const currentOrgId = $derived(rows.find((r) => r.orgId)?.orgId ?? null);
-
+	// `currentOrgId`/`visibleSections` above already keep a foreign org's section
+	// OUT of the render entirely (#124/F3), so in practice every node reaching
+	// `canRemove` below has already passed that filter. `isOwnOrgSection` stays as
+	// a second, independent check on the same question (never trust one gate for
+	// a destructive control) — see #110 review F2's original ruling: a
+	// destructive affordance on another org's entity must never ship, belt AND
+	// braces.
 	/** section id → the OWNING org id of its top-level root. Sub-sections carry no
 	 *  org `_parent` of their own (v4E `parentConstraint: 'exactly_one_of'`), so
 	 *  the root's org is propagated down the subtree. */
@@ -265,7 +312,7 @@
 				walk(n.children);
 			}
 		}
-		walk(sections);
+		walk(visibleSections);
 		if (unassignedGroup) ids.push('unassigned');
 		return ids;
 	});
@@ -662,6 +709,148 @@
 		}
 		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), newId]);
 	}
+
+	// #124 (F1+F2) — page-level "+ New section" entry point. SEPARATE from the
+	// inline SectionPicker's own create form above (kept as-is; its own specs
+	// keep pinning it) — this one lives in the roster header, needs no member
+	// row, no picker, and no expansion state to reach.
+	//
+	// SPIKE root cause (2026-08-12, #124 check 1): section creation "does
+	// nothing" in live NOT because the writes were broken, but because the ONLY
+	// entry point was the picker's "+ New section…" — the LAST row of a member's
+	// dropdown, one mis-tap away from the adjacent "(Unassigned)" row (identical
+	// 24px height; a tap there is `pick(null)`, which no-ops and closes the
+	// picker silently on an already-unassigned member — exactly the reported
+	// symptom). A 16-section live tree also made that dropdown ~440px tall, so
+	// the inline create form it swapped in was off-screen on a phone. This
+	// control needs none of that: reachable with every section collapsed,
+	// admin-only (fail-closed, same gate as every other admin control here).
+	let pageCreateOpen = $state(false);
+	let pageCreateName = $state('');
+	let pageCreateParentId = $state('');
+	let pageCreateError = $state<(() => string) | null>(null);
+	let pageCreateNameInput = $state<HTMLInputElement | null>(null);
+
+	// Announced result, mirroring `removeStatus`/`reorderStatus` above — the
+	// "invisible success" half of the SPIKE finding: a create used to sort LAST
+	// (`displayOrder: POSITIVE_INFINITY`, unchanged here — out of this fix's
+	// scope) with nothing on screen saying a create even happened. role="status",
+	// mounted from first render (a live region announces only CHANGES to its
+	// contents).
+	let pageCreateStatus = $state('');
+
+	/** Pre-order flatten, same shape as SectionPicker's own `flatten` — the
+	 *  parent `<select>`'s options and the sibling-scoped duplicate check both
+	 *  walk this. Built off `visibleSections` (already filtered to the viewer's
+	 *  own org, #124/F3) — a foreign org's section is never offered as a parent
+	 *  (finding F2) and never blocks a same-named create (finding #10 B, same
+	 *  discipline as SectionPicker's own org-scoped check). */
+	function flattenSections(nodes: SectionNode[]): SectionNode[] {
+		const out: SectionNode[] = [];
+		for (const node of nodes) {
+			out.push(node);
+			out.push(...flattenSections(node.children));
+		}
+		return out;
+	}
+	const ownOrgFlatSections = $derived(flattenSections(visibleSections));
+
+	/** Indent the parent `<select>`'s option labels so the tree shape survives a
+	 *  flat option list — NBSP, since leading ordinary spaces collapse in
+	 *  rendered option text (same fix as SectionPicker's `parentOptionLabel`). */
+	function pageCreateParentLabel(node: SectionNode): string {
+		return '  '.repeat(node.depth) + node.name;
+	}
+
+	function openPageCreateForm(): void {
+		pageCreateName = '';
+		pageCreateParentId = '';
+		pageCreateError = null;
+		pageCreateOpen = true;
+	}
+
+	function closePageCreateForm(): void {
+		pageCreateOpen = false;
+		pageCreateName = '';
+		pageCreateParentId = '';
+		pageCreateError = null;
+	}
+
+	// Same "Enter submits" affordance as SectionPicker's name input — this is not
+	// wrapped in a <form>, so there is no implicit submit otherwise.
+	function onPageCreateNameKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		void submitPageCreate();
+	}
+
+	async function submitPageCreate(): Promise<void> {
+		// A fresh attempt owns both the error slot and the status slot — a
+		// previous failure/success must not sit alongside a new attempt in flight.
+		pageCreateError = null;
+		pageCreateStatus = '';
+		const name = pageCreateName.trim();
+		if (!name) {
+			pageCreateError = m.roster_section_name_required;
+			return;
+		}
+		const parentId = pageCreateParentId === '' ? null : pageCreateParentId;
+		// Sibling-scoped, not global (finding #10 root cause B) — siblings are the
+		// chosen parent's DIRECT CHILDREN, or the top-level roots when parentId is
+		// null. `ownOrgFlatSections` is already own-org-scoped (#124/F3), so
+		// another org's same-named root never blocks this create.
+		const isDuplicate = ownOrgFlatSections.some(
+			(node) => node.parentId === parentId && node.name.toLowerCase() === name.toLowerCase()
+		);
+		if (isDuplicate) {
+			pageCreateError = m.roster_section_duplicate;
+			return;
+		}
+
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: page-level section create with no cfg', name, parentId);
+			pageCreateError = m.roster_section_create_failed;
+			return;
+		}
+
+		let newId: string;
+		try {
+			newId = await createSection(cfg, { name, parentId, orgId: currentOrgId });
+		} catch (e) {
+			console.error('roster: page-level section create failed', name, parentId, e);
+			pageCreateError = m.roster_section_create_failed;
+			return;
+		}
+
+		// LOCAL insertion — same "never refetch" contract as `handleCreate` above.
+		// There is no MEMBER context here (this is the page-level control, not a
+		// picker pinned to one row) — `assignMemberSection` never fires.
+		const depth = parentId ? (findSectionNode(sections, parentId)?.depth ?? 0) + 1 : 0;
+		const newNode: SectionNode = {
+			id: newId,
+			name,
+			displayOrder: Number.POSITIVE_INFINITY,
+			parentId,
+			// Mirrors what `listSections` would read back for it: a top-level
+			// section is parented to the VIEWER's own org, a sub-section is
+			// section-parented and carries no org `_parent` at all (v4E
+			// `parentConstraint: 'exactly_one_of'`).
+			orgId: parentId ? null : (currentOrgId ?? null),
+			depth,
+			children: []
+		};
+		sections = insertSectionNode(sections, newNode, parentId);
+		expandedIds = new Set(expandedIds).add(newId);
+		pageCreateStatus = m.roster_section_created({ name });
+		closePageCreateForm();
+	}
+
+	// Auto-focus the name input the instant the page-level form appears, same
+	// contract as SectionPicker's own create form.
+	$effect(() => {
+		if (pageCreateOpen && pageCreateNameInput) pageCreateNameInput.focus();
+	});
 
 	// TS.4/#98 — drag-reorder on COLLAPSED section headers (admin only). ALL THREE
 	// input paths (native HTML5 drop, touch long-press drag, keyboard up/down)
@@ -1433,6 +1622,19 @@
 			{removeStatus}
 		</div>
 
+		<!-- #124 (F1) — the page-level create's result, same contract as the reorder
+		     and remove regions above: mounted from first render, visually hidden.
+		     The "invisible success" half of the SPIKE finding — a create used to
+		     land nothing on screen saying it happened. -->
+		<div
+			data-testid="roster-section-create-status"
+			role="status"
+			aria-live="polite"
+			class="sr-only"
+		>
+			{pageCreateStatus}
+		</div>
+
 		{#if status === 'no-collective'}
 			<p data-testid="roster-no-collective" class="text-sm">{m.roster_no_collective()}</p>
 		{:else if status === 'loading'}
@@ -1543,6 +1745,90 @@
 			</div>
 
 			{#if view === 'grouped' && !sectionsError}
+				{#if admin === 'admin'}
+					<!-- #124 (F1+F2) — the page-level "+ New section" entry point, ABOVE
+					     the groups (same document-order contract as `sections-toggle-all`
+					     right below), admin-only (fail-closed, same gate as every other
+					     admin control), reachable with every section collapsed. See the
+					     script-side comment above `pageCreateOpen` for the SPIKE root
+					     cause this is the PRIMARY fix for. -->
+					<div class="flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3">
+						{#if !pageCreateOpen}
+							<button
+								type="button"
+								data-testid="roster-new-section"
+								class="self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+								onclick={openPageCreateForm}
+							>
+								{m.roster_new_section()}
+							</button>
+						{:else}
+							<div
+								data-testid="roster-new-section-form"
+								role="dialog"
+								aria-label={m.roster_new_section_form_label()}
+								class="flex flex-col gap-1.5"
+							>
+								<input
+									type="text"
+									data-testid="roster-new-section-name"
+									bind:this={pageCreateNameInput}
+									aria-label={m.roster_section_name_label()}
+									placeholder={m.roster_section_name_label()}
+									aria-invalid={pageCreateError ? true : undefined}
+									aria-describedby={pageCreateError ? 'roster-new-section-error' : undefined}
+									value={pageCreateName}
+									oninput={(e) => (pageCreateName = (e.currentTarget as HTMLInputElement).value)}
+									onkeydown={onPageCreateNameKeydown}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-xs text-ink"
+								/>
+								<select
+									data-testid="roster-new-section-parent"
+									aria-label={m.roster_section_parent_label()}
+									value={pageCreateParentId}
+									onchange={(e) => (pageCreateParentId = (e.currentTarget as HTMLSelectElement).value)}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-xs text-ink"
+								>
+									<option value="">{m.roster_new_section_top_level()}</option>
+									{#each ownOrgFlatSections as node (node.id)}
+										<option value={node.id}>{pageCreateParentLabel(node)}</option>
+									{/each}
+								</select>
+								{#if pageCreateError}
+									<!-- F5-style loud inline failure, same discipline as the picker's
+									     own create-error paragraph: role="alert" + aria-describedby
+									     on the input above. -->
+									<p
+										id="roster-new-section-error"
+										role="alert"
+										data-testid="roster-new-section-error"
+										class="text-xs text-red-700"
+									>
+										{pageCreateError()}
+									</p>
+								{/if}
+								<div class="flex gap-2">
+									<button
+										type="button"
+										data-testid="roster-new-section-submit"
+										class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
+										onclick={() => void submitPageCreate()}
+									>
+										{m.roster_create_assign()}
+									</button>
+									<button
+										type="button"
+										data-testid="roster-new-section-cancel"
+										class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
+										onclick={closePageCreateForm}
+									>
+										{m.roster_cancel()}
+									</button>
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
 				<!-- TU.2/#110 (finding #9) — collapse-all/expand-all, ABOVE the groups
 				     (pinned document-order contract) so it acts as a single entry point
 				     before diving into a (now collapsed-by-default) tree. -->
@@ -1558,7 +1844,7 @@
 					{anySectionExpanded ? m.roster_sections_collapse_all() : m.roster_sections_expand_all()}
 				</button>
 				<div data-testid="roster-groups" class="flex flex-col">
-					{#each sections as node (node.id)}
+					{#each visibleSections as node (node.id)}
 						{@render sectionGroup(node)}
 					{/each}
 					{#if unassignedGroup}

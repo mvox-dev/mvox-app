@@ -136,6 +136,7 @@
 	"roster_section_remove_failed": "{name} couldn't be removed — the section is still there.",
 	"roster_section_remove_not_empty": "{name} still has members or sub-sections — nothing was removed.",
 	"roster_section_removed": "{name} removed.",
+	"roster_section_created": "{name} created.",
 	"roster_sections_expand_all": "Expand all sections",
 	"roster_sections_collapse_all": "Collapse all sections",
 	"nav_agenda": "Agenda",
