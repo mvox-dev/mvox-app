@@ -185,6 +185,7 @@
 	"library_copy_sort_nr": "№",
 	"library_copy_sort_member": "Учасник",
 	"library_copy_sort_since": "З дати",
+	"library_available_summary": "{count} примірників доступно для видачі",
 	"repertoire_no_edition": "Видання не вказано",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Позичити",

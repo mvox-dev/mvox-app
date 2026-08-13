@@ -185,6 +185,7 @@
 	"library_copy_sort_nr": "Nr",
 	"library_copy_sort_member": "Member",
 	"library_copy_sort_since": "Since",
+	"library_available_summary": "{count} copies available for lending",
 	"repertoire_no_edition": "No pinned edition",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Borrow",

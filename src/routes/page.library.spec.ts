@@ -53,7 +53,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_sort_label: () => 'Sort copies by',
 		library_copy_sort_nr: () => 'Nr',
 		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since'
+		library_copy_sort_since: () => 'Since',
+		// #128 — collapsed-available summary line
+		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`
 	}
 }));
 
@@ -343,10 +345,16 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
 		await waitFor(() => expect(listCopiesMock).toHaveBeenCalledWith(expect.anything(), 'edition-1'));
 
+		// #128 — member view collapses the available copy (copy-1) into a
+		// summary line instead of an individual row; the lent copy (copy-2)
+		// still renders individually.
 		await waitFor(() => {
-			const copy1 = container.querySelector('[data-testid="library-copy-copy-1"]');
+			const summary = container.querySelector(
+				'[data-testid="library-available-summary-edition-1"]'
+			);
 			const copy2 = container.querySelector('[data-testid="library-copy-copy-2"]');
-			expect(copy1?.textContent).toContain('Available');
+			expect(container.querySelector('[data-testid="library-copy-copy-1"]')).toBeNull();
+			expect(summary?.textContent).toContain('1 copies available for lending');
 			expect(copy2?.textContent).toContain('Out');
 			expect(copy2?.textContent).toContain('Ada Lovelace');
 		});
@@ -788,10 +796,30 @@ describe('#76 — inline checkout on browse tree', () => {
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
-		await expandToCopies(container);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="library-work-toggle-work-1"]')).not.toBeNull()
+		);
+		await fireEvent.click(
+			container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element
+		);
+		await waitFor(() =>
+			expect(
+				container.querySelector('[data-testid="library-edition-toggle-edition-1"]')
+			).not.toBeNull()
+		);
+		await fireEvent.click(
+			container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element
+		);
 
-		const copyRow = container.querySelector('[data-testid="library-copy-copy-1"]');
-		expect(copyRow?.textContent).toContain('Available');
+		// #128 — copy-1 (available) collapses into the summary line for a
+		// non-librarian; copy-2 (lent) still renders individually. Neither
+		// carries an inline-checkout affordance for a non-librarian.
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="library-copy-copy-2"]')).not.toBeNull()
+		);
+		const copyRow = container.querySelector('[data-testid="library-copy-copy-2"]');
+		expect(copyRow?.textContent).toContain('Out');
+		expect(container.querySelector('[data-testid="library-copy-copy-1"]')).toBeNull();
 		expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).toBeNull();
 		expect(container.querySelector('[data-testid="inline-checkout-copy-2"]')).toBeNull();
 	});

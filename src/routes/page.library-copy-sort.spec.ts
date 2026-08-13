@@ -69,7 +69,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_sort_label: () => 'Sort copies by',
 		library_copy_sort_nr: () => 'Nr',
 		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since'
+		library_copy_sort_since: () => 'Since',
+		// #128 — collapsed-available summary line
+		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`
 	}
 }));
 
@@ -167,7 +169,12 @@ function setAuthedWithOneCollective() {
 	});
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set('polyphony');
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	// #128 collapses available copies into a summary for MEMBER view, which
+	// would hide the individual rows this spec sorts. Sort mechanics
+	// (sortCopies) are unaffected by librarian status, and #128 explicitly
+	// leaves the librarian view unchanged, so render as librarian here to
+	// keep every copy an individually-sortable row.
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	listAllEditionsMock.mockResolvedValue([]);
@@ -254,6 +261,11 @@ async function renderWithEditionUnfolded() {
 	);
 	await fireEvent.click(
 		container.querySelector('[data-testid="library-edition-toggle-edition-1"]')!
+	);
+	// Librarian state settled (tools revealed) before asserting rows — matches
+	// #128's own settling pattern, avoiding a transient not-librarian render.
+	await waitFor(() =>
+		expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull()
 	);
 	await waitFor(() =>
 		expect(container.querySelector('[data-testid="library-copy-copy-a"]')).not.toBeNull()

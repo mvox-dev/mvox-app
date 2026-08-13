@@ -185,6 +185,7 @@
 	"library_copy_sort_nr": "Nr",
 	"library_copy_sort_member": "Liige",
 	"library_copy_sort_since": "Alates",
+	"library_available_summary": "{count} eksemplari saadaval laenutamiseks",
 	"repertoire_no_edition": "Trükiväljaanne valimata",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Laenuta",

@@ -185,6 +185,7 @@
 	"library_copy_sort_nr": "Nr",
 	"library_copy_sort_member": "Biedrs",
 	"library_copy_sort_since": "Kopš",
+	"library_available_summary": "{count} eksemplāri pieejami izsniegšanai",
 	"repertoire_no_edition": "Izdevums nav norādīts",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Aizņemties",

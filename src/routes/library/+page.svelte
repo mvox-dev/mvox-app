@@ -883,6 +883,7 @@
 														{#each sortCopies(copiesByEdition.get(edition.id) ?? [], copySortKey) as copy (copy.id)}
 															{@const availability = deriveCopyAvailability(copy.id, lendings)}
 															{@const activeLending = activeLendingForCopy(copy.id)}
+															{#if $librarianStore === 'librarian' || activeLending}
 															<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">
 																<span class="text-ink">{copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown())}</span>
 																<span class="flex items-center gap-1">
@@ -941,7 +942,21 @@
 																	{/if}
 																</span>
 															</div>
+																{/if}
 														{/each}
+															{#if $librarianStore !== 'librarian'}
+																{@const availableCount = (copiesByEdition.get(edition.id) ?? []).filter(
+																	(c) => !activeLendingForCopy(c.id)
+																).length}
+																{#if availableCount > 0}
+																	<div
+																		data-testid="library-available-summary-{edition.id}"
+																		class="text-xs text-ink-2"
+																	>
+																		{m.library_available_summary({ count: availableCount })}
+																	</div>
+																{/if}
+															{/if}
 													{/if}
 												</div>
 											{/if}
