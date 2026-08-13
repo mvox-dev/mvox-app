@@ -15,6 +15,8 @@
 		listLendings,
 		resolveBorrowerNames,
 		resolveCopyNames,
+		resolveCopyChains,
+		formatLoanChainLabel,
 		deriveCopyAvailability,
 		deriveEditionAvailability,
 		deriveWorkAvailability,
@@ -22,7 +24,8 @@
 		type Work,
 		type Edition,
 		type Copy,
-		type Lending
+		type Lending,
+		type LoanChain
 	} from '$lib/library/libraryData';
 	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
@@ -139,6 +142,7 @@
 	let myMemberId = $state<string | null>(null);
 	let myLoansExpanded = $state(false);
 	let myCopyNames = $state<Map<string, string>>(new Map());
+	let myCopyChains = $state<Map<string, LoanChain>>(new Map());
 
 	// Derived: active loans for the current member
 	let myActiveLoans = $derived(
@@ -395,6 +399,52 @@
 			myCopyNames = names;
 		}).catch(e => {
 			console.error('library: copy name resolution failed', e);
+		});
+	});
+
+	// #129 — resolve copy → edition → work chain for my-loans labels
+	let chainGen = 0;
+	$effect(() => {
+		const loans = myActiveLoans;
+		const g = ++chainGen;
+		if (loans.length === 0) {
+			myCopyChains = new Map();
+			return;
+		}
+		const current = selected;
+		if (!current) { myCopyChains = new Map(); return; }
+		const token = getToken();
+		if (!token) return;
+		const copyIds = loans.map(l => l.copyId);
+		// Librarian path: resolve locally from allCopies → allEditions → works
+		const localChains = new Map<string, LoanChain>();
+		const unresolved: string[] = [];
+		for (const id of copyIds) {
+			const cached = allCopies.find(c => c.id === id);
+			if (cached) {
+				const edition = allEditions.find(e => e.id === cached.editionId);
+				const work = edition ? works.find(w => w.id === edition.workId) : undefined;
+				localChains.set(id, {
+					copyNumber: cached.copyNumber,
+					workName: work?.name ?? '',
+					editionName: edition?.name ?? ''
+				});
+			} else {
+				unresolved.push(id);
+			}
+		}
+		if (unresolved.length === 0) {
+			if (g !== chainGen) return;
+			myCopyChains = localChains;
+			return;
+		}
+		const cfg = { db: current.db, token };
+		resolveCopyChains(cfg, unresolved, works).then(chains => {
+			if (g !== chainGen) return;
+			for (const [id, chain] of localChains) chains.set(id, chain);
+			myCopyChains = chains;
+		}).catch(e => {
+			console.error('library: copy chain resolution failed', e);
 		});
 	});
 
@@ -702,7 +752,7 @@
 					<ul id="my-loans-list" class="mt-2 flex flex-col gap-1">
 						{#each myActiveLoans as loan (loan.id)}
 							<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
-								<span>{m.library_my_loans_copy_label({ copyName: myCopyNames.get(loan.copyId) || m.library_copy_name_unknown() })}</span>
+								<span>{m.library_my_loans_copy_label({ copyName: myCopyChains.has(loan.copyId) ? formatLoanChainLabel(myCopyChains.get(loan.copyId)!) : myCopyNames.get(loan.copyId) || m.library_copy_name_unknown() })}</span>
 								<span class="text-ink-2">
 									{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
 								</span>

@@ -9,6 +9,8 @@ import {
 	listLendings,
 	resolveBorrowerNames,
 	resolveCopyNames,
+	resolveCopyChains,
+	formatLoanChainLabel,
 	deriveCopyAvailability,
 	deriveEditionAvailability,
 	deriveWorkAvailability,
@@ -17,7 +19,8 @@ import {
 	type Edition,
 	type Copy,
 	type Lending,
-	type CopyAvailability
+	type CopyAvailability,
+	type LoanChain
 } from './libraryData';
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
@@ -554,5 +557,137 @@ describe('resolveCopyNames', () => {
 	it('fails loud on non-2xx', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		await expect(resolveCopyNames(cfg, ['copy-bad'], fetchImpl)).rejects.toThrow(/500/);
+	});
+});
+
+// ── formatLoanChainLabel — pure, no fetch ────────────────────────────────────
+// #129 — loan entries must show the full chain: copy nr, work name, edition
+// name ("Copy #3 — Spem in alium / 40-part original"), not just "Copy #3".
+
+describe('formatLoanChainLabel', () => {
+	it('formats copy number + work name + edition name as "Copy #<n> — <work> / <edition>"', () => {
+		const chain: LoanChain = { copyNumber: 3, workName: 'Spem in alium', editionName: '40-part original' };
+		expect(formatLoanChainLabel(chain)).toBe('Copy #3 — Spem in alium / 40-part original');
+	});
+
+	it('omits the "Copy #<n> —" prefix entirely when copyNumber is 0 (no number)', () => {
+		const chain: LoanChain = { copyNumber: 0, workName: 'Spem in alium', editionName: '40-part original' };
+		expect(formatLoanChainLabel(chain)).toBe('Spem in alium / 40-part original');
+		expect(formatLoanChainLabel(chain)).not.toContain('Copy #');
+	});
+});
+
+// ── resolveCopyChains — batched, dedup, follows copy -> edition -> work ──────
+// #129 — network fallback for the loan → copy → edition → work chain. Work
+// names come from the ALREADY-LOADED `works` list (listWorks runs for every
+// viewer on page load — see +page.svelte loadForSelected) — never fetched
+// here, matching the "no new API calls for data already loaded" AC.
+
+describe('resolveCopyChains', () => {
+	const works: Work[] = [{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }];
+
+	it('resolves copyNumber (via the copy entity) + editionName/workId (via the edition entity) + workName (via the passed works list, no fetch)', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-1')) {
+				return Promise.resolve(
+					json({
+						entity: {
+							copy_number: [{ number: 3 }],
+							_parent: [{ reference: 'edition-1', entity_type: 'edition' }]
+						}
+					})
+				);
+			}
+			if (url.includes('entity/edition-1')) {
+				return Promise.resolve(
+					json({
+						entity: {
+							name: [{ string: '40-part original' }],
+							_parent: [{ reference: 'work-1', entity_type: 'work' }]
+						}
+					})
+				);
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		const chains = await resolveCopyChains(cfg, ['copy-1'], works, fetchImpl);
+		expect(chains.get('copy-1')).toEqual<LoanChain>({
+			copyNumber: 3,
+			workName: 'Spem in alium',
+			editionName: '40-part original'
+		});
+		// The works list is provided, never fetched — only copy + edition lookups.
+		const workFetches = fetchImpl.mock.calls.filter((args) => String(args[0]).includes('entity/work-1'));
+		expect(workFetches).toHaveLength(0);
+	});
+
+	it('a copy with no resolvable edition parent resolves an empty chain beyond copyNumber (no edition fetch attempted)', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-2')) {
+				return Promise.resolve(json({ entity: { copy_number: [{ number: 5 }], _parent: [] } }));
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		const chains = await resolveCopyChains(cfg, ['copy-2'], works, fetchImpl);
+		expect(chains.get('copy-2')).toEqual<LoanChain>({ copyNumber: 5, workName: '', editionName: '' });
+	});
+
+	it('an edition whose workId is not present in the passed works list resolves workName to \'\'', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-3')) {
+				return Promise.resolve(
+					json({ entity: { copy_number: [{ number: 1 }], _parent: [{ reference: 'edition-9', entity_type: 'edition' }] } })
+				);
+			}
+			if (url.includes('entity/edition-9')) {
+				return Promise.resolve(
+					json({ entity: { name: [{ string: 'Orphan edition' }], _parent: [{ reference: 'work-missing', entity_type: 'work' }] } })
+				);
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		const chains = await resolveCopyChains(cfg, ['copy-3'], works, fetchImpl);
+		expect(chains.get('copy-3')).toEqual<LoanChain>({ copyNumber: 1, workName: '', editionName: 'Orphan edition' });
+	});
+
+	it('dedupes repeated copyIds — one copy fetch and one edition fetch regardless of repeat count', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-1')) {
+				return Promise.resolve(
+					json({ entity: { copy_number: [{ number: 3 }], _parent: [{ reference: 'edition-1', entity_type: 'edition' }] } })
+				);
+			}
+			if (url.includes('entity/edition-1')) {
+				return Promise.resolve(
+					json({ entity: { name: [{ string: '40-part original' }], _parent: [{ reference: 'work-1', entity_type: 'work' }] } })
+				);
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		await resolveCopyChains(cfg, ['copy-1', 'copy-1'], works, fetchImpl);
+		const copyFetches = fetchImpl.mock.calls.filter((args) => String(args[0]).includes('entity/copy-1'));
+		const editionFetches = fetchImpl.mock.calls.filter((args) => String(args[0]).includes('entity/edition-1'));
+		expect(copyFetches).toHaveLength(1);
+		expect(editionFetches).toHaveLength(1);
+	});
+
+	it('fails loud on a non-2xx copy lookup', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
+		await expect(resolveCopyChains(cfg, ['copy-bad'], works, fetchImpl)).rejects.toThrow(/500/);
+	});
+
+	it('fails loud on a non-2xx edition lookup (copy lookup itself succeeded)', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('entity/copy-1')) {
+				return Promise.resolve(
+					json({ entity: { copy_number: [{ number: 3 }], _parent: [{ reference: 'edition-1', entity_type: 'edition' }] } })
+				);
+			}
+			if (url.includes('entity/edition-1')) {
+				return Promise.resolve(json({}, 500));
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+		await expect(resolveCopyChains(cfg, ['copy-1'], works, fetchImpl)).rejects.toThrow(/500/);
 	});
 });

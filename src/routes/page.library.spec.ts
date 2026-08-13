@@ -59,7 +59,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock, resolveCopyNamesMock } =
+const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock, resolveCopyNamesMock, resolveCopyChainsMock } =
 	vi.hoisted(() => ({
 		listWorksMock: vi.fn(),
 		listEditionsMock: vi.fn(),
@@ -68,12 +68,15 @@ const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, li
 		listAllCopiesMock: vi.fn(),
 		listLendingsMock: vi.fn(),
 		resolveBorrowerNamesMock: vi.fn(),
-		resolveCopyNamesMock: vi.fn()
+		resolveCopyNamesMock: vi.fn(),
+		// #129 — loan → copy → edition → work chain resolver (network fallback
+		// when the chain isn't already available from locally-loaded data).
+		resolveCopyChainsMock: vi.fn()
 	}));
 vi.mock('$lib/library/libraryData', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>('$lib/library/libraryData');
 	return {
-		...actual, // keep the real, pure deriveCopyAvailability / deriveWorkAvailability
+		...actual, // keep the real, pure deriveCopyAvailability / deriveWorkAvailability / formatLoanChainLabel
 		listWorks: listWorksMock,
 		listEditions: listEditionsMock,
 		listCopies: listCopiesMock,
@@ -81,7 +84,8 @@ vi.mock('$lib/library/libraryData', async () => {
 		listAllCopies: listAllCopiesMock,
 		listLendings: listLendingsMock,
 		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock
+		resolveCopyNames: resolveCopyNamesMock,
+		resolveCopyChains: resolveCopyChainsMock
 	};
 });
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
@@ -144,6 +148,8 @@ function setAuthedWithOneCollective() {
 	findMyMemberIdMock.mockResolvedValue(null);
 	// Default: empty copy names, unless a test overrides.
 	resolveCopyNamesMock.mockResolvedValue(new Map());
+	// Default: empty loan chains, unless a test overrides. (#129)
+	resolveCopyChainsMock.mockResolvedValue(new Map());
 	// Default: empty checkout data, unless a test overrides.
 	listAllEditionsMock.mockResolvedValue([]);
 	listAllCopiesMock.mockResolvedValue([]);
@@ -166,6 +172,7 @@ afterEach(() => {
 	listLendingsMock.mockReset();
 	resolveBorrowerNamesMock.mockReset();
 	resolveCopyNamesMock.mockReset();
+	resolveCopyChainsMock.mockReset();
 	resolveLibrarianMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
@@ -1464,8 +1471,12 @@ describe('#76 — consolidated corrections', () => {
 		expect(memberSelect?.textContent).not.toMatch(/[0-9a-f]{24}/);
 	});
 
-	// ── Correction 8: My-loans copy name resolution (no raw entity IDs) ─────
-	it('my-loans section shows resolved copy name, not raw entity ID', async () => {
+	// ── Correction 8 / #129: My-loans copy chain resolution (no raw entity IDs) ─
+	// #129 — superseded: a bare resolved copy name ("Score #7") is no longer
+	// enough context; the loan row must show the full copy -> edition -> work
+	// chain. resolveCopyNames stays as its own tested unit (libraryData.spec.ts)
+	// but is no longer what the my-loans row renders from.
+	it('my-loans section shows the resolved copy -> edition -> work chain, not raw entity IDs', async () => {
 		listWorksMock.mockResolvedValue([]);
 		listLendingsMock.mockResolvedValue([
 			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
@@ -1473,7 +1484,9 @@ describe('#76 — consolidated corrections', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
-		resolveCopyNamesMock.mockResolvedValue(new Map([['copy-abc', 'Score #7']]));
+		resolveCopyChainsMock.mockResolvedValue(
+			new Map([['copy-abc', { copyNumber: 7, workName: 'Spem in alium', editionName: '40-part original' }]])
+		);
 
 		const { container } = render(Page);
 
@@ -1487,10 +1500,76 @@ describe('#76 — consolidated corrections', () => {
 		await waitFor(() => {
 			const item = container.querySelector('[data-testid="my-loans-item-lend-mine"]');
 			expect(item).not.toBeNull();
-			expect(item?.textContent).toContain('Score #7');
+			expect(item?.textContent).toContain('Copy #7 — Spem in alium / 40-part original');
 			// Must NOT contain the raw entity ID
 			expect(item?.textContent).not.toContain('copy-abc');
 		});
+	});
+
+	// ── #129 AC2: no copy number -> work/edition shown without the number ────
+	it('when the copy has no number, the loan row shows work/edition context without a copy-number prefix', async () => {
+		listWorksMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+		resolveCopyChainsMock.mockResolvedValue(
+			new Map([['copy-abc', { copyNumber: 0, workName: 'Spem in alium', editionName: '40-part original' }]])
+		);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+
+		await waitFor(() => {
+			const item = container.querySelector('[data-testid="my-loans-item-lend-mine"]');
+			expect(item).not.toBeNull();
+			expect(item?.textContent).toContain('Spem in alium / 40-part original');
+			expect(item?.textContent).not.toContain('Copy #');
+		});
+	});
+
+	// ── #129 AC3: chain resolves from already-loaded data, no new fetch ──────
+	// A librarian who is ALSO the current member already has the full chain
+	// available locally: allCopies carries editionId, allEditions carries
+	// workId + name, and works (loaded for every viewer) carries the work
+	// name. In that case the page must resolve the chain from those caches —
+	// resolveCopyChains (the network fallback) must not be invoked at all.
+	it('resolves the loan chain from already-loaded librarian data (allCopies/allEditions/works) without calling the network resolver', async () => {
+		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]);
+		listLendingsMock.mockResolvedValue([
+			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
+		]);
+		resolveBorrowerNamesMock.mockResolvedValue(new Map());
+		setAuthedWithOneCollective();
+		findMyMemberIdMock.mockResolvedValue('member-mine');
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		listAllEditionsMock.mockResolvedValue([
+			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }
+		]);
+		listAllCopiesMock.mockResolvedValue([
+			{ id: 'copy-1', name: '', copyNumber: 3, editionId: 'edition-1' }
+		]);
+		listActiveMembersMock.mockResolvedValue([]);
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="my-loans-toggle"]') as Element);
+
+		await waitFor(() => {
+			const item = container.querySelector('[data-testid="my-loans-item-lend-mine"]');
+			expect(item).not.toBeNull();
+			expect(item?.textContent).toContain('Copy #3 — Spem in alium / 40-part original');
+		});
+		expect(resolveCopyChainsMock).not.toHaveBeenCalled();
 	});
 });
 
@@ -1541,9 +1620,12 @@ describe('#76 — correction 9: localized lending dates', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		findMyMemberIdMock.mockResolvedValue('member-mine');
-		// Copy name deliberately digit-free so the year anchors below can only
-		// come from rendered dates.
-		resolveCopyNamesMock.mockResolvedValue(new Map([['copy-abc', 'Score Seven']]));
+		// #129 — chain deliberately digit-free (no copy number, digit-free work/
+		// edition names) so the year anchors below can only come from rendered
+		// dates, not from the loan-chain label itself.
+		resolveCopyChainsMock.mockResolvedValue(
+			new Map([['copy-abc', { copyNumber: 0, workName: 'Untitled Mass', editionName: 'Urtext' }]])
+		);
 
 		const { container } = render(Page);
 

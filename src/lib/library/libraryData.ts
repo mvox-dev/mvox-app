@@ -383,5 +383,65 @@ export function activeLendingForMemberInEdition(
 	);
 }
 
+export interface LoanChain {
+	copyNumber: number;
+	workName: string;
+	editionName: string;
+}
+
+export function formatLoanChainLabel(chain: LoanChain): string {
+	const context = `${chain.workName} / ${chain.editionName}`;
+	if (!chain.copyNumber) return context;
+	return `Copy #${chain.copyNumber} — ${context}`;
+}
+
+export async function resolveCopyChains(
+	cfg: EntuCfg,
+	copyIds: string[],
+	works: Work[],
+	fetchImpl: typeof fetch = fetch
+): Promise<Map<string, LoanChain>> {
+	const unique = [...new Set(copyIds)];
+	const editionCache = new Map<string, { name: string; workId: string }>();
+
+	const pairs = await Promise.all(
+		unique.map(async (copyId) => {
+			const copyRes = await entuFetch(cfg.db, `entity/${copyId}?props=copy_number,_parent`, cfg.token, {}, fetchImpl);
+			if (!copyRes.ok) throw new Error(`resolveCopyChains: copy ${copyId} lookup failed: ${copyRes.status}`);
+			const copyBody = (await copyRes.json()) as {
+				entity?: {
+					copy_number?: Array<{ number: number }>;
+					_parent?: Array<{ reference: string; entity_type?: string }>;
+				};
+			};
+			const copyNumber = copyBody.entity?.copy_number?.[0]?.number ?? 0;
+			const editionParent = (copyBody.entity?._parent ?? []).find((p) => p.entity_type === 'edition');
+			if (!editionParent) {
+				return [copyId, { copyNumber, workName: '', editionName: '' }] as const;
+			}
+
+			const editionId = editionParent.reference;
+			if (!editionCache.has(editionId)) {
+				const edRes = await entuFetch(cfg.db, `entity/${editionId}?props=name,_parent`, cfg.token, {}, fetchImpl);
+				if (!edRes.ok) throw new Error(`resolveCopyChains: edition ${editionId} lookup failed: ${edRes.status}`);
+				const edBody = (await edRes.json()) as {
+					entity?: {
+						name?: Array<{ string: string }>;
+						_parent?: Array<{ reference: string; entity_type?: string }>;
+					};
+				};
+				const edName = edBody.entity?.name?.[0]?.string ?? '';
+				const workParent = (edBody.entity?._parent ?? []).find((p) => p.entity_type === 'work');
+				editionCache.set(editionId, { name: edName, workId: workParent?.reference ?? '' });
+			}
+
+			const ed = editionCache.get(editionId)!;
+			const workName = works.find((w) => w.id === ed.workId)?.name ?? '';
+			return [copyId, { copyNumber, workName, editionName: ed.name }] as const;
+		})
+	);
+	return new Map(pairs);
+}
+
 // (*MVOX:Tallis* — RED spec)
 // (*MVOX:Josquin* — GREEN implementation)
