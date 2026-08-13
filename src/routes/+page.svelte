@@ -66,6 +66,14 @@
 	import type { Season } from '$lib/seasons/types';
 	import { createSeason } from '$lib/entity/entityCreate';
 	import { resolveMyOrgId } from '$lib/org/myOrg';
+	import {
+		listEventSeriesForSeason,
+		listEventsForSeason,
+		updateSeasonField,
+		addSeasonConductor,
+		removeSeasonConductor as apiRemoveSeasonConductor
+	} from '$lib/seasons/seasonManage';
+	import type { SeasonEditableField, SeriesListItem, StandaloneEvent } from '$lib/seasons/seasonManage';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -219,6 +227,11 @@
 	// cache was keyed by db alone and cleared only on collective switch).
 	const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 	let rosterCache = $state<{ db: string; roster: RosterRow[]; fetchedAt: number } | null>(null);
+	// #132/T3 — the season-manage panel's ONE source of member names (conductor
+	// chips + the conductor Autocomplete's option list). Mirrored off every
+	// `getRoster` resolution (cache hit or fresh fetch) rather than fetched
+	// separately, so the panel never pays its own 1+N roster fan-out.
+	let rosterRows = $state<RosterRow[]>([]);
 
 	/**
 	 * The ONE way this page reads the roster: cache-first, keyed by the db the
@@ -235,11 +248,15 @@
 			rosterCache &&
 			rosterCache.db === cfg.db &&
 			Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
-		if (cacheValid) return Promise.resolve(rosterCache!.roster);
+		if (cacheValid) {
+			rosterRows = rosterCache!.roster;
+			return Promise.resolve(rosterCache!.roster);
+		}
 		return loadRoster(cfg).then((roster) => {
 			// Keyed by the db the fetch was FOR — a collective switch mid-flight
 			// leaves a cache entry the (now different) selected db never matches.
 			rosterCache = { db: cfg.db, roster, fetchedAt: Date.now() };
+			rosterRows = roster;
 			return roster;
 		});
 	}
@@ -267,6 +284,8 @@
 			resetConductor();
 			closeAttendancePanel();
 			rosterCache = null;
+			rosterRows = [];
+			resetSeasonManage();
 			attendanceFailedByEvent = new Map();
 			myAttendance = [];
 			seasonSummaryExpanded = false;
@@ -294,6 +313,8 @@
 		pdfError = false;
 		resetManagement();
 		rosterCache = null;
+		rosterRows = [];
+		resetSeasonManage();
 		attendanceFailedByEvent = new Map();
 		myAttendance = [];
 		seasonSummaryExpanded = false;
@@ -390,6 +411,7 @@
 				worksByEventId = {};
 				resetManagement();
 				resetConductor();
+				resetSeasonManage();
 				seasons = [];
 			});
 
@@ -1610,6 +1632,400 @@
 		if (seasonCreateOpen && seasonCreateNameInput) seasonCreateNameInput.focus();
 	});
 
+	// ── #132/T3 — season MANAGEMENT: [⚙] gear + inline panel ──────────────────
+	//
+	// Rights gate: `seasonManageRights` (already derived above — fail-closed,
+	// #91) AND a CURRENT season (`currentSeasonId`, also already derived): the
+	// gate is deliberately independent of T2's `showSeasonCreate` (a lapsed
+	// season's editor may still CREATE the next one, but there is nothing to
+	// MANAGE — see `deriveSeasonCreateRights`'s doc for why the two gates read
+	// different rights signals).
+	//
+	// Local truth, not a re-derivation of `seasons` on every open: the panel's
+	// field state is seeded ONCE from `seasons` (loaded with the agenda — zero
+	// extra fetch) the FIRST time it opens for a given season, then every edit
+	// mutates it directly. This is what makes a saved rename survive close +
+	// reopen without a second save or a full agenda refetch (spec's close/
+	// reopen persistence contract).
+	const showSeasonManageGear = $derived(currentSeasonId !== null && seasonManageRights === 'editor');
+
+	let seasonManageOpen = $state(false);
+	let seasonManageName = $state('');
+	let seasonManageStartDate = $state('');
+	let seasonManageEndDate = $state('');
+	let seasonManageConductorIds = $state<string[]>([]);
+	let seasonManageFieldsLoaded = $state(false);
+	let seasonManageSeries = $state<SeriesListItem[]>([]);
+	let seasonManageEvents = $state<StandaloneEvent[]>([]);
+	/** A FAILED series / standalone-event read is a state of its own, never an
+	 *  empty list (#132/T3 review F2). `seasonManageSeries = []` in a catch is
+	 *  indistinguishable from "this season genuinely has no series" — and the
+	 *  [+ Series] / [+ Event] buttons sit directly under those lists, so the
+	 *  silent-empty shape invites the editor to re-create series that already
+	 *  exist but failed to load. Fail loudly (house rule). */
+	let seasonManageSeriesError = $state(false);
+	let seasonManageEventsError = $state(false);
+	/** A failed conductor add/remove reverts the optimistic chip — and, without
+	 *  this, said nothing (#132/T3 review F1). Same contract the three text/date
+	 *  fields already keep: a silently snapped-back value reads as a bug. */
+	let seasonManageConductorError = $state(false);
+	/** True while the panel's roster read is in flight — the conductor chips
+	 *  need it to tell "name not here YET" from "name will NEVER arrive"
+	 *  (#132/T3 review F4). */
+	let seasonManageRosterLoading = $state(false);
+	/** The dialog itself and the gear that opens it — focus moves INTO the
+	 *  panel on open and back to the gear on close (#132/T3 review F1). */
+	let seasonManagePanelEl = $state<HTMLDivElement | null>(null);
+	let seasonManageGearEl = $state<HTMLButtonElement | null>(null);
+
+	// Per-field inline edit — the event/[id] pattern (beginFieldEdit /
+	// confirmFieldEdit / Escape-cancels), scoped to the three editable season
+	// fields. Keyboard dismissal hands focus back to the DIALOG (not the pencil,
+	// as event/[id]'s TE.5 does): the pencil is `disabled` for the duration of a
+	// pending write, so focusing it after an Enter-commit would silently no-op —
+	// the panel, always mounted and `tabindex="-1"`, is the stable landing that
+	// keeps the layered Escape working (#132/T3 review F1).
+	let seasonEditingField = $state<SeasonEditableField | null>(null);
+	let seasonEditDraft = $state('');
+	/** Per-field inline error KIND — 'save' (the write failed) vs 'range' (the
+	 *  edit was refused before any write, #132/T3 review F3). The kind picks the
+	 *  message: a rejected date range must name the actual mistake. */
+	let seasonEditErrors = $state<Partial<Record<SeasonEditableField, 'save' | 'range'>>>({});
+	let seasonEditPending = $state<Partial<Record<SeasonEditableField, boolean>>>({});
+
+	/** Every conductor id → display name, off the ALREADY-cached roster
+	 *  (`rosterRows`, warmed by `loadManagePickers` for anyone who can manage
+	 *  anything — see `getRoster`). Ids are never shown as UI (house rule). */
+	const seasonManageConductorNameById = $derived.by(() => {
+		const map = new Map<string, string>();
+		for (const row of rosterRows) map.set(row.personId, row.name);
+		return map;
+	});
+
+	/** A conductor chip's visible text AND its remove button's accessible name.
+	 *  NEVER the raw person id (#132/T3 review F4): the roster read can fail, and
+	 *  a conductor who has left the collective is not on the roster at all — both
+	 *  would otherwise park an entity id in the UI permanently, not just for the
+	 *  load flash. Unresolved-yet reads as loading; unresolvable reads as an
+	 *  unknown member. */
+	function seasonConductorLabel(personId: string): string {
+		const name = seasonManageConductorNameById.get(personId);
+		if (name) return name;
+		return seasonManageRosterLoading
+			? m.season_manage_conductor_loading()
+			: m.season_manage_conductor_unknown();
+	}
+
+	/** The conductor Autocomplete's source: roster members not ALREADY a
+	 *  conductor of this season. */
+	const seasonManageConductorOptions = $derived(
+		rosterRows
+			.filter((row) => !seasonManageConductorIds.includes(row.personId))
+			.map((row) => ({ id: row.personId, label: row.name }))
+	);
+
+	/** Season bounds are date-ONLY (`yyyy-mm-dd`), so they format in UTC — the
+	 *  same guard `library/+page.svelte`'s `formatDate` uses to keep a date-only
+	 *  value from sliding to the previous day in a negative offset. Options and
+	 *  the implicit-locale shape match `event/[id]/+page.svelte`'s `dateFmt`;
+	 *  a raw ISO string never reaches the UI (#132/T3 review F3). */
+	const seasonDateFmt = new Intl.DateTimeFormat(undefined, {
+		timeZone: 'UTC',
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric'
+	});
+
+	/** The displayable form of a season bound, or '' when the bound is unset —
+	 *  `Intl.DateTimeFormat.format` THROWS `RangeError: Invalid time value` on an
+	 *  Invalid Date (the trap #101 F1 already paid for on event/[id]), and a
+	 *  season with no dates set IS representable data (Entu's `mandatory` is a UI
+	 *  hint). The caller renders the unset case as its own branch. */
+	function formatSeasonDate(isoDate: string): string {
+		if (!isoDate) return '';
+		const at = new Date(isoDate);
+		if (Number.isNaN(at.getTime())) return '';
+		return seasonDateFmt.format(at);
+	}
+
+	function resetSeasonManage(): void {
+		seasonManageOpen = false;
+		seasonManageFieldsLoaded = false;
+		seasonManageName = '';
+		seasonManageStartDate = '';
+		seasonManageEndDate = '';
+		seasonManageConductorIds = [];
+		seasonManageSeries = [];
+		seasonManageEvents = [];
+		seasonManageSeriesError = false;
+		seasonManageEventsError = false;
+		seasonManageConductorError = false;
+		seasonManageRosterLoading = false;
+		seasonEditingField = null;
+		seasonEditDraft = '';
+		seasonEditErrors = {};
+		seasonEditPending = {};
+	}
+
+	function openSeasonManagePanel(): void {
+		if (!selected || currentSeasonId === null) return;
+		seasonManageOpen = true;
+		seasonEditingField = null;
+		if (!seasonManageFieldsLoaded) {
+			// Ride the season list the agenda load already fetched — zero extra
+			// fetch, and pinned as the source for the initial field values.
+			const season = seasons.find((s) => s.id === currentSeasonId);
+			seasonManageName = season?.name ?? '';
+			seasonManageStartDate = season?.startDate ?? '';
+			seasonManageEndDate = season?.endDate ?? '';
+			seasonManageConductorIds = season?.conductors ?? [];
+			seasonManageFieldsLoaded = true;
+		}
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = currentSeasonId;
+		// #132/T3 review F4 — the page-wide collective-switch guard, which this
+		// panel's three reads were the ONLY async assignments on this page to skip.
+		// `loadForSelected` calls `resetSeasonManage()` on a new selection, but a
+		// read still in flight for the OLD db resolves AFTERWARDS and repopulates
+		// the cleared arrays; the panel is closed at that moment, so nothing is on
+		// screen — and the stale rows then survive into the NEXT open and render
+		// the previous collective's series until the new fetches land.
+		const thisRequest = requestId;
+		seasonManageSeriesError = false;
+		seasonManageEventsError = false;
+		// #132/T2 review F1's cache-first `getRoster` — same lazy-on-open posture
+		// as the season-CREATE form (never a roster read on the plain agenda
+		// visit): the conductor chips/Autocomplete are the FIRST thing in this
+		// panel to need names, so the fetch fires here, not earlier.
+		seasonManageRosterLoading = true;
+		getRoster(cfg)
+			.catch((e) => {
+				console.error('agenda: loading the roster for season management failed', e);
+			})
+			.finally(() => {
+				if (thisRequest !== requestId) return;
+				// Settled either way: a chip with no name is "unknown", not "loading",
+				// the moment the read is done (#132/T3 review F4).
+				seasonManageRosterLoading = false;
+			});
+		listEventSeriesForSeason(cfg, seasonId)
+			.then((list) => {
+				if (thisRequest !== requestId) return;
+				seasonManageSeries = list;
+			})
+			.catch((e) => {
+				if (thisRequest !== requestId) return;
+				console.error('agenda: loading the season\'s event series failed', e);
+				seasonManageSeries = [];
+				seasonManageSeriesError = true;
+			});
+		listEventsForSeason(cfg, seasonId)
+			.then((list) => {
+				if (thisRequest !== requestId) return;
+				seasonManageEvents = list;
+			})
+			.catch((e) => {
+				if (thisRequest !== requestId) return;
+				console.error('agenda: loading the season\'s standalone events failed', e);
+				seasonManageEvents = [];
+				seasonManageEventsError = true;
+			});
+	}
+
+	function closeSeasonManagePanel(): void {
+		seasonManageOpen = false;
+		seasonEditingField = null;
+		// The dialog held focus (see the $effect below); dismissing it unmounts
+		// the focused element, so hand focus back to the control that opened it
+		// rather than dropping the keyboard user at <body> — the same debt every
+		// self-unmounting control on this page pays (#113 TU.5, #99 F1/F3).
+		seasonManageGearEl?.focus();
+	}
+
+	/** Focus moves INTO the dialog the moment it opens (#132/T3 review F1). Without
+	 *  this the panel's own Escape handler is unreachable in a real browser: the
+	 *  panel is a SIBLING of the gear's wrapper, so a keypress at the still-focused
+	 *  gear never enters the panel's subtree and never bubbles to `onkeydown`. It
+	 *  is also what `role="dialog"` promises a screen-reader user. Same shape as
+	 *  the season-CREATE form's focus effect above; both deps are stable while the
+	 *  panel is open, so this runs once per open and never steals focus back. */
+	$effect(() => {
+		if (seasonManageOpen && seasonManagePanelEl) seasonManagePanelEl.focus();
+	});
+
+	/** Returns focus to the dialog after a KEYBOARD dismissal of a field editor —
+	 *  the editor's input is about to unmount, and an unfocused dialog cannot hear
+	 *  the next Escape. `tick()` because the input is still mounted on this tick
+	 *  (event/[id]'s `restorePencilFocus` shape). A BLUR dismissal never calls
+	 *  this: the viewer already chose where focus goes (#105 review F2). */
+	function refocusSeasonManagePanel(): void {
+		tick().then(() => seasonManagePanelEl?.focus());
+	}
+
+	/** Escape on the PANEL ITSELF dismisses it. Layered under a field edit's
+	 *  own Escape handler (`handleSeasonFieldKeydown`), which stops propagation
+	 *  while an edit is open — the WAI-APG two-Escapes-to-leave shape, same as
+	 *  the conductor Autocomplete vs. the season-CREATE form (#132/T2 review F2). */
+	function onSeasonManagePanelKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') closeSeasonManagePanel();
+	}
+
+	function seasonFieldValue(field: SeasonEditableField): string {
+		switch (field) {
+			case 'name':
+				return seasonManageName;
+			case 'start_date':
+				return seasonManageStartDate;
+			case 'end_date':
+				return seasonManageEndDate;
+		}
+	}
+
+	function applySeasonFieldLocally(field: SeasonEditableField, value: string): void {
+		switch (field) {
+			case 'name':
+				seasonManageName = value;
+				break;
+			case 'start_date':
+				seasonManageStartDate = value;
+				break;
+			case 'end_date':
+				seasonManageEndDate = value;
+				break;
+		}
+	}
+
+	function clearSeasonFieldError(field: SeasonEditableField): void {
+		const next = { ...seasonEditErrors };
+		delete next[field];
+		seasonEditErrors = next;
+	}
+
+	function beginSeasonFieldEdit(field: SeasonEditableField): void {
+		if (seasonEditPending[field]) return; // a write for this field is already in flight
+		clearSeasonFieldError(field);
+		seasonEditDraft = seasonFieldValue(field);
+		seasonEditingField = field;
+	}
+
+	function cancelSeasonFieldEdit(): void {
+		seasonEditingField = null;
+		seasonEditDraft = '';
+	}
+
+	/** Enter/blur confirm: optimistic apply + immediate write, eventFieldEdit's
+	 *  replace-semantics choreography underneath (`updateSeasonField`). A
+	 *  failed write reverts to `before` and surfaces the field's inline error —
+	 *  a silently snapped-back value reads as a bug (house rule). An empty or
+	 *  UNCHANGED draft degrades to a plain cancel: no wire call at all. */
+	function confirmSeasonFieldEdit(field: SeasonEditableField): void {
+		if (!selected || currentSeasonId === null || seasonEditingField !== field) return;
+		const before = seasonFieldValue(field);
+		const value = seasonEditDraft.trim();
+		seasonEditingField = null;
+		if (value === '' || value === before) return;
+
+		// The SAME range rule `submitSeasonCreate` enforces on the create form
+		// (#132/T3 review F3): editing one bound past the other would otherwise
+		// admit an inverted season through the very UI that guards it on create —
+		// and the agenda's current-season derivation reads those bounds. Refused
+		// BEFORE any write, so the old value simply stands.
+		if (seasonDateRangeInverted(field, value)) {
+			seasonEditErrors = { ...seasonEditErrors, [field]: 'range' };
+			return;
+		}
+
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = currentSeasonId;
+		clearSeasonFieldError(field);
+		seasonEditPending = { ...seasonEditPending, [field]: true };
+		applySeasonFieldLocally(field, value); // optimistic — the panel is the truth it renders
+		updateSeasonField(cfg, seasonId, field, value)
+			.then(() => {
+				seasonEditPending = { ...seasonEditPending, [field]: false };
+			})
+			.catch((e) => {
+				console.error('agenda: season field save failed', field, e);
+				seasonEditPending = { ...seasonEditPending, [field]: false };
+				applySeasonFieldLocally(field, before);
+				seasonEditErrors = { ...seasonEditErrors, [field]: 'save' };
+			});
+	}
+
+	/** True when `value` would put this season's bounds out of order against the
+	 *  OTHER (unedited) bound. ISO `yyyy-mm-dd` compares lexicographically, the
+	 *  same comparison `submitSeasonCreate` uses. A missing counterpart bound is
+	 *  nothing to contradict — the edit passes. */
+	function seasonDateRangeInverted(field: SeasonEditableField, value: string): boolean {
+		if (field === 'start_date') return seasonManageEndDate !== '' && value > seasonManageEndDate;
+		if (field === 'end_date') return seasonManageStartDate !== '' && value < seasonManageStartDate;
+		return false;
+	}
+
+	/** The message a field's inline error slot shows — a refused range names the
+	 *  actual mistake rather than the generic save failure (#132/T3 review F3). */
+	function seasonFieldErrorText(field: SeasonEditableField): string {
+		return seasonEditErrors[field] === 'range'
+			? m.season_date_range_invalid()
+			: m.season_manage_save_error();
+	}
+
+	function handleSeasonFieldKeydown(event: KeyboardEvent, field: SeasonEditableField): void {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			// Layering (#132/T2 review F2 shape): this Escape belongs to the FIELD
+			// edit, not the panel — stop it here so the panel's own Escape handler
+			// never sees it.
+			event.stopPropagation();
+			cancelSeasonFieldEdit();
+			// …and the NEXT Escape belongs to the panel, which can only hear it
+			// while it holds focus (#132/T3 review F1).
+			refocusSeasonManagePanel();
+		} else if (event.key === 'Enter') {
+			event.preventDefault();
+			confirmSeasonFieldEdit(field);
+			refocusSeasonManagePanel();
+		}
+	}
+
+	/** Svelte action: focus the element the instant it mounts — every edit
+	 *  input activates focus INTO itself, same discipline as event/[id]'s
+	 *  `focusOnMount`. */
+	function focusSeasonInputOnMount(node: HTMLElement): void {
+		node.focus();
+	}
+
+	function onSeasonManageConductorSelect(selection: { id: string | null; label: string }): void {
+		if (!selection.id || !selected || currentSeasonId === null) return;
+		const personId = selection.id;
+		if (seasonManageConductorIds.includes(personId)) return; // no duplicate chips
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = currentSeasonId;
+		seasonManageConductorError = false; // this attempt starts clean
+		seasonManageConductorIds = [...seasonManageConductorIds, personId]; // optimistic
+		addSeasonConductor(cfg, seasonId, personId).catch((e) => {
+			console.error('agenda: add season conductor failed', personId, e);
+			seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId);
+			// …and SAY so: the revert alone is a chip that appears and vanishes
+			// (#132/T3 review F1).
+			seasonManageConductorError = true;
+		});
+	}
+
+	function onSeasonManageConductorRemove(personId: string): void {
+		if (!selected || currentSeasonId === null) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = currentSeasonId;
+		const before = seasonManageConductorIds;
+		seasonManageConductorError = false;
+		seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId); // optimistic
+		apiRemoveSeasonConductor(cfg, seasonId, personId).catch((e) => {
+			console.error('agenda: remove season conductor failed', personId, e);
+			seasonManageConductorIds = before;
+			seasonManageConductorError = true;
+		});
+	}
+
 	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
 	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
 	// display set). An incomplete member is a MEMBER, not a non-member — she must
@@ -1659,6 +2075,308 @@
 							</button>
 						</div>
 					{:else}
+						<!-- #132/T3 — the [⚙] season-manage entry point. Gates INDEPENDENTLY
+						     of T2's [+ Season] below (a CURRENT season's editor, not "may
+						     create the next one") — see `showSeasonManageGear`'s doc. -->
+						{#if showSeasonManageGear}
+							<div class="mb-3 flex justify-end">
+								<button
+									type="button"
+									data-testid="season-manage-gear"
+									bind:this={seasonManageGearEl}
+									aria-label={m.season_manage_gear_label()}
+									class="rounded-md border border-ink-4 p-1.5 text-xs text-ink-2 hover:border-ink hover:text-ink"
+									onclick={openSeasonManagePanel}
+								>
+									<span aria-hidden="true">⚙</span>
+								</button>
+							</div>
+						{/if}
+						{#if seasonManageOpen}
+							<div
+								data-testid="season-manage-panel"
+								bind:this={seasonManagePanelEl}
+								role="dialog"
+								aria-label={m.season_manage_panel_label()}
+								tabindex="-1"
+								class="mb-3 flex flex-col gap-3 border border-ink-5 p-3"
+								onkeydown={onSeasonManagePanelKeydown}
+							>
+								<div class="flex items-center justify-between">
+									<h2 class="font-display text-sm text-ink">{m.season_manage_panel_label()}</h2>
+									<button
+										type="button"
+										data-testid="season-manage-close"
+										aria-label={m.season_manage_close()}
+										class="text-ink-2 hover:text-ink"
+										onclick={closeSeasonManagePanel}
+									>
+										&times;
+									</button>
+								</div>
+
+								<!-- name -->
+								<div>
+									{#if seasonEditingField === 'name'}
+										<input
+											type="text"
+											data-testid="season-edit-input-name"
+											aria-label={m.season_manage_name_label()}
+											value={seasonEditDraft}
+											use:focusSeasonInputOnMount
+											oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
+											onblur={() => confirmSeasonFieldEdit('name')}
+											onkeydown={(e) => handleSeasonFieldKeydown(e, 'name')}
+											class="w-full border-b border-ink bg-transparent font-display text-lg text-ink"
+										/>
+									{:else}
+										<div class="flex items-center gap-2">
+											<p data-testid="season-manage-name" class="font-display text-lg text-ink">
+												{seasonManageName}
+											</p>
+											<button
+												type="button"
+												data-testid="season-edit-btn-name"
+												aria-label={m.season_manage_edit_name_label()}
+												disabled={seasonEditPending.name === true}
+												class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+												onclick={() => beginSeasonFieldEdit('name')}
+											>
+												<span aria-hidden="true">✎</span>
+											</button>
+										</div>
+									{/if}
+									{#if seasonEditErrors.name}
+										<p data-testid="season-edit-error-name" role="alert" class="text-xs text-red-700">
+											{seasonFieldErrorText('name')}
+										</p>
+									{/if}
+								</div>
+
+								<!-- dates. The VISIBLE label is not decoration (#132/T3 review F3):
+								     the aria-labels ride on the pencils only, so without it neither a
+								     sighted nor a screen-reader user reading the two values side by
+								     side can tell start from end — and an unset bound would render as
+								     a bare, unexplained ✎. -->
+								<div class="flex gap-4">
+									<div>
+										<p class="text-xs tracking-wide text-ink-2 uppercase">
+											{m.season_manage_start_date_label()}
+										</p>
+										{#if seasonEditingField === 'start_date'}
+											<input
+												type="date"
+												data-testid="season-edit-input-start_date"
+												aria-label={m.season_manage_start_date_label()}
+												value={seasonEditDraft}
+												use:focusSeasonInputOnMount
+												oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
+												onblur={() => confirmSeasonFieldEdit('start_date')}
+												onkeydown={(e) => handleSeasonFieldKeydown(e, 'start_date')}
+												class="border-b border-ink bg-transparent text-ink"
+											/>
+										{:else}
+											<div class="flex items-center gap-1">
+												<span data-testid="season-manage-start_date" class="text-xs text-ink-2">
+													{#if seasonManageStartDate}
+														{formatSeasonDate(seasonManageStartDate)}
+													{:else}
+														{m.season_manage_date_unset()}
+													{/if}
+												</span>
+												<button
+													type="button"
+													data-testid="season-edit-btn-start_date"
+													aria-label={m.season_manage_edit_start_date_label()}
+													disabled={seasonEditPending.start_date === true}
+													class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+													onclick={() => beginSeasonFieldEdit('start_date')}
+												>
+													<span aria-hidden="true">✎</span>
+												</button>
+											</div>
+										{/if}
+										{#if seasonEditErrors.start_date}
+											<p
+												data-testid="season-edit-error-start_date"
+												role="alert"
+												class="text-xs text-red-700"
+											>
+												{seasonFieldErrorText('start_date')}
+											</p>
+										{/if}
+									</div>
+									<div>
+										<p class="text-xs tracking-wide text-ink-2 uppercase">
+											{m.season_manage_end_date_label()}
+										</p>
+										{#if seasonEditingField === 'end_date'}
+											<input
+												type="date"
+												data-testid="season-edit-input-end_date"
+												aria-label={m.season_manage_end_date_label()}
+												value={seasonEditDraft}
+												use:focusSeasonInputOnMount
+												oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
+												onblur={() => confirmSeasonFieldEdit('end_date')}
+												onkeydown={(e) => handleSeasonFieldKeydown(e, 'end_date')}
+												class="border-b border-ink bg-transparent text-ink"
+											/>
+										{:else}
+											<div class="flex items-center gap-1">
+												<span data-testid="season-manage-end_date" class="text-xs text-ink-2">
+													{#if seasonManageEndDate}
+														{formatSeasonDate(seasonManageEndDate)}
+													{:else}
+														{m.season_manage_date_unset()}
+													{/if}
+												</span>
+												<button
+													type="button"
+													data-testid="season-edit-btn-end_date"
+													aria-label={m.season_manage_edit_end_date_label()}
+													disabled={seasonEditPending.end_date === true}
+													class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+													onclick={() => beginSeasonFieldEdit('end_date')}
+												>
+													<span aria-hidden="true">✎</span>
+												</button>
+											</div>
+										{/if}
+										{#if seasonEditErrors.end_date}
+											<p
+												data-testid="season-edit-error-end_date"
+												role="alert"
+												class="text-xs text-red-700"
+											>
+												{seasonFieldErrorText('end_date')}
+											</p>
+										{/if}
+									</div>
+								</div>
+
+								<!-- conductors -->
+								<div>
+									<p class="text-xs tracking-wide text-ink-2 uppercase">
+										{m.season_manage_conductors_label()}
+									</p>
+									{#if seasonManageConductorIds.length > 0}
+										<ul class="mt-1 flex flex-wrap gap-1.5">
+											{#each seasonManageConductorIds as personId (personId)}
+												<li
+													data-testid="season-manage-conductor-{personId}"
+													class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+												>
+													{seasonConductorLabel(personId)}
+													<button
+														type="button"
+														aria-label={m.season_conductor_remove({
+															name: seasonConductorLabel(personId)
+														})}
+														class="text-ink-2 hover:text-ink"
+														onclick={() => onSeasonManageConductorRemove(personId)}
+													>
+														&times;
+													</button>
+												</li>
+											{/each}
+										</ul>
+									{/if}
+									<div class="mt-1.5">
+										<Autocomplete
+											items={seasonManageConductorOptions}
+											onSelect={onSeasonManageConductorSelect}
+											placeholder={m.season_conductor_placeholder()}
+											label={m.season_conductor_label()}
+											emptyLabel={m.season_conductor_no_matches()}
+										/>
+									</div>
+									{#if seasonManageConductorError}
+										<p
+											data-testid="season-manage-conductor-error"
+											role="alert"
+											class="text-xs text-red-700"
+										>
+											{m.season_manage_save_error()}
+										</p>
+									{/if}
+								</div>
+
+								<!-- event series -->
+								<div>
+									<div class="flex items-center justify-between">
+										<p class="text-xs tracking-wide text-ink-2 uppercase">
+											{m.season_manage_series_label()}
+										</p>
+										<button
+											type="button"
+											data-testid="season-manage-add-series"
+											class="text-xs text-ink underline"
+										>
+											{m.season_manage_add_series()}
+										</button>
+									</div>
+									{#if seasonManageSeriesError}
+										<p
+											data-testid="season-manage-series-error"
+											role="alert"
+											class="mt-1 text-xs text-red-700"
+										>
+											{m.season_manage_list_load_error()}
+										</p>
+									{/if}
+									{#each seasonManageSeries as series (series.id)}
+										<div
+											data-testid="season-manage-series-{series.id}"
+											class="mt-1 flex items-center justify-between text-xs text-ink"
+										>
+											<span>{series.name}</span>
+											<!-- The count is a SENTENCE, not a bare glyph: an unlabelled
+											     number announces as "Monday rehearsals 12" (#132/T3 review
+											     F2). Parameterised, count-safe copy — this pipeline has no
+											     ICU plural support (probed: ICU plural syntax compiles to
+											     garbage, and the messageFormat plugin's match shape flattens
+											     into separate keys), so a label form carries every count in
+											     all four locales. Real plural categories ride with the
+											     standing YELLOW-128.1 pluralization work. -->
+											<span class="text-ink-2"
+												>{m.season_manage_series_event_count({ count: series.eventCount })}</span
+											>
+										</div>
+									{/each}
+								</div>
+
+								<!-- standalone events -->
+								<div>
+									<div class="flex items-center justify-between">
+										<p class="text-xs tracking-wide text-ink-2 uppercase">
+											{m.season_manage_events_label()}
+										</p>
+										<button
+											type="button"
+											data-testid="season-manage-add-event"
+											class="text-xs text-ink underline"
+										>
+											{m.season_manage_add_event()}
+										</button>
+									</div>
+									{#if seasonManageEventsError}
+										<p
+											data-testid="season-manage-events-error"
+											role="alert"
+											class="mt-1 text-xs text-red-700"
+										>
+											{m.season_manage_list_load_error()}
+										</p>
+									{/if}
+									{#each seasonManageEvents as event (event.id)}
+										<div data-testid="season-manage-event-{event.id}" class="mt-1 text-xs text-ink">
+											{event.name}
+										</div>
+									{/each}
+								</div>
+							</div>
+						{/if}
 						<!-- #132/T2 — page-level [+ Season] entry point, ABOVE the agenda
 						     content: rights-gated + no-upcoming-season-gated, never inside a
 						     row/picker. The status region is mounted from first render (a

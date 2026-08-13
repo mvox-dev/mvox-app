@@ -2,6 +2,16 @@
 
 (*MVOX:Perotin*)
 
+## [CHECKPOINT] #132 _inheritrights mutation HALTED — premise mismatch (2026-08-13)
+
+Authorized single-entity mutation (EFK org `69c7f8718489bfcb0e81b065`, `_inheritrights`
+false→true, for epic #132 rights-inheritance design) — probed before writing, found the value
+**already `true`** (`_id` `6a7dc25923dc1d97bb8f20d1`). Dispatch's stated premise ("live db has
+`_inheritrights: false` on all org entities") is wrong for this entity. Halted, no write, posted
+evidence to issue #132, reported to team-lead. Did not extend scope to check other orgs (single-
+entity authorization, not a batch). Reinforces the standing discipline: probe-before-write catches
+premise drift the dispatch text can't see.
+
 > Pruned 2026-08-08 (session "MVOX") from ~470 to this. Full session-by-session history lives in
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
 > committed artifact / findings doc / issue-comment thread carries the detail.

@@ -299,7 +299,7 @@ const tasks = [
     i18nPrompt: null,
     reviewChecklist: [
       '1. Wire shape matches Entu contract: _type as reference (not string), _parent as reference',
-      '2. NO _sharing or _inheritrights in any POST body (critical design decision)',
+      '2. NO _sharing in any POST body (design decision). _inheritrights: org entity now carries true (data fix applied), so child inheritance works.',
       '3. resolveTypeId called correctly for each entity type',
       '4. Apparent-success trap: guards on missing _id in response',
       '5. POST-before-DELETE not needed here (creates only), but verify no accidental deletes',
@@ -307,9 +307,13 @@ const tasks = [
       '7. Optional fields genuinely omitted when absent (not sent as empty string/null)',
       '8. Name-trim validation present',
       '9. fetchImpl injectable seam preserved for testing',
-      '10. No regressions in existing tests (pnpm test -- --run && pnpm check)'
+      '10. No regressions in existing tests (pnpm test -- --run && pnpm check)',
+      '11. start_datetime is REQUIRED on createEvent (not optional) — v4E required, no read-side inheritance',
+      '12. start_date and end_date have non-blank validation on createSeason (v4E required)',
+      '13. Organization ID is a required parent for all three creates (v4E parentCard 1)',
+      '14. Series recurrence fields either required or explicitly documented as optional in contract'
     ].join('\n'),
-    commitBody: 'T1: Shared entity creation utility for season, event_series, and event types.\nTrusts _inheritrights from org — no explicit _sharing (design decision #132).',
+    commitBody: 'T1: Shared entity creation utility for season, event_series, and event types.\nOrg entity carries _inheritrights:true (data fix); no explicit _sharing on creates.',
     closesIssue: false
   },
 
@@ -991,6 +995,22 @@ const tasks = [
   }
 ]
 
+// ── Progress tracking ─────────────────────────────────────────────────────
+
+// Happy-path agent count: per task = RED+GREEN+INTEGRATION+REVIEW+2×REPORT+MERGE = 7 (no I18N) or 8 (with I18N)
+// T1: 7, T2-T6: 8 each = 47, plus RETRO = 48. Retries (GREEN-FIX, FIX) add to the count but don't change the denominator.
+const TOTAL_AGENTS = tasks.reduce(function(sum, t) {
+  return sum + (t.skipRed ? 0 : 1) + (t.greenPrompt ? 1 : 0) + (t.i18nPrompt ? 1 : 0) + 1 + 1 + 1 + 1 + 1
+}, 0) + 1 // +1 for RETRO
+// Breakdown: RED(1) + GREEN(1) + I18N(0|1) + INTEGRATION(1) + REVIEW(1) + REPORT_REVIEW(1) + MERGE(1) + REPORT_MERGE(1) + RETRO(1)
+
+let agentNum = 0
+
+function progress(sliceLabel, phaseName, taskTitle) {
+  agentNum++
+  return '[agent ' + agentNum + '/' + TOTAL_AGENTS + '] ' + sliceLabel + ' — ' + phaseName + ': ' + taskTitle
+}
+
 // ── Pipeline execution ────────────────────────────────────────────────────
 
 const results = []
@@ -1005,7 +1025,7 @@ for (let i = 0; i < tasks.length; i++) {
   // ── RED ────────────────────────────────────────────────────────────────
   if (!task.skipRed) {
     phase('RED')
-    log('RED: ' + taskLabel)
+    log(progress(sliceLabel, 'RED', task.title))
 
     const red = await agent(
       task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation.\n\nAfter writing tests, commit:\ngit add -A && git commit -m "test(#' + task.issueNumber + '/' + task.taskTag + '): RED — ' + task.title + '"',
@@ -1022,7 +1042,7 @@ for (let i = 0; i < tasks.length; i++) {
   // ── GREEN ──────────────────────────────────────────────────────────────
   if (task.greenPrompt) {
     phase('GREEN')
-    log('GREEN: ' + taskLabel)
+    log(progress(sliceLabel, 'GREEN', task.title))
 
     const green = await agent(
       task.greenPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\nBRANCH: ' + task.branch + ' (already checked out from RED)\n\nVerification:\n1. cd ' + REPO + ' && pnpm test -- --run — ALL pass\n2. cd ' + REPO + ' && pnpm check — 0 type errors\n\nGit: git add -A && git commit -m "' + task.commitPrefix + '/' + task.taskTag + ': ' + task.title + '"',
@@ -1039,7 +1059,7 @@ for (let i = 0; i < tasks.length; i++) {
   // ── I18N (optional) ────────────────────────────────────────────────────
   if (task.i18nPrompt) {
     phase('I18N')
-    log('I18N: ' + taskLabel)
+    log(progress(sliceLabel, 'I18N', task.title))
 
     const i18n = await agent(
       task.i18nPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\nBRANCH: ' + task.branch + '\n\nVerification: cd ' + REPO + ' && pnpm check — 0 type errors\n\nGit: git add -A && git commit -m "i18n(#' + task.issueNumber + '/' + task.taskTag + '): locale strings for ' + task.title + '"',
@@ -1055,7 +1075,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   // ── INTEGRATION ────────────────────────────────────────────────────────
   phase('INTEGRATION')
-  log('INTEGRATION: ' + taskLabel)
+  log(progress(sliceLabel, 'INTEGRATION', task.title))
 
   let integrationAttempts = 0
   let integrationPassed = false
@@ -1074,7 +1094,7 @@ for (let i = 0; i < tasks.length; i++) {
 
       if (integrationAttempts < 2) {
         phase('GREEN-FIX')
-        log('INTEGRATION found wiring gaps for ' + taskLabel + ', fixing')
+        log('[retry] ' + sliceLabel + ' — GREEN-FIX: wiring gaps for ' + task.title)
         await agent(
           'Fix wiring gaps on branch ' + task.branch + ' for ' + taskLabel + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\nUnreachable features:\n' + failSummary + '\n\nFor each gap: add the missing import/render in the appropriate page or route file. Do NOT rewrite the feature — just wire it in.\n\nVerify: pnpm test -- --run && pnpm check. Commit the fix.',
           { label: 'green-fix-' + task.taskTag, phase: 'GREEN-FIX', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
@@ -1090,7 +1110,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   // ── REVIEW ─────────────────────────────────────────────────────────────
   phase('REVIEW')
-  log('REVIEW: ' + taskLabel)
+  log(progress(sliceLabel, 'REVIEW', task.title))
 
   let verdict = null
   let reviewAttempts = 0
@@ -1099,7 +1119,7 @@ for (let i = 0; i < tasks.length; i++) {
     reviewAttempts++
 
     verdict = await agent(
-      'You are Bentham, architecture reviewer for mvox-dev. Review branch ' + task.branch + ' for ' + taskLabel + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\n' + ARCH_CONTEXT + '\n\n## Review checklist\n' + task.reviewChecklist + '\n\nProcedure:\n1. cd ' + REPO + ' && git diff main...HEAD --stat\n2. Read all changed files\n3. Run: pnpm test -- --run && pnpm check\n4. Issue GREEN / YELLOW / RED verdict\n\nFor non-GREEN: list findings with description, fixShape (recommended fix), and blockerType (code/data/config).',
+      'You are Bentham, architecture reviewer for mvox-dev. Review branch ' + task.branch + ' for ' + taskLabel + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\n' + ARCH_CONTEXT + '\n\n## Review checklist\n' + task.reviewChecklist + '\n\nProcedure:\n1. cd ' + REPO + ' && git diff main...HEAD --stat\n2. Read all changed files\n3. Run: pnpm test -- --run && pnpm check\n4. Issue GREEN / YELLOW / RED verdict\n\nFor non-GREEN: list findings with description, fixShape (recommended fix), and blockerType (code/data/config).\n\nIMPORTANT blockerType guidance:\n- blockerType "code" = requires changes to THIS branch\'s code before merge\n- blockerType "data" = requires a live data mutation that blocks THIS task\n- blockerType "config" = requires environment/config change that blocks THIS task\n\nDo NOT tag as "data" or "config" for:\n- Integration risks in FUTURE slices (note in summary, omit blockerType)\n- Separate cleanup tasks (note in summary, omit blockerType)\n- Speculative or unverified concerns (note in summary, omit blockerType)\n\nOnly use "data"/"config" when THIS branch cannot merge without the fix.',
       { label: 'review-' + task.taskTag + '-' + reviewAttempts, phase: 'REVIEW', schema: VERDICT_SCHEMA, model: 'claude-opus-5[1m]' }
     )
 
@@ -1113,7 +1133,7 @@ for (let i = 0; i < tasks.length; i++) {
 
       if (reviewAttempts < 3) {
         phase('FIX')
-        log('Review ' + verdict.verdict + ' for ' + taskLabel + ', fixing (attempt ' + reviewAttempts + ')')
+        log('[retry ' + reviewAttempts + '] ' + sliceLabel + ' — FIX: review findings for ' + task.title)
         await agent(
           'Fix review findings for ' + taskLabel + ' in ' + REPO + ' on branch ' + task.branch + '.\n\n' + ARCH_CONTEXT + '\n\nVerdict: ' + verdict.verdict + '\n\n## Findings\n' + formatFindings(verdict.findings) + '\n\nFor each finding, understand the ROOT CAUSE before writing a fix. Fix, verify (pnpm test -- --run && pnpm check), commit.',
           { label: 'fix-' + task.taskTag + '-' + reviewAttempts, phase: 'FIX', schema: RESULT_SCHEMA, model: 'claude-opus-5[1m]' }
@@ -1130,6 +1150,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   // ── REPORT (post-review) ──────────────────────────────────────────────
   phase('REPORT')
+  log(progress(sliceLabel, 'REPORT', 'review verdict → Gama'))
   var reviewMsg = sliceLabel + ' REVIEW: ' + taskLabel + ' — verdict ' + verdict.verdict + '. ' + verdict.summary
   await agent(
     'Send a progress report to gama@po-team via the comms MCP tool.\n\nStep 1: Use ToolSearch with query "select:mcp__comms__send" to load the tool schema.\nStep 2: Call mcp__comms__send with to="gama@po-team" and message="' + escapeForPrompt(reviewMsg) + '"\n\nReturn sent=true after sending.',
@@ -1138,7 +1159,7 @@ for (let i = 0; i < tasks.length; i++) {
 
   // ── MERGE ──────────────────────────────────────────────────────────────
   phase('MERGE')
-  log('MERGE: ' + taskLabel)
+  log(progress(sliceLabel, 'MERGE', task.title))
 
   var closesTag = task.closesIssue ? '\nCloses #' + task.issueNumber : ''
   var mergeCmd = 'cd ' + REPO + ' && git checkout main && git pull && git merge --squash ' + task.branch + ' && git commit -m "$(cat <<\'COMMITEOF\'\n' + task.commitPrefix + '/' + task.taskTag + ': ' + task.title + '\n\n' + task.commitBody + closesTag + '\n\n' + CO_AUTHOR + '\nCOMMITEOF\n)" && git push && git branch -d ' + task.branch + ' && git push origin --delete ' + task.branch + ' 2>/dev/null || true'
@@ -1155,6 +1176,7 @@ for (let i = 0; i < tasks.length; i++) {
   log('Merged: ' + merge.summary)
 
   // ── REPORT (post-merge) ───────────────────────────────────────────────
+  log(progress(sliceLabel, 'REPORT', 'merge result → Gama'))
   var mergeMsg = sliceLabel + ' MERGED: ' + taskLabel + (merge.commitSha ? ' @ ' + merge.commitSha : '') + '. ' + merge.summary
   await agent(
     'Send a progress report to gama@po-team via the comms MCP tool.\n\nStep 1: Use ToolSearch with query "select:mcp__comms__send" to load the tool schema.\nStep 2: Call mcp__comms__send with to="gama@po-team" and message="' + escapeForPrompt(mergeMsg) + '"\n\nReturn sent=true after sending.',
@@ -1173,7 +1195,8 @@ for (let i = 0; i < tasks.length; i++) {
 
 // ── RETRO ────────────────────────────────────────────────────────────────
 phase('RETRO')
-log('Epic #132 pipeline complete: ' + results.length + ' slices merged. Sending retrospective to Gama.')
+log(progress('Final', 'RETRO', 'retrospective → Gama'))
+log('Epic #132 pipeline complete: ' + results.length + ' slices merged.')
 
 var completedList = results.map(function(r) {
   return '- ' + r.taskTag + ': ' + r.title + ' (review: ' + r.reviewVerdict + ', attempts: ' + r.reviewAttempts + ', sha: ' + (r.commitSha || 'unknown') + ')'
