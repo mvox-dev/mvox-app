@@ -194,6 +194,37 @@ export async function applyDuplicateRepair(
 	return { field, clearedIds };
 }
 
+export interface ConflictResolutionInput {
+	cfg: EntuCfg;
+	field: FieldKey;
+	/** The previewed (second-tapped) tier's value — written onto every `sync` entity. */
+	value: string;
+	/** Every OTHER holder to converge onto `value`, each with its OWN preserved sibling. */
+	sync: { id: string; sibling: string }[];
+}
+
+/**
+ * Complete a #131 browse-then-confirm resolution: WRITE the chosen (previewed)
+ * value onto every OTHER holder in `sync` — `saveProfileFields(cfg, id, {
+ * [field]: value, [other]: sibling })` per entry. Distinct from
+ * `applyDuplicateRepair`: a conflict is different LEGITIMATE values across
+ * tiers (not an interrupted move), so resolving it converges every holder onto
+ * the chosen value rather than clearing them — no entity is deleted. Serial,
+ * fail-loud: the FIRST failure propagates (never a partial silent success).
+ */
+export async function applyConflictResolution(
+	input: ConflictResolutionInput,
+	fetchImpl: typeof fetch = fetch
+): Promise<{ field: FieldKey; syncedIds: string[] }> {
+	const { cfg, field, value, sync } = input;
+	const syncedIds: string[] = [];
+	for (const entry of sync) {
+		await saveProfileFields(cfg, entry.id, pair(field, value, entry.sibling), fetchImpl);
+		syncedIds.push(entry.id);
+	}
+	return { field, syncedIds };
+}
+
 /** An actionable, load-detected repair for one duplicated field (AC3 surfacing). */
 export interface DuplicateRepairPlan {
 	field: FieldKey;

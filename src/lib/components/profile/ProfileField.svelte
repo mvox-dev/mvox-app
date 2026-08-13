@@ -14,12 +14,16 @@
 		movable: boolean;
 		conflict: boolean;
 		conflictLevels: Level[];
+		/** #131 — each level's OWN value for this field, so a conflict-tier tap can preview it. */
+		conflictValues: Record<Level, string>;
 		disabled: boolean;
 		moveFailed: boolean;
 		saveFailed: boolean;
 		onvisibilitychange: (field: FieldKey, toLevel: Level) => void;
 		onvaluechange: (field: FieldKey, value: string) => void;
 		onblur: (field: FieldKey) => void;
+		/** #131 — second tap on the same previewed conflict tier: resolve in its favor. */
+		onresolve: (field: FieldKey, level: Level) => void;
 	}
 	let {
 		field,
@@ -31,13 +35,21 @@
 		movable = true,
 		conflict = false,
 		conflictLevels = [],
+		conflictValues = { public: '', domain: '', private: '' },
 		disabled = false,
 		moveFailed = false,
 		saveFailed = false,
 		onvisibilitychange,
 		onvaluechange,
-		onblur
+		onblur,
+		onresolve
 	}: Props = $props();
+
+	// #131 — browse-then-confirm: first tap on a conflicting tier previews its
+	// value; a second tap on the SAME tier resolves. Purely local UI state —
+	// never written back through onvaluechange (a preview is not an edit).
+	let previewLevel = $state<Level | null>(null);
+	const displayValue = $derived(previewLevel !== null ? conflictValues[previewLevel] : value);
 
 	const LEVELS: readonly Level[] = ['private', 'domain', 'public'];
 	const LEVEL_LABEL: Record<Level, () => string> = {
@@ -61,21 +73,47 @@
 	}
 
 	function isButtonDisabled(level: Level, state: string): boolean {
-		if (state === 'active' && saving) return true;
 		if (namePrivateDisabled && level === 'private') return true;
+		if (state === 'active' && saving) return true;
+		// #131 — a conflict-tier button stays clickable (browse-then-confirm)
+		// regardless of `movable` (always false during a conflict); it still
+		// respects the write-lock (`disabled`) to avoid overlapping writes.
+		if (state === 'conflict') return disabled;
 		if (disabled || !movable || state !== 'inactive') return true;
 		return false;
 	}
 
 	function clickLevel(level: Level) {
 		if (namePrivateDisabled && level === 'private') return;
+		const state = stateOf(level);
+		if (state === 'conflict') {
+			handleConflictClick(level);
+			return;
+		}
 		if (disabled || !movable) return;
-		if (stateOf(level) !== 'inactive') return;
+		if (state !== 'inactive') return;
 		onvisibilitychange(field, level);
+	}
+
+	function handleConflictClick(level: Level) {
+		if (disabled) return;
+		if (previewLevel === level) {
+			// Second tap on the SAME tier — resolve in its favor.
+			previewLevel = null;
+			onresolve(field, level);
+		} else {
+			// First tap, or a tap on a DIFFERENT tier while previewing — (re)preview.
+			previewLevel = level;
+		}
+	}
+
+	function handleGroupKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape' && previewLevel !== null) previewLevel = null;
 	}
 
 	function handleInput(e: Event) {
 		const target = e.target as HTMLInputElement;
+		previewLevel = null;
 		value = target.value;
 		onvaluechange(field, target.value);
 	}
@@ -91,7 +129,7 @@
 		<input
 			type={field === 'email' ? 'email' : 'text'}
 			data-testid="profile-{field}"
-			{value}
+			value={displayValue}
 			oninput={handleInput}
 			onblur={handleBlur}
 			disabled={saving && disabled}
@@ -99,10 +137,16 @@
 		/>
 	</label>
 
-	<div class="flex gap-2" role="group" aria-label={FIELD_LABEL[field]()}>
+	<div
+		class="flex gap-2"
+		role="group"
+		aria-label={FIELD_LABEL[field]()}
+		onkeydown={handleGroupKeydown}
+	>
 		{#each LEVELS as level (level)}
 			{@const s = stateOf(level)}
 			{@const btnDisabled = isButtonDisabled(level, s)}
+			{@const previewing = previewLevel === level}
 			<button
 				type="button"
 				data-testid="profile-vis-{field}-{level}"
@@ -111,11 +155,13 @@
 				aria-pressed={s === 'active'}
 				aria-label={namePrivateDisabled && level === 'private'
 					? m.profile_name_private_disabled()
-					: s === 'active'
-						? m.profile_visibility_active({ level: LEVEL_LABEL[level]() })
-						: s === 'leak' || s === 'conflict'
-							? m.profile_visibility_leak({ level: LEVEL_LABEL[level]() })
-							: m.profile_visibility_move({ field: FIELD_LABEL[field](), level: LEVEL_LABEL[level]() })}
+					: previewing
+						? m.profile_visibility_confirm_preview({ level: LEVEL_LABEL[level]() })
+						: s === 'active'
+							? m.profile_visibility_active({ level: LEVEL_LABEL[level]() })
+							: s === 'leak' || s === 'conflict'
+								? m.profile_visibility_leak({ level: LEVEL_LABEL[level]() })
+								: m.profile_visibility_move({ field: FIELD_LABEL[field](), level: LEVEL_LABEL[level]() })}
 				onclick={() => clickLevel(level)}
 				class="flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:cursor-default"
 				class:border-ink={s === 'active'}
@@ -130,7 +176,9 @@
 				class:hover:text-paper={s === 'inactive' && movable && !disabled && !(namePrivateDisabled && level === 'private')}
 				class:opacity-50={(btnDisabled && s === 'inactive') || (namePrivateDisabled && level === 'private')}
 			>
-				{#if s === 'transport'}
+				{#if previewing}
+					<span data-testid="profile-vis-{field}-{level}-preview" aria-hidden="true">◐</span>
+				{:else if s === 'transport'}
 					<span data-testid="profile-vis-{field}-{level}-transport" aria-hidden="true">…</span>
 				{:else if s === 'active' && saving}
 					<span data-testid="profile-vis-{field}-{level}-saving" aria-hidden="true">●</span>
@@ -156,6 +204,10 @@
 			<span data-testid="profile-{field}-error" role="alert">{m.profile_save_error()}</span>
 		{:else if moveFailed}
 			<span data-testid="profile-vis-{field}-error" role="alert">{m.profile_move_error()}</span>
+		{:else if conflict && previewLevel !== null}
+			<span data-testid="profile-vis-{field}-preview-note" class="text-amber-700"
+				>{m.profile_visibility_preview_note()}</span
+			>
 		{:else if conflict}
 			<span data-testid="profile-vis-{field}-conflict-note" class="text-amber-700"
 				>{m.profile_visibility_conflict({ field: FIELD_LABEL[field]() })}</span

@@ -90,6 +90,8 @@
 	"profile_visibility_unset": "Not set at any level yet.",
 	"profile_move_error": "Couldn't change visibility. Nothing was lost — please try again.",
 	"profile_visibility_conflict": "Your {field} has different values at more than one level. Edit the fields above to reconcile them before changing its visibility.",
+	"profile_visibility_confirm_preview": "Tap again to keep {level}",
+	"profile_visibility_preview_note": "Tap again to keep this version.",
 	"profile_sign_out": "Sign out",
 	"profile_signed_in_as": "Signed in as {account} via {provider}",
 	"profile_repair_title": "Unfinished visibility change",

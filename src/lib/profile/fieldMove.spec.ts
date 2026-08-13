@@ -20,6 +20,7 @@ vi.mock('./profileData', () => ({
 import {
 	applyFieldMove,
 	applyDuplicateRepair,
+	applyConflictResolution,
 	planLoadedDuplicateRepairs,
 	FieldMoveError,
 	type FieldMoveInput
@@ -326,5 +327,71 @@ describe('planLoadedDuplicateRepairs — detect interrupted moves at load, plan 
 		expect(plans[0].narrowLevel).toBe('private');
 		expect(plans[0].widerLevels).toEqual(['domain', 'public']);
 		expect(plans[0].clear.map((c) => c.id)).toEqual(['prof-dom', 'prof-pub']);
+	});
+});
+
+// ── applyConflictResolution — #131 browse-then-confirm: sync every OTHER
+// holder to the previewed (second-tapped) tier's value ────────────────────
+// Distinct from applyDuplicateRepair: a conflict is DIFFERENT legitimate
+// values across tiers (not an interrupted move) — resolving it WRITES the
+// chosen value onto every other holder rather than clearing them to ''. No
+// entity is deleted; every existing holder keeps its own row, now converged
+// on the same value (which planLoadedDuplicateRepairs then sees as a
+// same-value duplicate — the pre-existing collapse-to-one-entity path).
+
+describe('applyConflictResolution — sync every other holder to the previewed value (#131)', () => {
+	it('writes the chosen value onto each given entity via saveProfileFields({field: value, sibling preserved}) and returns the synced ids', async () => {
+		saveProfileFieldsMock.mockResolvedValue(undefined);
+
+		const res = await applyConflictResolution({
+			cfg,
+			field: 'name',
+			value: 'Annie',
+			sync: [{ id: 'prof-dom', sibling: 'dom@x.io' }]
+		});
+
+		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(1);
+		expect(saveProfileFieldsMock.mock.calls[0][1]).toBe('prof-dom');
+		expect(saveProfileFieldsMock.mock.calls[0][2]).toEqual({ name: 'Annie', email: 'dom@x.io' });
+		expect(res).toEqual({ field: 'name', syncedIds: ['prof-dom'] });
+	});
+
+	it('syncs multiple holders in order, each with its OWN preserved sibling', async () => {
+		saveProfileFieldsMock.mockResolvedValue(undefined);
+
+		const res = await applyConflictResolution({
+			cfg,
+			field: 'name',
+			value: 'Annie',
+			sync: [
+				{ id: 'prof-pri', sibling: 'pri@x.io' },
+				{ id: 'prof-dom', sibling: 'dom@x.io' }
+			]
+		});
+
+		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(2);
+		expect(saveProfileFieldsMock.mock.calls[0][1]).toBe('prof-pri');
+		expect(saveProfileFieldsMock.mock.calls[0][2]).toEqual({ name: 'Annie', email: 'pri@x.io' });
+		expect(saveProfileFieldsMock.mock.calls[1][1]).toBe('prof-dom');
+		expect(saveProfileFieldsMock.mock.calls[1][2]).toEqual({ name: 'Annie', email: 'dom@x.io' });
+		expect(res).toEqual({ field: 'name', syncedIds: ['prof-pri', 'prof-dom'] });
+	});
+
+	it('an empty sync list is a no-op — no write, empty syncedIds', async () => {
+		const res = await applyConflictResolution({ cfg, field: 'email', value: 'a@x.io', sync: [] });
+		expect(saveProfileFieldsMock).not.toHaveBeenCalled();
+		expect(res).toEqual({ field: 'email', syncedIds: [] });
+	});
+
+	it('fails loud — the first sync failure propagates (never a partial silent success)', async () => {
+		saveProfileFieldsMock.mockRejectedValueOnce(new Error('saveProfileFields save failed: 403'));
+		await expect(
+			applyConflictResolution({
+				cfg,
+				field: 'name',
+				value: 'Annie',
+				sync: [{ id: 'prof-dom', sibling: 'dom@x.io' }]
+			})
+		).rejects.toThrow(/403/);
 	});
 });

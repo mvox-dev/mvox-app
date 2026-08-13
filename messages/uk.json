@@ -90,6 +90,8 @@
 	"profile_visibility_unset": "Ще не встановлено на жодному рівні.",
 	"profile_move_error": "Не вдалося змінити видимість. Нічого не втрачено — будь ласка, спробуйте ще раз.",
 	"profile_visibility_conflict": "Ваше поле {field} має різні значення на кількох рівнях. Узгодьте поля вище, перш ніж змінювати видимість.",
+	"profile_visibility_confirm_preview": "Торкніться ще раз, щоб залишити {level}",
+	"profile_visibility_preview_note": "Торкніться ще раз, щоб залишити цю версію.",
 	"profile_sign_out": "Вийти",
 	"profile_signed_in_as": "Ви увійшли як {account} ({provider})",
 	"profile_repair_title": "Незавершена зміна видимості",

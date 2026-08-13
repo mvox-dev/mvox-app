@@ -10,7 +10,12 @@
 		type MyProfile
 	} from '$lib/profile/profileData';
 	import { completionGateStore, resolveGate } from '$lib/profile/completionGate';
-	import { planLoadedDuplicateRepairs, FieldMoveError, type FieldKey } from '$lib/profile/fieldMove';
+	import {
+		planLoadedDuplicateRepairs,
+		applyConflictResolution,
+		FieldMoveError,
+		type FieldKey
+	} from '$lib/profile/fieldMove';
 	import { createFieldMoveQueue } from '$lib/profile/fieldMoveQueue';
 	import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
 	import { createAutosave } from '$lib/profile/autosave';
@@ -90,6 +95,12 @@
 	const isConflict = (f: FieldKey) => resFor(f).holders.length > 1 && planFor(f) === undefined;
 	const conflictLevelsFor = (f: FieldKey): Level[] =>
 		isConflict(f) ? resFor(f).holders.slice(1).map((h) => h.level) : [];
+	/** #131 — each level's OWN value for a field, so ProfileField can preview a conflicting tier. */
+	const conflictValuesFor = (f: FieldKey): Record<Level, string> => ({
+		public: confirmed.public[f],
+		domain: confirmed.domain[f],
+		private: confirmed.private[f]
+	});
 
 	/** The level currently holding this field (narrowest non-empty, or 'domain' default). */
 	const activeLevelFor = (f: FieldKey): Level =>
@@ -372,6 +383,35 @@
 		moveQueue.repair({ cfg: ctx.cfg, field, clear: plan.clear });
 	}
 
+	// #131 — browse-then-confirm: second tap on a previewed conflict tier
+	// converges every OTHER holder onto that tier's value, then reloads (the
+	// pre-existing repair-detection machinery picks up the now-same-value
+	// duplicate on the next load).
+	function handleResolve(field: FieldKey, level: Level) {
+		if (writesInFlight) return;
+		const res = resFor(field);
+		const other = otherField(field);
+		const chosenValue = confirmed[level][field];
+		const sync = res.holders
+			.filter((h) => h.level !== level)
+			.map((h) => ({ id: h.id, sibling: confirmed[h.level][other] }));
+		const ctx = activeContext();
+		if (!ctx) return;
+		busy = true;
+		applyConflictResolution({ cfg: ctx.cfg, field, value: chosenValue, sync })
+			.then(() => {
+				busy = false;
+				// Deferred one macrotask: lets any synchronous caller-side setup that
+				// follows a resolve (e.g. reconfiguring what the next load will see)
+				// land before the reload's read fires.
+				setTimeout(() => void loadForSelected(), 0);
+			})
+			.catch((e) => {
+				busy = false;
+				console.error('profile: conflict resolution failed', e);
+			});
+	}
+
 	function handleValueChange(field: FieldKey, value: string) {
 		draft = { ...draft, [field]: value };
 		autosaveCtrl.keystroke(field);
@@ -467,12 +507,14 @@
 						movable={movableFor(field)}
 						conflict={isConflict(field)}
 						conflictLevels={conflictLevelsFor(field)}
+						conflictValues={conflictValuesFor(field)}
 						disabled={writesInFlight}
 						moveFailed={moveFailed.has(field)}
 						saveFailed={failedFields.has(field)}
 						onvisibilitychange={handleVisibilityChange}
 						onvaluechange={handleValueChange}
 						onblur={handleBlur}
+						onresolve={handleResolve}
 					/>
 				{/each}
 			</div>

@@ -90,6 +90,8 @@
 	"profile_visibility_unset": "Vēl nav iestatīts nevienā līmenī.",
 	"profile_move_error": "Neizdevās mainīt redzamību. Nekas netika zaudēts — lūdzu, mēģiniet vēlreiz.",
 	"profile_visibility_conflict": "Jūsu {field} dažādos līmeņos ir atšķirīgas vērtības. Pirms redzamības maiņas saskaņojiet laukus augstāk.",
+	"profile_visibility_confirm_preview": "Pieskarieties vēlreiz, lai paturētu {level}",
+	"profile_visibility_preview_note": "Pieskarieties vēlreiz, lai paturētu šo versiju.",
 	"profile_sign_out": "Izrakstīties",
 	"profile_signed_in_as": "Pieteicies kā {account} ({provider})",
 	"profile_repair_title": "Nepabeigta redzamības izmaiņa",

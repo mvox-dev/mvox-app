@@ -35,6 +35,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_visibility_leak: (p: { level: string }) => `Still readable at ${p.level}`,
 		profile_visibility_conflict: (p: { field: string }) =>
 			`Your ${p.field} has different values at more than one level.`,
+		// #131 — browse-then-confirm conflict resolution: first tap previews a
+		// conflicting tier's value, second tap on the SAME tier resolves it.
+		profile_visibility_confirm_preview: (p: { level: string }) => `Tap again to keep ${p.level}`,
+		profile_visibility_preview_note: () => 'Tap again to keep this version.',
 		profile_visibility_unset: () => 'Not set at any level yet.',
 		profile_move_error: () =>
 			"Couldn't change visibility. Nothing was lost — please try again.",
@@ -65,7 +69,20 @@ const h = vi.hoisted(() => {
 			this.createdProfileId = createdProfileId;
 		}
 	}
-	return { ProfileSaveError, listMyProfilesMock: vi.fn(), applyProfileSaveMock: vi.fn() };
+	return {
+		ProfileSaveError,
+		listMyProfilesMock: vi.fn(),
+		applyProfileSaveMock: vi.fn(),
+		// #131 — the browse-then-confirm resolve-write primitive.
+		applyConflictResolutionMock: vi.fn()
+	};
+});
+// #131 — mock ONLY the new applyConflictResolution primitive; keep every other
+// fieldMove export real (planLoadedDuplicateRepairs drives the existing,
+// unmocked repair-banner tests below — must not be replaced wholesale).
+vi.mock('$lib/profile/fieldMove', async () => {
+	const actual = await vi.importActual<typeof import('$lib/profile/fieldMove')>('$lib/profile/fieldMove');
+	return { ...actual, applyConflictResolution: h.applyConflictResolutionMock };
 });
 vi.mock('$lib/profile/profileData', () => {
 	const NARROWNESS: Record<string, number> = { private: 0, domain: 1, public: 2 };
@@ -137,6 +154,7 @@ beforeEach(() => {
 	vi.useFakeTimers();
 	h.listMyProfilesMock.mockReset();
 	h.applyProfileSaveMock.mockReset();
+	h.applyConflictResolutionMock.mockReset();
 });
 
 afterEach(() => {
@@ -585,5 +603,152 @@ describe('/profile v2 — distinct-value conflict', () => {
 
 		expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).not.toBeNull();
 		expect(q(container, '[data-testid="profile-visibility-repair-name"]')).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #131 — browse-then-confirm conflict resolution. A field with DIFFERENT
+// values at ≥2 tiers currently disables every visibility button — no way to
+// resolve. New UX: conflict-tier buttons become clickable. First tap PREVIEWS
+// that tier's value (input shows it + a "tap again" hint); a second tap on
+// the SAME button RESOLVES — every other holder is synced to the previewed
+// value via applyConflictResolution. No modal — the two-tap pattern IS the
+// confirmation. Tapping a DIFFERENT conflict button while previewing SWITCHES
+// the preview instead of resolving.
+// ---------------------------------------------------------------------------
+describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () => {
+	it('AC1: a conflicting tier\'s visibility button is NOT disabled (previously always disabled)', async () => {
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+
+		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
+		expect(pubBtn.disabled).toBe(false);
+	});
+
+	it('AC2: first tap on a conflicting tier previews its value + shows the "tap again" hint', async () => {
+		// Preview is pure synchronous UI state (no debounce involved) — real
+		// timers so a not-yet-implemented click's waitFor fails on its own
+		// ~1s default instead of hanging on fake-timer-blocked retries to
+		// vitest's 5s test timeout (see tallis.md GOTCHA, hit 2026-08-10 on #73).
+		vi.useRealTimers();
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+		// Before any tap, the input shows the narrow-wins active value.
+		expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ann');
+
+		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
+		await fireEvent.click(pubBtn);
+
+		await waitFor(() => {
+			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Annie');
+			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).not.toBeNull();
+			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
+		});
+		// Previewing is NOT resolving — no write yet.
+		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
+	});
+
+	it('AC3: second tap on the SAME tier resolves — syncs every OTHER holder to the previewed value', async () => {
+		vi.useRealTimers(); // see AC2 comment
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValueOnce([
+			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
+		]);
+		h.applyConflictResolutionMock.mockResolvedValue({ field: 'name', syncedIds: ['prof-dom'] });
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+
+		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
+		await fireEvent.click(pubBtn); // 1st tap — preview
+		await waitFor(() =>
+			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull()
+		);
+		await fireEvent.click(pubBtn); // 2nd tap — resolve
+
+		await waitFor(() => expect(h.applyConflictResolutionMock).toHaveBeenCalledTimes(1));
+		expect(h.applyConflictResolutionMock.mock.calls[0][0]).toMatchObject({
+			field: 'name',
+			value: 'Annie',
+			// Only the OTHER holder (domain) needs syncing — public already holds 'Annie'.
+			sync: [{ id: 'prof-dom', sibling: '' }]
+		});
+
+		// After resolution, the profiles are re-read; both now hold the same
+		// value — a same-value duplicate, not a distinct-value conflict, so the
+		// conflict note clears (the existing collapse-to-one-entity repair path
+		// picks it up from here — real, unmocked planLoadedDuplicateRepairs).
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
+		]);
+		await waitFor(() => {
+			expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).toBeNull();
+			expect(q(container, '[data-testid="profile-visibility-repair-name"]')).not.toBeNull();
+		});
+	});
+
+	it('AC4: tapping a DIFFERENT conflicting tier during preview switches the preview (no resolve)', async () => {
+		vi.useRealTimers(); // see AC2 comment
+		selectPolyphony();
+		// Three-way conflict: private is narrowest/active (an already-existing,
+		// pre-#131 impossible-to-CREATE-but-legal-to-HOLD state — same precedent
+		// as the "name-private guard" describe block above); domain + public are
+		// both 'conflict' buttons, neither guarded, so switching between them
+		// alone exercises AC4 without touching the always-disabled private button.
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-pri', name: 'Ann', email: '', _sharing: 'private' },
+			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'A. Smith', email: '', _sharing: 'public' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+
+		const domBtn = q(container, '[data-testid="profile-vis-name-domain"]') as HTMLButtonElement;
+		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
+
+		await fireEvent.click(domBtn); // preview domain
+		await waitFor(() => {
+			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Annie');
+			expect(q(container, '[data-testid="profile-vis-name-domain-preview"]')).not.toBeNull();
+		});
+
+		await fireEvent.click(pubBtn); // switch preview to public
+		await waitFor(() => {
+			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('A. Smith');
+			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
+			// The domain preview marker is gone — the preview state moved, it didn't accumulate.
+			expect(q(container, '[data-testid="profile-vis-name-domain-preview"]')).toBeNull();
+		});
+		// Switching previews is never a confirm.
+		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
+	});
+
+	it('AC5: a non-conflicting field renders no conflict/preview markers — happy path unchanged', async () => {
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+
+		expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).toBeNull();
+		expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
+		expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).toBeNull();
+		// The plain inactive/movable public button behaves as before — enabled,
+		// no conflict styling hooks.
+		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
+		expect(pubBtn.disabled).toBe(false);
+		expect(q(container, '[data-testid="profile-vis-name-public-conflict"]')).toBeNull();
 	});
 });
