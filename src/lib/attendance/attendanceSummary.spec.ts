@@ -307,7 +307,7 @@ function setMemberFixture() {
 			agendaItem('past-4', '2026-05-20T16:00:00.000Z')
 		],
 		seasonId: 's1',
-		seasonConductors: ['someone-else'], seasonOwners: [], seasonEditors: [] // person-p holds no conductor seat
+		seasonConductors: ['someone-else'], seasonOwners: [], seasonEditors: [], seasons: [] // person-p holds no conductor seat
 	});
 	findMyMemberIdMock.mockResolvedValue('m-me');
 	listMyAttendanceMock.mockResolvedValue([
@@ -331,7 +331,7 @@ function setConductorFixture() {
 			agendaItem('past-2', '2026-06-03T16:00:00.000Z')
 		],
 		seasonId: 's1',
-		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: []
+		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [], seasons: []
 	});
 	findMyMemberIdMock.mockResolvedValue('m1');
 	listMyAttendanceMock.mockResolvedValue([
@@ -513,7 +513,7 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 				agendaItem('current-2', '2027-06-03T16:00:00.000Z')
 			],
 			seasonId: 's2',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		});
 		findMyMemberIdMock.mockResolvedValue('m-me');
 		// 5 records: 2 for current-season events, 3 for old-season events.
@@ -570,7 +570,7 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z')],
 			seasonId: 's1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		});
 		// Confirmed non-member (null member id).
 		findMyMemberIdMock.mockResolvedValue(null);
@@ -592,7 +592,7 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z')],
 			seasonId: 's1',
-			seasonConductors: [], seasonOwners: [], seasonEditors: []
+			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		});
 		// Member lookup hangs forever — membership stays 'loading'.
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));

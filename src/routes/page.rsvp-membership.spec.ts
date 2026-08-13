@@ -66,6 +66,14 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
 }));
+// #132/T2 review F3 — the agenda's season-CREATE gate falls back to the
+// ORGANIZATION's rights when the collective has no season at all (which is this
+// fixture: seasonId null + seasons []). Stubbed to "no visible collective" so the
+// fallback is a no-op here instead of a live member lookup from a unit test.
+vi.mock('$lib/org/myOrg', async (importActual) => ({
+	...(await importActual<typeof import('$lib/org/myOrg')>()),
+	resolveMyOrgId: vi.fn().mockResolvedValue(null)
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
@@ -178,7 +186,7 @@ afterEach(() => {
 
 describe('+page — membership 3-state gates the non-member hint', () => {
 	it('while membership is UNRESOLVED (findMyMemberId still in flight) the control is disabled with NO non-member hint', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {})); // never resolves — stays loading
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -191,7 +199,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a CONFIRMED non-member (findMyMemberId resolves null) shows disabled control + the hint', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue(null);
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -207,7 +215,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a CONFIRMED member (findMyMemberId resolves an id) enables the control and shows no hint', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -222,7 +230,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a lookup FAILURE (findMyMemberId rejects) does NOT assert non-member — disabled, no false hint (fail-safe)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockRejectedValue(new Error('lookup boom'));
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -243,7 +251,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 
 describe('+page — write-failure feedback (a rejected rsvp save)', () => {
 	it('a rejected write surfaces a per-row save-failed error AND reverts the optimistic value', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		applyRsvpChangeMock.mockRejectedValue(new Error('save failed'));

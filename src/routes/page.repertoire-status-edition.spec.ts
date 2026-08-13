@@ -111,7 +111,7 @@ const REPERTOIRE_ITEMS = [
  *  management surface under test renders. Write routes answer like the
  *  wiring spec's world so the GET → POST → DELETE replace flow completes. */
 function installWorld() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [
 			{
 				id: 'ev-1',

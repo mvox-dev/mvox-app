@@ -161,6 +161,30 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		expect(result.seasonConductors).toEqual(['p-anna', 'p-bert']);
 	});
 
+	// #132/T2 — the season-creation upcoming-season gate reads this straight off
+	// the load, no extra fetch.
+	it('carries the FULL season list (both past/current and future) as `seasons`', async () => {
+		listSeasonsMock.mockResolvedValue([
+			season('s-cur', '2026-09-01', '2027-05-31'),
+			season('s-next', '2027-09-01', '2028-05-31')
+		]);
+		listRehearsalsMock.mockResolvedValue([]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		expect(result.seasons.map((s) => s.id)).toEqual(['s-cur', 's-next']);
+	});
+
+	it('carries `seasons` even when NO season is current (all future)', async () => {
+		listSeasonsMock.mockResolvedValue([season('s-future', '2027-09-01', '2028-05-31')]);
+		listRehearsalsMock.mockResolvedValue([]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		expect(result.seasonId).toBeNull();
+		expect(result.seasons.map((s) => s.id)).toEqual(['s-future']);
+	});
+
 	it('returns empty recent + null seasonId when no season has started (all future)', async () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-future', '2027-09-01', '2028-05-31', ['p-anna'])
@@ -258,6 +282,7 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 		expect(result).toEqual({
 			upcoming: [],
 			recent: [],
+			seasons: [],
 			seasonId: null,
 			seasonConductors: [],
 			seasonOwners: [],
@@ -272,6 +297,7 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 		expect(result).toEqual({
 			upcoming: [],
 			recent: [],
+			seasons: [],
 			seasonId: null,
 			seasonConductors: [],
 			seasonOwners: [],

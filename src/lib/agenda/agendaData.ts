@@ -4,6 +4,7 @@ import { selectedDbStore } from '$lib/collectives/store';
 import { listSeasons, listRehearsals, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { currentSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
+import type { Season } from '$lib/seasons/types';
 
 // ── Combined load: upcoming + recent + conductor data in ONE fetch pass ────
 
@@ -21,6 +22,13 @@ export interface FullAgendaResult {
 	 *  read that already happened instead of firing a separate rights probe. */
 	seasonOwners: string[];
 	seasonEditors: string[];
+	/**
+	 * #132/T2 — the FULL season list `listSeasons` already fetched, thrown away
+	 * after picking the current one. The season-creation entry point derives
+	 * "an upcoming season exists" from this (`startDate` strictly after today),
+	 * at zero extra fetch cost.
+	 */
+	seasons: Season[];
 }
 
 const NO_SEASON = { seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] };
@@ -56,7 +64,7 @@ export async function listFullAgenda(
 		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));
 
 	const season = currentSeason(seasons, now);
-	if (!season) return { upcoming, recent: [], ...NO_SEASON };
+	if (!season) return { upcoming, recent: [], seasons, ...NO_SEASON };
 
 	const seasonData = paired.find((p) => p.seasonId === season.id);
 	const recent = recentEvents(seasonData?.items ?? [], now);
@@ -64,6 +72,7 @@ export async function listFullAgenda(
 	return {
 		upcoming,
 		recent,
+		seasons,
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
@@ -78,7 +87,7 @@ export async function loadFullAgenda(
 ): Promise<FullAgendaResult> {
 	const db = get(selectedDbStore);
 	const token = getToken();
-	if (!db || !token) return { upcoming: [], recent: [], ...NO_SEASON };
+	if (!db || !token) return { upcoming: [], recent: [], seasons: [], ...NO_SEASON };
 	return listFullAgenda({ db, token }, now, fetchImpl);
 }
 

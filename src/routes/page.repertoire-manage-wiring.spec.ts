@@ -141,7 +141,7 @@ function installWorld(options: WorldOptions = {}) {
 	// round-trips. The fetch router below therefore has NO rights route left: a
 	// regression back to per-entity probing surfaces as an unrouted 404 here, and
 	// as a failure of the "issues NO per-entity rights probe" spec.
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [{ ...upcoming[0], editors: eventEditor ? ['person-p'] : [] }],
 		recent: [],
 		seasonId: 'season-1',
@@ -244,7 +244,7 @@ function postsTo(fetchMock: ReturnType<typeof installWorld>, fragment: string) {
 }
 
 beforeEach(() => {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming,
 		recent: [],
 		seasonId: 'season-1',

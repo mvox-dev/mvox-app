@@ -50,6 +50,14 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
 }));
+// #132/T2 review F3 — the agenda's season-CREATE gate falls back to the
+// ORGANIZATION's rights when the collective has no season at all (which is this
+// fixture: seasonId null + seasons []). Stubbed to "no visible collective" so the
+// fallback is a no-op here instead of a live member lookup from a unit test.
+vi.mock('$lib/org/myOrg', async (importActual) => ({
+	...(await importActual<typeof import('$lib/org/myOrg')>()),
+	resolveMyOrgId: vi.fn().mockResolvedValue(null)
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // #12 — mocked so the assertions below observe whether the page calls them, not
 // a live network. Full replacement (not `importOriginal` spread): the real
@@ -139,7 +147,7 @@ afterEach(() => {
 
 describe('+page — resolves member id + existing rsvps alongside the agenda (#12 data half)', () => {
 	it('calls findMyMemberId with {db,token} for the selected collective and the selected person id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -153,7 +161,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 	});
 
 	it('calls listMyRsvps with {db,token} for the selected collective and the selected person id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();

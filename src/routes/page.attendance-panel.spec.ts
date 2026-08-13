@@ -209,7 +209,7 @@ function deferred<T>() {
 
 /** TWO conducted recent events sharing the same roster — for cross-event bleed regressions. */
 function setTwoConductedRecentEventsFixture() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
@@ -229,7 +229,7 @@ function setTwoConductedRecentEventsFixture() {
 
 /** One conducted recent event + a two-member roster; m1 answered 'going', m2 never answered. */
 function setConductedRecentFixture() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [],
 		recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
 		seasonId: 's1',
@@ -280,7 +280,7 @@ describe('+page — the Take attendance entry point (#84 TA.3)', () => {
 	});
 
 	it('a NON-conductor sees the recent row but no take-attendance button — the panel is unreachable', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
 			seasonId: 's1',

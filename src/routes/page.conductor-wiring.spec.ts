@@ -188,7 +188,7 @@ afterEach(() => {
 describe('+page — recent items reach AgendaList (#83 conductor wiring)', () => {
 	it('renders the Recent section with recent items from loadFullAgenda', async () => {
 		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z');
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
@@ -206,7 +206,7 @@ describe('+page — recent items reach AgendaList (#83 conductor wiring)', () =>
 	});
 
 	it('renders no Recent section when loadFullAgenda returns empty recent', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
 			recent: [],
 			seasonId: 's1',
@@ -226,7 +226,7 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 	it('a conductor sees the Recent section with their conducted events identified', async () => {
 		// person-p is in the season conductors, and the event inherits (empty conductors)
 		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
@@ -247,7 +247,7 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 
 	it('a non-conductor sees recent rows but no attendance button, conductorEventIds is empty', async () => {
 		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',
@@ -265,7 +265,7 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 
 describe('+page — isConductor store reflects the broader signal (#83 signal shape fix)', () => {
 	it('sets isConductor to "conductor" when person is in seasonConductors, even with no past events', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
 			recent: [], // no past events yet
 			seasonId: 's1',
@@ -280,7 +280,7 @@ describe('+page — isConductor store reflects the broader signal (#83 signal sh
 	});
 
 	it('sets isConductor to "not-conductor" when person is NOT in seasonConductors and has no conducted events', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
 			recent: [],
 			seasonId: 's1',
@@ -300,7 +300,7 @@ describe('+page — isConductor store reflects the broader signal (#83 signal sh
 
 	it('sets isConductor to "conductor" via conducted past events (per-event ids.size > 0)', async () => {
 		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming: [],
 			recent: [recentEvent],
 			seasonId: 's1',

@@ -188,7 +188,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
  * delivers them: past-1 is the MOST RECENT (top) row.
  */
 function setThreeConductedRecentEventsFixture() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),

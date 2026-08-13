@@ -50,6 +50,7 @@
 		pinEdition,
 		planProgramMove,
 		reorderProgramItems,
+		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
 	import { listWorks, listAllEditions, type Edition, type Work } from '$lib/library/libraryData';
@@ -60,7 +61,11 @@
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
+	import Autocomplete from '$lib/components/Autocomplete.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
+	import type { Season } from '$lib/seasons/types';
+	import { createSeason } from '$lib/entity/entityCreate';
+	import { resolveMyOrgId } from '$lib/org/myOrg';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -144,7 +149,19 @@
 	// know the answer before it fetches — see includeInactive below).
 	let currentSeasonId = $state<string | null>(null);
 	let seasonManageRights = $state<ManageRightsState>('not-editor');
+	// #132/T2 review F3 — the season-CREATION gate's own rights signal, DELIBERATELY
+	// separate from `seasonManageRights`. That one answers "may I manage the CURRENT
+	// season's repertoire", so it is fail-closed 'not-editor' whenever no season is
+	// running — and the two states where no season is running (a brand-new
+	// collective; a season that lapsed) are precisely the states where creating one
+	// is the whole point of #132. See `deriveSeasonCreateRights`.
+	let seasonCreateRights = $state<ManageRightsState>('not-editor');
 	let eventManageRights = $state<Record<string, ManageRightsState>>({});
+	// #132/T2 — the FULL season list `loadFullAgenda` already fetches (it calls
+	// listSeasons internally and today throws the list away after picking the
+	// current one). Powers ONLY the season-creation "an upcoming season already
+	// exists" gate below — no extra fetch.
+	let seasons = $state<Season[]>([]);
 	// The season's repertoire_items — the exclusion set for the "Add work"
 	// picker. Read separately from the agenda rows because a fully programmed
 	// agenda produces NO repertoire rows at all, and the picker would then
@@ -203,6 +220,30 @@
 	const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 	let rosterCache = $state<{ db: string; roster: RosterRow[]; fetchedAt: number } | null>(null);
 
+	/**
+	 * The ONE way this page reads the roster: cache-first, keyed by the db the
+	 * read is for, TTL-bounded. `loadRoster` is `listActiveMembers` + one profile
+	 * GET per member — 1+N requests (~117 for a 116-member collective), so every
+	 * caller that goes around this helper pays the whole fan-out again.
+	 *
+	 * #132/T2 review F1 — extracted from `openAttendancePanel` (it was the only
+	 * cached path) so the season-create form shares it: opening the form after the
+	 * attendance panel had already loaded the roster used to re-fetch all of it.
+	 */
+	function getRoster(cfg: { db: string; token: string }): Promise<RosterRow[]> {
+		const cacheValid =
+			rosterCache &&
+			rosterCache.db === cfg.db &&
+			Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
+		if (cacheValid) return Promise.resolve(rosterCache!.roster);
+		return loadRoster(cfg).then((roster) => {
+			// Keyed by the db the fetch was FOR — a collective switch mid-flight
+			// leaves a cache entry the (now different) selected db never matches.
+			rosterCache = { db: cfg.db, roster, fetchedAt: Date.now() };
+			return roster;
+		});
+	}
+
 	// Load the selected collective's upcoming agenda; reload on every collective
 	// switch. `requestId` guards against a slow earlier fetch clobbering a later
 	// one if the user switches collectives before the first load resolves — the
@@ -233,6 +274,8 @@
 			seasonRatesLoaded = false;
 			seasonRatesLoading = false;
 			seasonRatesError = false;
+			seasons = [];
+			closeSeasonCreateForm();
 			return;
 		}
 		const thisRequest = ++requestId;
@@ -258,6 +301,8 @@
 		seasonRatesLoaded = false;
 		seasonRatesLoading = false;
 		seasonRatesError = false;
+		seasons = [];
+		closeSeasonCreateForm();
 
 		const personId = current.personId;
 
@@ -265,11 +310,14 @@
 		// loadRecentEvents() pair. Seasons and rehearsals are fetched once;
 		// conductor data rides on the already-fetched props (no separate reads).
 		loadFullAgenda()
-			.then(({ upcoming, recent, seasonId, seasonConductors, seasonOwners, seasonEditors }) => {
+			.then(({ upcoming, recent, seasonId, seasonConductors, seasonOwners, seasonEditors, seasons: fullSeasons }) => {
 				if (thisRequest !== requestId) return; // superseded by a newer selection
 				agendaItems = upcoming;
 				agendaLoading = false;
 				recentItems = recent;
+				// #132/T2 — the full season list, for the season-creation entry point's
+				// "an upcoming season already exists" gate. No extra fetch.
+				seasons = fullSeasons;
 
 				// #90 TR.2 / #91 TR.3 — the Works element on every row, plus the
 				// management surface on top of it. Resolved HERE (not in a parallel
@@ -288,6 +336,24 @@
 				// them, because `includeInactive` depended on the answer.
 				seasonManageRights =
 					seasonId === null ? 'not-editor' : manageRightsFrom(seasonOwners, seasonEditors, personId);
+				// #132/T2 review F3 — the season-CREATE gate needs its OWN rights
+				// signal. `seasonManageRights` is about managing the CURRENT season's
+				// repertoire, so it is 'not-editor' whenever no season is running —
+				// which is exactly when a season most needs creating (a collective
+				// with none yet; a season that lapsed yesterday). See
+				// `deriveSeasonCreateRights` for the ladder.
+				seasonCreateRights = deriveSeasonCreateRights(
+					seasonId,
+					seasonOwners,
+					seasonEditors,
+					fullSeasons,
+					personId
+				);
+				// Step 3 of the ladder — ONLY when nothing on this page can answer:
+				// no current season AND no season at all to borrow rights from.
+				if (seasonId === null && fullSeasons.length === 0) {
+					loadOrgSeasonCreateRights(worksCfg, personId, thisRequest);
+				}
 				eventManageRights = Object.fromEntries(
 					events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
 				);
@@ -324,6 +390,7 @@
 				worksByEventId = {};
 				resetManagement();
 				resetConductor();
+				seasons = [];
 			});
 
 		findMyMemberId({ db: current.db, token: getToken() ?? '' }, personId)
@@ -469,6 +536,7 @@
 	function resetManagement() {
 		currentSeasonId = null;
 		seasonManageRights = 'not-editor';
+		seasonCreateRights = 'not-editor';
 		eventManageRights = {};
 		seasonRepertoire = [];
 		libraryWorks = [];
@@ -478,6 +546,61 @@
 	}
 
 	type ManageCfg = { db: string; token: string };
+
+	/**
+	 * #132/T2 review F3 — "may this viewer create a season here?", answered without
+	 * requiring a season to be CURRENT. Ladder, most-specific first:
+	 *
+	 *   1. a season IS current → its own `_owner`/`_editor` (the #91 derivation)
+	 *   2. no current season but the collective HAS seasons → the most recent one's
+	 *      rights (they ride along on the list read — zero extra fetch). This is the
+	 *      admin who let the season lapse before opening the next one.
+	 *   3. no seasons at all → nothing on this page carries rights, so the caller
+	 *      falls back to the ORGANIZATION entity (see loadOrgSeasonCreateRights).
+	 *      This is the brand-new collective, where the FIRST season has to be
+	 *      creatable in-app or #132 has no point at all.
+	 *
+	 * Fail-closed throughout: absent rights props still mean 'not-editor'.
+	 */
+	function deriveSeasonCreateRights(
+		seasonId: string | null,
+		seasonOwners: string[],
+		seasonEditors: string[],
+		allSeasons: Season[],
+		personId: string
+	): ManageRightsState {
+		if (seasonId !== null) return manageRightsFrom(seasonOwners, seasonEditors, personId);
+		// `listSeasons` sorts ascending by startDate, but deriving a RIGHTS gate from
+		// a caller's sort order is exactly the kind of silent coupling that breaks
+		// quietly — pick the max explicitly.
+		const latest = allSeasons.reduce<Season | null>(
+			(best, s) => (best === null || s.startDate > best.startDate ? s : best),
+			null
+		);
+		if (!latest) return 'not-editor';
+		return manageRightsFrom(latest.owners, latest.editors, personId);
+	}
+
+	/**
+	 * The step-3 fallback: no season exists in this collective at all, so the only
+	 * entity that can answer "may I create one" is the organization itself. ONE
+	 * extra GET pair, and ONLY in the empty-collective case (a collective with any
+	 * season never reaches here). Supplementary — a failure leaves the gate closed.
+	 */
+	function loadOrgSeasonCreateRights(cfg: ManageCfg, personId: string, thisRequest: number) {
+		resolveMyOrgId(cfg, personId)
+			.then((orgId) => {
+				if (thisRequest !== requestId || !orgId) return;
+				return resolveManageRights(cfg, orgId, personId).then((state) => {
+					if (thisRequest !== requestId) return;
+					// 'error' is not a grant — fail closed.
+					seasonCreateRights = state === 'editor' ? 'editor' : 'not-editor';
+				});
+			})
+			.catch((e) => {
+				console.error('agenda: resolving organization rights for season create failed', e);
+			});
+	}
 
 	/**
 	 * The works load, and (for a rights-holder) the picker sources.
@@ -987,16 +1110,7 @@
 		// collective, otherwise load and cache. Avoids 1+N reads per panel open.
 		// Finding 3 fix: TTL-based invalidation so mid-session roster changes
 		// (member added/deactivated) surface within ROSTER_CACHE_TTL_MS.
-		const cacheValid =
-			rosterCache &&
-			rosterCache.db === selected.db &&
-			Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
-		const rosterPromise = cacheValid
-			? Promise.resolve(rosterCache!.roster)
-			: loadRoster(cfg).then((roster) => {
-					if (selected) rosterCache = { db: selected.db, roster, fetchedAt: Date.now() };
-					return roster;
-				});
+		const rosterPromise = getRoster(cfg);
 
 		// Snapshot the request-time instant so the .then can detect whether any
 		// write settled between request issue and list resolve (Finding 2 fix).
@@ -1281,6 +1395,221 @@
 			});
 	}
 
+	// #132/T2 — page-level "+ Season" entry point + inline creation form. The
+	// collective admin needs an in-app way to open the NEXT season before the
+	// current one runs out; today that's only possible in Entu's admin UI.
+	//
+	// Rights gate: `seasonManageRights` (already derived above from the CURRENT
+	// season's `_owner`/`_editor`, fail-closed — see #91). Existence gate: no
+	// UPCOMING season already exists — `seasons` (loaded alongside the agenda,
+	// no extra fetch) has none whose `startDate` is strictly after today (the
+	// CURRENT/running season never counts as upcoming).
+	let seasonCreateOpen = $state(false);
+	let seasonCreateName = $state('');
+	let seasonCreateStartDate = $state('');
+	let seasonCreateEndDate = $state('');
+	// Chosen conductors, in pick order — the Autocomplete clears itself after
+	// each pick (multi-add readiness), so THIS is what renders the chips and
+	// what `conductorRefs` is built from on submit.
+	let seasonCreateConductors = $state<Array<{ id: string; name: string }>>([]);
+	let seasonCreateError = $state<(() => string) | null>(null);
+	/**
+	 * #132/T2 review F2 — WHICH field the current error is about. One visible
+	 * `role="alert"` paragraph is right, but `aria-invalid`/`aria-describedby` are
+	 * per-field: hanging them off the name input unconditionally told a screen
+	 * reader that a perfectly good name was invalid whenever the DATES were wrong,
+	 * and sent the viewer to the one field that needed no fixing. `null` = the
+	 * error belongs to the form as a whole (a failed write), no field flagged.
+	 */
+	let seasonCreateErrorField = $state<'name' | 'dates' | null>(null);
+	// #132/T2 review F1 — the in-flight guard. `submitSeasonCreate` awaits TWO
+	// round-trips (resolveMyOrgId, then createSeason) before the form unmounts, and
+	// a season create is NOT idempotent: three clicks in that window used to produce
+	// three real season entities that the admin then has to delete by hand in Entu.
+	let seasonCreateSubmitting = $state(false);
+	// Announced result, same "invisible success" discipline as the roster
+	// page's page-level create (#124) — a live region mounted from first
+	// render, so only a CHANGE to its text is announced.
+	let seasonCreateStatus = $state('');
+	let seasonCreateNameInput = $state<HTMLInputElement | null>(null);
+	// The conductor autocomplete's source — loaded ONCE when the form opens
+	// (never per-keystroke; the Autocomplete itself filters client-side).
+	let seasonConductorOptions = $state<Array<{ id: string; label: string }>>([]);
+
+	const hasUpcomingSeason = $derived.by(() => {
+		const todayIso = new Date().toISOString().slice(0, 10);
+		return seasons.some((s) => s.startDate > todayIso);
+	});
+	const showSeasonCreate = $derived(seasonCreateRights === 'editor' && !hasUpcomingSeason);
+
+	function openSeasonCreateForm(): void {
+		seasonCreateName = '';
+		seasonCreateStartDate = '';
+		seasonCreateEndDate = '';
+		seasonCreateConductors = [];
+		clearSeasonCreateError();
+		seasonCreateStatus = '';
+		seasonCreateSubmitting = false;
+		seasonCreateOpen = true;
+
+		const current = selected;
+		if (!current) return;
+		seasonConductorOptions = [];
+		// F1 — through the shared cache, not a fresh 1+N fan-out per form open.
+		getRoster({ db: current.db, token: getToken() ?? '' })
+			.then((rows) => {
+				seasonConductorOptions = rows.map((row) => ({ id: row.personId, label: row.name }));
+			})
+			.catch((e) => {
+				// Supplementary — the conductor field is simply option-less on a
+				// failed read; the name/dates path (the point of the form) stays live.
+				console.error('agenda: loading the roster for the conductor autocomplete failed', e);
+			});
+	}
+
+	function closeSeasonCreateForm(): void {
+		seasonCreateOpen = false;
+		seasonCreateName = '';
+		seasonCreateStartDate = '';
+		seasonCreateEndDate = '';
+		seasonCreateConductors = [];
+		clearSeasonCreateError();
+	}
+
+	/**
+	 * #132/T2 review F6 — an error that outlives the edit that fixed it is a lie:
+	 * the field kept `aria-invalid`/`aria-describedby` pointing at "Season name is
+	 * required." while holding a perfectly good name. Editing ANY field clears it;
+	 * the next submit is what re-decides.
+	 */
+	function clearSeasonCreateError(): void {
+		seasonCreateError = null;
+		seasonCreateErrorField = null;
+	}
+
+	/** Message + the field it belongs to, always set together (review F2). */
+	function setSeasonCreateError(msg: () => string, field: 'name' | 'dates' | null): void {
+		seasonCreateError = msg;
+		seasonCreateErrorField = field;
+	}
+
+	// Escape ANYWHERE in the form dismisses it without writing — bound on the
+	// form's own root so it catches the bubbled keydown from any control inside.
+	//
+	// #132/T2 review F2 — LAYERED with the conductor Autocomplete, not racing it:
+	// while its dropdown is OPEN the Autocomplete consumes Escape (stopPropagation)
+	// and only dismisses its own popup, so one keystroke can no longer close the
+	// dropdown AND throw away the half-filled form around it. With the dropdown
+	// closed the event reaches here, and the form dismisses — the WAI-APG
+	// two-Escapes-to-leave behaviour.
+	function onSeasonFormKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') closeSeasonCreateForm();
+	}
+
+	function onSeasonCreateNameKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		void submitSeasonCreate();
+	}
+
+	function onSeasonConductorSelect(selection: { id: string | null; label: string }): void {
+		// No `allowFreeText` on this Autocomplete — id is always non-null here in
+		// practice, but stay fail-closed rather than trust that wiring silently.
+		if (!selection.id) return;
+		if (seasonCreateConductors.some((c) => c.id === selection.id)) return; // no duplicate chips
+		seasonCreateConductors = [...seasonCreateConductors, { id: selection.id, name: selection.label }];
+	}
+
+	function removeSeasonConductor(id: string): void {
+		seasonCreateConductors = seasonCreateConductors.filter((c) => c.id !== id);
+	}
+
+	async function submitSeasonCreate(): Promise<void> {
+		// F1 — re-entry guard FIRST: a second click while the first write is still
+		// in flight is a duplicate season, not a retry. The button is disabled too;
+		// this is the layer that also covers Enter-on-the-name-input.
+		if (seasonCreateSubmitting) return;
+
+		// A fresh attempt owns both the error slot and the status slot.
+		clearSeasonCreateError();
+		seasonCreateStatus = '';
+
+		const name = seasonCreateName.trim();
+		if (!name) {
+			setSeasonCreateError(m.season_name_required, 'name');
+			return;
+		}
+		// Validation BEFORE the write (T1 validates too, but a thrown-and-caught
+		// write is not a validation UX). F4 — MISSING dates and an INVERTED range
+		// are different mistakes and must not share one message: telling someone
+		// her end date precedes her start date when she has entered neither sends
+		// her looking at the wrong field.
+		if (!seasonCreateStartDate || !seasonCreateEndDate) {
+			setSeasonCreateError(m.season_dates_required, 'dates');
+			return;
+		}
+		if (seasonCreateEndDate < seasonCreateStartDate) {
+			setSeasonCreateError(m.season_date_range_invalid, 'dates');
+			return;
+		}
+
+		const current = selected;
+		if (!current) {
+			console.error('agenda: season create submitted with no selected collective');
+			setSeasonCreateError(m.season_create_failed, null);
+			return;
+		}
+		const cfg = { db: current.db, token: getToken() ?? '' };
+
+		// Everything past here is asynchronous — the window the guard exists for.
+		seasonCreateSubmitting = true;
+		try {
+			let orgId: string | null;
+			try {
+				orgId = await resolveMyOrgId(cfg, current.personId);
+			} catch (e) {
+				console.error('agenda: resolving the organization for season create failed', e);
+				setSeasonCreateError(m.season_create_failed, null);
+				return;
+			}
+			if (!orgId) {
+				console.error('agenda: season create with no resolvable organization', current.personId);
+				setSeasonCreateError(m.season_create_failed, null);
+				return;
+			}
+
+			try {
+				await createSeason(cfg, {
+					name,
+					orgId,
+					startDate: seasonCreateStartDate,
+					endDate: seasonCreateEndDate,
+					conductorRefs: seasonCreateConductors.map((c) => c.id)
+				});
+			} catch (e) {
+				console.error('agenda: season create failed', name, e);
+				setSeasonCreateError(m.season_create_failed, null);
+				return;
+			}
+
+			seasonCreateStatus = m.season_created({ name });
+			closeSeasonCreateForm();
+			// The write just changed the world this page reads — refresh for real
+			// rather than guess the new season's shape.
+			loadForSelected();
+		} finally {
+			// Released on EVERY path (success, failure, early return) — a stuck
+			// `true` would leave the form permanently unsubmittable.
+			seasonCreateSubmitting = false;
+		}
+	}
+
+	// Auto-focus the name input the instant the inline form appears, same
+	// discipline as SectionPicker's create form.
+	$effect(() => {
+		if (seasonCreateOpen && seasonCreateNameInput) seasonCreateNameInput.focus();
+	});
+
 	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
 	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
 	// display set). An incomplete member is a MEMBER, not a non-member — she must
@@ -1330,6 +1659,146 @@
 							</button>
 						</div>
 					{:else}
+						<!-- #132/T2 — page-level [+ Season] entry point, ABOVE the agenda
+						     content: rights-gated + no-upcoming-season-gated, never inside a
+						     row/picker. The status region is mounted from first render (a
+						     live region announces only CHANGES to its contents). -->
+						<div data-testid="season-create-status" role="status" aria-live="polite" class="sr-only">
+							{seasonCreateStatus}
+						</div>
+						{#if showSeasonCreate}
+							{#if !seasonCreateOpen}
+								<button
+									type="button"
+									data-testid="season-create"
+									class="mb-3 self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+									onclick={openSeasonCreateForm}
+								>
+									{m.season_create()}
+								</button>
+							{:else}
+								<div
+									data-testid="season-create-form"
+									role="dialog"
+									aria-label={m.season_create_form_label()}
+									tabindex="-1"
+									class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
+									onkeydown={onSeasonFormKeydown}
+								>
+									<input
+										type="text"
+										data-testid="season-create-name"
+										bind:this={seasonCreateNameInput}
+										aria-label={m.season_name_label()}
+										placeholder={m.season_name_label()}
+										aria-invalid={seasonCreateErrorField === 'name' ? true : undefined}
+										aria-describedby={seasonCreateErrorField === 'name'
+											? 'season-create-error'
+											: undefined}
+										value={seasonCreateName}
+										oninput={(e) => {
+											seasonCreateName = (e.currentTarget as HTMLInputElement).value;
+											clearSeasonCreateError();
+										}}
+										onkeydown={onSeasonCreateNameKeydown}
+										class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+									<!-- F7 — `min-w-0` on BOTH: a flex item's default `min-width: auto`
+									     floors it at its intrinsic content width, and a native date
+									     control's intrinsic width is wide enough that the pair cannot
+									     shrink into a 320px viewport's ~256px of usable form width. -->
+									<div class="flex gap-2">
+										<input
+											type="date"
+											data-testid="season-create-start"
+											aria-label={m.season_start_date_label()}
+											aria-invalid={seasonCreateErrorField === 'dates' ? true : undefined}
+											aria-describedby={seasonCreateErrorField === 'dates'
+												? 'season-create-error'
+												: undefined}
+											value={seasonCreateStartDate}
+											oninput={(e) => {
+												seasonCreateStartDate = (e.currentTarget as HTMLInputElement).value;
+												clearSeasonCreateError();
+											}}
+											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+										/>
+										<input
+											type="date"
+											data-testid="season-create-end"
+											aria-label={m.season_end_date_label()}
+											aria-invalid={seasonCreateErrorField === 'dates' ? true : undefined}
+											aria-describedby={seasonCreateErrorField === 'dates'
+												? 'season-create-error'
+												: undefined}
+											value={seasonCreateEndDate}
+											oninput={(e) => {
+												seasonCreateEndDate = (e.currentTarget as HTMLInputElement).value;
+												clearSeasonCreateError();
+											}}
+											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+										/>
+									</div>
+									<Autocomplete
+										items={seasonConductorOptions}
+										onSelect={onSeasonConductorSelect}
+										placeholder={m.season_conductor_placeholder()}
+										label={m.season_conductor_label()}
+										emptyLabel={m.season_conductor_no_matches()}
+									/>
+									{#if seasonCreateConductors.length > 0}
+										<ul class="flex flex-wrap gap-1.5">
+											{#each seasonCreateConductors as conductor (conductor.id)}
+												<li
+													data-testid="season-create-conductor-{conductor.id}"
+													class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+												>
+													{conductor.name}
+													<button
+														type="button"
+														aria-label={m.season_conductor_remove({ name: conductor.name })}
+														class="text-ink-2 hover:text-ink"
+														onclick={() => removeSeasonConductor(conductor.id)}
+													>
+														&times;
+													</button>
+												</li>
+											{/each}
+										</ul>
+									{/if}
+									{#if seasonCreateError}
+										<p
+											id="season-create-error"
+											role="alert"
+											data-testid="season-create-error"
+											class="text-xs text-red-700"
+										>
+											{seasonCreateError()}
+										</p>
+									{/if}
+									<div class="flex gap-2">
+										<button
+											type="button"
+											data-testid="season-create-submit"
+											disabled={seasonCreateSubmitting}
+											aria-busy={seasonCreateSubmitting}
+											class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+											onclick={() => void submitSeasonCreate()}
+										>
+											{m.season_create_submit()}
+										</button>
+										<button
+											type="button"
+											data-testid="season-create-cancel"
+											class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
+											onclick={closeSeasonCreateForm}
+										>
+											{m.roster_cancel()}
+										</button>
+									</div>
+								</div>
+							{/if}
+						{/if}
 						<AgendaList
 							items={agendaItems}
 							loading={agendaLoading}

@@ -62,6 +62,14 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
 }));
+// #132/T2 review F3 — the agenda's season-CREATE gate falls back to the
+// ORGANIZATION's rights when the collective has no season at all (which is this
+// fixture: seasonId null + seasons []). Stubbed to "no visible collective" so the
+// fallback is a no-op here instead of a live member lookup from a unit test.
+vi.mock('$lib/org/myOrg', async (importActual) => ({
+	...(await importActual<typeof import('$lib/org/myOrg')>()),
+	resolveMyOrgId: vi.fn().mockResolvedValue(null)
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
@@ -166,7 +174,7 @@ afterEach(() => {
 
 describe('+page — completion gate suppresses S1 (the member RSVP affordance)', () => {
 	it('an INCOMPLETE member (real member id, gate incomplete) is NOT shown as a member: control disabled AND no non-member hint (never mislabeled)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1'); // she IS an active member
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('incomplete'); // ...but her domain name is missing
@@ -185,7 +193,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a COMPLETE member (gate complete) IS shown as a member: control enabled (the release path)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('complete');
@@ -198,7 +206,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a member with the gate still LOADING is disabled with NO hint (no flash of the member affordance)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('loading');
@@ -215,7 +223,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	});
 
 	it('a GENUINE non-member is unaffected by the gate: disabled + the non-member hint (no over-reach)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
 		findMyMemberIdMock.mockResolvedValue(null); // confirmed non-member
 		listMyRsvpsMock.mockResolvedValue([]);
 		completionGateStore.set('complete');

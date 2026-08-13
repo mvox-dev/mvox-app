@@ -155,7 +155,7 @@ afterEach(() => {
 
 describe('+page — Works element wiring (#90 TR.2)', () => {
 	it('resolves works for every agenda event (upcoming AND recent) with the current season id', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming,
 			recent,
 			seasonId: 'season-1',
@@ -181,7 +181,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('renders the resolved works inside the matching agenda row — the element a member actually sees', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
@@ -205,7 +205,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('signs the PDF url AT CLICK TIME — the file id round-trips from the row to signFileUrl', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
@@ -233,7 +233,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('navigates the tab opened in the click gesture to the freshly signed url', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
@@ -263,7 +263,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('a rejected signing closes the tab and surfaces an inline error — never a silent no-op', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
@@ -290,7 +290,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('a failed works read leaves the agenda intact, just work-free', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',

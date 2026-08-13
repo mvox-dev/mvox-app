@@ -261,5 +261,20 @@
 	"agenda_sign_in": "Увійти",
 	"agenda_collectives_none": "Колективів поки немає",
 	"agenda_collectives_error_retry": "Не вдалося завантажити колективи — повторити",
-	"agenda_collectives_loading": "Завантаження колективів…"
+	"agenda_collectives_loading": "Завантаження колективів…",
+	"season_create": "+ Сезон",
+	"season_create_form_label": "Новий сезон",
+	"season_name_label": "Назва сезону",
+	"season_start_date_label": "Дата початку",
+	"season_end_date_label": "Дата закінчення",
+	"season_conductor_label": "Диригенти",
+	"season_conductor_placeholder": "Пошук диригента…",
+	"season_conductor_remove": "Видалити {name}",
+	"season_conductor_no_matches": "Відповідних людей не знайдено.",
+	"season_create_submit": "Створити сезон",
+	"season_name_required": "Назва сезону є обов'язковою.",
+	"season_dates_required": "Дата початку та дата закінчення є обов'язковими.",
+	"season_date_range_invalid": "Дата закінчення не може бути раніше дати початку.",
+	"season_create_failed": "Не вдалося створити сезон. Спробуйте ще раз.",
+	"season_created": "{name} створено."
 }

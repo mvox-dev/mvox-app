@@ -108,7 +108,7 @@ const REPERTOIRE_ITEMS = [
 /** person-p holds `_editor` on BOTH the season and the event, so every
  *  surface under test (status row, Remove, "Add to programme") renders. */
 function installWorld() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [
 			{
 				id: 'ev-1',

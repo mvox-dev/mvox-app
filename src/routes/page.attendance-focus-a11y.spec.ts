@@ -182,7 +182,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 }
 
 function setOneConductedRecentEventFixture() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue({ seasons: [],
 		upcoming: [],
 		recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
 		seasonId: 's1',

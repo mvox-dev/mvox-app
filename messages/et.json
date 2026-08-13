@@ -261,5 +261,20 @@
 	"agenda_sign_in": "Logi sisse",
 	"agenda_collectives_none": "Kollektiive veel pole",
 	"agenda_collectives_error_retry": "Kollektiivide laadimine ebaõnnestus — proovi uuesti",
-	"agenda_collectives_loading": "Kollektiivide laadimine…"
+	"agenda_collectives_loading": "Kollektiivide laadimine…",
+	"season_create": "+ Hooaeg",
+	"season_create_form_label": "Uus hooaeg",
+	"season_name_label": "Hooaja nimi",
+	"season_start_date_label": "Alguskuupäev",
+	"season_end_date_label": "Lõppkuupäev",
+	"season_conductor_label": "Dirigendid",
+	"season_conductor_placeholder": "Otsi dirigenti…",
+	"season_conductor_remove": "Eemalda {name}",
+	"season_conductor_no_matches": "Sobivaid inimesi ei leitud.",
+	"season_create_submit": "Loo hooaeg",
+	"season_name_required": "Hooaja nimi on kohustuslik.",
+	"season_dates_required": "Alguskuupäev ja lõppkuupäev on kohustuslikud.",
+	"season_date_range_invalid": "Lõppkuupäev ei tohi olla enne alguskuupäeva.",
+	"season_create_failed": "Hooaega ei õnnestunud luua. Proovi uuesti.",
+	"season_created": "{name} loodud."
 }

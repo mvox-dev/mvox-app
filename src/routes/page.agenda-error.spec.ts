@@ -50,6 +50,14 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
 }));
+// #132/T2 review F3 — the agenda's season-CREATE gate falls back to the
+// ORGANIZATION's rights when the collective has no season at all (which is this
+// fixture: seasonId null + seasons []). Stubbed to "no visible collective" so the
+// fallback is a no-op here instead of a live member lookup from a unit test.
+vi.mock('$lib/org/myOrg', async (importActual) => ({
+	...(await importActual<typeof import('$lib/org/myOrg')>()),
+	resolveMyOrgId: vi.fn().mockResolvedValue(null)
+}));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // #12 — +page.svelte now imports $lib/rsvp/rsvpData at module scope, which pulls
 // in $lib/entu/request -> $env/dynamic/public (same $env wall as discover.ts).
@@ -164,7 +172,7 @@ describe('+page — agenda load error + retry (M2)', () => {
 
 	it('retry re-invokes loadAgenda and recovers on success', async () => {
 		loadFullAgendaMock.mockRejectedValueOnce(new Error('network down'));
-		loadFullAgendaMock.mockResolvedValueOnce({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValueOnce({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
 		setAuthedWithOneCollective();
 		const { container } = render(Page);
 
@@ -188,7 +196,7 @@ describe('+page — agenda load error + retry (M2)', () => {
 		loadFullAgendaMock.mockImplementationOnce(
 			() => new Promise((_resolve, reject) => { rejectFirst = reject; })
 		);
-		loadFullAgendaMock.mockResolvedValueOnce({ upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValueOnce({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
 		setAuthedWithTwoCollectives();
 		const { container } = render(Page);
 

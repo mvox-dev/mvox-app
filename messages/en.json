@@ -261,5 +261,20 @@
 	"agenda_sign_in": "Sign in",
 	"agenda_collectives_none": "No collectives yet",
 	"agenda_collectives_error_retry": "Couldn't load collectives — retry",
-	"agenda_collectives_loading": "Loading collectives…"
+	"agenda_collectives_loading": "Loading collectives…",
+	"season_create": "+ Season",
+	"season_create_form_label": "New season",
+	"season_name_label": "Season name",
+	"season_start_date_label": "Start date",
+	"season_end_date_label": "End date",
+	"season_conductor_label": "Conductors",
+	"season_conductor_placeholder": "Search conductors…",
+	"season_conductor_remove": "Remove {name}",
+	"season_conductor_no_matches": "No matching people.",
+	"season_create_submit": "Create season",
+	"season_name_required": "Season name is required.",
+	"season_dates_required": "A start date and an end date are required.",
+	"season_date_range_invalid": "End date must not be before the start date.",
+	"season_create_failed": "Couldn't create the season. Try again.",
+	"season_created": "{name} created."
 }

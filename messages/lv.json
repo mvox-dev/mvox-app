@@ -261,5 +261,20 @@
 	"agenda_sign_in": "Pieteikties",
 	"agenda_collectives_none": "Vēl nav kolektīvu",
 	"agenda_collectives_error_retry": "Neizdevās ielādēt kolektīvus — mēģināt vēlreiz",
-	"agenda_collectives_loading": "Ielādē kolektīvus…"
+	"agenda_collectives_loading": "Ielādē kolektīvus…",
+	"season_create": "+ Sezona",
+	"season_create_form_label": "Jauna sezona",
+	"season_name_label": "Sezonas nosaukums",
+	"season_start_date_label": "Sākuma datums",
+	"season_end_date_label": "Beigu datums",
+	"season_conductor_label": "Diriģenti",
+	"season_conductor_placeholder": "Meklēt diriģentu…",
+	"season_conductor_remove": "Noņemt {name}",
+	"season_conductor_no_matches": "Nav atbilstošu cilvēku.",
+	"season_create_submit": "Izveidot sezonu",
+	"season_name_required": "Sezonas nosaukums ir obligāts.",
+	"season_dates_required": "Sākuma datums un beigu datums ir obligāti.",
+	"season_date_range_invalid": "Beigu datums nedrīkst būt pirms sākuma datuma.",
+	"season_create_failed": "Neizdevās izveidot sezonu. Mēģiniet vēlreiz.",
+	"season_created": "{name} izveidota."
 }
