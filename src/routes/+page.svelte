@@ -316,6 +316,11 @@
 			seasons = [];
 			closeSeasonCreateForm();
 			closeEventCreateForm();
+			// #132/T6 review F3 — the series form is the third creation surface and
+			// belongs to the collective it was opened in: its `seriesCreateSeasonId`
+			// (and any `seriesCreateResume.seriesId`) are ids in the PREVIOUS db.
+			// Left alive they would submit against the new db's cfg.
+			closeSeriesCreateForm();
 			return;
 		}
 		const thisRequest = ++requestId;
@@ -341,6 +346,18 @@
 			rosterCache = null;
 			rosterRows = [];
 			resetSeasonManage();
+			// #132/T6 review F3 — the series form lives INSIDE the panel this branch
+			// tears down, and `resetSeasonManage` does not touch its state: the panel
+			// closed but `seriesCreateOpen`/`seriesCreateSeasonId`/`seriesCreateResume`
+			// survived into the next collective, so re-opening the gear re-rendered
+			// the previous collective's form verbatim (and a submit would have sent a
+			// cross-database parent reference, or resumed POSTing against the old db's
+			// series id).
+			//
+			// Deliberately INSIDE this branch, not unconditional: the bulk-failure
+			// path calls `loadForSelected({ keepSeasonManage: true })` and depends on
+			// `seriesCreateResume` surviving that call.
+			closeSeriesCreateForm();
 		}
 		attendanceFailedByEvent = new Map();
 		myAttendance = [];
@@ -1493,6 +1510,17 @@
 	const showSeasonCreate = $derived(seasonCreateRights === 'editor' && !hasUpcomingSeason);
 
 	function openSeasonCreateForm(): void {
+		// #132/T6 review F1 — a form with a write on the wire, or a series run that
+		// stopped partway and still owes occurrences, is never torn down from
+		// underneath it (see `createEntryPointsBlocked`). The entry points are
+		// `disabled` on the same flag, so this is the belt under that brace.
+		if (createEntryPointsBlocked) return;
+		// #132/T6 — mutual exclusion: only one creation form is ever open at a
+		// time. The season-MANAGE panel is not a creation form (it coexists —
+		// see `closeSeasonManagePanel` is deliberately NOT called here), but the
+		// other two creation surfaces must yield.
+		closeEventCreateForm();
+		closeSeriesCreateForm();
 		seasonCreateName = '';
 		seasonCreateStartDate = '';
 		seasonCreateEndDate = '';
@@ -1553,7 +1581,26 @@
 	// closed the event reaches here, and the form dismisses — the WAI-APG
 	// two-Escapes-to-leave behaviour.
 	function onSeasonFormKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') closeSeasonCreateForm();
+		if (event.key === 'Escape') dismissSeasonCreateForm();
+	}
+
+	/**
+	 * #132/T6 review F2 — Cancel/Escape is REFUSED while the create is on the
+	 * wire, the invariant `dismissSeriesCreateForm` already holds for the series
+	 * form: a form with a write in flight is never torn down from underneath it.
+	 * Without this, a mid-flight cancel unmounted the form, and the later failure
+	 * wrote its message into `seasonCreateError` — state that renders ONLY inside
+	 * `{#if seasonCreateOpen}`. A failed create became completely silent: no
+	 * error, no announcement, no trace. (On the success path the entity is
+	 * created anyway, contradicting the apparent cancel.)
+	 *
+	 * NOT folded into `closeSeasonCreateForm`: the SUCCESS path calls that while
+	 * `seasonCreateSubmitting` is still true (the flag is released in `finally`),
+	 * and a guard there would stop the form closing at all.
+	 */
+	function dismissSeasonCreateForm(): void {
+		if (seasonCreateSubmitting) return;
+		closeSeasonCreateForm();
 	}
 
 	function onSeasonCreateNameKeydown(event: KeyboardEvent): void {
@@ -1861,6 +1908,12 @@
 	}
 
 	function closeSeasonManagePanel(): void {
+		// #132/T6 review F1, same root cause as the `open*Form` guards: the SERIES
+		// form is rendered INSIDE this panel, so dismissing the panel unmounts it —
+		// the very teardown `dismissSeriesCreateForm` refuses while a bulk run is
+		// on the wire. Narrow to `seriesCreateSubmitting` deliberately: the season
+		// and event forms live at page level and survive the panel either way.
+		if (seriesCreateSubmitting) return;
 		seasonManageOpen = false;
 		seasonEditingField = null;
 		// The dialog held focus (see the $effect below); dismissing it unmounts
@@ -2274,6 +2327,17 @@
 	 *  EMPTY) or from T3's panel [+ Event] (`origin: 'panel'`, the panel's own
 	 *  season pre-filled and its series already offered). Same form either way. */
 	function openEventCreateForm(origin: 'agenda' | 'panel'): void {
+		// #132/T6 review F1 — see `openSeasonCreateForm`. The panel's [+ Event]
+		// is the entry point that made this reachable: it renders regardless of
+		// which other form is open, so a mid-generation click used to unmount the
+		// series form (and its resume state) while the bulk loop kept POSTing.
+		if (createEntryPointsBlocked) return;
+		// #132/T6 — mutual exclusion (see `openSeasonCreateForm`'s doc). The
+		// season-manage panel survives — a panel-born open needs it to prefill
+		// season/series and a panel-born create's post-submit refresh needs it
+		// to still be there.
+		closeSeasonCreateForm();
+		closeSeriesCreateForm();
 		eventCreateLoadId += 1; // review F3 — a new form; nothing the last one asked for belongs here
 		eventCreateOrigin = origin;
 		const prefillSeasonId = origin === 'panel' ? (currentSeasonId ?? '') : '';
@@ -2348,8 +2412,16 @@
 		});
 	}
 
-	/** Cancel / Escape: dismiss WITHOUT writing, and give focus somewhere real. */
+	/** Cancel / Escape: dismiss WITHOUT writing, and give focus somewhere real.
+	 *
+	 *  #132/T6 review F2 — refused while the create is on the wire, for the same
+	 *  reason `dismissSeasonCreateForm` is: `eventCreateError` renders only inside
+	 *  `{#if eventCreateOpen}`, so tearing the form down mid-flight turns a failed
+	 *  create into a silent one. The guard sits HERE and not in
+	 *  `closeEventCreateForm` — the success path calls that while the flag is
+	 *  still true. */
 	function dismissEventCreateForm(): void {
+		if (eventCreateSubmitting) return;
 		const origin = eventCreateOrigin;
 		closeEventCreateForm();
 		restoreEventCreateFocus(origin);
@@ -2708,6 +2780,57 @@
 	);
 	let seriesCreateNameInput = $state<HTMLInputElement | null>(null);
 
+	/**
+	 * #132/T6 review F1 — the in-flight floor under the mutual exclusion below.
+	 *
+	 * Each creation form already refuses its OWN dismissal while its write is on
+	 * the wire (`dismissSeriesCreateForm`, and the submit guards). T6's mutual
+	 * exclusion then added a second, un-guarded way to unmount a form: opening
+	 * ANOTHER one. That is worst for the series form, whose generation run is
+	 * many serial POSTs wide — unmounting it mid-run leaves the loop POSTing
+	 * events the viewer believes she cancelled, and throws away
+	 * `seriesCreateResume` (the only record of what a stopped run still owes).
+	 *
+	 * So: while ANY create is in flight, no creation form opens and no entry
+	 * point is clickable. Declared here (after all three flags) so the guard
+	 * reads as one fact; the `open*` functions that consume it run long after
+	 * module init, so the forward reference is only textual.
+	 */
+	const anyCreateSubmitting = $derived(
+		seasonCreateSubmitting || eventCreateSubmitting || seriesCreateSubmitting
+	);
+
+	/**
+	 * #132/T6 review F1 (follow-up) — the guard above was pinned to the wrong
+	 * window.
+	 *
+	 * `anyCreateSubmitting` is true only while a write is literally on the wire.
+	 * But a bulk generation run that STOPS partway sets `seriesCreateResume` and
+	 * then releases `seriesCreateSubmitting` in its `finally` — so the state the
+	 * guard exists to protect (a stopped run that still owes occurrences) is
+	 * precisely the state in which the guard is FALSE. In that window every other
+	 * entry point went live again, and each of them calls
+	 * `closeSeriesCreateForm()`, which nulls `seriesCreateResume` and unmounts the
+	 * form. There is then no way back: re-opening [+ Series] resets the resume, so
+	 * the next submit creates a SECOND series under the same season and re-POSTs
+	 * the occurrences that already landed.
+	 *
+	 * So the predicate the entry points gate on is "the series form still owes
+	 * work", not "a write is in flight". The operator keeps an explicit exit:
+	 * `dismissSeriesCreateForm` (Cancel/Escape) is unguarded while nothing is
+	 * submitting, so cancelling the stopped run frees every other entry point.
+	 *
+	 * `openSeriesCreateForm` / `season-manage-add-series` stay on the narrower
+	 * `anyCreateSubmitting` on purpose: a non-null resume implies the series form
+	 * is OPEN, and that button is only rendered while it is closed — gating it
+	 * here would be a guard that can never be reached and, if it ever were, one
+	 * with no way to clear itself.
+	 */
+	const seriesRunUnfinished = $derived(seriesCreateSubmitting || seriesCreateResume !== null);
+	/** What every OTHER entry point gates on: an in-flight write anywhere, or a
+	 *  stopped series run whose remainder is still recorded in the open form. */
+	const createEntryPointsBlocked = $derived(anyCreateSubmitting || seriesRunUnfinished);
+
 	function setSeriesCreateError(msg: () => string, field: SeriesCreateErrorField): void {
 		seriesCreateError = msg;
 		seriesCreateErrorField = field;
@@ -2816,6 +2939,13 @@
 	 *  T4's two-entry-point form needs (no season switch is possible). */
 	function openSeriesCreateForm(): void {
 		if (currentSeasonId === null) return;
+		// #132/T6 review F1 — see `openSeasonCreateForm`.
+		if (anyCreateSubmitting) return;
+		// #132/T6 — mutual exclusion (see `openSeasonCreateForm`'s doc). Reachable
+		// only from inside the panel, which stays open — it is management, not a
+		// creation form.
+		closeSeasonCreateForm();
+		closeEventCreateForm();
 		seriesCreateSeasonId = currentSeasonId;
 		seriesCreateName = '';
 		seriesCreateType = 'rehearsal';
@@ -3067,7 +3197,16 @@
 
 			if (!seriesCreateGenerate) {
 				closeSeriesCreateForm();
-				refreshSeasonManageLists(cfg, seasonId);
+				// #132/T6 — the refresh discipline is UNIFORM across all three
+				// creation kinds: a series-only create also re-reads the whole
+				// agenda (`loadFullAgenda`), not just the panel's own lists — a
+				// new series can change what `showEventCreate`/series pickers
+				// elsewhere on the page offer. `keepSeasonManage` keeps the panel
+				// the series was just made in.
+				loadForSelected({ keepSeasonManage: true });
+				if (panelSeasonId === seasonId) {
+					refreshSeasonManageLists(cfg, panelSeasonId);
+				}
 				restoreSeriesCreateFocus();
 				return;
 			}
@@ -3190,7 +3329,7 @@
 									data-testid="season-manage-gear"
 									bind:this={seasonManageGearEl}
 									aria-label={m.season_manage_gear_label()}
-									class="rounded-md border border-ink-4 p-1.5 text-xs text-ink-2 hover:border-ink hover:text-ink"
+									class="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink-4 p-1.5 text-xs text-ink-2 hover:border-ink hover:text-ink"
 									onclick={openSeasonManagePanel}
 								>
 									<span aria-hidden="true">⚙</span>
@@ -3213,7 +3352,8 @@
 										type="button"
 										data-testid="season-manage-close"
 										aria-label={m.season_manage_close()}
-										class="text-ink-2 hover:text-ink"
+										disabled={seriesCreateSubmitting}
+										class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
 										onclick={closeSeasonManagePanel}
 									>
 										&times;
@@ -3244,7 +3384,7 @@
 												data-testid="season-edit-btn-name"
 												aria-label={m.season_manage_edit_name_label()}
 												disabled={seasonEditPending.name === true}
-												class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+												class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('name')}
 											>
 												<span aria-hidden="true">✎</span>
@@ -3294,7 +3434,7 @@
 													data-testid="season-edit-btn-start_date"
 													aria-label={m.season_manage_edit_start_date_label()}
 													disabled={seasonEditPending.start_date === true}
-													class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+													class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 													onclick={() => beginSeasonFieldEdit('start_date')}
 												>
 													<span aria-hidden="true">✎</span>
@@ -3341,7 +3481,7 @@
 													data-testid="season-edit-btn-end_date"
 													aria-label={m.season_manage_edit_end_date_label()}
 													disabled={seasonEditPending.end_date === true}
-													class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+													class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink-3 hover:text-ink disabled:opacity-40"
 													onclick={() => beginSeasonFieldEdit('end_date')}
 												>
 													<span aria-hidden="true">✎</span>
@@ -3368,17 +3508,22 @@
 									{#if seasonManageConductorIds.length > 0}
 										<ul class="mt-1 flex flex-wrap gap-1.5">
 											{#each seasonManageConductorIds as personId (personId)}
+												<!-- #132/T6 review F2 — the chip's × is an ICON-ONLY admin control:
+												     44x44 (min-h-11/min-w-11), and the li drops its own vertical
+												     padding so the chip is exactly as tall as the hit area it now
+												     reserves rather than 44px PLUS padding. -->
 												<li
 													data-testid="season-manage-conductor-{personId}"
-													class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+													class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 												>
 													{seasonConductorLabel(personId)}
 													<button
 														type="button"
+														data-testid="season-manage-conductor-remove-{personId}"
 														aria-label={m.season_conductor_remove({
 															name: seasonConductorLabel(personId)
 														})}
-														class="text-ink-2 hover:text-ink"
+														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
 														onclick={() => onSeasonManageConductorRemove(personId)}
 													>
 														&times;
@@ -3417,7 +3562,8 @@
 											<button
 												type="button"
 												data-testid="season-manage-add-series"
-												class="text-xs text-ink underline"
+												disabled={anyCreateSubmitting}
+												class="flex min-h-11 items-center text-xs text-ink underline disabled:opacity-50"
 												onclick={openSeriesCreateForm}
 											>
 												{m.season_manage_add_series()}
@@ -3450,7 +3596,7 @@
 													seriesCreateName = (e.currentTarget as HTMLInputElement).value;
 													clearSeriesCreateError();
 												}}
-												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											/>
 											<input
 												type="text"
@@ -3464,7 +3610,7 @@
 													seriesCreateType = (e.currentTarget as HTMLInputElement).value;
 													clearSeriesCreateError();
 												}}
-												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											/>
 											<input
 												type="number"
@@ -3479,7 +3625,7 @@
 													seriesCreateDuration = (e.currentTarget as HTMLInputElement).value;
 													clearSeriesCreateError();
 												}}
-												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											/>
 											<input
 												type="text"
@@ -3490,7 +3636,7 @@
 												value={seriesCreateLocation}
 												oninput={(e) =>
 													(seriesCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											/>
 											<textarea
 												data-testid="series-create-description"
@@ -3502,7 +3648,7 @@
 													(seriesCreateDescription = (
 														e.currentTarget as HTMLTextAreaElement
 													).value)}
-												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											></textarea>
 
 											<div class="flex gap-2">
@@ -3560,7 +3706,7 @@
 													seriesCreateTime = (e.currentTarget as HTMLInputElement).value;
 													clearSeriesCreateError();
 												}}
-												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											/>
 
 											<div class="flex gap-2">
@@ -3617,13 +3763,13 @@
 														(seriesCreateSkipDateInput = (
 															e.currentTarget as HTMLInputElement
 														).value)}
-													class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 												/>
 												<button
 													type="button"
 													data-testid="series-create-skip-add"
 													disabled={seriesCreateLocked}
-													class="text-xs text-ink underline disabled:opacity-50"
+													class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink underline disabled:opacity-50"
 													onclick={addSeriesCreateSkipDate}
 												>
 													{m.series_create_skip_add()}
@@ -3632,9 +3778,10 @@
 											{#if seriesCreateSkipDates.length > 0}
 												<ul class="flex flex-wrap gap-1.5">
 													{#each seriesCreateSkipDates as date (date)}
+														<!-- #132/T6 review F2 — icon-only ×, 44x44 (see the conductor chip). -->
 														<li
 															data-testid="series-create-skip-{date}"
-															class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+															class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 														>
 															{date}
 															<button
@@ -3642,7 +3789,7 @@
 																data-testid="series-create-skip-remove-{date}"
 																aria-label={m.series_create_skip_remove({ date })}
 																disabled={seriesCreateLocked}
-																class="text-ink-2 hover:text-ink disabled:opacity-50"
+																class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
 																onclick={() => removeSeriesCreateSkipDate(date)}
 															>
 																&times;
@@ -3721,7 +3868,7 @@
 													data-testid="series-create-submit"
 													disabled={seriesCreateSubmitting}
 													aria-busy={seriesCreateSubmitting}
-													class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+													class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 													onclick={() => void submitSeriesCreate()}
 												>
 													{m.series_create_submit()}
@@ -3730,7 +3877,7 @@
 													type="button"
 													data-testid="series-create-cancel"
 													disabled={seriesCreateSubmitting}
-													class="px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
+													class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
 													onclick={dismissSeriesCreateForm}
 												>
 													{m.roster_cancel()}
@@ -3774,14 +3921,24 @@
 										<p class="text-xs tracking-wide text-ink-2 uppercase">
 											{m.season_manage_events_label()}
 										</p>
-										<button
-											type="button"
-											data-testid="season-manage-add-event"
-											class="text-xs text-ink underline"
-											onclick={() => openEventCreateForm('panel')}
-										>
-											{m.season_manage_add_event()}
-										</button>
+										<!-- #132/T6 review F1 — gated on `!eventCreateOpen` like the other
+										     three entry points. Ungated, clicking it while the form it
+										     itself opened was half-filled silently wiped that form (the
+										     open path resets every field). `disabled` on
+										     `createEntryPointsBlocked` then keeps it off-limits while ANY
+										     create is on the wire OR a stopped series run still owes
+										     occurrences — visibly, rather than as a silent no-op click. -->
+										{#if !eventCreateOpen}
+											<button
+												type="button"
+												data-testid="season-manage-add-event"
+												disabled={createEntryPointsBlocked}
+												class="flex min-h-11 items-center text-xs text-ink underline disabled:opacity-50"
+												onclick={() => openEventCreateForm('panel')}
+											>
+												{m.season_manage_add_event()}
+											</button>
+										{/if}
 									</div>
 									{#if seasonManageEventsError}
 										<p
@@ -3812,7 +3969,8 @@
 								<button
 									type="button"
 									data-testid="season-create"
-									class="mb-3 self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+									disabled={createEntryPointsBlocked}
+									class="mb-3 flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 									onclick={openSeasonCreateForm}
 								>
 									{m.season_create()}
@@ -3842,7 +4000,7 @@
 											clearSeasonCreateError();
 										}}
 										onkeydown={onSeasonCreateNameKeydown}
-										class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 									/>
 									<!-- F7 — `min-w-0` on BOTH: a flex item's default `min-width: auto`
 									     floors it at its intrinsic content width, and a native date
@@ -3890,15 +4048,17 @@
 									{#if seasonCreateConductors.length > 0}
 										<ul class="flex flex-wrap gap-1.5">
 											{#each seasonCreateConductors as conductor (conductor.id)}
+												<!-- #132/T6 review F2 — icon-only, so 44x44 (see the panel chip). -->
 												<li
 													data-testid="season-create-conductor-{conductor.id}"
-													class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+													class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 												>
 													{conductor.name}
 													<button
 														type="button"
+														data-testid="season-create-conductor-remove-{conductor.id}"
 														aria-label={m.season_conductor_remove({ name: conductor.name })}
-														class="text-ink-2 hover:text-ink"
+														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
 														onclick={() => removeSeasonConductor(conductor.id)}
 													>
 														&times;
@@ -3923,7 +4083,7 @@
 											data-testid="season-create-submit"
 											disabled={seasonCreateSubmitting}
 											aria-busy={seasonCreateSubmitting}
-											class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+											class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 											onclick={() => void submitSeasonCreate()}
 										>
 											{m.season_create_submit()}
@@ -3931,8 +4091,9 @@
 										<button
 											type="button"
 											data-testid="season-create-cancel"
-											class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
-											onclick={closeSeasonCreateForm}
+											disabled={seasonCreateSubmitting}
+											class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
+											onclick={dismissSeasonCreateForm}
 										>
 											{m.roster_cancel()}
 										</button>
@@ -3956,7 +4117,8 @@
 								type="button"
 								data-testid="event-create"
 								bind:this={eventCreateButtonEl}
-								class="mb-3 self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+								disabled={createEntryPointsBlocked}
+								class="mb-3 flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 								onclick={() => openEventCreateForm('agenda')}
 							>
 								{m.event_create()}
@@ -4002,7 +4164,7 @@
 									value={eventCreateSeasonId}
 									onchange={(e) =>
 										handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								>
 									<option value="">{m.event_create_season_placeholder()}</option>
 									{#each seasons as season (season.id)}
@@ -4017,7 +4179,7 @@
 									disabled={eventCreateSeasonId === ''}
 									onchange={(e) =>
 										handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 								>
 									<option value="">{m.event_create_series_none()}</option>
 									{#each eventCreateSeriesOptions as series (series.id)}
@@ -4044,7 +4206,7 @@
 										eventCreateName = (e.currentTarget as HTMLInputElement).value;
 										clearEventCreateError();
 									}}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
 
 								<input
@@ -4058,7 +4220,7 @@
 										eventCreateDatetime = (e.currentTarget as HTMLInputElement).value;
 										clearEventCreateError();
 									}}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
 								
 								<div class="flex gap-2">
@@ -4100,7 +4262,7 @@
 									value={eventCreateLocation}
 									oninput={(e) =>
 										(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
 								
 								<textarea
@@ -4111,7 +4273,7 @@
 									value={eventCreateDescription}
 									oninput={(e) =>
 										(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								></textarea>
 								
 								<div data-testid="event-create-conductors-field">
@@ -4126,15 +4288,17 @@
 								{#if eventCreateConductors.length > 0}
 									<ul class="flex flex-wrap gap-1.5">
 										{#each eventCreateConductors as conductor (conductor.id)}
+											<!-- #132/T6 review F2 — icon-only, so 44x44 (see the panel chip). -->
 											<li
 												data-testid="event-create-conductor-{conductor.id}"
-												class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+												class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 											>
 												{conductor.name}
 												<button
 													type="button"
+													data-testid="event-create-conductor-remove-{conductor.id}"
 													aria-label={m.season_conductor_remove({ name: conductor.name })}
-													class="text-ink-2 hover:text-ink"
+													class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
 													onclick={() => removeEventCreateConductor(conductor.id)}
 												>
 													&times;
@@ -4161,7 +4325,7 @@
 										data-testid="event-create-submit"
 										disabled={eventCreateSubmitting}
 										aria-busy={eventCreateSubmitting}
-										class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+										class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 										onclick={() => void submitEventCreate()}
 									>
 										{m.event_create_submit()}
@@ -4169,7 +4333,8 @@
 									<button
 										type="button"
 										data-testid="event-create-cancel"
-										class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
+										disabled={eventCreateSubmitting}
+										class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
 										onclick={dismissEventCreateForm}
 									>
 										{m.roster_cancel()}
