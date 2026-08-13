@@ -6,6 +6,28 @@
 > git history of this file. Durable facts kept below; per-run narrative dropped once its own
 > committed artifact / findings doc / issue-comment thread carries the detail.
 
+## [CHECKPOINT] #127 Baritone follow-up — consolidate+nest+delete, LIVE, complete (2026-08-13)
+
+PO's ruling on Baritone flip-flopped twice in one session — worth recording the sequence since
+it's a good example of "scope corrections after dry-run are normal, re-run don't argue": (1)
+initial ruling "keep standalone, untouched"; (2) changed to "nest under Bass" — I built an
+ADDITIVE dual-parent script (both RAM+TAM Baritone get a second _parent to Bass/EFK, no merge),
+dry-ran it, sent for authorization; (3) team-lead relayed a further PO correction before I got
+authorization — "consolidate first, then nest, one surviving Baritone, not two". Rewrote the SAME
+script file (same filename, `git commit` history preserves both versions) to the
+consolidate-then-nest-then-delete pattern (identical shape to the main #127 script's
+RETIRE_TO_SURVIVOR + nest + not-empty-gated-delete). Never ran the additive version live — only a
+superseded dry-run ledger exists for it (commit `bb7cfd9`). Live-executed the corrected version
+(commit after `6a4cfea`) after fresh authorization: 7/7 ok, TAM Baritone's 2 members → RAM
+Baritone (1 was already dual-linked from the original data mess — "mibiri" — deduped, only 1
+genuinely new move), RAM Baritone nested under Bass/EFK, TAM Baritone deleted. Independently
+verified: 0 dangling refs, 241 members unchanged, RAM Baritone now 19 (not 20 — mibiri was
+already counted in the original 18). Full report:
+https://github.com/mvox-dev/mvox-app/issues/127#issuecomment-5276352494
+**#127 is now fully done**: 17 sections → 12 (Soprano/Alto/Tenor/Bass EFK-anchored with 7 nested
+sub-sections including Baritone under Bass; Admin untouched). Only remaining checklist item
+(F2+F3 TU.6 re-verification) is outside data-manager scope, flagged twice now, not chased further.
+
 ## [CHECKPOINT] #127 section cleanup — Phase 2 LIVE, complete, verified (2026-08-13)
 
 Executed `scripts/migrations/section-cleanup-127-2026-08-13.ts` with `DRY_RUN=false` after
