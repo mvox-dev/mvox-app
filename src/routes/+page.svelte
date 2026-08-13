@@ -64,8 +64,9 @@
 	import Autocomplete from '$lib/components/Autocomplete.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
-	import { createEvent, createSeason } from '$lib/entity/entityCreate';
-	import type { CreateEventInput } from '$lib/entity/entityCreate';
+	import { createEvent, createEventSeries, createSeason } from '$lib/entity/entityCreate';
+	import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
+	import { generateEventDates, type RepeatPattern } from '$lib/events/recurrence';
 	import { resolveMyOrgId } from '$lib/org/myOrg';
 	import {
 		listEventSeriesForSeason,
@@ -2642,6 +2643,494 @@
 		if (eventCreateOpen && eventCreateNameInput) eventCreateNameInput.focus();
 	});
 
+	// ── #132/T5 — event SERIES creation + the bulk occurrence generator ────────
+	//
+	// Reachable ONLY from T3's panel [+ Series] stub (`season-manage-add-series`)
+	// — there is no page-level entry point the way event-create has two. The
+	// template fields (name/type/duration/location/description) plus the
+	// ALWAYS-collected schedule fields (v4E requires interval_days/start_time/
+	// start_date/end_date on event_series, so the sketch's "optional recurrence"
+	// can only mean optional GENERATION — see the RED spec's header). Generation
+	// is the `seriesCreateGenerate` checkbox (default OFF); ON reveals the live
+	// preview and turns a plain series-create into a serial bulk `createEvent`
+	// per occurrence.
+
+	/** The series-create fields a validation message can belong to; `null` = a
+	 *  form-wide failure (no org, a failed write) that names no single box. */
+	type SeriesCreateErrorField =
+		| 'name'
+		| 'type'
+		| 'time'
+		| 'duration'
+		| 'day'
+		| 'from'
+		| 'until'
+		| null;
+
+	let seriesCreateOpen = $state(false);
+	// Captured at OPEN, not re-read from `currentSeasonId` at submit — the form
+	// has no season picker of its own (unlike event-create's), so its season is
+	// fixed to whichever season the panel was managing when [+ Series] was
+	// clicked.
+	let seriesCreateSeasonId = $state('');
+	let seriesCreateName = $state('');
+	let seriesCreateType = $state('rehearsal');
+	let seriesCreateDuration = $state('');
+	let seriesCreateLocation = $state('');
+	let seriesCreateDescription = $state('');
+	let seriesCreateRepeat = $state<RepeatPattern>('weekly');
+	/** '' = no day chosen — the SELECT's own placeholder value, not a parsed 0. */
+	let seriesCreateDay = $state('');
+	let seriesCreateTime = $state('');
+	let seriesCreateFrom = $state('');
+	let seriesCreateUntil = $state('');
+	let seriesCreateGenerate = $state(false);
+	let seriesCreateSkipDateInput = $state('');
+	let seriesCreateSkipDates = $state<string[]>([]);
+	let seriesCreateSubmitting = $state(false);
+	let seriesCreateError = $state<(() => string) | null>(null);
+	/** Which box a refusal belongs to — the T4 shape (`EventCreateErrorField`),
+	 *  applied here so a screen reader hears WHICH field was rejected when the
+	 *  viewer tabs back into it, not just a disembodied alert (#132/T5 review
+	 *  F4). `null` = form-wide (no org, a failed write) and names no box. */
+	let seriesCreateErrorField = $state<SeriesCreateErrorField>(null);
+	/** Non-null while the bulk loop is running — `current` is the occurrence
+	 *  IN FLIGHT (1-based), not the completed count (the RED spec pins "current
+	 *  1 of 3 while the FIRST POST is in flight"). */
+	let seriesCreateProgress = $state<{ current: number; total: number } | null>(null);
+	/** Set when a bulk run STOPPED partway: the series is already on the wire and
+	 *  `remaining` are the occurrences (failed one first) that never landed. A
+	 *  re-submit RESUMES from here instead of creating a second series and
+	 *  re-POSTing the occurrences that already succeeded. Cleared on a clean run,
+	 *  on close, and on open. */
+	let seriesCreateResume = $state<{ seriesId: string; remaining: Date[]; total: number } | null>(
+		null
+	);
+	let seriesCreateNameInput = $state<HTMLInputElement | null>(null);
+
+	function setSeriesCreateError(msg: () => string, field: SeriesCreateErrorField): void {
+		seriesCreateError = msg;
+		seriesCreateErrorField = field;
+	}
+
+	function clearSeriesCreateError(): void {
+		seriesCreateError = null;
+		seriesCreateErrorField = null;
+	}
+
+	/** `aria-describedby` for the field that currently owns the message. */
+	function seriesCreateDescribedBy(field: SeriesCreateErrorField): string | undefined {
+		return seriesCreateErrorField === field ? 'series-create-error' : undefined;
+	}
+
+	function seriesCreateInvalid(field: SeriesCreateErrorField): true | undefined {
+		return seriesCreateErrorField === field ? true : undefined;
+	}
+
+	/**
+	 * #132/T5 review F5 — while a stopped run is resumable, the template and
+	 * recurrence boxes are INERT: submit skips `createEventSeries` (the series is
+	 * already on the wire) and writes exactly `resume.remaining`, so an edit to
+	 * name/type/duration/location/description/recurrence would be silently
+	 * discarded. Disabling them makes the form read as "finish this run" rather
+	 * than "edit and re-submit". The GENERATE checkbox stays live — turning it
+	 * off is the documented way to close out a stopped run without writing the
+	 * rest.
+	 */
+	const seriesCreateLocked = $derived(seriesCreateResume !== null);
+
+	/**
+	 * Whether the day-of-week picker is a REAL input for the chosen pattern.
+	 * `generateEventDates` IGNORES `dayOfWeek` for 'daily' (recurrence.ts:91) —
+	 * so demanding a day there would gate generation behind a field that has no
+	 * effect on the output. Daily → no day needed, and the select is not rendered
+	 * at all (an inert control presented as required is the bug, not the label).
+	 */
+	const seriesCreateDayApplies = $derived(seriesCreateRepeat !== 'daily');
+	/** The dayOfWeek the generator gets — 0 is a harmless filler for 'daily',
+	 *  which never reads it. */
+	const seriesCreateDayOfWeek = $derived(seriesCreateDay === '' ? 0 : Number(seriesCreateDay));
+
+	/**
+	 * The live preview's source — the REAL `generateEventDates` (T5's own pinned
+	 * point: the preview must be the actual generator, not a lookalike),
+	 * recomputed on every param change via `$derived`. `null` (no render) unless
+	 * generation is ON AND time/from/until are set — plus a day WHEN THE PATTERN
+	 * USES ONE. An incomplete recurrence has nothing determinate to preview yet.
+	 */
+	const seriesCreatePreviewDates = $derived.by(() => {
+		if (!seriesCreateGenerate) return null;
+		if (seriesCreateDayApplies && seriesCreateDay === '') return null;
+		if (!seriesCreateTime || !seriesCreateFrom || !seriesCreateUntil) {
+			return null;
+		}
+		return generateEventDates({
+			repeat: seriesCreateRepeat,
+			dayOfWeek: seriesCreateDayOfWeek,
+			timeOfDay: seriesCreateTime,
+			from: seriesCreateFrom,
+			until: seriesCreateUntil,
+			skipDates: seriesCreateSkipDates
+		});
+	});
+
+	/**
+	 * The dates the preview actually LISTS — #132/T5 review F3.
+	 *
+	 * After a stopped run the count line is suppressed in favour of the resume
+	 * notice ("2 remaining of 3"), but the rows underneath kept coming from the
+	 * FULL recomputed set, so a run that stopped at 2 of 3 showed three dates
+	 * while a re-submit would create one. The list and the notice must describe
+	 * the SAME set: while `seriesCreateResume` is non-null that set is exactly
+	 * `remaining` — what submit will write.
+	 */
+	const seriesCreatePreviewRows = $derived.by(() => {
+		if (seriesCreatePreviewDates === null) return null;
+		return seriesCreateResume ? seriesCreateResume.remaining : seriesCreatePreviewDates;
+	});
+
+	/** `date` (a `generateEventDates` local wall-clock Date) as an ISO calendar
+	 *  day — the preview row testid and the skip-chip's own shape. */
+	function seriesCreateIsoDay(date: Date): string {
+		const y = date.getFullYear();
+		const mo = String(date.getMonth() + 1).padStart(2, '0');
+		const d = String(date.getDate()).padStart(2, '0');
+		return `${y}-${mo}-${d}`;
+	}
+
+	/** `date` re-typed as the 'YYYY-MM-DDTHH:MM' shape `tallinnLocalToUtcIso`
+	 *  expects — the SAME TE.4 wall-clock-typed-as-Tallinn convention T4 pinned
+	 *  for the single-event form (`eventCreateDatetime`), applied here to every
+	 *  generated occurrence instead of one typed value. */
+	function seriesCreateLocalInput(date: Date): string {
+		const y = date.getFullYear();
+		const mo = String(date.getMonth() + 1).padStart(2, '0');
+		const d = String(date.getDate()).padStart(2, '0');
+		const h = String(date.getHours()).padStart(2, '0');
+		const mi = String(date.getMinutes()).padStart(2, '0');
+		return `${y}-${mo}-${d}T${h}:${mi}`;
+	}
+
+	/** Opened ONLY from inside the panel — `currentSeasonId` is always the
+	 *  panel's own season while it is open, so there is nothing to guard here
+	 *  T4's two-entry-point form needs (no season switch is possible). */
+	function openSeriesCreateForm(): void {
+		if (currentSeasonId === null) return;
+		seriesCreateSeasonId = currentSeasonId;
+		seriesCreateName = '';
+		seriesCreateType = 'rehearsal';
+		seriesCreateDuration = '';
+		seriesCreateLocation = '';
+		seriesCreateDescription = '';
+		seriesCreateRepeat = 'weekly';
+		seriesCreateDay = '';
+		seriesCreateTime = '';
+		// Sketch D's pin: from/until default to the SEASON's own dates. Ride the
+		// panel's ALREADY-seeded field state (`openSeasonManagePanel` sets it from
+		// the `seasons` list the agenda load fetched) — zero extra fetch, and the
+		// panel is always open before this form can be reached.
+		seriesCreateFrom = seasonManageStartDate;
+		seriesCreateUntil = seasonManageEndDate;
+		seriesCreateGenerate = false;
+		seriesCreateSkipDateInput = '';
+		seriesCreateSkipDates = [];
+		seriesCreateProgress = null;
+		seriesCreateResume = null;
+		clearSeriesCreateError();
+		seriesCreateSubmitting = false;
+		seriesCreateOpen = true;
+	}
+
+	function closeSeriesCreateForm(): void {
+		seriesCreateOpen = false;
+		seriesCreateProgress = null;
+		seriesCreateResume = null;
+		clearSeriesCreateError();
+	}
+
+	/** The form is self-unmounting; hand focus back to the still-open panel
+	 *  (its ONLY possible origin) — same debt `restoreEventCreateFocus` pays. */
+	function restoreSeriesCreateFocus(): void {
+		tick().then(() => seasonManagePanelEl?.focus());
+	}
+
+	/** Dismissal is REFUSED while a run is in flight. A bulk run is many serial
+	 *  POSTs wide (13 Mondays over a season), so unmounting the form mid-run
+	 *  would leave the loop POSTing events the viewer believes she cancelled —
+	 *  and a later failure would write its error into state nothing renders.
+	 *  Same guard the submit button already carries. */
+	function dismissSeriesCreateForm(): void {
+		if (seriesCreateSubmitting) return;
+		closeSeriesCreateForm();
+		restoreSeriesCreateFocus();
+	}
+
+	function onSeriesCreateFormKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		// Layering (`handleSeasonFieldKeydown`'s #132/T2 review F2 shape): this
+		// form sits INSIDE the season-manage panel, whose own Escape handler
+		// closes the panel. Without stopping propagation one Escape would dismiss
+		// both — and while a run is in flight it would tear the panel down around
+		// a still-POSTing loop. The next Escape reaches the panel because
+		// `restoreSeriesCreateFocus` hands focus back to it.
+		event.stopPropagation();
+		dismissSeriesCreateForm();
+	}
+
+	function addSeriesCreateSkipDate(): void {
+		const value = seriesCreateSkipDateInput.trim();
+		if (!value) return;
+		if (!seriesCreateSkipDates.includes(value)) {
+			seriesCreateSkipDates = [...seriesCreateSkipDates, value].sort();
+		}
+		seriesCreateSkipDateInput = '';
+	}
+
+	function removeSeriesCreateSkipDate(date: string): void {
+		seriesCreateSkipDates = seriesCreateSkipDates.filter((d) => d !== date);
+	}
+
+	/**
+	 * Submit: series-only when generation is OFF — `createEventSeries` (T1) is
+	 * the ONE seam, org from `resolveMyOrgId`, the panel's season in
+	 * `extraParentIds`. WITH generation, bulk-creates one `createEvent` per
+	 * `generateEventDates` date, STRICTLY SERIAL, ascending (Entu rate/ordering
+	 * — #132/T5's pinned contract). Validation runs BEFORE any fetch, each
+	 * refusal naming its own field (the T4 discipline this form inherits) — a
+	 * refused submit must never leave a half-made series behind. When
+	 * `seriesCreateResume` is set (a previous run stopped partway) the series is
+	 * NOT re-created: the run picks up at the occurrence that failed.
+	 */
+	async function submitSeriesCreate(): Promise<void> {
+		if (seriesCreateSubmitting) return;
+		clearSeriesCreateError();
+
+		const resume = seriesCreateResume;
+		const seasonId = seriesCreateSeasonId;
+		const name = seriesCreateName.trim();
+		if (!name) {
+			setSeriesCreateError(m.series_create_name_required, 'name');
+			return;
+		}
+		// #132/T5 review F2 — NO silent `|| 'rehearsal'` fallback. `event_type` is
+		// the discriminator `listRehearsals` filters on, so a viewer who cleared
+		// the box (to type 'concert', or deliberately) would get a rehearsal
+		// series with no message and no way to see the mistake until the agenda
+		// is wrong. Refuse the blank, the way T4's sibling form on this page does.
+		const typeValue = seriesCreateType.trim();
+		if (!typeValue) {
+			setSeriesCreateError(m.series_create_type_required, 'type');
+			return;
+		}
+		const time = seriesCreateTime;
+		if (!time) {
+			setSeriesCreateError(m.series_create_time_required, 'time');
+			return;
+		}
+		const durationValue = Number(seriesCreateDuration);
+		if (!seriesCreateDuration.trim() || !Number.isFinite(durationValue)) {
+			setSeriesCreateError(m.series_create_duration_required, 'duration');
+			return;
+		}
+		// from/until are pre-filled from the season but are freely editable (and
+		// the season's own dates may be blank) — an invalid range must be named
+		// HERE, not discovered inside `createEventSeries`'s `requireDateRange`
+		// after an org round-trip has already been spent on it.
+		if (!seriesCreateFrom) {
+			setSeriesCreateError(m.series_create_from_required, 'from');
+			return;
+		}
+		if (!seriesCreateUntil) {
+			setSeriesCreateError(m.series_create_until_required, 'until');
+			return;
+		}
+		if (seriesCreateUntil < seriesCreateFrom) {
+			setSeriesCreateError(m.series_create_until_before_from, 'until');
+			return;
+		}
+		// 'daily' ignores dayOfWeek entirely, so only the day-using patterns may
+		// demand one.
+		if (seriesCreateGenerate && seriesCreateDayApplies && seriesCreateDay === '') {
+			setSeriesCreateError(m.series_create_day_required, 'day');
+			return;
+		}
+
+		// The occurrence set is computed BEFORE any write: a recurrence that
+		// yields nothing (Mondays over a Tue–Sun range) must be REFUSED, not
+		// reported as a silent success with a childless series behind it.
+		let dates: Date[] = [];
+		if (seriesCreateGenerate) {
+			dates =
+				resume?.remaining ??
+				generateEventDates({
+					repeat: seriesCreateRepeat,
+					dayOfWeek: seriesCreateDayOfWeek,
+					timeOfDay: time,
+					from: seriesCreateFrom,
+					until: seriesCreateUntil,
+					skipDates: seriesCreateSkipDates
+				});
+			if (dates.length === 0) {
+				setSeriesCreateError(m.series_create_no_dates, null);
+				return;
+			}
+		} else if (resume) {
+			// Generation switched OFF after a partial run: the series already
+			// exists, so there is nothing left to write — just close out rather
+			// than creating a SECOND series for the same form.
+			closeSeriesCreateForm();
+			restoreSeriesCreateFocus();
+			return;
+		}
+
+		const current = selected;
+		if (!current || !seasonId) {
+			console.error('agenda: series create submitted with no selected collective/season');
+			setSeriesCreateError(m.series_create_failed, null);
+			return;
+		}
+		const cfg = { db: current.db, token: getToken() ?? '' };
+		// Captured up front (T4's F2 discipline): the bulk success path's
+		// `loadForSelected` re-derives `currentSeasonId` from the reload, so this
+		// is what the post-write refresh compares against.
+		const panelSeasonId = currentSeasonId;
+
+		seriesCreateSubmitting = true;
+		try {
+			let orgId: string | null;
+			try {
+				orgId = await resolveMyOrgId(cfg, current.personId);
+			} catch (e) {
+				console.error('agenda: resolving the organization for series create failed', e);
+				setSeriesCreateError(m.series_create_failed, null);
+				return;
+			}
+			if (!orgId) {
+				console.error('agenda: series create with no resolvable organization', current.personId);
+				setSeriesCreateError(m.series_create_failed, null);
+				return;
+			}
+
+			const intervalDays =
+				seriesCreateRepeat === 'daily' ? 1 : seriesCreateRepeat === 'biweekly' ? 14 : 7;
+			const trimmedLocation = seriesCreateLocation.trim();
+			const trimmedDescription = seriesCreateDescription.trim();
+
+			// #132/T5 review F1 — `start_date` / `end_date` are the FIRST and LAST
+			// OCCURRENCE (entityCreate.ts's own contract), not the generator's
+			// search range. The day of week is NOT stored on the series (only
+			// interval_days + start_time), so `start_date` is the ONLY place a
+			// later reader — an extend/regenerate feature, a report — can recover
+			// which weekday the cadence lands on. With the season defaults
+			// (2026-09-01 is a Tuesday) a weekly-MONDAY series would otherwise
+			// persist a Tuesday start_date and describe a schedule it never had.
+			// Only the generated set knows the real bounds, so this applies when
+			// generation is ON; with generation OFF there is nothing better than
+			// the operator's own range. (On a RESUME run `dates` is only the tail,
+			// but `seriesInput` is never sent then — the series already exists.)
+			const startDate =
+				seriesCreateGenerate && dates.length > 0 ? seriesCreateIsoDay(dates[0]) : seriesCreateFrom;
+			const endDate =
+				seriesCreateGenerate && dates.length > 0
+					? seriesCreateIsoDay(dates[dates.length - 1])
+					: seriesCreateUntil;
+
+			const seriesInput: CreateEventSeriesInput = {
+				name,
+				orgId,
+				extraParentIds: [seasonId],
+				eventType: typeValue,
+				intervalDays,
+				startTime: time,
+				durationMinutes: durationValue,
+				startDate,
+				endDate,
+				...(trimmedLocation ? { defaultLocation: trimmedLocation } : {}),
+				...(trimmedDescription ? { defaultDescription: trimmedDescription } : {})
+			};
+
+			let seriesId: string;
+			if (resume) {
+				// A previous run already put this series on the wire — re-creating
+				// it would leave a duplicate behind for every retry.
+				seriesId = resume.seriesId;
+			} else {
+				try {
+					seriesId = await createEventSeries(cfg, seriesInput);
+				} catch (e) {
+					console.error('agenda: series create failed', e);
+					setSeriesCreateError(m.series_create_failed, null);
+					return;
+				}
+			}
+
+			if (!seriesCreateGenerate) {
+				closeSeriesCreateForm();
+				refreshSeasonManageLists(cfg, seasonId);
+				restoreSeriesCreateFocus();
+				return;
+			}
+
+			// On a resume run, `total` stays the ORIGINAL occurrence count so the
+			// progress/failure counts keep describing the whole series, not just
+			// the tail.
+			const total = resume?.total ?? dates.length;
+			const alreadyCreated = total - dates.length;
+			let created = alreadyCreated;
+			for (let i = 0; i < dates.length; i += 1) {
+				// Set BEFORE the await — the spec pins "current 1 of 3 while the
+				// FIRST POST is in flight", not after it resolves.
+				seriesCreateProgress = { current: created + 1, total };
+				const startDatetime = tallinnLocalToUtcIso(seriesCreateLocalInput(dates[i]));
+				try {
+					await createEvent(cfg, {
+						orgId,
+						seriesId,
+						extraParentIds: [seasonId],
+						eventType: typeValue,
+						startDatetime
+					});
+					created += 1;
+				} catch (e) {
+					// STOP at the failure — no further createEvent calls, and no
+					// rollback of the series or of events 1..N-1 (nothing here may
+					// DELETE). Instead: remember exactly where the run stopped so a
+					// re-submit RESUMES rather than duplicating, and re-read both
+					// the agenda and the panel's lists so the occurrences that DID
+					// land become visible before the operator decides.
+					console.error('agenda: bulk event create failed', e);
+					seriesCreateProgress = null;
+					seriesCreateResume = { seriesId, remaining: dates.slice(i), total };
+					setSeriesCreateError(() => m.series_create_bulk_failed({ created, total }), null);
+					loadForSelected({ keepSeasonManage: true });
+					if (panelSeasonId === seasonId) {
+						refreshSeasonManageLists(cfg, seasonId);
+					}
+					return;
+				}
+			}
+			seriesCreateProgress = null;
+			seriesCreateResume = null;
+			closeSeriesCreateForm();
+			// The generated occurrences just landed on the agenda — `loadForSelected`
+			// keeps the panel open (`keepSeasonManage`) the same way event-create's
+			// bulk-adjacent write does; the panel's own two lists still need their
+			// own explicit re-read (`loadForSelected` does not touch them).
+			loadForSelected({ keepSeasonManage: true });
+			if (panelSeasonId === seasonId) {
+				refreshSeasonManageLists(cfg, seasonId);
+			}
+			restoreSeriesCreateFocus();
+		} finally {
+			seriesCreateSubmitting = false;
+		}
+	}
+
+	$effect(() => {
+		if (seriesCreateOpen && seriesCreateNameInput) seriesCreateNameInput.focus();
+	});
+
 	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
 	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
 	// display set). An incomplete member is a MEMBER, not a non-member — she must
@@ -2924,14 +3413,331 @@
 										<p class="text-xs tracking-wide text-ink-2 uppercase">
 											{m.season_manage_series_label()}
 										</p>
-										<button
-											type="button"
-											data-testid="season-manage-add-series"
-											class="text-xs text-ink underline"
-										>
-											{m.season_manage_add_series()}
-										</button>
+										{#if !seriesCreateOpen}
+											<button
+												type="button"
+												data-testid="season-manage-add-series"
+												class="text-xs text-ink underline"
+												onclick={openSeriesCreateForm}
+											>
+												{m.season_manage_add_series()}
+											</button>
+										{/if}
 									</div>
+									{#if seriesCreateOpen}
+										<div
+											data-testid="series-create-form"
+											role="dialog"
+											aria-label={m.series_create_form_label()}
+											tabindex="-1"
+											class="mt-1 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
+											onkeydown={onSeriesCreateFormKeydown}
+										>
+											<!-- Every box below carries `disabled={seriesCreateLocked}`: once a
+											     run has stopped partway, submit finishes THAT run and edits here
+											     would be silently discarded (review F5). -->
+											<input
+												type="text"
+												data-testid="series-create-name"
+												bind:this={seriesCreateNameInput}
+												aria-label={m.series_create_name_label()}
+												aria-invalid={seriesCreateInvalid('name')}
+												aria-describedby={seriesCreateDescribedBy('name')}
+												placeholder={m.series_create_name_placeholder()}
+												disabled={seriesCreateLocked}
+												value={seriesCreateName}
+												oninput={(e) => {
+													seriesCreateName = (e.currentTarget as HTMLInputElement).value;
+													clearSeriesCreateError();
+												}}
+												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+											/>
+											<input
+												type="text"
+												data-testid="series-create-type"
+												aria-label={m.series_create_type_label()}
+												aria-invalid={seriesCreateInvalid('type')}
+												aria-describedby={seriesCreateDescribedBy('type')}
+												disabled={seriesCreateLocked}
+												value={seriesCreateType}
+												oninput={(e) => {
+													seriesCreateType = (e.currentTarget as HTMLInputElement).value;
+													clearSeriesCreateError();
+												}}
+												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+											/>
+											<input
+												type="number"
+												data-testid="series-create-duration"
+												aria-label={m.series_create_duration_label()}
+												aria-invalid={seriesCreateInvalid('duration')}
+												aria-describedby={seriesCreateDescribedBy('duration')}
+												placeholder={m.series_create_duration_placeholder()}
+												disabled={seriesCreateLocked}
+												value={seriesCreateDuration}
+												oninput={(e) => {
+													seriesCreateDuration = (e.currentTarget as HTMLInputElement).value;
+													clearSeriesCreateError();
+												}}
+												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+											/>
+											<input
+												type="text"
+												data-testid="series-create-location"
+												aria-label={m.series_create_location_label()}
+												placeholder={m.series_create_location_placeholder()}
+												disabled={seriesCreateLocked}
+												value={seriesCreateLocation}
+												oninput={(e) =>
+													(seriesCreateLocation = (e.currentTarget as HTMLInputElement).value)}
+												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+											/>
+											<textarea
+												data-testid="series-create-description"
+												aria-label={m.series_create_description_label()}
+												placeholder={m.series_create_description_placeholder()}
+												disabled={seriesCreateLocked}
+												value={seriesCreateDescription}
+												oninput={(e) =>
+													(seriesCreateDescription = (
+														e.currentTarget as HTMLTextAreaElement
+													).value)}
+												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+											></textarea>
+
+											<div class="flex gap-2">
+												<select
+													data-testid="series-create-repeat"
+													aria-label={m.series_create_repeat_label()}
+													disabled={seriesCreateLocked}
+													value={seriesCreateRepeat}
+													onchange={(e) =>
+														(seriesCreateRepeat = (e.currentTarget as HTMLSelectElement)
+															.value as RepeatPattern)}
+													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												>
+													<option value="weekly">{m.series_create_repeat_weekly()}</option>
+													<option value="biweekly">{m.series_create_repeat_biweekly()}</option>
+													<option value="daily">{m.series_create_repeat_daily()}</option>
+												</select>
+												<!-- Daily ignores the day of week entirely (recurrence.ts) — an
+												     inert control must not be shown, let alone demanded. -->
+												{#if seriesCreateDayApplies}
+													<select
+														data-testid="series-create-day"
+														aria-label={m.series_create_day_label()}
+														aria-invalid={seriesCreateInvalid('day')}
+														aria-describedby={seriesCreateDescribedBy('day')}
+														disabled={seriesCreateLocked}
+														value={seriesCreateDay}
+														onchange={(e) => {
+															seriesCreateDay = (e.currentTarget as HTMLSelectElement).value;
+															clearSeriesCreateError();
+														}}
+														class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+													>
+														<option value="">{m.series_create_day_placeholder()}</option>
+														<option value="0">{m.series_create_day_0()}</option>
+														<option value="1">{m.series_create_day_1()}</option>
+														<option value="2">{m.series_create_day_2()}</option>
+														<option value="3">{m.series_create_day_3()}</option>
+														<option value="4">{m.series_create_day_4()}</option>
+														<option value="5">{m.series_create_day_5()}</option>
+														<option value="6">{m.series_create_day_6()}</option>
+													</select>
+												{/if}
+											</div>
+
+											<input
+												type="time"
+												data-testid="series-create-time"
+												aria-label={m.series_create_time_label()}
+												aria-invalid={seriesCreateInvalid('time')}
+												aria-describedby={seriesCreateDescribedBy('time')}
+												disabled={seriesCreateLocked}
+												value={seriesCreateTime}
+												oninput={(e) => {
+													seriesCreateTime = (e.currentTarget as HTMLInputElement).value;
+													clearSeriesCreateError();
+												}}
+												class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+											/>
+
+											<div class="flex gap-2">
+												<input
+													type="date"
+													data-testid="series-create-from"
+													aria-label={m.series_create_from_label()}
+													aria-invalid={seriesCreateInvalid('from')}
+													aria-describedby={seriesCreateDescribedBy('from')}
+													disabled={seriesCreateLocked}
+													value={seriesCreateFrom}
+													oninput={(e) => {
+														seriesCreateFrom = (e.currentTarget as HTMLInputElement).value;
+														clearSeriesCreateError();
+													}}
+													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												/>
+												<input
+													type="date"
+													data-testid="series-create-until"
+													aria-label={m.series_create_until_label()}
+													aria-invalid={seriesCreateInvalid('until')}
+													aria-describedby={seriesCreateDescribedBy('until')}
+													disabled={seriesCreateLocked}
+													value={seriesCreateUntil}
+													oninput={(e) => {
+														seriesCreateUntil = (e.currentTarget as HTMLInputElement).value;
+														clearSeriesCreateError();
+													}}
+													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												/>
+											</div>
+
+											<label class="flex items-center gap-1.5 text-xs text-ink">
+												<input
+													type="checkbox"
+													data-testid="series-create-generate"
+													checked={seriesCreateGenerate}
+													onchange={(e) =>
+														(seriesCreateGenerate = (e.currentTarget as HTMLInputElement)
+															.checked)}
+												/>
+												{m.series_create_generate_label()}
+											</label>
+
+											<div class="flex items-center gap-2">
+												<input
+													type="date"
+													data-testid="series-create-skip-date"
+													aria-label={m.series_create_skip_date_label()}
+													disabled={seriesCreateLocked}
+													value={seriesCreateSkipDateInput}
+													oninput={(e) =>
+														(seriesCreateSkipDateInput = (
+															e.currentTarget as HTMLInputElement
+														).value)}
+													class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												/>
+												<button
+													type="button"
+													data-testid="series-create-skip-add"
+													disabled={seriesCreateLocked}
+													class="text-xs text-ink underline disabled:opacity-50"
+													onclick={addSeriesCreateSkipDate}
+												>
+													{m.series_create_skip_add()}
+												</button>
+											</div>
+											{#if seriesCreateSkipDates.length > 0}
+												<ul class="flex flex-wrap gap-1.5">
+													{#each seriesCreateSkipDates as date (date)}
+														<li
+															data-testid="series-create-skip-{date}"
+															class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+														>
+															{date}
+															<button
+																type="button"
+																data-testid="series-create-skip-remove-{date}"
+																aria-label={m.series_create_skip_remove({ date })}
+																disabled={seriesCreateLocked}
+																class="text-ink-2 hover:text-ink disabled:opacity-50"
+																onclick={() => removeSeriesCreateSkipDate(date)}
+															>
+																&times;
+															</button>
+														</li>
+													{/each}
+												</ul>
+											{/if}
+
+											{#if seriesCreatePreviewRows !== null}
+												<div data-testid="series-create-preview" class="text-xs text-ink-2">
+													<p class="tracking-wide uppercase">
+														{m.series_create_preview_label()}
+													</p>
+													<!-- The count says up front what submit will do; a daily series
+													     across a season is ~90 rows, so the list scrolls INSIDE the
+													     form rather than pushing submit/cancel off a phone screen.
+													     Suppressed once a stopped run is resumable: submit would then
+													     create only the remainder, and the resume notice below is the
+													     number that applies. -->
+													{#if !seriesCreateResume}
+														<p data-testid="series-create-preview-count" class="text-ink">
+															{seriesCreatePreviewRows.length === 1
+																? m.series_create_preview_count_one()
+																: m.series_create_preview_count_other({
+																		count: seriesCreatePreviewRows.length
+																	})}
+														</p>
+													{/if}
+													<!-- Review F3 — the ROWS come from `seriesCreatePreviewRows`, which
+													     is the REMAINDER while a stopped run is resumable. Listing the
+													     full recomputed set there contradicted the resume notice right
+													     under it: three dates shown, one event actually created. -->
+													<div class="max-h-32 overflow-y-auto">
+														{#each seriesCreatePreviewRows as date (date.getTime())}
+															<p data-testid="series-create-preview-date-{seriesCreateIsoDay(date)}">
+																{seriesCreateIsoDay(date)}
+															</p>
+														{/each}
+													</div>
+												</div>
+											{/if}
+
+											{#if seriesCreateResume}
+												<p data-testid="series-create-resume" class="text-xs text-ink-2">
+													{m.series_create_resume_notice({
+														remaining: seriesCreateResume.remaining.length,
+														total: seriesCreateResume.total
+													})}
+												</p>
+											{/if}
+
+											{#if seriesCreateProgress}
+												<p data-testid="series-create-progress" role="status" class="text-xs text-ink-2">
+													{m.series_create_progress({
+														current: seriesCreateProgress.current,
+														total: seriesCreateProgress.total
+													})}
+												</p>
+											{/if}
+
+											{#if seriesCreateError}
+												<p
+													id="series-create-error"
+													data-testid="series-create-error"
+													role="alert"
+													class="text-xs text-red-700"
+												>
+													{seriesCreateError()}
+												</p>
+											{/if}
+
+											<div class="flex gap-2">
+												<button
+													type="button"
+													data-testid="series-create-submit"
+													disabled={seriesCreateSubmitting}
+													aria-busy={seriesCreateSubmitting}
+													class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+													onclick={() => void submitSeriesCreate()}
+												>
+													{m.series_create_submit()}
+												</button>
+												<button
+													type="button"
+													data-testid="series-create-cancel"
+													disabled={seriesCreateSubmitting}
+													class="px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
+													onclick={dismissSeriesCreateForm}
+												>
+													{m.roster_cancel()}
+												</button>
+											</div>
+										</div>
+									{/if}
 									{#if seasonManageSeriesError}
 										<p
 											data-testid="season-manage-series-error"
