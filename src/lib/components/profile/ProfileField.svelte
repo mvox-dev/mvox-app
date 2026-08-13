@@ -95,7 +95,7 @@
 			oninput={handleInput}
 			onblur={handleBlur}
 			disabled={saving && disabled}
-			class="rounded-md border border-ink px-3 py-2 text-sm disabled:opacity-50"
+			class="rounded-md border border-ink px-3 py-2 disabled:opacity-50"
 		/>
 	</label>
 

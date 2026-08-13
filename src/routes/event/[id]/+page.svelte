@@ -1599,7 +1599,7 @@
 						type="datetime-local"
 						data-testid="event-edit-input-start_datetime"
 						aria-label={m.event_edit_start_datetime_aria_label()}
-						class="border-b border-ink bg-transparent text-sm text-ink-2"
+						class="border-b border-ink bg-transparent text-ink-2"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1657,7 +1657,7 @@
 						min="0"
 						data-testid="event-edit-input-duration_minutes"
 						aria-label={m.event_edit_duration_minutes_aria_label()}
-						class="w-24 border-b border-ink bg-transparent text-xs text-ink-2"
+						class="w-24 border-b border-ink bg-transparent text-ink-2"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1699,7 +1699,7 @@
 						type="text"
 						data-testid="event-edit-input-location"
 						aria-label={m.event_edit_location_aria_label()}
-						class="border-b border-ink bg-transparent text-sm text-ink-2"
+						class="border-b border-ink bg-transparent text-ink-2"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
@@ -1745,7 +1745,7 @@
 					<textarea
 						data-testid="event-edit-input-description"
 						aria-label={m.event_edit_description_aria_label()}
-						class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-sm text-ink"
+						class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-ink"
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLTextAreaElement).value)}

@@ -457,7 +457,7 @@
 						value={createName}
 						oninput={(e) => (createName = (e.currentTarget as HTMLInputElement).value)}
 						onkeydown={onNameKeydown}
-						class="border border-ink-5 bg-paper px-1.5 py-1 text-xs text-ink"
+						class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 					/>
 					<!-- One-way `value=` + explicit `onchange` (not `bind:value`) — same fix
 					     as admin/invite/+page.svelte's `invite-db` select: `bind:value`'s
@@ -468,7 +468,7 @@
 						aria-label={m.roster_section_parent_label()}
 						value={createParentId}
 						onchange={(e) => (createParentId = (e.currentTarget as HTMLSelectElement).value)}
-						class="border border-ink-5 bg-paper px-1.5 py-1 text-xs text-ink"
+						class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 					>
 						<option value="">{m.roster_new_section_top_level()}</option>
 						{#each flatSections as node (node.id)}

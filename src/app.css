@@ -50,3 +50,10 @@ body::-webkit-scrollbar,
 	width: 0;
 	height: 0;
 }
+
+/* #130 — iOS Safari auto-zooms on focus when a form control's computed font-size is below 16px. */
+input,
+select,
+textarea {
+	font-size: 1rem;
+}

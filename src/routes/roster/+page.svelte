@@ -1780,14 +1780,14 @@
 									value={pageCreateName}
 									oninput={(e) => (pageCreateName = (e.currentTarget as HTMLInputElement).value)}
 									onkeydown={onPageCreateNameKeydown}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-xs text-ink"
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
 								<select
 									data-testid="roster-new-section-parent"
 									aria-label={m.roster_section_parent_label()}
 									value={pageCreateParentId}
 									onchange={(e) => (pageCreateParentId = (e.currentTarget as HTMLSelectElement).value)}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-xs text-ink"
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								>
 									<option value="">{m.roster_new_section_top_level()}</option>
 									{#each ownOrgFlatSections as node (node.id)}

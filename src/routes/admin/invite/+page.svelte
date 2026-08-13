@@ -259,7 +259,7 @@
 						data-testid="invite-link"
 						readonly
 						value={inviteLink}
-						class="rounded-md border border-ink px-3 py-2 font-mono text-xs"
+						class="rounded-md border border-ink px-3 py-2 font-mono"
 					/>
 				</label>
 				<button
@@ -306,7 +306,7 @@
 						data-testid="invite-db"
 						value={dbId}
 						onchange={(e) => (dbId = e.currentTarget.value)}
-						class="rounded-md border border-ink px-3 py-2 text-sm"
+						class="rounded-md border border-ink px-3 py-2"
 					>
 						<!-- Explicit empty-value option, ALWAYS present (not `{#if}`-gated) so
 						     the option SET never changes shape mid-interaction: a native

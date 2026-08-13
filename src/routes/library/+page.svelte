@@ -583,14 +583,14 @@
 				<!-- #74 — bulk checkout section (work→edition two-level picker) -->
 				<div data-testid="bulk-checkout" class="mt-3">
 					<h3 class="text-xs font-medium">{m.library_bulk_checkout_title()}</h3>
-					<select data-testid="bulk-checkout-work-select" aria-label={m.library_bulk_checkout_work_placeholder()} value={bulkCheckoutWorkId} onchange={(e) => (bulkCheckoutWorkId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+					<select data-testid="bulk-checkout-work-select" aria-label={m.library_bulk_checkout_work_placeholder()} value={bulkCheckoutWorkId} onchange={(e) => (bulkCheckoutWorkId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1">
 						<option value="">{m.library_bulk_checkout_work_placeholder()}</option>
 						{#each works as work (work.id)}
 							<option value={work.id}>{work.name}</option>
 						{/each}
 					</select>
 					{#if bulkCheckoutWorkId}
-						<select data-testid="bulk-checkout-edition-select" aria-label={m.library_bulk_checkout_edition_placeholder()} value={bulkCheckoutEditionId} onchange={(e) => (bulkCheckoutEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs">
+						<select data-testid="bulk-checkout-edition-select" aria-label={m.library_bulk_checkout_edition_placeholder()} value={bulkCheckoutEditionId} onchange={(e) => (bulkCheckoutEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1">
 							<option value="">{m.library_bulk_checkout_edition_placeholder()}</option>
 							{#each filteredBulkCheckoutEditions as edition (edition.id)}
 								<option value={edition.id}>{edition.name}</option>
@@ -625,7 +625,7 @@
 								{/if}
 							{/each}
 						</div>
-						<input data-testid="bulk-checkout-due-date" type="date" bind:value={bulkCheckoutDueDate} class="mt-1 w-full rounded border border-ink-5 px-2 py-1 text-xs" />
+						<input data-testid="bulk-checkout-due-date" type="date" bind:value={bulkCheckoutDueDate} class="mt-1 w-full rounded border border-ink-5 px-2 py-1" />
 						{#if bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available}
 							<p data-testid="bulk-checkout-too-many" class="mt-1 text-xs text-red-700" role="alert">{m.library_bulk_checkout_too_many()}</p>
 						{/if}
@@ -898,7 +898,7 @@
 																					const memberId = e.currentTarget.value;
 																					if (memberId) void handleInlineCheckout(copy.id, memberId);
 																				}}
-																				class="rounded border border-ink-5 px-2 py-0.5 text-xs"
+																				class="rounded border border-ink-5 px-2 py-0.5"
 																			>
 																				<option value="" disabled>{m.library_inline_checkout_placeholder()}</option>
 																				{#each allMembers as member (member.memberId)}

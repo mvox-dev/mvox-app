@@ -317,7 +317,7 @@
 		     onpinedition immediately, no confirm step. -->
 		<select
 			data-testid="work-edition-picker"
-			class="w-full text-xs sm:w-auto"
+			class="w-full sm:w-auto"
 			value={row.editionId}
 			disabled={pendingKeys.has(row.id)}
 			aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
@@ -465,7 +465,7 @@
 		<div data-testid="work-manage-add-work" class="flex flex-wrap items-center gap-2 pt-1">
 			<select
 				data-testid="work-manage-add-work-select"
-				class="w-full text-xs sm:w-auto"
+				class="w-full sm:w-auto"
 				value={selectedWorkId}
 				disabled={pendingKeys.has(ADD_WORK_KEY)}
 				aria-label={m.repertoire_add_work_select_aria_label()}
@@ -498,7 +498,7 @@
 		<div data-testid="work-manage-add-programme" class="flex flex-wrap items-center gap-2 pt-1">
 			<select
 				data-testid="work-manage-add-programme-select"
-				class="w-full text-xs sm:w-auto"
+				class="w-full sm:w-auto"
 				value={selectedEditionForAdd}
 				disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
 				aria-label={m.repertoire_add_programme_select_aria_label()}
