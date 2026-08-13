@@ -214,4 +214,62 @@ export async function removeSeasonConductor(
 	if (!delRes.ok) throw new Error(`removeSeasonConductor delete failed: ${delRes.status}`);
 }
 
+// ── #132/T4 — series defaults for the event-creation inheritance preview ──────
+
+/** The four event fields a series occurrence inherits when it does not carry
+ *  its own value (v4E: name / duration_minutes / location / description ←
+ *  series name / duration_minutes / default_location / default_description).
+ *  `durationMinutes` is null when the series carries none. */
+export interface SeriesDefaults {
+	name: string;
+	durationMinutes: number | null;
+	defaultLocation: string;
+	defaultDescription: string;
+}
+
+interface SeriesDefaultsEntity {
+	name?: Array<{ string: string }>;
+	default_location?: Array<{ string: string }>;
+	default_description?: Array<{ string: string }>;
+	duration_minutes?: Array<{ number: number }>;
+}
+
+/**
+ * #132/T4 GREEN — the event-creation inheritance PREVIEW's source.
+ *
+ * ONE fetch, the same read `loadEventDetail`'s merge already performs per series:
+ *   entity/{seriesId}?props=name,default_location,duration_minutes,default_description
+ * The event-creation form shows these as PLACEHOLDERS (never values) on the
+ * name / duration / location / description inputs while that series is selected
+ * — the same read-side inheritance the agenda merge applies, previewed at write
+ * time. `default_description` joins the set in the #132/T4 review (2nd pass) F4:
+ * the read side has always inherited it (eventDetail.ts's
+ * `event.description ?? series.default_description`), so leaving it out of the
+ * preview meant a viewer could not tell that a blank description would inherit.
+ * Non-2xx throws (fail loud).
+ */
+export async function getSeriesDefaults(
+	cfg: EntuCfg,
+	seriesId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<SeriesDefaults> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity/${seriesId}?props=name,default_location,duration_minutes,default_description`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`getSeriesDefaults failed: ${res.status}`);
+	const body = (await res.json()) as { entity?: SeriesDefaultsEntity };
+	const entity = body.entity ?? {};
+	return {
+		name: entity.name?.[0]?.string ?? '',
+		durationMinutes: entity.duration_minutes?.[0]?.number ?? null,
+		defaultLocation: entity.default_location?.[0]?.string ?? '',
+		defaultDescription: entity.default_description?.[0]?.string ?? ''
+	};
+}
+
 // (*MVOX:Palestrina* — #132/T3 GREEN: season management data layer)
+// (*MVOX:Palestrina* — #132/T4 GREEN: getSeriesDefaults)

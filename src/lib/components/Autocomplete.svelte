@@ -44,6 +44,15 @@
 		/** Enter on non-matching text commits it as `{ id: null, label: text }`. Default false. */
 		allowFreeText?: boolean;
 		/**
+		 * #132/T4 review F1 — the LIVE typed text, reported on every keystroke and
+		 * reset to '' on a commit. Without it the query is private to this
+		 * component, so an `allowFreeText` caller cannot tell "nothing typed" from
+		 * "typed but never confirmed with Enter": a form holding a visibly filled
+		 * type box submitted as if the field were empty. Optional — callers that
+		 * only care about commits omit it.
+		 */
+		onQueryChange?: (query: string) => void;
+		/**
 		 * #132/T2 review F5 — announced inside the OPEN listbox when the filter
 		 * matches nothing. Without it an open combobox with zero options is
 		 * silence: `aria-expanded="true"` over an empty listbox announces nothing
@@ -51,6 +60,13 @@
 		 * caller's); omitted → no status line (the pre-review behaviour).
 		 */
 		emptyLabel?: string;
+		/**
+		 * #132/T4 review F1 — the id of the message element currently REFUSING
+		 * this field. Present → the input is `aria-invalid` AND points at it; the
+		 * two always travel together (T2 review F2's pairing), so the combobox is
+		 * never flagged invalid with nothing to read.
+		 */
+		errorId?: string;
 	}
 
 	const {
@@ -59,7 +75,9 @@
 		placeholder,
 		label,
 		allowFreeText = false,
-		emptyLabel
+		emptyLabel,
+		onQueryChange,
+		errorId
 	}: Props = $props();
 
 	instanceCounter += 1;
@@ -91,6 +109,9 @@
 		onSelect(selection);
 		closeDropdown();
 		query = '';
+		// Reported AFTER onSelect, so a caller tracking both never sees a stale
+		// pending query alongside the value it just committed.
+		onQueryChange?.('');
 	}
 
 	function pick(item: Item): void {
@@ -102,6 +123,7 @@
 		open = true;
 		// Typing never auto-highlights (contract) — a fresh filter starts blank.
 		activeIndex = -1;
+		onQueryChange?.(query);
 	}
 
 	function moveHighlight(delta: number): void {
@@ -230,6 +252,8 @@
 		aria-expanded={open}
 		aria-controls={open ? listboxId : undefined}
 		aria-activedescendant={open ? optionId(filtered[activeIndex]) : undefined}
+		aria-invalid={errorId ? true : undefined}
+		aria-describedby={errorId}
 		aria-label={label}
 		{placeholder}
 		value={query}
@@ -283,3 +307,4 @@
 
 <!-- (*MVOX:Tallis* — #132/T2 RED stub + props contract) -->
 <!-- (*MVOX:Palestrina* — #132/T2 GREEN implementation) -->
+<!-- (*MVOX:Palestrina* — #132/T4 review F1: onQueryChange seam) -->

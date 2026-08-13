@@ -64,16 +64,24 @@
 	import Autocomplete from '$lib/components/Autocomplete.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
-	import { createSeason } from '$lib/entity/entityCreate';
+	import { createEvent, createSeason } from '$lib/entity/entityCreate';
+	import type { CreateEventInput } from '$lib/entity/entityCreate';
 	import { resolveMyOrgId } from '$lib/org/myOrg';
 	import {
 		listEventSeriesForSeason,
 		listEventsForSeason,
 		updateSeasonField,
 		addSeasonConductor,
-		removeSeasonConductor as apiRemoveSeasonConductor
+		removeSeasonConductor as apiRemoveSeasonConductor,
+		getSeriesDefaults
 	} from '$lib/seasons/seasonManage';
-	import type { SeasonEditableField, SeriesListItem, StandaloneEvent } from '$lib/seasons/seasonManage';
+	import type {
+		SeasonEditableField,
+		SeriesDefaults,
+		SeriesListItem,
+		StandaloneEvent
+	} from '$lib/seasons/seasonManage';
+	import { listEventTypes } from '$lib/events/eventTypes';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -266,7 +274,18 @@
 	// one if the user switches collectives before the first load resolves — the
 	// same guard covers a stale rejection (M2 fix below), not just a stale resolve.
 	let requestId = 0;
-	function loadForSelected() {
+	/**
+	 * `keepSeasonManage` (#132/T4 review F2): this reload is a SAME-COLLECTIVE
+	 * refresh after a write made from inside the season-manage panel, not a
+	 * collective switch. The panel (and the roster its conductor chips read
+	 * names from) must survive it — otherwise the panel the editor is standing
+	 * in vanishes mid-task, and the list refresh that follows writes into a
+	 * panel nobody can see. NEVER pass it for a genuine selection change: the
+	 * teardown is what stops the previous collective's series/events from
+	 * surviving into the new one.
+	 */
+	function loadForSelected(opts: { keepSeasonManage?: boolean } = {}) {
+		const keepSeasonManage = opts.keepSeasonManage === true;
 		const current = selected;
 		if (!current) {
 			agendaItems = [];
@@ -295,6 +314,7 @@
 			seasonRatesError = false;
 			seasons = [];
 			closeSeasonCreateForm();
+			closeEventCreateForm();
 			return;
 		}
 		const thisRequest = ++requestId;
@@ -312,9 +332,15 @@
 		worksByEventId = {};
 		pdfError = false;
 		resetManagement();
-		rosterCache = null;
-		rosterRows = [];
-		resetSeasonManage();
+		if (!keepSeasonManage) {
+			// The roster ride-along is deliberate: the panel's conductor chips
+			// resolve their names off `rosterRows`, and nothing re-fetches it while
+			// the panel merely stays open — wiping it would turn every chip into
+			// "unknown member" for a refresh that changed no collective.
+			rosterCache = null;
+			rosterRows = [];
+			resetSeasonManage();
+		}
 		attendanceFailedByEvent = new Map();
 		myAttendance = [];
 		seasonSummaryExpanded = false;
@@ -324,6 +350,7 @@
 		seasonRatesError = false;
 		seasons = [];
 		closeSeasonCreateForm();
+		closeEventCreateForm();
 
 		const personId = current.personId;
 
@@ -2026,6 +2053,595 @@
 		});
 	}
 
+	// ── #132/T4 — event CREATION: two entry points, one inline form ───────────
+
+	/** Tallinn IANA timezone — same TE.4 wall-clock convention as
+	 *  event/[id]/+page.svelte's editor (and AgendaList's display). Duplicated
+	 *  rather than shared: neither of those two owns a module the other could
+	 *  import from without a bigger refactor, and this is the third site to
+	 *  need the SAME two-pass DST-aware conversion. */
+	const EVENT_CREATE_TZ = 'Europe/Tallinn';
+
+	/** The Tallinn wall-clock offset (minutes) in effect AT `date` — see
+	 *  event/[id]/+page.svelte's `tallinnOffsetMinutes` for the derivation. */
+	function eventCreateTallinnOffsetMinutes(date: Date): number {
+		const parts = new Intl.DateTimeFormat('en-US', {
+			timeZone: EVENT_CREATE_TZ,
+			hourCycle: 'h23',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit'
+		}).formatToParts(date);
+		const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+		const asUtc = Date.UTC(
+			get('year'),
+			get('month') - 1,
+			get('day'),
+			get('hour'),
+			get('minute'),
+			get('second')
+		);
+		return (asUtc - date.getTime()) / 60_000;
+	}
+
+	/** A `datetime-local` value typed AS TALLINN wall clock → the UTC instant
+	 *  to write on the wire (TE.4, exactly — see event/[id]/+page.svelte's
+	 *  `tallinnLocalToUtcIso` for why this needs two passes). '' on an empty or
+	 *  unparseable draft. */
+	function tallinnLocalToUtcIso(local: string): string {
+		const [datePart, timePart] = local.split('T');
+		const [y, mo, d] = (datePart ?? '').split('-').map(Number);
+		const [h, mi] = (timePart ?? '00:00').split(':').map(Number);
+		const guessUtcMs = Date.UTC(y, mo - 1, d, h, mi);
+		if (Number.isNaN(guessUtcMs)) return '';
+		const firstOffset = eventCreateTallinnOffsetMinutes(new Date(guessUtcMs));
+		let instantMs = guessUtcMs - firstOffset * 60_000;
+		const secondOffset = eventCreateTallinnOffsetMinutes(new Date(instantMs));
+		if (secondOffset !== firstOffset) instantMs = guessUtcMs - secondOffset * 60_000;
+		return new Date(instantMs).toISOString();
+	}
+
+	// Rights gate: the SAME formula `showSeasonManageGear` already computes —
+	// a CURRENT season, editor rights on it — deliberately independent of T2's
+	// `showSeasonCreate` gate (an upcoming season hides [+ Season] but must not
+	// hide [+ Event]; see the RED spec's own doc on the two gates).
+	const showEventCreate = $derived(currentSeasonId !== null && seasonManageRights === 'editor');
+
+	/** The event-create fields a validation message can belong to; `null` = a
+	 *  form-wide failure (no org, a failed write) that names no single box. */
+	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | null;
+
+	/** The created event's start, in the viewer's locale AND Tallinn wall clock —
+	 *  for the success announcement. A raw ISO string never reaches the UI
+	 *  (#132/T3 review F3). */
+	const eventCreateStatusFmt = new Intl.DateTimeFormat(undefined, {
+		timeZone: EVENT_CREATE_TZ,
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23'
+	});
+
+	let eventCreateOpen = $state(false);
+	// Which entry point opened the form — the ONLY thing that decides whether a
+	// successful create ALSO refreshes the panel's two lists (a page-level open
+	// has no panel to refresh).
+	let eventCreateOrigin = $state<'agenda' | 'panel' | null>(null);
+	let eventCreateSeasonId = $state('');
+	let eventCreateSeriesId = $state('');
+	let eventCreateSeriesOptions = $state<SeriesListItem[]>([]);
+	// The selected series' inherited name/duration/location/description —
+	// rendered as PLACEHOLDERS only, never copied into a value (the #132/T4
+	// preview contract: what this shows is exactly what the read-side merge
+	// (`listRehearsals`, `loadEventDetail`) would show for an untouched
+	// occurrence).
+	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
+	// Deduped + sorted PRIOR event_type values — the type Autocomplete's source.
+	// Dedup/sort is deliberately done HERE (not in `listEventTypes`, which hands
+	// back the wire values verbatim) — see eventTypes.ts's module doc.
+	let eventCreateTypeOptions = $state<string[]>([]);
+	let eventCreateType = $state('');
+	let eventCreateName = $state('');
+	let eventCreateDatetime = $state('');
+	let eventCreateDuration = $state('');
+	let eventCreateLocation = $state('');
+	let eventCreateDescription = $state('');
+	let eventCreateCapacity = $state('');
+	let eventCreateConductors = $state<Array<{ id: string; name: string }>>([]);
+	let eventCreateError = $state<(() => string) | null>(null);
+	/** Which field the message belongs to — always set WITH the message, the T2
+	 *  review F2 shape: a form-wide "try again" that names no field is a dead end
+	 *  for anyone who cannot see which box is empty. `null` = form-wide. */
+	let eventCreateErrorField = $state<EventCreateErrorField>(null);
+	/** #132/T4 review F1 — the type Autocomplete's LIVE text, mirrored here via
+	 *  its `onQueryChange`. `eventCreateType` alone is not the truth of what the
+	 *  viewer sees: "afterparty" typed and never confirmed with Enter leaves the
+	 *  committed value at '' while the word is still in the box. */
+	let eventCreateTypeQuery = $state('');
+	/**
+	 * #132/T4 review (2nd pass) F1 — the type the viewer is ACTUALLY looking at.
+	 *
+	 * The LIVE box wins over the committed value, not the other way round. A
+	 * commit resets the Autocomplete's own input to '' and reports
+	 * `onQueryChange('')` (Autocomplete.svelte's `commit`), so a blank query means
+	 * "the box is empty — the committed value is all there is". A NON-blank query
+	 * means the viewer has typed since: whether or not she pressed Enter, that
+	 * word is what the box reads. The other precedence loses silently — commit
+	 * 'rehearsal', retype 'concert' without Enter, submit, and the write carries
+	 * 'rehearsal' with no refusal and no aria-invalid to show for it.
+	 */
+	const eventCreateEffectiveType = $derived((eventCreateTypeQuery.trim() || eventCreateType).trim());
+	/**
+	 * #132/T4 review (2nd pass) F3 — the open form's IDENTITY, for the three
+	 * async reads it fires. Every other async assignment on this page carries an
+	 * in-flight guard; these had none, so a reply belonging to a form that has
+	 * since been closed (or reopened) still landed in its state.
+	 *
+	 * Bumped ONLY on open/close, deliberately: the type-options read is
+	 * season-independent, so bumping on a season change would drop a perfectly
+	 * good type list just because the viewer picked her season quickly. The two
+	 * season-/series-scoped reads pair this token with a VALUE check against the
+	 * current selection instead (see their guards) — that is the race the review
+	 * names: a `listEventSeriesForSeason` for the PREVIOUS season resolving after
+	 * the switch and offering its series under the newly selected season, which
+	 * then rides along as a cross-season `event_series` parent on the new event.
+	 */
+	let eventCreateLoadId = 0;
+	let eventCreateSubmitting = $state(false);
+	/** #132/T4 review F3 — the announced result. Mounted from first render (a
+	 *  live region announces only CHANGES), same "invisible success" discipline
+	 *  as `seasonCreateStatus` / #124: the form simply vanishing is the exact
+	 *  signal Cancel gives, and an event created into a NON-current season
+	 *  changes nothing visible on this page at all. */
+	let eventCreateStatus = $state('');
+	let eventCreateNameInput = $state<HTMLInputElement | null>(null);
+	/** The page-level [+ Event] — focus's landing after the form unmounts itself
+	 *  (an agenda-born create/cancel), so the keyboard user is not dropped at
+	 *  <body>. A panel-born form hands focus back to the panel instead. */
+	let eventCreateButtonEl = $state<HTMLButtonElement | null>(null);
+
+	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
+		eventCreateError = msg;
+		eventCreateErrorField = field;
+	}
+
+	/** T2 review F6's rule, applied here: an error that outlives the edit which
+	 *  fixed it is a lie. Any edit to any field clears it; the next submit
+	 *  re-decides. */
+	function clearEventCreateError(): void {
+		eventCreateError = null;
+		eventCreateErrorField = null;
+	}
+
+	/** `aria-describedby` for a field that currently owns the error message. */
+	function eventCreateDescribedBy(field: EventCreateErrorField): string | undefined {
+		return eventCreateErrorField === field ? 'event-create-error' : undefined;
+	}
+
+	function eventCreateInvalid(field: EventCreateErrorField): true | undefined {
+		return eventCreateErrorField === field ? true : undefined;
+	}
+
+	/** Deduped (exact) + sorted (localeCompare) — the PAGE's job per the
+	 *  eventTypes.ts contract; `listEventTypes` hands back the wire values
+	 *  verbatim, duplicates included. Lazy: fired only when the form opens. */
+	function loadEventCreateTypeOptions(cfg: ManageCfg): void {
+		const thisLoad = eventCreateLoadId;
+		listEventTypes(cfg)
+			.then((raw) => {
+				if (thisLoad !== eventCreateLoadId) return; // review F3 — a closed/reopened form's reply
+				const unique = [...new Set(raw)];
+				unique.sort((a, b) => a.localeCompare(b));
+				eventCreateTypeOptions = unique;
+			})
+			.catch((e) => {
+				if (thisLoad !== eventCreateLoadId) return;
+				console.error('agenda: loading prior event types failed', e);
+				eventCreateTypeOptions = [];
+			});
+	}
+
+	/** The series options for a CHOSEN season — shared by the initial
+	 *  panel-prefilled open and every subsequent season-select change.
+	 *
+	 *  Guarded twice (review F3): the form must still be the same one, AND the
+	 *  season this list belongs to must still be the selected one. Without the
+	 *  second half, switching season A → B while A's read is in flight repopulates
+	 *  the select with A's series under B — pick one and the created event carries
+	 *  a cross-season `event_series` parent no reader can make sense of. */
+	function loadEventCreateSeriesOptions(cfg: ManageCfg, seasonId: string): void {
+		const thisLoad = eventCreateLoadId;
+		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeasonId !== seasonId;
+		listEventSeriesForSeason(cfg, seasonId)
+			.then((list) => {
+				if (stale()) return;
+				eventCreateSeriesOptions = list;
+			})
+			.catch((e) => {
+				if (stale()) return;
+				console.error('agenda: loading series options for event create failed', e);
+				eventCreateSeriesOptions = [];
+			});
+	}
+
+	/** Opened from the page-level [+ Event] (`origin: 'agenda'`, season starts
+	 *  EMPTY) or from T3's panel [+ Event] (`origin: 'panel'`, the panel's own
+	 *  season pre-filled and its series already offered). Same form either way. */
+	function openEventCreateForm(origin: 'agenda' | 'panel'): void {
+		eventCreateLoadId += 1; // review F3 — a new form; nothing the last one asked for belongs here
+		eventCreateOrigin = origin;
+		const prefillSeasonId = origin === 'panel' ? (currentSeasonId ?? '') : '';
+		eventCreateSeasonId = prefillSeasonId;
+		eventCreateSeriesId = '';
+		eventCreateSeriesOptions = [];
+		eventCreateSeriesDefaults = null;
+		eventCreateType = '';
+		eventCreateTypeQuery = '';
+		eventCreateTypeOptions = [];
+		eventCreateName = '';
+		eventCreateDatetime = '';
+		eventCreateDuration = '';
+		eventCreateLocation = '';
+		eventCreateDescription = '';
+		eventCreateCapacity = '';
+		eventCreateConductors = [];
+		clearEventCreateError();
+		eventCreateSubmitting = false;
+		eventCreateOpen = true;
+
+		const current = selected;
+		if (!current) return;
+		const cfg = { db: current.db, token: getToken() ?? '' };
+		// Lazy, form-open-only reads — never on the plain agenda visit.
+		loadEventCreateTypeOptions(cfg);
+		getRoster(cfg).catch((e) => {
+			console.error('agenda: loading the roster for the event conductor autocomplete failed', e);
+		});
+		if (prefillSeasonId) loadEventCreateSeriesOptions(cfg, prefillSeasonId);
+	}
+
+	function closeEventCreateForm(): void {
+		eventCreateLoadId += 1; // review F3 — replies to a form that is gone land nowhere
+		eventCreateOpen = false;
+		eventCreateOrigin = null;
+		eventCreateSeasonId = '';
+		eventCreateSeriesId = '';
+		eventCreateSeriesOptions = [];
+		eventCreateSeriesDefaults = null;
+		eventCreateType = '';
+		eventCreateTypeQuery = '';
+		eventCreateTypeOptions = [];
+		eventCreateName = '';
+		eventCreateDatetime = '';
+		eventCreateDuration = '';
+		eventCreateLocation = '';
+		eventCreateDescription = '';
+		eventCreateCapacity = '';
+		eventCreateConductors = [];
+		clearEventCreateError();
+	}
+
+	/**
+	 * The form is self-unmounting, and the element that had focus goes with it —
+	 * without this the keyboard user lands at <body> (#113 TU.5, #99 F1/F3, the
+	 * same debt `closeSeasonManagePanel` pays). A PANEL-born form hands focus
+	 * back to the still-open panel; an agenda-born one to the [+ Event] button
+	 * that re-renders in the form's place. `tick()` because both targets are
+	 * mounted only on the NEXT tick. NOT folded into `closeEventCreateForm` —
+	 * that also runs on a collective switch, where stealing focus would be wrong.
+	 *
+	 * Best-effort by design (`?.`): on the agenda-born SUCCESS path the reload
+	 * blanks `currentSeasonId` until it resolves, so the button is briefly
+	 * unmounted and there is nothing to focus — the pre-existing behaviour, not
+	 * a regression. Cancel/Escape, which reload nothing, always land.
+	 */
+	function restoreEventCreateFocus(origin: 'agenda' | 'panel' | null): void {
+		tick().then(() => {
+			if (origin === 'panel') seasonManagePanelEl?.focus();
+			else eventCreateButtonEl?.focus();
+		});
+	}
+
+	/** Cancel / Escape: dismiss WITHOUT writing, and give focus somewhere real. */
+	function dismissEventCreateForm(): void {
+		const origin = eventCreateOrigin;
+		closeEventCreateForm();
+		restoreEventCreateFocus(origin);
+	}
+
+	function onEventCreateFormKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') dismissEventCreateForm();
+	}
+
+	/** A season change invalidates whatever series was picked for the OLD
+	 *  season — series ids are season-scoped, so a stale one would either 404
+	 *  or (worse) point at some other season's series. */
+	function handleEventCreateSeasonChange(newSeasonId: string): void {
+		clearEventCreateError();
+		eventCreateSeasonId = newSeasonId;
+		eventCreateSeriesId = '';
+		eventCreateSeriesDefaults = null;
+		eventCreateSeriesOptions = [];
+		if (!newSeasonId) return;
+		const current = selected;
+		if (!current) return;
+		loadEventCreateSeriesOptions({ db: current.db, token: getToken() ?? '' }, newSeasonId);
+	}
+
+	function handleEventCreateSeriesChange(newSeriesId: string): void {
+		// A series carries the name (v4E makes it mandatory on event_series), so
+		// picking one can retire a pending "needs a name" refusal.
+		clearEventCreateError();
+		eventCreateSeriesId = newSeriesId;
+		if (!newSeriesId) {
+			eventCreateSeriesDefaults = null;
+			return;
+		}
+		const current = selected;
+		if (!current) return;
+		const cfg = { db: current.db, token: getToken() ?? '' };
+		// Same double guard as the series list (review F3). Preview-only, but a
+		// late reply for a since-abandoned series also mis-names the success
+		// announcement, which reads `eventCreateSeriesDefaults?.name`.
+		const thisLoad = eventCreateLoadId;
+		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeriesId !== newSeriesId;
+		getSeriesDefaults(cfg, newSeriesId)
+			.then((defaults) => {
+				if (stale()) return;
+				eventCreateSeriesDefaults = defaults;
+			})
+			.catch((e) => {
+				if (stale()) return;
+				console.error('agenda: loading series defaults for event create failed', e);
+				eventCreateSeriesDefaults = null;
+			});
+	}
+
+	/** The type Autocomplete's `onSelect` — a list pick and a free-text commit
+	 *  both carry the chosen string in `label` (list picks have `id === label`
+	 *  per the eventTypes contract; free text has `id: null`). */
+	function handleEventCreateTypeSelect(selection: { id: string | null; label: string }): void {
+		const value = selection.label.trim();
+		if (!value) return;
+		eventCreateType = value;
+		clearEventCreateError();
+	}
+
+	/** The type Autocomplete's live text (#132/T4 review F1) — mirrored so submit
+	 *  can honour a typed-but-not-Entered type instead of writing '' and blaming
+	 *  the network for it. */
+	function handleEventCreateTypeQuery(query: string): void {
+		eventCreateTypeQuery = query;
+		if (query.trim()) clearEventCreateError();
+	}
+
+	function handleEventCreateConductorSelect(selection: { id: string | null; label: string }): void {
+		if (!selection.id) return;
+		if (eventCreateConductors.some((c) => c.id === selection.id)) return; // no duplicate chips
+		eventCreateConductors = [...eventCreateConductors, { id: selection.id, name: selection.label }];
+	}
+
+	function removeEventCreateConductor(id: string): void {
+		eventCreateConductors = eventCreateConductors.filter((c) => c.id !== id);
+	}
+
+	/** The conductor Autocomplete's source: roster members not already picked.
+	 *  Off the SAME cached `rosterRows` the season-manage panel populates —
+	 *  `getRoster` above is the one cache, so opening this form after the panel
+	 *  (or vice versa) never pays a second 1+N fan-out. */
+	const eventCreateConductorOptions = $derived(
+		rosterRows
+			.filter((row) => !eventCreateConductors.some((c) => c.id === row.personId))
+			.map((row) => ({ id: row.personId, label: row.name }))
+	);
+
+	/** '' (blank) → not sent; a non-blank, non-finite typed value (a bare '-'
+	 *  or stray text a number input still lets through) also drops rather than
+	 *  reaching `createEvent` as `NaN`. */
+	function eventCreateNumberOrUndefined(raw: string): number | undefined {
+		const trimmed = raw.trim();
+		if (!trimmed) return undefined;
+		const n = Number(trimmed);
+		return Number.isFinite(n) ? n : undefined;
+	}
+
+	/** Re-reads the panel's two lists after a PANEL-born create — the new
+	 *  occurrence must land in the counts the panel already shows. Mirrors
+	 *  `openSeasonManagePanel`'s pair of reads, minus the roster/open-state
+	 *  parts (this is a refresh, not a (re)open). */
+	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
+		const thisRequest = requestId;
+		listEventSeriesForSeason(cfg, seasonId)
+			.then((list) => {
+				if (thisRequest !== requestId) return;
+				seasonManageSeries = list;
+				seasonManageSeriesError = false;
+			})
+			.catch((e) => {
+				if (thisRequest !== requestId) return;
+				console.error('agenda: refreshing the season\'s event series after an event create failed', e);
+				seasonManageSeriesError = true;
+			});
+		listEventsForSeason(cfg, seasonId)
+			.then((list) => {
+				if (thisRequest !== requestId) return;
+				seasonManageEvents = list;
+				seasonManageEventsError = false;
+			})
+			.catch((e) => {
+				if (thisRequest !== requestId) return;
+				console.error(
+					"agenda: refreshing the season's standalone events after an event create failed",
+					e
+				);
+				seasonManageEventsError = true;
+			});
+	}
+
+	/**
+	 * Submit: `createEvent` is the ONE create seam (T1) — org from
+	 * `resolveMyOrgId`, the chosen season in `extraParentIds`, the chosen
+	 * series (if any) in its own named `seriesId`. Only EXPLICITLY-SET fields
+	 * reach the call: an untouched inherited field (name/duration/location)
+	 * stays blank/absent here, never a frozen copy of the series default —
+	 * `createEvent` itself is what tracks the series on the read side.
+	 *
+	 * An incomplete submit is refused BEFORE any fetch, each refusal naming its
+	 * own field (#132/T4 review F1): season (an event with no season parent is
+	 * invisible to every agenda read — `listRehearsals` selects on it), type,
+	 * start, and — for a STANDALONE event only — a name.
+	 */
+	async function submitEventCreate(): Promise<void> {
+		if (eventCreateSubmitting) return; // #132/T2 review F1 shape — no duplicate creates in flight
+
+		// A fresh attempt owns both the error slot and the status slot.
+		clearEventCreateError();
+		eventCreateStatus = '';
+
+		// #132/T4 review (2nd pass) F2 — the panel is scoped to ITS OWN season,
+		// while the form's season select is only PREFILLED from it and stays fully
+		// editable. Captured up front because the success path's `loadForSelected`
+		// blanks `currentSeasonId` (via `resetManagement`) before the refresh runs.
+		const panelSeasonId = currentSeasonId;
+
+		// ── validation BEFORE any fetch (#132/T4 review F1) ──────────────────
+		// `createEvent` validates too, but a thrown-and-caught write is not a
+		// validation UX: it surfaces as the generic "Couldn't create the event.
+		// Try again.", which names no field and blames a network that was never
+		// asked. Each refusal below names its own box, T2's discipline.
+		const seasonId = eventCreateSeasonId;
+		if (!seasonId) {
+			setEventCreateError(m.event_create_season_required, 'season');
+			return;
+		}
+		// What the type box actually READS — the live text if there is any, else
+		// the committed value (review F1, then its 2nd-pass correction: the live
+		// text has to WIN, or a retype-after-commit writes the old word silently).
+		const typeValue = eventCreateEffectiveType;
+		if (!typeValue) {
+			setEventCreateError(m.event_create_type_required, 'type');
+			return;
+		}
+		if (!eventCreateDatetime) {
+			setEventCreateError(m.event_create_datetime_required, 'datetime');
+			return;
+		}
+		// TE.4 convention, exactly: the viewer types a TALLINN wall clock, the
+		// wire carries the UTC instant. '' means unparseable — refused here
+		// rather than sent as an empty start (which every agenda read sorts on).
+		const startDatetime = tallinnLocalToUtcIso(eventCreateDatetime);
+		if (!startDatetime) {
+			setEventCreateError(m.event_create_datetime_required, 'datetime');
+			return;
+		}
+		const trimmedName = eventCreateName.trim();
+		// A SERIES occurrence inherits its name from the series (the read-side
+		// merge), so a blank name there is the normal, correct shape. A
+		// standalone event has nothing to inherit from — an unnamed one renders
+		// as a blank row everywhere.
+		if (!eventCreateSeriesId && !trimmedName) {
+			setEventCreateError(m.event_create_name_required, 'name');
+			return;
+		}
+
+		const current = selected;
+		if (!current) {
+			console.error('agenda: event create submitted with no selected collective');
+			setEventCreateError(m.event_create_failed, null);
+			return;
+		}
+		const cfg = { db: current.db, token: getToken() ?? '' };
+
+		eventCreateSubmitting = true;
+		try {
+			let orgId: string | null;
+			try {
+				orgId = await resolveMyOrgId(cfg, current.personId);
+			} catch (e) {
+				console.error('agenda: resolving the organization for event create failed', e);
+				setEventCreateError(m.event_create_failed, null);
+				return;
+			}
+			if (!orgId) {
+				console.error('agenda: event create with no resolvable organization', current.personId);
+				setEventCreateError(m.event_create_failed, null);
+				return;
+			}
+
+			const durationValue = eventCreateNumberOrUndefined(eventCreateDuration);
+			const capacityValue = eventCreateNumberOrUndefined(eventCreateCapacity);
+			const trimmedLocation = eventCreateLocation.trim();
+			const trimmedDescription = eventCreateDescription.trim();
+
+			const input: CreateEventInput = {
+				orgId,
+				extraParentIds: [seasonId],
+				eventType: typeValue,
+				startDatetime,
+				...(trimmedName ? { name: trimmedName } : {}),
+				...(eventCreateSeriesId ? { seriesId: eventCreateSeriesId } : {}),
+				...(durationValue !== undefined ? { durationMinutes: durationValue } : {}),
+				...(trimmedLocation ? { location: trimmedLocation } : {}),
+				...(trimmedDescription ? { description: trimmedDescription } : {}),
+				...(eventCreateConductors.length > 0
+					? { conductorRefs: eventCreateConductors.map((c) => c.id) }
+					: {}),
+				...(capacityValue !== undefined ? { capacity: capacityValue } : {})
+			};
+
+			try {
+				await createEvent(cfg, input);
+			} catch (e) {
+				console.error('agenda: event create failed', e);
+				setEventCreateError(m.event_create_failed, null);
+				return;
+			}
+
+			const origin = eventCreateOrigin;
+			// #132/T4 review F3 — say what happened BEFORE the form unmounts. An
+			// own name wins; a series occurrence has none of its own, so the
+			// inherited series name (or, failing that, the type) names it.
+			eventCreateStatus = m.event_created({
+				name: trimmedName || eventCreateSeriesDefaults?.name || typeValue,
+				when: eventCreateStatusFmt.format(new Date(startDatetime))
+			});
+			closeEventCreateForm();
+			// The write just changed the world this page reads — refresh for real
+			// (same discipline as season create). `loadForSelected` bumps
+			// `requestId`, so the panel refresh below (guarded by the SAME id)
+			// must run AFTER it, not before.
+			//
+			// #132/T4 review F2 — a PANEL-born create keeps its panel: the default
+			// reload tears the panel down (`resetSeasonManage`), which both
+			// discarded the refresh below and dropped focus at <body>. The new
+			// occurrence must land in the counts the panel is STILL showing.
+			loadForSelected({ keepSeasonManage: origin === 'panel' });
+			// …the PANEL's season, not the form's (2nd-pass F2). If the viewer
+			// switched the select away, the panel still shows its own season and
+			// nothing it lists changed — refreshing with the form's `seasonId`
+			// would swap the OTHER season's rows in under the panel's heading.
+			if (origin === 'panel' && panelSeasonId === seasonId) {
+				refreshSeasonManageLists(cfg, panelSeasonId);
+			}
+			restoreEventCreateFocus(origin);
+		} finally {
+			// Released on every path — a stuck `true` would leave the form
+			// permanently unsubmittable.
+			eventCreateSubmitting = false;
+		}
+	}
+
+	// Auto-focus the name input the instant the inline form appears, same
+	// discipline as the season-create form above.
+	$effect(() => {
+		if (eventCreateOpen && eventCreateNameInput) eventCreateNameInput.focus();
+	});
+
 	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
 	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
 	// display set). An incomplete member is a MEMBER, not a non-member — she must
@@ -2356,6 +2972,7 @@
 											type="button"
 											data-testid="season-manage-add-event"
 											class="text-xs text-ink underline"
+											onclick={() => openEventCreateForm('panel')}
 										>
 											{m.season_manage_add_event()}
 										</button>
@@ -2516,6 +3133,243 @@
 									</div>
 								</div>
 							{/if}
+						{/if}
+						<!-- #132/T4 — the page-level [+ Event] entry point: rights-gated the
+						     SAME way as the season-manage gear (a running season, its
+						     editor), independent of T2's [+ Season] gate. Never inside an
+						     agenda row — this sits above the agenda content, alongside
+						     [+ Season]. -->
+						<!-- #132/T4 review F3 — mounted from FIRST render, like
+						     `season-create-status`: a live region inserted already-populated
+						     is generally not announced; only a change to a present one is. -->
+						<div data-testid="event-create-status" role="status" aria-live="polite" class="sr-only">
+							{eventCreateStatus}
+						</div>
+						{#if showEventCreate && !eventCreateOpen}
+							<button
+								type="button"
+								data-testid="event-create"
+								bind:this={eventCreateButtonEl}
+								class="mb-3 self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+								onclick={() => openEventCreateForm('agenda')}
+							>
+								{m.event_create()}
+							</button>
+						{/if}
+						{#if eventCreateOpen}
+							<div
+								data-testid="event-create-form"
+								role="dialog"
+								aria-label={m.event_create_form_label()}
+								tabindex="-1"
+								class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
+								onkeydown={onEventCreateFormKeydown}
+							>
+								<div data-testid="event-create-type-field">
+									<Autocomplete
+										items={eventCreateTypeOptions.map((t) => ({ id: t, label: t }))}
+										onSelect={handleEventCreateTypeSelect}
+										onQueryChange={handleEventCreateTypeQuery}
+										errorId={eventCreateDescribedBy('type')}
+										allowFreeText={true}
+										placeholder={m.event_create_type_placeholder()}
+										label={m.event_create_type_label()}
+										emptyLabel={m.event_create_type_no_matches()}
+									/>
+								</div>
+								<!-- The committed type, echoed because the combobox blanks its own
+								     input on commit. Hidden the moment the viewer types again
+								     (review 2nd-pass F1): while the box says 'concert' this line
+								     saying 'rehearsal' would be showing the value the write no
+								     longer uses. -->
+								{#if eventCreateType && !eventCreateTypeQuery.trim()}
+									<p data-testid="event-create-type-value" class="text-xs text-ink-2">
+										{eventCreateType}
+									</p>
+								{/if}
+								
+								<select
+									data-testid="event-create-season"
+									aria-label={m.event_create_season_label()}
+									aria-invalid={eventCreateInvalid('season')}
+									aria-describedby={eventCreateDescribedBy('season')}
+									value={eventCreateSeasonId}
+									onchange={(e) =>
+										handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+								>
+									<option value="">{m.event_create_season_placeholder()}</option>
+									{#each seasons as season (season.id)}
+										<option value={season.id}>{season.name}</option>
+									{/each}
+								</select>
+								
+								<select
+									data-testid="event-create-series"
+									aria-label={m.event_create_series_label()}
+									value={eventCreateSeriesId}
+									disabled={eventCreateSeasonId === ''}
+									onchange={(e) =>
+										handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+								>
+									<option value="">{m.event_create_series_none()}</option>
+									{#each eventCreateSeriesOptions as series (series.id)}
+										<option value={series.id}>{series.name}</option>
+									{/each}
+								</select>
+								
+								<!-- #132/T4 review F4 — the inherited default is a PLACEHOLDER, and
+								     a blank one is not a placeholder at all: `default_location` is
+								     optional on event_series, and `getSeriesDefaults` reports an
+								     absent property as ''. `||` (not the ternary) keeps the static
+								     hint whenever the series has nothing to lend. -->
+								<input
+									type="text"
+									data-testid="event-create-name"
+									bind:this={eventCreateNameInput}
+									aria-label={m.event_create_name_label()}
+									aria-invalid={eventCreateInvalid('name')}
+									aria-describedby={eventCreateDescribedBy('name')}
+									placeholder={eventCreateSeriesDefaults?.name ||
+										m.event_create_name_placeholder()}
+									value={eventCreateName}
+									oninput={(e) => {
+										eventCreateName = (e.currentTarget as HTMLInputElement).value;
+										clearEventCreateError();
+									}}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+								/>
+
+								<input
+									type="datetime-local"
+									data-testid="event-create-datetime"
+									aria-label={m.event_create_datetime_label()}
+									aria-invalid={eventCreateInvalid('datetime')}
+									aria-describedby={eventCreateDescribedBy('datetime')}
+									value={eventCreateDatetime}
+									oninput={(e) => {
+										eventCreateDatetime = (e.currentTarget as HTMLInputElement).value;
+										clearEventCreateError();
+									}}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+								/>
+								
+								<div class="flex gap-2">
+									<input
+										type="number"
+										data-testid="event-create-duration"
+										aria-label={m.event_create_duration_label()}
+										placeholder={eventCreateSeriesDefaults &&
+										eventCreateSeriesDefaults.durationMinutes !== null
+											? String(eventCreateSeriesDefaults.durationMinutes)
+											: m.event_create_duration_placeholder()}
+										value={eventCreateDuration}
+										oninput={(e) =>
+											(eventCreateDuration = (e.currentTarget as HTMLInputElement).value)}
+										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+									<!-- #132/T4 review F5 — a visible hint, not an aria-label alone:
+									     this box sits beside a duration box that HAS one, so a sighted
+									     viewer otherwise reads one labelled number field next to an
+									     anonymous one. -->
+									<input
+										type="number"
+										data-testid="event-create-capacity"
+										aria-label={m.event_create_capacity_label()}
+										placeholder={m.event_create_capacity_placeholder()}
+										value={eventCreateCapacity}
+										oninput={(e) =>
+											(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
+										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+								</div>
+								
+								<input
+									type="text"
+									data-testid="event-create-location"
+									aria-label={m.event_create_location_label()}
+									placeholder={eventCreateSeriesDefaults?.defaultLocation ||
+										m.event_create_location_placeholder()}
+									value={eventCreateLocation}
+									oninput={(e) =>
+										(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+								/>
+								
+								<textarea
+									data-testid="event-create-description"
+									aria-label={m.event_create_description_label()}
+									placeholder={eventCreateSeriesDefaults?.defaultDescription ||
+										m.event_create_description_placeholder()}
+									value={eventCreateDescription}
+									oninput={(e) =>
+										(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
+									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+								></textarea>
+								
+								<div data-testid="event-create-conductors-field">
+									<Autocomplete
+										items={eventCreateConductorOptions}
+										onSelect={handleEventCreateConductorSelect}
+										placeholder={m.event_create_conductor_placeholder()}
+										label={m.event_create_conductor_label()}
+										emptyLabel={m.event_create_conductor_no_matches()}
+									/>
+								</div>
+								{#if eventCreateConductors.length > 0}
+									<ul class="flex flex-wrap gap-1.5">
+										{#each eventCreateConductors as conductor (conductor.id)}
+											<li
+												data-testid="event-create-conductor-{conductor.id}"
+												class="flex items-center gap-1 border border-ink-5 px-1.5 py-0.5 text-xs text-ink"
+											>
+												{conductor.name}
+												<button
+													type="button"
+													aria-label={m.season_conductor_remove({ name: conductor.name })}
+													class="text-ink-2 hover:text-ink"
+													onclick={() => removeEventCreateConductor(conductor.id)}
+												>
+													&times;
+												</button>
+											</li>
+										{/each}
+									</ul>
+								{/if}
+								
+								{#if eventCreateError}
+									<p
+										id="event-create-error"
+										data-testid="event-create-error"
+										role="alert"
+										class="text-xs text-red-700"
+									>
+										{eventCreateError()}
+									</p>
+								{/if}
+								
+								<div class="flex gap-2">
+									<button
+										type="button"
+										data-testid="event-create-submit"
+										disabled={eventCreateSubmitting}
+										aria-busy={eventCreateSubmitting}
+										class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+										onclick={() => void submitEventCreate()}
+									>
+										{m.event_create_submit()}
+									</button>
+									<button
+										type="button"
+										data-testid="event-create-cancel"
+										class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
+										onclick={dismissEventCreateForm}
+									>
+										{m.roster_cancel()}
+									</button>
+								</div>
+							</div>
 						{/if}
 						<AgendaList
 							items={agendaItems}

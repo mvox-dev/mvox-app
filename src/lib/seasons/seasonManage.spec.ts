@@ -41,7 +41,8 @@ import {
 	listEventsForSeason,
 	updateSeasonField,
 	addSeasonConductor,
-	removeSeasonConductor
+	removeSeasonConductor,
+	getSeriesDefaults
 } from './seasonManage';
 import type { EntuCfg } from './entuSeasons';
 
@@ -329,6 +330,56 @@ describe('removeSeasonConductor — delete ONLY the matching value', () => {
 	it('throws on a failed lookup — never guesses which property id to delete', async () => {
 		const { impl } = recordingFetch(() => json({}, 500));
 		await expect(removeSeasonConductor(cfg, 'season1', 'p-ada', impl)).rejects.toThrow(/500/);
+	});
+});
+
+// ── getSeriesDefaults — the event-creation inheritance preview's source ─────────
+
+describe('getSeriesDefaults — ONE read, every field the read side inherits', () => {
+	it('reads all FOUR inheritable props in a single fetch and maps them', async () => {
+		const { impl, calls } = recordingFetch(() =>
+			json({
+				entity: {
+					name: [{ string: 'Monday rehearsals' }],
+					default_location: [{ string: 'Main hall' }],
+					duration_minutes: [{ number: 90 }],
+					default_description: [{ string: 'Bring the black folder' }]
+				}
+			})
+		);
+		const defaults = await getSeriesDefaults(cfg, 'series1', impl);
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0].method).toBe('GET');
+		expect(calls[0].url).toContain('/entity/series1');
+		// `default_description` included (#132/T4 review 2nd-pass F4): the read
+		// side inherits it (eventDetail's `event.description ?? series
+		// .default_description`), so the write-time preview must be able to show
+		// it — otherwise a blank description looks like it inherits nothing.
+		expect(calls[0].url).toContain(
+			'props=name,default_location,duration_minutes,default_description'
+		);
+		expect(defaults).toEqual({
+			name: 'Monday rehearsals',
+			durationMinutes: 90,
+			defaultLocation: 'Main hall',
+			defaultDescription: 'Bring the black folder'
+		});
+	});
+
+	it('a series carrying none of the optionals: blanks and a null duration, never undefined', async () => {
+		const { impl } = recordingFetch(() => json({ entity: { name: [{ string: 'Ad-hoc' }] } }));
+		expect(await getSeriesDefaults(cfg, 'series2', impl)).toEqual({
+			name: 'Ad-hoc',
+			durationMinutes: null,
+			defaultLocation: '',
+			defaultDescription: ''
+		});
+	});
+
+	it('throws on a non-2xx — fail loud, never a preview of invented defaults', async () => {
+		const { impl } = recordingFetch(() => json({}, 403));
+		await expect(getSeriesDefaults(cfg, 'series1', impl)).rejects.toThrow(/403/);
 	});
 });
 
