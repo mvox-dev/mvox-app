@@ -1,0 +1,68 @@
+{
+  "dryRun": true,
+  "generatedAt": "2026-08-13T05:04:06.344Z",
+  "summary": {
+    "ok": 3,
+    "skipped": 0,
+    "dryRun": 3,
+    "failed": 0,
+    "aborted": 1
+  },
+  "ledger": [
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8768489bfcb0e81b163",
+      "targetLabel": "BASS_EFK (target parent)",
+      "status": "ok",
+      "detail": "name=Bass org=Eesti Filharmoonia Kammerkoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8828489bfcb0e81b3ec",
+      "targetLabel": "RAM_BARITONE (survivor)",
+      "status": "ok",
+      "detail": "name=Baritone org=Eesti Rahvusmeeskoor"
+    },
+    {
+      "phase": "phase0-verify",
+      "action": "verify-section",
+      "targetId": "69c7f8898489bfcb0e81b580",
+      "targetLabel": "TAM_BARITONE (retire)",
+      "status": "ok",
+      "detail": "name=Baritone org=Tartu Akadeemiline Meeskoor"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a0dd2594ff8277cd4306474",
+      "targetLabel": "member 6a0dd2594ff8277cd4306474 (Alar Kask): Baritone/Tartu Akadeemiline Meeskoor -> Baritone/Eesti Rahvusmeeskoor",
+      "status": "dry-run",
+      "detail": "would POST new survivor link, then DELETE the retiring link"
+    },
+    {
+      "phase": "A-reassign",
+      "action": "reassign-member",
+      "targetId": "6a7591cd36c951d9114ec8e7",
+      "targetLabel": "member 6a7591cd36c951d9114ec8e7 (mibiri): Baritone/Tartu Akadeemiline Meeskoor -> Baritone/Eesti Rahvusmeeskoor",
+      "status": "dry-run",
+      "detail": "already has survivor link — would only DELETE the retiring link"
+    },
+    {
+      "phase": "C-nest",
+      "action": "nest-section",
+      "targetId": "69c7f8828489bfcb0e81b3ec",
+      "targetLabel": "Baritone/Eesti Rahvusmeeskoor -> parent Bass/Eesti Filharmoonia Kammerkoor",
+      "status": "dry-run"
+    },
+    {
+      "phase": "B-delete-section",
+      "action": "delete-section",
+      "targetId": "69c7f8898489bfcb0e81b580",
+      "targetLabel": "Baritone/Tartu Akadeemiline Meeskoor",
+      "status": "aborted-not-empty",
+      "detail": "2 member(s) still linked — step A did not fully clear this section. Refusing to delete."
+    }
+  ]
+}
