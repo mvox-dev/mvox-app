@@ -1,27 +1,27 @@
-# Task List Snapshot — 2026-08-12 checkpoint (session "MVOX-8")
+# Task List Snapshot — 2026-08-13 (session MVOX-9)
 
-mvox-app main @ `fb1759f`. v1.0 + UX polish + database tidiness delivered.
+mvox-app main @ `015ed1a`. v1.0 + walkthrough improvements + section cleanup.
 
 ## COMPLETED this session
 
-### Auth recovery (#107)
-TDD pipeline. Merged at `8ab1711`.
+### #114 gate corrections
+#124 (sections F1-F3), #125 (repertoire F4-F5), #126 (library F6). Gate PASSED. Epic #108 CLOSED.
 
-### UX polish 1.0 (#108)
-#109, #110, #111, #112, #113 (pipeline). Also closed #88.
+### #127 section data cleanup
+17→12 sections. Consolidate + orphans + hierarchy + Baritone follow-up.
 
-### Database tidiness 2.0 (#116)
-#117 (audit), #118 (name visibility), #119 (type labels), #120 (entity visibility), #121 (live gate passed).
-Follow-up fixes: TD.2b tier alignment, TD.2c RSVP formula, TD.2d member formula.
+### Walkthrough improvements
+#128 (collapse copies), #129 (loan chain), #130 (iOS zoom), #131 (name conflict).
 
-### Event detail live gate (#106)
-14/14 passed, zero findings.
-
-## PENDING (live gates — manual PO walks)
-- **#114 TU.6** — UX polish live gate (all corrected surfaces, real phone)
-
-## PENDING (other)
-- **#37 Cleanup epic** — sub-tasks done, epic-level AC needs PO verification
+## PENDING
+- **#122** — Event create _sharing default-to-private
+- **#123** — Language selector on profile page
+- **#37** — Cleanup epic (PO verification needed)
 - **#14** — Playwright RSVP coverage (not scheduled)
+
+## YELLOW follow-ups
+- **#128** YELLOW-128.1 — Pluralization gap (Comenius)
+- **#131** YELLOW-131.2 — Escape key test missing (Tallis)
+- **#131** YELLOW-131.1 — setTimeout(0) cleanup (minor)
 
 (*MVOX:Palestrina*)
