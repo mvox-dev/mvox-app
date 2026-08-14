@@ -14,7 +14,11 @@
 	//   - focus STAYS in the input the whole time — the highlight moves via
 	//     `aria-activedescendant`, never by moving DOM focus onto an option
 	//   - ArrowDown/ArrowUp walk the FILTERED list, clamped at both ends;
-	//     Home/End jump to the first/last option
+	//     Home/End jump to the first/last option. #139 — the dropdown itself
+	//     caps at max-h-60 and scrolls INTERNALLY (never pushing page content),
+	//     and every highlight move scrolls the newly-highlighted option into
+	//     that container ("nearest") so keyboard walking never drifts the
+	//     highlight out of view.
 	//   - Enter on a highlighted option commits it; Enter with no highlight
 	//     commits typed free text only when `allowFreeText` and non-blank;
 	//     otherwise Enter is a no-op
@@ -126,15 +130,30 @@
 		onQueryChange?.(query);
 	}
 
+	/** #139 — after the highlight moves, scroll the highlighted option into the
+	 *  DROPDOWN's own scroll container ("nearest": no scroll at all if it's
+	 *  already visible, otherwise the minimum nudge to reveal it). The options
+	 *  are already in the DOM regardless of `activeIndex` (only `aria-selected`
+	 *  changes), so the lookup runs synchronously right after the index update
+	 *  — no `tick()` needed. */
+	function scrollActiveIntoView(): void {
+		const item = filtered[activeIndex];
+		const id = item ? optionId(item) : undefined;
+		if (!id) return;
+		document.getElementById(id)?.scrollIntoView({ block: 'nearest' });
+	}
+
 	function moveHighlight(delta: number): void {
 		if (!open || filtered.length === 0) return;
 		activeIndex = Math.min(Math.max(activeIndex + delta, 0), filtered.length - 1);
+		scrollActiveIntoView();
 	}
 
 	/** Home/End: jump to the first/last option of the FILTERED list. */
 	function jumpHighlight(to: 'first' | 'last'): void {
 		if (!open || filtered.length === 0) return;
 		activeIndex = to === 'first' ? 0 : filtered.length - 1;
+		scrollActiveIntoView();
 	}
 
 	function commitEnter(): void {
@@ -269,7 +288,7 @@
 			aria-label={label}
 			class={showEmpty
 				? 'sr-only'
-				: 'absolute z-10 mt-1 flex w-full flex-col border border-ink bg-paper py-1 shadow-sm'}
+				: 'absolute z-10 mt-1 flex max-h-60 w-full flex-col overflow-y-auto border border-ink bg-paper py-1 shadow-sm'}
 		>
 			<!-- #136 — an option row is tap-to-act: a tap COMMITS the pick (adds a
 			     conductor chip / sets the event type), so it carries the same 44px
@@ -314,3 +333,4 @@
 <!-- (*MVOX:Tallis* — #132/T2 RED stub + props contract) -->
 <!-- (*MVOX:Palestrina* — #132/T2 GREEN implementation) -->
 <!-- (*MVOX:Palestrina* — #132/T4 review F1: onQueryChange seam) -->
+<!-- (*MVOX:Palestrina* — #139: dropdown max-h-60 + scrollIntoView on highlight move) -->

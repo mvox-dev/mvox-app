@@ -2785,7 +2785,7 @@
 	 *  re-submit RESUMES from here instead of creating a second series and
 	 *  re-POSTing the occurrences that already succeeded. Cleared on a clean run,
 	 *  on close, and on open. */
-	let seriesCreateResume = $state<{ seriesId: string; remaining: Date[]; total: number } | null>(
+	let seriesCreateResume = $state<{ seriesId: string; remaining: string[]; total: number } | null>(
 		null
 	);
 	let seriesCreateNameInput = $state<HTMLInputElement | null>(null);
@@ -2922,26 +2922,14 @@
 		return seriesCreateResume ? seriesCreateResume.remaining : seriesCreatePreviewDates;
 	});
 
-	/** `date` (a `generateEventDates` local wall-clock Date) as an ISO calendar
-	 *  day — the preview row testid and the skip-chip's own shape. */
-	function seriesCreateIsoDay(date: Date): string {
-		const y = date.getFullYear();
-		const mo = String(date.getMonth() + 1).padStart(2, '0');
-		const d = String(date.getDate()).padStart(2, '0');
-		return `${y}-${mo}-${d}`;
-	}
-
-	/** `date` re-typed as the 'YYYY-MM-DDTHH:MM' shape `tallinnLocalToUtcIso`
-	 *  expects — the SAME TE.4 wall-clock-typed-as-Tallinn convention T4 pinned
-	 *  for the single-event form (`eventCreateDatetime`), applied here to every
-	 *  generated occurrence instead of one typed value. */
-	function seriesCreateLocalInput(date: Date): string {
-		const y = date.getFullYear();
-		const mo = String(date.getMonth() + 1).padStart(2, '0');
-		const d = String(date.getDate()).padStart(2, '0');
-		const h = String(date.getHours()).padStart(2, '0');
-		const mi = String(date.getMinutes()).padStart(2, '0');
-		return `${y}-${mo}-${d}T${h}:${mi}`;
+	/** `date` (a `generateEventDates` 'YYYY-MM-DDTHH:MM' local string) as an ISO
+	 *  calendar day — the preview row testid and the skip-chip's own shape.
+	 *  #141 — a plain slice, never a `Date` readback: `generateEventDates`
+	 *  itself now emits the local string directly (see recurrence.ts's module
+	 *  doc) precisely so no caller reconstructs a `Date` at the occurrence's
+	 *  hour and risks the DST spring-forward normalization. */
+	function seriesCreateIsoDay(date: string): string {
+		return date.slice(0, 10);
 	}
 
 	/** Opened ONLY from inside the panel — `currentSeasonId` is always the
@@ -3099,7 +3087,7 @@
 		// The occurrence set is computed BEFORE any write: a recurrence that
 		// yields nothing (Mondays over a Tue–Sun range) must be REFUSED, not
 		// reported as a silent success with a childless series behind it.
-		let dates: Date[] = [];
+		let dates: string[] = [];
 		if (seriesCreateGenerate) {
 			dates =
 				resume?.remaining ??
@@ -3269,7 +3257,10 @@
 				// Set BEFORE the await — the spec pins "current 1 of 3 while the
 				// FIRST POST is in flight", not after it resolves.
 				seriesCreateProgress = { current: created + 1, total };
-				const startDatetime = tallinnLocalToUtcIso(seriesCreateLocalInput(dates[i]));
+				// #141 — `dates[i]` IS the 'YYYY-MM-DDTHH:MM' Tallinn wall-clock string
+				// already (generateEventDates emits it directly), fed straight to the
+				// UTC converter with no intermediate Date-readback step.
+				const startDatetime = tallinnLocalToUtcIso(dates[i]);
 				try {
 					await createEvent(cfg, {
 						orgId,
@@ -3883,7 +3874,7 @@
 													     full recomputed set there contradicted the resume notice right
 													     under it: three dates shown, one event actually created. -->
 													<div class="max-h-32 overflow-y-auto">
-														{#each seriesCreatePreviewRows as date (date.getTime())}
+														{#each seriesCreatePreviewRows as date (date)}
 															<p data-testid="series-create-preview-date-{seriesCreateIsoDay(date)}">
 																{seriesCreateIsoDay(date)}
 															</p>

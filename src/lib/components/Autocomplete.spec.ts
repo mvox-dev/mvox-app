@@ -586,4 +586,90 @@ describe('Autocomplete — ARIA combobox wiring while open', () => {
 	});
 });
 
+// ── #139 — the dropdown contains its own scroll and follows the highlight ───────
+
+describe('Autocomplete — #139: a long list scrolls INSIDE the dropdown, and the highlight stays visible', () => {
+	afterEach(() => {
+		// Only touches spies created with vi.spyOn (the scrollIntoView stub below).
+		vi.restoreAllMocks();
+	});
+
+	it('the OPEN listbox caps its height and scrolls internally (max-h-60 + overflow-y-auto), instead of growing without limit', async () => {
+		const { container } = renderAutocomplete();
+
+		// Options must MATCH: the option-less listbox deliberately collapses to
+		// `sr-only`, so the sized-and-scrollable class string only applies here.
+		await type(container, 'a'); // all three match
+		await waitFor(() => {
+			expect(q(container, 'autocomplete-listbox')).not.toBeNull();
+		});
+
+		const listbox = q(container, 'autocomplete-listbox') as HTMLElement;
+		// These two are #139 CONTRACT, not decoration: without the cap a full
+		// roster renders as one unbounded column that pushes the rest of the form
+		// off-screen, and without the overflow the cap would simply clip the tail
+		// unreachably. A restyle of this element must keep both.
+		expect(listbox.classList.contains('max-h-60')).toBe(true);
+		expect(listbox.classList.contains('overflow-y-auto')).toBe(true);
+	});
+
+	it('EVERY highlight move (ArrowDown/ArrowUp/End/Home) scrolls the newly-highlighted option into that container with { block: "nearest" }', async () => {
+		// Record the receiver too — a call count alone would pass if the component
+		// scrolled the wrong row (or the listbox itself).
+		const calls: Array<{ el: Element; arg: boolean | ScrollIntoViewOptions | undefined }> = [];
+		const spy = vi
+			.spyOn(Element.prototype, 'scrollIntoView')
+			.mockImplementation(function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
+				calls.push({ el: this, arg });
+			});
+
+		const { container } = renderAutocomplete();
+
+		await type(container, 'a'); // all three match
+		await waitFor(() => {
+			expect(q(container, 'autocomplete-listbox')).not.toBeNull();
+		});
+		// Opening/filtering alone scrolls nothing — there is no highlight yet.
+		expect(spy).not.toHaveBeenCalled();
+
+		const walk = [
+			{ keyName: 'ArrowDown', label: 'Ada Lovelace' },
+			{ keyName: 'ArrowDown', label: 'Alan Turing' },
+			{ keyName: 'ArrowUp', label: 'Ada Lovelace' },
+			{ keyName: 'End', label: 'Grace Hopper' },
+			{ keyName: 'Home', label: 'Ada Lovelace' }
+		] as const;
+
+		for (const { keyName, label } of walk) {
+			const before = calls.length;
+
+			await key(container, keyName);
+			await waitFor(() => {
+				expect(highlighted(container)?.textContent).toContain(label);
+			});
+
+			// Exactly one scroll per move — for every one of the four keys, not just
+			// the arrows (Home/End go through a separate jump path).
+			expect(calls.length).toBe(before + 1);
+			const call = calls[calls.length - 1];
+
+			// The EXACT options object: "nearest" is what keeps this a minimum nudge
+			// inside the dropdown rather than a page-level jump.
+			expect(call.arg).toEqual({ block: 'nearest' });
+
+			// ...and the receiver is the row that is NOW highlighted — matched
+			// through the input's aria-activedescendant, so scrolling a neighbour
+			// (an off-by-one in the index → element lookup) cannot pass.
+			const activeId = input(container).getAttribute('aria-activedescendant');
+			expect(activeId ?? '').not.toBe('');
+			expect((call.el as HTMLElement).id).toBe(activeId);
+			expect(call.el).toBe(highlighted(container));
+		}
+
+		expect(spy).toHaveBeenCalledTimes(walk.length);
+		expect(spy).toHaveBeenCalledWith({ block: 'nearest' });
+	});
+});
+
 // (*MVOX:Tallis* — #132/T2 RED: Autocomplete combobox contract)
+// (*MVOX:Palestrina* — #139: dropdown scroll-containment + follow-the-highlight coverage)

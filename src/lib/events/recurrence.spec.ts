@@ -1,7 +1,11 @@
 // #132/T5 RED — generateEventDates, the PURE recurrence calculator behind the
 // event-series bulk generator (design sketch D). No fetches, no Date.now(), no
-// timezone conversion: the whole occurrence list is determined by the params,
-// and every generated Date is a LOCAL wall-clock construction.
+// timezone conversion: the whole occurrence list is determined by the params.
+// Calendar stepping (which DAY is an occurrence) uses `Date` objects pinned at
+// midnight; the EMITTED occurrence is a 'YYYY-MM-DDTHH:MM' local datetime
+// STRING, formatted directly from the day + `timeOfDay` (#141 — see
+// recurrence.ts's module doc for why: a `Date` constructed AT the requested
+// hour is not safe across DST spring-forward).
 //
 // Pinned contract (GREEN must implement — see recurrence.ts's module doc):
 //   - 'daily': every calendar day in [from, until], dayOfWeek IGNORED.
@@ -10,7 +14,7 @@
 //     anchor). Calendar stepping, not milliseconds — a fixed-ms step drifts
 //     the wall-clock hour across a DST boundary.
 //   - Bounds INCLUSIVE on both ends; from > until → [].
-//   - timeOfDay 'HH:MM' attached as LOCAL hours/minutes (seconds/ms zero).
+//   - timeOfDay 'HH:MM' attached to every emitted string VERBATIM.
 //   - skipDates excludes calendar dates from the OUTPUT without re-anchoring
 //     the cadence; a skip that is not an occurrence is a no-op.
 //   - Result sorted ascending.
@@ -19,18 +23,21 @@
 //   2026-09-01 is a TUESDAY. Mondays in [2026-09-01, 2026-12-01]:
 //   Sep 7/14/21/28, Oct 5/12/19/26, Nov 2/9/16/23/30 — 13 of them.
 //   Wednesdays in [2026-09-01, 2026-10-01]: Sep 2/9/16/23/30.
-//   Europe/Tallinn falls back (EEST +3 → EET +2) on Sunday 2026-10-25 —
-//   the machine/test TZ, which makes the DST cases below load-bearing.
+//   Europe/Tallinn falls back (EEST +3 → EET +2) on Sunday 2026-10-25, and
+//   springs forward (EET +2 → EEST +3) on Sunday 2026-03-29 — the machine/
+//   test TZ, which makes the DST cases below load-bearing.
 import { describe, expect, it } from 'vitest';
 
 import { generateEventDates, type RecurrenceParams } from './recurrence';
 
-/** A LOCAL wall-clock Date for an ISO calendar day + time — the shape every
- *  generated occurrence must equal (new Date(y, m, d, h, mi) is DST-correct
- *  in whatever TZ the test runs under, so these expectations are TZ-agnostic). */
-function atLocal(isoDay: string, hours: number, minutes: number): Date {
-	const [y, m, d] = isoDay.split('-').map(Number);
-	return new Date(y, m - 1, d, hours, minutes, 0, 0);
+/** The 'YYYY-MM-DDTHH:MM' string every generated occurrence must equal —
+ *  built the same way the fix requires (string formatting, no `Date`
+ *  constructed at the target hour), so the test itself can't hide a
+ *  DST-normalization bug. */
+function atLocal(isoDay: string, hours: number, minutes: number): string {
+	const h = String(hours).padStart(2, '0');
+	const mi = String(minutes).padStart(2, '0');
+	return `${isoDay}T${h}:${mi}`;
 }
 
 const MONDAYS_SEP_TO_DEC = [
@@ -144,7 +151,7 @@ describe('generateEventDates — daily', () => {
 		);
 
 		expect(dates).toHaveLength(6);
-		expect(dates.map((d) => d.getDate())).toEqual([1, 2, 3, 5, 6, 7]);
+		expect(dates.map((d) => Number(d.slice(8, 10)))).toEqual([1, 2, 3, 5, 6, 7]);
 	});
 });
 
@@ -173,22 +180,19 @@ describe('generateEventDates — bounds', () => {
 });
 
 describe('generateEventDates — the attached time', () => {
-	it('timeOfDay lands as LOCAL hours/minutes on EVERY generated date, seconds and ms zero', () => {
+	it('timeOfDay lands as LOCAL HH:MM on EVERY generated date, verbatim', () => {
 		const dates = generateEventDates(params({ timeOfDay: '08:05' }));
 
 		expect(dates).toHaveLength(13);
 		for (const d of dates) {
-			expect(d.getHours()).toBe(8);
-			expect(d.getMinutes()).toBe(5);
-			expect(d.getSeconds()).toBe(0);
-			expect(d.getMilliseconds()).toBe(0);
+			expect(d.endsWith('T08:05')).toBe(true);
 		}
 	});
 
-	it('generates in LOCAL time, not UTC-shifted: the first Monday IS new Date(2026, 8, 7, 19, 0) — a Date.UTC / "…T19:00Z" construction fails this in any non-UTC TZ (this suite runs in Europe/Tallinn)', () => {
+	it('generates in LOCAL time, not UTC-shifted: the first Monday IS 2026-09-07T19:00', () => {
 		const [first] = generateEventDates(params());
 
-		expect(first.getTime()).toBe(new Date(2026, 8, 7, 19, 0, 0, 0).getTime());
+		expect(first).toBe('2026-09-07T19:00');
 	});
 
 	it('the wall-clock hour SURVIVES the DST fall-back (Europe/Tallinn, 2026-10-25): Mondays Oct 19 / Oct 26 / Nov 2 all read 19:00 local — a fixed-ms weekly step drifts to 18:00 after the switch', () => {
@@ -199,10 +203,35 @@ describe('generateEventDates — the attached time', () => {
 			atLocal('2026-10-26', 19, 0),
 			atLocal('2026-11-02', 19, 0)
 		]);
-		for (const d of dates) {
-			expect(d.getHours()).toBe(19);
-		}
+	});
+
+	it('#141 — the wall-clock hour SURVIVES the DST spring-forward (Europe/Tallinn, 2026-03-29, 03:00 does not exist): a daily run through it still reads 03:00 on every day, including the skipped local hour — a `new Date(y,m,d,3,0)` construction would normalize that one day to 04:00', () => {
+		const dates = generateEventDates(
+			params({
+				repeat: 'daily',
+				timeOfDay: '03:00',
+				from: '2026-03-28',
+				until: '2026-03-30'
+			})
+		);
+
+		expect(dates).toEqual(['2026-03-28T03:00', '2026-03-29T03:00', '2026-03-30T03:00']);
+	});
+
+	it('#141 — a WEEKLY series landing exactly on spring-forward Sunday (2026-03-29) also keeps 03:00, not 04:00', () => {
+		const dates = generateEventDates(
+			params({
+				repeat: 'weekly',
+				dayOfWeek: 0,
+				timeOfDay: '03:00',
+				from: '2026-03-29',
+				until: '2026-03-29'
+			})
+		);
+
+		expect(dates).toEqual(['2026-03-29T03:00']);
 	});
 });
 
 // (*MVOX:Tallis* — #132/T5 RED: the pure recurrence calculator's contract)
+// (*MVOX:Palestrina* — #141: string[] contract + DST spring-forward cases)
