@@ -68,9 +68,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_create_failed: () => "The section couldn't be created — nothing was saved.",
 		roster_section_assign_failed: () =>
 			"The section was created, but the member couldn't be added to it.",
-		roster_section_drag_handle: (p) => `Drag to reorder ${p?.name}`,
-		roster_section_move_up: (p) => `Move ${p?.name} up`,
-		roster_section_move_down: (p) => `Move ${p?.name} down`
+		roster_section_drag_handle: (p) => `Drag to reorder ${p?.name}`
 	};
 	const m = new Proxy(known, {
 		get(target, prop) {
@@ -274,6 +272,21 @@ function makeDataTransfer() {
 	};
 }
 
+// #150 — the ▲/▼ buttons that used to trigger a reorder for these tests are
+// gone; drag is now the only input, so the shared reorder-outcome tests below
+// (error/status announcements) drive it the same way page.roster-reorder.spec.ts
+// does.
+async function dragAndDrop(container: HTMLElement, fromId: string, toId: string): Promise<void> {
+	const dataTransfer = makeDataTransfer();
+	const handle = q(container, `section-drag-handle-${fromId}`) as HTMLElement;
+	expect(handle, `drag handle for ${fromId}`).not.toBeNull();
+	const target = q(container, `section-header-${toId}`) as HTMLElement;
+	expect(target, `drop target header for ${toId}`).not.toBeNull();
+	await fireEvent.dragStart(handle, { dataTransfer });
+	await fireEvent.dragOver(target, { dataTransfer });
+	await fireEvent.drop(target, { dataTransfer });
+}
+
 // ---------------------------------------------------------------------------
 // Source-scan helpers (i18n hygiene) — same strategy as the #86/#93 passes:
 // strip script blocks, HTML comments and Svelte expressions from the template;
@@ -349,11 +362,7 @@ describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', 
 	it('guard: parameterised reorder labels carry {name} in ALL four locales — a label that drops the param collapses every section to the same announcement', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
-			for (const key of [
-				'roster_section_drag_handle',
-				'roster_section_move_up',
-				'roster_section_move_down'
-			]) {
+			for (const key of ['roster_section_drag_handle']) {
 				expect(
 					everyPatternContains(messages[key], '{name}'),
 					`${locale}.json ${key} must carry {name} in every variant`
@@ -551,39 +560,15 @@ describe('#99 — a11y: drag-reorder announces grab and drop state', () => {
 		expect(container.querySelectorAll('[aria-dropeffect="move"]').length).toBe(0);
 	});
 
-	it('guard: the drag handle is NOT focusable — the keyboard path is the labelled ▲/▼ buttons, a focusable span with no keyboard drag protocol would be a trap', async () => {
+	// #150 — the ▲/▼ buttons this guard used to justify handle unfocusability
+	// against are gone; drag/touch is now the only reorder input, and this page
+	// has no keyboard-operable reorder path at all (an open a11y gap, tracked in
+	// #152 — this guard is expected to change shape when that lands).
+	it('guard: the drag handle is NOT focusable — it implements no keyboard drag protocol of its own, so a focusable span here would be a trap', async () => {
 		const container = await renderCollapsedAdmin();
 		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
 		const tabindex = handle.getAttribute('tabindex');
 		expect(tabindex === null || tabindex === '-1').toBe(true);
-	});
-
-	it('guard: move buttons are native <button>s whose aria-labels name their section AND direction, distinct per section', async () => {
-		const container = await renderCollapsedAdmin();
-		const upLabels: string[] = [];
-		for (const id of ['sec-sop', 'sec-alto', 'sec-tenor']) {
-			const up = q(container, `section-move-up-${id}`) as HTMLElement;
-			const down = q(container, `section-move-down-${id}`) as HTMLElement;
-			expect(up.tagName).toBe('BUTTON');
-			expect(down.tagName).toBe('BUTTON');
-			const upLabel = up.getAttribute('aria-label');
-			const downLabel = down.getAttribute('aria-label');
-			expect(upLabel, `move-up ${id} aria-label`).toBeTruthy();
-			expect(downLabel, `move-down ${id} aria-label`).toBeTruthy();
-			expect(upLabel).not.toBe(downLabel);
-			upLabels.push(upLabel!);
-		}
-		expect(upLabels[0]).toContain('Soprano');
-		expect(upLabels[1]).toContain('Alto');
-		expect(upLabels[2]).toContain('Tenor');
-		expect(new Set(upLabels).size).toBe(3);
-	});
-
-	it('guard: boundary move buttons are disabled (first up, last down) — a keyboard user gets a refused control, not a silent no-op', async () => {
-		const container = await renderCollapsedAdmin();
-		expect((q(container, 'section-move-up-sec-sop') as HTMLButtonElement).disabled).toBe(true);
-		expect((q(container, 'section-move-down-sec-sop') as HTMLButtonElement).disabled).toBe(false);
-		expect((q(container, 'section-move-down-sec-tenor') as HTMLButtonElement).disabled).toBe(true);
 	});
 });
 
@@ -861,7 +846,7 @@ describe('#99 review F4 — only a SIBLING header advertises (and accepts) the d
 });
 
 describe('#99 review F5 — the drag handle does not announce itself as a button', () => {
-	it("the handle is role='img' with an accessible name, not role='button' — it is deliberately unfocusable and implements no activation, so 'button' promises AT a control that cannot be operated", async () => {
+	it("the handle is role='img' with an accessible name, not role='button' — it is deliberately unfocusable and implements no activation of its own, so 'button' promises AT a control that cannot be operated", async () => {
 		const container = await renderReady('admin');
 		await collapse(container, 'sec-sop');
 		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
@@ -945,7 +930,7 @@ describe('#99 review R2/F2 — a failed reorder is SAID, not silently re-derived
 		reorderMock.mockRejectedValue(new Error('403'));
 		const container = await renderCollapsedAdmin();
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 
 		await waitFor(() => {
 			const error = q(container, 'section-reorder-error');
@@ -958,53 +943,25 @@ describe('#99 review R2/F2 — a failed reorder is SAID, not silently re-derived
 		reorderMock.mockRejectedValueOnce(new Error('403'));
 		const container = await renderCollapsedAdmin();
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-error')).not.toBeNull();
 		});
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-error'), 'a retry owns the error slot').toBeNull();
 		});
 	});
 });
 
-describe('#99 review R2/F3 — the ▲/▼ path keeps focus and announces its result', () => {
-	it('a move that leaves the activated button operable returns focus TO IT — the button disables itself mid-write, and a browser blurs a focused element that becomes disabled', async () => {
-		const container = await renderCollapsedAdmin();
-		const down = q(container, 'section-move-down-sec-sop') as HTMLButtonElement;
-		down.focus();
-
-		await fireEvent.click(down);
-
-		await waitFor(() => {
-			expect(reorderMock).toHaveBeenCalled();
-		});
-		await waitFor(() => {
-			expect(down.ownerDocument.activeElement).toBe(down);
-		});
-	});
-
-	it('a move that lands on a BOUNDARY (the activated button stays disabled) falls back to the section toggle — focus must never be left on <body>', async () => {
-		const container = await renderCollapsedAdmin();
-		const up = q(container, 'section-move-up-sec-alto') as HTMLButtonElement;
-		expect(up.disabled, 'Alto starts second, so ▲ is operable').toBe(false);
-		up.focus();
-
-		await fireEvent.click(up);
-
-		await waitFor(() => {
-			expect(reorderMock).toHaveBeenCalled();
-		});
-		await waitFor(() => {
-			expect((q(container, 'section-move-up-sec-alto') as HTMLButtonElement).disabled).toBe(true);
-		});
-		await waitFor(() => {
-			expect(up.ownerDocument.activeElement).toBe(q(container, 'section-toggle-sec-alto'));
-		});
-	});
-
+// #150 — the two focus-restoration tests that used to live here (button stays
+// operable → refocus it; button lands on a boundary → fall back to the
+// section toggle) tested `moveSection`'s own focus bookkeeping, which was
+// deleted along with the ▲/▼ buttons. Drag/drop carries no equivalent focus
+// hop (a mouse drag never had DOM focus to lose), so there is nothing left to
+// pin here — the reorder-announcement coverage below still applies.
+describe('#99 review R2/F3 — reorder outcomes are announced', () => {
 	it('guard: the polite live region is present from FIRST render — a region mounted together with its own text is announced by nothing', async () => {
 		const container = await renderReady();
 		const status = q(container, 'roster-reorder-status') as HTMLElement;
@@ -1014,10 +971,10 @@ describe('#99 review R2/F3 — the ▲/▼ path keeps focus and announces its re
 		expect(status.textContent?.trim()).toBe('');
 	});
 
-	it('a successful move announces the section BY NAME and its new position — the drag path has aria-grabbed/aria-dropeffect, the keyboard path had nothing', async () => {
+	it('a successful move announces the section BY NAME and its new position', async () => {
 		const container = await renderCollapsedAdmin();
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 
 		await waitFor(() => {
 			const status = q(container, 'roster-reorder-status') as HTMLElement;

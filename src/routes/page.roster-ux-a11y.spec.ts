@@ -12,9 +12,9 @@
 //   - the two-step remove confirm DESTROYS ITS OWN FOCUS TARGET twice over:
 //     arming (✕ → confirm/cancel) unmounts the focused ✕ and cancelling
 //     unmounts the focused Cancel, both dropping focus to <body> — the exact
-//     WCAG 2.4.3 defect class this page already fixed for the ▲/▼ buttons
-//     (#99 F3) and the picker (closeMenu). Focus must land on the confirm
-//     button on arm, and back on the restored ✕ on cancel.
+//     WCAG 2.4.3 defect class the picker already fixed (closeMenu). Focus
+//     must land on the confirm button on arm, and back on the restored ✕ on
+//     cancel.
 //
 //   Guards (what TU.2 already carries, so GREEN can't regress it):
 //   - remove/confirm/cancel are native <button>s (Enter/Space for free) with
@@ -24,11 +24,15 @@
 //   - section headers stay proper disclosures (native <button>,
 //     aria-expanded);
 //   - the dashed drop-target hint is aria-hidden decoration, the hovered
-//     header announces aria-dropeffect="move", the handle announces
-//     aria-grabbed, and the labelled ▲/▼ buttons remain the keyboard
-//     alternative to the drag;
+//     header announces aria-dropeffect="move", and the handle announces
+//     aria-grabbed;
 //   - the reorder result live region (roster-reorder-status) is present from
 //     first render with role="status" + aria-live="polite".
+//
+//   #150 — the labelled ▲/▼ buttons this file used to pin as "the keyboard
+//   alternative to the drag" are gone; drag/touch is now the only reorder
+//   input, and the page currently has no keyboard-operable reorder path
+//   (tracked in #152).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,8 +55,6 @@ vi.mock('$lib/paraglide/messages.js', () => {
 			"Section grouping couldn't be loaded — showing the flat list instead.",
 		roster_new_section: () => '+ New section…',
 		roster_section_drag_handle: (p) => `Drag to reorder ${p?.name}`,
-		roster_section_move_up: (p) => `Move ${p?.name} up`,
-		roster_section_move_down: (p) => `Move ${p?.name} down`,
 		roster_section_moved: (p) => `${p?.name} moved to position ${p?.position} of ${p?.total}`,
 		roster_section_reorder_failed: () => "The new order couldn't be saved.",
 		roster_section_reorder_pending: () => 'Saving new order…',
@@ -230,6 +232,19 @@ function makeDataTransfer() {
 	};
 }
 
+// #150 — the ▲/▼ buttons this file used to click to trigger a reorder are
+// gone; drag is now the only reorder input.
+async function dragAndDrop(container: HTMLElement, fromId: string, toId: string): Promise<void> {
+	const dataTransfer = makeDataTransfer();
+	const handle = q(container, `section-drag-handle-${fromId}`) as HTMLElement;
+	expect(handle, `drag handle for ${fromId}`).not.toBeNull();
+	const target = q(container, `section-header-${toId}`) as HTMLElement;
+	expect(target, `drop target header for ${toId}`).not.toBeNull();
+	await fireEvent.dragStart(handle, { dataTransfer });
+	await fireEvent.dragOver(target, { dataTransfer });
+	await fireEvent.drop(target, { dataTransfer });
+}
+
 // ---------------------------------------------------------------------------
 // 1 — the reorder loading indicator (TU.2 finding #6)
 // ---------------------------------------------------------------------------
@@ -247,7 +262,7 @@ describe('#113 — a11y: reorder loading indicator (aria-busy + aria-live)', () 
 				})
 		);
 		const container = await renderReady();
-		await fireEvent.click(q(container, 'section-move-down-sec-sop')!);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		let pending!: HTMLElement;
 		await waitFor(() => {
 			const el = q(container, 'section-reorder-pending');
@@ -473,9 +488,11 @@ describe('#113 — a11y: collapse/expand controls', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4 — drag-reorder affordances (TU.2 finding #11 + the #99 keyboard path)
+// 4 — drag-reorder affordances (TU.2 finding #11)
+// #150 — this page's ONLY keyboard-alternative to the drag (the ▲/▼ buttons)
+// has been removed; no replacement keyboard path exists yet — tracked in #152.
 // ---------------------------------------------------------------------------
-describe('#113 — a11y: drag-reorder (drop-target hint, ARIA drag state, keyboard alternative)', () => {
+describe('#113 — a11y: drag-reorder (drop-target hint, ARIA drag state)', () => {
 	it('guard: during a drag-over, the dashed drop-target hint renders as aria-hidden decoration and the hovered header announces aria-dropeffect="move"', async () => {
 		const container = await renderReady();
 		const dt = makeDataTransfer();
@@ -494,19 +511,6 @@ describe('#113 — a11y: drag-reorder (drop-target hint, ARIA drag state, keyboa
 			expect(hint!.getAttribute('aria-hidden')).toBe('true');
 		});
 		await fireEvent.dragEnd(q(container, 'section-drag-handle-sec-sop')!);
-	});
-
-	it('guard: the labelled ▲/▼ buttons remain the keyboard alternative to the drag — native <button>s with contextual m.* labels', async () => {
-		const container = await renderReady();
-		for (const [testid, label] of [
-			['section-move-up-sec-alto', 'Move Alto up'],
-			['section-move-down-sec-alto', 'Move Alto down']
-		] as const) {
-			const btn = q(container, testid) as HTMLElement;
-			expect(btn, testid).not.toBeNull();
-			expect(btn.tagName).toBe('BUTTON');
-			expect(btn.getAttribute('aria-label')).toBe(label);
-		}
 	});
 
 	it('guard: the reorder result live region is present from first render with role="status" + aria-live="polite"', async () => {

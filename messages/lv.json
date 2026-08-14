@@ -143,8 +143,6 @@
 	"roster_section_parent_label": "Vecāka balss grupa",
 	"roster_section_create_failed": "Neizdevās izveidot balss grupu — nekas netika saglabāts.",
 	"roster_section_drag_handle": "Velciet, lai mainītu {name} secību",
-	"roster_section_move_up": "Pārvietot {name} augšup",
-	"roster_section_move_down": "Pārvietot {name} lejup",
 	"roster_section_picker_label": "{name} balss grupas",
 	"roster_new_section_form_label": "Jauna balss grupa",
 	"roster_section_reorder_failed": "Neizdevās saglabāt balss grupu secību — tiek rādīta serverī saglabātā secība.",

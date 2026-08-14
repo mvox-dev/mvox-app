@@ -250,6 +250,19 @@ function makeDataTransfer() {
 	};
 }
 
+// #150 — the up/down arrow buttons this section's tests used to click are
+// gone; drag is now the only reorder input.
+async function dragAndDrop(container: HTMLElement, fromId: string, toId: string): Promise<void> {
+	const dataTransfer = makeDataTransfer();
+	const handle = q(container, `section-drag-handle-${fromId}`) as HTMLElement;
+	expect(handle, `drag handle for ${fromId}`).not.toBeNull();
+	const target = q(container, `section-header-${toId}`) as HTMLElement;
+	expect(target, `drop target header for ${toId}`).not.toBeNull();
+	await fireEvent.dragStart(handle, { dataTransfer });
+	await fireEvent.dragOver(target, { dataTransfer });
+	await fireEvent.drop(target, { dataTransfer });
+}
+
 /** A reorder write that stays pending until the test resolves/rejects it. */
 function deferredReorder(): { resolve: () => void; reject: (e: Error) => void } {
 	let release!: () => void;
@@ -273,7 +286,7 @@ describe('/roster — a reorder write in flight shows a loading indicator (findi
 		expect(q(container, 'section-reorder-pending')).toBeNull();
 
 		const pending = deferredReorder();
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
@@ -291,7 +304,7 @@ describe('/roster — a reorder write in flight shows a loading indicator (findi
 		await collapseAllTopLevel(container);
 		const pending = deferredReorder();
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-pending')).not.toBeNull();
 		});
@@ -308,7 +321,7 @@ describe('/roster — a reorder write in flight shows a loading indicator (findi
 		await collapseAllTopLevel(container);
 		const pending = deferredReorder();
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-pending')).not.toBeNull();
 		});

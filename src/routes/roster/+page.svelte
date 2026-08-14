@@ -517,8 +517,7 @@
 	// #113 RED — arming/disarming the two-step confirm each unmount the very
 	// button that held focus (the ✕ → confirm/cancel swap, and the reverse on
 	// cancel), so without explicit placement focus drops to <body> (WCAG
-	// 2.4.3) — the same defect class as `moveSection`'s boundary case above.
-	// Both are async: `tick()` lets the swapped-in button render before the
+	// 2.4.3). Async: `tick()` lets the swapped-in button render before the
 	// query for it runs.
 	async function armRemove(id: string): Promise<void> {
 		// A fresh attempt owns the error slot — a previous failure's message must
@@ -558,8 +557,8 @@
 	}
 
 	/** Place focus once a SUCCESSFUL removal has settled. `tick()` first, same
-	 *  shape as `armRemove`/`moveSection`: the group only leaves the DOM after
-	 *  the `sections` reassignment renders. */
+	 *  shape as `armRemove`: the group only leaves the DOM after the
+	 *  `sections` reassignment renders. */
 	async function placeFocusAfterRemove(targetId: string | null): Promise<void> {
 		await tick();
 		const neighbour = targetId
@@ -595,8 +594,8 @@
 		const fallbackId = removeFocusFallbackId(id);
 		const active = document.activeElement;
 		// Only restore focus if the REMOVAL is what lost it — the same `ownsFocus`
-		// discipline as `moveSection`: focus already sitting elsewhere is the
-		// user's own doing and yanking it back would fight them.
+		// discipline as the picker's `closeMenu`: focus already sitting elsewhere
+		// is the user's own doing and yanking it back would fight them.
 		const ownsFocus =
 			!active ||
 			active === document.body ||
@@ -906,9 +905,9 @@
 	// the row, because a reorder's blast radius is the whole group — and one
 	// page-wide flag is that key here, since only one group can be mid-move at a
 	// time on this page. The primary guard is the UI disabling the controls
-	// (`disabled` on ▲/▼, `draggable="false"` on the handle) so a double-tap is
-	// visibly refused rather than silently swallowed; the early return below is
-	// the defensive backstop for the paths the UI can't disable.
+	// (`draggable="false"` on the handle) so a double-tap is visibly refused
+	// rather than silently swallowed; the early return below is the defensive
+	// backstop for the paths the UI can't disable.
 	let reorderPending = $state(false);
 
 	// #99 review F2 — a failed reorder used to be SILENT to the user: the catch
@@ -920,11 +919,11 @@
 	// TS.4 added, had none.
 	let reorderError = $state(false);
 
-	// #99 review F3 — the keyboard reorder path had no result announcement at all:
-	// ▲/▼ moved the section, the DOM reordered silently, and a screen-reader user
-	// pressing ▲ got no confirmation anything happened (the DRAG path at least
-	// announces state via aria-grabbed/aria-dropeffect). Rendered into a
-	// visually-hidden role="status" region — see `roster-reorder-status` below.
+	// #99 review F3 — the reorder path had no result announcement at all: a drag
+	// moved the section, the DOM reordered silently, and a screen-reader user got
+	// no confirmation anything happened beyond the drag's own aria-grabbed/
+	// aria-dropeffect state. Rendered into a visually-hidden role="status"
+	// region — see `roster-reorder-status` below.
 	let reorderStatus = $state('');
 
 	// F3 code-review fix (#98 review): a reorder write is NOT all-or-nothing, so a
@@ -946,7 +945,7 @@
 	//
 	// #99 review F2/F3: the same run owns BOTH user-visible outcomes — the
 	// `role="alert"` on failure and the `role="status"` announcement on success —
-	// so every input path (native drop, touch drop, ▲/▼) gets them for free.
+	// so every input path (native drop, touch drop) gets them for free.
 	// `movedId` is the section the user acted on; it is what the announcement has
 	// to name (`afterIds` alone can't say which one moved).
 	async function performReorder(
@@ -1010,10 +1009,10 @@
 	// F1 code-review fix (#98 review): a dragstart handler MUST populate the drag
 	// data store. Firefox refuses to START a drag session at all when the store is
 	// left empty — dragstart fires, then no dragover/drop ever follows, so the
-	// whole drop path is dead there (silently: the ▲/▼ buttons still work).
-	// `draggedSectionId` stays the source of truth on drop — it survives the
-	// cross-handler hop just as it did before; `setData` is here to satisfy the
-	// browser's drag-initiation precondition, not to carry state.
+	// whole drop path was dead there. `draggedSectionId` stays the source of
+	// truth on drop — it survives the cross-handler hop just as it did before;
+	// `setData` is here to satisfy the browser's drag-initiation precondition,
+	// not to carry state.
 	function handleDragStart(id: string, event: DragEvent): void {
 		draggedSectionId = id;
 		dragOverId = null; // a fresh drag owns its own hover trail, not a stale one
@@ -1064,7 +1063,7 @@
 	function handleDragLeave(id: string, event: DragEvent): void {
 		if (dragOverId !== id) return;
 		// `dragleave` BUBBLES, so a pointer travelling between this header's own
-		// descendants (the toggle button, the name span, the ▲/▼ buttons) reports
+		// descendants (the toggle button, the name span, the drag handle) reports
 		// one too. Only a leave whose destination is OUTSIDE the header row counts
 		// — otherwise the hint flickers off and back on across every internal hop.
 		// (`relatedTarget` is null when the pointer leaves for nothing, and under
@@ -1227,55 +1226,14 @@
 		if (targetId) dropOnto(fromId, targetId);
 	}
 
-	// #99 review F3 — the ▲/▼ buttons DESTROY THEIR OWN FOCUS TARGET: `performReorder`
-	// flips `reorderPending` synchronously, so the button the user just activated is
-	// `disabled` in the same update, and a browser blurs an element that becomes
-	// disabled while focused — focus drops to <body> and the next Tab restarts at the
-	// top of the document (WCAG 2.4.3, the same defect class F1 fixed for the picker).
-	// At a boundary it is permanent: ▲ on the second sibling moves it to index 0, so
-	// the button STAYS disabled once the write settles and there is nothing to return
-	// to.
-	//
-	// The `disabled` attribute stays (a refused control is the honest affordance, and
-	// it is pinned) — focus is restored explicitly instead: back onto the same button
-	// if it is still operable, otherwise onto `section-toggle-<id>`, which always
-	// renders, is always focusable, and names the section that moved. Looked up by
-	// data-testid rather than off the click event: Svelte 5 DELEGATES click, so
-	// `currentTarget` is a patched property, and the id+direction already identify
-	// the button exactly.
-	function reorderButton(id: string, direction: 'up' | 'down'): HTMLButtonElement | null {
-		return document.querySelector<HTMLButtonElement>(
-			`[data-testid="section-move-${direction}-${id}"]`
-		);
-	}
-
-	async function moveSection(id: string, direction: 'up' | 'down'): Promise<void> {
-		const siblingNodes = siblingsOf(sections, id);
-		if (!siblingNodes) return;
-		const siblingIds = siblingNodes.map((n) => n.id);
-		const idx = siblingIds.indexOf(id);
-		const swapWith = direction === 'up' ? idx - 1 : idx + 1;
-		if (swapWith < 0 || swapWith >= siblingIds.length) return; // boundary — no wraparound
-
-		// Only restore focus if the reorder is what LOST it: focus already sitting on
-		// something else is the user's own doing, and yanking it back would fight them
-		// (the same `hadFocus` discipline as the picker's `closeMenu`).
-		const activated = reorderButton(id, direction);
-		const active = document.activeElement;
-		const ownsFocus = !active || active === document.body || active === activated;
-
-		const afterIds = [...siblingIds];
-		[afterIds[idx], afterIds[swapWith]] = [afterIds[swapWith], afterIds[idx]];
-		await performReorder(siblingIds, afterIds, id);
-		if (!ownsFocus) return;
-		await tick(); // let the re-enabled/boundary-disabled buttons settle first
-		const settled = reorderButton(id, direction);
-		if (settled && !settled.disabled) {
-			settled.focus();
-			return;
-		}
-		document.querySelector<HTMLElement>(`[data-testid="section-toggle-${id}"]`)?.focus();
-	}
+	// #150 — the up/down arrow buttons that used to live here (`reorderButton`/
+	// `moveSection`) are gone; the drag handle below is now the only reorder
+	// input. That leaves this page with NO keyboard-operable reorder path (the
+	// handle is deliberately `tabindex="-1"`, see the drag handle rendering) —
+	// an open a11y gap, not a design decision made here. Tracked in #152:
+	// restore a keyboard path on the handle itself (roving tabindex +
+	// ArrowUp/ArrowDown + Space to grab), reusing `performReorder` and the
+	// `roster-reorder-status` live region, which already announce the outcome.
 </script>
 
 {#snippet memberRow(row: RosterRow, showSection: boolean)}
@@ -1517,17 +1475,25 @@
 				     `max-w-md`, so the drag half of "works on mobile (long-press) and
 				     desktop" cannot be desktop-only). `handlePointerDown` ignores mouse
 				     pointers so the two never race on one gesture; both funnel into the
-				     same `dropOnto`. The ▲/▼ buttons remain the keyboard/a11y path.
+				     same `dropOnto`.
 				     `touch-action: none` is what lets a drag off the handle be a drag
 				     rather than a page scroll.
 				     Both paths are disabled while a reorder write is in flight — see
 				     `reorderPending`. -->
 				<!-- #99 review F5: role="img", NOT role="button". The handle is deliberately
-				     not focusable and implements no activation of its own (the keyboard
-				     path is the labelled ▲/▼ buttons below), so announcing it as a button
-				     promised a screen-reader user a control they could never operate.
-				     role="img" + aria-label keeps it a NAMED, non-hidden object that can
-				     still carry the drag state. -->
+				     not focusable and implements no activation of its own, so announcing
+				     it as a button promised a screen-reader user a control they could
+				     never operate. role="img" + aria-label keeps it a NAMED, non-hidden
+				     object that can still carry the drag state.
+				     #150 — the ▲/▼ buttons that used to sit beside this handle (and were
+				     this page's only KEYBOARD path to a reorder) are gone; drag/touch is
+				     now the sole input. Restoring keyboard operability is tracked in
+				     #152 — note that if the handle DOES become operable, this role="img"
+				     choice must be revisited (F5's reasoning was conditioned on it not
+				     being operable). -->
+				<!-- Design question: rearrange-handle visibility for subsections (and how a
+				     handle should read on a COLLAPSED sub-section vs. its parent) is TBD —
+				     split out of #150 point 2 into #153, which is where the decision lands. -->
 				<span
 					data-testid="section-drag-handle-{node.id}"
 					draggable={reorderPending ? 'false' : 'true'}
@@ -1550,26 +1516,6 @@
 				>
 					≡
 				</span>
-				<button
-					type="button"
-					data-testid="section-move-up-{node.id}"
-					aria-label={m.roster_section_move_up({ name: node.name })}
-					class="rounded px-1 text-xs text-ink-2 hover:text-ink disabled:opacity-30"
-					disabled={siblingIdx <= 0 || reorderPending}
-					onclick={() => void moveSection(node.id, 'up')}
-				>
-					▲
-				</button>
-				<button
-					type="button"
-					data-testid="section-move-down-{node.id}"
-					aria-label={m.roster_section_move_down({ name: node.name })}
-					class="rounded px-1 text-xs text-ink-2 hover:text-ink disabled:opacity-30"
-					disabled={siblingIdx === -1 || siblingIdx >= siblingIds.length - 1 || reorderPending}
-					onclick={() => void moveSection(node.id, 'down')}
-				>
-					▼
-				</button>
 			{/if}
 		</div>
 		{#if showDropIndicator && !hintBefore}

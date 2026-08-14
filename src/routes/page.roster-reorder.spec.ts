@@ -14,35 +14,37 @@
 //   TESTIDS
 //     section-drag-handle-<sectionId>   the ≡ drag handle; draggable="true";
 //                                       INSIDE its own section-group element
-//     section-move-up-<sectionId>       keyboard fallback: move one slot up
-//     section-move-down-<sectionId>     keyboard fallback: move one slot down
+//
+//   #150 — the up/down keyboard-fallback buttons this file originally pinned
+//   (section-move-up-<id>/section-move-down-<id>) were removed: the drag
+//   handle is now the ONLY reorder input, and this page currently has no
+//   keyboard-operable path to a reorder at all (an open a11y gap, tracked in
+//   #152).
 //
 //   VISIBILITY — per-header, both gates AND-ed, FAIL CLOSED:
-//     - handle + move buttons render on a section header ONLY while THAT
-//       section is COLLAPSED (issue #98: "visible only on collapsed section
-//       headers" — expanded sections must collapse to reorder; per-header, so
-//       a collapsed Soprano shows its handle even while Alto stays expanded);
+//     - the handle renders on a section header ONLY while THAT section is
+//       COLLAPSED (issue #98: "visible only on collapsed section headers" —
+//       expanded sections must collapse to reorder; per-header, so a
+//       collapsed Soprano shows its handle even while Alto stays expanded);
 //     - AND only for `$adminStore === 'admin'` — 'not-admin', 'loading' and
-//       'error' all hide them (same fail-closed gate as the section picker);
-//     - the Unassigned group NEVER gets a handle or move buttons (it is not a
-//       section entity and always sorts last).
+//       'error' all hide it (same fail-closed gate as the section picker);
+//     - the Unassigned group NEVER gets a handle (it is not a section entity
+//       and always sorts last).
 //
-//   REORDER SEMANTICS (both input paths):
+//   REORDER SEMANTICS:
 //     - a reorder is scoped to ONE SIBLING GROUP: the top-level sections, or
 //       one parent's sub-sections. `reorderSections(cfg, orderedIds)` receives
 //       EXACTLY the sibling ids in their new order — never ids from another
 //       level (#98: dragging a sub-section out of its parent is a structural
 //       change, not an order change — it must do NOTHING).
-//     - DROP (desktop dnd): dropping a dragged header onto a SIBLING header
-//       means "the dragged section takes the drop target's original position"
-//       (downward drag → lands after the target; upward → before it). The drop
-//       triggers the write IMMEDIATELY — no confirm step, no save button.
-//       These tests dispatch dragstart on the handle and dragover/drop on the
-//       target's section-header-<id> element (events bubble — handlers may
-//       live on any ancestor). Dropping on a NON-sibling → no call, no move.
-//     - KEYBOARD (a11y fallback): move-up/move-down swap the section with its
-//       adjacent sibling and fire the same single reorderSections call.
-//       move-up is disabled on the FIRST sibling, move-down on the LAST.
+//     - DROP (desktop dnd) and the touch long-press twin: dropping a dragged
+//       header onto a SIBLING header means "the dragged section takes the drop
+//       target's original position" (downward drag → lands after the target;
+//       upward → before it). The drop triggers the write IMMEDIATELY — no
+//       confirm step, no save button. These tests dispatch dragstart on the
+//       handle and dragover/drop on the target's section-header-<id> element
+//       (events bubble — handlers may live on any ancestor). Dropping on a
+//       NON-sibling → no call, no move.
 //     - OPTIMISTIC-AND-RECONCILE (AC-8): the groups re-render in the new order
 //       immediately; on write failure the order REVERTS and the failure is
 //       logged; on success it stays — no roster/section refetch.
@@ -239,7 +241,7 @@ async function dragAndDrop(container: HTMLElement, fromId: string, toId: string)
 // ── visibility: collapsed-only, admin-only, integration presence ────────────────
 
 describe('/roster — drag handles render on the actual page: collapsed headers only, admin only (integration)', () => {
-	it('admin + everything EXPANDED (explicitly — TU.2/#110 finding #9 supersedes the old expanded-by-default default) → NO drag handle and NO move buttons anywhere', async () => {
+	it('admin + everything EXPANDED (explicitly — TU.2/#110 finding #9 supersedes the old expanded-by-default default) → NO drag handle anywhere', async () => {
 		const container = await renderReady('admin');
 		// Expand every section (incl. sub-sections) via the same toggle-all
 		// control finding #9 shipped — the exhaustive "expand literally
@@ -249,11 +251,9 @@ describe('/roster — drag handles render on the actual page: collapsed headers 
 			expect(q(container, 'section-toggle-sec-sop1')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid^="section-drag-handle-"]')).toBeNull();
-		expect(container.querySelector('[data-testid^="section-move-up-"]')).toBeNull();
-		expect(container.querySelector('[data-testid^="section-move-down-"]')).toBeNull();
 	});
 
-	it('admin + Soprano collapsed → Soprano\'s header gets the handle (draggable="true", INSIDE its group) plus up/down buttons with an accessible name; still-expanded Alto/Tenor stay bare', async () => {
+	it('admin + Soprano collapsed → Soprano\'s header gets the handle (draggable="true", INSIDE its group) with an accessible name; still-expanded Alto/Tenor stay bare', async () => {
 		const container = await renderReady('admin');
 		// TU.2/#110 finding #9 — sections default collapsed now; explicitly
 		// expand Alto/Tenor so "still-expanded" is genuinely true, isolating
@@ -271,25 +271,16 @@ describe('/roster — drag handles render on the actual page: collapsed headers 
 				'[data-testid="section-group-sec-sop"] [data-testid="section-drag-handle-sec-sop"]'
 			)
 		).not.toBeNull();
-
-		const up = q(container, 'section-move-up-sec-sop');
-		const down = q(container, 'section-move-down-sec-sop');
-		expect(up).not.toBeNull();
-		expect(down).not.toBeNull();
-		// A11y: the fallback buttons carry an accessible name (aria-label or text).
-		for (const btn of [up, down]) {
-			expect(btn?.getAttribute('aria-label') || btn?.textContent?.trim()).toBeTruthy();
-		}
+		// A11y: the handle carries an accessible name (aria-label).
+		expect(handle?.getAttribute('aria-label')).toBeTruthy();
 
 		// Per-header gate: the still-expanded siblings show nothing.
 		for (const id of ['sec-alto', 'sec-tenor']) {
 			expect(q(container, `section-drag-handle-${id}`)).toBeNull();
-			expect(q(container, `section-move-up-${id}`)).toBeNull();
-			expect(q(container, `section-move-down-${id}`)).toBeNull();
 		}
 	});
 
-	it('the Unassigned group NEVER gets a handle or move buttons — even collapsed, even for admin (it is not a section and always sorts last)', async () => {
+	it('the Unassigned group NEVER gets a handle — even collapsed, even for admin (it is not a section and always sorts last)', async () => {
 		loadRosterMock.mockResolvedValue([
 			...fixtureRows(),
 			{ memberId: 'm-pete', personId: 'p-pete', name: 'Pete Wilson', email: 'pete@x.com', sectionIds: [] }
@@ -298,18 +289,14 @@ describe('/roster — drag handles render on the actual page: collapsed headers 
 		await collapse(container, 'unassigned');
 
 		expect(q(container, 'section-drag-handle-unassigned')).toBeNull();
-		expect(q(container, 'section-move-up-unassigned')).toBeNull();
-		expect(q(container, 'section-move-down-unassigned')).toBeNull();
 	});
 
 	it.each(['not-admin', 'loading', 'error'] as const)(
-		'%s: collapsed sections still show NO handles and NO move buttons — members never reorder, fail closed on unresolved/errored rights',
+		'%s: collapsed sections still show NO handles — members never reorder, fail closed on unresolved/errored rights',
 		async (state) => {
 			const container = await renderReady(state);
 			await collapse(container, 'sec-sop');
 			expect(container.querySelector('[data-testid^="section-drag-handle-"]')).toBeNull();
-			expect(container.querySelector('[data-testid^="section-move-up-"]')).toBeNull();
-			expect(container.querySelector('[data-testid^="section-move-down-"]')).toBeNull();
 		}
 	);
 });
@@ -379,71 +366,23 @@ describe('/roster — dropping a dragged header triggers ONE immediate reorderSe
 	});
 });
 
-// ── keyboard fallback: up/down buttons ──────────────────────────────────────────
-
-describe('/roster — keyboard fallback: up/down buttons fire the same reorderSections write', () => {
-	it('move-down on Soprano (first of three) swaps it with Alto → reorderSections(cfg, ["sec-alto","sec-sop","sec-tenor"]) exactly once; groups re-render', async () => {
-		const container = await renderReady('admin');
-		await collapseAllTopLevel(container);
-
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
-
-		await waitFor(() => {
-			expect(reorderMock).toHaveBeenCalledTimes(1);
-		});
-		expect(reorderMock).toHaveBeenCalledWith(CFG, ['sec-alto', 'sec-sop', 'sec-tenor']);
-		await waitFor(() => {
-			expect(groupOrder(container)).toEqual([
-				'section-group-sec-alto',
-				'section-group-sec-sop',
-				'section-group-sec-tenor'
-			]);
-		});
-	});
-
-	it('move-up on Tenor (last of three) swaps it with Alto → reorderSections(cfg, ["sec-sop","sec-tenor","sec-alto"])', async () => {
-		const container = await renderReady('admin');
-		await collapseAllTopLevel(container);
-
-		await fireEvent.click(q(container, 'section-move-up-sec-tenor') as HTMLElement);
-
-		await waitFor(() => {
-			expect(reorderMock).toHaveBeenCalledTimes(1);
-		});
-		expect(reorderMock).toHaveBeenCalledWith(CFG, ['sec-sop', 'sec-tenor', 'sec-alto']);
-	});
-
-	it('boundary: move-up is DISABLED on the first sibling, move-down on the last — the middle sibling has both enabled', async () => {
-		const container = await renderReady('admin');
-		await collapseAllTopLevel(container);
-
-		expect((q(container, 'section-move-up-sec-sop') as HTMLButtonElement).disabled).toBe(true);
-		expect((q(container, 'section-move-down-sec-sop') as HTMLButtonElement).disabled).toBe(false);
-		expect((q(container, 'section-move-up-sec-alto') as HTMLButtonElement).disabled).toBe(false);
-		expect((q(container, 'section-move-down-sec-alto') as HTMLButtonElement).disabled).toBe(false);
-		expect((q(container, 'section-move-up-sec-tenor') as HTMLButtonElement).disabled).toBe(false);
-		expect((q(container, 'section-move-down-sec-tenor') as HTMLButtonElement).disabled).toBe(true);
-	});
-});
+// #150 — the up/down keyboard-fallback buttons this section tested (and their
+// dedicated boundary-disabled coverage) are gone; drag is now the only
+// reorder input, exercised by the describe blocks around this one.
 
 // ── sub-sections: constrained to their parent group ─────────────────────────────
 
 describe('/roster — sub-sections reorder within their PARENT group only', () => {
-	it('move-down on collapsed Soprano 1 calls reorderSections with EXACTLY the sibling ids ["sec-sop2","sec-sop1"] — never top-level ids; the two sub-groups swap on screen', async () => {
+	it('dragging collapsed Soprano 1 onto Soprano 2 calls reorderSections with EXACTLY the sibling ids ["sec-sop2","sec-sop1"] — never top-level ids; the two sub-groups swap on screen', async () => {
 		const container = await renderReady('admin');
 		// Parent must be EXPANDED first (its children must be on screen — TU.2/
 		// #110 finding #9, no longer automatic); both sub-sections then collapsed
-		// so their handles/buttons show.
+		// so their handles show.
 		await expand(container, 'sec-sop');
 		await collapse(container, 'sec-sop1');
 		await collapse(container, 'sec-sop2');
 
-		// Boundary within the SUB-group: Soprano 1 is first (no up), Soprano 2 last
-		// (no down) — the boundary is the sibling group, not the whole page.
-		expect((q(container, 'section-move-up-sec-sop1') as HTMLButtonElement).disabled).toBe(true);
-		expect((q(container, 'section-move-down-sec-sop2') as HTMLButtonElement).disabled).toBe(true);
-
-		await fireEvent.click(q(container, 'section-move-down-sec-sop1') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop1', 'sec-sop2');
 
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
@@ -470,7 +409,7 @@ describe('/roster — a failed reorder write RECONCILES against the server and l
 		await collapseAllTopLevel(container);
 		reorderMock.mockRejectedValue(new Error('reorder boom'));
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
@@ -520,7 +459,7 @@ describe('/roster — a failed reorder write RECONCILES against the server and l
 			{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, depth: 0, children: [] }
 		] satisfies SectionNode[]);
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
@@ -543,7 +482,7 @@ describe('/roster — a failed reorder write RECONCILES against the server and l
 		reorderMock.mockRejectedValue(new Error('reorder boom'));
 		listSectionsMock.mockRejectedValue(new Error('refetch boom'));
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 
 		await waitFor(() => {
 			expect(listSectionsMock).toHaveBeenCalledTimes(2);
@@ -598,37 +537,36 @@ describe('/roster — an in-flight reorder write blocks a second one (#98 review
 		return { resolve: () => release() };
 	}
 
-	it('a second move while the first write is outstanding is REFUSED, and the controls visibly disable — two overlapping full-sibling renumbers would leave a section holding two display_order values', async () => {
+	it('a second drop while the first write is outstanding is REFUSED, and the handles visibly disable — two overlapping full-sibling renumbers would leave a section holding two display_order values', async () => {
 		const container = await renderReady('admin');
 		await collapseAllTopLevel(container);
 		const pending = deferredReorder();
 
-		await fireEvent.click(q(container, 'section-move-down-sec-sop') as HTMLElement);
+		await dragAndDrop(container, 'sec-sop', 'sec-alto');
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
 
-		// Every reorder control is disabled while the write is outstanding — the
-		// primary double-tap guard is the UI refusing the tap, not swallowing it.
+		// Every drag handle is disabled while the write is outstanding — the
+		// primary double-tap guard is the UI refusing the drag, not swallowing it.
 		await waitFor(() => {
-			expect((q(container, 'section-move-up-sec-sop') as HTMLButtonElement).disabled).toBe(true);
+			expect(q(container, 'section-drag-handle-sec-sop')?.getAttribute('draggable')).toBe('false');
 		});
-		expect((q(container, 'section-move-down-sec-alto') as HTMLButtonElement).disabled).toBe(true);
-		expect((q(container, 'section-move-up-sec-tenor') as HTMLButtonElement).disabled).toBe(true);
-		expect(q(container, 'section-drag-handle-sec-sop')?.getAttribute('draggable')).toBe('false');
+		expect(q(container, 'section-drag-handle-sec-alto')?.getAttribute('draggable')).toBe('false');
+		expect(q(container, 'section-drag-handle-sec-tenor')?.getAttribute('draggable')).toBe('false');
 
-		// Backstop: even a tap/drop that got through anyway writes nothing.
-		await fireEvent.click(q(container, 'section-move-up-sec-tenor') as HTMLElement);
+		// Backstop: even a drop that got through anyway writes nothing — the
+		// handle's `draggable="false"` is the visible refusal, `reorderPending`'s
+		// early return in `performReorder` is what actually enforces it.
 		await dragAndDrop(container, 'sec-tenor', 'sec-sop');
 		expect(reorderMock).toHaveBeenCalledTimes(1);
 
 		// Settled → the controls come back and a move works again.
 		pending.resolve();
 		await waitFor(() => {
-			expect((q(container, 'section-move-up-sec-tenor') as HTMLButtonElement).disabled).toBe(false);
+			expect(q(container, 'section-drag-handle-sec-tenor')?.getAttribute('draggable')).toBe('true');
 		});
-		expect(q(container, 'section-drag-handle-sec-sop')?.getAttribute('draggable')).toBe('true');
-		await fireEvent.click(q(container, 'section-move-up-sec-tenor') as HTMLElement);
+		await dragAndDrop(container, 'sec-tenor', 'sec-sop');
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(2);
 		});

@@ -10,10 +10,12 @@
 // top of the document (WCAG 2.4.3 Focus Order). Closing the panel does the
 // same in reverse: the panel's own Close button unmounts itself.
 //
-// This is the exact defect class the roster page already fixed twice (#99 F3
-// for the ▲/▼ reorder buttons, F1 for the picker's closeMenu): when an
-// activation unmounts its own control, the handler must place focus
-// explicitly. The pinned contract:
+// This is the exact defect class the section picker already fixed (#99 F1 —
+// `closeMenu` in src/lib/sections/SectionPicker.svelte, which puts focus back
+// on the trigger instead of letting it drop to <body>): when an activation
+// unmounts its own control, the handler must place focus explicitly. The
+// roster's `handleRemoveSection` follows the same discipline. The pinned
+// contract:
 //   - opening a row's panel moves focus INTO that panel (its close control is
 //     the natural landing — first focusable, and the symmetric undo);
 //   - closing the panel returns focus to that row's restored 'Take

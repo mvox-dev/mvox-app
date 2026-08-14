@@ -143,8 +143,6 @@
 	"roster_section_parent_label": "Ülemhääleliik",
 	"roster_section_create_failed": "Hääleliigi loomine ebaõnnestus — midagi ei salvestatud.",
 	"roster_section_drag_handle": "Lohista, et muuta {name} järjekorda",
-	"roster_section_move_up": "Liiguta {name} üles",
-	"roster_section_move_down": "Liiguta {name} alla",
 	"roster_section_picker_label": "{name} hääleliigid",
 	"roster_new_section_form_label": "Uus hääleliik",
 	"roster_section_reorder_failed": "Hääleliikide järjekorda ei õnnestunud salvestada — kuvatakse serveris olevat järjekorda.",

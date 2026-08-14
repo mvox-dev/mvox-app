@@ -144,8 +144,6 @@
 	"roster_section_create_failed": "The section couldn't be created — nothing was saved.",
 	"roster_section_assign_failed": "The section was created, but the member couldn't be added to it.",
 	"roster_section_drag_handle": "Drag to reorder {name}",
-	"roster_section_move_up": "Move {name} up",
-	"roster_section_move_down": "Move {name} down",
 	"roster_section_picker_label": "Sections for {name}",
 	"roster_new_section_form_label": "New section",
 	"roster_section_reorder_failed": "The section order couldn't be saved — showing the order the server holds.",
