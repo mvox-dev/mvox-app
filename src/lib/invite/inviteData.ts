@@ -212,14 +212,15 @@ export async function createInvite(
 	// ── 1. Person create — the server mints the invite JWT from any truthy
 	// entu_user string and deletes the string (entu-api utils/entity.js:462-467),
 	// so a fixed trigger constant is sent, never the invitee's email (#34). No
-	// name/email props: those prop-defs were deleted in T4.3. Explicit `_sharing`
-	// (omission would silently copy the parent tier, utils/entity.js:296-327) and
-	// explicit `_inheritrights` — no hidden defaults.
+	// name/email props: those prop-defs were deleted in T4.3. explicit `_inheritrights`
+	// kept — no hidden default. NO explicit `_sharing` (#133 audit): the parent here
+	// is the database ROOT entity (never the organization), which the #133 audit
+	// found already carries a non-private tier, so Entu's create-time copy
+	// (utils/entity.js:296-327) lands `domain` here without resending it.
 	const personProps: Prop[] = [
 		{ type: '_type', reference: personTypeId },
 		{ type: '_parent', reference: personParentId },
 		{ type: 'entu_user', string: INVITE_MINT_TRIGGER },
-		{ type: '_sharing', string: 'domain' },
 		{ type: '_inheritrights', boolean: true }
 	];
 	const personRes = await entuFetch(
@@ -289,18 +290,21 @@ export async function createInvite(
 	}
 
 	// ── 4. Member create — `person` ref + `status:'active'` are what
-	// findMyMemberId filters on (rsvpData.ts). `_sharing:'domain'` (#36): the
-	// member→domain ruling unbreaks the roster query (#18/T3.2), which under
-	// `private` returned only the invitee's own membership; domain sharing also
-	// covers her own read, so the slice3-era explicit `_viewer` grant is retired.
-	// NO `name` property (#36) — the member carries no name; that lives on a
-	// separate per-visibility-level entity now (T4.3/T4.8).
+	// findMyMemberId filters on (rsvpData.ts). The #36 member→domain ruling
+	// unbreaks the roster query (#18/T3.2), which under `private` returned only
+	// the invitee's own membership; domain sharing also covers her own read, so
+	// the slice3-era explicit `_viewer` grant is retired. NO explicit `_sharing`
+	// (#133): the direct parent is the organization, which carries `domain` +
+	// `_inheritrights:true`, so Entu's create-time copy (utils/entity.js:296-327)
+	// already lands `domain` on the member without resending it. `_inheritrights`
+	// IS still sent explicitly here (kept per #133 audit). NO `name` property
+	// (#36) — the member carries no name; that lives on a separate
+	// per-visibility-level entity now (T4.3/T4.8).
 	const memberProps: Prop[] = [
 		{ type: '_type', reference: memberTypeId },
 		{ type: '_parent', reference: input.orgId },
 		{ type: 'person', reference: personId },
 		{ type: 'status', string: 'active' },
-		{ type: '_sharing', string: 'domain' },
 		{ type: '_inheritrights', boolean: true }
 	];
 	const memberRes = await entuFetch(

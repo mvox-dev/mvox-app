@@ -345,7 +345,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 	});
 
-	it('adding a work creates a repertoire_item under the SEASON, with an explicit domain _sharing', async () => {
+	it('adding a work creates a repertoire_item under the SEASON, with NO explicit _sharing (#133: inherited from the domain-tier season parent)', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
@@ -370,8 +370,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			{ type: '_type', reference: 'type-1' },
 			{ type: '_parent', reference: 'season-1' },
 			{ type: 'work', reference: 'work-3' },
-			{ type: 'status', string: 'active' },
-			{ type: '_sharing', string: 'domain' }
+			{ type: 'status', string: 'active' }
 		]);
 	});
 

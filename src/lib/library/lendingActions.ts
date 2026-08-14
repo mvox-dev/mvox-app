@@ -15,8 +15,16 @@ export interface CreateLendingPayload {
 
 /**
  * Create a new lending entity under the library. Resolves the `lending` type-def
- * id, then POSTs the entity with copy/member references, assigned_at date, and
- * domain sharing. Returns the created Lending mapped from the payload + response.
+ * id, then POSTs the entity with copy/member references and assigned_at date.
+ * Returns the created Lending mapped from the payload + response.
+ *
+ * #133: NO explicit `_sharing` — the LIBRARY entity named in `_parent` carries
+ * its own materialized `_sharing: domain` (1/1 live: 6a12036c4ff8277cd4306b26
+ * 'EPCC Library'), so Entu's create-time copy (utils/entity.js:296-327) lands
+ * `domain` on the lending. That copy reads ONLY the `private._sharing` of the
+ * entities named in the create body's `_parent` props — there is no ancestor
+ * walk, so the org's tier is provenance (the library materialized `domain` from
+ * it at ITS create), not what makes this create safe.
  */
 export async function createLending(
 	cfg: EntuCfg,
@@ -26,13 +34,14 @@ export async function createLending(
 ): Promise<Lending> {
 	const typeId = await resolveTypeId(cfg, 'lending', fetchImpl);
 
+	// `_sharing` copied at create from the library parent's own `domain` (which
+	// the library itself inherited from the org) — #133.
 	const props: Array<{ type: string; reference?: string; string?: string; date?: string }> = [
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: libraryId },
 		{ type: 'copy', reference: payload.copyId },
 		{ type: 'member', reference: payload.memberId },
-		{ type: 'assigned_at', date: payload.assignedAt },
-		{ type: '_sharing', string: 'domain' }
+		{ type: 'assigned_at', date: payload.assignedAt }
 	];
 
 	if (payload.assignedUntil) {

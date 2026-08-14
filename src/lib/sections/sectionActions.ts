@@ -29,8 +29,11 @@ import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 //         (unchanged regression guard). No readable org at all fails loud
 //         naming the db (a parent is REQUIRED: v4E
 //         `parentConstraint: 'exactly_one_of'`).
-//   - `_sharing: 'public'` EXPLICIT at create time — v4E pins section sharing
-//     as public (federation discoverability); never rely on inherit.
+//   - `_sharing: 'public'` EXPLICIT at create time — a deliberate WIDEN, not a
+//     copy of the parent tier: inherit would yield `domain` (the org is `domain`,
+//     6/6 live), and v4E pins section sharing as public for federation
+//     discoverability. See the create-body comment below for the full #133
+//     rationale and the live caveat.
 //   - `name` sent trimmed; an empty/whitespace-only name throws WITHOUT any
 //     fetch (defense in depth — the form validates too, but the data layer must
 //     not create a nameless section).
@@ -148,6 +151,19 @@ export async function createSection(
 
 	// Full create body, exactly: _type + _parent + name + _sharing — no
 	// display_order, no voice, no description (see module contract above).
+	//
+	// explicit `_sharing: public` required (#133 audit) — KEEP, do not remove:
+	// inherit cannot produce this value. The org is `domain` (6/6 live) and seed
+	// sections are `domain`, so omitting the property would yield `domain`, not
+	// `public` — this is a deliberate widen (v4E federation discoverability), not
+	// a copy of the parent tier. CAVEAT live-verified at audit time: the
+	// `section` TYPE entity is itself `domain`, which caps every section prop-def
+	// at domain (aggregate.js:113-121) and gets its domain bucket dropped
+	// whenever the instance is `public` (aggregate.js:269) — the one live public
+	// section (6a7cc04e23dc1d97bb8f203b) currently reads back nameless even to an
+	// authenticated member. `public` is presently counterproductive in practice,
+	// but the fix is widening the section TYPE entity (a data change), not
+	// deleting this line.
 	const props: Array<{ type: string; reference?: string; string?: string }> = [
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: parentRef },

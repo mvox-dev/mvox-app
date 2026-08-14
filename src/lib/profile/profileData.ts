@@ -13,8 +13,14 @@ import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 // `src/lib/profile/profileData.spec.ts` for the `@ts-expect-error` proofs (gated
 // by `pnpm check`) and the runtime defense-in-depth for callers who bypass TS.
 //
-// Extends the half-precedent `createRsvp` (`src/lib/rsvp/rsvpData.ts:111-139`),
-// which sets an explicit `_sharing` but no `_inheritrights`.
+// #133 audit — KEEP, do not remove either field: both are load-bearing here, not
+// redundant with inherit. `_inheritrights:false` is a deliberate ISOLATION (a
+// profile must never inherit rights from its person parent; inherit would supply
+// `true` wherever the person carries it). `_sharing` is a per-level VARIABLE
+// (public|domain|private — one profile entity per visibility level); inherit
+// would copy the person's tier onto every profile, so a 'private'-level profile
+// would silently be created domain-visible. Unlike rsvp/repertoire_item/lending,
+// there is no single inherited value that is ever correct here.
 
 export interface CreateProfileInput {
 	/** The person this profile is created under (`_parent`). */

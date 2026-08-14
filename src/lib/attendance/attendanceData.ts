@@ -65,9 +65,18 @@ export interface RsvpForEvent {
  * #10 pinned wire-shape), plus the ONE sentinel matching `status`; the other two
  * sentinels are simply absent (a fresh create has no stale values to clear).
  *
- * MUST send an explicit `{ type: '_sharing', string: 'domain' }` at create time
- * per v4E — never rely on inherit (#82 widen: the whole collective may see who
- * showed up, and the singer can read her own row).
+ * explicit `{ type: '_sharing', string: 'domain' }` required (#133 audit) — KEEP,
+ * do not remove: the parent here is the EVENT, which is NOT a uniformly-domain
+ * tier (21 live events are domain, one — 6a7a164e23dc1d97bb8f18a1 'Test
+ * rehearsal' — is public). Public wins at Entu's create-time copy, so an
+ * attendance created under a public event would inherit `public`;
+ * aggregate.js:269 then drops the domain bucket, and since member/status are
+ * domain-tier prop-defs they'd become unreadable via listAttendance/
+ * listMyAttendance. The explicit `domain` pins the intended tier regardless of
+ * the parent event's own tier — public concert events are a legitimate product
+ * state, so this pin is not redundant. `domain` is also the intended visibility
+ * per the #82 widen: the whole collective may see who showed up, and the singer
+ * can read her own row.
  */
 export async function createAttendance(
 	cfg: EntuCfg,
@@ -78,7 +87,8 @@ export async function createAttendance(
 	// One sentinel (`<status>_ref`) matching the chosen status, carrying the EVENT
 	// id — which IS `_parent` here (unlike rsvp, there is no separate `event` prop).
 	// The other two sentinels are simply absent on a fresh create. Explicit
-	// `_sharing: domain` — never rely on inherit (#82).
+	// `_sharing: domain` pins the tier because the parent event tier is NOT
+	// uniform (#133 — see the JSDoc above).
 	const props = [
 		{ type: '_type', reference: attendanceTypeId },
 		{ type: '_parent', reference: input.eventId },

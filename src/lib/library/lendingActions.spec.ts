@@ -39,7 +39,7 @@ describe('createLending', () => {
 		assignedAt: '2026-08-10'
 	};
 
-	it('POST body full-shape has copy/member as reference, assigned_at as date, _parent=libraryId, _sharing=domain (no assigned_until when absent)', async () => {
+	it('POST body full-shape has copy/member as reference, assigned_at as date, _parent=libraryId, NO explicit _sharing (#133: inherited from the domain-tier library parent), no assigned_until when absent', async () => {
 		const fetchImpl = makeFetchMock('lending-type-42');
 		await createLending(cfg, 'library-1', basePayload, fetchImpl);
 		const body = createCallBody(fetchImpl);
@@ -50,11 +50,11 @@ describe('createLending', () => {
 				{ type: '_parent', reference: 'library-1' },
 				{ type: 'copy', reference: 'copy-1' },
 				{ type: 'member', reference: 'member-1' },
-				{ type: 'assigned_at', date: '2026-08-10' },
-				{ type: '_sharing', string: 'domain' }
+				{ type: 'assigned_at', date: '2026-08-10' }
 			])
 		);
 		expect(body.map((p) => p.type)).not.toContain('assigned_until');
+		expect(body.map((p) => p.type)).not.toContain('_sharing');
 	});
 
 	it('returns the created Lending, mapping the POST response onto the Lending shape', async () => {
@@ -226,7 +226,7 @@ describe('bulkCheckout', () => {
 		expect(result.failed.every((f) => f.error.length > 0)).toBe(true);
 	});
 
-	it('each create carries explicit _sharing (verify via mock inspection)', async () => {
+	it('each create carries NO explicit _sharing (#133: inherited from the domain-tier library parent — verify via mock inspection)', async () => {
 		const fetchImpl = makeFetchMock();
 		const resolveCopies = makeResolveCopies();
 		await bulkCheckout(cfg, 'library-1', basePayload, [], fetchImpl, resolveCopies);
@@ -238,7 +238,7 @@ describe('bulkCheckout', () => {
 		expect(createCalls.length).toBe(3);
 		for (const [, init] of createCalls) {
 			const body = JSON.parse(String(init.body)) as Array<{ type: string; string?: string }>;
-			expect(body).toEqual(expect.arrayContaining([{ type: '_sharing', string: 'domain' }]));
+			expect(body.map((p) => p.type)).not.toContain('_sharing');
 		}
 	});
 

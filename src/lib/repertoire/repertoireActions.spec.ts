@@ -34,8 +34,10 @@ import {
 //     `{ number: n }`, never `{ string: ... }`), notes (text, not written here).
 //   - `_type` sent as a resolved REFERENCE, never a string (#10 pinned
 //     wire-shape); type names 'repertoire_item' / 'program_item'.
-//   - `_sharing: domain` EXPLICIT at create time per v4E — the whole collective
-//     reads the repertoire/programme; never rely on inherit.
+//   - `_sharing` (#133 audit): repertoire_item sends NO explicit `_sharing`
+//     (inherited from the uniformly-domain season parent). program_item KEEPS
+//     an explicit `_sharing: domain` — its parent (event) is not uniformly
+//     domain, so the tier must be pinned rather than inherited.
 //   - UPDATE = GET current value-ids → POST the new value → DELETE
 //     /property/{value-id} for each OLD id (Entu POST APPENDS to implicitly
 //     multi-valued props, so replace semantics need both calls, and the GET must
@@ -84,7 +86,7 @@ describe('createRepertoireItem', () => {
 		}>;
 	}
 
-	it('POST body FULL SHAPE: _type ref + _parent=season + work ref + status=active + _sharing:domain — and nothing else', async () => {
+	it('POST body FULL SHAPE: _type ref + _parent=season + work ref + status=active — and nothing else (NO explicit _sharing, #133: inherited from the domain-tier season parent)', async () => {
 		const fetchImpl = makeFetchMock('rep-type-42');
 		await createRepertoireItem(cfg, { seasonId: 'season-s', workId: 'work-w', status: 'active' }, fetchImpl);
 		const body = createCallBody(fetchImpl);
@@ -98,8 +100,7 @@ describe('createRepertoireItem', () => {
 				{ type: '_type', reference: 'rep-type-42' },
 				{ type: '_parent', reference: 'season-s' },
 				{ type: 'work', reference: 'work-w' },
-				{ type: 'status', string: 'active' },
-				{ type: '_sharing', string: 'domain' }
+				{ type: 'status', string: 'active' }
 			].sort((a, b) => a.type.localeCompare(b.type))
 		);
 	});
@@ -123,14 +124,11 @@ describe('createRepertoireItem', () => {
 		expect(typeProp.string).toBeUndefined();
 	});
 
-	it('POST body contains explicit _sharing:domain — set by the creating client per v4E, never inherit-reliant', async () => {
+	it('POST body carries NO explicit _sharing (#133: inherited from the domain-tier season parent — never resent)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createRepertoireItem(cfg, { seasonId: 'season-s', workId: 'work-w' }, fetchImpl);
 		const body = createCallBody(fetchImpl);
-		expect(body).toEqual(expect.arrayContaining([{ type: '_sharing', string: 'domain' }]));
-		// A body carrying BOTH domain and private would also satisfy arrayContaining —
-		// pin private's absence separately.
-		expect(body).not.toEqual(expect.arrayContaining([{ type: '_sharing', string: 'private' }]));
+		expect(body.map((p) => p.type)).not.toContain('_sharing');
 	});
 
 	it('returns the created repertoire_item _id', async () => {

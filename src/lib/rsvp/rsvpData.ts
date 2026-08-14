@@ -103,10 +103,11 @@ export function rsvpsByEventId(rsvps: MyRsvp[]): RsvpByEventId {
  * matching `status`; the other three sentinels are simply absent (a fresh create
  * has no stale values to clear).
  *
- * MUST send an explicit `{ type: '_sharing', string: 'domain' }` at create time
- * per v4E — never rely on inherit. Deliberate privacy widen (#82, Mihkel
- * 2026-08-10): `domain` so collective members see each other's answers and the
- * conductor can read individual RSVPs for the RSVP→attendance comparison (AC-3/AC-11).
+ * #133: NO explicit `_sharing` here — the parent (person) inherits `domain` from
+ * the database ROOT entity at create time (inviteData.ts sends no explicit
+ * `_sharing` either — #133), so Entu's create-time copy (utils/entity.js:296-327)
+ * already lands `domain` on the rsvp; the #82 widen this comment used to defend is
+ * achieved for free via inherit, not by resending the tier.
  */
 export async function createRsvp(
 	cfg: EntuCfg,
@@ -115,16 +116,15 @@ export async function createRsvp(
 ): Promise<string> {
 	const rsvpTypeId = await resolveTypeId(cfg, 'rsvp', fetchImpl);
 	// One sentinel (`<status>_ref`) matching the chosen status; the other three are
-	// simply absent on a fresh create. Explicit `_sharing: domain` — never rely on
-	// inherit (#82: deliberate widen for conductor RSVP→attendance read, AC-3/AC-11).
+	// simply absent on a fresh create. `_sharing` is inherited from the person
+	// parent (which is itself domain) via Entu's create-time copy — #133.
 	const props = [
 		{ type: '_type', reference: rsvpTypeId },
 		{ type: '_parent', reference: input.personId },
 		{ type: 'event', reference: input.eventId },
 		{ type: 'member', reference: input.memberId },
 		{ type: 'status', string: input.status },
-		{ type: `${input.status}_ref`, reference: input.eventId },
-		{ type: '_sharing', string: 'domain' }
+		{ type: `${input.status}_ref`, reference: input.eventId }
 	];
 	const res = await entuFetch(
 		cfg.db,

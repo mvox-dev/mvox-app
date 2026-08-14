@@ -269,7 +269,7 @@ describe('createInvite — happy path', () => {
 		expect(result).toEqual({ personId: 'p1', memberId: 'm1', inviteToken: 'tok.abc.def' });
 	});
 
-	it('person payload is EXACTLY: _type ref, _parent=database entity _id, entu_user=mint-trigger constant, _sharing:domain, _inheritrights:true — and NO name/email props (prop-defs deleted in T4.3)', async () => {
+	it('person payload is EXACTLY: _type ref, _parent=database entity _id, entu_user=mint-trigger constant, _inheritrights:true, NO explicit _sharing (#133: inherited from the domain-tier database root) — and NO name/email props (prop-defs deleted in T4.3)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
@@ -286,12 +286,12 @@ describe('createInvite — happy path', () => {
 				// Entu. Hard-coded here (not imported from source) so RED fails on the
 				// assertion, not on a missing export.
 				{ type: 'entu_user', string: 'trigger invite token' },
-				{ type: '_sharing', string: 'domain' },
 				{ type: '_inheritrights', boolean: true }
 			])
 		);
-		expect(personCall!.body).toHaveLength(5);
+		expect(personCall!.body).toHaveLength(4);
 		expect(personCall!.body!.some((p) => p.type === 'name' || p.type === 'email')).toBe(false);
+		expect(personCall!.body!.some((p) => p.type === '_sharing')).toBe(false);
 	});
 
 	it("#34 — the invitee's real email NEVER reaches Entu: the person-create request body contains no occurrence of it, anywhere", async () => {
@@ -304,7 +304,7 @@ describe('createInvite — happy path', () => {
 		expect(JSON.stringify(personCall!.body)).not.toContain('mari@example.com');
 	});
 
-	it('member payload is EXACTLY: _type ref, _parent=orgId, person ref, status:active, _sharing:domain, _inheritrights:true — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
+	it('member payload is EXACTLY: _type ref, _parent=orgId, person ref, status:active, _inheritrights:true, NO explicit _sharing (#133: inherited from the domain-tier org parent) — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const memberCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'person'));
@@ -320,14 +320,14 @@ describe('createInvite — happy path', () => {
 				// member→domain ruling exists specifically to unbreak the roster query
 				// (#18/T3.2), which under private returned only the invitee's own
 				// membership. domain sharing supersedes the need for the explicit grant.
-				{ type: '_sharing', string: 'domain' },
 				{ type: '_inheritrights', boolean: true }
 			])
 		);
-		expect(memberCall!.body).toHaveLength(6);
+		expect(memberCall!.body).toHaveLength(5);
 		// Positive proof — absence, not just a changed value.
 		expect(memberCall!.body!.some((p) => p.type === 'name')).toBe(false);
 		expect(memberCall!.body!.some((p) => p.type === '_viewer')).toBe(false);
+		expect(memberCall!.body!.some((p) => p.type === '_sharing')).toBe(false);
 	});
 
 	it('grants the person self-_editor via POST entity/{personId} (parity with native auto-create — load-bearing for T4.6 lazy creates)', async () => {

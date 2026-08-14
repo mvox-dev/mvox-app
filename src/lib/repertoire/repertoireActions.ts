@@ -18,8 +18,12 @@ import type { ManageRightsState, RepertoireStatus } from './types';
 //     `{ number: n }`, never `{ string: ... }`), notes (text, not written here).
 //   - `_type` sent as a resolved REFERENCE, never a string (#10 pinned
 //     wire-shape); type names 'repertoire_item' / 'program_item'.
-//   - `_sharing: domain` EXPLICIT at create time per v4E — the whole collective
-//     reads the repertoire/programme; never rely on inherit.
+//   - `_sharing` (#133 audit): repertoire_item sends NO explicit `_sharing` —
+//     its parent (season) is uniformly `domain` (2/2 live, inherited from the
+//     domain org), so inherit already lands `domain`. program_item KEEPS an explicit
+//     `_sharing: domain` — its parent (event) is NOT uniformly domain (one live
+//     event is `public`), so inherit would be variable; the explicit cap pins
+//     the intended tier regardless of the parent event's own tier.
 //   - UPDATE = GET current value-ids → POST the new value → DELETE
 //     /property/{value-id} for each OLD id (Entu POST APPENDS to implicitly
 //     multi-valued props, so replace semantics require both calls; the GET must
@@ -45,9 +49,12 @@ export interface CreateRepertoireItemInput {
 
 /**
  * Create a repertoire_item under a season. `_type` resolved to a reference
- * (#10 pinned wire-shape); explicit `_sharing: domain` at create time (v4E —
- * never rely on inherit). `status` defaults to 'active' (schema default) when
+ * (#10 pinned wire-shape). `status` defaults to 'active' (schema default) when
  * omitted.
+ *
+ * #133: NO explicit `_sharing` — the direct parent (season) is uniformly `domain`
+ * (2/2 live, inherited from the domain org), so Entu's create-time copy
+ * (utils/entity.js:296-327) already lands `domain` here.
  */
 export async function createRepertoireItem(
 	cfg: EntuCfg,
@@ -56,12 +63,13 @@ export async function createRepertoireItem(
 ): Promise<string> {
 	const typeId = await resolveTypeId(cfg, 'repertoire_item', fetchImpl);
 	const status = input.status ?? 'active';
+	// `_sharing` inherited from the season parent (itself inherited from the
+	// org) via Entu's create-time copy — #133.
 	const props = [
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: input.seasonId },
 		{ type: 'work', reference: input.workId },
-		{ type: 'status', string: status },
-		{ type: '_sharing', string: 'domain' }
+		{ type: 'status', string: status }
 	];
 	const res = await entuFetch(
 		cfg.db,
@@ -176,6 +184,12 @@ export interface CreateProgramItemInput {
  * Create a program_item under an event. `ordinal` is a NUMBER prop — always
  * sent as `{ number: n }`, including `0` (the opening piece — a falsy-drop
  * would create an unordered program_item).
+ *
+ * explicit `_sharing` required (#133 audit): the parent (event) is NOT a
+ * uniformly-domain tier — one live event is `public` — so relying on inherit
+ * would let a program_item under that event land `public`, and aggregate.js:269
+ * then drops its domain-tier prop-defs (edition/ordinal) from ordinary reads.
+ * The explicit `domain` pins the intended tier independent of the parent event.
  */
 export async function createProgramItem(
 	cfg: EntuCfg,
