@@ -21,20 +21,89 @@ export function resetLibrarian(): void {
 // statically imports `$env/dynamic/public`. This module is imported by the root
 // layout for `librarianStore`/`resetLibrarian` alongside auth/gate wiring — same trap
 // documented in `completionGate.ts` (see its module note). Importing `entuFetch`
-// LAZILY inside `resolveLibrarian` (not at module top-level) keeps the $env chain out
-// of `+layout`'s module-eval time, so specs that render the layout without
-// stubbing `$env/dynamic/public` (e.g. happy-dom layout specs) aren't broken by
-// wiring this store in.
+// (and `$lib/org/myOrg`, which pulls the same chain) LAZILY inside `resolveLibrarian`
+// / `resolveMyLibraryId` (not at module top-level) keeps the $env chain out of
+// `+layout`'s module-eval time, so specs that render the layout without stubbing
+// `$env/dynamic/public` (e.g. happy-dom layout specs) aren't broken by wiring this
+// store in.
+//
+// #143 review — mirrors the TU.1/#109 `resolveAdmin` fix: derive the library
+// entity from the PERSON'S OWN collective org, never from a `limit=1` global
+// query. With more than one library entity visible to a reader (multi-org data),
+// `entity?_type.string=library&limit=1` picks an arbitrary one — the same
+// first-hit-guess bug `resolveMyOrgId` documents for `organization`. The org
+// comes from `resolveMyOrgId` (the person's own member `_parent`) and the
+// library is looked up scoped to that org's id, then read by id for rights.
+//
+// #143 review F4 — THROWS on a non-2xx library list, never `null`. `null` is
+// reserved for the one FACTUAL emptiness this function can assert ("no library
+// entity is parented under this person's org"), and `resolveLibrarian` maps
+// that to `not-librarian`. A transient 500 answered with `null` would have been
+// indistinguishable from that fact, so `admin/+page.svelte`'s `state ===
+// 'error'` branch (which exists precisely to keep a failed read from rendering
+// as "this collective has no library") could never fire for it: the page would
+// reach `status = 'ready'`, skip `refreshLibrarians`, and show a real librarian
+// a library-less collective with no error and no retry. `resolveMyOrgId` already
+// throws (`MyOrgLookupError`) on the same failure kind one call up; matching it
+// keeps the whole resolution fail-loud (house rule) and keeps `resolveLibrarian`
+// on the pre-branch contract of `{ state: 'error' }` for any non-2xx.
+export class LibraryLookupError extends Error {
+	readonly status: number;
+	constructor(message: string, status: number) {
+		super(message);
+		this.name = 'LibraryLookupError';
+		this.status = status;
+	}
+}
+
+export async function resolveMyLibraryId(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+	const { entuFetch } = await import('$lib/entu/request');
+	const { resolveMyOrgId } = await import('$lib/org/myOrg');
+
+	const orgId = await resolveMyOrgId(cfg, personId, fetchImpl);
+	// No visible collective membership: there is no org to scope the library
+	// lookup to, so no library can be resolved for this person.
+	if (!orgId) return null;
+
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=library&_parent.reference=${encodeURIComponent(orgId)}&props=_id&limit=1`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) {
+		throw new LibraryLookupError(
+			`resolveMyLibraryId: library lookup failed: HTTP ${res.status} in db '${cfg.db}'`,
+			res.status
+		);
+	}
+
+	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
+	return body.entities?.[0]?._id ?? null;
+}
+
 export async function resolveLibrarian(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<LibrarianResult> {
 	try {
+		const libraryId = await resolveMyLibraryId(cfg, personId, fetchImpl);
+		// #143 review F4 — `null` here is now ONLY the factual "no library entity
+		// is visible under this person's org" (no membership, or an empty list).
+		// Every failure kind (member lookup, library list, ambiguous membership)
+		// throws and lands in the catch below as `state: 'error'`.
+		if (!libraryId) return { state: 'not-librarian', libraryId: null };
+
 		const { entuFetch } = await import('$lib/entu/request');
 		const res = await entuFetch(
 			cfg.db,
-			'entity?_type.string=library&props=_owner,_editor&limit=1',
+			`entity/${libraryId}?props=_owner,_editor`,
 			cfg.token,
 			{},
 			fetchImpl
@@ -42,19 +111,18 @@ export async function resolveLibrarian(
 		if (!res.ok) return { state: 'error', libraryId: null };
 
 		const body = (await res.json()) as {
-			entities?: Array<{
-				_id: string;
+			entity?: {
 				_owner?: Array<{ reference?: string }>;
 				_editor?: Array<{ reference?: string }>;
-			}>;
+			};
 		};
-		const lib = body.entities?.[0];
-		if (!lib) return { state: 'not-librarian', libraryId: null };
+		const lib = body.entity;
+		if (!lib) return { state: 'error', libraryId: null };
 
 		const isOwner = (lib._owner ?? []).some((p) => p.reference === personId);
 		const isEditor = (lib._editor ?? []).some((p) => p.reference === personId);
 		const state = isOwner || isEditor ? 'librarian' : 'not-librarian';
-		return { state, libraryId: lib._id };
+		return { state, libraryId };
 	} catch {
 		return { state: 'error', libraryId: null };
 	}

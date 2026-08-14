@@ -209,7 +209,7 @@
 			// #92 TR.4 — season-scoped repertoire read, once: resolve the CURRENT
 			// season (same pure picker the agenda uses) then TR.2's
 			// listRepertoireItems. No current season -> no badges, no second fetch.
-			listSeasons(cfg)
+			listSeasons(cfg, current.personId)
 				.then((seasons) => {
 					if (g !== generation) return;
 					const season = currentSeason(seasons, new Date());

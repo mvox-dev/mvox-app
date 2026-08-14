@@ -57,17 +57,32 @@ export function resetTypeIdCache(): void {
 // (*MVOX:Tallis*)
 
 /**
- * List the collective's seasons. DE-FANNED for single-collective: the selected db
- * IS the collective, so we drop the old org-`_parent` scoping and read every
- * `season` in the db (in polyphony all seasons are EFK's). Sorted by start date.
+ * List the collective's seasons, scoped to the PERSON'S OWN org.
+ *
+ * #144 review — re-fans the de-fan: single-collective made "the selected db IS
+ * the collective" true for polyphony today, but it stops being true the moment
+ * a db holds more than one organization's seasons, and nothing here enforced
+ * that assumption — it just read every `season` row in the db. Scoped the same
+ * way `resolveAdmin`/`resolveMyLibraryId` scope their reads: resolve the org
+ * from the person's own active membership (`resolveMyOrgId`), then filter by
+ * `_parent.reference`. No visible membership -> no org to scope to -> `[]`
+ * (not an error: same "nothing visible" shape `resolveMyOrgId` documents).
  */
-export async function listSeasons(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Season[]> {
+export async function listSeasons(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<Season[]> {
+	const { resolveMyOrgId } = await import('$lib/org/myOrg');
+	const orgId = await resolveMyOrgId(cfg, personId, fetchImpl);
+	if (!orgId) return [];
+
 	const res = await entuFetch(
 		cfg.db,
 		// `_owner,_editor` ride along (#91 F1): the repertoire management controls
 		// need `_editor` on the season, and asking for it HERE replaces a separate
 		// per-entity rights GET with zero extra round-trips.
-		'entity?_type.string=season&props=name,start_date,end_date,conductor,_owner,_editor&limit=200',
+		`entity?_type.string=season&_parent.reference=${encodeURIComponent(orgId)}&props=name,start_date,end_date,conductor,_owner,_editor&limit=200`,
 		cfg.token,
 		{},
 		fetchImpl

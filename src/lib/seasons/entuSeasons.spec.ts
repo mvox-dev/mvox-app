@@ -2,9 +2,43 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSeasons, listRehearsals, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
 
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const personId = 'person-123';
+const ORG_ID = 'org-1';
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
+}
+
+/** An active member row parented to `orgId` (plus a section parent, live shape). */
+function memberBody(orgId: string | null) {
+	return {
+		entities: [
+			{
+				_id: 'm-1',
+				_parent: [
+					{ reference: 'sec-sop', entity_type: 'section' },
+					...(orgId ? [{ reference: orgId, entity_type: 'organization' }] : [])
+				]
+			}
+		],
+		count: 1
+	};
+}
+
+/** Routed mock: member lookup (`resolveMyOrgId`), then the org-scoped seasons list. */
+function mockSeasonsFetch(opts: {
+	member?: unknown;
+	memberStatus?: number;
+	seasons?: unknown;
+	seasonsStatus?: number;
+}) {
+	return vi.fn().mockImplementation((url: string) => {
+		const u = String(url);
+		if (u.includes('_type.string=member')) {
+			return Promise.resolve(json(opts.member ?? { entities: [], count: 0 }, opts.memberStatus ?? 200));
+		}
+		return Promise.resolve(json(opts.seasons ?? { entities: [] }, opts.seasonsStatus ?? 200));
+	}) as unknown as typeof fetch;
 }
 
 // A rehearsal event as Entu returns it, parented to org + season + series with
@@ -23,27 +57,36 @@ function eventRaw(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-describe('listSeasons (de-fanned — no org scoping)', () => {
-	it('queries seasons WITHOUT a _parent.reference org filter', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
-		await listSeasons(cfg, fetchImpl);
+// #144 review — re-fans the de-fan: `listSeasons` now scopes to the PERSON'S
+// OWN org (resolved via `resolveMyOrgId`, same as `resolveAdmin`/
+// `resolveMyLibraryId`) instead of reading every `season` row in the db. The
+// routed mock stands in for the two calls: the member lookup, then the
+// org-scoped seasons list.
+describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
+	it('queries seasons WITH a _parent.reference org filter, scoped to the own org', async () => {
+		const fetchImpl = mockSeasonsFetch({ member: memberBody(ORG_ID), seasons: { entities: [] } });
+		await listSeasons(cfg, personId, fetchImpl);
 
-		const url = String(fetchImpl.mock.calls[0][0]);
-		expect(url).toContain('https://api.entu.app/polyphony/entity?');
-		expect(url).toContain('_type.string=season');
-		expect(url).not.toContain('_parent.reference'); // de-fanned: read the whole collective
+		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
+			String(c[0])
+		);
+		const seasonsUrl = urls.find((u) => u.includes('_type.string=season'));
+		expect(seasonsUrl).toBeDefined();
+		expect(seasonsUrl).toContain('https://api.entu.app/polyphony/entity?');
+		expect(seasonsUrl).toContain(`_parent.reference=${ORG_ID}`);
 	});
 
 	it('maps + sorts seasons by start date', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(
-			json({
+		const fetchImpl = mockSeasonsFetch({
+			member: memberBody(ORG_ID),
+			seasons: {
 				entities: [
 					{ _id: 'b', name: [{ string: 'B' }], start_date: [{ date: '2026-09-01' }], end_date: [{ date: '2027-05-31' }] },
 					{ _id: 'a', name: [{ string: 'A' }], start_date: [{ date: '2025-09-01' }], end_date: [{ date: '2026-05-31' }] }
 				]
-			})
-		);
-		const seasons = await listSeasons(cfg, fetchImpl);
+			}
+		});
+		const seasons = await listSeasons(cfg, personId, fetchImpl);
 		expect(seasons.map((s) => s.id)).toEqual(['a', 'b']);
 		expect(seasons[0]).toEqual({
 			id: 'a',
@@ -59,8 +102,9 @@ describe('listSeasons (de-fanned — no org scoping)', () => {
 	// #91 review F1 — repertoire management gates on `_editor` on the SEASON.
 	// Asking for it in THIS query is what removes the per-entity rights probe.
 	it('asks for _owner,_editor and surfaces the refs the caller can see', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(
-			json({
+		const fetchImpl = mockSeasonsFetch({
+			member: memberBody(ORG_ID),
+			seasons: {
 				entities: [
 					{
 						_id: 'a',
@@ -70,27 +114,46 @@ describe('listSeasons (de-fanned — no org scoping)', () => {
 						_editor: [{ reference: 'p-editor' }, {}]
 					}
 				]
-			})
+			}
+		});
+		const seasons = await listSeasons(cfg, personId, fetchImpl);
+		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
+			String(c[0])
 		);
-		const seasons = await listSeasons(cfg, fetchImpl);
-		expect(String(fetchImpl.mock.calls[0][0])).toContain('_owner,_editor');
+		expect(urls.some((u) => u.includes('_owner,_editor'))).toBe(true);
 		expect(seasons[0].owners).toEqual(['p-owner']);
 		// A ref-less entry is dropped, never surfaced as an undefined person id.
 		expect(seasons[0].editors).toEqual(['p-editor']);
 	});
 
 	it('rights props ABSENT (non-granted caller — private bucket) → empty arrays, no throw', async () => {
-		const fetchImpl = vi
-			.fn()
-			.mockResolvedValue(json({ entities: [{ _id: 'a', name: [{ string: 'A' }] }] }));
-		const seasons = await listSeasons(cfg, fetchImpl);
+		const fetchImpl = mockSeasonsFetch({
+			member: memberBody(ORG_ID),
+			seasons: { entities: [{ _id: 'a', name: [{ string: 'A' }] }] }
+		});
+		const seasons = await listSeasons(cfg, personId, fetchImpl);
 		expect(seasons[0].owners).toEqual([]);
 		expect(seasons[0].editors).toEqual([]);
 	});
 
-	it('throws on a non-2xx response', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
-		await expect(listSeasons(cfg, fetchImpl)).rejects.toThrow(/listSeasons failed: 500/);
+	it('throws on a non-2xx response from the seasons query', async () => {
+		const fetchImpl = mockSeasonsFetch({ member: memberBody(ORG_ID), seasonsStatus: 500 });
+		await expect(listSeasons(cfg, personId, fetchImpl)).rejects.toThrow(/listSeasons failed: 500/);
+	});
+
+	it('returns [] without querying seasons when the person has no visible active membership', async () => {
+		const fetchImpl = mockSeasonsFetch({ member: { entities: [], count: 0 } });
+		const seasons = await listSeasons(cfg, personId, fetchImpl);
+		expect(seasons).toEqual([]);
+		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
+			String(c[0])
+		);
+		expect(urls.some((u) => u.includes('_type.string=season'))).toBe(false);
+	});
+
+	it('throws (MyOrgLookupError) when the membership is ambiguous (two active member rows in one db)', async () => {
+		const fetchImpl = mockSeasonsFetch({ member: { ...memberBody(ORG_ID), count: 2 } });
+		await expect(listSeasons(cfg, personId, fetchImpl)).rejects.toThrow(/cannot tell which collective/);
 	});
 });
 

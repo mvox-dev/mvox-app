@@ -1572,6 +1572,299 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 	});
 });
 
+// ── #138 — a stopped run survives the COLLECTIVE ROUND TRIP ────────────────────
+//
+// The gap the #138 fix's own review found: keying the resume record by db was
+// not enough, because `closeSeriesCreateForm` still cleared "the currently
+// selected db" and DURING a switch `selected` has already moved to the db being
+// switched TO. Returning to the collective that owns a stopped run therefore
+// deleted exactly that db's entry — the only direction the feature exists for —
+// and the suite could not see it: every existing resume case above stays inside
+// ONE collective. These pin the round trip itself.
+//
+// Contract pinned here:
+//   - a run stopped in A (by a failed occurrence OR by the switch itself) is
+//     still recorded when the viewer comes back to A;
+//   - coming back RE-OPENS the panel + form from the run's own snapshot, so the
+//     "N remaining of M" notice, the remainder-scoped preview rows, Submit and
+//     Cancel are all on screen — a lock with no visible cause and no exit is not
+//     an acceptable terminal state;
+//   - a re-submit after the round trip FINISHES the run: no second
+//     `createEventSeries`, and no re-POST of an occurrence that already landed;
+//   - B is untouched throughout — its own entry points stay live and it can
+//     create its own series while A's run is outstanding;
+//   - Cancel is still the documented way to abandon the run, and it unlocks A.
+
+describe('#138 — a stopped series run survives a collective round trip', () => {
+	function setAuthedWithTwoCollectives(): void {
+		setToken('jwt-abc');
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { 'org-a': 'person-p', 'org-b': 'person-p' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'org-a', name: 'Org A', personId: 'person-p' },
+				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
+			],
+			erroredDbs: []
+		});
+		urlCollectiveDbStore.set(null);
+		selectedCollectiveDbStore.set('org-a');
+	}
+
+	async function renderTwoReady(): Promise<HTMLElement> {
+		setAuthedWithTwoCollectives();
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		return container;
+	}
+
+	/** Three Mondays in org-a; occurrence #2 fails, so the run STOPS owing two. */
+	async function stopRunInOrgA(container: HTMLElement): Promise<void> {
+		createEventMock.mockImplementation(async () => {
+			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
+			return `ev-new-${createEventMock.mock.calls.length}`;
+		});
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+	}
+
+	async function leaveOrgA(container: HTMLElement): Promise<void> {
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+	}
+
+	it('coming back to org-a re-surfaces the run, and a re-submit creates NO second series and re-POSTs nothing that landed', async () => {
+		const container = await renderTwoReady();
+		await stopRunInOrgA(container);
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+		expect(createEventMock).toHaveBeenCalledTimes(2);
+
+		await leaveOrgA(container);
+		selectedCollectiveDbStore.set('org-a');
+
+		// No gear click: the return itself must put the run back on screen — while
+		// the record is outstanding every entry point INCLUDING [+ Series] is
+		// refused, so a viewer who had to click her way back could not get here.
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+		const resume = q(container, 'series-create-resume') as HTMLElement;
+		expect(resume.textContent).toContain('"remaining":2');
+		expect(resume.textContent).toContain('"total":3');
+		// The rows describe the same set as the notice — the remainder.
+		expect(previewDates(container)).toEqual(['2026-09-14', '2026-09-21']);
+		// …and the exits are reachable again.
+		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
+		expect((q(container, 'series-create-cancel') as HTMLButtonElement).disabled).toBe(false);
+
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).toBeNull();
+		});
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+		expect(createEventMock).toHaveBeenCalledTimes(4);
+		expect(
+			createEventMock.mock.calls.slice(2).map((c) => (c[1] as CreateEventInput).startDatetime)
+		).toEqual(['2026-09-14T16:00:00.000Z', '2026-09-21T16:00:00.000Z']);
+		for (const call of createEventMock.mock.calls.slice(2)) {
+			expect((call[1] as CreateEventInput).seriesId).toBe(NEW_SERIES_ID);
+			expect(call[0]).toEqual({ db: 'org-a', token: 'jwt-abc' });
+		}
+		// The finished run is forgotten, so org-a's entry points are live again.
+		await waitFor(() => {
+			expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(false);
+		});
+	});
+
+	it('a switch MID-generation (nothing failed) records what org-a still owes — the orphan #138 is actually named after', async () => {
+		const resolvers: Array<(id: string) => void> = [];
+		createEventMock.mockImplementation(
+			() =>
+				new Promise<string>((resolve) => {
+					resolvers.push(resolve);
+				})
+		);
+		const container = await renderTwoReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(resolvers.length).toBe(1);
+		});
+
+		// The viewer leaves while occurrence #1 is still on the wire.
+		await leaveOrgA(container);
+		resolvers[0]('ev-new-1');
+		await flush();
+		// #137's contract holds: the loop stops rather than POSTing into org-a.
+		expect(createEventMock).toHaveBeenCalledTimes(1);
+		// …and org-b is a clean slate meanwhile.
+		expect(q(container, 'series-create-resume')).toBeNull();
+
+		selectedCollectiveDbStore.set('org-a');
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+		expect((q(container, 'series-create-resume') as HTMLElement).textContent).toContain(
+			'"remaining":2'
+		);
+
+		createEventMock.mockImplementation(async () => `ev-resumed-${createEventMock.mock.calls.length}`);
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).toBeNull();
+		});
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+		expect(createEventMock).toHaveBeenCalledTimes(3);
+		expect(
+			createEventMock.mock.calls.slice(1).map((c) => (c[1] as CreateEventInput).startDatetime)
+		).toEqual(['2026-09-14T16:00:00.000Z', '2026-09-21T16:00:00.000Z']);
+	});
+
+	it('org-b is unaffected while org-a owes a run: its entry points stay live and it creates its own series', async () => {
+		const container = await renderTwoReady();
+		await stopRunInOrgA(container);
+
+		await leaveOrgA(container);
+		// `openSeriesForm` clicks the gear and then [+ Series] — a click on a
+		// disabled button is a no-op, so reaching the form at all proves org-b's
+		// entry points were never blocked by org-a's outstanding run.
+		await openSeriesForm(container);
+		expect(q(container, 'series-create-resume')).toBeNull();
+
+		createEventMock.mockImplementation(async () => `ev-b-${createEventMock.mock.calls.length}`);
+		await fillValidTemplate(container);
+		await submit(container); // generation OFF — series only
+
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).toBeNull();
+		});
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(2);
+		expect(createEventSeriesMock.mock.calls[1][0]).toEqual({ db: 'org-b', token: 'jwt-abc' });
+
+		// And org-a's own record survived org-b's clean series create untouched.
+		selectedCollectiveDbStore.set('org-a');
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+	});
+
+	it('Cancel after the round trip abandons the run and unlocks org-a', async () => {
+		const container = await renderTwoReady();
+		await stopRunInOrgA(container);
+		await leaveOrgA(container);
+		selectedCollectiveDbStore.set('org-a');
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+
+		await fireEvent.click(q(container, 'series-create-cancel') as HTMLElement);
+
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).toBeNull();
+		});
+		expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(false);
+		// Re-opening is a genuinely blank form, not the abandoned run.
+		await fireEvent.click(q(container, 'season-manage-add-series') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).not.toBeNull();
+		});
+		expect(q(container, 'series-create-resume')).toBeNull();
+		expect((q(container, 'series-create-name') as HTMLInputElement).value).toBe('');
+	});
+
+	// #138 review 2 — the restore guard was keyed to the GLOBAL submitting flag
+	// while the resume records are keyed by db, so a run still on the wire in the
+	// collective the viewer just LEFT swallowed the arriving collective's own
+	// restore. `restoreSeriesCreateRun` has exactly one call site (the agenda
+	// load's success handler), so the skipped restore is never re-attempted: the
+	// arriving db's surviving record keeps every create entry point refused with
+	// no form on screen and no copy explaining it — the dead end the flag's own
+	// doc says cannot happen. It self-heals only on a further collective switch.
+	it('a run still IN FLIGHT in the collective just left does not swallow the arriving one’s restore', async () => {
+		const container = await renderTwoReady();
+
+		// org-b acquires its OWN stopped run (occurrence 2 of 3 fails)…
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+		});
+		await stopRunInOrgA(container); // db-agnostic: it runs in whatever is selected
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+
+		// …and the viewer moves back to org-a, whose entry points are free (the
+		// outstanding record belongs to org-b).
+		selectedCollectiveDbStore.set('org-a');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+
+		// org-a starts a bulk run of its own; the first occurrence POST hangs.
+		const resolvers: Array<(id: string) => void> = [];
+		createEventMock.mockImplementation(
+			() =>
+				new Promise<string>((resolve) => {
+					resolvers.push(resolve);
+				})
+		);
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(resolvers.length).toBe(1);
+		});
+
+		// She switches to org-b WHILE org-a's POST is still on the wire. org-b's
+		// agenda load resolves first — this is the load that used to skip the
+		// restore because SOME db was submitting.
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+
+		// org-a's POST lands afterwards: it records what org-a still owes and
+		// releases the submitting flag — and touches nothing org-b is showing.
+		resolvers[0]('ev-a-1');
+		await flush();
+		expect(q(container, 'series-create-resume')).not.toBeNull();
+		expect(previewDates(container)).toEqual(['2026-09-14', '2026-09-21']);
+		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
+		expect((q(container, 'series-create-cancel') as HTMLButtonElement).disabled).toBe(false);
+
+		// The lock therefore has its visible exit back: Cancel frees org-b.
+		await fireEvent.click(q(container, 'series-create-cancel') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).toBeNull();
+		});
+		expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(false);
+
+		// …while org-a's own record survived the whole exchange untouched.
+		selectedCollectiveDbStore.set('org-a');
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+		expect((q(container, 'series-create-resume') as HTMLElement).textContent).toContain(
+			'"remaining":2'
+		);
+	});
+});
+
 // (*MVOX:Palestrina* — #132/T5 review fixes: daily-generation reachability,
 // range validation, empty-recurrence refusal, mid-run dismissal guard, preview
 // count/scroll, resumable partial bulk run)

@@ -318,8 +318,11 @@
 			closeEventCreateForm();
 			// #132/T6 review F3 — the series form is the third creation surface and
 			// belongs to the collective it was opened in: its `seriesCreateSeasonId`
-			// (and any `seriesCreateResume.seriesId`) are ids in the PREVIOUS db.
-			// Left alive they would submit against the new db's cfg.
+			// is an id in the PREVIOUS db. Left alive it would submit against the
+			// new db's cfg. `closeSeriesCreateForm` UNMOUNTS it and nothing else
+			// (#138 review F1): the per-db resume records are untouched by any
+			// switch, and `restoreSeriesCreateRun` re-opens the owning db's own run
+			// when it is selected again.
 			closeSeriesCreateForm();
 			return;
 		}
@@ -348,15 +351,20 @@
 			resetSeasonManage();
 			// #132/T6 review F3 — the series form lives INSIDE the panel this branch
 			// tears down, and `resetSeasonManage` does not touch its state: the panel
-			// closed but `seriesCreateOpen`/`seriesCreateSeasonId`/`seriesCreateResume`
-			// survived into the next collective, so re-opening the gear re-rendered
-			// the previous collective's form verbatim (and a submit would have sent a
+			// closed but `seriesCreateOpen`/`seriesCreateSeasonId` survived into the
+			// next collective, so re-opening the gear re-rendered the previous
+			// collective's form verbatim (and a submit would have sent a
 			// cross-database parent reference, or resumed POSTing against the old db's
 			// series id).
 			//
+			// #138 review F1 — this is an UNMOUNT, never a forget: the previous db's
+			// resume record (if any) stays in `seriesCreateResumeByDb` under its own
+			// key, and the agenda load below re-opens THIS db's own stopped run via
+			// `restoreSeriesCreateRun`.
+			//
 			// Deliberately INSIDE this branch, not unconditional: the bulk-failure
 			// path calls `loadForSelected({ keepSeasonManage: true })` and depends on
-			// `seriesCreateResume` surviving that call.
+			// the open form surviving that call.
 			closeSeriesCreateForm();
 		}
 		attendanceFailedByEvent = new Map();
@@ -402,6 +410,13 @@
 				// them, because `includeInactive` depended on the answer.
 				seasonManageRights =
 					seasonId === null ? 'not-editor' : manageRightsFrom(seasonOwners, seasonEditors, personId);
+				// #138 review F2 — the first moment THIS db's own season data is on
+				// hand, which is what `restoreSeriesCreateRun` needs to re-open the
+				// panel + form for a run that stopped here before the viewer left.
+				// Without it, returning to such a collective shows a silently dead
+				// set of create buttons (blocked by the surviving resume record) and
+				// no way out of it.
+				restoreSeriesCreateRun();
 				// #132/T2 review F3 — the season-CREATE gate needs its OWN rights
 				// signal. `seasonManageRights` is about managing the CURRENT season's
 				// repertoire, so it is 'not-editor' whenever no season is running —
@@ -2770,6 +2785,17 @@
 	let seriesCreateSkipDateInput = $state('');
 	let seriesCreateSkipDates = $state<string[]>([]);
 	let seriesCreateSubmitting = $state(false);
+	/**
+	 * #138 review 2 — WHICH db the in-flight run belongs to (null when nothing is
+	 * submitting). `seriesCreateSubmitting` is global while the resume records
+	 * are per-db, and `restoreSeriesCreateRun` needs to tell "a run is on the
+	 * wire in the collective I am arriving at" (leave it alone) from "a run is
+	 * still finishing in the collective just LEFT" (irrelevant here — every
+	 * remaining write in it is behind its own `dbChanged()` check and touches
+	 * only `seriesCreateResumeByDb[runDb]`, never form state). Mirrors the
+	 * submit-local `runDb` pin; set and cleared with `seriesCreateSubmitting`.
+	 */
+	let seriesRunDb = $state<string | null>(null);
 	let seriesCreateError = $state<(() => string) | null>(null);
 	/** Which box a refusal belongs to — the T4 shape (`EventCreateErrorField`),
 	 *  applied here so a screen reader hears WHICH field was rejected when the
@@ -2780,14 +2806,88 @@
 	 *  IN FLIGHT (1-based), not the completed count (the RED spec pins "current
 	 *  1 of 3 while the FIRST POST is in flight"). */
 	let seriesCreateProgress = $state<{ current: number; total: number } | null>(null);
-	/** Set when a bulk run STOPPED partway: the series is already on the wire and
-	 *  `remaining` are the occurrences (failed one first) that never landed. A
-	 *  re-submit RESUMES from here instead of creating a second series and
-	 *  re-POSTing the occurrences that already succeeded. Cleared on a clean run,
-	 *  on close, and on open. */
-	let seriesCreateResume = $state<{ seriesId: string; remaining: string[]; total: number } | null>(
-		null
-	);
+	/**
+	 * Everything the series form needs to RE-RENDER a run that stopped in a db
+	 * the viewer has since left (#138 review F2). Pinned at submit — never
+	 * re-read from the live form afterwards: the switch's own teardown unmounts
+	 * the form, and `openSeriesCreateForm` blanks every one of these fields, so
+	 * a snapshot is the only thing that can still describe the run on return.
+	 */
+	type SeriesCreateFormSnapshot = {
+		seasonId: string;
+		name: string;
+		type: string;
+		duration: string;
+		location: string;
+		description: string;
+		repeat: RepeatPattern;
+		day: string;
+		time: string;
+		from: string;
+		until: string;
+		skipDates: string[];
+	};
+
+	type SeriesResumeEntry = {
+		seriesId: string;
+		remaining: string[];
+		total: number;
+		form: SeriesCreateFormSnapshot;
+	};
+
+	/**
+	 * #138 — KEYED BY DB. Set when a bulk run STOPPED partway (an occurrence
+	 * failed, OR the viewer switched collectives mid-generation): the series is
+	 * already on the wire and `remaining` are the occurrences that never landed.
+	 * A re-submit RESUMES from here instead of creating a second series and
+	 * re-POSTing the occurrences that already succeeded.
+	 *
+	 * Was a single unkeyed slot: a collective switch mid-generation nulled it
+	 * (via `closeSeriesCreateForm`) along with the form, so the OLD collective's
+	 * still-owed occurrences left no in-app record — returning to it and
+	 * re-submitting created a SECOND series under the same season and re-POSTed
+	 * the occurrences that already landed.
+	 *
+	 * #138 review F1 — keying alone did NOT fix that. `closeSeriesCreateForm`
+	 * still cleared "the currently selected db", and during a switch `selected`
+	 * has ALREADY moved to the db being switched TO — so returning to the
+	 * collective that owns a stopped run deleted exactly that db's entry, the
+	 * only direction #138 is about. UNMOUNTING the form and FORGETTING a run are
+	 * now separate acts: `closeSeriesCreateForm` only unmounts, and an entry is
+	 * cleared at the three points that genuinely mean "this run is done or
+	 * abandoned" — a clean finish, `dismissSeriesCreateForm` (Cancel/Escape),
+	 * and closing out with generation switched off.
+	 */
+	let seriesCreateResumeByDb = $state<Record<string, SeriesResumeEntry>>({});
+
+	/** The CURRENT collective's own entry (or null) — every reader below wants
+	 *  THIS, never the raw map. Re-derives on every collective switch, so a
+	 *  return to a db with a stopped run re-surfaces its lock automatically. */
+	const seriesCreateResume = $derived(selected ? (seriesCreateResumeByDb[selected.db] ?? null) : null);
+
+	/** Write helper — touches ONLY `db`'s entry. */
+	function setSeriesCreateResume(db: string, entry: SeriesResumeEntry): void {
+		seriesCreateResumeByDb = { ...seriesCreateResumeByDb, [db]: entry };
+	}
+
+	/** Clear helper — touches ONLY `db`'s entry, never another collective's. A
+	 *  no-op (no reassignment) when `db` has nothing recorded, so the explicit
+	 *  close-out callers don't fire a reactive update for collectives that never
+	 *  had a run. */
+	function clearSeriesCreateResume(db: string): void {
+		if (!(db in seriesCreateResumeByDb)) return;
+		const next = { ...seriesCreateResumeByDb };
+		delete next[db];
+		seriesCreateResumeByDb = next;
+	}
+
+	/** The CURRENT collective's entry, forgotten. The operator-facing exits
+	 *  (Cancel/Escape, generation switched off) and the clean-finish path go
+	 *  through here; a collective switch never does. */
+	function clearSeriesCreateResumeForSelected(): void {
+		if (selected) clearSeriesCreateResume(selected.db);
+	}
+
 	let seriesCreateNameInput = $state<HTMLInputElement | null>(null);
 
 	/**
@@ -2830,11 +2930,19 @@
 	 * `dismissSeriesCreateForm` (Cancel/Escape) is unguarded while nothing is
 	 * submitting, so cancelling the stopped run frees every other entry point.
 	 *
-	 * `openSeriesCreateForm` / `season-manage-add-series` stay on the narrower
-	 * `anyCreateSubmitting` on purpose: a non-null resume implies the series form
-	 * is OPEN, and that button is only rendered while it is closed — gating it
-	 * here would be a guard that can never be reached and, if it ever were, one
-	 * with no way to clear itself.
+	 * #138 update — `openSeriesCreateForm` / `season-manage-add-series` USED to
+	 * stay on the narrower `anyCreateSubmitting` on the theory that "a non-null
+	 * resume implies the series form is already open, so this button is never
+	 * rendered while one is outstanding." Keying `seriesCreateResumeByDb` by db
+	 * broke that: a collective switch away and back leaves `seriesCreateOpen`
+	 * false (the switch unmounted the form) while THIS db's resume entry
+	 * survives and re-surfaces via `seriesCreateResume` — exactly the "button
+	 * visible, resume non-null" state the old comment assumed couldn't happen.
+	 * Both now gate on `createEntryPointsBlocked` too, so returning to a
+	 * collective with a still-owed run cannot spawn a second series for it. The
+	 * blocked state is never a dead end: `restoreSeriesCreateRun` re-opens the
+	 * form on that same return, so Submit (finish) and Cancel (abandon) are on
+	 * screen with the "N remaining of M" notice that explains the lock.
 	 */
 	const seriesRunUnfinished = $derived(seriesCreateSubmitting || seriesCreateResume !== null);
 	/** What every OTHER entry point gates on: an in-flight write anywhere, or a
@@ -2938,7 +3046,12 @@
 	function openSeriesCreateForm(): void {
 		if (currentSeasonId === null) return;
 		// #132/T6 review F1 — see `openSeasonCreateForm`.
-		if (anyCreateSubmitting) return;
+		// #138 — widened from `anyCreateSubmitting` to `createEntryPointsBlocked`
+		// (see that flag's doc): the CURRENT db can carry a stopped run's resume
+		// entry even while `seriesCreateOpen` is false (a switch away and back
+		// unmounts the form without discarding the per-db record), so this must
+		// refuse to blank a run THIS db still owes.
+		if (createEntryPointsBlocked) return;
 		// #132/T6 — mutual exclusion (see `openSeasonCreateForm`'s doc). Reachable
 		// only from inside the panel, which stays open — it is management, not a
 		// creation form.
@@ -2963,17 +3076,106 @@
 		seriesCreateSkipDateInput = '';
 		seriesCreateSkipDates = [];
 		seriesCreateProgress = null;
-		seriesCreateResume = null;
+		// #138 review F1 — NO resume clear here. `createEntryPointsBlocked` above
+		// already refuses this whole function whenever the CURRENT db has an
+		// outstanding entry, so a clear could only ever be a no-op or a way to
+		// silently drop a run this db still owes.
 		clearSeriesCreateError();
 		seriesCreateSubmitting = false;
 		seriesCreateOpen = true;
 	}
 
+	/**
+	 * UNMOUNTS the form. Nothing more.
+	 *
+	 * #138 review F1 — this used to also forget the current db's resume record,
+	 * and that is what kept #138 reproducible: `loadForSelected`'s switch
+	 * teardown calls this, and DURING a switch `selected` already names the db
+	 * being switched TO. Returning to the collective that owns a stopped run
+	 * therefore deleted exactly that db's entry — the one direction the whole
+	 * feature exists for. Forgetting a run is now always an explicit act by a
+	 * caller that means it (`clearSeriesCreateResumeForSelected`).
+	 */
 	function closeSeriesCreateForm(): void {
 		seriesCreateOpen = false;
 		seriesCreateProgress = null;
-		seriesCreateResume = null;
 		clearSeriesCreateError();
+	}
+
+	/**
+	 * #138 review F2 — RE-SURFACE a stopped run when its collective is selected
+	 * again, rather than only locking that collective's creation UI out.
+	 *
+	 * With F1 fixed the resume record survives a round trip, and that alone is a
+	 * deadlock: `createEntryPointsBlocked` is true from the surviving entry, so
+	 * `openSeriesCreateForm` refuses and [+ Series] is disabled — while
+	 * `seriesCreateOpen` is false, because the switch unmounted the form. The
+	 * only in-form escape (`dismissSeriesCreateForm`) is then unreachable and
+	 * nothing on screen explains why every create button is dead. So the return
+	 * re-opens the panel and the form from the run's own snapshot: the resume
+	 * notice, the resume-scoped preview rows, Submit (finish it) and Cancel
+	 * (abandon it) are all back, and no new copy is needed.
+	 *
+	 * Called from the agenda load's success handler — that is the first moment
+	 * `currentSeasonId` and `seasons` describe the db being returned to, and
+	 * `openSeasonManagePanel` needs both.
+	 */
+	function restoreSeriesCreateRun(): void {
+		const current = selected;
+		if (!current) return;
+		// Already on screen (the failure path's own `loadForSelected({ keepSeasonManage })`
+		// lands here too) — never re-seed a form the operator is looking at.
+		//
+		// #138 review 2 — the second half is keyed to the RUN'S db, not to the
+		// bare global flag. Unqualified it dropped the arriving collective's
+		// restore whenever ANY collective happened to be mid-run: viewer leaves
+		// org-a with an occurrence POST still on the wire, org-b's agenda load
+		// resolves first and returns here, then org-a's POST lands and the
+		// `finally` releases the flag — with nobody left to re-attempt the
+		// restore (this function has exactly one call site, and org-b's load has
+		// already run). org-b was then locked out of every create entry point by
+		// its own surviving record, with no form on screen and no copy saying
+		// why, self-healing only on a further collective switch. A run still
+		// finishing in a db the viewer has LEFT cannot touch form state, so it is
+		// no reason to withhold the form of the db she is now IN.
+		if (seriesCreateOpen || (seriesCreateSubmitting && seriesRunDb === current.db)) return;
+		const entry = seriesCreateResumeByDb[current.db];
+		if (!entry) return;
+		if (currentSeasonId !== entry.form.seasonId) {
+			// The run's season is no longer this collective's CURRENT one, so the
+			// panel that owns the form cannot be opened for it and neither can the
+			// [+ Series] button that would duplicate it. Keeping the record would
+			// freeze the season/event entry points forever with nothing on screen to
+			// explain it, so reap it — loudly (house rule), never silently.
+			console.warn(
+				'agenda: dropping a series resume record whose season is no longer current',
+				current.db,
+				entry.form.seasonId
+			);
+			clearSeriesCreateResume(current.db);
+			return;
+		}
+		if (!seasonManageOpen) openSeasonManagePanel();
+		const form = entry.form;
+		seriesCreateSeasonId = form.seasonId;
+		seriesCreateName = form.name;
+		seriesCreateType = form.type;
+		seriesCreateDuration = form.duration;
+		seriesCreateLocation = form.location;
+		seriesCreateDescription = form.description;
+		seriesCreateRepeat = form.repeat;
+		seriesCreateDay = form.day;
+		seriesCreateTime = form.time;
+		seriesCreateFrom = form.from;
+		seriesCreateUntil = form.until;
+		seriesCreateSkipDates = [...form.skipDates];
+		seriesCreateSkipDateInput = '';
+		// A resume record only ever exists for a GENERATING run (a series-only
+		// create has nothing left to owe), and the preview/notice both need it on.
+		seriesCreateGenerate = true;
+		seriesCreateProgress = null;
+		clearSeriesCreateError();
+		seriesCreateOpen = true;
 	}
 
 	/** The form is self-unmounting; hand focus back to the still-open panel
@@ -2989,6 +3191,10 @@
 	 *  Same guard the submit button already carries. */
 	function dismissSeriesCreateForm(): void {
 		if (seriesCreateSubmitting) return;
+		// #138 review F1 — Cancel/Escape IS the documented operator exit from a
+		// stopped run (it is what frees every other entry point again), so it is
+		// one of the two places that may forget what the run still owed.
+		clearSeriesCreateResumeForSelected();
 		closeSeriesCreateForm();
 		restoreSeriesCreateFocus();
 	}
@@ -3106,11 +3312,19 @@
 		} else if (resume) {
 			// Generation switched OFF after a partial run: the series already
 			// exists, so there is nothing left to write — just close out rather
-			// than creating a SECOND series for the same form.
+			// than creating a SECOND series for the same form. #138 review F1 —
+			// this is the second operator-facing close-out, so it forgets the run
+			// explicitly (`closeSeriesCreateForm` no longer does).
+			clearSeriesCreateResumeForSelected();
 			closeSeriesCreateForm();
 			restoreSeriesCreateFocus();
 			return;
 		}
+		// On a resume run `total` stays the ORIGINAL occurrence count so every
+		// progress/failure count keeps describing the whole series, not just the
+		// tail. Hoisted above the first `dbChanged()` checkpoint: a switch that
+		// stops the run there must record the same numbers a later stop would.
+		const total = resume?.total ?? dates.length;
 
 		const current = selected;
 		if (!current || !seasonId) {
@@ -3138,20 +3352,59 @@
 		 *  where it stands rather than finishing into state/collective nothing on
 		 *  screen still refers to. */
 		const dbChanged = (): boolean => selected?.db !== runDb;
+		/**
+		 * #138 review F2 — the form as submitted, pinned before the first await.
+		 * Read live at a stop site it would be worthless: `openSeriesCreateForm`
+		 * blanks every one of these the next time [+ Series] is clicked, so the
+		 * record of a run parked under another db would decay into whatever the
+		 * viewer typed next. A resume run keeps the ORIGINAL snapshot (the boxes
+		 * are inert while resumable, so nothing can have changed).
+		 */
+		const runForm: SeriesCreateFormSnapshot = resume?.form ?? {
+			seasonId,
+			name,
+			type: typeValue,
+			duration: seriesCreateDuration,
+			location: seriesCreateLocation,
+			description: seriesCreateDescription,
+			repeat: seriesCreateRepeat,
+			day: seriesCreateDay,
+			time,
+			from: seriesCreateFrom,
+			until: seriesCreateUntil,
+			skipDates: [...seriesCreateSkipDates]
+		};
+		/** What `runDb` still owes from `index` onward, recorded under ITS OWN key
+		 *  — never the currently-selected one, which a mid-run switch has already
+		 *  moved on. */
+		const recordStop = (seriesId: string, index: number): void => {
+			setSeriesCreateResume(runDb, {
+				seriesId,
+				remaining: dates.slice(index),
+				total,
+				form: runForm
+			});
+		};
 
 		seriesCreateSubmitting = true;
+		// #138 review 2 — the module-level twin of `runDb`, so `restoreSeriesCreateRun`
+		// can tell whose run is on the wire. Released with the flag in the `finally`.
+		seriesRunDb = runDb;
 		try {
 			let orgId: string | null;
 			try {
 				orgId = await resolveMyOrgId(cfg, current.personId);
 			} catch (e) {
 				console.error('agenda: resolving the organization for series create failed', e);
-				setSeriesCreateError(m.series_create_failed, null);
+				// #137 — the org read straddled a switch: the refusal belongs to a form
+				// that is gone, and since #138 review 2 the screen may already be
+				// showing ANOTHER collective's restored run. Diagnose, write nothing.
+				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}
 			if (!orgId) {
 				console.error('agenda: series create with no resolvable organization', current.personId);
-				setSeriesCreateError(m.series_create_failed, null);
+				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}
 			// #137 — the org read crossed an await; a collective switch in that
@@ -3208,13 +3461,23 @@
 					seriesId = await createEventSeries(cfg, seriesInput);
 				} catch (e) {
 					console.error('agenda: series create failed', e);
-					setSeriesCreateError(m.series_create_failed, null);
+					// #137 / #138 review 2 — same crossing as the org read above: a
+					// failure discovered after the switch must not paint its alert onto
+					// whatever collective's form is on screen now.
+					if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 					return;
 				}
 			}
 			// #137 — same crossing, this time around the series-creation POST
 			// (skipped entirely on a resume, but still an await on a fresh run).
-			if (dbChanged()) return;
+			if (dbChanged()) {
+				// #138 — the series LANDED in `runDb` and the viewer left before a
+				// single occurrence followed. With generation on that is a stopped
+				// run owing everything, and the record is the only thing standing
+				// between a return visit and a duplicate series.
+				if (seriesCreateGenerate) recordStop(seriesId, 0);
+				return;
+			}
 
 			if (!seriesCreateGenerate) {
 				closeSeriesCreateForm();
@@ -3232,10 +3495,6 @@
 				return;
 			}
 
-			// On a resume run, `total` stays the ORIGINAL occurrence count so the
-			// progress/failure counts keep describing the whole series, not just
-			// the tail.
-			const total = resume?.total ?? dates.length;
 			const alreadyCreated = total - dates.length;
 			let created = alreadyCreated;
 			for (let i = 0; i < dates.length; i += 1) {
@@ -3245,15 +3504,19 @@
 				// mid-run switch the very next iteration — no separate cancellation
 				// wiring needed.
 				//
-				// KNOWN GAP (#138, deliberately not fixed here): stopping leaves a
-				// PARTIAL series in the old collective with no in-app record of what
-				// it still owes — the switch's own `closeSeriesCreateForm` already
-				// nulled `seriesCreateResume`, which is a single unkeyed slot and so
-				// cannot describe a run in a db that is no longer selected. Returning
-				// there and re-submitting therefore duplicates. Still strictly better
-				// than finishing the run into a collective nothing on screen refers
-				// to; #138 keys the resume record by db.
-				if (dbChanged()) break;
+				// #138 — this is the switch-stop the issue is actually named after,
+				// and it must RECORD, not just stop. Breaking out silently left the
+				// partial series in `runDb` with no in-app record of what it owed, so
+				// a return visit and a re-submit created a SECOND series under the
+				// same season and re-POSTed the occurrences that had landed. The
+				// record is keyed by `runDb` — never by `selected`, which the switch
+				// has already moved on — so it survives the return trip
+				// (`restoreSeriesCreateRun` re-opens it) instead of being torn down
+				// with the form.
+				if (dbChanged()) {
+					recordStop(seriesId, i);
+					break;
+				}
 				// Set BEFORE the await — the spec pins "current 1 of 3 while the
 				// FIRST POST is in flight", not after it resolves.
 				seriesCreateProgress = { current: created + 1, total };
@@ -3273,10 +3536,15 @@
 				} catch (e) {
 					// #137 — the failing POST's own await can itself straddle a
 					// switch; a failure discovered AFTER the viewer has left this db
-					// writes nothing (not the resume record, not the error, not a
-					// reload) into a form/collective the viewer is no longer looking
-					// at.
-					if (dbChanged()) return;
+					// writes nothing VISIBLE (not the error, not a reload) into a
+					// form/collective the viewer is no longer looking at. #138 — the
+					// per-db record is the exception: it is not on screen anywhere,
+					// and `runDb` owes these occurrences whether or not the viewer is
+					// still standing in it.
+					if (dbChanged()) {
+						recordStop(seriesId, i);
+						return;
+					}
 					// STOP at the failure — no further createEvent calls, and no
 					// rollback of the series or of events 1..N-1 (nothing here may
 					// DELETE). Instead: remember exactly where the run stopped so a
@@ -3285,7 +3553,11 @@
 					// land become visible before the operator decides.
 					console.error('agenda: bulk event create failed', e);
 					seriesCreateProgress = null;
-					seriesCreateResume = { seriesId, remaining: dates.slice(i), total };
+					// #138 — keyed under `runDb` (pinned at submit, confirmed == the
+					// current db by the `dbChanged()` check just above), not a blanket
+					// slot: a later switch away no longer discards what THIS db's run
+					// still owes.
+					recordStop(seriesId, i);
 					setSeriesCreateError(() => m.series_create_bulk_failed({ created, total }), null);
 					loadForSelected({ keepSeasonManage: true });
 					if (panelSeasonId === seasonId) {
@@ -3298,9 +3570,20 @@
 			// switch (the `break` above only catches the NEXT iteration, not the
 			// one already in flight when the switch lands) — one more check before
 			// the success path's writes.
-			if (dbChanged()) return;
+			if (dbChanged()) {
+				// #138 — reached only when every occurrence LANDED and the viewer
+				// left afterwards: `runDb` owes nothing. A resume record from the run
+				// this one just finished must not survive, or the return visit would
+				// re-POST occurrences that already exist. (A `break` never lands here
+				// with an unrecorded remainder — it has already recorded its own.)
+				if (created >= total) clearSeriesCreateResume(runDb);
+				return;
+			}
 			seriesCreateProgress = null;
-			seriesCreateResume = null;
+			// #138 review F1 — `closeSeriesCreateForm` only UNMOUNTS now. A clean
+			// finish is one of the three places that may forget the run, and it does
+			// so under `runDb` (== `selected.db`, just confirmed by `dbChanged()`).
+			clearSeriesCreateResume(runDb);
 			closeSeriesCreateForm();
 			// The generated occurrences just landed on the agenda — `loadForSelected`
 			// keeps the panel open (`keepSeasonManage`) the same way event-create's
@@ -3313,6 +3596,7 @@
 			restoreSeriesCreateFocus();
 		} finally {
 			seriesCreateSubmitting = false;
+			seriesRunDb = null;
 		}
 	}
 
@@ -3332,8 +3616,19 @@
 		membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : membership
 	);
 
+	// #138 review — this effect must react to EXACTLY ONE thing: a genuine
+	// collective switch (`selected` changing). `loadForSelected()`'s body reads
+	// a lot of OTHER reactive state along the way — left untracked, `$effect`
+	// would treat every one of those as an implicit retrigger condition too, and
+	// the body WRITES most of them. That is a feedback loop waiting for its first
+	// shared read: a write to some tracked-by-accident piece of state reruns
+	// `loadForSelected()` with the default (non-keepSeasonManage) options, whose
+	// teardown branch tears the season-manage panel down under whoever was
+	// standing in it. `untrack` scopes the call to depend on nothing but the
+	// explicit `selected` read below.
 	$effect(() => {
-		loadForSelected();
+		selected;
+		untrack(() => loadForSelected());
 	});
 
 	function retryAgenda() {
@@ -3612,7 +3907,7 @@
 											<button
 												type="button"
 												data-testid="season-manage-add-series"
-												disabled={anyCreateSubmitting}
+												disabled={createEntryPointsBlocked}
 												class="flex min-h-11 items-center text-xs text-ink underline disabled:opacity-50"
 												onclick={openSeriesCreateForm}
 											>

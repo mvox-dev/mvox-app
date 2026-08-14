@@ -1,6 +1,6 @@
 import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
-import { selectedDbStore } from '$lib/collectives/store';
+import { selectedCollectiveStore } from '$lib/collectives/store';
 import { listSeasons, listRehearsals, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { currentSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
@@ -43,11 +43,12 @@ const NO_SEASON = { seasonId: null, seasonConductors: [], seasonOwners: [], seas
  */
 export async function listFullAgenda(
 	cfg: EntuCfg,
+	personId: string,
 	now: Date,
 	fetchImpl: typeof fetch = fetch
 ): Promise<FullAgendaResult> {
 	const nowIso = now.toISOString();
-	const seasons = await listSeasons(cfg, fetchImpl);
+	const seasons = await listSeasons(cfg, personId, fetchImpl);
 
 	// Fetch rehearsals for ALL seasons, paired with season id so we can isolate
 	// the current season's events for the Recent section without re-fetching.
@@ -80,15 +81,15 @@ export async function listFullAgenda(
 	};
 }
 
-/** Convenience for callers: resolve db/token from T4's stores, then delegate to listFullAgenda. */
+/** Convenience for callers: resolve db/personId/token from T4's stores, then delegate to listFullAgenda. */
 export async function loadFullAgenda(
 	now: Date = new Date(),
 	fetchImpl: typeof fetch = fetch
 ): Promise<FullAgendaResult> {
-	const db = get(selectedDbStore);
+	const collective = get(selectedCollectiveStore);
 	const token = getToken();
-	if (!db || !token) return { upcoming: [], recent: [], seasons: [], ...NO_SEASON };
-	return listFullAgenda({ db, token }, now, fetchImpl);
+	if (!collective || !token) return { upcoming: [], recent: [], seasons: [], ...NO_SEASON };
+	return listFullAgenda({ db: collective.db, token }, collective.personId, now, fetchImpl);
 }
 
 // (*MVOX:Josquin*)
