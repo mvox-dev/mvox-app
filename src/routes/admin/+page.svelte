@@ -32,6 +32,11 @@
 		type RolePerson
 	} from '$lib/admin/roleManagement';
 	import Autocomplete from '$lib/components/Autocomplete.svelte';
+	// #140/S3 — the invite functionality merges into this page as a distinct
+	// section, sharing the SAME live component the standalone /admin/invite
+	// route still renders (backward compat) — see
+	// src/lib/components/admin/InviteSurface.svelte.
+	import InviteSurface from '$lib/components/admin/InviteSurface.svelte';
 
 	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
 	type Cfg = { db: string; token: string };
@@ -378,6 +383,23 @@
 						</p>
 					{/if}
 				{/if}
+			</section>
+
+			<!-- #140/S3 — merged invite surface (was the standalone /admin/invite
+			     nav tab). Same live component the backward-compat /admin/invite
+			     route still renders — no duplicated state machine. -->
+			<section data-testid="admin-invite-section" class="flex flex-col gap-3">
+				<!-- Controlled: this page has ALREADY resolved (db, org) for the
+				     SELECTED collective and hands BOTH — so the embedded surface renders
+				     no db picker of its own and an invite can never be minted against a
+				     different collective than the role sections above act on (review F1).
+				     `heading="h2"` keeps it under this page's h1 (review F2). -->
+				<InviteSurface
+					presetDb={cfg?.db ?? ''}
+					presetOrgId={orgId ?? ''}
+					presetDbName={selected?.name ?? ''}
+					heading="h2"
+				/>
 			</section>
 		{/if}
 	</div>

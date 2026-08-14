@@ -60,7 +60,30 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// 'owner'/'editor' would pass against `{person.role}` and prove nothing.
 		admin_roles_role_owner: () => 'omanik',
 		admin_roles_role_editor: () => 'toimetaja',
-		nav_admin: () => 'Admin'
+		nav_admin: () => 'Admin',
+		// #140/S3 — the merged /admin page now also renders InviteSurface
+		// (src/lib/components/admin/InviteSurface.svelte); this file doesn't
+		// exercise the invite flow itself (that's page.navshell-merge.spec.ts +
+		// page.admin-invite.spec.ts), but the component still renders its own
+		// heading/labels and needs every key it can reach in its default states.
+		admin_invite_title: () => 'Invite a new member',
+		admin_invite_no_collective: () => 'Select a collective before creating invites.',
+		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
+		admin_invite_load_error: () => 'Could not load invite prerequisites.',
+		admin_invite_retry_load: () => 'Retry',
+		admin_invite_db_label: () => 'Collective',
+		admin_invite_submit: () => 'Create invite',
+		admin_invite_creating: () => 'Creating…',
+		admin_invite_link_label: () => 'Invite link',
+		admin_invite_copy: () => 'Copy link',
+		admin_invite_copied: () => 'Copied',
+		admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
+		admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
+		admin_invite_error: () => 'Invite creation failed.',
+		admin_invite_copy_error: () => "Couldn't copy the link.",
+		admin_invite_partial_failure: (p: { personId: string }) =>
+			`A person entity (${p.personId}) was already created and carries a live invite token.`,
+		admin_invite_create_another: () => 'Create another invite'
 	}
 }));
 
@@ -82,9 +105,25 @@ const h = vi.hoisted(() => {
 			this.name = 'RoleGrantMissingError';
 		}
 	}
+	// #140/S3 — InviteSurface's own error class, mirrored here so the embedded
+	// component's `instanceof` checks match (see page.admin-invite.spec.ts /
+	// page.navshell-merge.spec.ts for the same pattern).
+	class InviteCreateError extends Error {
+		readonly phase: string;
+		readonly reason: string;
+		readonly personId?: string;
+		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
+			super(message);
+			this.name = 'InviteCreateError';
+			this.phase = opts.phase;
+			this.reason = opts.reason;
+			this.personId = opts.personId;
+		}
+	}
 	return {
 		RoleLockoutError,
 		RoleGrantMissingError,
+		InviteCreateError,
 		listAdminsMock: vi.fn(),
 		addAdminMock: vi.fn(),
 		removeAdminMock: vi.fn(),
@@ -94,7 +133,10 @@ const h = vi.hoisted(() => {
 		resolveAdminMock: vi.fn(),
 		resolveLibrarianMock: vi.fn(),
 		resolveMyOrgIdMock: vi.fn(),
-		loadRosterMock: vi.fn()
+		loadRosterMock: vi.fn(),
+		resolveParentMock: vi.fn(),
+		resolveOrgMock: vi.fn(),
+		createInviteMock: vi.fn()
 	};
 });
 vi.mock('$lib/admin/roleManagement', () => ({
@@ -119,6 +161,14 @@ vi.mock('$lib/org/myOrg', () => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
+}));
+// #140/S3 — the merged page also mounts InviteSurface; mock its data seam at
+// the same boundary page.admin-invite.spec.ts / page.navshell-merge.spec.ts use.
+vi.mock('$lib/invite/inviteData', () => ({
+	InviteCreateError: h.InviteCreateError,
+	resolvePersonParentId: h.resolveParentMock,
+	resolveOrgId: h.resolveOrgMock,
+	createInvite: h.createInviteMock
 }));
 // Sever the $env chain the collectives store pulls in (discover → marker →
 // entu-config) and the store's `goto` import — same discipline as
@@ -202,6 +252,10 @@ function loadOk() {
 	h.addLibrarianMock.mockResolvedValue(undefined);
 	h.removeAdminMock.mockResolvedValue(undefined);
 	h.removeLibrarianMock.mockResolvedValue(undefined);
+	// #140/S3 — InviteSurface's own prerequisite resolution, so the embedded
+	// component settles into 'ready' instead of hanging mid-load.
+	h.resolveParentMock.mockResolvedValue('parent-1');
+	h.resolveOrgMock.mockResolvedValue('org-1');
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -247,7 +301,10 @@ beforeEach(() => {
 		h.resolveAdminMock,
 		h.resolveLibrarianMock,
 		h.resolveMyOrgIdMock,
-		h.loadRosterMock
+		h.loadRosterMock,
+		h.resolveParentMock,
+		h.resolveOrgMock,
+		h.createInviteMock
 	]) {
 		mock.mockReset();
 	}

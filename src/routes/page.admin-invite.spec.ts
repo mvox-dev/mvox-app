@@ -291,6 +291,29 @@ describe('/admin/invite — ready form', () => {
 	});
 });
 
+describe('/admin/invite — page heading', () => {
+	// #140/S3 review F2 — the invite surface became a shared component whose
+	// heading is an <h2> when embedded under /admin's own <h1>. On THIS route the
+	// surface IS the page, so it must still carry the page-level <h1> it had
+	// before the extraction — heading hierarchy is part of the backward-compat
+	// promise for the standalone URL, not just the rendered controls.
+	it('renders the invite title as the single page-level h1', async () => {
+		selectPolyphony();
+		loadOk();
+
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
+		});
+
+		const headings = Array.from(container.querySelectorAll('h1'));
+		expect(headings).toHaveLength(1);
+		expect(headings[0].textContent?.trim()).toBe('Invite a new member');
+		// …and the title is not ALSO emitted at a lower level.
+		expect(container.querySelector('h2')).toBeNull();
+	});
+});
+
 describe('/admin/invite — done (show-once link)', () => {
 	it('calls createInvite with the selected db + the internally-resolved org, shows the link + always-visible bearer warning, and the token NEVER touches storage', async () => {
 		selectPolyphony();
