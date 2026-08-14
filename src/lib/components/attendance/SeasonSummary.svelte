@@ -67,7 +67,9 @@
 			{#if loading}
 				<p data-testid="season-rates-loading" class="text-xs text-ink-3">{m.attendance_season_loading()}</p>
 			{:else if error}
-				<p data-testid="season-rates-error" class="text-xs text-red" role="alert">{m.attendance_season_load_error()}</p>
+				<!-- #151 — surface-level error role, matched to AttendanceSurface's panel
+				     error (its sibling in the same feature and structural position). -->
+				<p data-testid="season-rates-error" class="text-sm text-red-700" role="alert">{m.attendance_season_load_error()}</p>
 			{:else}
 				<div role="list" class="flex flex-col gap-1">
 					{#each memberRates as rate (rate.memberId)}

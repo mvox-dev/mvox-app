@@ -51,9 +51,25 @@ body::-webkit-scrollbar,
 	height: 0;
 }
 
-/* #130 — iOS Safari auto-zooms on focus when a form control's computed font-size is below 16px. */
-input,
-select,
-textarea {
-	font-size: 1rem;
+/* #130 — iOS Safari auto-zooms on focus when a form control's computed font-size is below 16px.
+ *
+ * #151 — this MUST stay inside `@layer base`. Tailwind v4 emits every utility into
+ * `@layer utilities` (see the `@layer theme, base, components, utilities;` line it
+ * injects), and an UNLAYERED rule beats every layered one no matter the specificity.
+ * Authored unlayered, this rule silently ate `text-2xl` / `text-lg` on the inline-edit
+ * inputs in event/[id] and the season-manage panel — the classes read as intentional but
+ * rendered 16px, so the event/season name visibly shrank when you clicked the pencil.
+ * Layered into `base` it still beats preflight (same layer, later source order) and still
+ * covers every bare control, but a deliberate `text-*` on a control now wins.
+ *
+ * That makes this a DEFAULT, not a floor, so the >=16px guarantee now rides on the
+ * companion invariant: no input/select/textarea may carry text-xs, text-sm, or an
+ * arbitrary text-[Npx] below 16px. Both prongs are enforced by src/ios-form-zoom.spec.ts.
+ */
+@layer base {
+	input,
+	select,
+	textarea {
+		font-size: 1rem;
+	}
 }

@@ -89,13 +89,21 @@
 		hint/error appearing or disappearing on a tap never shifts the layout. Holds
 		the non-member hint (membership) OR the save-failed error (last write), which
 		are mutually exclusive (a non-member can't issue a write).
+
+		#151 — the line sits at the dense BODY tier (`text-xs`), not the stamp tier:
+		both of its occupants are sentences, and an error sentence is never a stamp
+		(the buttons above are the stamp tier — font-mono chips). Because the two
+		occupants swap inside one reserved box, they share one step; the reserved
+		pair `min-h-[16px] leading-[16px]` is text-xs's 12/16 metric, so the swap
+		still shifts nothing. Error colour is the shared `text-red-700` error role,
+		NOT the bare `text-red` destructive-ACTION token. See docs/design/typography.md.
 	-->
 	<p
 		data-testid="rsvp-msg-line"
-		class="min-h-[14px] text-[9px] leading-[14px]"
+		class="min-h-[16px] text-xs leading-[16px]"
 		class:italic={nonMember}
 		class:text-ink-2={nonMember}
-		class:text-red={saveFailed && !nonMember}
+		class:text-red-700={saveFailed && !nonMember}
 	>
 		{#if nonMember}
 			<span id={hintId} data-testid="rsvp-non-member-hint">{m.rsvp_non_member_hint()}</span>

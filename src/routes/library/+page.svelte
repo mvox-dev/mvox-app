@@ -632,7 +632,10 @@
 
 				<!-- #74 — bulk checkout section (work→edition two-level picker) -->
 				<div data-testid="bulk-checkout" class="mt-3">
-					<h3 class="text-xs font-medium">{m.library_bulk_checkout_title()}</h3>
+					<!-- #151 — section-heading role: `font-display text-lg`, as every other
+					     section heading in the app. h2 rather than h3: the page's only
+					     other heading is the h1 above, so h3 skipped a level. -->
+					<h2 class="font-display text-lg">{m.library_bulk_checkout_title()}</h2>
 					<select data-testid="bulk-checkout-work-select" aria-label={m.library_bulk_checkout_work_placeholder()} value={bulkCheckoutWorkId} onchange={(e) => (bulkCheckoutWorkId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1">
 						<option value="">{m.library_bulk_checkout_work_placeholder()}</option>
 						{#each works as work (work.id)}
@@ -964,7 +967,7 @@
 																				{/each}
 																			</select>
 																			{#if inlineCheckoutErrors.get(copy.id)}
-																				<span data-testid="inline-checkout-error-{copy.id}" class="text-red-700" role="alert">{inlineCheckoutErrors.get(copy.id)}</span>
+																				<span data-testid="inline-checkout-error-{copy.id}" class="text-xs text-red-700" role="alert">{inlineCheckoutErrors.get(copy.id)}</span>
 																			{/if}
 																		</span>
 																	{:else}

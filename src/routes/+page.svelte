@@ -3742,7 +3742,7 @@
 								onkeydown={onSeasonManagePanelKeydown}
 							>
 								<div class="flex items-center justify-between">
-									<h2 class="font-display text-sm text-ink">{m.season_manage_panel_label()}</h2>
+									<h2 class="font-display text-lg text-ink">{m.season_manage_panel_label()}</h2>
 									<button
 										type="button"
 										data-testid="season-manage-close"
@@ -3817,7 +3817,11 @@
 											/>
 										{:else}
 											<div class="flex items-center gap-1">
-												<span data-testid="season-manage-start_date" class="text-xs text-ink-2">
+												<!-- #151 — text-base, not text-xs: this value is REPLACED in place
+												     by the date input above, which renders at the 16px control
+												     default (#130), so at text-xs it jumped 12px -> 16px -> 12px
+												     across an edit. Same for end_date below. -->
+												<span data-testid="season-manage-start_date" class="text-base text-ink-2">
 													{#if seasonManageStartDate}
 														{formatSeasonDate(seasonManageStartDate)}
 													{:else}
@@ -3864,7 +3868,7 @@
 											/>
 										{:else}
 											<div class="flex items-center gap-1">
-												<span data-testid="season-manage-end_date" class="text-xs text-ink-2">
+												<span data-testid="season-manage-end_date" class="text-base text-ink-2">
 													{#if seasonManageEndDate}
 														{formatSeasonDate(seasonManageEndDate)}
 													{:else}
@@ -4743,7 +4747,7 @@
 							{/snippet}
 						</AgendaList>
 						{#if pdfError}
-							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red" role="alert">
+							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red-700" role="alert">
 								{m.repertoire_pdf_error()}
 							</p>
 						{/if}
@@ -4751,7 +4755,7 @@
 						     already rolled back by the time this renders, so without the
 						     message the value would just snap back and read as a bug. -->
 						{#if manageError}
-							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red" role="alert">
+							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">
 								{m.repertoire_manage_error()}
 							</p>
 						{/if}

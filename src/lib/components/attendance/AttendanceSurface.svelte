@@ -168,7 +168,11 @@
 			{/each}
 		</div>
 	{:else if error}
-		<p data-testid="attendance-panel-error" class="text-sm text-ink-2" role="alert">{m.attendance_load_error()}</p>
+		<!-- #151 — surface-level error role: text-sm text-red-700, the treatment every
+		     other whole-surface load failure uses (library, admin, invite, auth). This
+		     was text-ink-2, which rendered a failure in the same colour as ordinary
+		     body copy, and its sibling SeasonSummary rendered the same role at text-xs. -->
+		<p data-testid="attendance-panel-error" class="text-sm text-red-700" role="alert">{m.attendance_load_error()}</p>
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#each members as member (member.memberId)}
@@ -209,9 +213,12 @@
 						</div>
 					</div>
 					{#if failedMemberIds.has(member.memberId)}
+						<!-- #151 — row-level error role: text-xs text-red-700, as everywhere else.
+						     text-[9px] is the stamp/badge tier (font-mono uppercase chips); an
+						     error sentence is body copy, not a stamp. -->
 						<p
 							data-testid="attendance-save-failed-{member.memberId}"
-							class="text-[9px] text-red"
+							class="text-xs text-red-700"
 							role="alert"
 						>
 							{m.attendance_save_failed()}

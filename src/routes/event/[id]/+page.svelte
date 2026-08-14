@@ -1607,7 +1607,12 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
 					/>
 				{:else if startAt}
-					<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-sm text-ink-2">
+					<!-- #151 — text-base, not text-sm: this line is REPLACED in place by the
+					     datetime-local input above, which renders at the 16px control default
+					     (#130). At text-sm the header visibly grew on entering edit mode and
+					     shrank on leaving. Every inline-edit display counterpart in this
+					     header holds the same 16px body tier for the same reason. -->
+					<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-base text-ink-2">
 						<!-- The comma is plain text, NOT an aria-hidden decoration like the
 						     back link's ←: it is real punctuation, and hiding it would run
 						     "September 1" straight into "19:00" for a screen reader. -->
@@ -1665,7 +1670,7 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
 					/>
 				{:else if detail.durationMinutes > 0 || isEditor}
-					<p class="flex items-center gap-2 text-xs text-ink-2">
+					<p class="flex items-center gap-2 text-base text-ink-2">
 						{#if detail.durationMinutes > 0}
 							<span data-testid="event-detail-duration">
 								{m.agenda_duration_min({ minutes: detail.durationMinutes })}
@@ -1707,7 +1712,7 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'location', false)}
 					/>
 				{:else if detail.location || isEditor}
-					<p class="flex items-center gap-2 text-sm text-ink-2">
+					<p class="flex items-center gap-2 text-base text-ink-2">
 						{#if detail.location}
 							<span data-testid="event-detail-location">{detail.location}</span>
 						{/if}
@@ -1733,7 +1738,10 @@
 				{/if}
 
 				{#if detail.conductorNames.length > 0}
-					<p data-testid="event-detail-conductors" class="text-sm text-ink-2">
+					<!-- Not inline-editable, but it sits in the same header metadata stack as
+					     the four fields that are, so it holds the same 16px body tier — a lone
+					     14px line among them would just be the old inconsistency relocated. -->
+					<p data-testid="event-detail-conductors" class="text-base text-ink-2">
 						{m.event_detail_conductor_label()}: {detail.conductorNames.join(', ')}
 					</p>
 				{/if}
@@ -1753,7 +1761,7 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'description', true)}
 					></textarea>
 				{:else if detail.description || isEditor}
-					<p class="mt-2 flex items-start gap-2 text-sm text-ink">
+					<p class="mt-2 flex items-start gap-2 text-base text-ink">
 						{#if detail.description}
 							<span data-testid="event-detail-description">{detail.description}</span>
 						{/if}
@@ -1786,7 +1794,7 @@
 					class="mt-3 flex flex-col gap-2"
 					aria-labelledby="event-detail-rsvp-heading"
 				>
-					<h2 id="event-detail-rsvp-heading" class="font-display text-sm text-ink-2">
+					<h2 id="event-detail-rsvp-heading" class="font-display text-lg text-ink-2">
 						{m.event_detail_rsvp_heading()}
 					</h2>
 					<!-- Three silent-disable reasons collapse into `pending`, exactly as
@@ -1870,7 +1878,7 @@
 						class="mt-4 flex flex-col gap-2"
 						aria-labelledby="event-detail-works-heading"
 					>
-						<h2 id="event-detail-works-heading" class="font-display text-sm text-ink-2">
+						<h2 id="event-detail-works-heading" class="font-display text-lg text-ink-2">
 							{m.event_detail_works_heading()}
 						</h2>
 						<RepertoireElement
@@ -1905,7 +1913,7 @@
 						class="mt-4 flex flex-col gap-2"
 						aria-labelledby="event-detail-attendance-heading"
 					>
-						<h2 id="event-detail-attendance-heading" class="font-display text-sm text-ink-2">
+						<h2 id="event-detail-attendance-heading" class="font-display text-lg text-ink-2">
 							{m.event_detail_attendance_heading()}
 						</h2>
 						{#if myAttendanceStatus !== null}
