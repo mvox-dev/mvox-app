@@ -1,0 +1,387 @@
+<script lang="ts">
+	// #134/S3 GREEN — the /admin role-management surface (admin + librarian
+	// assignment). Contract: src/routes/page.admin.spec.ts (route integration)
+	// + src/lib/admin/roleManagement.spec.ts (data layer).
+	//
+	// Access gate mirrors admin/invite/+page.svelte's shape (loading →
+	// no-collective / no-access / load-error → ready), but the "which
+	// collective" resolution reuses the ROOT LAYOUT's pattern instead —
+	// `selectedCollectiveStore` (URL → persisted pick → first collective), not
+	// the invite page's own db-picker (this surface acts on the person's
+	// CURRENTLY selected collective, same as every other rights-gated page).
+	//
+	// `resolveMyOrgId` / `resolveLibrarian` are called again here even though
+	// `resolveAdmin` already resolves the org internally — the EXISTING
+	// resolutions are the source of truth for "which org"/"which library" this
+	// surface acts on; no new lookup is invented (task instructions + spec).
+	import { m } from '$lib/paraglide/messages.js';
+	import { getToken } from '$lib/auth/storage';
+	import { selectedCollectiveStore } from '$lib/collectives/store';
+	import type { Collective } from '$lib/collectives/types';
+	import { resolveAdmin } from '$lib/nav/adminStore';
+	import { resolveLibrarian } from '$lib/library/librarianStore';
+	import { resolveMyOrgId } from '$lib/org/myOrg';
+	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import {
+		listAdmins,
+		addAdmin,
+		removeAdmin,
+		listLibrarians,
+		addLibrarian,
+		removeLibrarian,
+		type RolePerson
+	} from '$lib/admin/roleManagement';
+	import Autocomplete from '$lib/components/Autocomplete.svelte';
+
+	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
+	type Cfg = { db: string; token: string };
+
+	let status = $state<Status>('loading');
+	let selected = $state<Collective | null>(null);
+	let cfg = $state<Cfg | null>(null);
+	let orgId = $state<string | null>(null);
+	let libraryId = $state<string | null>(null);
+	let viewerId = $state<string | null>(null);
+	let admins = $state<RolePerson[]>([]);
+	let librarians = $state<RolePerson[]>([]);
+	// Write gate, per entity. `resolveAdmin` (the ACCESS gate above) answers
+	// 'admin' for an org `_editor` too, but entu-api refuses EVERY rights write
+	// from a caller who is not in the entity's aggregated `private._owner` — POST
+	// entity/{id} and DELETE property/{id} both 403. Showing an editing surface
+	// that is guaranteed to 403 is exactly the silent-failure shape the house
+	// rule forbids, so the lists stay readable and the write controls disappear.
+	let canManageAdmins = $state(false);
+	let canManageLibrarians = $state(false);
+	let roster = $state<RosterRow[]>([]);
+	let actionError = $state(false);
+
+	const adminOwnerCount = $derived(admins.filter((p) => p.role === 'owner').length);
+	const hasLibraryOwner = $derived(librarians.some((p) => p.role === 'owner'));
+
+	const adminOptions = $derived(
+		roster
+			.filter((r) => !admins.some((a) => a.id === r.personId))
+			.map((r) => ({ id: r.personId, label: r.name }))
+	);
+	const librarianOptions = $derived(
+		roster
+			.filter((r) => !librarians.some((l) => l.id === r.personId))
+			.map((r) => ({ id: r.personId, label: r.name }))
+	);
+
+	function isLastOwner(person: RolePerson): boolean {
+		return person.role === 'owner' && adminOwnerCount === 1;
+	}
+
+	// A library OWNER's grant is not this surface's to revoke: `removeLibrarian`
+	// runs 'editor-only' scope and rejects with RoleGrantMissingError before any
+	// write, so an enabled button here would be a guaranteed dead click.
+	function isLibraryOwner(person: RolePerson): boolean {
+		return person.role === 'owner';
+	}
+
+	// `RolePerson.role` is a wire-level enum ('owner' | 'editor'), never a label.
+	// The badge is user-visible text, so it goes through `m.*` like every other
+	// string on the page (house convention — cf. rsvp_status_*).
+	function roleLabel(role: RolePerson['role']): string {
+		return role === 'owner' ? m.admin_roles_role_owner() : m.admin_roles_role_editor();
+	}
+
+	// Request-sequence guard. Switching collectives is an IN-PLACE store update
+	// (`selectCollective` sets the store then `goto`s the same pathname) and the
+	// root layout renders `{@render children?.()}` with no `{#key}` — so this
+	// component is never remounted and a slow load(A) can resolve after load(B)
+	// started, pairing B's `cfg.db` with A's org/library/rows/canManage. Every
+	// state write that follows an `await` is fenced behind `thisLoad`, the same
+	// pattern src/routes/+page.svelte uses for its own collective switch.
+	let loadSeq = 0;
+
+	async function refreshAdmins(thisLoad: number): Promise<void> {
+		if (thisLoad !== loadSeq) return; // the collective moved on before this read
+		if (!cfg || !orgId || !viewerId) return;
+		const listing = await listAdmins(cfg, orgId, viewerId);
+		if (thisLoad !== loadSeq) return; // superseded by a newer selection
+		admins = listing.persons;
+		canManageAdmins = listing.canManage;
+	}
+
+	async function refreshLibrarians(thisLoad: number): Promise<void> {
+		if (thisLoad !== loadSeq) return; // the collective moved on before this read
+		if (!cfg || !libraryId || !viewerId) return;
+		const listing = await listLibrarians(cfg, libraryId, viewerId);
+		if (thisLoad !== loadSeq) return; // superseded by a newer selection
+		librarians = listing.persons;
+		canManageLibrarians = listing.canManage;
+	}
+
+	async function load(target: Collective): Promise<void> {
+		const thisLoad = ++loadSeq;
+		status = 'loading';
+		actionError = false;
+		const token = getToken();
+		if (!token) {
+			// Inconsistency on a protected route — fail loudly, never as "not admin".
+			console.error('admin roles: no auth token in storage on a protected route');
+			status = 'load-error';
+			return;
+		}
+		const c: Cfg = { db: target.db, token };
+		cfg = c;
+		viewerId = target.personId;
+		canManageAdmins = false;
+		canManageLibrarians = false;
+
+		const adminState = await resolveAdmin(c, target.personId);
+		if (thisLoad !== loadSeq) return; // superseded by a newer selection
+		if (adminState === 'not-admin') {
+			status = 'no-access';
+			return;
+		}
+		if (adminState === 'error') {
+			status = 'load-error';
+			return;
+		}
+
+		try {
+			const [resolvedOrgId, libResult, rosterRows] = await Promise.all([
+				resolveMyOrgId(c, target.personId),
+				resolveLibrarian(c, target.personId),
+				loadRoster(c)
+			]);
+			if (thisLoad !== loadSeq) return; // superseded by a newer selection
+			// `resolveLibrarian` SWALLOWS its failures (non-2xx / throw) into
+			// { state: 'error', libraryId: null } — the same libraryId shape it
+			// returns for the legitimate "this collective has no library" case.
+			// Reading libraryId alone would render a failed fetch as the factual
+			// claim "no library entity is visible in this collective". Branch on
+			// `state` first, so a broken read fails loudly (load-error + retry,
+			// same as its sibling resolutions, which throw and land in the catch).
+			if (libResult.state === 'error') {
+				console.error('admin roles: librarian resolution failed');
+				status = 'load-error';
+				return;
+			}
+			orgId = resolvedOrgId;
+			libraryId = libResult.libraryId;
+			roster = rosterRows;
+			await Promise.all([
+				refreshAdmins(thisLoad),
+				libraryId ? refreshLibrarians(thisLoad) : Promise.resolve()
+			]);
+			if (thisLoad !== loadSeq) return; // superseded by a newer selection
+			status = 'ready';
+		} catch (e) {
+			if (thisLoad !== loadSeq) return; // a superseded load's failure is not this view's
+			console.error('admin roles: load failed', e);
+			status = 'load-error';
+		}
+	}
+
+	function retryLoad(): void {
+		if (selected) void load(selected);
+	}
+
+	// EFFECT — react to the resolved selected collective: no-collective gate, or
+	// (re-)load. Same "no selected collective ⇒ no-collective" collapse the
+	// admin/invite page uses for its own picker (loading and none read the
+	// same to the user here — there is nothing actionable to distinguish).
+	$effect(() => {
+		const s = $selectedCollectiveStore;
+		selected = s;
+		if (!s) {
+			status = 'no-collective';
+			return;
+		}
+		void load(s);
+	});
+
+	// The write handlers SNAPSHOT the current sequence (they do not bump it —
+	// this is a same-collective refresh, not a switch). A collective switch that
+	// lands mid-write invalidates the snapshot, so neither the refetched rows nor
+	// the error banner can leak into the collective the viewer moved to.
+	async function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
+		if (!selection.id || !cfg || !orgId) return;
+		const thisLoad = loadSeq;
+		actionError = false;
+		try {
+			await addAdmin(cfg, orgId, selection.id);
+			await refreshAdmins(thisLoad);
+		} catch (e) {
+			if (thisLoad !== loadSeq) return;
+			console.error('admin roles: add admin failed', e);
+			actionError = true;
+		}
+	}
+
+	async function onPickLibrarian(selection: { id: string | null; label: string }): Promise<void> {
+		if (!selection.id || !cfg || !libraryId) return;
+		const thisLoad = loadSeq;
+		actionError = false;
+		try {
+			await addLibrarian(cfg, libraryId, selection.id);
+			await refreshLibrarians(thisLoad);
+		} catch (e) {
+			if (thisLoad !== loadSeq) return;
+			console.error('admin roles: add librarian failed', e);
+			actionError = true;
+		}
+	}
+
+	async function onRemoveAdmin(personId: string): Promise<void> {
+		if (!cfg || !orgId) return;
+		const thisLoad = loadSeq;
+		actionError = false;
+		try {
+			await removeAdmin(cfg, orgId, personId);
+			await refreshAdmins(thisLoad);
+		} catch (e) {
+			if (thisLoad !== loadSeq) return;
+			console.error('admin roles: remove admin failed', e);
+			actionError = true;
+		}
+	}
+
+	async function onRemoveLibrarian(personId: string): Promise<void> {
+		if (!cfg || !libraryId) return;
+		const thisLoad = loadSeq;
+		actionError = false;
+		try {
+			await removeLibrarian(cfg, libraryId, personId);
+			await refreshLibrarians(thisLoad);
+		} catch (e) {
+			if (thisLoad !== loadSeq) return;
+			console.error('admin roles: remove librarian failed', e);
+			actionError = true;
+		}
+	}
+</script>
+
+<main class="min-h-screen bg-paper px-6 py-10 text-ink">
+	<div class="mx-auto flex w-full max-w-2xl flex-col gap-6">
+		<h1 class="font-display text-2xl">{m.admin_roles_title()}</h1>
+
+		{#if status === 'no-collective'}
+			<p data-testid="admin-roles-no-collective" class="text-sm">
+				{m.admin_roles_no_collective()}
+			</p>
+		{:else if status === 'loading'}
+			<p class="text-sm" aria-busy="true">…</p>
+		{:else if status === 'no-access'}
+			<p data-testid="admin-roles-no-access" class="text-sm" role="alert">
+				{m.admin_roles_no_access()}
+			</p>
+		{:else if status === 'load-error'}
+			<div data-testid="admin-roles-load-error" class="flex flex-col gap-2" role="alert">
+				<p class="text-sm text-red-700">{m.admin_roles_load_error()}</p>
+				<button
+					type="button"
+					data-testid="admin-roles-retry-load"
+					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+					onclick={retryLoad}
+				>
+					{m.admin_roles_retry_load()}
+				</button>
+			</div>
+		{:else}
+			<!-- ready -->
+			{#if actionError}
+				<p data-testid="admin-roles-action-error" role="alert" class="text-sm text-red-700">
+					{m.admin_roles_action_error()}
+				</p>
+			{/if}
+
+			<section data-testid="admin-roles-admins" class="flex flex-col gap-3">
+				<h2 class="font-display text-lg">{m.admin_roles_admins_title()}</h2>
+				<ul class="flex flex-col gap-1">
+					{#each admins as person (person.id)}
+						<li
+							data-testid="admin-entry-{person.id}"
+							class="flex items-center justify-between gap-2 border-b border-ink-5 py-1 text-sm"
+						>
+							<span
+								>{person.name}
+								<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
+							>
+							<button
+								type="button"
+								data-testid="admin-remove-{person.id}"
+								disabled={!canManageAdmins || isLastOwner(person)}
+								class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
+								onclick={() => onRemoveAdmin(person.id)}
+							>
+								{m.admin_roles_remove({ name: person.name })}
+							</button>
+						</li>
+					{/each}
+				</ul>
+				{#if canManageAdmins}
+					{#if adminOwnerCount === 1}
+						<p class="text-xs text-ink-2">{m.admin_roles_last_owner_hint()}</p>
+					{/if}
+					<Autocomplete
+						items={adminOptions}
+						onSelect={onPickAdmin}
+						placeholder={m.admin_roles_add_admin_placeholder()}
+						label={m.admin_roles_add_admin_label()}
+						emptyLabel={m.admin_roles_empty()}
+					/>
+				{:else}
+					<p data-testid="admin-roles-admins-read-only" class="text-xs text-ink-2">
+						{m.admin_roles_read_only()}
+					</p>
+				{/if}
+			</section>
+
+			<section data-testid="admin-roles-librarians" class="flex flex-col gap-3">
+				<h2 class="font-display text-lg">{m.admin_roles_librarians_title()}</h2>
+				{#if libraryId === null}
+					<p data-testid="admin-roles-no-library" class="text-sm">{m.admin_roles_no_library()}</p>
+				{:else}
+					<ul class="flex flex-col gap-1">
+						{#each librarians as person (person.id)}
+							<li
+								data-testid="librarian-entry-{person.id}"
+								class="flex items-center justify-between gap-2 border-b border-ink-5 py-1 text-sm"
+							>
+								<span
+									>{person.name}
+									<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
+								>
+								<button
+									type="button"
+									data-testid="librarian-remove-{person.id}"
+									disabled={!canManageLibrarians || isLibraryOwner(person)}
+									class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
+									onclick={() => onRemoveLibrarian(person.id)}
+								>
+									{m.admin_roles_remove({ name: person.name })}
+								</button>
+							</li>
+						{/each}
+					</ul>
+					{#if hasLibraryOwner}
+						<p data-testid="admin-roles-library-owner-hint" class="text-xs text-ink-2">
+							{m.admin_roles_library_owner_hint()}
+						</p>
+					{/if}
+					{#if canManageLibrarians}
+						<Autocomplete
+							items={librarianOptions}
+							onSelect={onPickLibrarian}
+							placeholder={m.admin_roles_add_librarian_placeholder()}
+							label={m.admin_roles_add_librarian_label()}
+							emptyLabel={m.admin_roles_empty()}
+						/>
+					{:else}
+						<p data-testid="admin-roles-librarians-read-only" class="text-xs text-ink-2">
+							{m.admin_roles_read_only()}
+						</p>
+					{/if}
+				{/if}
+			</section>
+		{/if}
+	</div>
+</main>
+
+<!-- (*MVOX:Tallis* — #134/S3 RED route stub) -->
+<!-- (*MVOX:Palestrina* — #134/S3 GREEN implementation) -->

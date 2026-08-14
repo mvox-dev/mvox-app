@@ -283,6 +283,67 @@ describe('NavShell — prefix route matching', () => {
 		const inviteLink = screen.getByText('Invite').closest('a');
 		expect(inviteLink?.getAttribute('aria-current')).toBe('page');
 	});
+
+	// Two entries share the '/admin' prefix. A per-entry `startsWith` test marks
+	// BOTH current on /admin/invite — two aria-current="page", two folder tabs
+	// highlighted. The deepest matching route wins, and only it.
+	it('activates only the MOST SPECIFIC entry when two routes share a prefix', () => {
+		const nested: NavEntry[] = [
+			...testEntries,
+			{
+				key: 'admin',
+				label: () => 'Admin',
+				route: '/admin',
+				icon: '<svg></svg>',
+				visible: (ctx) => ctx.isAdmin,
+			},
+		];
+		const { container } = render(NavShell, {
+			props: {
+				children: testChildren,
+				entries: nested,
+				activeRoute: '/admin/invite',
+				isAdmin: true,
+			},
+		});
+		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
+		expect(active.map((a) => a.getAttribute('href'))).toEqual(['/admin/invite']);
+		expect(container.querySelectorAll('.nav-entry--active').length).toBe(1);
+	});
+
+	it('activates the parent entry when on the parent route itself', () => {
+		const nested: NavEntry[] = [
+			...testEntries,
+			{
+				key: 'admin',
+				label: () => 'Admin',
+				route: '/admin',
+				icon: '<svg></svg>',
+				visible: (ctx) => ctx.isAdmin,
+			},
+		];
+		const { container } = render(NavShell, {
+			props: {
+				children: testChildren,
+				entries: nested,
+				activeRoute: '/admin',
+				isAdmin: true,
+			},
+		});
+		const active = Array.from(container.querySelectorAll('a[aria-current="page"]'));
+		expect(active.map((a) => a.getAttribute('href'))).toEqual(['/admin']);
+	});
+
+	it('does not activate an entry on a sibling route sharing a string prefix', () => {
+		const { container } = render(NavShell, {
+			props: {
+				children: testChildren,
+				entries: testEntries,
+				activeRoute: '/rosters-archive',
+			},
+		});
+		expect(container.querySelectorAll('a[aria-current="page"]').length).toBe(0);
+	});
 });
 
 describe('NavShell — no visible entries', () => {

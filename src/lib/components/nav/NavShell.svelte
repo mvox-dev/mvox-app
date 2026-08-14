@@ -24,10 +24,23 @@
 	const ctx: NavContext = $derived({ isAdmin, hasMultipleCollectives });
 	const visibleEntries = $derived(entries.filter((e) => e.visible(ctx)));
 
-	function isActive(route: string): boolean {
+	// Route matching is SEGMENT-aware and LONGEST-WINS. Two entries can share a
+	// prefix ('/admin' and '/admin/invite'); a per-entry `startsWith` test would
+	// mark BOTH current on /admin/invite (two aria-current="page", two active
+	// tabs). Resolve the single winning entry once, over the visible set.
+	function matchesRoute(route: string): boolean {
 		if (route === '/') return activeRoute === '/';
-		return activeRoute.startsWith(route);
+		return activeRoute === route || activeRoute.startsWith(route + '/');
 	}
+
+	const activeKey = $derived.by(() => {
+		let best: NavEntry | null = null;
+		for (const entry of visibleEntries) {
+			if (!matchesRoute(entry.route)) continue;
+			if (!best || entry.route.length > best.route.length) best = entry;
+		}
+		return best?.key ?? null;
+	});
 
 	let railSide = $state<'left' | 'right'>('left');
 
@@ -71,7 +84,7 @@
 			onkeydown={handleKeydown}
 		>
 			{#each visibleEntries as entry (entry.key)}
-				{@const active = isActive(entry.route)}
+				{@const active = entry.key === activeKey}
 				{@const disabled = completionLocked && entry.route !== '/profile'}
 				<a
 					href={disabled ? '/profile' : entry.route}

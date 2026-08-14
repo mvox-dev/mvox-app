@@ -26,6 +26,8 @@ const libraryIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 
 const collectivesIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>';
 
+const adminIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>';
+
 export const NAV_ENTRIES: NavEntry[] = [
 	{
 		key: 'agenda',
@@ -60,6 +62,13 @@ export const NAV_ENTRIES: NavEntry[] = [
 		label: () => m.nav_invite(),
 		route: '/admin/invite',
 		icon: inviteIcon,
+		visible: (ctx) => ctx.isAdmin,
+	},
+	{
+		key: 'admin',
+		label: () => m.nav_admin(),
+		route: '/admin',
+		icon: adminIcon,
 		visible: (ctx) => ctx.isAdmin,
 	},
 	{
