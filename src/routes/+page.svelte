@@ -3664,21 +3664,71 @@
 							</button>
 						</div>
 					{:else}
-						<!-- #132/T3 — the [⚙] season-manage entry point. Gates INDEPENDENTLY
-						     of T2's [+ Season] below (a CURRENT season's editor, not "may
-						     create the next one") — see `showSeasonManageGear`'s doc. -->
-						{#if showSeasonManageGear}
-							<div class="mb-3 flex justify-end">
-								<button
-									type="button"
-									data-testid="season-manage-gear"
-									bind:this={seasonManageGearEl}
-									aria-label={m.season_manage_gear_label()}
-									class="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink-4 p-1.5 text-xs text-ink-2 hover:border-ink hover:text-ink"
-									onclick={openSeasonManagePanel}
-								>
-									<span aria-hidden="true">⚙</span>
-								</button>
+						<!-- #149 — [⚙] season-manage, [+ Season] and [+ Event] triggers
+						     grouped into one admin toolbar (shared border, consistent
+						     button sizing) so they read as one admin surface instead of
+						     three loose buttons. Each control keeps its OWN pre-existing
+						     rights gate (#132/T2-T4: showSeasonManageGear /
+						     showSeasonCreate+!seasonCreateOpen / showEventCreate+
+						     !eventCreateOpen) — this is a visual grouping only, not a
+						     rights change. The toolbar itself only mounts when at least
+						     one control would show, so a non-editor never sees an empty
+						     frame. The panels/forms these open (season-manage-panel,
+						     season-create-form, event-create-form) render below,
+						     unchanged, outside the toolbar.
+						     #149 review F2 — `w-fit`, NOT `self-start`: the parent
+						     (`rounded-lg bg-paper p-4`) is a plain BLOCK container, so
+						     `align-self` had nothing to act on and the frame silently
+						     stretched the full card width. `w-fit` (= fit-content) makes
+						     the border hug the buttons as intended, and still caps at the
+						     available width, so `flex-wrap` — not overflow — is what
+						     happens when the three no longer fit on one 375px line. -->
+						{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen) || (showEventCreate && !eventCreateOpen)}
+							<div
+								data-testid="agenda-admin-toolbar"
+								class="mb-3 flex w-fit flex-wrap items-center gap-2 rounded-md border border-ink-4 p-1.5"
+							>
+								<!-- #149 review F3 — the gear wears the SAME outline as its two
+								     siblings (`border border-ink text-ink`, same hover
+								     inversion). Inside a shared frame a borderless lighter
+								     glyph next to two outlined pills reads as an inconsistency,
+								     not as a hierarchy; checklist item 4 asks for one uniform
+								     control row, so the gear is a pill too. -->
+								{#if showSeasonManageGear}
+									<button
+										type="button"
+										data-testid="season-manage-gear"
+										bind:this={seasonManageGearEl}
+										aria-label={m.season_manage_gear_label()}
+										class="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink text-xs text-ink hover:bg-ink hover:text-paper"
+										onclick={openSeasonManagePanel}
+									>
+										<span aria-hidden="true">⚙</span>
+									</button>
+								{/if}
+								{#if showSeasonCreate && !seasonCreateOpen}
+									<button
+										type="button"
+										data-testid="season-create"
+										disabled={createEntryPointsBlocked}
+										class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+										onclick={openSeasonCreateForm}
+									>
+										{m.season_create()}
+									</button>
+								{/if}
+								{#if showEventCreate && !eventCreateOpen}
+									<button
+										type="button"
+										data-testid="event-create"
+										bind:this={eventCreateButtonEl}
+										disabled={createEntryPointsBlocked}
+										class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+										onclick={() => openEventCreateForm('agenda')}
+									>
+										{m.event_create()}
+									</button>
+								{/if}
 							</div>
 						{/if}
 						{#if seasonManageOpen}
@@ -4302,25 +4352,15 @@
 								</div>
 							</div>
 						{/if}
-						<!-- #132/T2 — page-level [+ Season] entry point, ABOVE the agenda
-						     content: rights-gated + no-upcoming-season-gated, never inside a
-						     row/picker. The status region is mounted from first render (a
+						<!-- #132/T2 — page-level [+ Season] creation form. The trigger button
+						     now lives in the #149 admin toolbar above; this block is the
+						     form only. The status region is mounted from first render (a
 						     live region announces only CHANGES to its contents). -->
 						<div data-testid="season-create-status" role="status" aria-live="polite" class="sr-only">
 							{seasonCreateStatus}
 						</div>
 						{#if showSeasonCreate}
-							{#if !seasonCreateOpen}
-								<button
-									type="button"
-									data-testid="season-create"
-									disabled={createEntryPointsBlocked}
-									class="mb-3 flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-									onclick={openSeasonCreateForm}
-								>
-									{m.season_create()}
-								</button>
-							{:else}
+							{#if seasonCreateOpen}
 								<div
 									data-testid="season-create-form"
 									role="dialog"
@@ -4446,29 +4486,15 @@
 								</div>
 							{/if}
 						{/if}
-						<!-- #132/T4 — the page-level [+ Event] entry point: rights-gated the
-						     SAME way as the season-manage gear (a running season, its
-						     editor), independent of T2's [+ Season] gate. Never inside an
-						     agenda row — this sits above the agenda content, alongside
-						     [+ Season]. -->
+						<!-- #132/T4 — the page-level [+ Event] creation form. The trigger
+						     button now lives in the #149 admin toolbar above; this block is
+						     the form only. -->
 						<!-- #132/T4 review F3 — mounted from FIRST render, like
 						     `season-create-status`: a live region inserted already-populated
 						     is generally not announced; only a change to a present one is. -->
 						<div data-testid="event-create-status" role="status" aria-live="polite" class="sr-only">
 							{eventCreateStatus}
 						</div>
-						{#if showEventCreate && !eventCreateOpen}
-							<button
-								type="button"
-								data-testid="event-create"
-								bind:this={eventCreateButtonEl}
-								disabled={createEntryPointsBlocked}
-								class="mb-3 flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-								onclick={() => openEventCreateForm('agenda')}
-							>
-								{m.event_create()}
-							</button>
-						{/if}
 						{#if eventCreateOpen}
 							<div
 								data-testid="event-create-form"

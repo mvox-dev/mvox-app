@@ -535,6 +535,98 @@ describe('agenda admin — the three entry points render together for a season e
 	});
 });
 
+// ── #149 — the three entry points share ONE toolbar frame ──────────────────────
+//
+// #132/T6 above pins that each control EXISTS and is page-level (not inside an
+// agenda row) — which passes identically whether the three sit in one toolbar or
+// in three loose divs. #149 is exactly the difference those tests cannot see, so
+// it gets its own pins: one shared frame (parentElement identity), the wrap-not-
+// overflow class contract that keeps it inside 375px (same style as
+// `expectFormFluid`'s class contract — happy-dom computes no layout), no empty
+// frame for a non-editor, and the frame surviving with the siblings that remain
+// while one control's form is open.
+
+const TOOLBAR = 'agenda-admin-toolbar';
+
+describe('agenda admin — #149: the entry points live in one shared admin toolbar', () => {
+	it('[⚙], [+ Season] and [+ Event] are all DIRECT children of the same agenda-admin-toolbar element', async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, TOOLBAR)).not.toBeNull();
+		});
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+
+		for (const testid of ['season-manage-gear', 'season-create', 'event-create']) {
+			const control = q(container, testid) as HTMLElement;
+			expect(control, testid).not.toBeNull();
+			expect(
+				control.parentElement,
+				`${testid} must sit INSIDE the shared toolbar frame — not as a loose sibling`
+			).toBe(toolbar);
+		}
+	});
+
+	it('the toolbar wraps instead of overflowing, and its frame hugs its contents with a real width class (375px contract)', async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, TOOLBAR)).not.toBeNull();
+		});
+		const classes = Array.from((q(container, TOOLBAR) as HTMLElement).classList);
+
+		expect(classes, 'the toolbar must be a flex row').toContain('flex');
+		expect(
+			classes,
+			'the toolbar must carry flex-wrap — three ~44px controls must drop to a second line at 375px, never scroll sideways'
+		).toContain('flex-wrap');
+		// F2: the parent (`rounded-lg bg-paper p-4`) is a plain BLOCK container, so
+		// `self-start` is inert there — the hug must come from a width class.
+		expect(
+			classes,
+			'the toolbar frame must hug its buttons via w-fit — align-self does nothing inside a block parent'
+		).toContain('w-fit');
+		expect(
+			classes,
+			'self-start is a no-op on a block-parented div — do not reintroduce it as the hug mechanism'
+		).not.toContain('self-start');
+	});
+
+	it('a NON-editor gets no toolbar at all — not an empty frame', async () => {
+		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
+		const container = await renderReady();
+
+		expectNoAdminControls(container);
+		expect(
+			q(container, TOOLBAR),
+			'an empty bordered frame must not render for a non-editor'
+		).toBeNull();
+	});
+
+	it('with the [+ Season] form open, the toolbar survives holding the controls that remain ([⚙] + [+ Event])', async () => {
+		const container = await renderReady();
+		await openSeasonForm(container);
+
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+		expect(
+			toolbar,
+			'the toolbar must not vanish when one of its controls opens its form'
+		).not.toBeNull();
+		expect(q(container, 'season-create'), 'the open form replaces its own trigger').toBeNull();
+		expect((q(container, 'season-manage-gear') as HTMLElement)?.parentElement).toBe(toolbar);
+		expect((q(container, 'event-create') as HTMLElement)?.parentElement).toBe(toolbar);
+	});
+
+	it('with the [+ Event] form open, the toolbar survives holding [⚙] + [+ Season]', async () => {
+		const container = await renderReady();
+		await openEventFormFromAgenda(container);
+
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+		expect(toolbar).not.toBeNull();
+		expect(q(container, 'event-create'), 'the open form replaces its own trigger').toBeNull();
+		expect((q(container, 'season-manage-gear') as HTMLElement)?.parentElement).toBe(toolbar);
+		expect((q(container, 'season-create') as HTMLElement)?.parentElement).toBe(toolbar);
+	});
+});
+
 // ── rights-gate: fail-closed, uniformly ─────────────────────────────────────────
 
 describe('agenda admin — the rights gate fails closed across ALL controls', () => {
@@ -1509,3 +1601,6 @@ describe('agenda admin — creation forms stay inside a 375px viewport (class co
 // (*MVOX:Tallis* — #132/T6 RED: agenda admin controls — entry-point + rights-gate
 // consistency, one-form-at-a-time, refresh-on-create, 44px touch targets, 375px
 // fluid-width contract)
+// (*MVOX:Palestrina* — #149 review F1/F2: shared admin-toolbar pins — one frame,
+// wrap-not-overflow + w-fit hug, no empty frame for a non-editor, frame survives
+// an open sibling form)
