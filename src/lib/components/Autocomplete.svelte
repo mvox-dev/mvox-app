@@ -271,6 +271,12 @@
 				? 'sr-only'
 				: 'absolute z-10 mt-1 flex w-full flex-col border border-ink bg-paper py-1 shadow-sm'}
 		>
+			<!-- #136 — an option row is tap-to-act: a tap COMMITS the pick (adds a
+			     conductor chip / sets the event type), so it carries the same 44px
+			     touch-target floor as every other admin button. The component's only
+			     consumer is the agenda's admin surface, so the taller rows are entirely
+			     an admin-side cost. `flex items-center` keeps the label vertically
+			     centred in the taller row; `text-left` still governs the left edge. -->
 			{#each filtered as item (item.id)}
 				<button
 					type="button"
@@ -279,7 +285,7 @@
 					role="option"
 					aria-selected={filtered[activeIndex]?.id === item.id}
 					tabindex="-1"
-					class="px-2 py-1 text-left text-xs text-ink hover:bg-ink-5"
+					class="flex min-h-11 items-center px-2 py-1 text-left text-xs text-ink hover:bg-ink-5"
 					onclick={() => pick(item)}
 					onmousedown={(event) => event.preventDefault()}
 				>

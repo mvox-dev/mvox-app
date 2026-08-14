@@ -1911,9 +1911,19 @@
 		// #132/T6 review F1, same root cause as the `open*Form` guards: the SERIES
 		// form is rendered INSIDE this panel, so dismissing the panel unmounts it —
 		// the very teardown `dismissSeriesCreateForm` refuses while a bulk run is
-		// on the wire. Narrow to `seriesCreateSubmitting` deliberately: the season
-		// and event forms live at page level and survive the panel either way.
-		if (seriesCreateSubmitting) return;
+		// on the wire.
+		//
+		// #135 — widened from `seriesCreateSubmitting` to `seriesRunUnfinished`.
+		// The narrower flag left the STOPPED-but-idle window unguarded: a run that
+		// stops partway sets `seriesCreateResume` and releases `seriesCreateSubmitting`
+		// in its `finally`, so the close button re-enabled and a click unmounted the
+		// panel — with it the ONLY visible explanation ("2 remaining of 3") for why
+		// every other entry point stayed disabled. The resume record itself survives
+		// (this function never touches it), so the entry points stayed correctly
+		// blocked, but re-opening the gear was the only way to see why — the season
+		// and event forms live at page level and survive the panel either way, so
+		// widening this costs nothing on their account.
+		if (seriesRunUnfinished) return;
 		seasonManageOpen = false;
 		seasonEditingField = null;
 		// The dialog held focus (see the $effect below); dismissing it unmounts
@@ -3125,6 +3135,21 @@
 		// `loadForSelected` re-derives `currentSeasonId` from the reload, so this
 		// is what the post-write refresh compares against.
 		const panelSeasonId = currentSeasonId;
+		// #137 — the run's OWN db, pinned at submit. `selected` is a live
+		// `$derived` off the collective-picker store: a switch mid-run re-points
+		// it at the new collective, but `cfg` (and every closed-over id in this
+		// function) still describes the OLD one. Every write below — including
+		// each serial POST inside the bulk loop — checks the CURRENT `selected`
+		// against this pinned value before touching state or the wire, so a
+		// switch mid-generation stops the loop from POSTing further occurrences
+		// into the OLD db and never writes this run's outcome into the NEW
+		// collective's (unrelated) form state.
+		const runDb = cfg.db;
+		/** True once the viewer has switched away from `runDb` — checked before
+		 *  every write below (state OR wire) so a switch mid-run stops the run
+		 *  where it stands rather than finishing into state/collective nothing on
+		 *  screen still refers to. */
+		const dbChanged = (): boolean => selected?.db !== runDb;
 
 		seriesCreateSubmitting = true;
 		try {
@@ -3141,6 +3166,11 @@
 				setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}
+			// #137 — the org read crossed an await; a collective switch in that
+			// window means this run's form is already gone (the switch's own
+			// `closeSeriesCreateForm` saw to that). Stop here: no series POST, no
+			// state write into whatever the new collective is now showing.
+			if (dbChanged()) return;
 
 			const intervalDays =
 				seriesCreateRepeat === 'daily' ? 1 : seriesCreateRepeat === 'biweekly' ? 14 : 7;
@@ -3194,6 +3224,9 @@
 					return;
 				}
 			}
+			// #137 — same crossing, this time around the series-creation POST
+			// (skipped entirely on a resume, but still an await on a fresh run).
+			if (dbChanged()) return;
 
 			if (!seriesCreateGenerate) {
 				closeSeriesCreateForm();
@@ -3218,6 +3251,21 @@
 			const alreadyCreated = total - dates.length;
 			let created = alreadyCreated;
 			for (let i = 0; i < dates.length; i += 1) {
+				// #137 — checked FIRST, every iteration: a collective switch between
+				// occurrences must stop the loop from POSTing further events into the
+				// db it just left. `selected` is live (`$derived`), so this sees a
+				// mid-run switch the very next iteration — no separate cancellation
+				// wiring needed.
+				//
+				// KNOWN GAP (#138, deliberately not fixed here): stopping leaves a
+				// PARTIAL series in the old collective with no in-app record of what
+				// it still owes — the switch's own `closeSeriesCreateForm` already
+				// nulled `seriesCreateResume`, which is a single unkeyed slot and so
+				// cannot describe a run in a db that is no longer selected. Returning
+				// there and re-submitting therefore duplicates. Still strictly better
+				// than finishing the run into a collective nothing on screen refers
+				// to; #138 keys the resume record by db.
+				if (dbChanged()) break;
 				// Set BEFORE the await — the spec pins "current 1 of 3 while the
 				// FIRST POST is in flight", not after it resolves.
 				seriesCreateProgress = { current: created + 1, total };
@@ -3232,6 +3280,12 @@
 					});
 					created += 1;
 				} catch (e) {
+					// #137 — the failing POST's own await can itself straddle a
+					// switch; a failure discovered AFTER the viewer has left this db
+					// writes nothing (not the resume record, not the error, not a
+					// reload) into a form/collective the viewer is no longer looking
+					// at.
+					if (dbChanged()) return;
 					// STOP at the failure — no further createEvent calls, and no
 					// rollback of the series or of events 1..N-1 (nothing here may
 					// DELETE). Instead: remember exactly where the run stopped so a
@@ -3249,6 +3303,11 @@
 					return;
 				}
 			}
+			// #137 — the loop's LAST successful iteration can itself straddle a
+			// switch (the `break` above only catches the NEXT iteration, not the
+			// one already in flight when the switch lands) — one more check before
+			// the success path's writes.
+			if (dbChanged()) return;
 			seriesCreateProgress = null;
 			seriesCreateResume = null;
 			closeSeriesCreateForm();
@@ -3352,7 +3411,7 @@
 										type="button"
 										data-testid="season-manage-close"
 										aria-label={m.season_manage_close()}
-										disabled={seriesCreateSubmitting}
+										disabled={seriesRunUnfinished}
 										class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
 										onclick={closeSeasonManagePanel}
 									>
@@ -3740,7 +3799,7 @@
 												/>
 											</div>
 
-											<label class="flex items-center gap-1.5 text-xs text-ink">
+											<label class="flex min-h-11 items-center gap-1.5 text-xs text-ink">
 												<input
 													type="checkbox"
 													data-testid="series-create-generate"

@@ -47,6 +47,21 @@
 //       `min-h-11` (2.75rem = 44px) on every admin button, plus `min-w-11` on
 //       the icon-only ones (gear, panel close), whose text content is too
 //       narrow to reach 44px on its own.
+//       SCOPE, decided in #136 (fix shape option 2) and pinned here so the next
+//       reader does not read the gap as an oversight: the contract covers every
+//       admin BUTTON — INCLUDING the ones a SHARED component renders on the admin
+//       surface's behalf, i.e. Autocomplete's `role="option"` rows (a tap there
+//       COMMITS a pick, and +page.svelte is that component's only consumer, so
+//       every option row on screen is an admin control) — plus the one
+//       CHECKBOX ROW (a checkbox's own 13px box is not sizable by a height
+//       utility, so the floor rides on the <label> wrapping it — that label IS
+//       the click target). Text inputs, selects and
+//       textareas are DELIBERATELY EXEMPT: they stay at `px-1.5 py-1 text-xs`
+//       (~28px). They are not tap-to-act controls — a mistap lands the caret
+//       instead of firing an action, so the WCAG 2.5.5 rationale (undo cost)
+//       does not bite, and floors on ~10 fields would add ~160px of height to
+//       the series form alone. What DOES cover them is the fluid-width contract
+//       immediately below.
 //     - NO HORIZONTAL OVERFLOW: every field (input/select/textarea, checkboxes
 //       exempt — they are intrinsically small) inside each creation form is
 //       FLUID — carries `w-full`, `flex-1` or `min-w-0` — so no intrinsic
@@ -417,6 +432,24 @@ async function addConductorChip(
 		expect(scope.querySelector(optionSelector)).not.toBeNull();
 	});
 	await fireEvent.click(scope.querySelector(optionSelector) as HTMLElement);
+}
+
+/** Type into the Autocomplete inside `scope` and STOP — the dropdown stays open
+ *  (a commit would unmount it), so its option rows can be inspected. Returns the
+ *  awaited option element for `optionId`. */
+async function openAutocompleteOptions(
+	scope: HTMLElement,
+	query: string,
+	optionId: string
+): Promise<HTMLElement> {
+	const input = scope.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
+	expect(input, 'the scope must contain an autocomplete').not.toBeNull();
+	await fireEvent.input(input, { target: { value: query } });
+	const optionSelector = `[data-testid="autocomplete-option-${optionId}"]`;
+	await waitFor(() => {
+		expect(scope.querySelector(optionSelector)).not.toBeNull();
+	});
+	return scope.querySelector(optionSelector) as HTMLElement;
 }
 
 /** Minimal VALID season-create fill. */
@@ -862,6 +895,25 @@ describe('agenda admin — a STOPPED series run still owes work, and the entry p
 			}
 		});
 	});
+
+	// #135 — the panel's own × was narrower than the entry-point guard: it
+	// re-enabled the moment `seriesCreateSubmitting` released (the STOPPED
+	// window this whole describe block is about), so a click there closed the
+	// panel — and with it the resume notice, the ONLY visible reason every
+	// other entry point stayed disabled. Widened to `seriesRunUnfinished`.
+	it('the panel’s × cannot discard the panel while a resume record is outstanding — it is the only surviving explanation for the disabled entry points', async () => {
+		const container = await renderReady();
+		await stopBulkRunPartway(container);
+
+		const close = q(container, 'season-manage-close') as HTMLButtonElement;
+		expect(close.disabled, 'close must be visibly refused while a resume is outstanding').toBe(
+			true
+		);
+		await fireEvent.click(close);
+
+		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		expect(q(container, 'series-create-resume')).not.toBeNull();
+	});
 });
 
 // ── a form never tears ITSELF down while its write is on the wire ───────────────
@@ -1006,6 +1058,68 @@ describe('agenda admin — a collective switch leaves no creation form behind', 
 			expect((q(container, 'event-create') as HTMLButtonElement).disabled).toBe(false);
 		});
 	});
+
+	// #137 — the two tests above cover a run that has already STOPPED (nothing on
+	// the wire) when the switch lands. The bug this one pins is narrower and
+	// worse: a switch WHILE an occurrence's POST is still in flight. The switch's
+	// own `loadForSelected` tears the form down synchronously (proven above), but
+	// the bulk loop inside `submitSeriesCreate` is a closure holding its OWN `cfg`
+	// (pinned to org-a) — nothing stopped it from resolving and looping straight
+	// into a second, third… `createEvent(cfg, …)` against a db the viewer had
+	// already left, or from writing its outcome into state a form that belonged
+	// to org-a (and is now unmounted) used to render.
+	it('a LIVE bulk run stops issuing POSTs the moment the viewer switches away mid-generation, and writes no outcome into the old form', async () => {
+		setAuthedWithTwoCollectives();
+		const resolvers: Array<(id: string) => void> = [];
+		createEventMock.mockImplementation(
+			() =>
+				new Promise<string>((resolve) => {
+					resolvers.push(resolve);
+				})
+		);
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+
+		await openSeriesForm(container);
+		await fillValidSeries(container);
+		await enableMondayGeneration(container);
+		await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
+
+		// The first occurrence's POST is on the wire, against org-a.
+		await waitFor(() => {
+			expect(resolvers.length).toBe(1);
+		});
+
+		// The viewer switches collectives WHILE that POST is still in flight.
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+
+		// Let the in-flight POST resolve — the loop's next turn is where a stale
+		// closure would fire occurrence #2 against org-a.
+		resolvers[0]('ev-new-1');
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(
+			createEventMock,
+			'the loop must stop at the switch — no further occurrence may land in the db the viewer left'
+		).toHaveBeenCalledTimes(1);
+
+		// Re-opening the panel in B is a clean slate: no resume record bled over
+		// from the run that stopped when the viewer left org-a, and B's own entry
+		// points are live.
+		await openPanel(container);
+		expect(q(container, 'series-create-form')).toBeNull();
+		expect(q(container, 'series-create-resume')).toBeNull();
+		await waitFor(() => {
+			expect((q(container, 'event-create') as HTMLButtonElement).disabled).toBe(false);
+		});
+	});
 });
 
 // ── panel ↔ creation-form coexistence ───────────────────────────────────────────
@@ -1125,18 +1239,30 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
 
 /** Asserts the 44px touch-target contract on one control. Icon-only controls
  *  (a gear, an ×) also need the WIDTH floor — text buttons get their width
- *  from their label + padding, but a lone glyph does not. */
+ *  from their label + padding, but a lone glyph does not.
+ *
+ *  `onWrappingLabel` moves the assertion off the testid'd element and onto the
+ *  <label> around it. That is the honest target for a CHECKBOX: the box itself
+ *  is a ~13px UA-drawn widget that a height utility does not grow, while the
+ *  whole label is clickable (clicking the text toggles it). Asserting on the
+ *  input would pin a class that changes nothing on screen. */
 function expectTouchTarget(
 	container: HTMLElement,
 	testid: string,
-	opts: { iconOnly?: boolean } = {}
+	opts: { iconOnly?: boolean; onWrappingLabel?: boolean } = {}
 ): void {
-	const el = q(container, testid);
-	expect(el, `${testid} must be in the DOM`).not.toBeNull();
+	const found = q(container, testid);
+	expect(found, `${testid} must be in the DOM`).not.toBeNull();
+	const el = opts.onWrappingLabel
+		? (found as HTMLElement).closest('label')
+		: (found as HTMLElement);
+	expect(
+		el,
+		`${testid} must sit inside a <label> — that label is what carries the touch target`
+	).not.toBeNull();
+	const what = opts.onWrappingLabel ? `the <label> wrapping ${testid}` : testid;
 	const classes = Array.from((el as HTMLElement).classList);
-	expect(classes, `${testid} must reserve a 44px-tall touch target (min-h-11)`).toContain(
-		'min-h-11'
-	);
+	expect(classes, `${what} must reserve a 44px-tall touch target (min-h-11)`).toContain('min-h-11');
 	if (opts.iconOnly) {
 		expect(classes, `${testid} is icon-only — it must also floor its width (min-w-11)`).toContain(
 			'min-w-11'
@@ -1255,6 +1381,67 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 		});
 
 		expectTouchTarget(container, 'series-create-skip-remove-2026-09-14', { iconOnly: true });
+	});
+
+	// #136 — the generate checkbox, the one non-button the contract covers (see
+	// the SCOPE note in the header). The testid rides on the <input>, but the
+	// input is the ~13px UA widget; the <label> around it is the click target and
+	// therefore where the floor has to live. Resolving through `.closest('label')`
+	// is the point of the case: an assertion on the input would pass while the
+	// row on screen stayed 16px tall.
+	it('series form generate checkbox: its wrapping label row is the 44px target', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		expectTouchTarget(container, 'series-create-generate', { onWrappingLabel: true });
+	});
+
+	// #136 review — the option rows of the shared Autocomplete. They are BUTTONS
+	// and they are tap-to-act (a tap commits the pick), so the SCOPE note's
+	// text-input exemption does NOT reach them: a mistap here adds the wrong
+	// conductor / sets the wrong event type, which is exactly the undo cost WCAG
+	// 2.5.5 is about. They were missed by the first #136 sweep only because they
+	// are rendered by Autocomplete.svelte rather than by +page.svelte — and the
+	// page is that component's ONLY consumer, so the floor costs nothing outside
+	// this admin surface. Not icon-only: a person/type label carries the width.
+	it('season form conductor autocomplete: each option row is a 44px-tall button', async () => {
+		const container = await renderReady();
+		await openSeasonForm(container);
+
+		await openAutocompleteOptions(q(container, 'season-create-form') as HTMLElement, 'ada', 'p-ada');
+		expectTouchTarget(container, 'autocomplete-option-p-ada');
+	});
+
+	it('event form conductor AND type autocompletes: each option row is a 44px-tall button', async () => {
+		const container = await renderReady();
+		await openEventFormFromAgenda(container);
+
+		await openAutocompleteOptions(
+			q(container, 'event-create-conductors-field') as HTMLElement,
+			'ada',
+			'p-ada'
+		);
+		expectTouchTarget(container, 'autocomplete-option-p-ada');
+
+		// The type combobox is the free-text one — same rows, same floor.
+		await openAutocompleteOptions(
+			q(container, 'event-create-type-field') as HTMLElement,
+			'reh',
+			'rehearsal'
+		);
+		expectTouchTarget(container, 'autocomplete-option-rehearsal');
+	});
+
+	it('season-manage panel conductor autocomplete: each option row is a 44px-tall button', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		await openAutocompleteOptions(
+			q(container, 'season-manage-panel') as HTMLElement,
+			'ada',
+			'p-ada'
+		);
+		expectTouchTarget(container, 'autocomplete-option-p-ada');
 	});
 });
 
