@@ -665,6 +665,17 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
+		// After resolution, the profiles are re-read; both now hold the same
+		// value — a same-value duplicate, not a distinct-value conflict, so the
+		// conflict note clears (the existing collapse-to-one-entity repair path
+		// picks it up from here — real, unmocked planLoadedDuplicateRepairs).
+		// Queued up front (not after the resolve click) — the reload now fires
+		// off a tick()-scheduled microtask rather than a setTimeout(0) macrotask,
+		// so it can land before any post-click synchronous test setup would.
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
+		]);
 		h.applyConflictResolutionMock.mockResolvedValue({ field: 'name', syncedIds: ['prof-dom'] });
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
@@ -684,14 +695,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			sync: [{ id: 'prof-dom', sibling: '' }]
 		});
 
-		// After resolution, the profiles are re-read; both now hold the same
-		// value — a same-value duplicate, not a distinct-value conflict, so the
-		// conflict note clears (the existing collapse-to-one-entity repair path
-		// picks it up from here — real, unmocked planLoadedDuplicateRepairs).
-		h.listMyProfilesMock.mockResolvedValue([
-			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
-			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
-		]);
 		await waitFor(() => {
 			expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).toBeNull();
 			expect(q(container, '[data-testid="profile-visibility-repair-name"]')).not.toBeNull();
@@ -750,5 +753,38 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
 		expect(pubBtn.disabled).toBe(false);
 		expect(q(container, '[data-testid="profile-vis-name-public-conflict"]')).toBeNull();
+	});
+
+	it('AC6: pressing Escape while previewing dismisses the preview back to the active value', async () => {
+		vi.useRealTimers(); // see AC2 comment
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
+			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+
+		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
+		await fireEvent.click(pubBtn); // 1st tap — preview
+
+		await waitFor(() => {
+			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Annie');
+			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
+		});
+
+		await fireEvent.keyDown(pubBtn, { key: 'Escape' });
+
+		await waitFor(() => {
+			// previewLevel back to null: input reverts to the narrow-wins active
+			// value, the preview marker/hint are gone, and the conflict note
+			// (not the preview note) shows again.
+			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ann');
+			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).toBeNull();
+			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
+			expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).not.toBeNull();
+		});
+		// Escape is a pure dismiss — no write.
+		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 });

@@ -42,6 +42,7 @@
 // raw entity id — "Entity IDs need names" cuts both ways).
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -623,22 +624,19 @@ describe('/event/[id] — type badge is translated', () => {
 	});
 
 	it('guard: every event_type_* key in en.json exists in et, lv and uk, and none is empty', () => {
-		const en = JSON.parse(readFileSync(resolve('messages/en.json'), 'utf8')) as Record<
-			string,
-			string
-		>;
+		const en = JSON.parse(readFileSync(resolve('messages/en.json'), 'utf8')) as MessageFile;
 		const typeKeys = Object.keys(en).filter((k) => k.startsWith('event_type_'));
 		expect(typeKeys.length).toBe(8); // the v4E schema's eight known event types
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(
 				readFileSync(resolve(`messages/${locale}.json`), 'utf8')
-			) as Record<string, string>;
+			) as MessageFile;
 			expect(
 				typeKeys.filter((k) => !(k in messages)),
 				`${locale}.json is missing event_type keys`
 			).toEqual([]);
 			expect(
-				typeKeys.filter((k) => k in messages && messages[k].trim() === ''),
+				typeKeys.filter((k) => k in messages && isMessageEmpty(messages[k])),
 				`${locale}.json has empty event_type values`
 			).toEqual([]);
 			expect(

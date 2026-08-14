@@ -27,6 +27,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 // Paraglide mock: real English strings for the keys that exist today, plus a
 // Proxy fallback so aria-label keys ADDED by the GREEN pass resolve without
@@ -286,11 +287,11 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 	});
 
 	it('every repertoire_* key in en.json exists in et, lv and uk', () => {
-		const en = JSON.parse(readSource('messages/en.json')) as Record<string, string>;
+		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
 		const repertoireKeys = Object.keys(en).filter((k) => k.startsWith('repertoire_'));
 		expect(repertoireKeys.length).toBeGreaterThan(0);
 		for (const locale of ['et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
+			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
 			const missing = repertoireKeys.filter((k) => !(k in messages));
 			expect(missing, `${locale}.json is missing repertoire keys`).toEqual([]);
 		}
@@ -308,7 +309,7 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 		// Keys with no such sibling (selects, the badge, the domain-texted
 		// external links) label controls with no visible text of their own —
 		// nothing to contain, so they're skipped here.
-		const en = JSON.parse(readSource('messages/en.json')) as Record<string, string>;
+		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
 		const pairs = Object.keys(en)
 			.filter((k) => k.startsWith('repertoire_') && k.endsWith('_aria_label'))
 			.map((ariaKey) => {
@@ -320,12 +321,21 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 		expect(pairs.length, 'no visible-text/aria-label pairs found — the scan is vacuous').toBeGreaterThan(0);
 
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
+			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
+			// Both sides may be variant arrays, so compare pattern-wise: EVERY
+			// rendering of the aria-label must contain SOME rendering of the
+			// visible label. For plain strings this is the original check.
+			const containsVisible = (ariaKey: string, visibleKey: string) => {
+				const ariaPatterns = messagePatterns(messages[ariaKey]);
+				const visiblePatterns = messagePatterns(messages[visibleKey]);
+				if (ariaPatterns.length === 0 || visiblePatterns.length === 0) return false;
+				return ariaPatterns.every((aria) => visiblePatterns.some((visible) => aria.includes(visible)));
+			};
 			const violations = pairs
-				.filter(({ ariaKey, visibleKey }) => !messages[ariaKey]?.includes(messages[visibleKey]))
+				.filter(({ ariaKey, visibleKey }) => !containsVisible(ariaKey, visibleKey))
 				.map(
 					({ ariaKey, visibleKey }) =>
-						`${locale}: "${messages[ariaKey]}" (${ariaKey}) does not contain "${messages[visibleKey]}" (${visibleKey})`
+						`${locale}: ${JSON.stringify(messages[ariaKey])} (${ariaKey}) does not contain ${JSON.stringify(messages[visibleKey])} (${visibleKey})`
 				);
 			expect(violations, `${locale}.json breaks Label in Name`).toEqual([]);
 		}

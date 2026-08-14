@@ -187,7 +187,18 @@
 	"library_copy_sort_nr": "№",
 	"library_copy_sort_member": "Учасник",
 	"library_copy_sort_since": "З дати",
-	"library_available_summary": "{count} примірників доступно для видачі",
+	"library_available_summary": [
+		{
+			"declarations": ["input count", "local countPlural = count: plural"],
+			"selectors": ["countPlural"],
+			"match": {
+				"countPlural=one": "{count} примірник доступний для видачі",
+				"countPlural=few": "{count} примірники доступні для видачі",
+				"countPlural=many": "{count} примірників доступно для видачі",
+				"countPlural=other": "{count} примірника доступно для видачі"
+			}
+		}
+	],
 	"repertoire_no_edition": "Видання не вказано",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Позичити",

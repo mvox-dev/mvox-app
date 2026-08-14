@@ -33,6 +33,11 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+	everyPatternContains,
+	isMessageEmpty,
+	type MessageFile
+} from '$lib/testing/messageFile.js';
 
 // Paraglide mock: real English strings for the keys that exist today, plus a
 // Proxy fallback so keys ADDED by the GREEN pass resolve without this file
@@ -329,27 +334,30 @@ describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', 
 	});
 
 	it('guard: every roster_* key in en.json exists in et, lv and uk, and none is empty', () => {
-		const en = JSON.parse(readSource('messages/en.json')) as Record<string, string>;
+		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
 		const rosterKeys = Object.keys(en).filter((k) => k.startsWith('roster_'));
 		expect(rosterKeys.length).toBeGreaterThan(0);
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
+			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
 			const missing = rosterKeys.filter((k) => !(k in messages));
 			expect(missing, `${locale}.json is missing roster keys`).toEqual([]);
-			const empty = rosterKeys.filter((k) => k in messages && messages[k].trim() === '');
+			const empty = rosterKeys.filter((k) => k in messages && isMessageEmpty(messages[k]));
 			expect(empty, `${locale}.json has empty roster values`).toEqual([]);
 		}
 	});
 
 	it('guard: parameterised reorder labels carry {name} in ALL four locales — a label that drops the param collapses every section to the same announcement', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
+			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
 			for (const key of [
 				'roster_section_drag_handle',
 				'roster_section_move_up',
 				'roster_section_move_down'
 			]) {
-				expect(messages[key], `${locale}.json ${key}`).toContain('{name}');
+				expect(
+					everyPatternContains(messages[key], '{name}'),
+					`${locale}.json ${key} must carry {name} in every variant`
+				).toBe(true);
 			}
 		}
 	});

@@ -26,6 +26,11 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+	everyPatternContains,
+	isMessageEmpty,
+	type MessageFile
+} from '$lib/testing/messageFile.js';
 
 const CHANGED_SURFACES = [
 	'src/routes/roster/+page.svelte',
@@ -100,8 +105,11 @@ function usedMessageKeys(source: string): string[] {
 	return [...keys].sort();
 }
 
-function localeMessages(locale: string): Record<string, string> {
-	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
+// Values are `string | MessageVariant[]` — plural messages are variant arrays,
+// so every assertion below goes through the messageFile helpers rather than
+// calling string methods on the raw value.
+function localeMessages(locale: string): MessageFile {
+	return JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +143,7 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 				const messages = localeMessages(locale);
 				const missing = keys.filter((k) => !(k in messages));
 				expect(missing, `${locale}.json is missing keys used by ${file}`).toEqual([]);
-				const empty = keys.filter((k) => k in messages && messages[k].trim() === '');
+				const empty = keys.filter((k) => k in messages && isMessageEmpty(messages[k]));
 				expect(empty, `${locale}.json has empty values for keys used by ${file}`).toEqual([]);
 			}
 		});
@@ -151,7 +159,10 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 				'roster_section_remove_failed',
 				'roster_section_remove_not_empty'
 			]) {
-				expect(messages[key], `${locale}.json ${key}`).toContain('{name}');
+				expect(
+					everyPatternContains(messages[key], '{name}'),
+					`${locale}.json ${key} must carry {name} in every variant`
+				).toBe(true);
 			}
 		}
 	});
@@ -165,7 +176,7 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 				'library_copy_sort_member',
 				'library_copy_sort_since'
 			]) {
-				expect(messages[key], `${locale}.json ${key}`).toBeTruthy();
+				expect(isMessageEmpty(messages[key]), `${locale}.json ${key}`).toBe(false);
 			}
 		}
 	});

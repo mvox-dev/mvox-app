@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser, getLastProvider } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -399,12 +400,13 @@
 		if (!ctx) return;
 		busy = true;
 		applyConflictResolution({ cfg: ctx.cfg, field, value: chosenValue, sync })
-			.then(() => {
+			.then(async () => {
 				busy = false;
-				// Deferred one macrotask: lets any synchronous caller-side setup that
-				// follows a resolve (e.g. reconfiguring what the next load will see)
-				// land before the reload's read fires.
-				setTimeout(() => void loadForSelected(), 0);
+				// Deferred to the next microtask tick: lets any synchronous
+				// caller-side setup that follows a resolve (e.g. reconfiguring what
+				// the next load will see) land before the reload's read fires.
+				await tick();
+				loadForSelected();
 			})
 			.catch((e) => {
 				busy = false;
