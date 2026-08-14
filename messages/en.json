@@ -80,7 +80,7 @@
 	"admin_roles_action_error": "Role change failed.",
 	"admin_roles_empty": "No matching people.",
 	"admin_roles_read_only": "Only an owner of this collective can change these roles. You can see who holds them.",
-	"admin_roles_library_owner_hint": "Library ownership is not revoked from this page.",
+	"admin_roles_remove_self_hint": "Cannot remove your own rights.",
 	"admin_roles_role_owner": "owner",
 	"admin_roles_role_editor": "editor",
 	"rsvp_status_going": "Going",

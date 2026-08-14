@@ -80,7 +80,7 @@
 	"admin_roles_action_error": "Neizdevās mainīt lomu.",
 	"admin_roles_empty": "Atbilstošu cilvēku nav.",
 	"admin_roles_read_only": "Šīs lomas var mainīt tikai kolektīva īpašnieks. Tu redzi, kam tās ir.",
-	"admin_roles_library_owner_hint": "Bibliotēkas īpašumtiesības no šīs lapas netiek atsauktas.",
+	"admin_roles_remove_self_hint": "Nevar noņemt savas paša tiesības.",
 	"admin_roles_role_owner": "īpašnieks",
 	"admin_roles_role_editor": "redaktors",
 	"rsvp_status_going": "Būšu",

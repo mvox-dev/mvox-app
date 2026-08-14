@@ -19,6 +19,7 @@
 
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { RosterRow } from '$lib/roster/rosterData';
 
 export interface RolePerson {
 	/** person entity id (the rights value's `reference`). */
@@ -186,6 +187,27 @@ function toRolePersons(ownOwners: RightsValue[], ownEditors: RightsValue[]): Rol
 }
 
 /**
+ * #146 — a freshly POSTed `_editor`/`_owner` value carries only `reference`
+ * (the person entity id), never `string` (display name): Entu's aggregated
+ * read only backfills `string` once its own indexing catches up, so
+ * `toRolePersons`' fallback (`name: v.reference`) shows the raw entity id
+ * until then. The roster (already loaded for the Autocomplete person search)
+ * is a ready-made id→name lookup — every row whose `name` still equals its
+ * `id` (i.e. never resolved a display name off the rights value itself) gets
+ * a second chance against it. A person absent from the roster (e.g. no
+ * longer an active member) keeps the id fallback — never a blank row.
+ */
+function resolveNamesFromRoster(persons: RolePerson[], roster: RosterRow[]): RolePerson[] {
+	if (roster.length === 0) return persons;
+	const byPersonId = new Map(roster.map((r) => [r.personId, r.name]));
+	return persons.map((p) => {
+		if (p.name !== p.id) return p;
+		const rosterName = byPersonId.get(p.id);
+		return rosterName ? { ...p, name: rosterName } : p;
+	});
+}
+
+/**
  * Grant `_editor` to `personId` on `entityId`.
  * GET rights → NO-OP when the person already holds an OWN `_owner` value (a
  * naive "replace" would DELETE the folded `_id` — i.e. the ownership itself)
@@ -271,11 +293,12 @@ export async function listAdmins(
 	cfg: EntuCfg,
 	orgId: string,
 	viewerId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	roster: RosterRow[] = []
 ): Promise<RoleListing> {
 	const { ownOwners, ownEditors, allOwners } = await fetchRights(cfg, orgId, fetchImpl);
 	return {
-		persons: toRolePersons(ownOwners, ownEditors),
+		persons: resolveNamesFromRoster(toRolePersons(ownOwners, ownEditors), roster),
 		canManage: allOwners.some((v) => v.reference === viewerId)
 	};
 }
@@ -308,11 +331,12 @@ export async function listLibrarians(
 	cfg: EntuCfg,
 	libraryId: string,
 	viewerId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	roster: RosterRow[] = []
 ): Promise<RoleListing> {
 	const { ownOwners, ownEditors, allOwners } = await fetchRights(cfg, libraryId, fetchImpl);
 	return {
-		persons: toRolePersons(ownOwners, ownEditors),
+		persons: resolveNamesFromRoster(toRolePersons(ownOwners, ownEditors), roster),
 		canManage: allOwners.some((v) => v.reference === viewerId)
 	};
 }

@@ -61,7 +61,6 @@
 	let actionError = $state(false);
 
 	const adminOwnerCount = $derived(admins.filter((p) => p.role === 'owner').length);
-	const hasLibraryOwner = $derived(librarians.some((p) => p.role === 'owner'));
 
 	const adminOptions = $derived(
 		roster
@@ -85,6 +84,15 @@
 		return person.role === 'owner';
 	}
 
+	// #147 — self-lockout guard. `isLastOwner` only catches the LAST org
+	// _owner; an admin holding _editor (or an _owner when other owners remain)
+	// could otherwise remove HERSELF and lose access to this page with no way
+	// back in. Applies to both lists — a librarian can self-lock out of the
+	// library section the same way.
+	function isSelf(person: RolePerson): boolean {
+		return person.id === viewerId;
+	}
+
 	// `RolePerson.role` is a wire-level enum ('owner' | 'editor'), never a label.
 	// The badge is user-visible text, so it goes through `m.*` like every other
 	// string on the page (house convention — cf. rsvp_status_*).
@@ -104,7 +112,12 @@
 	async function refreshAdmins(thisLoad: number): Promise<void> {
 		if (thisLoad !== loadSeq) return; // the collective moved on before this read
 		if (!cfg || !orgId || !viewerId) return;
-		const listing = await listAdmins(cfg, orgId, viewerId);
+		// #146 — roster rides along as the id→name lookup for rows whose display
+		// name hasn't caught up in Entu's aggregated read yet (see
+		// resolveNamesFromRoster in roleManagement.ts). `undefined` for fetchImpl
+		// keeps its own default (real `fetch`) rather than reaching for the
+		// browser global here.
+		const listing = await listAdmins(cfg, orgId, viewerId, undefined, roster);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
 		admins = listing.persons;
 		canManageAdmins = listing.canManage;
@@ -113,7 +126,7 @@
 	async function refreshLibrarians(thisLoad: number): Promise<void> {
 		if (thisLoad !== loadSeq) return; // the collective moved on before this read
 		if (!cfg || !libraryId || !viewerId) return;
-		const listing = await listLibrarians(cfg, libraryId, viewerId);
+		const listing = await listLibrarians(cfg, libraryId, viewerId, undefined, roster);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
 		librarians = listing.persons;
 		canManageLibrarians = listing.canManage;
@@ -310,7 +323,8 @@
 							<button
 								type="button"
 								data-testid="admin-remove-{person.id}"
-								disabled={!canManageAdmins || isLastOwner(person)}
+								disabled={!canManageAdmins || isLastOwner(person) || isSelf(person)}
+								title={isSelf(person) ? m.admin_roles_remove_self_hint() : undefined}
 								class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 								onclick={() => onRemoveAdmin(person.id)}
 							>
@@ -322,6 +336,16 @@
 				{#if canManageAdmins}
 					{#if adminOwnerCount === 1}
 						<p class="text-xs text-ink-2">{m.admin_roles_last_owner_hint()}</p>
+					{/if}
+					<!-- #147 — the `title` on a *disabled* button is not a reliable
+					     affordance (most UAs suppress tooltips on disabled controls, and
+					     a disabled button is out of the tab order so its title is not
+					     announced). The reason has to be visible text, exactly like the
+					     last-owner hint above. -->
+					{#if admins.some(isSelf)}
+						<p data-testid="admin-roles-admins-self-hint" class="text-xs text-ink-2">
+							{m.admin_roles_remove_self_hint()}
+						</p>
 					{/if}
 					<Autocomplete
 						items={adminOptions}
@@ -352,24 +376,36 @@
 									>{person.name}
 									<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 								>
-								<button
-									type="button"
-									data-testid="librarian-remove-{person.id}"
-									disabled={!canManageLibrarians || isLibraryOwner(person)}
-									class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
-									onclick={() => onRemoveLibrarian(person.id)}
-								>
-									{m.admin_roles_remove({ name: person.name })}
-								</button>
+								<!-- #148 — a library OWNER's grant is not this surface's to
+								     revoke (removeLibrarian is 'editor-only' scope and would
+								     reject before any write). The role badge above already says
+								     "omanik" — a disabled button plus an explanatory note was
+								     confusing; the fix is to not offer a control that can never
+								     do anything, full stop. -->
+								{#if !isLibraryOwner(person)}
+									<button
+										type="button"
+										data-testid="librarian-remove-{person.id}"
+										disabled={!canManageLibrarians || isSelf(person)}
+										title={isSelf(person) ? m.admin_roles_remove_self_hint() : undefined}
+										class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
+										onclick={() => onRemoveLibrarian(person.id)}
+									>
+										{m.admin_roles_remove({ name: person.name })}
+									</button>
+								{/if}
 							</li>
 						{/each}
 					</ul>
-					{#if hasLibraryOwner}
-						<p data-testid="admin-roles-library-owner-hint" class="text-xs text-ink-2">
-							{m.admin_roles_library_owner_hint()}
-						</p>
-					{/if}
 					{#if canManageLibrarians}
+						<!-- Same visible-reason rule as the admin list. A library OWNER row
+						     renders no button at all (#148), so it needs no explanation —
+						     only a self row that IS rendered-but-disabled does. -->
+						{#if librarians.some((p) => isSelf(p) && !isLibraryOwner(p))}
+							<p data-testid="admin-roles-librarians-self-hint" class="text-xs text-ink-2">
+								{m.admin_roles_remove_self_hint()}
+							</p>
+						{/if}
 						<Autocomplete
 							items={librarianOptions}
 							onSelect={onPickLibrarian}

@@ -54,7 +54,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_roles_action_error: () => 'Role change failed.',
 		admin_roles_empty: () => 'No matching people.',
 		admin_roles_read_only: () => 'Only an owner of this collective can change these roles.',
-		admin_roles_library_owner_hint: () => 'Library ownership is not revoked from this page.',
+		admin_roles_remove_self_hint: () => 'Cannot remove your own rights.',
 		// Deliberately NOT the English words: the row badge must render the
 		// localized label, never the raw `RolePerson.role` enum. An assertion on
 		// 'owner'/'editor' would pass against `{person.role}` and prove nothing.
@@ -404,16 +404,22 @@ describe('/admin — role lists', () => {
 			'admin-p'
 		);
 		// The VIEWER rides along: her own `_owner` membership on each entity is
-		// what decides whether the write controls may be offered at all.
+		// what decides whether the write controls may be offered at all. The
+		// roster rides along too (#146) — the id→name lookup for rows whose
+		// display name hasn't caught up in Entu's aggregated read yet.
 		expect(h.listAdminsMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'org-1',
-			'admin-p'
+			'admin-p',
+			undefined,
+			ROSTER
 		);
 		expect(h.listLibrariansMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'lib-1',
-			'admin-p'
+			'admin-p',
+			undefined,
+			ROSTER
 		);
 	});
 
@@ -666,6 +672,137 @@ describe('/admin — removing people', () => {
 	});
 });
 
+// ── #147 self-lockout: an admin/librarian can never remove HER OWN rights ───────
+
+describe('/admin — self-lockout guard (#147)', () => {
+	// selectPolyphony() gives the viewer personId 'admin-p' — a row carrying
+	// that same id is HER OWN grant.
+	const SELF_EDITOR = {
+		id: 'admin-p',
+		name: 'Admin Person',
+		role: 'editor' as const,
+		valueIds: ['pv-ed-self']
+	};
+	const SELF_OWNER = {
+		id: 'admin-p',
+		name: 'Admin Person',
+		role: 'owner' as const,
+		valueIds: ['pv-own-self']
+	};
+
+	it("an admin holding only _editor sees HER OWN remove button disabled, even though canManage is true and she isn't the last owner", async () => {
+		selectPolyphony();
+		loadOk();
+		const EMIL = { id: 'p-emil', name: 'Emil Erg', role: 'owner' as const, valueIds: ['pv-own-emil'] };
+		// Two owners (Anna, Emil) so neither is the "last owner" — isolates the
+		// self-lockout guard from the pre-existing last-owner guard.
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, EMIL, SELF_EDITOR]));
+
+		const { container } = await renderReady();
+
+		expect(q<HTMLButtonElement>(container, 'admin-remove-admin-p')!.disabled).toBe(true);
+		// Anna's and Emil's rows are untouched by the guard — different people.
+		expect(q<HTMLButtonElement>(container, 'admin-remove-p-anna')!.disabled).toBe(false);
+		expect(q<HTMLButtonElement>(container, 'admin-remove-p-emil')!.disabled).toBe(false);
+	});
+
+	it('an owner among TWO owners still gets HER OWN remove button disabled — self-lockout applies even when she is not the last owner', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_OWNER]));
+
+		const { container } = await renderReady();
+
+		// Two owners → isLastOwner is false for both, but isSelf still disables
+		// her own row.
+		expect(q<HTMLButtonElement>(container, 'admin-remove-admin-p')!.disabled).toBe(true);
+		expect(q<HTMLButtonElement>(container, 'admin-remove-p-anna')!.disabled).toBe(false);
+	});
+
+	it('clicking a self-disabled admin remove button never calls removeAdmin', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
+
+		const { container } = await renderReady();
+		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-remove-admin-p')!);
+		expect(h.removeAdminMock).not.toHaveBeenCalled();
+	});
+
+	it('a librarian sees HER OWN remove button disabled in the librarian list too — same guard, both sections', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listLibrariansMock
+			.mockReset()
+			.mockResolvedValue(listing([CILLA, { ...SELF_EDITOR, valueIds: ['pv-ed-lib-self'] }]));
+
+		const { container } = await renderReady();
+
+		expect(q<HTMLButtonElement>(container, 'librarian-remove-admin-p')!.disabled).toBe(true);
+		expect(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla')!.disabled).toBe(false);
+		await fireEvent.click(q<HTMLButtonElement>(container, 'librarian-remove-admin-p')!);
+		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
+	});
+
+	// The guard is only half the fix: a greyed-out "Remove Admin Person" with no
+	// stated reason is the bug report we'd get next. A `title` on a DISABLED
+	// button is not that reason — UAs suppress tooltips on disabled controls and
+	// the control is out of the tab order, so assistive tech never announces it.
+	// The reason has to be rendered text, like the last-owner hint next to it.
+	it('renders the self-lockout reason as VISIBLE text under the admin list, not only as a title on the disabled button', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
+
+		const { container } = await renderReady();
+
+		const hint = q(container, 'admin-roles-admins-self-hint');
+		expect(hint, 'expected a visible self-lockout hint in the admins section').not.toBeNull();
+		expect(hint!.textContent).toContain('Cannot remove your own rights.');
+		// It lives inside the admins section, next to the row it explains.
+		expect(
+			q(section(container, 'admin-roles-admins'), 'admin-roles-admins-self-hint')
+		).not.toBeNull();
+	});
+
+	it('shows no self-lockout hint when the viewer holds no grant in the list — nothing is disabled, so there is nothing to explain', async () => {
+		selectPolyphony();
+		loadOk(); // ANNA + BELA in admins, CILLA in librarians — no 'admin-p' row
+
+		const { container } = await renderReady();
+
+		expect(q(container, 'admin-roles-admins-self-hint')).toBeNull();
+		expect(q(container, 'admin-roles-librarians-self-hint')).toBeNull();
+	});
+
+	it('renders the same visible reason under the librarian list', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listLibrariansMock
+			.mockReset()
+			.mockResolvedValue(listing([CILLA, { ...SELF_EDITOR, valueIds: ['pv-ed-lib-self'] }]));
+
+		const { container } = await renderReady();
+
+		const hint = q(container, 'admin-roles-librarians-self-hint');
+		expect(hint, 'expected a visible self-lockout hint in the librarians section').not.toBeNull();
+		expect(hint!.textContent).toContain('Cannot remove your own rights.');
+	});
+
+	it('shows no librarian self-lockout hint when the viewer is a library OWNER — her row renders no button at all (#148), so nothing is greyed out to explain', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listLibrariansMock
+			.mockReset()
+			.mockResolvedValue(listing([CILLA, { ...SELF_OWNER, valueIds: ['pv-own-lib-self'] }]));
+
+		const { container } = await renderReady();
+
+		expect(q(container, 'librarian-remove-admin-p')).toBeNull();
+		expect(q(container, 'admin-roles-librarians-self-hint')).toBeNull();
+	});
+});
+
 // ── the write gate: 'admin' access ≠ permission to write rights ─────────────────
 
 describe('/admin — write gate (canManage)', () => {
@@ -726,7 +863,10 @@ describe('/admin — write gate (canManage)', () => {
 // ── library owners: listed, but not revocable from here ─────────────────────────
 
 describe('/admin — a library OWNER row', () => {
-	it("renders a DISABLED Remove and never calls removeLibrarian — removeLibrarian is 'editor-only' scope and would reject before any write (a dead click)", async () => {
+	// #148 — a disabled Remove button plus an explanatory note was confusing;
+	// the fix drops the control entirely for an owner row. The role badge
+	// (rendered via roleLabel, asserted separately) already says why.
+	it("renders NO Remove button at all — removeLibrarian is 'editor-only' scope and would reject before any write (a dead click); the role badge alone explains the row", async () => {
 		selectPolyphony();
 		loadOk();
 		const LIB_OWNER = {
@@ -739,26 +879,13 @@ describe('/admin — a library OWNER row', () => {
 
 		const { container } = await renderReady();
 
-		const removeOwner = q<HTMLButtonElement>(container, 'librarian-remove-p-anna');
-		expect(removeOwner).not.toBeNull();
-		expect(removeOwner!.disabled).toBe(true);
-		await fireEvent.click(removeOwner!);
+		expect(q(container, 'librarian-entry-p-anna')).not.toBeNull();
+		expect(q(container, 'librarian-remove-p-anna')).toBeNull();
 		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
 		expect(q(container, 'admin-roles-action-error')).toBeNull();
 
 		// A librarian (editor) in the same list is still revocable.
 		expect(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla')!.disabled).toBe(false);
-
-		// …and the page says WHY the owner row cannot be removed here.
-		expect(q(container, 'admin-roles-library-owner-hint')).not.toBeNull();
-	});
-
-	it('with no owner in the librarian list, the ownership hint is absent', async () => {
-		selectPolyphony();
-		loadOk();
-
-		const { container } = await renderReady();
-		expect(q(container, 'admin-roles-library-owner-hint')).toBeNull();
 	});
 });
 
@@ -836,11 +963,12 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		expect(q(container, 'admin-roles-admins-read-only')).not.toBeNull();
 		expect(q(section(container, 'admin-roles-admins'), 'autocomplete-input')).toBeNull();
 		// The stale load never got to read alpha's org through beta's cfg.
-		expect(h.listAdminsMock).not.toHaveBeenCalledWith(
-			expect.anything(),
-			'org-alpha',
-			expect.anything()
-		);
+		// Asserted on the RECORDED org-id argument rather than a matcher tuple:
+		// `not.toHaveBeenCalledWith(...)` passes vacuously the moment the arity
+		// drifts (and `expect.anything()` never matches the literal `undefined`
+		// this call site passes for `fetchImpl`), so it would read as coverage
+		// while checking nothing.
+		expect(h.listAdminsMock.mock.calls.map((c: unknown[]) => c[1])).not.toContain('org-alpha');
 	});
 });
 

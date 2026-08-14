@@ -80,7 +80,7 @@
 	"admin_roles_action_error": "Rolli muutmine ebaõnnestus.",
 	"admin_roles_empty": "Sobivaid inimesi ei leitud.",
 	"admin_roles_read_only": "Rolle saab muuta ainult selle kollektiivi omanik. Sina näed, kes neid kannab.",
-	"admin_roles_library_owner_hint": "Noodikogu omandiõigust siit lehelt ära ei võeta.",
+	"admin_roles_remove_self_hint": "Enda õigusi ei saa eemaldada.",
 	"admin_roles_role_owner": "omanik",
 	"admin_roles_role_editor": "toimetaja",
 	"rsvp_status_going": "Tulen",

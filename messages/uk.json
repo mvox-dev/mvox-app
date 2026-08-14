@@ -80,7 +80,7 @@
 	"admin_roles_action_error": "Не вдалося змінити роль.",
 	"admin_roles_empty": "Відповідних людей не знайдено.",
 	"admin_roles_read_only": "Змінювати ці ролі може лише власник колективу. Ви бачите, хто їх має.",
-	"admin_roles_library_owner_hint": "Право власності на бібліотеку не скасовується на цій сторінці.",
+	"admin_roles_remove_self_hint": "Не можна видалити власні права.",
 	"admin_roles_role_owner": "власник",
 	"admin_roles_role_editor": "редактор",
 	"rsvp_status_going": "Буду",

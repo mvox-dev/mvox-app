@@ -295,6 +295,47 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		]);
 	});
 
+	// #146 — a freshly POSTed rights value carries only `reference` (no
+	// `string`), so the row falls back to the raw entity id. The roster
+	// (already loaded for the Autocomplete person search) is passed through
+	// as a second-chance id→name lookup.
+	it('#146: a display-name-less row (id fallback) is resolved against a passed roster, by personId', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValue(json(rollup({ ownOwners: [{ _id: 'pv-x', reference: 'p-ghost' }] })));
+		const roster = [
+			{ memberId: 'm-1', personId: 'p-ghost', name: 'Ghost Gould', email: '' },
+			{ memberId: 'm-2', personId: 'p-other', name: 'Someone Else', email: '' }
+		];
+
+		const result = await listAdmins(cfg, 'org-1', 'p-ghost', fetchImpl, roster);
+		expect(result.persons).toEqual([
+			{ id: 'p-ghost', name: 'Ghost Gould', role: 'owner', valueIds: ['pv-x'] }
+		]);
+	});
+
+	it('#146: a row with a REAL display name off the rights value is never overwritten by the roster, even if it disagrees', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER] })));
+		const roster = [{ memberId: 'm-1', personId: 'p-anna', name: 'Stale Roster Name', email: '' }];
+
+		const result = await listAdmins(cfg, 'org-1', 'p-anna', fetchImpl, roster);
+		expect(result.persons).toEqual([
+			{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-own-anna'] }
+		]);
+	});
+
+	it('#146: a person absent from the roster keeps the id fallback — no roster entry to resolve against', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValue(json(rollup({ ownOwners: [{ _id: 'pv-x', reference: 'p-ghost' }] })));
+		const roster = [{ memberId: 'm-1', personId: 'p-other', name: 'Someone Else', email: '' }];
+
+		const result = await listAdmins(cfg, 'org-1', 'p-ghost', fetchImpl, roster);
+		expect(result.persons).toEqual([
+			{ id: 'p-ghost', name: 'p-ghost', role: 'owner', valueIds: ['pv-x'] }
+		]);
+	});
+
 	it('rights props entirely absent → no rows and canManage false (fail-closed), NOT a throw', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entity: { _id: 'org-1' } }));
 		await expect(listAdmins(cfg, 'org-1', 'p-anna', fetchImpl)).resolves.toEqual({
@@ -594,6 +635,20 @@ describe('listLibrarians — the org admins arrive SPLICED IN as inherited (org 
 
 		const result = await listLibrarians(cfg, 'lib-1', 'p-cilla', fetchImpl);
 		expect(result.canManage).toBe(false);
+	});
+
+	it('#146: a display-name-less librarian row is resolved against a passed roster, same as listAdmins', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValue(
+				json(rollup({ ownEditors: [{ _id: 'pv-ed-cilla', reference: 'p-cilla' }] }))
+			);
+		const roster = [{ memberId: 'm-1', personId: 'p-cilla', name: 'Cilla Cane', email: '' }];
+
+		const result = await listLibrarians(cfg, 'lib-1', 'p-cilla', fetchImpl, roster);
+		expect(result.persons).toEqual([
+			{ id: 'p-cilla', name: 'Cilla Cane', role: 'editor', valueIds: ['pv-ed-cilla'] }
+		]);
 	});
 
 	it('rights props absent → no rows, canManage false (fail-closed), non-2xx → rejects', async () => {
