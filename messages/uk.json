@@ -122,6 +122,7 @@
 	"profile_repair_working": "Завершення…",
 	"profile_repair_error": "Не вдалося завершити. Поле {field} досі можна прочитати на рівні {level} — будь ласка, спробуйте ще раз.",
 	"profile_repair_done": "Зміну видимості завершено.",
+	"profile_language_label": "Мова",
 	"roster_title": "Учасники",
 	"roster_no_collective": "Щоб переглянути список учасників, виберіть колектив.",
 	"roster_load_error": "Не вдалося завантажити список учасників.",

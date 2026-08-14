@@ -22,6 +22,7 @@
 	import { createAutosave } from '$lib/profile/autosave';
 	import ProfileField from '$lib/components/profile/ProfileField.svelte';
 	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
+	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
@@ -454,6 +455,16 @@
 				</p>
 			{/if}
 			<a class="text-sm text-ink-2 underline" href="/auth/logout">{m.profile_sign_out()}</a>
+		</div>
+
+		<!--
+			#123 — app chrome, like sign-out above: not gated on `status` /
+			collective selection. Language choice must be reachable whether or
+			not a collective is selected.
+		-->
+		<div class="flex flex-col items-start gap-1">
+			<span class="text-sm text-ink-2">{m.profile_language_label()}</span>
+			<LanguageSelector />
 		</div>
 
 		{#if status === 'no-collective'}

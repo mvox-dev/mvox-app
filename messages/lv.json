@@ -122,6 +122,7 @@
 	"profile_repair_working": "Pabeidz…",
 	"profile_repair_error": "Neizdevās pabeigt. Jūsu {field} joprojām ir lasāms līmenī {level} — lūdzu, mēģiniet vēlreiz.",
 	"profile_repair_done": "Redzamības izmaiņa pabeigta.",
+	"profile_language_label": "Valoda",
 	"roster_title": "Dalībnieki",
 	"roster_no_collective": "Lai skatītu sarakstu, izvēlieties kolektīvu.",
 	"roster_load_error": "Neizdevās ielādēt dalībnieku sarakstu.",

@@ -14,7 +14,11 @@ export default defineConfig({
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
-			strategy: ['localStorage', 'preferredLanguage', 'baseLocale'],
+			// #123 — 'cookie' added ahead of 'preferredLanguage' so an explicit
+			// selection (LanguageSelector → setLocale) persists across reloads and
+			// wins over browser-language detection. localStorage stays first for
+			// back-compat; baseLocale remains the final fallback.
+			strategy: ['localStorage', 'cookie', 'preferredLanguage', 'baseLocale'],
 		}),
 		sveltekit(),
 	],

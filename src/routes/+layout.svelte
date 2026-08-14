@@ -29,8 +29,25 @@
 	import NavShell from '$lib/components/nav/NavShell.svelte';
 	import { NAV_ENTRIES } from '$lib/nav/entries';
 	import { adminStore, resetAdmin, resolveAdmin } from '$lib/nav/adminStore';
+	import { getLocale } from '$lib/paraglide/runtime.js';
 
 	let { children } = $props();
+
+	// ── #123/S4 review F1 — keep the DOCUMENT's declared language in step with the
+	// locale Paraglide actually resolved. `src/app.html` ships a hardcoded
+	// `<html lang="en">`, and this is a pure client-side SPA: no hooks, no
+	// +layout.server, nothing else writes `documentElement.lang`. So a member who
+	// picks Eesti (or whose browser reports et/lv/uk via the preferredLanguage
+	// strategy) got a fully translated page that still ANNOUNCED itself as
+	// English — screen readers apply English pronunciation to Estonian text and
+	// browser translation/hyphenation heuristics get the wrong signal.
+	//
+	// One effect in the root layout covers every route. Locale switching goes
+	// through a document reload (see LanguageSelector.svelte), so this runs once
+	// per load, after the strategy chain has resolved, and always matches.
+	$effect(() => {
+		document.documentElement.lang = getLocale();
+	});
 
 	// Keep the URL-derived collective selection in sync with the address bar so a
 	// deep link like `?collective=<db>` wins in the selection precedence.

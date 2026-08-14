@@ -56,7 +56,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_repair_done: () => 'Visibility change completed.',
 		profile_sign_out: () => 'Sign out',
 		profile_signed_in_as: (p: { account: string; provider: string }) =>
-			`Signed in as ${p.account} via ${p.provider}`
+			`Signed in as ${p.account} via ${p.provider}`,
+		// #123 — LanguageSelector (now rendered as app chrome on this page) reads
+		// this key for its aria-label.
+		profile_language_label: () => 'Language'
 	}
 }));
 

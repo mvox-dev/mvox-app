@@ -122,6 +122,7 @@
 	"profile_repair_working": "Lõpetamine…",
 	"profile_repair_error": "Lõpetamine ebaõnnestus. Sinu {field} on endiselt loetav tasemel {level} — palun proovi uuesti.",
 	"profile_repair_done": "Nähtavuse muudatus lõpetatud.",
+	"profile_language_label": "Keel",
 	"roster_title": "Liikmed",
 	"roster_no_collective": "Nimekirja vaatamiseks vali kollektiiv.",
 	"roster_load_error": "Liikmete nimekirja laadimine ebaõnnestus.",
