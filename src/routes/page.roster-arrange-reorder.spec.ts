@@ -388,10 +388,20 @@ describe('/roster — data-grabbed + subtree visual grouping (#155/S2 point 3)',
 // ── #155/S2 review F2: drop-slot indicator + a distinct held-subtree tint ─────
 
 /** Direct children of the arrange list, in document order — rows AND the dashed
- *  drop indicator, so a hint's SLOT (which side of which row) is assertable. */
+ *  drop indicator, so a hint's SLOT (which side of which row) is assertable.
+ *
+ *  #155/S3 review R2/F1 — a row's slot is now a plain layout wrapper holding the
+ *  row plus its indent/unindent buttons as SIBLINGS (the buttons must not be
+ *  nested inside the row's `role="button"` subtree). The wrapper carries no
+ *  testid of its own, so a slot is named by the `arrange-row-*` it contains. */
 function listSlots(container: HTMLElement): string[] {
 	const list = q(container, 'roster-arrange-list') as HTMLElement;
-	return [...list.children].map((el) => el.getAttribute('data-testid') ?? '?');
+	return [...list.children].map(
+		(el) =>
+			el.getAttribute('data-testid') ??
+			el.querySelector('[data-testid^="arrange-row-"]')?.getAttribute('data-testid') ??
+			'?'
+	);
 }
 
 /** Alto ▸ —; Soprano ▸ [Soprano 1, Soprano 2]; Tenor — the parent-with-children

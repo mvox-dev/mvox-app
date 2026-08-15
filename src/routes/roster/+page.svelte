@@ -18,7 +18,8 @@
 		unassignMemberSection,
 		createSection,
 		reorderSections,
-		deleteSection
+		deleteSection,
+		reparentSection
 	} from '$lib/sections/sectionActions';
 	import { isSectionMembershipMissing, isSectionNotEmpty } from '$lib/sections/sectionErrors';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
@@ -512,6 +513,103 @@
 		return nodes
 			.filter((n) => n.id !== id)
 			.map((n) => (n.children.length === 0 ? n : { ...n, children: removeSectionNode(n.children, id) }));
+	}
+
+	// #155/S3 — indent/unindent tree-mutation helpers. Unlike `insertSectionNode`
+	// (new node, no prior home) and `removeSectionNode` (gone for good), a
+	// reparent RELOCATES an existing node+subtree: it has to come out of wherever
+	// it sits, get its own (and every descendant's) `depth` recomputed relative
+	// to its NEW parent, and go back in at a SPECIFIC position among its new
+	// siblings — "last child" for indent, "right after the former parent" for
+	// unindent (see `applyReparent`'s callers below).
+
+	/** Rewrite `node.depth` to `depth`, and cascade `depth + 1, +2, …` down every
+	 *  descendant — the whole subtree moves as one relative shape, only its
+	 *  ANCHOR depth changes. */
+	function withDepth(node: SectionNode, depth: number): SectionNode {
+		return { ...node, depth, children: node.children.map((c) => withDepth(c, depth + 1)) };
+	}
+
+	/** Immutable extract: pulls `id` (with its whole subtree, untouched) out of
+	 *  wherever it sits — top level or nested — and returns BOTH the pruned tree
+	 *  and the removed node (null if `id` isn't anywhere in it). */
+	function extractSectionNode(nodes: SectionNode[], id: string): [SectionNode[], SectionNode | null] {
+		let removed: SectionNode | null = null;
+		function walk(list: SectionNode[]): SectionNode[] {
+			const kept: SectionNode[] = [];
+			for (const n of list) {
+				if (n.id === id) {
+					removed = n;
+					continue;
+				}
+				kept.push(n.children.length === 0 ? n : { ...n, children: walk(n.children) });
+			}
+			return kept;
+		}
+		const next = walk(nodes);
+		return [next, removed];
+	}
+
+	/** Immutable insert at a SPECIFIC index (unlike `insertSectionNode`, which
+	 *  always appends): `parentId === null` targets the top level, `atIndex`
+	 *  undefined means "append" (used for indent's "last child"). */
+	function insertSectionNodeAt(
+		nodes: SectionNode[],
+		newNode: SectionNode,
+		parentId: string | null,
+		atIndex: number | undefined
+	): SectionNode[] {
+		if (parentId === null) {
+			const idx = atIndex ?? nodes.length;
+			return [...nodes.slice(0, idx), newNode, ...nodes.slice(idx)];
+		}
+		return nodes.map((node) => {
+			if (node.id === parentId) {
+				const idx = atIndex ?? node.children.length;
+				return { ...node, children: [...node.children.slice(0, idx), newNode, ...node.children.slice(idx)] };
+			}
+			if (node.children.length === 0) return node;
+			return { ...node, children: insertSectionNodeAt(node.children, newNode, parentId, atIndex) };
+		});
+	}
+
+	/** Where a reparent's new parent is: a SECTION (indent's previous sibling,
+	 *  unindent's grandparent) or the ORGANIZATION (unindent promoting to top
+	 *  level) — `reparentSection`'s wire call takes either id verbatim, but the
+	 *  LOCAL tree update needs to know which so it can set `depth`/`parentId`/
+	 *  `orgId` correctly (see `SectionNode.orgId`'s own doc: only top-level
+	 *  nodes carry it). */
+	type ReparentTarget = { kind: 'section'; sectionId: string } | { kind: 'org'; orgId: string };
+
+	/** Move `id` (with its subtree) to `target`, landing right after
+	 *  `insertAfterId` among its NEW siblings (`null` = append at the end — used
+	 *  for indent's "last child of the previous sibling"). Depths of `id` and
+	 *  every descendant are recomputed relative to the new parent; nodes
+	 *  elsewhere in the tree are untouched. No-op (returns `nodes` as-is) if
+	 *  `id` isn't found. */
+	function applyReparent(
+		nodes: SectionNode[],
+		id: string,
+		target: ReparentTarget,
+		insertAfterId: string | null
+	): SectionNode[] {
+		const [withoutNode, removed] = extractSectionNode(nodes, id);
+		if (!removed) return nodes;
+
+		const newDepth =
+			target.kind === 'org' ? 0 : (findSectionNode(nodes, target.sectionId)?.depth ?? 0) + 1;
+		const newParentId = target.kind === 'org' ? null : target.sectionId;
+		const newOrgId = target.kind === 'org' ? target.orgId : null;
+		const movedNode: SectionNode = { ...withDepth(removed, newDepth), parentId: newParentId, orgId: newOrgId };
+
+		let atIndex: number | undefined;
+		if (insertAfterId !== null) {
+			const newSiblings =
+				target.kind === 'org' ? withoutNode : (findSectionNode(withoutNode, target.sectionId)?.children ?? []);
+			const idx = newSiblings.findIndex((n) => n.id === insertAfterId);
+			atIndex = idx === -1 ? undefined : idx + 1;
+		}
+		return insertSectionNodeAt(withoutNode, movedNode, newParentId, atIndex);
 	}
 
 	// #110 review F1 — a FAILED remove used to be SILENT: the catch reverted
@@ -1065,6 +1163,163 @@
 		return false;
 	}
 
+	// ── #155/S3 — indent/unindent (structural reparent, arrange mode) ──────────
+	//
+	// A DIFFERENT write from the reorder above: `reparentSection` changes a
+	// section's `_parent` REFERENCE (which sibling group it belongs to), never
+	// its `display_order` (position within one). Same in-flight guard
+	// (`reorderPending` — one outstanding structural write at a time, reused
+	// rather than a second flag, per the RED contract) and the same
+	// `roster-reorder-status` live region / failure-reconcile shape as
+	// `performReorder`, so every structural write on this page — reorder or
+	// reparent — behaves identically to the user and to a screen reader.
+
+	/** The immediate previous sibling AT THE SAME LEVEL, or null when `id` is
+	 *  already first (nothing to nest under) or not found. `visibleSiblingsOf`
+	 *  is the exact helper the reorder/drag paths use, so a top-level id is
+	 *  scoped to the viewer's own collective the same way (#124/F3). */
+	function prevSiblingId(id: string): string | null {
+		const siblingIds = visibleSiblingsOf(id)?.map((n) => n.id) ?? [];
+		const idx = siblingIds.indexOf(id);
+		if (idx <= 0) return null;
+		return siblingIds[idx - 1];
+	}
+
+	/** Indent guard: something to nest under. */
+	function canIndent(id: string): boolean {
+		return prevSiblingId(id) !== null;
+	}
+
+	/** Unindent guard: not already top-level (a top-level section's `parentId`
+	 *  is null — its parent is the organization, and there is no level above
+	 *  that to promote to). */
+	function canUnindent(id: string): boolean {
+		return (findSectionNode(sections, id)?.parentId ?? null) !== null;
+	}
+
+	/** The one write seam both `handleIndent`/`handleUnindent` and the
+	 *  ArrowRight/ArrowLeft keyboard branch funnel through — GET-POST-DELETE via
+	 *  `reparentSection`, local tree patched optimistically first, reconciled
+	 *  against the server (refetch via `listSections`) on failure exactly like
+	 *  `performReorder` (#98 AC-8). Returns whether the write landed, same
+	 *  contract as `performReorder`.
+	 *
+	 *  #155/S3 review F2 — a reparent is TWO writes, not one. `reparentSection`
+	 *  moves `_parent`, and that is all it moves: the section keeps whatever
+	 *  `display_order` it held in its OLD sibling group, which is a number that
+	 *  means nothing among its NEW siblings. `listSections` sorts every level by
+	 *  `displayOrder` (name as tie-break, sectionData.ts pass 5), so without a
+	 *  renumber the POSITION on screen is a lie that survives only until the next
+	 *  full load — indent Alto (display_order 2) under Soprano ▸ [Soprano 1 = 1,
+	 *  Soprano 2 = 2] shows and announces "last child", and reloads as
+	 *  [Soprano 1, Alto, Soprano 2]. So the reparent is followed by ONE
+	 *  `reorderSections` over the DESTINATION sibling group, in the order the
+	 *  freshly-patched local tree holds it (`visibleSiblingsOf` — the group AS
+	 *  RENDERED, #152 review F1, which is `visibleSections` for a promote-to-org
+	 *  and the new parent's `children` for everything else). The SOURCE group is
+	 *  deliberately left alone: pulling a node out leaves a GAP in its old
+	 *  numbering (1, 3, 4), and a gap sorts identically to a dense run.
+	 *
+	 *  Both writes live inside the one `reorderPending` guard and the one
+	 *  catch: a renumber that fails after the `_parent` landed is exactly the
+	 *  partial state #98/F3 built the `listSections` reconcile for — the screen
+	 *  re-derives from the server rather than guessing. */
+	async function performReparent(
+		node: SectionNode,
+		target: ReparentTarget,
+		insertAfterId: string | null,
+		announce: () => string
+	): Promise<boolean> {
+		if (reorderPending) return false;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section reparent with no cfg', node.id);
+			reorderError = true;
+			return false;
+		}
+		const g = generation;
+		reorderPending = true;
+		reorderError = false;
+		reorderStatus = '';
+		const before = sections;
+		sections = applyReparent(sections, node.id, target, insertAfterId);
+		const newParentId = target.kind === 'org' ? target.orgId : target.sectionId;
+		try {
+			await reparentSection(cfg, node.id, newParentId);
+			// Read AFTER the optimistic patch above: this is the destination group
+			// in its new on-screen order, including the moved section itself.
+			const destinationIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [];
+			if (destinationIds.length > 0) await reorderSections(cfg, destinationIds);
+			reorderStatus = announce();
+			return true;
+		} catch (e) {
+			console.error('roster: section reparent failed', e);
+			reorderError = true;
+			try {
+				const fresh = await listSections(cfg);
+				if (g !== generation) return false; // superseded by a newer collective selection
+				sections = fresh;
+			} catch (refetchError) {
+				console.error('roster: section refetch after a failed reparent failed', refetchError);
+				if (g === generation) sections = before;
+			}
+		} finally {
+			reorderPending = false;
+		}
+		return false;
+	}
+
+	/** INDENT: nest `node` under its immediate previous sibling, as that
+	 *  sibling's LAST child (`insertAfterId: null` → append). Refuses silently
+	 *  when there's no previous sibling (guard already gates the button/key). */
+	async function handleIndent(node: SectionNode): Promise<void> {
+		const prevId = prevSiblingId(node.id);
+		if (prevId === null) return;
+		const parentName = findSectionNode(sections, prevId)?.name ?? '';
+		await performReparent(node, { kind: 'section', sectionId: prevId }, null, () =>
+			m.roster_section_indented({ name: node.name, parentName })
+		);
+	}
+
+	/** UNINDENT: promote `node` one level — to its parent's own parent (a
+	 *  section), or to the ORGANIZATION when the parent is already top-level.
+	 *  Lands right after the former parent among the new siblings
+	 *  (`insertAfterId: parent.id`). Refuses silently when `node` is already
+	 *  top-level (no parent to promote FROM). */
+	async function handleUnindent(node: SectionNode): Promise<void> {
+		if (node.parentId === null) return;
+		const parent = findSectionNode(sections, node.parentId);
+		if (!parent) return;
+		if (parent.parentId === null) {
+			// The parent is top-level — promoting past it lands on the organization.
+			const orgId = parent.orgId ?? currentOrgId;
+			if (!orgId) {
+				// #155/S3 review F3 — this used to log and return SILENTLY while the
+				// button stayed ENABLED (`canUnindent` only asks whether there IS a
+				// parent, not whether the promote target is resolvable): the user
+				// tapped a live control, nothing moved, nothing was announced, no
+				// banner appeared. Reachable whenever no visible root carries an
+				// `orgId` — the same permissive-when-unknown state `visibleSections`
+				// deliberately tolerates. Every other failure on this page raises
+				// `reorderError` (the role="alert" banner above the groups), and so
+				// does this one now: fail loudly over silent degradation, same shape
+				// as `performReparent`'s own no-cfg path.
+				console.error('roster: unindent to top level with no known organization id', node.id);
+				reorderError = true;
+				return;
+			}
+			await performReparent(node, { kind: 'org', orgId }, parent.id, () =>
+				m.roster_section_unindented_top({ name: node.name })
+			);
+			return;
+		}
+		const grandParentId = parent.parentId;
+		const grandParentName = findSectionNode(sections, grandParentId)?.name ?? '';
+		await performReparent(node, { kind: 'section', sectionId: grandParentId }, parent.id, () =>
+			m.roster_section_unindented({ name: node.name, parentName: grandParentName })
+		);
+	}
+
 	// Drag source, tracked between dragstart and drop. #99/TS.5 — now `$state`
 	// (was a plain variable, read only at drop time): the drag handle's
 	// `aria-grabbed` and the sibling headers' `aria-dropeffect` both need to
@@ -1488,6 +1743,18 @@
 	 *  #152 review F1) — the Unassigned pseudo-group is never reachable either
 	 *  way, since it isn't part of the `sections` tree `siblingsOf` walks. */
 	async function handleHandleKeydown(node: SectionNode, event: KeyboardEvent): Promise<void> {
+		// #155/S3 review F1 — only a keydown on the handle ITSELF drives this state
+		// machine; one from a descendant control is that control's business. The
+		// idle branch below `preventDefault()`s Space/Enter, which would SUPPRESS a
+		// nested control's own native activation — a keyboard user pressing it
+		// would grab the row instead (WCAG 2.1.1 / predictable activation), and
+		// ArrowUp/ArrowDown would rove focus off it.
+		// The indent/unindent buttons no longer rely on this: review R2/F1 moved
+		// them OUT of the row's subtree entirely (they are siblings now), so
+		// nothing they emit reaches here in the first place. The guard stays as
+		// belt-and-braces, and it covers the grouped-view handle for free.
+		if (event.target !== event.currentTarget) return;
+
 		const key = event.key;
 
 		// #152 review F2 (belt-and-braces) — the grabbed branch below assumes it
@@ -1541,6 +1808,32 @@
 			} finally {
 				grabRefocusPending = false;
 			}
+			return;
+		}
+
+		// #155/S3 — ArrowRight indents, ArrowLeft unindents, both IMMEDIATE
+		// commits (unlike Up/Down above, which stay provisional until drop): a
+		// reparent changes the sibling GROUP itself, so `grabSiblingIds` (the
+		// restore snapshot Escape/blur would replay) no longer describes
+		// anything meaningful afterwards. The grab therefore ENDS with the
+		// commit — same guards as the buttons (`prevSiblingId`/`node.parentId`),
+		// and a refused move (no previous sibling / already top-level) writes
+		// nothing and LEAVES the grab exactly as Up/Down's own clamp does.
+		if (key === 'ArrowRight') {
+			event.preventDefault();
+			if (prevSiblingId(node.id) === null) return; // guard — grab stays
+			grabbedSectionId = null;
+			grabSiblingIds = null;
+			await handleIndent(node);
+			return;
+		}
+
+		if (key === 'ArrowLeft') {
+			event.preventDefault();
+			if (node.parentId === null) return; // guard — grab stays (already top-level)
+			grabbedSectionId = null;
+			grabSiblingIds = null;
+			await handleUnindent(node);
 			return;
 		}
 
@@ -2409,73 +2702,143 @@
 								     anywhere else on the row and `pan-y` scrolls as normal.
 								     Only the touch PICKUP is zoned — the whole row stays the native
 								     `draggable` surface for mouse and stays the keyboard control. -->
-								<div
-									data-testid="arrange-row-{row.id}"
-									data-depth={row.depth}
-									data-grabbed={heldSectionId === row.id ? 'true' : undefined}
-									data-grabbed-subtree={heldSubtreeIds.has(row.id) ? 'true' : undefined}
-									role="button"
-									tabindex={activeArrangeRowId === row.id ? 0 : -1}
-									aria-grabbed={draggedSectionId === row.id || grabbedSectionId === row.id
-										? 'true'
-										: 'false'}
-									aria-dropeffect={acceptsDrop ? 'move' : undefined}
-									aria-describedby="section-reorder-instructions"
-									draggable={reorderPending ? 'false' : 'true'}
-									style="touch-action: pan-y"
-									class="flex items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)} select-none {reorderPending
-										? 'cursor-default'
-										: 'cursor-grab'} {touchDragId === row.id
-										? 'opacity-50'
-										: ''} {heldSectionId === row.id
-										? 'outline-2 outline-dashed outline-indigo'
-										: ''} {heldSubtreeIds.has(row.id)
-										? 'bg-indigo-soft'
-										: ''} {(acceptsDrop && dragOverId === row.id) || acceptsTouchDrop
-										? 'bg-ink-5'
-										: ''}"
-									ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
-									ondragend={handleDragEnd}
-									ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
-									ondragleave={acceptsDrop
-										? (event: DragEvent) => handleDragLeave(row.id, event)
-										: undefined}
-									ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
-									onpointermove={handlePointerMove}
-									onpointerup={handlePointerUp}
-									onpointercancel={endTouchDrag}
-									onlostpointercapture={endTouchDrag}
-									onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
-									onclick={(event: MouseEvent) => {
-										// Same "honour the role=button activation promise arriving as
-										// a click, without letting a pointer gesture near the grab
-										// state machine" contract as the old handle's onclick — see
-										// #152 review F1 in `sectionGroup` above.
-										if (event.detail !== 0) return;
-										handleElementFor(row.id)?.focus();
-										void toggleGrab(node);
-									}}
-									onfocus={() => (rovingHandleId = row.id)}
-									onblur={() => handleHandleBlur(node)}
-								>
-									<!-- The touch grab zone. `aria-hidden` and drawn from bars rather
-									     than a `≡` character on purpose: the row is named by its own
-									     CONTENTS (review F1), so anything with text here would leak
-									     into the accessible name and desync it from the visible label
-									     again. Its only job is to be the element a finger presses —
-									     every other input path (mouse drag, keyboard) lives on the row. -->
-									<span
-										data-testid="arrange-grip-{row.id}"
-										aria-hidden="true"
-										style="touch-action: none"
-										class="flex w-4 shrink-0 flex-col justify-center gap-0.5 py-1 text-ink-2"
-										onpointerdown={(event: PointerEvent) => handlePointerDown(row.id, event)}
+								<!-- #155/S3 review R2/F1 — the SLOT wrapper. The two nesting buttons used
+								     to sit INSIDE the `role="button"` row below, which cost two things at
+								     once. (a) Accessible name: the row is deliberately named from its own
+								     CONTENTS (#155/S2 review F1, so the "(3)" roll-up survives — WCAG 2.5.3
+								     Label in Name), and name computation recurses into every child using
+								     that child's OWN name — an `aria-label`/`title` first. The row therefore
+								     computed to "Soprano (3) Indent Soprano Unindent Soprano". A
+								     `textContent` assertion structurally cannot catch that (both buttons
+								     hold only an `aria-hidden` SVG), which is why the S2 guard test stayed
+								     green over the regression. (b) Focusable `<button>`s inside a
+								     `role="button"` is the `nested-interactive` violation (WCAG 4.1.2):
+								     `button` has presentational children in ARIA, so AT exposure of the
+								     nested controls is implementation-defined, and they added two extra tab
+								     stops per row inside a composite widget #152 gave ONE roving tab stop.
+								     Hoisting them out of the subtree removes both at the source rather than
+								     guarding around the symptom. The wrapper is pure layout: no role, no
+								     testid, no handlers — every attribute the reorder machine resolves by
+								     (`data-testid="arrange-row-*"` for `handleElementFor` and the touch
+								     hit-test, `tabindex`, `aria-grabbed`, `data-grabbed*`, `draggable`, the
+								     depth padding and the drag tints) stays on the row itself. -->
+								<div class="flex items-center">
+									<div
+										data-testid="arrange-row-{row.id}"
+										data-depth={row.depth}
+										data-grabbed={heldSectionId === row.id ? 'true' : undefined}
+										data-grabbed-subtree={heldSubtreeIds.has(row.id) ? 'true' : undefined}
+										role="button"
+										tabindex={activeArrangeRowId === row.id ? 0 : -1}
+										aria-grabbed={draggedSectionId === row.id || grabbedSectionId === row.id
+											? 'true'
+											: 'false'}
+										aria-dropeffect={acceptsDrop ? 'move' : undefined}
+										aria-describedby="section-reorder-instructions"
+										draggable={reorderPending ? 'false' : 'true'}
+										style="touch-action: pan-y"
+										class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)} select-none {reorderPending
+											? 'cursor-default'
+											: 'cursor-grab'} {touchDragId === row.id
+											? 'opacity-50'
+											: ''} {heldSectionId === row.id
+											? 'outline-2 outline-dashed outline-indigo'
+											: ''} {heldSubtreeIds.has(row.id)
+											? 'bg-indigo-soft'
+											: ''} {(acceptsDrop && dragOverId === row.id) || acceptsTouchDrop
+											? 'bg-ink-5'
+											: ''}"
+										ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
+										ondragend={handleDragEnd}
+										ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
+										ondragleave={acceptsDrop
+											? (event: DragEvent) => handleDragLeave(row.id, event)
+											: undefined}
+										ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
+										onpointermove={handlePointerMove}
+										onpointerup={handlePointerUp}
+										onpointercancel={endTouchDrag}
+										onlostpointercapture={endTouchDrag}
+										onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
+										onclick={(event: MouseEvent) => {
+											// Same "honour the role=button activation promise arriving as
+											// a click, without letting a pointer gesture near the grab
+											// state machine" contract as the old handle's onclick — see
+											// #152 review F1 in `sectionGroup` above.
+											if (event.detail !== 0) return;
+											handleElementFor(row.id)?.focus();
+											void toggleGrab(node);
+										}}
+										onfocus={() => (rovingHandleId = row.id)}
+										onblur={() => handleHandleBlur(node)}
 									>
-										<span class="h-px w-full bg-current"></span>
-										<span class="h-px w-full bg-current"></span>
-										<span class="h-px w-full bg-current"></span>
-									</span>
-									<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
+										<!-- The touch grab zone. `aria-hidden` and drawn from bars rather
+										     than a `≡` character on purpose: the row is named by its own
+										     CONTENTS (review F1), so anything with text here would leak
+										     into the accessible name and desync it from the visible label
+										     again. Its only job is to be the element a finger presses —
+										     every other input path (mouse drag, keyboard) lives on the row. -->
+										<span
+											data-testid="arrange-grip-{row.id}"
+											aria-hidden="true"
+											style="touch-action: none"
+											class="flex w-4 shrink-0 flex-col justify-center gap-0.5 py-1 text-ink-2"
+											onpointerdown={(event: PointerEvent) => handlePointerDown(row.id, event)}
+										>
+											<span class="h-px w-full bg-current"></span>
+											<span class="h-px w-full bg-current"></span>
+											<span class="h-px w-full bg-current"></span>
+										</span>
+										<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
+									</div>
+									<!-- #155/S3 — indent/unindent: ALWAYS rendered (not grab-gated), so a
+									     pointer-only admin can restructure the tree without ever touching
+									     the keyboard grab machine. SIBLINGS of the row, never children of
+									     it (review R2/F1, see the wrapper comment above): the row is the
+									     `role="button"` reorder control, and nesting a real `<button>`
+									     inside one both pollutes its accessible name and creates the
+									     `nested-interactive` violation. Sitting outside the row's subtree
+									     is also what makes them keyboard-operable in their own right —
+									     nothing they emit can reach `handleHandleKeydown`, so no
+									     `stopPropagation()` on either handler is needed any more (review
+									     F1 shipped one when they were still children; the containment
+									     fix retires it — the `event.target !== event.currentTarget` guard
+									     inside `handleHandleKeydown` stays as belt-and-braces).
+									     No text nodes inside either button (SVG glyph only,
+									     `aria-hidden`): the accessible name comes from `aria-label`, and
+									     a text glyph here would land in the slot's own text — leaking
+									     into `textContent` assertions (e.g. "Soprano (4)") the moment two
+									     rows sit in the same list — the grip bars beside them use the
+									     same no-text-node trick for the same reason. `reorderPending`
+									     disables EVERY button while any structural write (reorder or
+									     reparent) is outstanding — the same one-at-a-time posture
+									     `reorderPending` already enforces on the drag handle. -->
+									<button
+										type="button"
+										data-testid="arrange-indent-{row.id}"
+										aria-label={m.roster_section_indent({ name: row.name })}
+										title={m.roster_section_indent({ name: row.name })}
+										disabled={reorderPending || !canIndent(row.id)}
+										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
+										onclick={() => void handleIndent(node)}
+									>
+										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3 w-3 fill-current">
+											<path d="M4 2 L12 8 L4 14 Z" />
+										</svg>
+									</button>
+									<button
+										type="button"
+										data-testid="arrange-unindent-{row.id}"
+										aria-label={m.roster_section_unindent({ name: row.name })}
+										title={m.roster_section_unindent({ name: row.name })}
+										disabled={reorderPending || !canUnindent(row.id)}
+										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
+										onclick={() => void handleUnindent(node)}
+									>
+										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3 w-3 fill-current">
+											<path d="M12 2 L4 8 L12 14 Z" />
+										</svg>
+									</button>
 								</div>
 							{/if}
 						{/each}

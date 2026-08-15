@@ -444,6 +444,79 @@ export async function deleteSection(
 	if (!res.ok) throw new Error(`deleteSection failed: ${res.status}`);
 }
 
+// #155/S3 — the section REPARENT write layer (indent/unindent). RED: stub only.
+//
+// CONTRACT (pinned by sectionActions.reparent.spec.ts):
+//
+//   - `reparentSection(cfg, sectionId, newParentId)` changes WHERE a section
+//     hangs in the tree: its `_parent` reference moves to `newParentId` —
+//     a sibling section on INDENT (nest under the immediate previous sibling),
+//     the grandparent on UNINDENT (the parent's own parent section, or the
+//     ORGANIZATION id when promoting to top level — v4E `parentConstraint:
+//     'exactly_one_of'` means a section always has exactly one parent, org or
+//     section, so the caller resolves WHICH id; this layer just re-points).
+//   - Replace semantics per the pinned Entu wire contract (POST APPENDS to
+//     implicitly multi-valued props — a naive POST would leave the section
+//     with TWO parents), same choreography as eventFieldEdit/reorderSections:
+//       1. GET `entity/{sectionId}?props=_parent` — the existing value id(s),
+//          captured BEFORE the POST so the deletes can never target the value
+//          we are about to write;
+//       2. POST `entity/{sectionId}` with body EXACTLY
+//          `[{ type: '_parent', reference: newParentId }]`;
+//       3. DELETE `/property/{valueId}` for EVERY id from step 1 — not just
+//          the first (duplicates from corrupted state all go; a leftover
+//          `_parent` value would violate `exactly_one_of` as a phantom
+//          second parent).
+//     POST-BEFORE-DELETE: a failed POST leaves the old parent untouched (the
+//     section never dangles parentless); a failed DELETE leaves a recoverable
+//     duplicate the next reparent's GET-then-delete-all sweeps.
+//   - Old value ids go to `DELETE /property/{valueId}` ONLY — never
+//     `DELETE /entity/...` (the endpoint split: that would delete the section
+//     or its parent, not the reference between them).
+//   - `newParentId === sectionId` throws WITHOUT any fetch — a section can
+//     never be its own parent, and the guard belongs in the data layer too
+//     (defense in depth; the page's sibling math should never produce it).
+//   - Throws on any non-2xx (status surfaced).
+
+/**
+ * Re-point a section's `_parent` reference to `newParentId` (indent/unindent —
+ * #155/S3). Replace semantics: GET old `_parent` value ids → POST the new
+ * reference → DELETE every old value id. See module contract above.
+ */
+export async function reparentSection(
+	cfg: EntuCfg,
+	sectionId: string,
+	newParentId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	if (newParentId === sectionId) {
+		throw new Error('reparentSection: a section cannot become its own parent');
+	}
+
+	const getRes = await entuFetch(cfg.db, `entity/${sectionId}?props=_parent`, cfg.token, {}, fetchImpl);
+	if (!getRes.ok) throw new Error(`reparentSection lookup failed: ${getRes.status}`);
+	const body = (await getRes.json()) as { entity?: { _parent?: MemberParentValue[] } };
+	const existing = body.entity?._parent ?? [];
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${sectionId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([{ type: '_parent', reference: newParentId }])
+		},
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`reparentSection POST failed: ${postRes.status}`);
+
+	for (const value of existing) {
+		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+		if (!delRes.ok) throw new Error(`reparentSection delete failed: ${delRes.status}`);
+	}
+}
+
 // (*MVOX:Tallis* — RED stubs + contract, TS.2/#96)
 // (*MVOX:Palestrina* — GREEN implementation, TS.2/#96)
 // (*MVOX:Tallis* — RED createSection stub + contract, TS.3/#97)
@@ -453,3 +526,5 @@ export async function deleteSection(
 // (*MVOX:Tallis* — RED deleteSection stub + contract, TU.2/#110 finding #7)
 // (*MVOX:Palestrina* — GREEN implementation, TU.2/#110 finding #7)
 // (*MVOX:Palestrina* — #110 review F3: server-side emptiness verification on delete)
+// (*MVOX:Tallis* — RED reparentSection stub + contract, #155/S3)
+// (*MVOX:Palestrina* — GREEN implementation, #155/S3)
