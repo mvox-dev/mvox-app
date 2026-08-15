@@ -19,7 +19,8 @@
 		createSection,
 		reorderSections,
 		deleteSection,
-		reparentSection
+		reparentSection,
+		renameSection
 	} from '$lib/sections/sectionActions';
 	import { isSectionMembershipMissing, isSectionNotEmpty } from '$lib/sections/sectionErrors';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
@@ -515,6 +516,20 @@
 			.map((n) => (n.children.length === 0 ? n : { ...n, children: removeSectionNode(n.children, id) }));
 	}
 
+	// #155/S4 — RENAME tree-mutation helper. Unlike remove/reparent, a rename
+	// touches exactly one node's `name` in place — no relocation, no depth
+	// recompute, children untouched.
+
+	/** Immutable rename: rewrites `name` on `id` wherever it sits in the tree
+	 *  (top level or nested), children untouched. */
+	function renameSectionNode(nodes: SectionNode[], id: string, name: string): SectionNode[] {
+		return nodes.map((n) => {
+			if (n.id === id) return { ...n, name };
+			if (n.children.length === 0) return n;
+			return { ...n, children: renameSectionNode(n.children, id, name) };
+		});
+	}
+
 	// #155/S3 — indent/unindent tree-mutation helpers. Unlike `insertSectionNode`
 	// (new node, no prior home) and `removeSectionNode` (gone for good), a
 	// reparent RELOCATES an existing node+subtree: it has to come out of wherever
@@ -689,9 +704,25 @@
 	 *  shape as `armRemove`: the group only leaves the DOM after the
 	 *  `sections` reassignment renders. */
 	async function placeFocusAfterRemove(targetId: string | null): Promise<void> {
+		// #155/S4 review F2 — delete MOVED into arrange mode, where there is no
+		// `section-toggle-*` at all (that is the collapsed/expanded group's expand
+		// control). Resolving the neighbour by that selector alone therefore always
+		// missed and fell through to the view-mode chip — so the natural next
+		// keypress straight after Confirm silently switched the page OUT of arrange
+		// mode. Two selectors, in render order, exactly like `handleElementFor`:
+		// only one of the two UIs is ever mounted, so trying both is unambiguous.
+		// The chip stays as the genuine last resort — "no neighbouring header".
+		if (targetId && viewMode === 'arrange') {
+			// Keep the roving tab stop WITH the focus: an arrange row is only at
+			// `tabindex="0"` when `activeArrangeRowId` names it, and landing focus
+			// on a `tabindex="-1"` row would put the widget's tab stop somewhere
+			// else than the caret.
+			rovingHandleId = targetId;
+		}
 		await tick();
 		const neighbour = targetId
-			? document.querySelector<HTMLElement>(`[data-testid="section-toggle-${targetId}"]`)
+			? (document.querySelector<HTMLElement>(`[data-testid="section-toggle-${targetId}"]`) ??
+				document.querySelector<HTMLElement>(`[data-testid="arrange-row-${targetId}"]`))
 			: null;
 		(neighbour ?? document.querySelector<HTMLElement>('[data-testid="roster-view-chip-collapsed"]'))?.focus();
 	}
@@ -703,10 +734,34 @@
 	 *  `section-remove-error`'s role="alert". */
 	async function placeFocusAfterFailedRemove(id: string): Promise<void> {
 		await tick();
-		(
-			document.querySelector<HTMLElement>(`[data-testid="section-remove-${id}"]`) ??
-			document.querySelector<HTMLElement>(`[data-testid="section-toggle-${id}"]`)
-		)?.focus();
+		// #155/S4 review F1 (follow-up) — PRESENT is not the same as FOCUSABLE. S4
+		// made the ✕ `disabled` when the section is ineligible (`!canDelete`) as
+		// well as while a structural write is in flight, and a disabled <button>
+		// cannot take focus at all: stopping the `??` chain at the first element
+		// that merely EXISTS made `.focus()` a silent no-op and dropped focus to
+		// <body>. That is precisely the `section-not-empty` case — the refusal's own
+		// reconcile reveals the child that makes the ✕ ineligible — so the chain has
+		// to step OVER a disabled candidate and land on the row instead.
+		const focusable = (testid: string): HTMLElement | null => {
+			const el = document.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
+			return el && !(el as HTMLButtonElement).disabled ? el : null;
+		};
+		// #155/S4 review F2 — same two-UI lookup as `placeFocusAfterRemove`: the
+		// `section-toggle-*` fallback is dead in arrange mode, where the row itself
+		// is the landing.
+		const target =
+			focusable(`section-remove-${id}`) ??
+			focusable(`section-toggle-${id}`) ??
+			focusable(`arrange-row-${id}`);
+		if (!target) return;
+		target.focus();
+		// Landing on the ROW means landing inside the roving-tabindex widget, where
+		// focus and the tab stop must stay together (the same reasoning
+		// `placeFocusAfterRemove` spells out) — a focused row at `tabindex="-1"`
+		// leaves the widget's Tab entry point on some other row.
+		if (target === document.querySelector(`[data-testid="arrange-row-${id}"]`)) {
+			rovingHandleId = id;
+		}
 	}
 
 	// #113 review F1 — a SUCCESSFUL remove was also the one outcome with no
@@ -717,7 +772,22 @@
 	// region, mirroring `reorderStatus` — see `roster-section-remove-status`.
 	let removeStatus = $state('');
 
+	// #155/S4 review F1 — the delete's own in-flight flag, the third member of the
+	// single-flight set (`reorderPending`/`renamePending` are the other two, see
+	// `structuralWritePending` below). Before S4, delete rendered only in the
+	// collapsed/expanded views and indent/unindent only in arrange, so a delete
+	// could never be on screen beside another structural control; S4 puts rename,
+	// delete, indent and unindent on the SAME row, and without this flag a delete
+	// in flight left every one of its neighbours live.
+	let removePending = $state(false);
+
 	async function handleRemoveSection(id: string): Promise<void> {
+		// #155/S4 review F1 — one structural write at a time, the same refusal
+		// `performReorder`/`performReparent` already make. The primary guard is the
+		// UI disabling the controls (see `structuralWritePending` on the arrange
+		// row's buttons); this is the defensive backstop for the paths the UI
+		// can't disable (the armed Confirm button renders unconditionally).
+		if (structuralWritePending) return;
 		// Both resolved BEFORE `pendingRemoveId` is cleared and the tree mutated —
 		// each of those destroys the evidence this needs.
 		const fallbackId = removeFocusFallbackId(id);
@@ -742,7 +812,22 @@
 			if (ownsFocus) await placeFocusAfterFailedRemove(id);
 			return;
 		}
+		// #155/S4 review F1 — the same collective-switch guard `performReorder`/
+		// `performReparent` carry: a reconcile resolving after the user switched
+		// collectives must not clobber the newer collective's tree.
+		const g = generation;
 		const before = sections;
+		// #155/S4 review F1 (follow-up) — the failure landing is DEFERRED to the
+		// `finally`, because the ✕ it wants to land on is
+		// `disabled={structuralWritePending || …}` and `removePending` is still true
+		// for the whole of the `catch`. Focusing from there was a no-op that dropped
+		// focus to <body> (WCAG 2.4.3). Same ordering `submitRename` already gets
+		// right: clear the flag, THEN `tick()` + focus. Left null on every path that
+		// must NOT move focus — success (which places its own), and the
+		// collective-switch bail-outs, where the tree on screen is no longer this
+		// removal's.
+		let failedRemoveId: string | null = null;
+		removePending = true;
 		sections = removeSectionNode(sections, id);
 		try {
 			await deleteSection(cfg, id);
@@ -762,12 +847,33 @@
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
 		} catch (e) {
 			console.error('roster: section remove failed', id, e);
-			sections = before;
+			// #155/S4 review F1 — STOP GUESSING, re-derive from the server. The blind
+			// `sections = before` this replaces restored a snapshot taken before the
+			// write went out, discarding whatever landed since, and it was WRONG for
+			// the refusal case in its own right: `section-not-empty` means the server
+			// holds members/sub-sections this stale tree does not know about (that is
+			// the whole reason `canDelete` couldn't gate it — see sectionErrors.ts),
+			// so the honest thing to put back on screen is the server's tree, not the
+			// one that mispredicted. Exactly the `listSections` reconcile
+			// `performReparent` uses, with the same `generation` guard; the snapshot
+			// survives only as the fallback for when the refetch ALSO fails.
+			try {
+				const fresh = await listSections(cfg);
+				if (g !== generation) return; // superseded by a newer collective selection
+				sections = fresh;
+			} catch (refetchError) {
+				console.error('roster: section refetch after a failed remove failed', refetchError);
+				if (g !== generation) return;
+				sections = before;
+			}
 			// #110 review F1/F3 — say it, don't just log it. `section-not-empty` is
 			// its own message: nothing was written, and "it's not actually empty" is
 			// a different instruction to the user than "the delete was refused".
 			removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
-			if (ownsFocus) await placeFocusAfterFailedRemove(id);
+			failedRemoveId = id;
+		} finally {
+			removePending = false;
+			if (ownsFocus && failedRemoveId !== null) await placeFocusAfterFailedRemove(failedRemoveId);
 		}
 	}
 
@@ -1123,7 +1229,10 @@
 		afterIds: string[],
 		movedId: string
 	): Promise<boolean> {
-		if (reorderPending) return false;
+		// #155/S4 review F1 — `structuralWritePending`, not `reorderPending` alone:
+		// a rename or a delete started on a neighbouring arrange row is just as
+		// much an outstanding write on this tree.
+		if (structuralWritePending) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section reorder with no cfg', afterIds);
@@ -1230,7 +1339,9 @@
 		insertAfterId: string | null,
 		announce: () => string
 	): Promise<boolean> {
-		if (reorderPending) return false;
+		// #155/S4 review F1 — see `performReorder`: one structural write at a time,
+		// counting rename and delete.
+		if (structuralWritePending) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section reparent with no cfg', node.id);
@@ -1319,6 +1430,145 @@
 			m.roster_section_unindented({ name: node.name, parentName: grandParentName })
 		);
 	}
+
+	// ── #155/S4 — inline RENAME (arrange mode only) ─────────────────────────────
+	//
+	// "Tap the name → it turns into a text input → Enter saves → Escape
+	// cancels" (issue #155). Only ONE row can be renaming at a time
+	// (`renamingSectionId`), same single-flight posture as the grab/drag state
+	// machines above. The row stays draggable=false and its own grab/keydown
+	// machinery is bypassed while renaming — see the template's guards.
+
+	let renamingSectionId = $state<string | null>(null);
+	let renameValue = $state('');
+	let renamePending = $state(false);
+	// A fresh attempt owns the slot — a previous failure must not outlive the
+	// retry that fixed it (same discipline as `sectionWriteError`/`removeError`).
+	let renameError = $state<{ id: string; name: string } | null>(null);
+	let renameInputEl = $state<HTMLInputElement | null>(null);
+	// Announced result — same "invisible success" concern `pageCreateStatus`/
+	// `removeStatus` exist for: a rename that silently succeeds says nothing to
+	// a screen-reader user.
+	let renameStatus = $state('');
+
+	// ── #155/S4 review F1 — the single-flight set ───────────────────────────────
+	//
+	// ONE structural write on the section tree at a time, whichever control
+	// started it. `reorderPending` (reorder + reparent), `renamePending` and
+	// `removePending` used to guard only themselves, which was harmless while the
+	// controls lived in different views: before S4, delete rendered only in
+	// collapsed/expanded and indent/unindent only in arrange, so two of them could
+	// never be on screen together. S4 puts rename, delete, indent and unindent
+	// side by side on every arrange row — so a rename could be started over an
+	// outstanding reorder, a delete over an outstanding rename, and each one's
+	// failure path would then restore a tree snapshot taken before the other's
+	// write, silently discarding it.
+	//
+	// Every one of the four controls' `disabled` reads this, and every write seam
+	// (`performReorder`, `performReparent`, `handleRemoveSection`, `submitRename`)
+	// refuses on it as the defensive backstop.
+	const structuralWritePending = $derived(reorderPending || renamePending || removePending);
+
+	function startRename(node: SectionNode): void {
+		if (structuralWritePending) return; // one structural write at a time
+		renameError = null;
+		renameStatus = '';
+		renamingSectionId = node.id;
+		renameValue = node.name;
+	}
+
+	async function cancelRename(): Promise<void> {
+		const id = renamingSectionId;
+		renamingSectionId = null;
+		renameValue = '';
+		await tick();
+		if (id) document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
+	}
+
+	async function submitRename(): Promise<void> {
+		const id = renamingSectionId;
+		if (id === null) return;
+		const name = renameValue.trim();
+		if (!name) {
+			// Empty name — same "nothing written" refusal as a blank create; the
+			// input just stays open for the user to fix or Escape out of.
+			return;
+		}
+		// #155/S4 review F1 — another structural write is outstanding (a reorder or
+		// reparent started on a NEIGHBOURING row, which stays live while this input
+		// is open). Refuse the same way a blank value is refused: nothing written,
+		// the input stays open for the user to retry or Escape out of — never a
+		// silent discard of what they typed.
+		if (structuralWritePending) return;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section rename with no cfg', id);
+			renameError = { id, name };
+			return;
+		}
+		// #155/S4 review F1 — the collective-switch guard `performReparent` carries,
+		// for the same reason: a reconcile resolving after a switch must not clobber
+		// the newer collective's tree.
+		const g = generation;
+		const before = sections;
+		renamePending = true;
+		renamingSectionId = null;
+		sections = renameSectionNode(sections, id, name);
+		try {
+			await renameSection(cfg, id, name);
+			renameStatus = m.roster_section_renamed({ name });
+		} catch (e) {
+			console.error('roster: section rename failed', id, e);
+			// #155/S4 review F1 — re-derive from the server rather than blind-
+			// restoring a pre-write snapshot (the #98/F3 reconcile `performReorder`
+			// and `performReparent` already use). `renameSection` is a replace, i.e.
+			// GET → POST → DELETE: a rejection can leave the old and the new value
+			// BOTH present server-side, which the snapshot cannot represent either.
+			// The snapshot survives only as the fallback for when the refetch ALSO
+			// fails.
+			try {
+				const fresh = await listSections(cfg);
+				if (g !== generation) return; // superseded by a newer collective selection
+				sections = fresh;
+			} catch (refetchError) {
+				console.error('roster: section refetch after a failed rename failed', refetchError);
+				if (g !== generation) return;
+				sections = before;
+			}
+			renameError = { id, name };
+		} finally {
+			renamePending = false;
+			// The rename input unmounts the instant `renamingSectionId` cleared
+			// above — same WCAG 2.4.3 concern `armRemove`/`disarmRemove` already
+			// carry on this page: land focus back on the trigger that opened it,
+			// success or failure alike, rather than dropping it to <body>.
+			await tick();
+			document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
+		}
+	}
+
+	function onRenameKeydown(event: KeyboardEvent): void {
+		// Never let the rename input's own keys reach the row's grab/reorder
+		// keydown machine (Space/Enter grab, arrows move, Escape cancel-grab) —
+		// the input has its own, incompatible, meaning for every one of those.
+		event.stopPropagation();
+		if (event.key === 'Enter') {
+			event.preventDefault();
+			void submitRename();
+		} else if (event.key === 'Escape') {
+			event.preventDefault();
+			void cancelRename();
+		}
+	}
+
+	// Auto-focus + select the input the instant rename mode opens, same
+	// contract as the page-level create form's name input.
+	$effect(() => {
+		if (renamingSectionId !== null && renameInputEl) {
+			renameInputEl.focus();
+			renameInputEl.select();
+		}
+	});
 
 	// Drag source, tracked between dragstart and drop. #99/TS.5 — now `$state`
 	// (was a plain variable, read only at drop time): the drag handle's
@@ -1512,7 +1762,7 @@
 
 	function handlePointerDown(id: string, event: PointerEvent): void {
 		if (event.pointerType === 'mouse') return; // the native dnd path owns mouse
-		if (reorderPending) return; // same in-flight refusal as `draggable="false"`
+		if (structuralWritePending) return; // same in-flight refusal as `draggable="false"`
 		endTouchDrag();
 		// Derived from `target`, not `currentTarget`: Svelte 5 DELEGATES pointer
 		// events from the root, so `currentTarget` is a patched property rather than
@@ -1682,7 +1932,7 @@
 		if (grabbedSectionId !== null && grabbedSectionId !== node.id) return;
 
 		if (grabbedSectionId === null) {
-			if (reorderPending) return;
+			if (structuralWritePending) return;
 			grabbedSectionId = node.id;
 			grabSiblingIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [node.id];
 			rovingHandleId = node.id;
@@ -1912,8 +2162,21 @@
 	/** Every arrange row is reorderable (unlike the collapsed-only
 	 *  `reorderableHandleIds` above, arrange mode has no expand/collapse gate
 	 *  — the whole tree is always on screen), in the SAME pre-order the list
-	 *  renders in. */
-	const arrangeReorderableIds = $derived(arrangeRows.map((r) => r.id));
+	 *  renders in.
+	 *
+	 *  #155/S4 review F3 — EXCEPT the row currently in rename mode, which does
+	 *  not render an `arrange-row-*` element at all (it renders the rename
+	 *  `<input>` block instead — see the template). Leaving it in this list let
+	 *  `activeArrangeRowId` name a row that isn't there, and then EVERY rendered
+	 *  row sat at `tabindex="-1"`: the reorder widget lost its roving tab stop
+	 *  entirely and was unreachable by Tab for as long as the input stayed open
+	 *  (there is no blur-close, so that is indefinitely). Excluding it here is
+	 *  what makes the tab stop fall through to a row that actually renders —
+	 *  the same "still-rendered-or-first" contract `activeHandleId` holds for
+	 *  the collapsed view. */
+	const arrangeReorderableIds = $derived(
+		arrangeRows.filter((r) => r.id !== renamingSectionId).map((r) => r.id)
+	);
 
 	/** The row currently at tabindex="0" in the arrange list — same
 	 *  still-rendered-or-first-row fallback as `activeHandleId`. */
@@ -2014,6 +2277,25 @@
 			     zero-width unlabeled button. The section-load-error banner above
 			     already explains the absence; hide the write control rather than
 			     offer one whose options are known-incomplete. -->
+			<!-- #155/S4 review F4 — SCOPE CALL, recorded so code and acceptance text
+			     agree. S4's "collapsed/expanded are display-only — no add/rename/
+			     delete" is about the SECTION-TREE management controls that used to sit
+			     on every section header (drag handle, ✕, and the page-level "+ New
+			     section"); all three moved into Arrange mode. This picker is a
+			     different thing: MEMBER→section ASSIGNMENT, which has no home in
+			     arrange mode at all (arrange renders no member rows), so it stays on
+			     the member row in Expanded view.
+			     Its inline `section-picker-new` → `section-create-form` create entry
+			     stays WITH it, deliberately: it exists so an admin assigning a member
+			     to a section that doesn't exist yet can make it in place (#111/#120),
+			     and pulling it out would mean leaving the assignment flow, switching
+			     view mode, creating, and coming back. The S4 acceptance wording is
+			     therefore read as "the PAGE-LEVEL add entry moved to arrange mode";
+			     the picker's assignment-scoped create is out of that scope.
+			     `page.roster-arrange-crud.spec.ts`'s STRIP suite asserts this
+			     explicitly (present in Expanded, absent in Collapsed where no member
+			     rows render) so the choice is visible to the gate rather than
+			     invisible to it. -->
 			<SectionPicker
 				memberId={row.memberId}
 				memberName={row.name}
@@ -2056,83 +2338,6 @@
 {#snippet sectionGroup(node: SectionNode)}
 	{@const group = groupById.get(node.id)}
 	{@const isExpanded = expandedIds.has(node.id)}
-	<!-- TS.4/#98: reorder controls are per-header — COLLAPSED (a section must
-	     collapse to reorder) AND admin — fail-closed AND, never OR. -->
-	{@const canReorder = admin === 'admin' && !isExpanded}
-	{@const siblingIds = canReorder ? (visibleSiblingsOf(node.id)?.map((n) => n.id) ?? []) : []}
-	{@const siblingIdx = siblingIds.indexOf(node.id)}
-	<!-- #99 review F4: whether this header can actually TAKE the live drag.
-	     `dropOnto` silently refuses any non-sibling target (a sub-section dropped
-	     on a top-level header is a STRUCTURAL move, not an order change — #98), so
-	     the sibling test belongs on every affordance that says "drop here":
-	     aria-dropeffect (AT), the ondragover/ondrop pair (the browser only fires
-	     `drop` where dragover was prevented), and the touch highlight. Without it a
-	     screen-reader user was told a foreign header would accept the move, the
-	     drop was accepted, and nothing happened — with no feedback either way. -->
-	{@const acceptsDrop =
-		canReorder &&
-		draggedSectionId !== null &&
-		draggedSectionId !== node.id &&
-		siblingIds.includes(draggedSectionId)}
-	{@const acceptsTouchDrop =
-		canReorder &&
-		touchDragId !== null &&
-		touchOverId === node.id &&
-		touchOverId !== touchDragId &&
-		siblingIds.includes(touchDragId)}
-	<!-- TU.2/#110 (finding #11) — this section is the live drag's current hover
-	     target: render the dashed drop-target hint inside ITS OWN group. Native
-	     drag (`dragOverId`) and the touch long-press path (`touchOverId`) both
-	     feed it, so the hint shows for either input.
-
-	     #110 review F2 — BOTH branches gate on the same `acceptsDrop`/
-	     `acceptsTouchDrop` the drop itself does. The touch branch used to restate
-	     a weaker condition (no `canReorder`, no sibling test), and
-	     `handlePointerMove` sets `touchOverId` from whatever section group is
-	     under the finger regardless of parentage or expansion — so dragging a
-	     sub-section handle across a top-level header painted "drop here" on a
-	     target `dropOnto` silently refuses, and an EXPANDED sibling got the hint
-	     wedged between its header and its member rows. That is exactly the
-	     misleading affordance #99's F4 fix removed from aria-dropeffect; the hint
-	     must not reintroduce it. Reusing the guards also means the hint and the
-	     `bg-ink-5` highlight can never disagree about whether a drop will act. -->
-	{@const showDropIndicator = (acceptsDrop && dragOverId === node.id) || acceptsTouchDrop}
-	<!-- #110 review F1 — WHICH SIDE of this header the hint belongs on. `dropOnto`
-	     gives the dragged section the target's ORIGINAL index, so an UPWARD move
-	     (source below the target) lands the item ABOVE the target and a downward
-	     move lands it BELOW. A hint pinned after the header row therefore pointed
-	     one slot too low for every upward drag. `siblingIds` membership is already
-	     implied by `showDropIndicator`, so `dragFromIdx` is a real index whenever
-	     this is read. -->
-	{@const dragFromIdx = siblingIds.indexOf(draggedSectionId ?? touchDragId ?? '')}
-	{@const hintBefore = dragFromIdx > siblingIdx}
-	<!-- TU.2/#110 (finding #7) — a REMOVE control on ZERO-MEMBER, ZERO-CHILDREN
-	     ("leaf") sections only: deleting a section with sub-sections would orphan
-	     them, so an empty PARENT stays bare — only its empty LEAF children get
-	     the control. `memberCount` is the section's RECURSIVE roll-up
-	     (sectionData.ts), so an empty parent with a non-empty child never
-	     qualifies either way; the children.length===0 check is what actually
-	     draws the "has sub-sections" line. Admin-only, same fail-closed pattern
-	     as every other admin control on this page.
-
-	     #110 review F2 — plus `isOwnOrgSection`: `listSections` is not org-scoped
-	     and sections are `_sharing: public`, so the tree holds EVERY readable
-	     collective's sections, and a foreign org's are all `memberCount === 0` by
-	     construction (`rows` holds only the selected collective's members). Without
-	     this an EFK admin's /roster offered a delete button on every other
-	     collective's empty sections.
-
-	     #110 review F3 — `memberCount` is the ROSTER's count: active + name-complete
-	     members only (rosterData's query + `toRosterRow`'s #28 gate), over a tree
-	     fetched once at load. A section holding only inactive/nameless members, or
-	     one that gained a member since the tab opened, still reads (0) here. That is
-	     why `deleteSection` re-verifies emptiness server-side and can refuse — this
-	     gate decides what to OFFER, not what is safe to delete. -->
-	{@const canRemove =
-		admin === 'admin' &&
-		(group?.memberCount ?? 0) === 0 &&
-		node.children.length === 0 &&
-		isOwnOrgSection(node.id)}
 	<!--
 		F2 code-review fix: a child's <section> is rendered NESTED inside its
 		parent's (below, `{#each node.children as child}{@render sectionGroup(child)}{/each}`
@@ -2141,6 +2346,13 @@
 		quadratically (a depth-2 node got 1+2=3rem of visual indent, not 2rem). A
 		CONSTANT 1rem on every non-root node gives each level exactly 1rem of
 		indent relative to its immediate parent — nesting itself does the rest.
+
+		#155/S4 — COLLAPSED and EXPANDED are DISPLAY-ONLY now: no drag handle, no
+		remove control, no rename. Every section-management affordance that used
+		to live on this header (TS.4/#98 drag, TU.2/#110 remove) moved exclusively
+		to Arrange mode — see the `roster-arrange-list` rendering below, which is
+		the ONLY place `section-remove-*`/rename/add now render. This snippet
+		keeps just the toggle + header display + nested member rows/children.
 	-->
 	<section
 		data-testid="section-group-{node.id}"
@@ -2148,27 +2360,7 @@
 		class="flex flex-col"
 		style="margin-left: {node.depth === 0 ? 0 : 1}rem"
 	>
-		{#if showDropIndicator && hintBefore}
-			{@render dropIndicator()}
-		{/if}
-		<!-- The touch-drag affordance stands in for the drag image the browser draws
-		     for a native drag and does not for a pointer one: without it a long-press
-		     drag has no visible drop target at all. -->
-		<div
-			role="group"
-			aria-label={node.name}
-			aria-dropeffect={acceptsDrop ? 'move' : undefined}
-			data-drop-target={acceptsTouchDrop ? 'true' : undefined}
-			class="flex items-center gap-2 py-1.5 {acceptsTouchDrop ? 'bg-ink-5' : ''} {grabbedSectionId ===
-			node.id
-				? 'outline-2 outline-dashed outline-indigo'
-				: ''}"
-			ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(node.id, event) : undefined}
-			ondragleave={acceptsDrop
-				? (event: DragEvent) => handleDragLeave(node.id, event)
-				: undefined}
-			ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(node.id, event) : undefined}
-		>
+		<div class="flex items-center gap-2 py-1.5">
 			<button
 				type="button"
 				data-testid="section-toggle-{node.id}"
@@ -2182,130 +2374,7 @@
 					{node.name} ({group?.memberCount ?? 0})
 				</span>
 			</button>
-			{#if canRemove}
-				<!-- #110 review F4 — a TWO-STEP inline confirm, superseding the original
-				     single-activation shape. No blocking `confirm()`: the two-step lives
-				     in the header row itself, matching SectionPicker's inline create form
-				     and testable without stubbing a window global. The delete is
-				     IRREVERSIBLE (Entu soft-deletes every property referencing the
-				     entity) on a `max-w-md`, thumb-driven page — one stray tap was one
-				     tap too few. `armRemove` only arms; only
-				     `section-remove-confirm-<id>` writes. -->
-				{#if pendingRemoveId === node.id}
-					<button
-						type="button"
-						data-testid="section-remove-confirm-{node.id}"
-						aria-label={m.roster_section_remove_confirm({ name: node.name })}
-						class="rounded px-1 text-xs text-red-700 underline"
-						onclick={() => void handleRemoveSection(node.id)}
-					>
-						{m.roster_section_remove_confirm_short()}
-					</button>
-					<button
-						type="button"
-						data-testid="section-remove-cancel-{node.id}"
-						aria-label={m.roster_section_remove_cancel({ name: node.name })}
-						class="rounded px-1 text-xs text-ink-2 underline hover:text-ink"
-						onclick={() => void disarmRemove(node.id)}
-					>
-						{m.roster_section_remove_cancel_short()}
-					</button>
-				{:else}
-					<button
-						type="button"
-						data-testid="section-remove-{node.id}"
-						aria-label={m.roster_section_remove({ name: node.name })}
-						title={m.roster_section_remove({ name: node.name })}
-						class="rounded px-1 text-xs text-ink-2 hover:text-red-700"
-						onclick={() => void armRemove(node.id)}
-					>
-						✕
-					</button>
-				{/if}
-			{/if}
-			{#if canReorder}
-				<!-- TWO drag protocols on one handle, because there is no single one that
-				     covers both: native `draggable` is DESKTOP-POINTER only (HTML5 dnd is
-				     not driven by touch events — a long-press on a `draggable="true"`
-				     element does NOT synthesise a dragstart on Android Chrome or iOS
-				     Safari), and the pointer-event long-press below is the touch twin
-				     (F2 code-review fix, #98 review — this page is mobile-shaped,
-				     `max-w-md`, so the drag half of "works on mobile (long-press) and
-				     desktop" cannot be desktop-only). `handlePointerDown` ignores mouse
-				     pointers so the two never race on one gesture; both funnel into the
-				     same `dropOnto`.
-				     `touch-action: none` is what lets a drag off the handle be a drag
-				     rather than a page scroll.
-				     Both paths are disabled while a reorder write is in flight — see
-				     `reorderPending`. -->
-				<!-- #152 — role="button", now genuinely operable (SUPERSEDES the #99 F5
-				     role="img" pin, which was explicitly conditioned on the handle NOT
-				     being operable — see `handleHandleKeydown` above for the full
-				     grab/move/drop/cancel contract). Roving tabindex: only
-				     `activeHandleId`'s own handle sits at "0", every other at "-1", so
-				     Tab reaches exactly one reorder control per page the way a single
-				     composite widget should.
-				     #150 — the ▲/▼ buttons that used to sit beside this handle (and were
-				     this page's only KEYBOARD path to a reorder) are gone; this handle is
-				     now the sole input for BOTH pointer (drag/touch, unchanged above) and
-				     keyboard. -->
-				<!-- Design question: rearrange-handle visibility for subsections (and how a
-				     handle should read on a COLLAPSED sub-section vs. its parent) is TBD —
-				     split out of #150 point 2 into #153, which is where the decision lands. -->
-				<span
-					data-testid="section-drag-handle-{node.id}"
-					draggable={reorderPending ? 'false' : 'true'}
-					role="button"
-					tabindex={activeHandleId === node.id ? 0 : -1}
-					aria-grabbed={draggedSectionId === node.id || grabbedSectionId === node.id
-						? 'true'
-						: 'false'}
-					aria-label={m.roster_section_drag_handle({ name: node.name })}
-					aria-describedby="section-reorder-instructions"
-					title={m.roster_section_drag_handle({ name: node.name })}
-					style="touch-action: none"
-					class="px-1 text-ink-2 select-none {reorderPending
-						? 'cursor-default opacity-30'
-						: 'cursor-grab'} {touchDragId === node.id
-						? 'opacity-50'
-						: ''} {grabbedSectionId === node.id ? 'text-indigo' : ''}"
-					ondragstart={(event: DragEvent) => handleDragStart(node.id, event)}
-					ondragend={handleDragEnd}
-					onpointerdown={(event: PointerEvent) => handlePointerDown(node.id, event)}
-					onpointermove={handlePointerMove}
-					onpointerup={handlePointerUp}
-					onpointercancel={endTouchDrag}
-					onlostpointercapture={endTouchDrag}
-					onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
-					onclick={(event: MouseEvent) => {
-						// #152 review F1 — honour the role="button" activation promise for
-						// the ATs that deliver it as a CLICK (NVDA/JAWS browse-mode
-						// Enter/Space, TalkBack/VoiceOver double-tap, Voice Control
-						// "click Reorder Soprano"), without letting a pointer gesture
-						// near the grab state machine. A synthesised/AT click carries
-						// `detail === 0`; a real mouse click — including the click that
-						// trails a drag release — carries `detail >= 1`, so the drag path
-						// above is untouched.
-						//
-						// Focus FIRST: an activation that arrives without focus (a voice
-						// command naming a handle the user never Tab'd to) would otherwise
-						// leave a grab on an unfocused element — `handleHandleBlur` could
-						// never fire, so the grab (and its provisional, unwritten reorder)
-						// would outlive every subsequent interaction.
-						if (event.detail !== 0) return;
-						handleElementFor(node.id)?.focus();
-						void toggleGrab(node);
-					}}
-					onfocus={() => (rovingHandleId = node.id)}
-					onblur={() => handleHandleBlur(node)}
-				>
-					≡
-				</span>
-			{/if}
 		</div>
-		{#if showDropIndicator && !hintBefore}
-			{@render dropIndicator()}
-		{/if}
 		{#if isExpanded}
 			<!-- #99/TS.5 — the id the toggle's aria-controls points at. `display:
 			     contents` (Tailwind `contents`) keeps this wrapper invisible to
@@ -2386,6 +2455,18 @@
 			class="sr-only"
 		>
 			{pageCreateStatus}
+		</div>
+
+		<!-- #155/S4 — the rename result, same contract as the create/remove regions
+		     above: mounted from first render, visually hidden. Only the SUCCESS
+		     text lands here; a failed rename is a role="alert" (`arrange-rename-error-*`). -->
+		<div
+			data-testid="roster-section-rename-status"
+			role="status"
+			aria-live="polite"
+			class="sr-only"
+		>
+			{renameStatus}
 		</div>
 
 		{#if status === 'no-collective'}
@@ -2498,90 +2579,6 @@
 			</div>
 
 			{#if view === 'grouped' && !sectionsError}
-				{#if admin === 'admin'}
-					<!-- #124 (F1+F2) — the page-level "+ New section" entry point, ABOVE
-					     the groups (same document-order contract as `roster-view-modes`
-					     right below), admin-only (fail-closed, same gate as every other
-					     admin control), reachable with every section collapsed. See the
-					     script-side comment above `pageCreateOpen` for the SPIKE root
-					     cause this is the PRIMARY fix for. -->
-					<div class="flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3">
-						{#if !pageCreateOpen}
-							<button
-								type="button"
-								data-testid="roster-new-section"
-								class="self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
-								onclick={openPageCreateForm}
-							>
-								{m.roster_new_section()}
-							</button>
-						{:else}
-							<div
-								data-testid="roster-new-section-form"
-								role="dialog"
-								aria-label={m.roster_new_section_form_label()}
-								class="flex flex-col gap-1.5"
-							>
-								<input
-									type="text"
-									data-testid="roster-new-section-name"
-									bind:this={pageCreateNameInput}
-									aria-label={m.roster_section_name_label()}
-									placeholder={m.roster_section_name_label()}
-									aria-invalid={pageCreateError ? true : undefined}
-									aria-describedby={pageCreateError ? 'roster-new-section-error' : undefined}
-									value={pageCreateName}
-									oninput={(e) => (pageCreateName = (e.currentTarget as HTMLInputElement).value)}
-									onkeydown={onPageCreateNameKeydown}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								/>
-								<select
-									data-testid="roster-new-section-parent"
-									aria-label={m.roster_section_parent_label()}
-									value={pageCreateParentId}
-									onchange={(e) => (pageCreateParentId = (e.currentTarget as HTMLSelectElement).value)}
-									class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								>
-									<option value="">{m.roster_new_section_top_level()}</option>
-									{#each ownOrgFlatSections as node (node.id)}
-										<option value={node.id}>{pageCreateParentLabel(node)}</option>
-									{/each}
-								</select>
-								{#if pageCreateError}
-									<!-- F5-style loud inline failure, same discipline as the picker's
-									     own create-error paragraph: role="alert" + aria-describedby
-									     on the input above. -->
-									<p
-										id="roster-new-section-error"
-										role="alert"
-										data-testid="roster-new-section-error"
-										class="text-xs text-red-700"
-									>
-										{pageCreateError()}
-									</p>
-								{/if}
-								<div class="flex gap-2">
-									<button
-										type="button"
-										data-testid="roster-new-section-submit"
-										class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
-										onclick={() => void submitPageCreate()}
-									>
-										{m.roster_create_assign()}
-									</button>
-									<button
-										type="button"
-										data-testid="roster-new-section-cancel"
-										class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
-										onclick={closePageCreateForm}
-									>
-										{m.roster_cancel()}
-									</button>
-								</div>
-							</div>
-						{/if}
-					</div>
-				{/if}
 				<!-- #155/S1 — the 3-chip view-mode selector, ABOVE the groups (pinned
 				     document-order contract the old collapse-all/expand-all toggle
 				     held). Radio-style single selection: `aria-pressed` is the pin,
@@ -2658,6 +2655,18 @@
 									touchOverId === row.id &&
 									touchOverId !== touchDragId &&
 									siblingIds.includes(touchDragId)}
+								<!-- #155/S4 — DELETE eligibility. Same rule `sectionGroup`'s old
+								     `canRemove` enforced (TU.2/#110 finding #7/#110 review F2/F3):
+								     zero members (the roster's active + name-complete roll-up),
+								     zero sub-sections (would orphan them), and not a foreign org's
+								     section (belt-and-braces — `visibleSections`/`arrangeRows`
+								     already keep a foreign root off this list entirely). UNLIKE the
+								     old conditional-render, the control here is ALWAYS rendered and
+								     DISABLED when ineligible (task #155/S4: "Disable for sections
+								     with children/members"), matching indent/unindent's own
+								     always-shown-sometimes-disabled shape. -->
+								{@const canDelete =
+									row.memberCount === 0 && node.children.length === 0 && isOwnOrgSection(row.id)}
 								{#if arrangeDropHintBeforeId === row.id}
 									{@render dropIndicator()}
 								{/if}
@@ -2723,74 +2732,118 @@
 								     hit-test, `tabindex`, `aria-grabbed`, `data-grabbed*`, `draggable`, the
 								     depth padding and the drag tints) stays on the row itself. -->
 								<div class="flex items-center">
-									<div
-										data-testid="arrange-row-{row.id}"
-										data-depth={row.depth}
-										data-grabbed={heldSectionId === row.id ? 'true' : undefined}
-										data-grabbed-subtree={heldSubtreeIds.has(row.id) ? 'true' : undefined}
-										role="button"
-										tabindex={activeArrangeRowId === row.id ? 0 : -1}
-										aria-grabbed={draggedSectionId === row.id || grabbedSectionId === row.id
-											? 'true'
-											: 'false'}
-										aria-dropeffect={acceptsDrop ? 'move' : undefined}
-										aria-describedby="section-reorder-instructions"
-										draggable={reorderPending ? 'false' : 'true'}
-										style="touch-action: pan-y"
-										class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)} select-none {reorderPending
-											? 'cursor-default'
-											: 'cursor-grab'} {touchDragId === row.id
-											? 'opacity-50'
-											: ''} {heldSectionId === row.id
-											? 'outline-2 outline-dashed outline-indigo'
-											: ''} {heldSubtreeIds.has(row.id)
-											? 'bg-indigo-soft'
-											: ''} {(acceptsDrop && dragOverId === row.id) || acceptsTouchDrop
-											? 'bg-ink-5'
-											: ''}"
-										ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
-										ondragend={handleDragEnd}
-										ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
-										ondragleave={acceptsDrop
-											? (event: DragEvent) => handleDragLeave(row.id, event)
-											: undefined}
-										ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
-										onpointermove={handlePointerMove}
-										onpointerup={handlePointerUp}
-										onpointercancel={endTouchDrag}
-										onlostpointercapture={endTouchDrag}
-										onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
-										onclick={(event: MouseEvent) => {
-											// Same "honour the role=button activation promise arriving as
-											// a click, without letting a pointer gesture near the grab
-											// state machine" contract as the old handle's onclick — see
-											// #152 review F1 in `sectionGroup` above.
-											if (event.detail !== 0) return;
-											handleElementFor(row.id)?.focus();
-											void toggleGrab(node);
-										}}
-										onfocus={() => (rovingHandleId = row.id)}
-										onblur={() => handleHandleBlur(node)}
-									>
-										<!-- The touch grab zone. `aria-hidden` and drawn from bars rather
-										     than a `≡` character on purpose: the row is named by its own
-										     CONTENTS (review F1), so anything with text here would leak
-										     into the accessible name and desync it from the visible label
-										     again. Its only job is to be the element a finger presses —
-										     every other input path (mouse drag, keyboard) lives on the row. -->
-										<span
-											data-testid="arrange-grip-{row.id}"
-											aria-hidden="true"
-											style="touch-action: none"
-											class="flex w-4 shrink-0 flex-col justify-center gap-0.5 py-1 text-ink-2"
-											onpointerdown={(event: PointerEvent) => handlePointerDown(row.id, event)}
+									{#if renamingSectionId === row.id}
+										<!-- #155/S4 — RENAME mode: a SEPARATE, non-draggable row, never the
+										     `role="button"` reorder row with an `<input>` nested inside it
+										     (that would be the same `nested-interactive` violation — WCAG
+										     4.1.2 — review R2/F1 above already fixed for indent/unindent).
+										     Enter saves (`onRenameKeydown` → `submitRename`), Escape cancels;
+										     no Save/Cancel buttons — matches the issue's literal "tap the
+										     name → input → Enter saves → Escape cancels" contract. -->
+										<div class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)}">
+											<span aria-hidden="true" class="w-4 shrink-0"></span>
+											<input
+												type="text"
+												data-testid="arrange-rename-input-{row.id}"
+												bind:this={renameInputEl}
+												aria-label={m.roster_section_name_label()}
+												value={renameValue}
+												oninput={(e) => (renameValue = (e.currentTarget as HTMLInputElement).value)}
+												onkeydown={onRenameKeydown}
+												class="min-w-0 grow border border-ink-5 bg-paper px-1.5 py-0.5 text-ink"
+											/>
+										</div>
+									{:else}
+										<div
+											data-testid="arrange-row-{row.id}"
+											data-depth={row.depth}
+											data-grabbed={heldSectionId === row.id ? 'true' : undefined}
+											data-grabbed-subtree={heldSubtreeIds.has(row.id) ? 'true' : undefined}
+											role="button"
+											tabindex={activeArrangeRowId === row.id ? 0 : -1}
+											aria-grabbed={draggedSectionId === row.id || grabbedSectionId === row.id
+												? 'true'
+												: 'false'}
+											aria-dropeffect={acceptsDrop ? 'move' : undefined}
+											aria-describedby="section-reorder-instructions"
+											draggable={structuralWritePending ? 'false' : 'true'}
+											style="touch-action: pan-y"
+											class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)} select-none {structuralWritePending
+												? 'cursor-default'
+												: 'cursor-grab'} {touchDragId === row.id
+												? 'opacity-50'
+												: ''} {heldSectionId === row.id
+												? 'outline-2 outline-dashed outline-indigo'
+												: ''} {heldSubtreeIds.has(row.id)
+												? 'bg-indigo-soft'
+												: ''} {(acceptsDrop && dragOverId === row.id) || acceptsTouchDrop
+												? 'bg-ink-5'
+												: ''}"
+											ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
+											ondragend={handleDragEnd}
+											ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
+											ondragleave={acceptsDrop
+												? (event: DragEvent) => handleDragLeave(row.id, event)
+												: undefined}
+											ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
+											onpointermove={handlePointerMove}
+											onpointerup={handlePointerUp}
+											onpointercancel={endTouchDrag}
+											onlostpointercapture={endTouchDrag}
+											onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
+											onclick={(event: MouseEvent) => {
+												// Same "honour the role=button activation promise arriving as
+												// a click, without letting a pointer gesture near the grab
+												// state machine" contract as the old handle's onclick — see
+												// #152 review F1 in `sectionGroup` above.
+												if (event.detail !== 0) return;
+												handleElementFor(row.id)?.focus();
+												void toggleGrab(node);
+											}}
+											onfocus={() => (rovingHandleId = row.id)}
+											onblur={() => handleHandleBlur(node)}
 										>
-											<span class="h-px w-full bg-current"></span>
-											<span class="h-px w-full bg-current"></span>
-											<span class="h-px w-full bg-current"></span>
-										</span>
-										<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
-									</div>
+											<!-- The touch grab zone. `aria-hidden` and drawn from bars rather
+											     than a `≡` character on purpose: the row is named by its own
+											     CONTENTS (review F1), so anything with text here would leak
+											     into the accessible name and desync it from the visible label
+											     again. Its only job is to be the element a finger presses —
+											     every other input path (mouse drag, keyboard) lives on the row. -->
+											<span
+												data-testid="arrange-grip-{row.id}"
+												aria-hidden="true"
+												style="touch-action: none"
+												class="flex w-4 shrink-0 flex-col justify-center gap-0.5 py-1 text-ink-2"
+												onpointerdown={(event: PointerEvent) => handlePointerDown(row.id, event)}
+											>
+												<span class="h-px w-full bg-current"></span>
+												<span class="h-px w-full bg-current"></span>
+												<span class="h-px w-full bg-current"></span>
+											</span>
+											<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
+										</div>
+									{/if}
+									<!-- #155/S4 — RENAME trigger: tap the section name (well, tap this
+									     button beside it — see the RENAME-mode comment above for why the
+									     input can't nest inside the `role="button"` row) to open inline
+									     edit. Sibling of the row, same reasoning as indent/unindent:
+									     keyboard-operable in its own right, no nested-interactive, no
+									     accessible-name pollution. -->
+									<button
+										type="button"
+										data-testid="arrange-rename-{row.id}"
+										aria-label={m.roster_section_rename({ name: row.name })}
+										title={m.roster_section_rename({ name: row.name })}
+										disabled={structuralWritePending || renamingSectionId === row.id}
+										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
+										onclick={() => startRename(node)}
+									>
+										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3 w-3 fill-current">
+											<path
+												d="M11.3 1.3a1 1 0 0 1 1.4 0l2 2a1 1 0 0 1 0 1.4l-8 8-3.7 1 1-3.7 8-8z"
+											/>
+										</svg>
+									</button>
 									<!-- #155/S3 — indent/unindent: ALWAYS rendered (not grab-gated), so a
 									     pointer-only admin can restructure the tree without ever touching
 									     the keyboard grab machine. SIBLINGS of the row, never children of
@@ -2818,7 +2871,9 @@
 										data-testid="arrange-indent-{row.id}"
 										aria-label={m.roster_section_indent({ name: row.name })}
 										title={m.roster_section_indent({ name: row.name })}
-										disabled={reorderPending || !canIndent(row.id)}
+										disabled={structuralWritePending ||
+											renamingSectionId === row.id ||
+											!canIndent(row.id)}
 										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
 										onclick={() => void handleIndent(node)}
 									>
@@ -2831,7 +2886,9 @@
 										data-testid="arrange-unindent-{row.id}"
 										aria-label={m.roster_section_unindent({ name: row.name })}
 										title={m.roster_section_unindent({ name: row.name })}
-										disabled={reorderPending || !canUnindent(row.id)}
+										disabled={structuralWritePending ||
+											renamingSectionId === row.id ||
+											!canUnindent(row.id)}
 										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
 										onclick={() => void handleUnindent(node)}
 									>
@@ -2839,13 +2896,147 @@
 											<path d="M12 2 L4 8 L12 14 Z" />
 										</svg>
 									</button>
+									<!-- #155/S4 — DELETE: reuses `armRemove`/`disarmRemove`/
+									     `handleRemoveSection`/`pendingRemoveId` VERBATIM (same testids
+									     too — `section-remove-*`), the exact two-step-confirm write seam
+									     `sectionGroup` used to render. Only the RENDERING moved: always
+									     shown, `disabled` when `!canDelete` rather than absent, per the
+									     task's own "Disable for sections with children/members". -->
+									{#if pendingRemoveId === row.id}
+										<button
+											type="button"
+											data-testid="section-remove-confirm-{row.id}"
+											aria-label={m.roster_section_remove_confirm({ name: row.name })}
+											class="rounded px-1 text-xs text-red-700 underline"
+											onclick={() => void handleRemoveSection(row.id)}
+										>
+											{m.roster_section_remove_confirm_short()}
+										</button>
+										<button
+											type="button"
+											data-testid="section-remove-cancel-{row.id}"
+											aria-label={m.roster_section_remove_cancel({ name: row.name })}
+											class="rounded px-1 text-xs text-ink-2 underline hover:text-ink"
+											onclick={() => void disarmRemove(row.id)}
+										>
+											{m.roster_section_remove_cancel_short()}
+										</button>
+									{:else}
+										<button
+											type="button"
+											data-testid="section-remove-{row.id}"
+											aria-label={m.roster_section_remove({ name: row.name })}
+											title={m.roster_section_remove({ name: row.name })}
+											disabled={structuralWritePending ||
+												renamingSectionId === row.id ||
+												!canDelete}
+											class="rounded p-1 text-xs text-ink-2 hover:text-red-700 disabled:cursor-default disabled:opacity-30 disabled:hover:text-ink-2"
+											onclick={() => void armRemove(row.id)}
+										>
+											✕
+										</button>
+									{/if}
 								</div>
+								{#if renameError?.id === row.id}
+									<!-- #155/S4 — same "say it, don't just log it" discipline as
+									     `sectionWriteError`/`removeError` above. role="alert": nothing
+									     else on screen names the failure (the input has already closed). -->
+									<p
+										data-testid="arrange-rename-error-{row.id}"
+										role="alert"
+										class="text-xs text-red-700 {arrangeIndentClass(row.depth)}"
+									>
+										{m.roster_section_rename_failed({ name: renameError.name })}
+									</p>
+								{/if}
 							{/if}
 						{/each}
 						{#if arrangeDropHintBeforeId === ARRANGE_DROP_HINT_END}
 							{@render dropIndicator()}
 						{/if}
 					</div>
+					{#if admin === 'admin'}
+						<!-- #155/S4 — "Add section" RELOCATED into Arrange mode exclusively
+						     (was page-level, rendered regardless of viewMode — #124). Reuses
+						     `createSection`/`pageCreateOpen`/`submitPageCreate` VERBATIM, same
+						     testids too (`roster-new-section*`) — only WHERE it renders moved. -->
+						<div class="flex flex-col gap-1.5 border-t border-dashed border-ink-5 pt-3">
+							{#if !pageCreateOpen}
+								<button
+									type="button"
+									data-testid="roster-new-section"
+									class="self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+									onclick={openPageCreateForm}
+								>
+									{m.roster_new_section()}
+								</button>
+							{:else}
+								<div
+									data-testid="roster-new-section-form"
+									role="dialog"
+									aria-label={m.roster_new_section_form_label()}
+									class="flex flex-col gap-1.5"
+								>
+									<input
+										type="text"
+										data-testid="roster-new-section-name"
+										bind:this={pageCreateNameInput}
+										aria-label={m.roster_section_name_label()}
+										placeholder={m.roster_section_name_label()}
+										aria-invalid={pageCreateError ? true : undefined}
+										aria-describedby={pageCreateError ? 'roster-new-section-error' : undefined}
+										value={pageCreateName}
+										oninput={(e) => (pageCreateName = (e.currentTarget as HTMLInputElement).value)}
+										onkeydown={onPageCreateNameKeydown}
+										class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+									<select
+										data-testid="roster-new-section-parent"
+										aria-label={m.roster_section_parent_label()}
+										value={pageCreateParentId}
+										onchange={(e) => (pageCreateParentId = (e.currentTarget as HTMLSelectElement).value)}
+										class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									>
+										<option value="">{m.roster_new_section_top_level()}</option>
+										{#each ownOrgFlatSections as node (node.id)}
+											<option value={node.id}>{pageCreateParentLabel(node)}</option>
+										{/each}
+									</select>
+									{#if pageCreateError}
+										<!-- F5-style loud inline failure, same discipline as the picker's
+										     own create-error paragraph: role="alert" + aria-describedby
+										     on the input above. -->
+										<p
+											id="roster-new-section-error"
+											role="alert"
+											data-testid="roster-new-section-error"
+											class="text-xs text-red-700"
+										>
+											{pageCreateError()}
+										</p>
+									{/if}
+									<div class="flex gap-2">
+										<button
+											type="button"
+											data-testid="roster-new-section-submit"
+											class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
+											onclick={() => void submitPageCreate()}
+										>
+											{m.roster_create_assign()}
+										</button>
+										<button
+											type="button"
+											data-testid="roster-new-section-cancel"
+											class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
+											onclick={closePageCreateForm}
+										>
+											{m.roster_cancel()}
+										</button>
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
 				{:else}
 					<div data-testid="roster-groups" class="flex flex-col">
 						{#each visibleSections as node (node.id)}

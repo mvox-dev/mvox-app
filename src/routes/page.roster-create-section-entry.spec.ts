@@ -248,6 +248,21 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
+// #155/S4 — the page-level "+ New section" control moved EXCLUSIVELY into
+// Arrange mode (was rendered regardless of viewMode). Every test below that
+// wants `roster-new-section` first switches into it via this helper.
+async function renderArrangeReady(admin: AdminState = 'admin') {
+	const container = await renderReady(admin);
+	const arrangeChip = q(container, 'roster-view-chip-arrange') as HTMLElement | null;
+	if (arrangeChip) {
+		await fireEvent.click(arrangeChip);
+		await waitFor(() => {
+			expect(q(container, 'roster-arrange-list')).not.toBeNull();
+		});
+	}
+	return container;
+}
+
 async function openPageForm(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'roster-new-section') as HTMLElement);
 	await waitFor(() => {
@@ -266,36 +281,50 @@ async function submit(container: HTMLElement): Promise<void> {
 }
 
 // ── F1: the entry point exists at PAGE level, not buried in a picker ────────────
+//
+// #155/S4 — this control RELOCATED into Arrange mode exclusively (was
+// page-level, rendered regardless of viewMode). Every test below opens
+// Arrange first via `renderArrangeReady`; the structural pin is now "outside
+// the arrange row list, admin-only, reachable from the arrange chip" rather
+// than "above roster-groups" (roster-groups doesn't render in Arrange mode
+// at all).
 
-describe('/roster — a page-level "+ New section" control (finding F1, structural)', () => {
-	it('admin, grouped view, everything COLLAPSED (the default): roster-new-section renders ABOVE the groups, outside any member row, with no picker open — and merely rendering writes nothing', async () => {
-		const container = await renderReady();
+describe('/roster — the "+ New section" control lives in Arrange mode (finding F1, structural, relocated #155/S4)', () => {
+	it('admin, Arrange mode: roster-new-section renders inside the arrange screen, outside the row list and outside any member row — and merely rendering writes nothing', async () => {
+		const container = await renderArrangeReady();
 
 		const control = q(container, 'roster-new-section');
 		expect(control).not.toBeNull();
-		// NOT buried: no member-row ancestor, no picker involved.
+		// NOT buried: no member-row ancestor, no picker involved, not one of the
+		// per-row arrange controls either.
 		expect(control!.closest('[data-testid^="roster-row-"]')).toBeNull();
 		expect(container.querySelector('[data-testid^="section-picker-menu-"]')).toBeNull();
-		// Reachable before the tree is ever expanded — the live failure required
-		// expand → find a member → open her picker → scroll a 440px dropdown.
-		expect(container.querySelector('[data-testid^="roster-row-"]')).toBeNull();
-		// ABOVE the groups (same document-order pin as roster-view-modes, #155/S1).
-		const groups = q(container, 'roster-groups') as HTMLElement;
-		expect(
-			control!.compareDocumentPosition(groups) & Node.DOCUMENT_POSITION_FOLLOWING
-		).toBeTruthy();
+		const list = q(container, 'roster-arrange-list') as HTMLElement;
+		expect(list.contains(control)).toBe(false);
 
 		expect(createSectionMock).not.toHaveBeenCalled();
 		expect(assignMock).not.toHaveBeenCalled();
 	});
 
-	it('non-admin: roster-new-section does not render (same fail-closed gate as every other admin control)', async () => {
-		const container = await renderReady('not-admin');
+	it('Collapsed/Expanded (display-only) views: roster-new-section does NOT render — it lives exclusively in Arrange mode now', async () => {
+		const container = await renderReady();
+		expect(q(container, 'roster-new-section')).toBeNull();
+
+		const expandedChip = q(container, 'roster-view-chip-expanded') as HTMLElement;
+		await fireEvent.click(expandedChip);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid^="roster-row-"]')).not.toBeNull();
+		});
+		expect(q(container, 'roster-new-section')).toBeNull();
+	});
+
+	it('non-admin: roster-new-section does not render (same fail-closed gate as every other admin control — and the Arrange chip itself is unreachable)', async () => {
+		const container = await renderArrangeReady('not-admin');
 		expect(q(container, 'roster-new-section')).toBeNull();
 	});
 
 	it('tapping it opens roster-new-section-form: name input AUTO-FOCUSED, parent select present defaulting to "(top level)" — nothing written by opening', async () => {
-		const container = await renderReady();
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		const name = q(container, 'roster-new-section-name') as HTMLInputElement;
@@ -311,7 +340,7 @@ describe('/roster — a page-level "+ New section" control (finding F1, structur
 	});
 
 	it('cancel closes the form; nothing was written', async () => {
-		const container = await renderReady();
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		await fireEvent.click(q(container, 'roster-new-section-cancel') as HTMLElement);
@@ -324,9 +353,9 @@ describe('/roster — a page-level "+ New section" control (finding F1, structur
 
 // ── F1: end-to-end — type name, submit, section APPEARS (and is announced) ──────
 
-describe('/roster — page-level create: type name, submit, the section appears in the list', () => {
-	it("top-level create: createSection(cfg, { name, parentId: null, orgId: <viewer's org> }) fires ONCE; the new group renders TITLED with the name; success is ANNOUNCED (role=status non-empty); NO member assigned; NO refetch", async () => {
-		const container = await renderReady();
+describe('/roster — page-level create: type name, submit, the section appears in the arrange list', () => {
+	it("top-level create: createSection(cfg, { name, parentId: null, orgId: <viewer's org> }) fires ONCE; the new row renders TITLED with the name; success is ANNOUNCED (role=status non-empty); NO member assigned; NO refetch", async () => {
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		await typeName(container, 'Tenor 2');
@@ -343,11 +372,11 @@ describe('/roster — page-level create: type name, submit, the section appears 
 			orgId: ORG_EFK
 		});
 
-		// VISIBLE result: the group is on screen, named.
+		// VISIBLE result: the arrange row is on screen, named.
 		await waitFor(() => {
-			expect(q(container, 'section-group-sec-new-1')).not.toBeNull();
+			expect(q(container, 'arrange-row-sec-new-1')).not.toBeNull();
 		});
-		expect(q(container, 'section-header-sec-new-1')?.textContent).toContain('Tenor 2');
+		expect(q(container, 'arrange-row-sec-new-1')?.textContent).toContain('Tenor 2');
 
 		// ANNOUNCED result — the "invisible success" half of the finding: a
 		// role="status" live region carries a non-empty announcement.
@@ -366,7 +395,7 @@ describe('/roster — page-level create: type name, submit, the section appears 
 	});
 
 	it("duplicate of the viewer's OWN org's root ('Alto') is refused: roster-new-section-error shows, no write", async () => {
-		const container = await renderReady();
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		await typeName(container, 'Alto');
@@ -379,7 +408,7 @@ describe('/roster — page-level create: type name, submit, the section appears 
 	});
 
 	it("ANOTHER org's flat 'Soprano II' does NOT block a top-level EFK 'Soprano II' — no error, the write fires (the global duplicate check was the original live bug)", async () => {
-		const container = await renderReady();
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		await typeName(container, 'Soprano II');
@@ -401,7 +430,7 @@ describe('/roster — page-level create: type name, submit, the section appears 
 
 describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 	it("parent select offers ONLY the viewer's own org's sections — EFK's roots yes, Sireen's 'Soprano II' NO (a foreign org's section must not be offered as a parent)", async () => {
-		const container = await renderReady();
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		const parent = q(container, 'roster-new-section-parent') as HTMLSelectElement;
@@ -412,13 +441,8 @@ describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 		expect(values).not.toContain(SIREEN_SOPRANO_II);
 	});
 
-	it("name 'Soprano II', parent Soprano: not refused by the foreign flat 'Soprano II'; createSection(cfg, { name, parentId: Soprano, orgId }) fires; the new group renders NESTED inside Soprano's group at data-depth 1", async () => {
-		const container = await renderReady();
-
-		// Expand everything so the nested group's DOM is observable (a child
-		// group renders inside its parent's expanded region).
-		const toggleAll = q(container, 'roster-view-chip-expanded') as HTMLElement | null;
-		if (toggleAll) await fireEvent.click(toggleAll);
+	it("name 'Soprano II', parent Soprano: not refused by the foreign flat 'Soprano II'; createSection(cfg, { name, parentId: Soprano, orgId }) fires; the new row renders NESTED under Soprano's row at data-depth 1", async () => {
+		const container = await renderArrangeReady();
 
 		await openPageForm(container);
 		await typeName(container, 'Soprano II');
@@ -438,16 +462,13 @@ describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 		});
 
 		await waitFor(() => {
-			expect(
-				q(container, `section-group-${EFK_SOPRANO}`)?.querySelector(
-					'[data-testid="section-group-sec-new-1"]'
-				)
-			).not.toBeNull();
+			expect(q(container, 'arrange-row-sec-new-1')).not.toBeNull();
 		});
-		const newGroup = q(container, 'section-group-sec-new-1') as HTMLElement;
-		expect(newGroup.getAttribute('data-depth')).toBe('1');
+		const newRow = q(container, 'arrange-row-sec-new-1') as HTMLElement;
+		expect(newRow.getAttribute('data-depth')).toBe('1');
 		expect(listSectionsMock).toHaveBeenCalledTimes(1);
 	});
 });
 
 // (*MVOX:Tallis* — #124 RED, F1+F2: page-level section-create entry point)
+// (*MVOX:Palestrina* — #155/S4: relocated into Arrange mode exclusively)

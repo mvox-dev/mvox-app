@@ -517,6 +517,71 @@ export async function reparentSection(
 	}
 }
 
+// #155/S4 — the section RENAME write layer.
+//
+// CONTRACT (pinned by sectionActions.rename.spec.ts):
+//
+//   - `renameSection(cfg, sectionId, name)` replaces the section's `name`
+//     property. Replace semantics per the pinned Entu wire contract (POST
+//     APPENDS to implicitly multi-valued props), same choreography as
+//     eventFieldEdit/reorderSections/reparentSection:
+//       1. GET `entity/{sectionId}?props=name` — the existing value id(s),
+//          captured BEFORE the POST so the deletes can only ever target
+//          PRE-EXISTING ids;
+//       2. POST `entity/{sectionId}` with body EXACTLY
+//          `[{ type: 'name', string: <trimmed name> }]`;
+//       3. DELETE `/property/{valueId}` for EVERY id from step 1 (not just
+//          the first — corrupted duplicate state all goes).
+//     POST-BEFORE-DELETE: a failed POST leaves the old name untouched; a
+//     failed DELETE leaves a recoverable duplicate the next rename sweeps.
+//   - `name` sent TRIMMED; an empty/whitespace-only name throws WITHOUT any
+//     fetch (defense in depth — the inline form validates too, but the data
+//     layer must not rename a section to blank).
+//   - Old value ids go to `DELETE /property/{valueId}` ONLY — never
+//     `DELETE /entity/...` (the endpoint split: that would delete the
+//     section itself).
+//   - Throws on any non-2xx (status surfaced).
+
+/**
+ * Rename a `section` entity — replace its `name` property. Replace
+ * semantics: GET old `name` value ids → POST the new value → DELETE every
+ * old value id. See module contract above.
+ */
+export async function renameSection(
+	cfg: EntuCfg,
+	sectionId: string,
+	name: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	const trimmed = name.trim();
+	if (!trimmed) {
+		throw new Error('renameSection: name must not be empty');
+	}
+
+	const getRes = await entuFetch(cfg.db, `entity/${sectionId}?props=name`, cfg.token, {}, fetchImpl);
+	if (!getRes.ok) throw new Error(`renameSection lookup failed: ${getRes.status}`);
+	const body = (await getRes.json()) as { entity?: { name?: Array<{ _id: string }> } };
+	const existing = body.entity?.name ?? [];
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${sectionId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([{ type: 'name', string: trimmed }])
+		},
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`renameSection POST failed: ${postRes.status}`);
+
+	for (const value of existing) {
+		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+		if (!delRes.ok) throw new Error(`renameSection delete failed: ${delRes.status}`);
+	}
+}
+
 // (*MVOX:Tallis* — RED stubs + contract, TS.2/#96)
 // (*MVOX:Palestrina* — GREEN implementation, TS.2/#96)
 // (*MVOX:Tallis* — RED createSection stub + contract, TS.3/#97)
@@ -528,3 +593,4 @@ export async function reparentSection(
 // (*MVOX:Palestrina* — #110 review F3: server-side emptiness verification on delete)
 // (*MVOX:Tallis* — RED reparentSection stub + contract, #155/S3)
 // (*MVOX:Palestrina* — GREEN implementation, #155/S3)
+// (*MVOX:Palestrina* — renameSection, #155/S4)

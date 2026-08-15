@@ -67,8 +67,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_parent_label: () => 'Parent section',
 		roster_section_create_failed: () => "The section couldn't be created — nothing was saved.",
 		roster_section_assign_failed: () =>
-			"The section was created, but the member couldn't be added to it.",
-		roster_section_drag_handle: (p) => `Drag to reorder ${p?.name}`
+			"The section was created, but the member couldn't be added to it."
 	};
 	const m = new Proxy(known, {
 		get(target, prop) {
@@ -259,34 +258,6 @@ function listboxOf(container: HTMLElement, memberId: string): HTMLElement {
 	return listbox;
 }
 
-/** Minimal DataTransfer stand-in — happy-dom has no native one. */
-function makeDataTransfer() {
-	const data: Record<string, string> = {};
-	return {
-		setData: (k: string, v: string) => {
-			data[k] = v;
-		},
-		getData: (k: string) => data[k] ?? '',
-		effectAllowed: '',
-		dropEffect: ''
-	};
-}
-
-// #150 — the ▲/▼ buttons that used to trigger a reorder for these tests are
-// gone; drag is now the only input, so the shared reorder-outcome tests below
-// (error/status announcements) drive it the same way page.roster-reorder.spec.ts
-// does.
-async function dragAndDrop(container: HTMLElement, fromId: string, toId: string): Promise<void> {
-	const dataTransfer = makeDataTransfer();
-	const handle = q(container, `section-drag-handle-${fromId}`) as HTMLElement;
-	expect(handle, `drag handle for ${fromId}`).not.toBeNull();
-	const target = q(container, `section-header-${toId}`) as HTMLElement;
-	expect(target, `drop target header for ${toId}`).not.toBeNull();
-	await fireEvent.dragStart(handle, { dataTransfer });
-	await fireEvent.dragOver(target, { dataTransfer });
-	await fireEvent.drop(target, { dataTransfer });
-}
-
 // ---------------------------------------------------------------------------
 // Source-scan helpers (i18n hygiene) — same strategy as the #86/#93 passes:
 // strip script blocks, HTML comments and Svelte expressions from the template;
@@ -359,10 +330,28 @@ describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', 
 		}
 	});
 
-	it('guard: parameterised reorder labels carry {name} in ALL four locales — a label that drops the param collapses every section to the same announcement', () => {
+	it('guard: parameterised reorder/rename announcement labels carry {name} in ALL four locales — a label that drops the param collapses every section to the same announcement', () => {
+		// #155/S4 — `roster_section_drag_handle` (the original member of this list)
+		// was retired along with the standalone drag-handle element it labelled:
+		// the arrange row is now named by its own contents (row text), not a
+		// separate aria-label/title pair — see roster/+page.svelte's `arrange-row-*`
+		// comment. The live-region ANNOUNCEMENTS this guard actually cares about
+		// (reorder + the S4 rename addition) still carry `{name}` and still need
+		// the guard.
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
-			for (const key of ['roster_section_drag_handle']) {
+			for (const key of [
+				'roster_section_moved',
+				'roster_section_grabbed',
+				'roster_section_dropped',
+				'roster_section_move_cancelled',
+				'roster_section_indented',
+				'roster_section_unindented',
+				'roster_section_unindented_top',
+				'roster_section_removed',
+				'roster_section_renamed',
+				'roster_section_rename_failed'
+			]) {
 				expect(
 					everyPatternContains(messages[key], '{name}'),
 					`${locale}.json ${key} must carry {name} in every variant`
@@ -507,81 +496,10 @@ describe("#99 — a11y: the section picker menu is a listbox (role='listbox', ar
 	});
 });
 
-// ---------------------------------------------------------------------------
-// 4 — drag-reorder: aria-grabbed / aria-dropeffect + labelled keyboard fallback
-// ---------------------------------------------------------------------------
-describe('#99 — a11y: drag-reorder announces grab and drop state', () => {
-	async function renderCollapsedAdmin(): Promise<HTMLElement> {
-		const container = await renderReady('admin');
-		for (const id of ['sec-sop', 'sec-alto', 'sec-tenor']) await collapse(container, id);
-		return container;
-	}
-
-	it("an idle drag handle exposes aria-grabbed='false' and is NOT aria-hidden — a hidden handle can announce nothing, and this one carries the drag state", async () => {
-		const container = await renderCollapsedAdmin();
-		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
-		expect(handle, 'drag handle must render on a collapsed admin header').not.toBeNull();
-		expect(handle.getAttribute('aria-hidden')).not.toBe('true');
-		expect(handle.getAttribute('aria-grabbed')).toBe('false');
-	});
-
-	it("dragstart flips the dragged handle to aria-grabbed='true'; dragend returns it to 'false'", async () => {
-		const container = await renderCollapsedAdmin();
-		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
-		await fireEvent.dragStart(handle, { dataTransfer: makeDataTransfer() });
-		expect(handle.getAttribute('aria-grabbed')).toBe('true');
-		await fireEvent.dragEnd(handle);
-		expect(handle.getAttribute('aria-grabbed')).toBe('false');
-	});
-
-	it("while a drag is live, every SIBLING drop target exposes aria-dropeffect='move' — with no dropeffect anywhere the drag is completely silent to AT", async () => {
-		const container = await renderCollapsedAdmin();
-		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
-
-		// Idle: no advertised drop targets.
-		expect(container.querySelectorAll('[aria-dropeffect="move"]').length).toBe(0);
-
-		await fireEvent.dragStart(handle, { dataTransfer: makeDataTransfer() });
-		// Both remaining top-level siblings advertise the drop.
-		for (const id of ['sec-alto', 'sec-tenor']) {
-			const group = q(container, `section-group-${id}`) as HTMLElement;
-			const dropTarget =
-				group.getAttribute('aria-dropeffect') === 'move'
-					? group
-					: group.querySelector('[aria-dropeffect="move"]');
-			expect(dropTarget, `section ${id} must expose aria-dropeffect="move" during a drag`).not.toBeNull();
-		}
-		// The Unassigned pseudo-group is NOT a drop target (not a section entity).
-		const unassigned = q(container, 'section-group-unassigned') as HTMLElement;
-		expect(unassigned.getAttribute('aria-dropeffect')).not.toBe('move');
-		expect(unassigned.querySelector('[aria-dropeffect="move"]')).toBeNull();
-
-		await fireEvent.dragEnd(handle);
-		expect(container.querySelectorAll('[aria-dropeffect="move"]').length).toBe(0);
-	});
-
-	// #152 RED — SUPERSEDES the #150-era "NOT focusable" guard that lived here
-	// (which said so itself: "expected to change shape when #152 lands"). The
-	// handle now implements the keyboard grab protocol (see
-	// page.roster-ux-a11y.spec.ts section 5 for the full contract), so it must
-	// be focusable: every handle carries a tabindex, and at least one sits in
-	// the Tab order (roving tabindex keeps one per composite; a flat
-	// tabindex="0" everywhere also satisfies this).
-	it('#152: the drag handle is FOCUSABLE — it implements the keyboard grab protocol now, so tabindex="-1" everywhere would leave the reorder keyboard-unreachable (WCAG 2.1.1)', async () => {
-		const container = await renderCollapsedAdmin();
-		const handles = ['sec-sop', 'sec-alto', 'sec-tenor'].map(
-			(id) => q(container, `section-drag-handle-${id}`) as HTMLElement
-		);
-		for (const handle of handles) {
-			expect(handle, 'handle must render').not.toBeNull();
-			expect(handle.getAttribute('tabindex'), 'every handle must carry a tabindex').not.toBeNull();
-		}
-		expect(
-			handles.some((handle) => handle.getAttribute('tabindex') === '0'),
-			'at least one handle must be in the Tab order'
-		).toBe(true);
-	});
-});
+// #155/S4 — the collapsed-view drag handle (aria-grabbed/aria-dropeffect,
+// focusability) that used to be pinned here is GONE: drag-reorder now lives
+// exclusively in Arrange mode. See page.roster-arrange-reorder.spec.ts for
+// the equivalent (and superseding) coverage on `arrange-row-*`.
 
 // ---------------------------------------------------------------------------
 // 5 — form errors: role='alert' + field association
@@ -825,67 +743,15 @@ describe('#99 review F3 — the listbox owns only options', () => {
 	});
 });
 
-describe('#99 review F4 — only a SIBLING header advertises (and accepts) the drop', () => {
-	it("a NON-SIBLING collapsed header exposes no aria-dropeffect and refuses the drop — dropOnto silently ignores cross-parent targets, so advertising 'move' there promises a move that never happens", async () => {
-		const container = await renderReady('admin');
-		// Soprano stays EXPANDED so its sub-section renders; the sub-section and
-		// both foreign top-level sections collapse, so all three carry handles.
-		for (const id of ['sec-sop1', 'sec-alto', 'sec-tenor']) await collapse(container, id);
-
-		const handle = q(container, 'section-drag-handle-sec-alto') as HTMLElement;
-		await fireEvent.dragStart(handle, { dataTransfer: makeDataTransfer() });
-
-		// sec-tenor IS a top-level sibling of sec-alto → advertised.
-		const sibling = q(container, 'section-group-sec-tenor') as HTMLElement;
-		expect(sibling.querySelector('[aria-dropeffect="move"]')).not.toBeNull();
-
-		// sec-sop1 is Soprano's CHILD → not a sibling of sec-alto, not a drop target.
-		const foreign = q(container, 'section-group-sec-sop1') as HTMLElement;
-		expect(foreign.getAttribute('aria-dropeffect')).not.toBe('move');
-		expect(foreign.querySelector('[aria-dropeffect="move"]')).toBeNull();
-
-		// …and the drop it refuses to advertise is a drop it also refuses to take.
-		const target = q(container, 'section-header-sec-sop1') as HTMLElement;
-		const dragover = new Event('dragover', { bubbles: true, cancelable: true });
-		target.dispatchEvent(dragover);
-		expect(dragover.defaultPrevented, 'a non-sibling header must not become a drop zone').toBe(
-			false
-		);
-		await fireEvent.drop(target, { dataTransfer: makeDataTransfer() });
-		expect(reorderMock).not.toHaveBeenCalled();
-	});
-});
-
-// #152 RED — SUPERSEDES #99 review F5. F5 pinned role='img' EXPLICITLY
-// conditioned on the handle being non-operable ("if the handle DOES become
-// operable, this role='img' choice must be revisited" — the handle's own
-// source comment). #152 makes it operable (Space/Enter grab, arrows move,
-// Escape cancels — full contract in page.roster-ux-a11y.spec.ts section 5),
-// so the promise flips: it IS a button now, and role='img' would hide an
-// operable control from AT.
-describe('#152 — the drag handle announces itself as a BUTTON (supersedes #99 F5)', () => {
-	it("the handle is role='button' with an accessible name containing the section name — it is focusable and operable now, so 'img' would deny AT the control that exists", async () => {
-		const container = await renderReady('admin');
-		await collapse(container, 'sec-sop');
-		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
-
-		expect(handle.getAttribute('role')).toBe('button');
-		expect(handle.getAttribute('role')).not.toBe('img');
-		expect(handle.getAttribute('aria-label')).toContain('Soprano');
-		expect(handle.getAttribute('aria-hidden')).not.toBe('true');
-	});
-});
+// #155/S4 — the collapsed-view non-sibling drop refusal and the handle's own
+// role='button' pin that used to live here are GONE with the handle itself;
+// the sibling-only drop rule is still exercised (on `arrange-row-*`) by
+// page.roster-arrange-reorder.spec.ts.
 
 // ---------------------------------------------------------------------------
 // 8 — #99 CODE-REVIEW FIXES, ROUND 2. Same discipline as section 7: every block
 //     pins a defect the first round of review fixes shipped.
 // ---------------------------------------------------------------------------
-async function renderCollapsedAdmin(): Promise<HTMLElement> {
-	const container = await renderReady('admin');
-	for (const id of ['sec-sop', 'sec-alto', 'sec-tenor']) await collapse(container, id);
-	return container;
-}
-
 describe('#99 review R2/F1 — the listbox is NAMED, and the trigger names what it controls', () => {
 	it("the listbox carries an accessible name identifying the MEMBER — role='listbox' is Name From: author with a name REQUIRED, and a roster renders one picker per row", async () => {
 		const container = await renderReady();
@@ -943,44 +809,15 @@ describe("#99 review R2/F4 — '+ New section…' is a BUTTON, not a fake option
 	});
 });
 
-describe('#99 review R2/F2 — a failed reorder is SAID, not silently re-derived', () => {
-	it("a rejected reorderSections surfaces role='alert' — the list snaps to the server's order, and without this nothing on screen says why", async () => {
-		reorderMock.mockRejectedValue(new Error('403'));
-		const container = await renderCollapsedAdmin();
-
-		await dragAndDrop(container, 'sec-sop', 'sec-alto');
-
-		await waitFor(() => {
-			const error = q(container, 'section-reorder-error');
-			expect(error, 'a failed reorder must render an error').not.toBeNull();
-			expect(error!.getAttribute('role')).toBe('alert');
-		});
-	});
-
-	it('a SUCCESSFUL reorder renders no error, and a retry clears a previous failure', async () => {
-		reorderMock.mockRejectedValueOnce(new Error('403'));
-		const container = await renderCollapsedAdmin();
-
-		await dragAndDrop(container, 'sec-sop', 'sec-alto');
-		await waitFor(() => {
-			expect(q(container, 'section-reorder-error')).not.toBeNull();
-		});
-
-		await dragAndDrop(container, 'sec-sop', 'sec-alto');
-		await waitFor(() => {
-			expect(q(container, 'section-reorder-error'), 'a retry owns the error slot').toBeNull();
-		});
-	});
-});
-
-// #150 — the two focus-restoration tests that used to live here (button stays
-// operable → refocus it; button lands on a boundary → fall back to the
-// section toggle) tested `moveSection`'s own focus bookkeeping, which was
-// deleted along with the ▲/▼ buttons. Drag/drop carries no equivalent focus
-// hop (a mouse drag never had DOM focus to lose), so there is nothing left to
-// pin here — the reorder-announcement coverage below still applies.
-describe('#99 review R2/F3 — reorder outcomes are announced', () => {
-	it('guard: the polite live region is present from FIRST render — a region mounted together with its own text is announced by nothing', async () => {
+// #155/S4 — "a failed reorder is SAID" and "a successful move announces
+// itself" used to be pinned here via the collapsed-view drag handle; both are
+// GONE with it. The live region and the failure alert are still genuine
+// (shared `reorderStatus`/`reorderError` machinery, unconditional on
+// viewMode) — see page.roster-arrange-reorder.spec.ts for the arrange-mode
+// exercise of the SAME state, plus the guard below that the region exists
+// from first render regardless of mode.
+describe('#99 review R2/F3 — the reorder live region is present from first render', () => {
+	it('guard: role="status"/aria-live="polite", mounted before any reorder — a region mounted together with its own text is announced by nothing', async () => {
 		const container = await renderReady();
 		const status = q(container, 'roster-reorder-status') as HTMLElement;
 		expect(status, 'the live region must exist before any reorder').not.toBeNull();
@@ -988,91 +825,16 @@ describe('#99 review R2/F3 — reorder outcomes are announced', () => {
 		expect(status.getAttribute('aria-live')).toBe('polite');
 		expect(status.textContent?.trim()).toBe('');
 	});
-
-	it('a successful move announces the section BY NAME and its new position', async () => {
-		const container = await renderCollapsedAdmin();
-
-		await dragAndDrop(container, 'sec-sop', 'sec-alto');
-
-		await waitFor(() => {
-			const status = q(container, 'roster-reorder-status') as HTMLElement;
-			expect(status.textContent).toContain('roster_section_moved');
-			expect(status.textContent).toContain('Soprano');
-			// Soprano moved from slot 1 to slot 2 of 3 top-level siblings.
-			expect(status.textContent).toContain('2');
-		});
-	});
 });
 
-// ---------------------------------------------------------------------------
-// 9 — #152 RED: keyboard reorder respects sibling boundaries. The full
-//     grab/move/drop/cancel protocol is defined in page.roster-ux-a11y.spec.ts
-//     section 5 (flat three-section fixture); THIS fixture has what that one
-//     lacks — a sub-section (sec-sop1) and the Unassigned pseudo-group — so
-//     the boundary rules live here: a keyboard move must stay inside its own
-//     sibling group (same rule `dropOnto` enforces for pointer drops: a
-//     cross-parent move is STRUCTURAL, not an order change) and must never
-//     treat Unassigned as a landing slot (it is not a section entity).
-// ---------------------------------------------------------------------------
-describe('#152 — keyboard reorder respects sibling boundaries and the Unassigned pseudo-group', () => {
-	/** Every section-group testid suffix in document order — nested groups
-	 *  included, so a structural escape (a sub-section leaving its parent)
-	 *  would show up as a changed sequence. */
-	function groupOrder(container: HTMLElement): string[] {
-		return Array.from(container.querySelectorAll('[data-testid^="section-group-"]')).map((el) =>
-			el.getAttribute('data-testid')!.slice('section-group-'.length)
-		);
-	}
-
-	/** Focus `id`'s handle and grab it with Space. */
-	async function grab(container: HTMLElement, id: string): Promise<HTMLElement> {
-		const handle = q(container, `section-drag-handle-${id}`) as HTMLElement;
-		expect(handle, `drag handle for ${id}`).not.toBeNull();
-		handle.focus();
-		await fireEvent.keyDown(handle, { key: ' ' });
-		expect(handle.getAttribute('aria-grabbed'), `Space must grab ${id}`).toBe('true');
-		return handle;
-	}
-
-	it('ArrowDown on the grabbed LAST real section is a no-op — the Unassigned pseudo-group is not a landing slot, so there is nowhere further down', async () => {
-		const container = await renderCollapsedAdmin();
-		// All roots collapsed: Soprano, Alto, Tenor, then Unassigned.
-		expect(groupOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor', 'unassigned']);
-
-		const handle = await grab(container, 'sec-tenor');
-		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
-
-		expect(groupOrder(container), 'Tenor must not move below/into Unassigned').toEqual([
-			'sec-sop',
-			'sec-alto',
-			'sec-tenor',
-			'unassigned'
-		]);
-		expect(handle.getAttribute('aria-grabbed'), 'the grab survives the clamped press').toBe('true');
-		await fireEvent.keyDown(handle, { key: 'Escape' });
-	});
-
-	it('a grabbed SUB-SECTION with no siblings goes nowhere — ArrowUp/ArrowDown never escape its parent (a cross-parent move is structural, not an order change), and dropping in place writes nothing', async () => {
-		const container = await renderReady('admin');
-		// Soprano stays EXPANDED so Soprano 1 renders; Soprano 1 itself collapses
-		// so it carries a handle (canReorder = admin AND collapsed).
-		await collapse(container, 'sec-sop1');
-		const before = groupOrder(container);
-		expect(before).toContain('sec-sop1');
-
-		const handle = await grab(container, 'sec-sop1');
-		await fireEvent.keyDown(handle, { key: 'ArrowUp' });
-		expect(groupOrder(container), 'ArrowUp on an only child must move nothing').toEqual(before);
-		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
-		expect(groupOrder(container), 'ArrowDown on an only child must move nothing').toEqual(before);
-
-		await fireEvent.keyDown(handle, { key: ' ' });
-		expect(handle.getAttribute('aria-grabbed')).toBe('false');
-		expect(reorderMock, 'a drop that moved nothing must not write').not.toHaveBeenCalled();
-	});
-});
+// #155/S4 — "keyboard reorder respects sibling boundaries and the Unassigned
+// pseudo-group" used to be pinned here via the collapsed-view drag handle.
+// Sibling-boundary clamping is re-pinned on `arrange-row-*` in
+// page.roster-arrange-reorder.spec.ts; "Unassigned is not a landing slot" no
+// longer applies at all — Arrange mode's row list is built from
+// `visibleSections` alone and never includes the Unassigned pseudo-group.
 
 // (*MVOX:Tallis*)
 // (*MVOX:Palestrina* — section 7, #99 code-review fix regression cover)
 // (*MVOX:Palestrina* — section 8, #99 code-review fix regression cover, round 2)
-// (*MVOX:Tallis* — section 9, #152 keyboard-reorder sibling-boundary RED)
+// (*MVOX:Palestrina* — #155/S4: collapsed-view drag/remove coverage retired, superseded by arrange-mode specs)

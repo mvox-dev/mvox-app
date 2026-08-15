@@ -200,12 +200,25 @@ afterEach(() => {
 	resetAdmin();
 });
 
+// #155/S4 — section management (remove included) moved EXCLUSIVELY into
+// Arrange mode; `renderReady` now switches into it, and every id lookup below
+// reads `arrange-row-<id>`/`section-remove-<id>` (still the SAME remove
+// testid — only WHERE it renders moved, per #155/S4's design) rather than the
+// retired `section-group-*`/`section-header-*` collapsed-view markup.
 async function renderReady() {
 	setAuthedWithOneCollective();
 	adminStore.set('admin');
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
+	});
+	const arrangeChip = container.querySelector<HTMLElement>(
+		'[data-testid="roster-view-chip-arrange"]'
+	);
+	expect(arrangeChip, 'arrange chip').not.toBeNull();
+	arrangeChip!.click();
+	await waitFor(() => {
+		expect(container.querySelector('[data-testid="roster-arrange-list"]')).not.toBeNull();
 	});
 	return container;
 }
@@ -214,39 +227,49 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-/** Ids of every RENDERED section group (headers render collapsed or not),
- *  excluding the Unassigned pseudo-group. */
+/** Ids of every RENDERED arrange row, in the SAME org-filtered tree the
+ *  collapsed/expanded views render from (`visibleSections`) — a foreign org's
+ *  root never reaches this list at all (#124/F3), same guarantee the retired
+ *  `section-group-*` scan relied on. */
 function renderedSectionIds(container: HTMLElement): string[] {
-	return Array.from(container.querySelectorAll('[data-testid^="section-group-"]'))
-		.map((el) => el.getAttribute('data-testid')!.slice('section-group-'.length))
-		.filter((id) => id !== 'unassigned');
+	return Array.from(container.querySelectorAll('[data-testid^="arrange-row-"]')).map((el) =>
+		el.getAttribute('data-testid')!.slice('arrange-row-'.length)
+	);
 }
 
-// ── the gate repro: two "Bass (0)" headers must not disagree ────────────────────
+// ── the gate repro: two "Bass (0)" rows must not disagree ────────────────────
 
-describe('/roster — F3: every empty section the page SHOWS offers the remove control', () => {
-	it('gate repro — with EFK Bass (0) and another org\'s Bass (0) in the whole-db tree, every RENDERED "(0)" leaf group carries section-remove-<id>; never one-with-one-without', async () => {
+describe('/roster — F3: every empty section the page SHOWS offers a WORKING (non-disabled) remove control', () => {
+	it('gate repro — with EFK Bass (0) and another org\'s Bass (0) in the whole-db tree, every RENDERED "(0)" leaf row carries an ENABLED section-remove-<id>; never one-with-one-without', async () => {
 		const container = await renderReady();
 
-		// Sanity: the viewer's own empty section is on screen with its control —
-		// the invariant below must not pass vacuously.
-		expect(q(container, `section-header-${EFK_BASS}`)?.textContent).toContain('(0)');
-		expect(q(container, `section-remove-${EFK_BASS}`)).not.toBeNull();
+		// Sanity: the viewer's own empty section is on screen with a WORKING
+		// control — the invariant below must not pass vacuously. #155/S4: the
+		// button is now ALWAYS rendered (per-row, like indent/unindent) and
+		// `disabled` when ineligible, rather than absent — "offers the remove
+		// control" therefore means "renders enabled", not merely "exists".
+		expect(q(container, 'arrange-row-' + EFK_BASS)?.textContent).toContain('(0)');
+		expect((q(container, `section-remove-${EFK_BASS}`) as HTMLButtonElement).disabled).toBe(false);
 
-		// THE INVARIANT (fix-agnostic): a section group the page chose to render
-		// whose header reads "(0)" — every fixture node is a childless leaf —
-		// must offer the remove control. Today the foreign org's "Bass (0)"
-		// renders WITHOUT one (canRemove's isOwnOrgSection gate), which is
-		// exactly the on-screen inconsistency the gate walk failed. A tree
-		// scoped to the viewer's own org satisfies this; rendering foreign
-		// groups control-less does not.
+		// THE INVARIANT (fix-agnostic): an arrange row the page chose to render
+		// whose text reads "(0)" — every fixture node is a childless leaf — must
+		// offer a WORKING remove control. Today the foreign org's "Bass (0)"
+		// would render disabled/absent (canRemove's isOwnOrgSection gate) if it
+		// rendered at all, which is exactly the on-screen inconsistency the gate
+		// walk failed. A tree scoped to the viewer's own org satisfies this;
+		// rendering foreign rows control-less does not.
 		for (const id of renderedSectionIds(container)) {
-			const header = q(container, `section-header-${id}`);
-			if (!header?.textContent?.includes('(0)')) continue;
+			const row = q(container, `arrange-row-${id}`);
+			if (!row?.textContent?.includes('(0)')) continue;
+			const button = q(container, `section-remove-${id}`) as HTMLButtonElement | null;
 			expect(
-				q(container, `section-remove-${id}`),
-				`rendered empty section "${header.textContent.trim()}" (${id}) has no remove control — empty sections must not be inconsistent (#114 check 4)`
+				button,
+				`rendered empty section "${row.textContent.trim()}" (${id}) has no remove control — empty sections must not be inconsistent (#114 check 4)`
 			).not.toBeNull();
+			expect(
+				button!.disabled,
+				`rendered empty section "${row.textContent.trim()}" (${id}) has a DISABLED remove control — empty sections must not be inconsistent (#114 check 4)`
+			).toBe(false);
 		}
 	});
 
@@ -257,15 +280,15 @@ describe('/roster — F3: every empty section the page SHOWS offers the remove c
 		// is forbidden…
 		expect(q(container, `section-remove-${TAM_BASS}`)).toBeNull();
 		// …and therefore the only consistent presentation is to not show the
-		// foreign group on this collective's roster in the first place.
-		expect(q(container, `section-group-${TAM_BASS}`)).toBeNull();
+		// foreign row on this collective's roster in the first place.
+		expect(q(container, `arrange-row-${TAM_BASS}`)).toBeNull();
 	});
 });
 
 // ── second-order: "own org" comes from the VIEWER, not the first roster row ─────
 
 describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER's, not whoever sorts first", () => {
-	it("multi-org roster where a FOREIGN member sorts first alphabetically: the EFK viewer still gets the ✕ on EFK's empty Bass, and Sireen's empty section gets none", async () => {
+	it("multi-org roster where a FOREIGN member sorts first alphabetically: the EFK viewer still gets a WORKING ✕ on EFK's empty Bass, and Sireen's empty section gets none rendered at all", async () => {
 		// `loadRoster`'s member query is not org-scoped — on a multi-org db the
 		// rows legitimately span orgs, sorted by name. Anna (Sireen) sorts
 		// before every EFK member; the current `rows.find((r) => r.orgId)`
@@ -291,17 +314,21 @@ describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER'
 
 		const container = await renderReady();
 
-		// The viewer's own empty section keeps its control…
+		// The viewer's own empty section keeps a WORKING control…
 		expect(
-			q(container, `section-remove-${EFK_BASS}`),
-			"EFK viewer's own empty Bass lost its remove control — own-org must derive from the viewer, not the first alphabetical row"
-		).not.toBeNull();
-		// …and the foreign org's empty section never gains one.
+			(q(container, `section-remove-${EFK_BASS}`) as HTMLButtonElement | null)?.disabled,
+			"EFK viewer's own empty Bass lost its (enabled) remove control — own-org must derive from the viewer, not the first alphabetical row"
+		).toBe(false);
+		// …and the foreign org's section never even RENDERS as an arrange row
+		// (`visibleSections`/`arrangeRows` org-filter, #124/F3) — so its remove
+		// control cannot exist either.
 		expect(
-			q(container, `section-remove-${SIREEN_SOPRANO_II}`),
-			"the remove control migrated onto ANOTHER org's section — destructive affordance on a foreign entity (#110 review F2)"
+			q(container, `arrange-row-${SIREEN_SOPRANO_II}`),
+			"the foreign org's section rendered as an arrange row at all — destructive affordance surface on a foreign entity (#110 review F2)"
 		).toBeNull();
+		expect(q(container, `section-remove-${SIREEN_SOPRANO_II}`)).toBeNull();
 	});
 });
 
 // (*MVOX:Tallis* — #124 RED, F3: consistent empty-section remove + viewer-derived own org)
+// (*MVOX:Palestrina* — #155/S4: remove control relocated into Arrange mode, always-rendered/disabled shape)

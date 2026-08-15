@@ -426,7 +426,7 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 		expect(memberRowCount(container)).toBe(0);
 	});
 
-	it('NO management controls in the S1 shell — no remove ✕, no drag handles, no per-section expand toggles, no pickers, no new-section entry inside the arrange list (S2–S4 add management)', async () => {
+	it('NO drag-handle/expand-toggle/picker/new-section controls in the S1 shell — S2/S4 add reorder and CRUD respectively (#155/S4: section-remove-/arrange-rename-* are now expected INSIDE the arrange list, tested in page.roster-arrange-crud.spec.ts)', async () => {
 		const container = await renderReady('admin');
 		await selectMode(container, 'arrange');
 		await waitFor(() => {
@@ -434,18 +434,16 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 		});
 
 		const list = q(container, 'roster-arrange-list') as HTMLElement;
-		for (const prefix of [
-			'section-remove-',
-			'section-drag-handle-',
-			'section-toggle-',
-			'section-picker-',
-			'roster-new-section'
-		]) {
+		for (const prefix of ['section-drag-handle-', 'section-toggle-', 'section-picker-']) {
 			expect(
 				list.querySelectorAll(`[data-testid^="${prefix}"]`),
 				`no "${prefix}*" control inside the arrange list`
 			).toHaveLength(0);
 		}
+		// #155/S4 — "+ New section" relocated INTO Arrange mode (was page-level,
+		// unconditional-on-viewMode); it now sits OUTSIDE the row list itself
+		// (arrange-mode-only chrome, not a per-row control).
+		expect(list.querySelectorAll('[data-testid^="roster-new-section"]')).toHaveLength(0);
 	});
 
 	it('switching BACK to Collapsed resumes normal rendering: arrange list gone, roster-groups back, sections collapsed', async () => {
