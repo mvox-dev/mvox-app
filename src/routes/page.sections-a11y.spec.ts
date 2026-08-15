@@ -560,15 +560,26 @@ describe('#99 — a11y: drag-reorder announces grab and drop state', () => {
 		expect(container.querySelectorAll('[aria-dropeffect="move"]').length).toBe(0);
 	});
 
-	// #150 — the ▲/▼ buttons this guard used to justify handle unfocusability
-	// against are gone; drag/touch is now the only reorder input, and this page
-	// has no keyboard-operable reorder path at all (an open a11y gap, tracked in
-	// #152 — this guard is expected to change shape when that lands).
-	it('guard: the drag handle is NOT focusable — it implements no keyboard drag protocol of its own, so a focusable span here would be a trap', async () => {
+	// #152 RED — SUPERSEDES the #150-era "NOT focusable" guard that lived here
+	// (which said so itself: "expected to change shape when #152 lands"). The
+	// handle now implements the keyboard grab protocol (see
+	// page.roster-ux-a11y.spec.ts section 5 for the full contract), so it must
+	// be focusable: every handle carries a tabindex, and at least one sits in
+	// the Tab order (roving tabindex keeps one per composite; a flat
+	// tabindex="0" everywhere also satisfies this).
+	it('#152: the drag handle is FOCUSABLE — it implements the keyboard grab protocol now, so tabindex="-1" everywhere would leave the reorder keyboard-unreachable (WCAG 2.1.1)', async () => {
 		const container = await renderCollapsedAdmin();
-		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
-		const tabindex = handle.getAttribute('tabindex');
-		expect(tabindex === null || tabindex === '-1').toBe(true);
+		const handles = ['sec-sop', 'sec-alto', 'sec-tenor'].map(
+			(id) => q(container, `section-drag-handle-${id}`) as HTMLElement
+		);
+		for (const handle of handles) {
+			expect(handle, 'handle must render').not.toBeNull();
+			expect(handle.getAttribute('tabindex'), 'every handle must carry a tabindex').not.toBeNull();
+		}
+		expect(
+			handles.some((handle) => handle.getAttribute('tabindex') === '0'),
+			'at least one handle must be in the Tab order'
+		).toBe(true);
 	});
 });
 
@@ -845,14 +856,21 @@ describe('#99 review F4 — only a SIBLING header advertises (and accepts) the d
 	});
 });
 
-describe('#99 review F5 — the drag handle does not announce itself as a button', () => {
-	it("the handle is role='img' with an accessible name, not role='button' — it is deliberately unfocusable and implements no activation of its own, so 'button' promises AT a control that cannot be operated", async () => {
+// #152 RED — SUPERSEDES #99 review F5. F5 pinned role='img' EXPLICITLY
+// conditioned on the handle being non-operable ("if the handle DOES become
+// operable, this role='img' choice must be revisited" — the handle's own
+// source comment). #152 makes it operable (Space/Enter grab, arrows move,
+// Escape cancels — full contract in page.roster-ux-a11y.spec.ts section 5),
+// so the promise flips: it IS a button now, and role='img' would hide an
+// operable control from AT.
+describe('#152 — the drag handle announces itself as a BUTTON (supersedes #99 F5)', () => {
+	it("the handle is role='button' with an accessible name containing the section name — it is focusable and operable now, so 'img' would deny AT the control that exists", async () => {
 		const container = await renderReady('admin');
 		await collapse(container, 'sec-sop');
 		const handle = q(container, 'section-drag-handle-sec-sop') as HTMLElement;
 
-		expect(handle.getAttribute('role')).not.toBe('button');
-		expect(handle.getAttribute('role')).toBe('img');
+		expect(handle.getAttribute('role')).toBe('button');
+		expect(handle.getAttribute('role')).not.toBe('img');
 		expect(handle.getAttribute('aria-label')).toContain('Soprano');
 		expect(handle.getAttribute('aria-hidden')).not.toBe('true');
 	});
@@ -986,6 +1004,75 @@ describe('#99 review R2/F3 — reorder outcomes are announced', () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// 9 — #152 RED: keyboard reorder respects sibling boundaries. The full
+//     grab/move/drop/cancel protocol is defined in page.roster-ux-a11y.spec.ts
+//     section 5 (flat three-section fixture); THIS fixture has what that one
+//     lacks — a sub-section (sec-sop1) and the Unassigned pseudo-group — so
+//     the boundary rules live here: a keyboard move must stay inside its own
+//     sibling group (same rule `dropOnto` enforces for pointer drops: a
+//     cross-parent move is STRUCTURAL, not an order change) and must never
+//     treat Unassigned as a landing slot (it is not a section entity).
+// ---------------------------------------------------------------------------
+describe('#152 — keyboard reorder respects sibling boundaries and the Unassigned pseudo-group', () => {
+	/** Every section-group testid suffix in document order — nested groups
+	 *  included, so a structural escape (a sub-section leaving its parent)
+	 *  would show up as a changed sequence. */
+	function groupOrder(container: HTMLElement): string[] {
+		return Array.from(container.querySelectorAll('[data-testid^="section-group-"]')).map((el) =>
+			el.getAttribute('data-testid')!.slice('section-group-'.length)
+		);
+	}
+
+	/** Focus `id`'s handle and grab it with Space. */
+	async function grab(container: HTMLElement, id: string): Promise<HTMLElement> {
+		const handle = q(container, `section-drag-handle-${id}`) as HTMLElement;
+		expect(handle, `drag handle for ${id}`).not.toBeNull();
+		handle.focus();
+		await fireEvent.keyDown(handle, { key: ' ' });
+		expect(handle.getAttribute('aria-grabbed'), `Space must grab ${id}`).toBe('true');
+		return handle;
+	}
+
+	it('ArrowDown on the grabbed LAST real section is a no-op — the Unassigned pseudo-group is not a landing slot, so there is nowhere further down', async () => {
+		const container = await renderCollapsedAdmin();
+		// All roots collapsed: Soprano, Alto, Tenor, then Unassigned.
+		expect(groupOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor', 'unassigned']);
+
+		const handle = await grab(container, 'sec-tenor');
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+
+		expect(groupOrder(container), 'Tenor must not move below/into Unassigned').toEqual([
+			'sec-sop',
+			'sec-alto',
+			'sec-tenor',
+			'unassigned'
+		]);
+		expect(handle.getAttribute('aria-grabbed'), 'the grab survives the clamped press').toBe('true');
+		await fireEvent.keyDown(handle, { key: 'Escape' });
+	});
+
+	it('a grabbed SUB-SECTION with no siblings goes nowhere — ArrowUp/ArrowDown never escape its parent (a cross-parent move is structural, not an order change), and dropping in place writes nothing', async () => {
+		const container = await renderReady('admin');
+		// Soprano stays EXPANDED so Soprano 1 renders; Soprano 1 itself collapses
+		// so it carries a handle (canReorder = admin AND collapsed).
+		await collapse(container, 'sec-sop1');
+		const before = groupOrder(container);
+		expect(before).toContain('sec-sop1');
+
+		const handle = await grab(container, 'sec-sop1');
+		await fireEvent.keyDown(handle, { key: 'ArrowUp' });
+		expect(groupOrder(container), 'ArrowUp on an only child must move nothing').toEqual(before);
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		expect(groupOrder(container), 'ArrowDown on an only child must move nothing').toEqual(before);
+
+		await fireEvent.keyDown(handle, { key: ' ' });
+		expect(handle.getAttribute('aria-grabbed')).toBe('false');
+		expect(reorderMock, 'a drop that moved nothing must not write').not.toHaveBeenCalled();
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Palestrina* — section 7, #99 code-review fix regression cover)
 // (*MVOX:Palestrina* — section 8, #99 code-review fix regression cover, round 2)
+// (*MVOX:Tallis* — section 9, #152 keyboard-reorder sibling-boundary RED)

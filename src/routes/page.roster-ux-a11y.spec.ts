@@ -31,8 +31,22 @@
 //
 //   #150 — the labelled ▲/▼ buttons this file used to pin as "the keyboard
 //   alternative to the drag" are gone; drag/touch is now the only reorder
-//   input, and the page currently has no keyboard-operable reorder path
-//   (tracked in #152).
+//   input.
+//
+//   #152 RED (section 5 below) — the replacement keyboard path, ON THE HANDLE
+//   ITSELF: focusable role="button", Space/Enter grabs, ArrowUp/ArrowDown move
+//   the grabbed section one sibling slot per press (provisional, no write),
+//   Space/Enter drops and COMMITS through the same reorderSections seam the
+//   drag path uses, Escape cancels back to the original order with no write.
+//   Every outcome lands in the existing roster-reorder-status live region.
+//
+//   #152 review fixes:
+//   - F1 — the handle's role="button" is honoured for CLICK activation too
+//     (detail === 0 only, so no pointer gesture reaches the state machine), and
+//     the protocol is discoverable via aria-describedby, not guesswork;
+//   - F2 — the COMMITTED drop is announced differently from the PROVISIONAL
+//     arrow press, so a screen-reader user can tell "saved" from "moved but not
+//     saved yet".
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -67,7 +81,19 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_remove_cancel: (p) => `Keep ${p?.name}`,
 		roster_section_remove_failed: (p) => `${p?.name} couldn't be removed — the section is still there.`,
 		roster_section_remove_not_empty: (p) =>
-			`${p?.name} still has members or sub-sections — nothing was removed.`
+			`${p?.name} still has members or sub-sections — nothing was removed.`,
+		// #152 — the keyboard-cancel announcement. The key name is a proposal: the
+		// tests below assert /cancel/i + the section name, so a GREEN that names
+		// the key differently still passes through the Proxy fallback as long as
+		// "cancel" appears in the key or its text.
+		roster_section_move_cancelled: (p) => `${p?.name} — move cancelled.`,
+		// #152 review F2 — the two announcements the drop path has to keep
+		// DISTINCT: "moved" is provisional (an arrow press, nothing written),
+		// "dropped" is committed (the write landed).
+		roster_section_grabbed: (p) => `Grabbed ${p?.name}.`,
+		roster_section_dropped: (p) => `Dropped ${p?.name} at position ${p?.position} of ${p?.total}.`,
+		roster_section_reorder_instructions: () =>
+			'Press Space to grab, arrow keys to move, Space to drop, Escape to cancel.'
 	};
 	const m = new Proxy(known, {
 		get(target, prop) {
@@ -490,7 +516,8 @@ describe('#113 — a11y: collapse/expand controls', () => {
 // ---------------------------------------------------------------------------
 // 4 — drag-reorder affordances (TU.2 finding #11)
 // #150 — this page's ONLY keyboard-alternative to the drag (the ▲/▼ buttons)
-// has been removed; no replacement keyboard path exists yet — tracked in #152.
+// has been removed; the replacement keyboard path (ON the handle) is #152 —
+// section 5 below defines it.
 // ---------------------------------------------------------------------------
 describe('#113 — a11y: drag-reorder (drop-target hint, ARIA drag state)', () => {
 	it('guard: during a drag-over, the dashed drop-target hint renders as aria-hidden decoration and the hovered header announces aria-dropeffect="move"', async () => {
@@ -522,4 +549,624 @@ describe('#113 — a11y: drag-reorder (drop-target hint, ARIA drag state)', () =
 	});
 });
 
+// ---------------------------------------------------------------------------
+// 5 — #152 RED: keyboard section reorder on the drag handle (WCAG 2.1.1)
+//
+// #150 left the drag handle as the SOLE reorder input: `tabindex="-1"`,
+// `role="img"`, no keyboard protocol — a keyboard-only admin cannot reorder
+// sections at all. These tests define the replacement contract on the REAL
+// route (never a component in isolation, per "partial assertions hide bugs"):
+//
+//   - the handle is a focusable role="button" with an accessible name naming
+//     its section (supersedes the #99 F5 role="img" pin, which was explicitly
+//     conditioned on the handle being non-operable);
+//   - Space/Enter GRABS (aria-grabbed="true" + a visible affordance);
+//   - ArrowUp/ArrowDown move the grabbed section one sibling slot per press —
+//     PROVISIONAL: the DOM reorders, focus stays on the moved handle, the live
+//     region announces the new position, but NO write fires yet;
+//   - Space/Enter while grabbed DROPS: one reorderSections write with the
+//     final order (the same seam the drag path commits through), announced in
+//     roster-reorder-status;
+//   - Escape CANCELS: the original order comes back, no write ever fires, and
+//     the cancellation is announced;
+//   - top/bottom presses CLAMP (no wrap), and reorderPending refuses a new
+//     grab while a write is outstanding.
+// ---------------------------------------------------------------------------
+describe('#152 — keyboard section reorder on the drag handle', () => {
+	function handleOf(container: HTMLElement, id: string): HTMLElement {
+		const handle = q(container, `section-drag-handle-${id}`) as HTMLElement;
+		expect(handle, `drag handle for ${id}`).not.toBeNull();
+		return handle;
+	}
+
+	/** Top-level section order as rendered — the observable a keyboard move
+	 *  must change (and a cancel must restore). */
+	function sectionOrder(container: HTMLElement): string[] {
+		return Array.from(
+			(q(container, 'roster-groups') as HTMLElement).querySelectorAll(
+				'[data-testid^="section-group-"]'
+			)
+		).map((el) => el.getAttribute('data-testid')!.slice('section-group-'.length));
+	}
+
+	/** Focus `id`'s handle and grab it with Space. */
+	async function grab(container: HTMLElement, id: string): Promise<HTMLElement> {
+		const handle = handleOf(container, id);
+		handle.focus();
+		await fireEvent.keyDown(handle, { key: ' ' });
+		return handle;
+	}
+
+	// ── handle accessibility ────────────────────────────────────────────────
+
+	it('the handle is role="button" — it implements a keyboard protocol now, so the #99 F5 role="img" choice (conditioned on non-operability) no longer holds', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		expect(handle.getAttribute('role')).toBe('button');
+		expect(handle.getAttribute('role')).not.toBe('img');
+	});
+
+	it('the handle carries an accessible name containing the section name, and is not aria-hidden', async () => {
+		const container = await renderReady();
+		for (const [id, name] of [
+			['sec-sop', 'Soprano'],
+			['sec-alto', 'Alto'],
+			['sec-tenor', 'Tenor']
+		] as const) {
+			const handle = handleOf(container, id);
+			expect(handle.getAttribute('aria-label'), `handle label for ${id}`).toContain(name);
+			expect(handle.getAttribute('aria-hidden')).not.toBe('true');
+		}
+	});
+
+	it('integration: rendered on the real /roster route (admin, sections collapsed), at least one handle sits in the Tab order — tabindex="0" flat or roving, but never every handle at "-1"', async () => {
+		const container = await renderReady();
+		const handles = ['sec-sop', 'sec-alto', 'sec-tenor'].map((id) => handleOf(container, id));
+		// Every handle must carry a tabindex so it can take focus at all…
+		for (const handle of handles) {
+			expect(handle.getAttribute('tabindex'), 'every handle must carry a tabindex').not.toBeNull();
+		}
+		// …and at least one must be REACHABLE via Tab (roving tabindex keeps one
+		// per composite; a flat tabindex="0" on all of them also satisfies this).
+		expect(
+			handles.some((handle) => handle.getAttribute('tabindex') === '0'),
+			'no handle is in the Tab order — the keyboard path is unreachable'
+		).toBe(true);
+	});
+
+	it('the handle takes programmatic focus (precondition for every protocol test below)', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		handle.focus();
+		expect(document.activeElement).toBe(handle);
+	});
+
+	// #152 review F1 — role="button" is a PROMISE of activation, and a large
+	// share of AT users deliver activation as a `click`, not a keydown:
+	// NVDA/JAWS browse-mode Enter/Space on a role="button" synthesises a click
+	// (and browse mode does not switch to focus mode for `button`, so the arrows
+	// never reach the handler either), TalkBack/VoiceOver double-tap fires a
+	// click, Voice Control / Dragon "click Reorder Soprano" fires a click.
+	// Wiring only onkeydown made the branch's own new role a lie for all of
+	// them. Synthetic/AT clicks carry `detail === 0`; real pointer clicks (and
+	// the click that trails a drag release) carry `detail >= 1`.
+	it('an AT-synthesised click (detail 0) GRABS and takes focus — role="button" promises activation, and NVDA/JAWS/TalkBack/Voice Control deliver it as a click', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		// Deliberately NOT focused first: a voice command ("click Reorder
+		// Soprano") activates a handle the user never Tab'd to.
+		await fireEvent.click(handle, { detail: 0 });
+
+		expect(
+			handle.getAttribute('aria-grabbed'),
+			'a click-activated role="button" that does nothing is a broken control for every browse-mode / touch-AT / voice user'
+		).toBe('true');
+		expect(
+			document.activeElement,
+			'a grab on an UNFOCUSED handle can never be blur-cancelled — the provisional reorder would outlive the gesture'
+		).toBe(handle);
+	});
+
+	it('an AT-synthesised click while grabbed DROPS and commits — the whole protocol is reachable click-only', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		await fireEvent.click(handle, { detail: 0 });
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		await waitFor(() => {
+			expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+		});
+
+		await fireEvent.click(handleOf(container, 'sec-sop'), { detail: 0 });
+
+		await waitFor(() => {
+			expect(reorderMock).toHaveBeenCalledTimes(1);
+		});
+		expect(reorderMock).toHaveBeenCalledWith({ db: 'polyphony', token: 'jwt-abc' }, [
+			'sec-alto',
+			'sec-sop',
+			'sec-tenor'
+		]);
+		expect(handleOf(container, 'sec-sop').getAttribute('aria-grabbed')).toBe('false');
+	});
+
+	it('a REAL mouse click (detail 1) does NOT grab — the pointer/drag gesture must never fall into the keyboard state machine', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+
+		await fireEvent.click(handle, { detail: 1 });
+
+		expect(
+			handle.getAttribute('aria-grabbed'),
+			'the click that trails a mouse drag release would otherwise leave the handle grabbed'
+		).toBe('false');
+		expect(reorderMock).not.toHaveBeenCalled();
+	});
+
+	it('the handle is DESCRIBED by the reorder protocol — Space/arrows/Escape is not guessable from a name that says "drag"', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		const describedBy = handle.getAttribute('aria-describedby');
+		expect(describedBy, 'the handle carries no description at all').toBeTruthy();
+
+		const description = container.ownerDocument.getElementById(describedBy!);
+		expect(description, `aria-describedby="${describedBy}" points at nothing`).not.toBeNull();
+		const text = description!.textContent ?? '';
+		expect(text).toMatch(/space/i);
+		expect(text).toMatch(/arrow/i);
+		expect(text).toMatch(/escape/i);
+	});
+
+	it('guard: no drag handle renders for a non-admin — the keyboard path is admin-gated like every other reorder input', async () => {
+		const container = await renderReady('not-admin');
+		expect(container.querySelector('[data-testid^="section-drag-handle-"]')).toBeNull();
+		// …and the protocol description goes with them — nothing references it,
+		// and a non-admin should not be told about a control she never gets.
+		expect(q(container, 'roster-reorder-instructions')).toBeNull();
+	});
+
+	// ── grab / drop protocol ────────────────────────────────────────────────
+
+	it('Space on a focused handle GRABS (aria-grabbed="true" + a visible affordance); Space again drops it — and a no-move drop fires no write', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		const idleClass = handle.className;
+
+		handle.focus();
+		await fireEvent.keyDown(handle, { key: ' ' });
+		expect(handle.getAttribute('aria-grabbed')).toBe('true');
+		expect(
+			handle.className,
+			'the grabbed state needs a VISIBLE affordance — a class change, not aria alone'
+		).not.toBe(idleClass);
+
+		await fireEvent.keyDown(handle, { key: ' ' });
+		expect(handle.getAttribute('aria-grabbed')).toBe('false');
+		expect(reorderMock, 'a grab dropped in place must not write').not.toHaveBeenCalled();
+	});
+
+	it('Enter grabs and drops too — Space/Enter parity on a role="button"', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		handle.focus();
+		await fireEvent.keyDown(handle, { key: 'Enter' });
+		expect(handle.getAttribute('aria-grabbed')).toBe('true');
+		await fireEvent.keyDown(handle, { key: 'Enter' });
+		expect(handle.getAttribute('aria-grabbed')).toBe('false');
+	});
+
+	it('ArrowUp/ArrowDown on a focused but UNGRABBED handle move nothing — arrows only act inside a grab', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-alto');
+		handle.focus();
+		await fireEvent.keyDown(handle, { key: 'ArrowUp' });
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+		expect(reorderMock).not.toHaveBeenCalled();
+	});
+
+	it('ArrowDown while grabbed moves the section DOWN one position — provisional (no write yet), focus stays on the moved handle, and the move is announced', async () => {
+		const container = await renderReady();
+		const handle = await grab(container, 'sec-sop');
+
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+
+		await waitFor(() => {
+			expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+		});
+		expect(reorderMock, 'a provisional move must not write — only the drop commits').not.toHaveBeenCalled();
+		expect(
+			document.activeElement,
+			'focus must travel WITH the moved handle (WCAG 2.4.3)'
+		).toBe(handleOf(container, 'sec-sop'));
+		await waitFor(() => {
+			const status = q(container, 'roster-reorder-status') as HTMLElement;
+			expect(status.textContent).toContain('Soprano');
+			expect(status.textContent).toContain('2');
+		});
+	});
+
+	it('ArrowUp while grabbed moves the section UP one position — provisional, no write', async () => {
+		const container = await renderReady();
+		const handle = await grab(container, 'sec-alto');
+
+		await fireEvent.keyDown(handle, { key: 'ArrowUp' });
+
+		await waitFor(() => {
+			expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+		});
+		expect(reorderMock).not.toHaveBeenCalled();
+	});
+
+	it('Space while grabbed DROPS: exactly one reorderSections write with the final order, aria-grabbed returns to "false", and the drop announces the final position', async () => {
+		const container = await renderReady();
+		const handle = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+
+		await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: ' ' });
+
+		await waitFor(() => {
+			expect(reorderMock).toHaveBeenCalledTimes(1);
+		});
+		expect(reorderMock).toHaveBeenCalledWith({ db: 'polyphony', token: 'jwt-abc' }, [
+			'sec-alto',
+			'sec-sop',
+			'sec-tenor'
+		]);
+		expect(handleOf(container, 'sec-sop').getAttribute('aria-grabbed')).toBe('false');
+		await waitFor(() => {
+			const status = q(container, 'roster-reorder-status') as HTMLElement;
+			expect(status.textContent).toContain('Soprano');
+			expect(status.textContent).toContain('2');
+		});
+	});
+
+	// #152 review F2 — the committed drop used to re-announce the byte-identical
+	// `roster_section_moved` string the PROVISIONAL arrow press had already put
+	// in the live region: a screen-reader user heard "Soprano moved to position 2
+	// of 3" on the arrow and the same sentence again once the write landed, with
+	// nothing separating "not saved" from "saved". Meanwhile the bespoke
+	// `roster_section_dropped` string was reachable ONLY from the no-op drop
+	// branch — the one case with nothing to confirm. The words are now split by
+	// meaning: "moved" = provisional, "dropped" = written.
+	it('the COMMITTED drop announces something different from the provisional arrow press — "saved" must not sound identical to "moved but not saved"', async () => {
+		const container = await renderReady();
+		const status = () => (q(container, 'roster-reorder-status') as HTMLElement).textContent ?? '';
+
+		const handle = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		let provisional = '';
+		await waitFor(() => {
+			provisional = status();
+			expect(provisional).toContain('Soprano');
+			expect(provisional).toContain('moved');
+		});
+
+		await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: ' ' });
+		await waitFor(() => {
+			expect(reorderMock).toHaveBeenCalledTimes(1);
+		});
+		await waitFor(() => {
+			expect(
+				status(),
+				'the post-drop announcement is byte-identical to the pre-drop one — nothing tells the user the order was actually saved'
+			).not.toBe(provisional);
+		});
+		expect(status()).toContain('Soprano');
+		expect(status(), 'the committed drop still has to name the final position').toContain('2');
+	});
+
+	it('a FAILED drop does not claim the order was saved — the provisional wording stands and the error alert speaks', async () => {
+		reorderMock.mockRejectedValue(new Error('403'));
+		const container = await renderReady();
+		const status = () => (q(container, 'roster-reorder-status') as HTMLElement).textContent ?? '';
+
+		const handle = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: ' ' });
+
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-error')).not.toBeNull();
+		});
+		expect(
+			status(),
+			'a rejected write must never produce a committed-drop announcement'
+		).not.toMatch(/dropped/i);
+	});
+
+	it('Escape while grabbed CANCELS: the original order comes back, NO write ever fires, and the cancellation is announced naming the section', async () => {
+		const container = await renderReady();
+		const handle = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		await waitFor(() => {
+			expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+		});
+
+		await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: 'Escape' });
+
+		await waitFor(() => {
+			expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+		});
+		expect(reorderMock, 'a cancelled move must never write').not.toHaveBeenCalled();
+		expect(handleOf(container, 'sec-sop').getAttribute('aria-grabbed')).toBe('false');
+		await waitFor(() => {
+			const status = q(container, 'roster-reorder-status') as HTMLElement;
+			expect(status.textContent).toMatch(/cancel/i);
+			expect(status.textContent).toContain('Soprano');
+		});
+	});
+
+	// ── clamping ────────────────────────────────────────────────────────────
+
+	it('ArrowUp on the grabbed TOP section is a no-op — clamp, no wrap to the bottom', async () => {
+		const container = await renderReady();
+		const handle = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(handle, { key: 'ArrowUp' });
+		expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+		expect(handle.getAttribute('aria-grabbed'), 'the grab survives a clamped press').toBe('true');
+	});
+
+	it('ArrowDown on the grabbed BOTTOM section is a no-op — clamp, no wrap to the top', async () => {
+		const container = await renderReady();
+		const handle = await grab(container, 'sec-tenor');
+		await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+		expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+		expect(handle.getAttribute('aria-grabbed')).toBe('true');
+	});
+
+	// ── in-flight guard ─────────────────────────────────────────────────────
+
+	it('reorderPending refuses a NEW grab while a reorder write is in flight — and grabbing works again once it settles', async () => {
+		let settle!: () => void;
+		reorderMock.mockImplementation(
+			() =>
+				new Promise<void>((res) => {
+					settle = res;
+				})
+		);
+		const container = await renderReady();
+
+		// Keyboard move + drop → the write is now outstanding.
+		const sop = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(sop, { key: 'ArrowDown' });
+		await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: ' ' });
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-pending')).not.toBeNull();
+		});
+
+		// A second grab while pending must be refused.
+		const tenor = handleOf(container, 'sec-tenor');
+		tenor.focus();
+		await fireEvent.keyDown(tenor, { key: ' ' });
+		expect(
+			tenor.getAttribute('aria-grabbed'),
+			'a grab while a write is in flight must be refused'
+		).toBe('false');
+
+		settle();
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-pending')).toBeNull();
+		});
+
+		// …and the refusal was the guard, not a broken handle.
+		tenor.focus();
+		await fireEvent.keyDown(tenor, { key: ' ' });
+		expect(tenor.getAttribute('aria-grabbed')).toBe('true');
+		await fireEvent.keyDown(tenor, { key: 'Escape' });
+	});
+
+	// ── coexistence with the drag path ──────────────────────────────────────
+
+	it('integration: keyboard reorder and drag reorder coexist on the same handle — a keyboard commit then a drag commit both land, in order', async () => {
+		const container = await renderReady();
+
+		// Keyboard: Soprano down one, drop. Order: Alto, Soprano, Tenor.
+		const sop = await grab(container, 'sec-sop');
+		await fireEvent.keyDown(sop, { key: 'ArrowDown' });
+		await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: ' ' });
+		await waitFor(() => {
+			expect(reorderMock).toHaveBeenCalledTimes(1);
+		});
+		expect(reorderMock).toHaveBeenLastCalledWith({ db: 'polyphony', token: 'jwt-abc' }, [
+			'sec-alto',
+			'sec-sop',
+			'sec-tenor'
+		]);
+
+		// Drag: Tenor onto Alto (Tenor takes Alto's slot). Order: Tenor, Alto, Soprano.
+		await dragAndDrop(container, 'sec-tenor', 'sec-alto');
+		await waitFor(() => {
+			expect(reorderMock).toHaveBeenCalledTimes(2);
+		});
+		expect(reorderMock).toHaveBeenLastCalledWith({ db: 'polyphony', token: 'jwt-abc' }, [
+			'sec-tenor',
+			'sec-alto',
+			'sec-sop'
+		]);
+		await waitFor(() => {
+			expect(sectionOrder(container)).toEqual(['sec-tenor', 'sec-alto', 'sec-sop']);
+		});
+	});
+
+	it('guard: a drag still announces its grab — the keyboard protocol must not break aria-grabbed on the pointer path', async () => {
+		const container = await renderReady();
+		const handle = handleOf(container, 'sec-sop');
+		await fireEvent.dragStart(handle, { dataTransfer: makeDataTransfer() });
+		expect(handle.getAttribute('aria-grabbed')).toBe('true');
+		await fireEvent.dragEnd(handle);
+		expect(handle.getAttribute('aria-grabbed')).toBe('false');
+	});
+
+	// ── #152 review F1 — the move indexes the RENDERED list, not the raw tree ──
+	//
+	// `listSections` is NOT org-scoped and sections are `_sharing: public`, so on
+	// a multi-collective db the raw top level holds roots belonging to OTHER
+	// collectives. #124/F3 filters those out of the render (`visibleSections`),
+	// so a keyboard move that indexes the RAW sibling array is counting slots the
+	// user can neither see nor reach: the press appears to do nothing, the live
+	// region announces a phantom position/total, and the drop writes a
+	// display_order renumbering over another collective's sections.
+	describe('a foreign collective\'s root section is never a keyboard landing slot (#152 review F1)', () => {
+		/** sec-foreign (org-2) sits BETWEEN Soprano and Alto in the raw tree — it
+		 *  is filtered out of the render by #124/F3, so the screen shows
+		 *  Soprano, Alto, Tenor. */
+		function interleavedForeignTree(): SectionNode[] {
+			return [
+				{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, orgId: 'org-1', depth: 0, children: [] },
+				{ id: 'sec-foreign', name: 'Foreign Bass', displayOrder: 2, parentId: null, orgId: 'org-2', depth: 0, children: [] },
+				{ id: 'sec-alto', name: 'Alto', displayOrder: 3, parentId: null, orgId: 'org-1', depth: 0, children: [] },
+				{ id: 'sec-tenor', name: 'Tenor', displayOrder: 4, parentId: null, orgId: 'org-1', depth: 0, children: [] }
+			];
+		}
+
+		/** The foreign root sorts AFTER every visible one — the bottom clamp must
+		 *  hold against the RENDERED list, not the raw one. */
+		function trailingForeignTree(): SectionNode[] {
+			return [
+				{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, orgId: 'org-1', depth: 0, children: [] },
+				{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, orgId: 'org-1', depth: 0, children: [] },
+				{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, orgId: 'org-1', depth: 0, children: [] },
+				{ id: 'sec-foreign', name: 'Foreign Bass', displayOrder: 4, parentId: null, orgId: 'org-2', depth: 0, children: [] }
+			];
+		}
+
+		it('precondition: the foreign-org root is not rendered at all (#124/F3)', async () => {
+			listSectionsMock.mockResolvedValue(interleavedForeignTree());
+			const container = await renderReady();
+			expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+			expect(q(container, 'section-drag-handle-sec-foreign')).toBeNull();
+		});
+
+		it('ArrowDown on the first VISIBLE root swaps it with the next VISIBLE root — the invisible foreign root is not a slot, and the announcement counts only what is on screen', async () => {
+			listSectionsMock.mockResolvedValue(interleavedForeignTree());
+			const container = await renderReady();
+			const handle = await grab(container, 'sec-sop');
+
+			await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+
+			await waitFor(() => {
+				expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+			});
+			const status = q(container, 'roster-reorder-status') as HTMLElement;
+			expect(
+				status.textContent,
+				'position/total must describe the RENDERED list — "2 of 4" names a slot the user cannot see'
+			).toContain('Soprano moved to position 2 of 3');
+		});
+
+		it('the drop writes only the VISIBLE sibling order — a keyboard reorder never renumbers another collective\'s sections', async () => {
+			listSectionsMock.mockResolvedValue(interleavedForeignTree());
+			const container = await renderReady();
+			const handle = await grab(container, 'sec-sop');
+			await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+
+			await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: ' ' });
+
+			await waitFor(() => {
+				expect(reorderMock).toHaveBeenCalledTimes(1);
+			});
+			expect(reorderMock).toHaveBeenCalledWith({ db: 'polyphony', token: 'jwt-abc' }, [
+				'sec-alto',
+				'sec-sop',
+				'sec-tenor'
+			]);
+		});
+
+		it('ArrowDown on the LAST VISIBLE root is a no-op even when a foreign root sorts after it — the clamp holds against the rendered list', async () => {
+			listSectionsMock.mockResolvedValue(trailingForeignTree());
+			const container = await renderReady();
+			const handle = await grab(container, 'sec-tenor');
+
+			await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+
+			expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+			expect(handle.getAttribute('aria-grabbed'), 'the grab survives a clamped press').toBe('true');
+			const status = q(container, 'roster-reorder-status') as HTMLElement;
+			expect(
+				status.textContent ?? '',
+				'a clamped press must announce nothing — not a move onto an invisible slot'
+			).not.toMatch(/Tenor moved/);
+		});
+	});
+
+	// ── #152 review F2 — a grab must not survive focus loss ───────────────────
+	//
+	// Nothing cancelled the grab when the handle lost focus, so `grabbedSectionId`
+	// and the PROVISIONAL (unwritten) reorder outlived the user leaving the
+	// control: the screen kept an order the server does not hold (this page never
+	// refetches — the #98/F3 "the screen lies" failure mode), and the dangling
+	// grab then hijacked the next handle the user pressed an arrow on.
+	describe('a keyboard grab is cancelled when the handle loses focus (#152 review F2)', () => {
+		it('blur while grabbed CANCELS: the pre-grab order comes back, aria-grabbed returns to "false", and nothing is written', async () => {
+			const container = await renderReady();
+			const handle = await grab(container, 'sec-sop');
+			await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+			await waitFor(() => {
+				expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+			});
+
+			handleOf(container, 'sec-sop').blur();
+
+			await waitFor(() => {
+				expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+			});
+			expect(handleOf(container, 'sec-sop').getAttribute('aria-grabbed')).toBe('false');
+			expect(reorderMock, 'an abandoned grab must never write').not.toHaveBeenCalled();
+			await waitFor(() => {
+				const status = q(container, 'roster-reorder-status') as HTMLElement;
+				expect(status.textContent).toMatch(/cancel/i);
+				expect(status.textContent).toContain('Soprano');
+			});
+		});
+
+		it('after that blur, an arrow press on a DIFFERENT handle moves nothing — no grab is left dangling to hijack it', async () => {
+			const container = await renderReady();
+			const handle = await grab(container, 'sec-sop');
+			await fireEvent.keyDown(handle, { key: 'ArrowDown' });
+			handleOf(container, 'sec-sop').blur();
+			await waitFor(() => {
+				expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+			});
+
+			const tenor = handleOf(container, 'sec-tenor');
+			expect(tenor.getAttribute('aria-grabbed')).toBe('false');
+			tenor.focus();
+			await fireEvent.keyDown(tenor, { key: 'ArrowUp' });
+
+			expect(sectionOrder(container)).toEqual(['sec-sop', 'sec-alto', 'sec-tenor']);
+			expect(reorderMock).not.toHaveBeenCalled();
+		});
+
+		it('a provisional ArrowUp/ArrowDown does NOT self-cancel — a real browser blurs the grabbed handle when the reorder relocates it in the DOM, and that blur is not the user leaving', async () => {
+			const container = await renderReady();
+			const handle = await grab(container, 'sec-sop');
+
+			// A real browser blurs a focused element when it is relocated in the
+			// DOM (the reorder does exactly that, which is why the handler
+			// re-focuses afterwards); happy-dom does not, so dispatch it by hand,
+			// synchronously inside the move — between the keydown dispatch and the
+			// handler's post-tick re-focus. Without the guard this cancels the grab
+			// and reverts the move the user just made.
+			const moved = fireEvent.keyDown(handle, { key: 'ArrowDown' });
+			handle.dispatchEvent(new FocusEvent('blur'));
+			await moved;
+
+			await waitFor(() => {
+				expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-sop', 'sec-tenor']);
+			});
+			expect(
+				handleOf(container, 'sec-sop').getAttribute('aria-grabbed'),
+				'the grab survives its own re-homing of focus'
+			).toBe('true');
+
+			// …and the grab is still live enough to keep moving and to commit.
+			await fireEvent.keyDown(handleOf(container, 'sec-sop'), { key: 'ArrowDown' });
+			await waitFor(() => {
+				expect(sectionOrder(container)).toEqual(['sec-alto', 'sec-tenor', 'sec-sop']);
+			});
+		});
+	});
+});
+
 // (*MVOX:Tallis*)
+// (*MVOX:Tallis* — section 5, #152 keyboard-reorder RED)
+// (*MVOX:Byrd* — #152 review F1/F2 RED: org-filtered sibling list, grab cancelled on blur)

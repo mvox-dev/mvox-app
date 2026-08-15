@@ -875,14 +875,46 @@
 		return null;
 	}
 
-	/** Immutable reorder: whichever level's id SET matches `orderedIds` exactly
-	 *  gets rebuilt in that order (nodes themselves, incl. `children`, untouched
+	/** #152 review F1 — the sibling group AS RENDERED, which is what every
+	 *  reorder path must index, clamp, announce and write over.
+	 *
+	 *  `siblingsOf` walks the RAW `sections` tree, but the top level on screen is
+	 *  `visibleSections`: `listSections` is not org-scoped and sections are
+	 *  `_sharing: public`, so on a multi-collective db the raw top level also
+	 *  holds roots belonging to OTHER collectives, which #124/F3 filters out of
+	 *  the render entirely. Indexing the raw array therefore counts slots the
+	 *  user can neither see nor reach — a keypress that appears to do nothing, an
+	 *  announcement that contradicts the screen, and a `reorderSections` payload
+	 *  that renumbers another collective's sections.
+	 *
+	 *  Only the ROOT level needs the filter: a sub-section carries no org
+	 *  `_parent` of its own (v4E `parentConstraint: 'exactly_one_of'`), so a
+	 *  rendered root's whole subtree is org-coherent by construction — the same
+	 *  reasoning `visibleSections`/`rootOrgBySectionId` above already rest on. */
+	function visibleSiblingsOf(id: string): SectionNode[] | null {
+		const siblings = siblingsOf(sections, id);
+		if (siblings === null) return null;
+		// Identity, not a content test: `siblingsOf(sections, …)` returns the very
+		// array it was handed when `id` is a root.
+		return siblings === sections ? visibleSections : siblings;
+	}
+
+	/** Immutable reorder: whichever level holds ALL of `orderedIds` gets those
+	 *  nodes rebuilt in that order (nodes themselves, incl. `children`, untouched
 	 *  — only the array's order changes); every ancestor on the path down to it
-	 *  is rebuilt too, so reassigning `sections` is enough to notify Svelte. */
+	 *  is rebuilt too, so reassigning `sections` is enough to notify Svelte.
+	 *
+	 *  #152 review F1 — `orderedIds` may be a SUBSET of its level: a reorder now
+	 *  carries only the VISIBLE siblings (`visibleSiblingsOf`), so a foreign
+	 *  collective's root sitting in the same raw array is not part of the move.
+	 *  Those nodes keep the slots they already occupy; only the listed ones are
+	 *  permuted among the slots they held between them. */
 	function applySiblingOrder(nodes: SectionNode[], orderedIds: string[]): SectionNode[] {
-		if (nodes.length === orderedIds.length && orderedIds.every((id) => nodes.some((n) => n.id === id))) {
+		const wanted = new Set(orderedIds);
+		if (orderedIds.length > 0 && nodes.filter((n) => wanted.has(n.id)).length === orderedIds.length) {
 			const byId = new Map(nodes.map((n) => [n.id, n]));
-			return orderedIds.map((id) => byId.get(id)!);
+			let next = 0;
+			return nodes.map((n) => (wanted.has(n.id) ? byId.get(orderedIds[next++])! : n));
 		}
 		return nodes.map((n) =>
 			n.children.length === 0 ? n : { ...n, children: applySiblingOrder(n.children, orderedIds) }
@@ -948,17 +980,25 @@
 	// so every input path (native drop, touch drop) gets them for free.
 	// `movedId` is the section the user acted on; it is what the announcement has
 	// to name (`afterIds` alone can't say which one moved).
+	//
+	// Returns whether the write LANDED — false for a refused attempt (a write
+	// already in flight, no cfg) as well as for a failed one. #152 review F2:
+	// the keyboard drop path needs to tell "committed" from "announced
+	// provisionally and then nothing happened" before it overwrites the live
+	// region with its own committed-drop wording; `reorderError` alone can't say
+	// that, since the early returns above leave it untouched or set it without a
+	// request ever going out.
 	async function performReorder(
 		beforeIds: string[],
 		afterIds: string[],
 		movedId: string
-	): Promise<void> {
-		if (reorderPending) return;
+	): Promise<boolean> {
+		if (reorderPending) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section reorder with no cfg', afterIds);
 			reorderError = true;
-			return;
+			return false;
 		}
 		const g = generation;
 		reorderPending = true;
@@ -975,12 +1015,13 @@
 				position: afterIds.indexOf(movedId) + 1,
 				total: afterIds.length
 			});
+			return true;
 		} catch (e) {
 			console.error('roster: section reorder failed', e);
 			reorderError = true;
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== generation) return; // superseded by a newer collective selection
+				if (g !== generation) return false; // superseded by a newer collective selection
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed reorder failed', refetchError);
@@ -989,6 +1030,7 @@
 		} finally {
 			reorderPending = false;
 		}
+		return false;
 	}
 
 	// Drag source, tracked between dragstart and drop. #99/TS.5 — now `$state`
@@ -1082,7 +1124,10 @@
 	function dropOnto(fromId: string, targetId: string): void {
 		if (!fromId || fromId === targetId) return;
 
-		const siblingNodes = siblingsOf(sections, fromId);
+		// #152 review F1 — the RENDERED sibling group (see `visibleSiblingsOf`):
+		// a foreign collective's root is not a slot the pointer can land on
+		// either, and must never end up in the `reorderSections` payload.
+		const siblingNodes = visibleSiblingsOf(fromId);
 		if (!siblingNodes) return;
 		const siblingIds = siblingNodes.map((n) => n.id);
 		const targetIndex = siblingIds.indexOf(targetId);
@@ -1234,6 +1279,264 @@
 	// restore a keyboard path on the handle itself (roving tabindex +
 	// ArrowUp/ArrowDown + Space to grab), reusing `performReorder` and the
 	// `roster-reorder-status` live region, which already announce the outcome.
+
+	// #152 — keyboard section reorder on the drag handle (WCAG 2.1.1). A
+	// SEPARATE input path from the native/touch drag handlers above (those are
+	// untouched) that funnels its own commit through the SAME `performReorder`
+	// write seam and the same `roster-reorder-status` live region, so a write —
+	// drag, touch, or keyboard — is always reconciled and announced identically.
+	//
+	// `grabbedSectionId` is this state machine's own flag (idle ⇄ grabbed),
+	// independent of the drag path's `draggedSectionId` — a keyboard grab and a
+	// pointer drag never occur on the same gesture, but nothing here assumes
+	// that; `aria-grabbed` on a handle is true when EITHER path holds it (see
+	// the handle's template below).
+	let grabbedSectionId = $state<string | null>(null);
+	// Non-reactive — the pre-grab sibling order, snapshotted once at grab time
+	// so Escape can restore it exactly regardless of how many provisional
+	// moves happened in between. Never drives a render on its own.
+	let grabSiblingIds: string[] | null = null;
+	// Non-reactive — true only for the instant a PROVISIONAL move is re-homing
+	// focus onto the moved handle. Reordering the tree MOVES that handle's
+	// element in the DOM, which blurs it; `handleHandleBlur` below must not read
+	// that as the user leaving the control (see #152 review F2).
+	let grabRefocusPending = false;
+
+	// Roving tabindex — one handle in the Tab order at a time.
+	// `reorderableHandleIds` walks the SAME collapsed/expanded shape the
+	// template renders (a node contributes its own handle when COLLAPSED, else
+	// its children are walked instead of it — mirrors `canReorder`/`isExpanded`
+	// in `sectionGroup` exactly), so this is always "every handle actually on
+	// screen", in document order.
+	const reorderableHandleIds = $derived.by(() => {
+		if (admin !== 'admin') return [] as string[];
+		const ids: string[] = [];
+		function walk(nodes: SectionNode[]): void {
+			for (const n of nodes) {
+				if (expandedIds.has(n.id)) walk(n.children);
+				else ids.push(n.id);
+			}
+		}
+		walk(visibleSections);
+		return ids;
+	});
+	let rovingHandleId = $state<string | null>(null);
+	/** The handle currently at tabindex="0" — `rovingHandleId` when it still
+	 *  names a rendered handle, else the first rendered one (covers the
+	 *  initial render, and a roving id that vanished from under it via an
+	 *  expand/collapse elsewhere on the page). */
+	const activeHandleId = $derived(
+		rovingHandleId !== null && reorderableHandleIds.includes(rovingHandleId)
+			? rovingHandleId
+			: (reorderableHandleIds[0] ?? null)
+	);
+
+	function handleElementFor(id: string): HTMLElement | null {
+		return document.querySelector<HTMLElement>(`[data-testid="section-drag-handle-${id}"]`);
+	}
+
+	/** IDLE-state ArrowUp/ArrowDown: move the roving tabindex to the
+	 *  next/previous reorderable handle and focus it. Clamps at either end (no
+	 *  wrap) — ArrowUp/ArrowDown while GRABBED is a completely different
+	 *  branch, below, and never calls this. */
+	function moveFocus(direction: 1 | -1): void {
+		const ids = reorderableHandleIds;
+		const currentId = activeHandleId;
+		if (currentId === null) return;
+		const idx = ids.indexOf(currentId);
+		const nextIdx = idx + direction;
+		if (idx === -1 || nextIdx < 0 || nextIdx >= ids.length) return;
+		const nextId = ids[nextIdx];
+		rovingHandleId = nextId;
+		tick().then(() => handleElementFor(nextId)?.focus());
+	}
+
+	/** Grab ⇄ drop, the one place the toggle lives.
+	 *
+	 *  #152 review F1 — `role="button"` promises ACTIVATION, and activation does
+	 *  not always arrive as a keydown. NVDA/JAWS browse-mode Enter/Space on a
+	 *  role="button" synthesises a `click`; TalkBack/VoiceOver double-tap fires a
+	 *  click; Voice Control / Dragon ("click Reorder Soprano") fires a click.
+	 *  Wiring the toggle to keydown alone left every one of those users with a
+	 *  control that announces itself as a button and then does nothing — the
+	 *  4.1.2 half of the promise unmet even though 2.1.1 (sighted keyboard) was
+	 *  satisfied. Both `onkeydown` and `onclick` now funnel here, so the grab
+	 *  state machine has exactly one implementation.
+	 *
+	 *  Grab is refused while `reorderPending` (#4 — no new grab over an
+	 *  outstanding write). Drop commits through `performReorder` — the SAME seam
+	 *  the drag path writes through — and only when the order actually changed;
+	 *  a drop back in place writes nothing. */
+	async function toggleGrab(node: SectionNode): Promise<void> {
+		// Belt-and-braces, same guard `handleHandleKeydown` applies: a handle that
+		// does not own the grab never drives the state machine.
+		if (grabbedSectionId !== null && grabbedSectionId !== node.id) return;
+
+		if (grabbedSectionId === null) {
+			if (reorderPending) return;
+			grabbedSectionId = node.id;
+			grabSiblingIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [node.id];
+			rovingHandleId = node.id;
+			reorderStatus = m.roster_section_grabbed({ name: node.name });
+			return;
+		}
+
+		const before = grabSiblingIds ?? [];
+		const after = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? before;
+		grabbedSectionId = null;
+		grabSiblingIds = null;
+		if (before.length === after.length && before.every((id, i) => id === after[i])) {
+			// Dropped back in place — nothing to write, but still worth saying so.
+			reorderStatus = m.roster_section_dropped({
+				name: node.name,
+				position: after.indexOf(node.id) + 1,
+				total: after.length
+			});
+			return;
+		}
+		// #152 review F2 — "moved" is the PROVISIONAL word (what an arrow press
+		// announces), "dropped" is the COMMITTED one. `performReorder` announces
+		// `roster_section_moved` for the drag path, where there is no provisional
+		// step and "moved" IS the commit; on this path that string has already
+		// been in the live region since the arrow press, so re-announcing it
+		// would make "saved" indistinguishable from "not saved yet". Only a write
+		// that actually landed earns the overwrite — a failure leaves
+		// `performReorder`'s own error handling (role="alert" + refetch) to speak.
+		const wrote = await performReorder(before, after, node.id);
+		if (!wrote) return;
+		const committed = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? after;
+		reorderStatus = m.roster_section_dropped({
+			name: node.name,
+			position: committed.indexOf(node.id) + 1,
+			total: committed.length
+		});
+	}
+
+	/** The keyboard state machine for one handle.
+	 *
+	 *  Idle (`grabbedSectionId === null`): Space/Enter grabs (refused while
+	 *  `reorderPending`); ArrowUp/ArrowDown rove focus between handles.
+	 *
+	 *  Grabbed: ArrowUp/ArrowDown move the section one SIBLING slot per press
+	 *  — PROVISIONAL (the local tree reorders, focus follows the moved handle,
+	 *  the move is announced, but nothing is written yet), clamped at either
+	 *  end; Space/Enter drops (`toggleGrab`) — commits through `performReorder`
+	 *  (the SAME write seam and `roster-reorder-status` region the drag path
+	 *  uses) only when the order actually changed, a no-op drop writes nothing,
+	 *  and the committed drop is announced with its OWN wording so "saved"
+	 *  never sounds like the provisional "moved" (#152 review F2); Escape
+	 *  cancels — restores the pre-grab order from `grabSiblingIds`, announces,
+	 *  never writes.
+	 *
+	 *  `visibleSiblingsOf` is the exact helper `dropOnto` (the drag path) also
+	 *  uses, so a keyboard move can never escape its own sibling group (a
+	 *  sub-section's parent's `children`, or the top-level list AS RENDERED —
+	 *  #152 review F1) — the Unassigned pseudo-group is never reachable either
+	 *  way, since it isn't part of the `sections` tree `siblingsOf` walks. */
+	async function handleHandleKeydown(node: SectionNode, event: KeyboardEvent): Promise<void> {
+		const key = event.key;
+
+		// #152 review F2 (belt-and-braces) — the grabbed branch below assumes it
+		// is acting on the grabbed section. Never let a handle that does NOT own
+		// the grab drive the state machine, whatever put focus there.
+		if (grabbedSectionId !== null && grabbedSectionId !== node.id) return;
+
+		if (grabbedSectionId === null) {
+			if (key === ' ' || key === 'Enter') {
+				event.preventDefault();
+				await toggleGrab(node);
+				return;
+			}
+			if (key === 'ArrowDown') {
+				event.preventDefault();
+				moveFocus(1);
+				return;
+			}
+			if (key === 'ArrowUp') {
+				event.preventDefault();
+				moveFocus(-1);
+			}
+			return;
+		}
+
+		// Grabbed — every branch below acts on THIS node's own section, which is
+		// always the grabbed one: focus follows the grab throughout, losing focus
+		// CANCELS it (`handleHandleBlur`), and the guard at the top of this
+		// function refuses a handle that does not own the grab either way.
+		if (key === 'ArrowUp' || key === 'ArrowDown') {
+			event.preventDefault();
+			const siblingIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [];
+			const idx = siblingIds.indexOf(node.id);
+			const nextIdx = idx + (key === 'ArrowUp' ? -1 : 1);
+			if (idx === -1 || nextIdx < 0 || nextIdx >= siblingIds.length) return; // clamp, no wrap
+			const reordered = [...siblingIds];
+			reordered.splice(idx, 1);
+			reordered.splice(nextIdx, 0, node.id);
+			// The reorder relocates this handle's element, which blurs it — see
+			// `grabRefocusPending`/`handleHandleBlur` (#152 review F2).
+			grabRefocusPending = true;
+			sections = applySiblingOrder(sections, reordered);
+			reorderStatus = m.roster_section_moved({
+				name: node.name,
+				position: nextIdx + 1,
+				total: reordered.length
+			});
+			try {
+				await tick();
+				handleElementFor(node.id)?.focus();
+			} finally {
+				grabRefocusPending = false;
+			}
+			return;
+		}
+
+		if (key === ' ' || key === 'Enter') {
+			event.preventDefault();
+			await toggleGrab(node);
+			return;
+		}
+
+		if (key === 'Escape') {
+			event.preventDefault();
+			cancelGrab(node);
+			await tick();
+			handleElementFor(node.id)?.focus();
+		}
+	}
+
+	/** Abandon the grab on `node`: the pre-grab sibling order comes back, the
+	 *  state machine returns to idle, and the cancellation is announced. NEVER
+	 *  writes — a provisional move that is cancelled must leave no trace on the
+	 *  server. State is cleared BEFORE the tree is patched so the DOM churn that
+	 *  patch causes can't re-enter this through `handleHandleBlur`. */
+	function cancelGrab(node: SectionNode): void {
+		const restore = grabSiblingIds;
+		grabbedSectionId = null;
+		grabSiblingIds = null;
+		if (restore) sections = applySiblingOrder(sections, restore);
+		reorderStatus = m.roster_section_move_cancelled({ name: node.name });
+	}
+
+	/** #152 review F2 — a grab must not outlive the handle's focus.
+	 *
+	 *  Without this, Tab (or any other focus move) left `grabbedSectionId` set
+	 *  and the PROVISIONAL, unwritten reorder on screen: this page never
+	 *  refetches, so the order shown disagreed with the server until the next
+	 *  full load — the same "the screen lies" failure `performReorder`'s #98/F3
+	 *  comment exists to prevent — and the dangling grab then hijacked the next
+	 *  handle the user pressed an arrow on, on an element whose `aria-grabbed`
+	 *  read "false".
+	 *
+	 *  Cancels exactly like Escape, minus the focus restore: focus has
+	 *  legitimately moved on, and dragging it back would trap the user.
+	 *  `grabRefocusPending` excludes the blur a PROVISIONAL move causes by
+	 *  relocating the grabbed handle in the DOM — that one is ours, not the
+	 *  user's. */
+	function handleHandleBlur(node: SectionNode): void {
+		if (grabRefocusPending) return;
+		if (grabbedSectionId !== node.id) return;
+		cancelGrab(node);
+	}
 </script>
 
 {#snippet memberRow(row: RosterRow, showSection: boolean)}
@@ -1304,7 +1607,7 @@
 	<!-- TS.4/#98: reorder controls are per-header — COLLAPSED (a section must
 	     collapse to reorder) AND admin — fail-closed AND, never OR. -->
 	{@const canReorder = admin === 'admin' && !isExpanded}
-	{@const siblingIds = canReorder ? (siblingsOf(sections, node.id)?.map((n) => n.id) ?? []) : []}
+	{@const siblingIds = canReorder ? (visibleSiblingsOf(node.id)?.map((n) => n.id) ?? []) : []}
 	{@const siblingIdx = siblingIds.indexOf(node.id)}
 	<!-- #99 review F4: whether this header can actually TAKE the live drag.
 	     `dropOnto` silently refuses any non-sibling target (a sub-section dropped
@@ -1404,7 +1707,10 @@
 			aria-label={node.name}
 			aria-dropeffect={acceptsDrop ? 'move' : undefined}
 			data-drop-target={acceptsTouchDrop ? 'true' : undefined}
-			class="flex items-center gap-2 py-1.5 {acceptsTouchDrop ? 'bg-ink-5' : ''}"
+			class="flex items-center gap-2 py-1.5 {acceptsTouchDrop ? 'bg-ink-5' : ''} {grabbedSectionId ===
+			node.id
+				? 'outline-2 outline-dashed outline-indigo'
+				: ''}"
 			ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(node.id, event) : undefined}
 			ondragleave={acceptsDrop
 				? (event: DragEvent) => handleDragLeave(node.id, event)
@@ -1480,32 +1786,37 @@
 				     rather than a page scroll.
 				     Both paths are disabled while a reorder write is in flight — see
 				     `reorderPending`. -->
-				<!-- #99 review F5: role="img", NOT role="button". The handle is deliberately
-				     not focusable and implements no activation of its own, so announcing
-				     it as a button promised a screen-reader user a control they could
-				     never operate. role="img" + aria-label keeps it a NAMED, non-hidden
-				     object that can still carry the drag state.
+				<!-- #152 — role="button", now genuinely operable (SUPERSEDES the #99 F5
+				     role="img" pin, which was explicitly conditioned on the handle NOT
+				     being operable — see `handleHandleKeydown` above for the full
+				     grab/move/drop/cancel contract). Roving tabindex: only
+				     `activeHandleId`'s own handle sits at "0", every other at "-1", so
+				     Tab reaches exactly one reorder control per page the way a single
+				     composite widget should.
 				     #150 — the ▲/▼ buttons that used to sit beside this handle (and were
-				     this page's only KEYBOARD path to a reorder) are gone; drag/touch is
-				     now the sole input. Restoring keyboard operability is tracked in
-				     #152 — note that if the handle DOES become operable, this role="img"
-				     choice must be revisited (F5's reasoning was conditioned on it not
-				     being operable). -->
+				     this page's only KEYBOARD path to a reorder) are gone; this handle is
+				     now the sole input for BOTH pointer (drag/touch, unchanged above) and
+				     keyboard. -->
 				<!-- Design question: rearrange-handle visibility for subsections (and how a
 				     handle should read on a COLLAPSED sub-section vs. its parent) is TBD —
 				     split out of #150 point 2 into #153, which is where the decision lands. -->
 				<span
 					data-testid="section-drag-handle-{node.id}"
 					draggable={reorderPending ? 'false' : 'true'}
-					role="img"
-					tabindex="-1"
-					aria-grabbed={draggedSectionId === node.id ? 'true' : 'false'}
+					role="button"
+					tabindex={activeHandleId === node.id ? 0 : -1}
+					aria-grabbed={draggedSectionId === node.id || grabbedSectionId === node.id
+						? 'true'
+						: 'false'}
 					aria-label={m.roster_section_drag_handle({ name: node.name })}
+					aria-describedby="section-reorder-instructions"
 					title={m.roster_section_drag_handle({ name: node.name })}
 					style="touch-action: none"
 					class="px-1 text-ink-2 select-none {reorderPending
 						? 'cursor-default opacity-30'
-						: 'cursor-grab'} {touchDragId === node.id ? 'opacity-50' : ''}"
+						: 'cursor-grab'} {touchDragId === node.id
+						? 'opacity-50'
+						: ''} {grabbedSectionId === node.id ? 'text-indigo' : ''}"
 					ondragstart={(event: DragEvent) => handleDragStart(node.id, event)}
 					ondragend={handleDragEnd}
 					onpointerdown={(event: PointerEvent) => handlePointerDown(node.id, event)}
@@ -1513,6 +1824,28 @@
 					onpointerup={handlePointerUp}
 					onpointercancel={endTouchDrag}
 					onlostpointercapture={endTouchDrag}
+					onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
+					onclick={(event: MouseEvent) => {
+						// #152 review F1 — honour the role="button" activation promise for
+						// the ATs that deliver it as a CLICK (NVDA/JAWS browse-mode
+						// Enter/Space, TalkBack/VoiceOver double-tap, Voice Control
+						// "click Reorder Soprano"), without letting a pointer gesture
+						// near the grab state machine. A synthesised/AT click carries
+						// `detail === 0`; a real mouse click — including the click that
+						// trails a drag release — carries `detail >= 1`, so the drag path
+						// above is untouched.
+						//
+						// Focus FIRST: an activation that arrives without focus (a voice
+						// command naming a handle the user never Tab'd to) would otherwise
+						// leave a grab on an unfocused element — `handleHandleBlur` could
+						// never fire, so the grab (and its provisional, unwritten reorder)
+						// would outlive every subsequent interaction.
+						if (event.detail !== 0) return;
+						handleElementFor(node.id)?.focus();
+						void toggleGrab(node);
+					}}
+					onfocus={() => (rovingHandleId = node.id)}
+					onblur={() => handleHandleBlur(node)}
 				>
 					≡
 				</span>
@@ -1553,6 +1886,28 @@
 		<div data-testid="roster-reorder-status" role="status" aria-live="polite" class="sr-only">
 			{reorderStatus}
 		</div>
+
+		<!-- #152 review F1 — the drag handle's keyboard protocol (Space grabs,
+		     arrows move, Space drops, Escape cancels) is not guessable from a
+		     name that only says "Drag to reorder". Every handle points its
+		     aria-describedby here, so the protocol is READ OUT when the control
+		     takes focus instead of having to be discovered. One node for the whole
+		     page (the handles are rendered by a RECURSIVE snippet — a per-handle
+		     copy would duplicate the id). Admin-gated on the same condition that
+		     renders the handles at all (`canReorder` = `admin === 'admin' &&
+		     !isExpanded`), so the id resolves exactly when something references
+		     it, and a non-admin is not described a control she never gets. NOT a
+		     live region: it never changes, and role="status" here would make it
+		     compete with the reorder announcements above. -->
+		{#if admin === 'admin'}
+			<span
+				id="section-reorder-instructions"
+				data-testid="roster-reorder-instructions"
+				class="sr-only"
+			>
+				{m.roster_section_reorder_instructions()}
+			</span>
+		{/if}
 
 		<!-- #113 review F1 — the removal result, same contract as the reorder region
 		     above: mounted from first render (a live region announces only CHANGES
