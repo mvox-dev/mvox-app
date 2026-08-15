@@ -268,6 +268,47 @@ const EDITABLE_FIELDS = [
 	'description'
 ] as const;
 
+/**
+ * Enough of the accessible-name computation to pin what a screen reader
+ * ANNOUNCES, which `textContent` cannot: `aria-labelledby` wins outright,
+ * then `aria-label`, then name-from-contents — and name-from-contents skips
+ * `aria-hidden` subtrees while recursing into each descendant element's OWN
+ * name. That recursion is the whole point here: it is how the edit button's
+ * sr-only label climbs into the <h1> that wraps it (#157 review round 2, F1),
+ * a leak every containment/`textContent` assertion below sails straight past.
+ */
+function accessibleName(el: Element): string {
+	const labelledby = el.getAttribute('aria-labelledby');
+	if (labelledby) {
+		return labelledby
+			.split(/\s+/)
+			.filter(Boolean)
+			.map((id) => {
+				const target = el.ownerDocument.getElementById(id);
+				return target ? accessibleName(target) : '';
+			})
+			.join(' ')
+			.replace(/\s+/g, ' ')
+			.trim();
+	}
+	const label = el.getAttribute('aria-label');
+	if (label) return label.replace(/\s+/g, ' ').trim();
+	let out = '';
+	for (const node of el.childNodes) {
+		if (node.nodeType === 3 /* TEXT_NODE */) {
+			out += node.textContent ?? '';
+		} else if (node.nodeType === 1 /* ELEMENT_NODE */) {
+			const child = node as Element;
+			if (child.getAttribute('aria-hidden') === 'true') continue;
+			out += ` ${accessibleName(child)}`;
+		}
+	}
+	return out.replace(/\s+/g, ' ').trim();
+}
+
+/** The one heading string an editor and a member must BOTH hear. */
+const EVENT_HEADING = 'Tuesday Rehearsal';
+
 /** Every write POST the page issued against the event entity. */
 function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return fetchStub.mock.calls.filter(
@@ -493,7 +534,12 @@ describe('#105 — a11y: back link', () => {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('#105 — a11y: edit pencils and inputs are labelled per field', () => {
-	it('every pencil is a <button type="button"> with its per-field aria-label and an aria-hidden glyph', async () => {
+	it('every pencil is a <button type="button"> whose label rides as an sr-only CHILD (never aria-label — #157), with an aria-hidden glyph', async () => {
+		// #157 review F1 — the button now WRAPS the field value, so its accessible
+		// name must compose "Edit location, Rehearsal Hall". `aria-label` overrides
+		// name-from-contents outright, which would announce the label alone and
+		// leave the value unspoken; the label therefore lives in an sr-only span
+		// inside the button, the same shape the roster's sr-only regions use.
 		const { container } = renderEventPage(editorEvent());
 		await waitForTestid(container, 'event-edit-btn-description');
 		for (const field of EDITABLE_FIELDS) {
@@ -503,9 +549,17 @@ describe('#105 — a11y: edit pencils and inputs are labelled per field', () => 
 			expect(btn, `event-edit-btn-${field} missing`).not.toBeNull();
 			expect(btn!.tagName).toBe('BUTTON');
 			expect(btn!.getAttribute('type')).toBe('button');
-			expect(btn!.getAttribute('aria-label')).toBe(`[event_edit_${field}_aria_label]`);
-			const glyph = btn!.querySelector('span');
-			expect(glyph, `event-edit-btn-${field} glyph span missing`).not.toBeNull();
+			expect(
+				btn!.getAttribute('aria-label'),
+				`event-edit-btn-${field} carries aria-label — it would silence the value it wraps`
+			).toBeNull();
+			const srLabel = btn!.querySelector('.sr-only');
+			expect(srLabel, `event-edit-btn-${field} has no sr-only label node`).not.toBeNull();
+			expect(srLabel!.textContent).toBe(`[event_edit_${field}_aria_label]`);
+			const glyph = [...btn!.querySelectorAll('span')].find((el) =>
+				(el.textContent ?? '').includes('✎')
+			);
+			expect(glyph, `event-edit-btn-${field} glyph span missing`).not.toBeUndefined();
 			expect(glyph!.getAttribute('aria-hidden')).toBe('true');
 		}
 	});
@@ -523,6 +577,159 @@ describe('#105 — a11y: edit pencils and inputs are labelled per field', () => 
 				expect(container.querySelector(`[data-testid="event-edit-input-${field}"]`)).toBeNull();
 			});
 		}
+	});
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 5b — #157: the whole field is the tap target
+//
+// The regression these pin: before #157 the tap target was the bare pencil
+// glyph — a ~12px box next to the value. The fix makes the value part of the
+// button, which is invisible to every existing assertion here (they all query
+// the value by data-testid and do not care what wraps it), so without these a
+// refactor could silently put the pencil back on its own.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('#157 — the edit tap target is the whole field, not the pencil glyph', () => {
+	// name is excluded: its value node is the <h1>, which WRAPS the button
+	// rather than sitting inside it (a heading is not phrasing content and
+	// role=button would strip its heading role) — asserted separately below.
+	const VALUE_TESTID: Record<string, string> = {
+		start_datetime: 'event-detail-time',
+		duration_minutes: 'event-detail-duration',
+		location: 'event-detail-location',
+		description: 'event-detail-description'
+	};
+
+	it('each field value is rendered INSIDE its edit button', async () => {
+		const { container } = renderEventPage(editorEvent());
+		await waitForTestid(container, 'event-edit-btn-description');
+		for (const [field, valueTestid] of Object.entries(VALUE_TESTID)) {
+			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`);
+			expect(btn, `event-edit-btn-${field} missing`).not.toBeNull();
+			const value = container.querySelector(`[data-testid="${valueTestid}"]`);
+			expect(value, `${valueTestid} missing`).not.toBeNull();
+			expect(
+				btn!.contains(value),
+				`${valueTestid} is outside event-edit-btn-${field} — the tap target is the glyph again`
+			).toBe(true);
+		}
+	});
+
+	it('the name value sits inside the button too, with the <h1> wrapping the button (heading role preserved)', async () => {
+		const { container } = renderEventPage(editorEvent());
+		const btn = await waitForTestid(container, 'event-edit-btn-name');
+		expect(btn.textContent).toContain('Tuesday Rehearsal');
+		const h1 = container.querySelector('[data-testid="event-detail-name"]')!;
+		expect(h1.tagName, 'the event name must stay an <h1> for an editor too').toBe('H1');
+		expect(h1.contains(btn), 'the name button must live inside the <h1>').toBe(true);
+		// …and it is still the ONLY h1 — an editor and a member get the same
+		// heading tree (a <button>-swallowed heading would leave the editor none).
+		expect(container.querySelectorAll('h1')).toHaveLength(1);
+	});
+
+	// The pair below closes the gap the two assertions above leave open: they
+	// pin the heading's SHAPE (tag, containment, count) but never what it SAYS,
+	// so the sr-only edit label could — and did — ride up into the h1 through
+	// name-from-contents while every one of them stayed green.
+	it('an EDITOR hears the event name alone as the heading — the sr-only edit label stays on the button', async () => {
+		const { container } = renderEventPage(editorEvent());
+		const btn = await waitForTestid(container, 'event-edit-btn-name');
+		const h1 = container.querySelector('h1')!;
+		expect(
+			accessibleName(h1),
+			'the edit label leaked into the h1 — an editor and a member now hear different headings'
+		).toBe(EVENT_HEADING);
+		// …while the button it wraps still composes label + value, which is the
+		// #157 shape and must NOT be sacrificed to clean the heading up.
+		expect(accessibleName(btn)).toBe(`[event_edit_name_aria_label] ${EVENT_HEADING}`);
+	});
+
+	it('a MEMBER hears exactly the same heading (the invariant the editor case is measured against)', async () => {
+		const { container } = renderEventPage(eventEntity());
+		await waitForTestid(container, 'event-detail-name');
+		expect(container.querySelector('[data-testid="event-edit-btn-name"]')).toBeNull();
+		expect(accessibleName(container.querySelector('h1')!)).toBe(EVENT_HEADING);
+	});
+
+	it('every whole-field button keeps a pointer hover cue on its glyph', async () => {
+		// The pre-#157 pencil buttons each carried `hover:text-ink`. Growing the
+		// target to the whole field is a mobile win, but dropping that rule would
+		// make the field LESS discoverable with a mouse than the glyph it replaced
+		// — Tailwind's preflight sets no `cursor: pointer` on <button>, so the
+		// glyph darkening is the only cue left that the region is clickable.
+		const { container } = renderEventPage(editorEvent());
+		await waitForTestid(container, 'event-edit-btn-description');
+		for (const field of EDITABLE_FIELDS) {
+			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!;
+			expect(
+				btn.classList.contains('group'),
+				`event-edit-btn-${field} is not a hover group`
+			).toBe(true);
+			const glyph = [...btn.querySelectorAll('span')].find((el) =>
+				(el.textContent ?? '').includes('✎')
+			)!;
+			expect(
+				glyph.classList.contains('group-hover:text-ink'),
+				`event-edit-btn-${field} glyph has no hover cue — the enlarged target is invisible to a mouse`
+			).toBe(true);
+		}
+	});
+
+	it('every edit button spans the field width and clears the 44px minimum touch size', async () => {
+		// `min-h-11` = 44px, the same floor the agenda/season controls already use
+		// (#101). Empty optional fields (no location/description, duration 0) render
+		// nothing but the glyph, so without an explicit minimum they would keep the
+		// pre-#157 target size exactly where it hurt most.
+		const { container } = renderEventPage(
+			editorEvent({
+				location: [],
+				description: [],
+				duration_minutes: [],
+				// No series parent either — otherwise the series defaults fill all
+				// three back in and this stops being the empty case.
+				_parent: [
+					{ reference: 'org1', entity_type: 'organization' },
+					{ reference: 'season1', entity_type: 'season' }
+				]
+			})
+		);
+		await waitForTestid(container, 'event-edit-btn-description');
+		expect(container.querySelector('[data-testid="event-detail-location"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-description"]')).toBeNull();
+		expect(container.querySelector('[data-testid="event-detail-duration"]')).toBeNull();
+		for (const field of EDITABLE_FIELDS) {
+			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!;
+			expect(btn.classList.contains('w-full'), `event-edit-btn-${field} is not full width`).toBe(
+				true
+			);
+			expect(
+				btn.classList.contains('min-h-11'),
+				`event-edit-btn-${field} has no 44px minimum height`
+			).toBe(true);
+		}
+	});
+
+	it('an event with no parseable start still offers a full-size target, not a bare glyph', async () => {
+		const { container } = renderEventPage(editorEvent({ start_datetime: [] }));
+		const btn = await waitForTestid(container, 'event-edit-btn-start_datetime');
+		expect(container.querySelector('[data-testid="event-detail-time"]')).toBeNull();
+		expect(btn.classList.contains('w-full')).toBe(true);
+		expect(btn.classList.contains('min-h-11')).toBe(true);
+		expect(btn.querySelector('.sr-only')?.textContent).toBe('[event_edit_start_datetime_aria_label]');
+		// …and the same hover cue as the four populated fields: this branch used
+		// to carry a button-level `hover:text-ink` while they had none, so the
+		// header's hover treatment disagreed with itself inside one file.
+		expect(btn.classList.contains('group'), 'the empty-start target is not a hover group').toBe(
+			true
+		);
+		const glyph = [...btn.querySelectorAll('span')].find((el) =>
+			(el.textContent ?? '').includes('✎')
+		)!;
+		expect(
+			glyph.classList.contains('group-hover:text-ink'),
+			'the empty-start glyph has no hover cue'
+		).toBe(true);
 	});
 });
 

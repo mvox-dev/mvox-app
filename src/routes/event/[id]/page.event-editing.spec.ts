@@ -872,14 +872,20 @@ describe('/event/[id] — every edit input carries its own accessible name', () 
 		}
 	});
 
-	it('the pencil glyph itself is decorative — the button’s accessible name is the label alone', async () => {
+	it('the pencil glyph itself is decorative — the button’s accessible name is the label plus the value it wraps (#157)', async () => {
 		const { container } = renderEditPage(editorEvent());
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
 		});
 		for (const field of EDITABLE_FIELDS) {
 			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!;
-			expect(btn.getAttribute('aria-label')).toContain(`event_edit_${field}_aria_label`);
+			// #157 — since the button wraps the value, the label is an sr-only CHILD:
+			// an `aria-label` here would override name-from-contents and the value
+			// would never be announced.
+			expect(btn.getAttribute('aria-label')).toBeNull();
+			expect(btn.querySelector('.sr-only')?.textContent).toContain(
+				`event_edit_${field}_aria_label`
+			);
 			const glyph = [...btn.querySelectorAll('*')].find((el) =>
 				(el.textContent ?? '').includes('✎')
 			);

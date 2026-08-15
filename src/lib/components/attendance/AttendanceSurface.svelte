@@ -12,7 +12,7 @@
 	keys (attendance_close, attendance_tally) added in the #84 review pass.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
@@ -66,6 +66,34 @@
 	let closeButtonEl = $state<HTMLButtonElement | undefined>(undefined);
 	onMount(() => {
 		closeButtonEl?.focus();
+	});
+
+	// #158 — auto-scroll to the panel once its DATA has loaded, not merely once
+	// it has opened: the panel mounts immediately with a short loading skeleton
+	// (see `loading` below), and scrolling against THAT height lands short of
+	// the roster once the real rows expand it. So the scroll hangs off the
+	// `loading` edge (the flip from the initial `true` to `false` on load
+	// settling — either the roster arriving or `error`), and `tick()` waits for
+	// THAT render's DOM (the now-populated content, not the skeleton) to land
+	// before measuring where to scroll.
+	//
+	// `hasScrolled` is a PLAIN let, not `$state` — deliberately untracked, so
+	// reading and setting it inside the effect neither registers a dependency
+	// nor schedules a re-run. It makes once-per-open structural rather than a
+	// side effect of Svelte's dependency granularity: the effect body reads
+	// `loading` alone, but an effect re-running for any other reason (a parent
+	// re-render, a props-object swap — AttendanceSurface.scroll.spec.ts shows a
+	// wholesale props update doing exactly that) would otherwise yank the page
+	// back to the panel top mid-interaction, every time a conductor tapped a
+	// status. The panel unmounts on close, so a fresh open gets a fresh flag.
+	let panelEl = $state<HTMLDivElement | undefined>(undefined);
+	let hasScrolled = false;
+	$effect(() => {
+		if (loading || hasScrolled) return;
+		hasScrolled = true;
+		tick().then(() => {
+			panelEl?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+		});
 	});
 
 	const STATUSES: { value: AttendanceStatus; label: () => string }[] = [
@@ -166,6 +194,7 @@
      mounted for the panel's whole life, so both the arrival of the loading
      text and its replacement by the loaded text are announced. -->
 <div
+	bind:this={panelEl}
 	data-testid="attendance-panel"
 	aria-busy={loading ? 'true' : undefined}
 	class="mt-3 flex flex-col gap-2 rounded-lg border border-ink-4 bg-paper p-3"

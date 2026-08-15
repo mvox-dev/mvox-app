@@ -1566,23 +1566,62 @@
 						onblur={() => confirmFieldEdit('name', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'name', false)}
 					/>
+				{:else if isEditor}
+					<!-- #157 — the whole field (value + pencil), not just the pencil, is the
+					     edit tap target: a <button> (not a div+role) so it is keyboard-
+					     accessible by default, with `appearance-none`/transparent styling so
+					     it still reads as the plain field display it replaces, `w-full` +
+					     `min-h-11` so the target spans the field and clears the 44px minimum
+					     even when the value is empty.
+
+					     The <h1> stays OUTSIDE the button (review F2): a button's content
+					     model is phrasing content only — a heading nested inside it is
+					     invalid, and `role=button` makes its descendants presentational, so
+					     the editor's page would lose its only h1 while a member's kept one.
+					     A button IS phrasing content, so this nesting is legal and the
+					     heading role survives.
+
+					     The label rides as an sr-only NODE, not `aria-label` (review F1):
+					     aria-label overrides name-from-contents, so a wrapper carrying one
+					     would announce "Edit event name, button" and never speak the value
+					     it now contains. As a child it composes — "Edit event name, Tuesday
+					     Rehearsal, button".
+
+					     That sr-only child sits inside the page's only <h1>, though, so
+					     the HEADING would inherit it too: name-from-contents recurses into
+					     the button and takes ITS accessible name, so an editor jumping by
+					     heading would hear "Edit event name Tuesday Rehearsal" where a
+					     member hears "Tuesday Rehearsal" — the two heading trees the #157
+					     tests set out to keep identical. Naming the h1 explicitly after the
+					     value span alone pins them back together without touching the
+					     button's own composed name (review round 2, F1). `heading` supports
+					     name-from-author, so this is a sanctioned override, not a hack. -->
+					<h1
+						data-testid="event-detail-name"
+						aria-labelledby="event-detail-name-value"
+						class="font-display text-2xl"
+					>
+						<button
+							type="button"
+							data-testid="event-edit-btn-name"
+							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
+							disabled={editWritePending.name === true}
+							bind:this={pencilRefs.name}
+							onclick={() => beginFieldEdit('name')}
+						>
+							<span class="sr-only">{m.event_edit_name_aria_label()}</span>
+							<!-- `group`/`group-hover:text-ink` on all five whole-field buttons
+							     (review round 2, F2): the pre-#157 pencil buttons each carried
+							     `hover:text-ink`, and growing the target to the whole field
+							     dropped the only pointer cue that the region is clickable —
+							     Tailwind's preflight sets no `cursor: pointer` for <button>, so a
+							     mouse user would otherwise get no feedback at all. -->
+							<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+							<span id="event-detail-name-value">{detail.name}</span>
+						</button>
+					</h1>
 				{:else}
-					<div class="flex items-center gap-2">
-						<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
-						{#if isEditor}
-							<button
-								type="button"
-								data-testid="event-edit-btn-name"
-								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-								aria-label={m.event_edit_name_aria_label()}
-								disabled={editWritePending.name === true}
-								bind:this={pencilRefs.name}
-								onclick={() => beginFieldEdit('name')}
-							>
-								<span aria-hidden="true">✎</span>
-							</button>
-						{/if}
-					</div>
+					<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
 				{/if}
 				{#if editErrors.name}
 					<p data-testid="event-edit-error-name" role="alert" class="text-xs text-red-700">
@@ -1612,39 +1651,56 @@
 					     (#130). At text-sm the header visibly grew on entering edit mode and
 					     shrank on leaving. Every inline-edit display counterpart in this
 					     header holds the same 16px body tier for the same reason. -->
-					<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-base text-ink-2">
-						<!-- The comma is plain text, NOT an aria-hidden decoration like the
-						     back link's ←: it is real punctuation, and hiding it would run
-						     "September 1" straight into "19:00" for a screen reader. -->
-						<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
-							startAt,
-							detail.durationMinutes
-						)}
-						{#if isEditor}
-							<button
-								type="button"
-								data-testid="event-edit-btn-start_datetime"
-								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-								aria-label={m.event_edit_start_datetime_aria_label()}
-								disabled={editWritePending.start_datetime === true}
-								bind:this={pencilRefs.start_datetime}
-								onclick={() => beginFieldEdit('start_datetime')}
-							>
-								<span aria-hidden="true">✎</span>
-							</button>
-						{/if}
-					</p>
+					{#if isEditor}
+						<!-- #157 — whole-field tap target, see the `name` field above. -->
+						<button
+							type="button"
+							data-testid="event-edit-btn-start_datetime"
+							class="group flex min-h-11 w-full appearance-none flex-wrap items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
+							disabled={editWritePending.start_datetime === true}
+							bind:this={pencilRefs.start_datetime}
+							onclick={() => beginFieldEdit('start_datetime')}
+						>
+							<span class="sr-only">{m.event_edit_start_datetime_aria_label()}</span>
+							<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+							<span data-testid="event-detail-time" class="flex flex-wrap items-center gap-2">
+								<!-- The comma is plain text, NOT an aria-hidden decoration like the
+								     back link's ←: it is real punctuation, and hiding it would run
+								     "September 1" straight into "19:00" for a screen reader. -->
+								<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
+									startAt,
+									detail.durationMinutes
+								)}
+							</span>
+						</button>
+					{:else}
+						<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-base text-ink-2">
+							<!-- The comma is plain text, NOT an aria-hidden decoration like the
+							     back link's ←: it is real punctuation, and hiding it would run
+							     "September 1" straight into "19:00" for a screen reader. -->
+							<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
+								startAt,
+								detail.durationMinutes
+							)}
+						</p>
+					{/if}
 				{:else if isEditor}
+					<!-- No parseable start: nothing to show but the affordance itself, which
+					     still gets the #157 full-width, 44px-tall target (an empty optional
+					     field is exactly where a glyph-sized target hurt most). -->
 					<button
 						type="button"
 						data-testid="event-edit-btn-start_datetime"
-						class="w-fit text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-						aria-label={m.event_edit_start_datetime_aria_label()}
+						class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-xs text-ink-3 disabled:opacity-40"
 						disabled={editWritePending.start_datetime === true}
 						bind:this={pencilRefs.start_datetime}
 						onclick={() => beginFieldEdit('start_datetime')}
 					>
-						<span aria-hidden="true">✎</span>
+						<span class="sr-only">{m.event_edit_start_datetime_aria_label()}</span>
+						<!-- Same `group-hover` cue as the four populated fields: this branch
+						     kept a button-level `hover:text-ink` while they had none, which
+						     made the header's hover treatment inconsistent with itself. -->
+						<span aria-hidden="true" class="group-hover:text-ink">✎</span>
 					</button>
 				{/if}
 				{#if editErrors.start_datetime}
@@ -1670,26 +1726,31 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
 					/>
 				{:else if detail.durationMinutes > 0 || isEditor}
-					<p class="flex items-center gap-2 text-base text-ink-2">
-						{#if detail.durationMinutes > 0}
+					{#if isEditor}
+						<!-- #157 — whole-field tap target, see the `name` field above. -->
+						<button
+							type="button"
+							data-testid="event-edit-btn-duration_minutes"
+							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
+							disabled={editWritePending.duration_minutes === true}
+							bind:this={pencilRefs.duration_minutes}
+							onclick={() => beginFieldEdit('duration_minutes')}
+						>
+							<span class="sr-only">{m.event_edit_duration_minutes_aria_label()}</span>
+							<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+							{#if detail.durationMinutes > 0}
+								<span data-testid="event-detail-duration">
+									{m.agenda_duration_min({ minutes: detail.durationMinutes })}
+								</span>
+							{/if}
+						</button>
+					{:else}
+						<p class="flex items-center gap-2 text-base text-ink-2">
 							<span data-testid="event-detail-duration">
 								{m.agenda_duration_min({ minutes: detail.durationMinutes })}
 							</span>
-						{/if}
-						{#if isEditor}
-							<button
-								type="button"
-								data-testid="event-edit-btn-duration_minutes"
-								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-								aria-label={m.event_edit_duration_minutes_aria_label()}
-								disabled={editWritePending.duration_minutes === true}
-								bind:this={pencilRefs.duration_minutes}
-								onclick={() => beginFieldEdit('duration_minutes')}
-							>
-								<span aria-hidden="true">✎</span>
-							</button>
-						{/if}
-					</p>
+						</p>
+					{/if}
 				{/if}
 				{#if editErrors.duration_minutes}
 					<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
@@ -1712,24 +1773,27 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'location', false)}
 					/>
 				{:else if detail.location || isEditor}
-					<p class="flex items-center gap-2 text-base text-ink-2">
-						{#if detail.location}
+					{#if isEditor}
+						<!-- #157 — whole-field tap target, see the `name` field above. -->
+						<button
+							type="button"
+							data-testid="event-edit-btn-location"
+							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
+							disabled={editWritePending.location === true}
+							bind:this={pencilRefs.location}
+							onclick={() => beginFieldEdit('location')}
+						>
+							<span class="sr-only">{m.event_edit_location_aria_label()}</span>
+							<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+							{#if detail.location}
+								<span data-testid="event-detail-location">{detail.location}</span>
+							{/if}
+						</button>
+					{:else}
+						<p class="flex items-center gap-2 text-base text-ink-2">
 							<span data-testid="event-detail-location">{detail.location}</span>
-						{/if}
-						{#if isEditor}
-							<button
-								type="button"
-								data-testid="event-edit-btn-location"
-								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-								aria-label={m.event_edit_location_aria_label()}
-								disabled={editWritePending.location === true}
-								bind:this={pencilRefs.location}
-								onclick={() => beginFieldEdit('location')}
-							>
-								<span aria-hidden="true">✎</span>
-							</button>
-						{/if}
-					</p>
+						</p>
+					{/if}
 				{/if}
 				{#if editErrors.location}
 					<p data-testid="event-edit-error-location" role="alert" class="text-xs text-red-700">
@@ -1761,24 +1825,27 @@
 						onkeydown={(e) => handleFieldKeydown(e, 'description', true)}
 					></textarea>
 				{:else if detail.description || isEditor}
-					<p class="mt-2 flex items-start gap-2 text-base text-ink">
-						{#if detail.description}
+					{#if isEditor}
+						<!-- #157 — whole-field tap target, see the `name` field above. -->
+						<button
+							type="button"
+							data-testid="event-edit-btn-description"
+							class="group mt-2 flex min-h-11 w-full appearance-none items-start gap-2 border-0 bg-transparent p-0 text-left text-base text-ink disabled:opacity-40"
+							disabled={editWritePending.description === true}
+							bind:this={pencilRefs.description}
+							onclick={() => beginFieldEdit('description')}
+						>
+							<span class="sr-only">{m.event_edit_description_aria_label()}</span>
+							<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+							{#if detail.description}
+								<span data-testid="event-detail-description">{detail.description}</span>
+							{/if}
+						</button>
+					{:else}
+						<p class="mt-2 flex items-start gap-2 text-base text-ink">
 							<span data-testid="event-detail-description">{detail.description}</span>
-						{/if}
-						{#if isEditor}
-							<button
-								type="button"
-								data-testid="event-edit-btn-description"
-								class="text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-								aria-label={m.event_edit_description_aria_label()}
-								disabled={editWritePending.description === true}
-								bind:this={pencilRefs.description}
-								onclick={() => beginFieldEdit('description')}
-							>
-								<span aria-hidden="true">✎</span>
-							</button>
-						{/if}
-					</p>
+						</p>
+					{/if}
 				{/if}
 				{#if editErrors.description}
 					<p data-testid="event-edit-error-description" role="alert" class="text-xs text-red-700">
