@@ -4,46 +4,41 @@
 
 ### [NEXT SESSION] 2026-08-15 — session MVOX-10 → MVOX-11
 
-mvox-app main @ `8443239`. **5 pipelines shipped, 24 issues closed.**
+mvox-app main @ `133e551`. **Board empty. 9 pipelines, 29 issues closed.**
 
-**Session MVOX-10 summary (2026-08-13 10:15 EEST → 2026-08-15 ~01:30 EEST):**
+**Session MVOX-10 (2026-08-13 10:15 → 2026-08-15 21:27 EEST, ~59h elapsed):**
 
-Five pipelines executed across ~36 hours:
+Nine pipelines executed:
 
-1. **Epic #132 — Event management** (72 agents, ~6M tokens, ~9h)
-   - 6-slice TDD: entity create utility, season creation + autocomplete, season management, event creation, series + bulk generator, agenda admin controls
-   - T1-T2 GREEN, T3-T6 YELLOW. All 10 AC met. Closes #132.
-   - Taught: blockerType guidance, progress tracking, reviewer probe cross-verification
+1. **Epic #132 — Event management** (72 agents, ~6M tokens) — 6-slice TDD, closes #132
+2. **Fixes + features** (43 agents, ~1.7M tokens) — #135-137, YELLOWs, #134 role mgmt, #123 language selector
+3. **Verification + fixes** (32 agents, ~2.3M tokens) — #142 SPIKE, #139/#141 UX, #140 NavShell, #143/#144/#138 correctness
+4. **Rights audit #133** (13 agents, ~812k tokens) — SPIKE + fix, 5 redundant _sharing removed
+5. **Walkthrough findings** (36 agents, ~2.2M tokens) — #146-151, ALL GREEN
+6. **Keyboard reorder #152** (12 agents, ~993k tokens) — WCAG 2.1.1 fix
+7. **Arrange mode #155** (41 agents, ~3.7M tokens) — 4-slice, chip selector + reorder + indent + CRUD relocation
+8. **Roving tabindex #156** (11 agents, ~1.1M tokens) — SPIKE + implement, 10 groups fixed
+9. **UX fixes #157/#158** (11 agents, ~707k tokens) — tap target + auto-scroll
 
-2. **Fixes + features** (43 agents, ~1.7M tokens, ~3.1h)
-   - S1: T6 follow-ups (#135-137) GREEN. S2: YELLOW batch GREEN.
-   - S3: #134 role management YELLOW (wire-contract fix for Entu aggregated rights rollup)
-   - S4: #123 language selector YELLOW. Closes #135-137, #134, #123, YELLOWs.
+**Totals:** ~340 agents, ~24M tokens, 29 issues closed, 9 Gama retros.
 
-3. **Verification + fixes** (32 agents, ~2.3M tokens, ~2.8h)
-   - S1: #142 _expander SPIKE — confirmed _owner/_editor implies _expander. Closed.
-   - S2: UX fixes (#139, #141) GREEN. S3: NavShell tab merge (#140) GREEN.
-   - S4: Correctness (#143, #144, #138) YELLOW. Closes #142, #139-141, #143-144, #138.
+**Process lessons (codified):**
+1. Three validated slice types: SPIKE (investigation), skip-RED (known fixes), full-TDD (features)
+2. blockerType guidance prevents advisory findings from halting pipeline
+3. Gama is trusted PO proxy (memory: feedback_gama_trust.md)
+4. Entu aggregated rights rollup: _owner folded into _editor, inherited:true — bake into prompts
+5. Pipeline template v2 candidates: pipelined RED, per-slice meta.phases, fix-batch pattern
+6. Reviewer live-probing can be wrong — cross-verify with Pérotin
 
-4. **Rights audit #133** (13 agents, ~812k tokens, ~1h)
-   - SPIKE: 5 redundant, 4 necessary. S2: remove + document GREEN. Closes #133.
+**Open issues:** None (board empty per `gh issue list --state open`)
 
-5. **Walkthrough findings** (36 agents, ~2.2M tokens, ~2.5h)
-   - ALL GREEN (first all-GREEN pipeline). Admin fixes (#146-148), agenda toolbar (#149), roster arrows (#150), typography (#151). Closes #146-151.
+**Parked (not filed as issues):**
+- #153 — subsection handle visibility rule (design discussion, parked per Gama)
+- Pipeline template v2 improvements (pipelined RED, per-slice meta.phases)
 
-**Totals:** ~270 agents, ~17M tokens, 24 issues closed, 5 Gama retros completed.
-
-**Process lessons (cumulative):**
-1. blockerType guidance prevents advisory findings from halting pipeline
-2. Three validated slice types: SPIKE (investigation), skip-RED (known fixes), full-TDD (features)
-3. Gama is trusted PO proxy — route decisions there, don't wait for Mihkel
-4. Entu aggregated rights rollup: _owner folded into _editor, inherited:true from parents — bake into prompts
-5. Reviewer live-probing can produce incorrect results — cross-verify with Pérotin
-6. Pipeline template v2 candidates: pipelined RED, per-slice meta.phases, fix-batch pattern
-
-**Parked:**
-- #14 — Playwright RSVP coverage
-- #152, #153 — from S3 YELLOW follow-ups (parked per Gama)
+**FIRST ACTION next session:**
+1. Check if any new issues filed since shutdown
+2. Ask Gama for priorities
 
 **Standing teammates this session:** finn, bentham, perotin (always-on)
 

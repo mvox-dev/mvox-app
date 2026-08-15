@@ -1,27 +1,44 @@
-# Task List Snapshot — 2026-08-13 (session MVOX-9)
+# Task List Snapshot — 2026-08-15 (session MVOX-10)
 
-mvox-app main @ `015ed1a`. v1.0 + walkthrough improvements + section cleanup.
+mvox-app main @ `133e551`. Board empty.
 
 ## COMPLETED this session
 
-### #114 gate corrections
-#124 (sections F1-F3), #125 (repertoire F4-F5), #126 (library F6). Gate PASSED. Epic #108 CLOSED.
+### Epic #132 — Event management (6 slices)
+T1 entity create utility, T2 season creation + autocomplete, T3 season management,
+T4 event creation, T5 series + bulk generator, T6 agenda admin controls.
 
-### #127 section data cleanup
-17→12 sections. Consolidate + orphans + hierarchy + Baritone follow-up.
+### Fixes + features pipeline
+#135 mutual exclusion, #136 touch targets, #137 collective switch,
+YELLOW-128.1 pluralization, YELLOW-131.1 setTimeout, YELLOW-131.2 Escape test,
+#134 role management, #123 language selector.
 
-### Walkthrough improvements
-#128 (collapse copies), #129 (loan chain), #130 (iOS zoom), #131 (name conflict).
+### Verification + fixes pipeline
+#142 _expander verification (SPIKE), #139 autocomplete max-height,
+#141 DST spring-forward, #140 NavShell tab merge,
+#143 resolveLibrarian, #144 listSeasons scope, #138 resume orphan.
+
+### Rights audit #133
+SPIKE: 5 redundant _sharing removed, 4 necessary documented.
+
+### Walkthrough findings
+#146 admin name resolution, #147 self-removal guard, #148 ownership note,
+#149 agenda toolbar, #150 roster arrows, #151 typography.
+
+### Keyboard reorder #152
+WCAG 2.1.1 keyboard section reorder on drag handle.
+
+### Arrange mode #155
+Chip selector, reorder, indent/unindent, CRUD relocation. Net -1940 lines.
+
+### Roving tabindex #156
+10 button groups fixed. Shared helper rovingNextIndex.
+
+### UX fixes #157/#158
+Event field tap target, attendance auto-scroll.
 
 ## PENDING
-- **#122** — Event create _sharing default-to-private
-- **#123** — Language selector on profile page
-- **#37** — Cleanup epic (PO verification needed)
-- **#14** — Playwright RSVP coverage (not scheduled)
 
-## YELLOW follow-ups
-- **#128** YELLOW-128.1 — Pluralization gap (Comenius)
-- **#131** YELLOW-131.2 — Escape key test missing (Tallis)
-- **#131** YELLOW-131.1 — setTimeout(0) cleanup (minor)
+None. Board empty.
 
 (*MVOX:Palestrina*)
