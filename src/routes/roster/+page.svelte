@@ -1241,10 +1241,17 @@
 	 *  `<section>`), and never the Unassigned pseudo-group — it is not a section
 	 *  entity and always sorts last (#98). */
 	function sectionIdUnderPointer(x: number, y: number): string | null {
+		// #155/S2 — arrange mode has no `section-group-*` wrapper at all (its
+		// ROWS are the drop target, not a handle's containing group), so the
+		// touch hit test also recognises `arrange-row-*`.
 		const under = document.elementFromPoint?.(x, y);
-		const group = under?.closest('[data-testid^="section-group-"]') ?? null;
-		const testid = group?.getAttribute('data-testid') ?? '';
-		const id = testid.slice('section-group-'.length);
+		const match = under?.closest('[data-testid^="section-group-"], [data-testid^="arrange-row-"]') ?? null;
+		const testid = match?.getAttribute('data-testid') ?? '';
+		const id = testid.startsWith('arrange-row-')
+			? testid.slice('arrange-row-'.length)
+			: testid.startsWith('section-group-')
+				? testid.slice('section-group-'.length)
+				: '';
 		return id && id !== 'unassigned' ? id : null;
 	}
 
@@ -1256,8 +1263,12 @@
 		// events from the root, so `currentTarget` is a patched property rather than
 		// the real one — `closest` off the actual target is the version that cannot
 		// be wrong.
+		// #155/S2 — arrange mode has no `section-drag-handle-*`; its touch pickup
+		// zone is the narrow `arrange-grip-*` bar at the head of each row (review
+		// F4 — the row itself keeps `touch-action: pan-y` so the list still
+		// scrolls under a finger, so only the grip can start a drag).
 		const handle = (event.target as HTMLElement | null)?.closest?.(
-			'[data-testid^="section-drag-handle-"]'
+			'[data-testid^="section-drag-handle-"], [data-testid^="arrange-grip-"]'
 		) as HTMLElement | null;
 		if (!handle) return;
 		pressHandle = handle;
@@ -1364,7 +1375,14 @@
 	);
 
 	function handleElementFor(id: string): HTMLElement | null {
-		return document.querySelector<HTMLElement>(`[data-testid="section-drag-handle-${id}"]`);
+		// #155/S2 — arrange mode's whole ROW is a second possible home for this
+		// same refocus lookup; only one of the two ever renders at a time
+		// (`viewMode` picks exactly one UI), so trying both selectors in order
+		// is unambiguous.
+		return (
+			document.querySelector<HTMLElement>(`[data-testid="section-drag-handle-${id}"]`) ??
+			document.querySelector<HTMLElement>(`[data-testid="arrange-row-${id}"]`)
+		);
 	}
 
 	/** IDLE-state ArrowUp/ArrowDown: move the roving tabindex to the
@@ -1372,8 +1390,12 @@
 	 *  wrap) — ArrowUp/ArrowDown while GRABBED is a completely different
 	 *  branch, below, and never calls this. */
 	function moveFocus(direction: 1 | -1): void {
-		const ids = reorderableHandleIds;
-		const currentId = activeHandleId;
+		// #155/S2 — arrange mode's rows are a SEPARATE reorderable set (every
+		// row is on screen regardless of collapse state, unlike the
+		// collapsed-only `reorderableHandleIds`), so idle-state Up/Down roves
+		// whichever list is actually rendered.
+		const ids = viewMode === 'arrange' ? arrangeReorderableIds : reorderableHandleIds;
+		const currentId = viewMode === 'arrange' ? activeArrangeRowId : activeHandleId;
 		if (currentId === null) return;
 		const idx = ids.indexOf(currentId);
 		const nextIdx = idx + direction;
@@ -1569,6 +1591,111 @@
 		if (grabbedSectionId !== node.id) return;
 		cancelGrab(node);
 	}
+
+	// ── #155/S2 — arrange-mode reorder ──────────────────────────────────────
+	//
+	// The whole ARRANGE ROW is now the drag target (GH#155: "Whole row is the
+	// drag target (no separate handle needed)"), for BOTH pointer paths
+	// (native dragstart/dragover/drop, and the touch long-press twin) and for
+	// the keyboard grab/move/drop/cancel machine #152 shipped. None of
+	// `toggleGrab`/`handleHandleKeydown`/`cancelGrab`/`handleHandleBlur`/
+	// `handleDragStart`/`handleDragEnd`/`handleDragOver`/`handleDragLeave`/
+	// `handleDrop`/`handlePointerDown`/`handlePointerMove`/`handlePointerUp`
+	// above needed to change to serve rows instead of drag handles — every one
+	// of them already operates purely on a section id/SectionNode and its
+	// SIBLING GROUP (`visibleSiblingsOf`), never on which UI rendered the
+	// control. `findSectionNode(sections, row.id)` is what supplies the
+	// SectionNode arrange rows don't carry themselves (`ArrangeRow` is a
+	// flattened name/depth/count projection, not the tree node).
+	//
+	// "The subtree moves with its grabbed/dragged parent" (S2 point 5) is true
+	// of the WRITE for free: `applySiblingOrder` moves a node's `children`
+	// array along with it, and `arrangeRows` walks the CURRENT tree pre-order,
+	// so the flat list simply reflects wherever the parent landed — no extra
+	// code needed for that half. What follows is the VISUAL half (S2 point 3):
+	// which rows currently belong to whichever section is held, so they can be
+	// shown grouped with it.
+
+	/** Every arrange row is reorderable (unlike the collapsed-only
+	 *  `reorderableHandleIds` above, arrange mode has no expand/collapse gate
+	 *  — the whole tree is always on screen), in the SAME pre-order the list
+	 *  renders in. */
+	const arrangeReorderableIds = $derived(arrangeRows.map((r) => r.id));
+
+	/** The row currently at tabindex="0" in the arrange list — same
+	 *  still-rendered-or-first-row fallback as `activeHandleId`. */
+	const activeArrangeRowId = $derived(
+		rovingHandleId !== null && arrangeReorderableIds.includes(rovingHandleId)
+			? rovingHandleId
+			: (arrangeReorderableIds[0] ?? null)
+	);
+
+	/** The section currently HELD by whichever input path owns it right now —
+	 *  keyboard grab, a live native drag, or a live touch drag. Only one of
+	 *  the three is ever non-null at once (a keyboard grab and a pointer drag
+	 *  never occur on the same gesture — the same assumption `aria-grabbed`
+	 *  above already makes). */
+	const heldSectionId = $derived(grabbedSectionId ?? draggedSectionId ?? touchDragId ?? null);
+
+	/** Every DESCENDANT id of `heldSectionId` — the rows that visually belong
+	 *  WITH it while it's being moved (S2 point 3: "subtree rows visually
+	 *  grouped with grabbed parent"). Never includes `heldSectionId` itself —
+	 *  that row gets its own `data-grabbed`, not this. */
+	const heldSubtreeIds = $derived.by(() => {
+		const ids = new Set<string>();
+		if (heldSectionId === null) return ids;
+		const node = findSectionNode(sections, heldSectionId);
+		if (!node) return ids;
+		function walk(n: SectionNode): void {
+			for (const child of n.children) {
+				ids.add(child.id);
+				walk(child);
+			}
+		}
+		walk(node);
+		return ids;
+	});
+
+	/** Sentinel for "the hint belongs AFTER the last arrange row" — a slot, not a
+	 *  section id, so it can never collide with one. */
+	const ARRANGE_DROP_HINT_END = '__end__';
+
+	/** #155/S2 review F2 — WHERE the dashed landing hint goes in the ARRANGE list,
+	 *  as the id of the row it renders IMMEDIATELY BEFORE (or the end sentinel).
+	 *  One place computes it, so "one indicator, never two" holds by construction
+	 *  the same way `sectionGroup`'s two-slot `hintBefore` does.
+	 *
+	 *  Why not simply reuse `hintBefore` per row: `sectionGroup` renders the hint
+	 *  around a section's HEADER, and its children live in a nested region. The
+	 *  arrange list is FLAT pre-order — a parent's descendants are rows of the
+	 *  same list, right after it. So the "lands below the target" slot is not
+	 *  after the target's row, it is after the target's whole SUBTREE, otherwise
+	 *  a downward drag onto a parent would draw the hint wedged between that
+	 *  parent and its own children.
+	 *
+	 *  Direction is the same `dropOnto` fact #110 review F1 pinned: the dragged
+	 *  section takes the target's ORIGINAL index, so an UPWARD move (source below
+	 *  the target) lands ABOVE the target and a downward move lands BELOW it.
+	 *  Gated on exactly what the drop itself accepts (live drag, distinct target,
+	 *  same visible sibling group), so the hint and the `bg-ink-5` target tint can
+	 *  never disagree about whether a drop will act. */
+	const arrangeDropHintBeforeId = $derived.by((): string | null => {
+		if (viewMode !== 'arrange') return null;
+		const fromId = draggedSectionId ?? touchDragId;
+		const overId = draggedSectionId !== null ? dragOverId : touchOverId;
+		if (fromId === null || overId === null || overId === fromId) return null;
+		const siblingIds = visibleSiblingsOf(overId)?.map((n) => n.id) ?? [];
+		const fromIdx = siblingIds.indexOf(fromId);
+		const toIdx = siblingIds.indexOf(overId);
+		if (fromIdx < 0 || toIdx < 0) return null;
+		if (fromIdx > toIdx) return overId;
+		const targetIdx = arrangeRows.findIndex((r) => r.id === overId);
+		if (targetIdx < 0) return null;
+		const targetDepth = arrangeRows[targetIdx].depth;
+		let i = targetIdx + 1;
+		while (i < arrangeRows.length && arrangeRows[i].depth > targetDepth) i += 1;
+		return arrangeRows[i]?.id ?? ARRANGE_DROP_HINT_END;
+	});
 </script>
 
 {#snippet memberRow(row: RosterRow, showSection: boolean)}
@@ -2213,18 +2340,148 @@
 				{#if viewMode === 'arrange' && admin === 'admin'}
 					<!-- #155/S1 — the arrange-mode SHELL: a compact section list (name +
 					     recursive member count, nesting by indentation only), replacing
-					     `roster-groups` on screen. No member rows, no management controls
-					     yet (no remove/drag/toggle/picker/new-section) — S2–S4 add those. -->
+					     `roster-groups` on screen. No member rows, no per-section expand
+					     toggle/picker/new-section/remove yet — S3–S4 add those.
+					     #155/S2 — every row is now the reorder control itself: the WHOLE
+					     row is draggable (native + touch) and carries the SAME keyboard
+					     grab/move/drop/cancel machine #152 shipped on the old drag handle
+					     (`toggleGrab`/`handleHandleKeydown`, unmodified — see the script-
+					     side "#155/S2" comment block above `</script>` for why nothing
+					     there needed to change). `node` is the row's own SectionNode
+					     (`ArrangeRow` itself carries no tree reference); it always resolves
+					     because `arrangeRows` is built by walking the very tree
+					     `findSectionNode` searches. -->
 					<div data-testid="roster-arrange-list" class="flex flex-col">
 						{#each arrangeRows as row (row.id)}
-							<div
-								data-testid="arrange-row-{row.id}"
-								data-depth={row.depth}
-								class="flex items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)}"
-							>
-								<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
-							</div>
+							{@const node = findSectionNode(sections, row.id)}
+							{#if node}
+								{@const siblingIds = visibleSiblingsOf(row.id)?.map((n) => n.id) ?? []}
+								{@const acceptsDrop =
+									draggedSectionId !== null &&
+									draggedSectionId !== row.id &&
+									siblingIds.includes(draggedSectionId)}
+								{@const acceptsTouchDrop =
+									touchDragId !== null &&
+									touchOverId === row.id &&
+									touchOverId !== touchDragId &&
+									siblingIds.includes(touchDragId)}
+								{#if arrangeDropHintBeforeId === row.id}
+									{@render dropIndicator()}
+								{/if}
+								<!-- #155/S2 review F1 — NO `aria-label` here on purpose. An
+								     aria-label OVERRIDES the element's contents for naming, so
+								     `aria-label={row.name}` made the row announce "Soprano" while
+								     it visibly reads "Soprano (3)" — the recursive member roll-up
+								     S1 shipped went silent in arrange mode, and the accessible
+								     name became a strict SUBSET of the visible label (WCAG 2.5.3
+								     Label in Name). Naming this role="button" from its own text
+								     content restores the count and keeps the two in lockstep for
+								     free — no second string for Comenius to keep in sync. The
+								     reorder protocol is unaffected: it was never in the label, it
+								     comes from `aria-describedby` below. -->
+								<!-- #155/S2 review F2 — the HELD SUBTREE and the DROP TARGET must not
+								     look the same. Both used to paint `bg-ink-5`, so mid-drag "these
+								     rows are coming with me" and "the section lands here" were the
+								     one tint. The subtree now reads `bg-indigo-soft`, tying it to the
+								     held row's own indigo dashed outline; `bg-ink-5` stays the drop
+								     target's alone. (Tint, not a border — a left border would shift
+								     every subtree row by its width the moment a drag started.) The
+								     two can never both apply to one row anyway: a descendant of the
+								     dragged section is by construction not its sibling, and only
+								     siblings accept the drop. -->
+								<!-- #155/S2 review F3 — `reorderPending` dims NOTHING here. In the
+								     collapsed view that `opacity-30` sat on the ≡ glyph alone, so an
+								     in-flight write faded one character; on a whole row it washed
+								     out the entire section list, names and counts included, for
+								     every reorder round-trip. The refusal is already real and
+								     announced elsewhere — `draggable="false"` plus the guards in
+								     `handlePointerDown`/`performReorder` — so the cursor is the only
+								     affordance that still needs to change. -->
+								<!-- #155/S2 review F4 — `touch-action` is `pan-y` on the ROW, `none` on
+								     the leading GRIP alone. In the collapsed view `touch-action: none`
+								     sat on the ~12px ≡ glyph; hoisted onto a whole row it covered the
+								     entire arrange list, and since touch-action is latched at gesture
+								     START (neither the 10px long-press slop cancel nor `pointercancel`
+								     can hand the scroll back afterwards) a finger swipe beginning
+								     anywhere on the list could no longer scroll this deliberately
+								     mobile-shaped (`max-w-md`) page. Zoning it is what keeps both:
+								     press the grip and the browser never claims the gesture, press
+								     anywhere else on the row and `pan-y` scrolls as normal.
+								     Only the touch PICKUP is zoned — the whole row stays the native
+								     `draggable` surface for mouse and stays the keyboard control. -->
+								<div
+									data-testid="arrange-row-{row.id}"
+									data-depth={row.depth}
+									data-grabbed={heldSectionId === row.id ? 'true' : undefined}
+									data-grabbed-subtree={heldSubtreeIds.has(row.id) ? 'true' : undefined}
+									role="button"
+									tabindex={activeArrangeRowId === row.id ? 0 : -1}
+									aria-grabbed={draggedSectionId === row.id || grabbedSectionId === row.id
+										? 'true'
+										: 'false'}
+									aria-dropeffect={acceptsDrop ? 'move' : undefined}
+									aria-describedby="section-reorder-instructions"
+									draggable={reorderPending ? 'false' : 'true'}
+									style="touch-action: pan-y"
+									class="flex items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)} select-none {reorderPending
+										? 'cursor-default'
+										: 'cursor-grab'} {touchDragId === row.id
+										? 'opacity-50'
+										: ''} {heldSectionId === row.id
+										? 'outline-2 outline-dashed outline-indigo'
+										: ''} {heldSubtreeIds.has(row.id)
+										? 'bg-indigo-soft'
+										: ''} {(acceptsDrop && dragOverId === row.id) || acceptsTouchDrop
+										? 'bg-ink-5'
+										: ''}"
+									ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
+									ondragend={handleDragEnd}
+									ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
+									ondragleave={acceptsDrop
+										? (event: DragEvent) => handleDragLeave(row.id, event)
+										: undefined}
+									ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
+									onpointermove={handlePointerMove}
+									onpointerup={handlePointerUp}
+									onpointercancel={endTouchDrag}
+									onlostpointercapture={endTouchDrag}
+									onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
+									onclick={(event: MouseEvent) => {
+										// Same "honour the role=button activation promise arriving as
+										// a click, without letting a pointer gesture near the grab
+										// state machine" contract as the old handle's onclick — see
+										// #152 review F1 in `sectionGroup` above.
+										if (event.detail !== 0) return;
+										handleElementFor(row.id)?.focus();
+										void toggleGrab(node);
+									}}
+									onfocus={() => (rovingHandleId = row.id)}
+									onblur={() => handleHandleBlur(node)}
+								>
+									<!-- The touch grab zone. `aria-hidden` and drawn from bars rather
+									     than a `≡` character on purpose: the row is named by its own
+									     CONTENTS (review F1), so anything with text here would leak
+									     into the accessible name and desync it from the visible label
+									     again. Its only job is to be the element a finger presses —
+									     every other input path (mouse drag, keyboard) lives on the row. -->
+									<span
+										data-testid="arrange-grip-{row.id}"
+										aria-hidden="true"
+										style="touch-action: none"
+										class="flex w-4 shrink-0 flex-col justify-center gap-0.5 py-1 text-ink-2"
+										onpointerdown={(event: PointerEvent) => handlePointerDown(row.id, event)}
+									>
+										<span class="h-px w-full bg-current"></span>
+										<span class="h-px w-full bg-current"></span>
+										<span class="h-px w-full bg-current"></span>
+									</span>
+									<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
+								</div>
+							{/if}
 						{/each}
+						{#if arrangeDropHintBeforeId === ARRANGE_DROP_HINT_END}
+							{@render dropIndicator()}
+						{/if}
 					</div>
 				{:else}
 					<div data-testid="roster-groups" class="flex flex-col">
