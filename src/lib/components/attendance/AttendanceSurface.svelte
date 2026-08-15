@@ -17,6 +17,7 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 	import type { RosterRow } from '$lib/roster/rosterData';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	interface AttendanceEntryLite {
 		attendanceId: string;
@@ -91,6 +92,32 @@
 		// Tap the ACTIVE status -> clear the record (null); tap any other -> set it.
 		const current = attendanceByMemberId[memberId]?.status;
 		ontoggle(memberId, current === status ? null : status);
+	}
+
+	// #156 — roving tabindex, PER MEMBER. `status` is undefined for most
+	// members on a fresh panel (no record yet), so the fallback-to-first-status
+	// rule is the common case, not the edge case. Keyed by memberId — all rows
+	// live in ONE component instance, so a scalar would move every row's tab
+	// stop together.
+	let rovingByMember = $state<Record<string, AttendanceStatus>>({});
+	function activeStatusFor(memberId: string): AttendanceStatus {
+		const roving = rovingByMember[memberId];
+		if (roving !== undefined && STATUSES.some((s) => s.value === roving)) return roving;
+		return attendanceByMemberId[memberId]?.status ?? STATUSES[0].value;
+	}
+
+	// The walk filters [disabled] (there is none here) but NOT [aria-disabled]
+	// — members with a pending write stay deliberately focusable (they read
+	// `aria-disabled`, not `disabled`, precisely so Tab still reaches them).
+	function handleAttendanceKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
+		const idx = buttons.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, buttons.length);
+		if (next < 0) return;
+		e.preventDefault();
+		buttons[next].focus();
 	}
 
 	/** Text of the panel's always-mounted sr-only live region.
@@ -188,9 +215,22 @@
 						>
 							{rsvpLabel(member.memberId)}
 						</span>
+						<!-- #156 — WAI-APG TOOLBAR: arrows MOVE focus only, never activate
+						     (tapping the ACTIVE status CLEARS the record, so arrowing across the
+						     strip must not commit anything). `role="toolbar"` says so in the
+						     markup — the old bare `role="group"` did not distinguish this from
+						     the app's arrow-SELECTS radiogroups (roster view chips, library
+						     copy-sort), and svelte-check flagged the keydown handler on a
+						     non-interactive role. `aria-pressed` toggle buttons inside a toolbar
+						     are the APG pattern, so the state pin is unchanged. -->
 						<div
+							data-testid="attendance-status-group-{member.memberId}"
+							role="toolbar"
+							tabindex="-1"
+							aria-label={m.attendance_group_label({ name: member.name })}
 							class="inline-flex overflow-hidden rounded-md border border-ink-4"
 							aria-busy={pendingMemberIds.has(member.memberId) ? 'true' : undefined}
+							onkeydown={handleAttendanceKeydown}
 						>
 							{#each STATUSES as status (status.value)}
 								<button
@@ -201,6 +241,9 @@
 										? 'true'
 										: 'false'}
 									aria-label={m.attendance_toggle_aria_label({ name: member.name, status: status.label() })}
+									tabindex={activeStatusFor(member.memberId) === status.value ? 0 : -1}
+									onfocus={() =>
+										(rovingByMember = { ...rovingByMember, [member.memberId]: status.value })}
 									class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 aria-disabled:cursor-default aria-disabled:opacity-[0.45]"
 									class:bg-ink={attendanceByMemberId[member.memberId]?.status === status.value}
 									class:text-paper={attendanceByMemberId[member.memberId]?.status === status.value}

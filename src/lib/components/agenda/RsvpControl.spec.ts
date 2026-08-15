@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, cleanup, createEvent, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RsvpControl from './RsvpControl.svelte';
 
@@ -9,6 +9,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
+		rsvp_group_label: () => 'RSVP',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.'
 	}
@@ -215,6 +216,108 @@ describe('RsvpControl — reserved message space (no layout jump)', () => {
 	it('always renders the message-line container even with no hint/error, so toggling it never shifts layout', () => {
 		const { container } = render(RsvpControl, { status: 'going' });
 		expect(container.querySelector('[data-testid="rsvp-msg-line"]')).not.toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #156 — roving tabindex. WAI-APG TOOLBAR semantics: exactly one Tab stop,
+// arrows MOVE focus only (never activate — tapping the active status CLEARS the
+// answer, so an arrow that activated would silently destroy data), Tab/Enter/
+// Space untouched, and the stop never parks on a disabled button.
+// ---------------------------------------------------------------------------
+describe('RsvpControl — roving tabindex (#156)', () => {
+	function buttons(container: HTMLElement): HTMLButtonElement[] {
+		return Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid^="rsvp-btn-"]')
+		);
+	}
+	function tabStops(container: HTMLElement): HTMLButtonElement[] {
+		return buttons(container).filter((b) => b.getAttribute('tabindex') === '0');
+	}
+
+	it('the group is a role="toolbar" with an accessible name', () => {
+		const { container } = render(RsvpControl, { status: 'maybe' });
+		const group = container.querySelector('[data-testid="rsvp-status-group"]');
+		expect(group?.getAttribute('role')).toBe('toolbar');
+		expect(group?.getAttribute('aria-label')).toBe('RSVP');
+	});
+
+	it('exactly ONE button is the Tab stop, and it is the answered status', () => {
+		const { container } = render(RsvpControl, { status: 'maybe' });
+		const stops = tabStops(container);
+		expect(stops).toHaveLength(1);
+		expect(stops[0].getAttribute('data-testid')).toBe('rsvp-btn-maybe');
+	});
+
+	it('status=null (never answered) still has exactly one Tab stop — the FIRST button, not zero', () => {
+		const { container } = render(RsvpControl, { status: null });
+		const stops = tabStops(container);
+		expect(stops).toHaveLength(1);
+		expect(stops[0].getAttribute('data-testid')).toBe('rsvp-btn-going');
+	});
+
+	it('ArrowRight moves focus forward and WRAPS; ArrowLeft wraps backwards', async () => {
+		const { container } = render(RsvpControl, { status: null });
+		const btns = buttons(container);
+		expect(btns).toHaveLength(4);
+
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[1]);
+
+		await fireEvent.keyDown(btns[3], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[0]);
+
+		await fireEvent.keyDown(btns[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(btns[3]);
+	});
+
+	it('Home/End jump to the ends', async () => {
+		const { container } = render(RsvpControl, { status: null });
+		const btns = buttons(container);
+		btns[1].focus();
+		await fireEvent.keyDown(btns[1], { key: 'End' });
+		expect(document.activeElement).toBe(btns[3]);
+		await fireEvent.keyDown(btns[3], { key: 'Home' });
+		expect(document.activeElement).toBe(btns[0]);
+	});
+
+	it('arrows MOVE ONLY — they never call onchange (toolbar, not radiogroup)', async () => {
+		const onchange = vi.fn();
+		const { container } = render(RsvpControl, { status: 'going', onchange });
+		const btns = buttons(container);
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		await fireEvent.keyDown(btns[1], { key: 'ArrowRight' });
+		expect(onchange).not.toHaveBeenCalled();
+	});
+
+	it('the Tab stop TRAVELS with focus', async () => {
+		const { container } = render(RsvpControl, { status: 'going' });
+		const btns = buttons(container);
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		const stops = tabStops(container);
+		expect(stops).toHaveLength(1);
+		expect(stops[0]).toBe(btns[1]);
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the button still activates', () => {
+		const { container } = render(RsvpControl, { status: 'going' });
+		const btn = buttons(container)[0];
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(btn, { key });
+			fireEvent(btn, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
+	});
+
+	it('all four buttons disabled (non-member) — arrows move nothing, no crash, and no stop is claimed by a disabled button', async () => {
+		const { container } = render(RsvpControl, { status: 'going', nonMember: true });
+		const btns = buttons(container);
+		btns.forEach((b) => expect(b.disabled).toBe(true));
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		expect(document.activeElement).not.toBe(btns[1]);
 	});
 });
 

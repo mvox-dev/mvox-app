@@ -2,6 +2,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { NavEntry, NavContext } from '$lib/nav/entries';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	let {
 		entries,
@@ -24,6 +25,17 @@
 	const ctx: NavContext = $derived({ isAdmin, hasMultipleCollectives });
 	const visibleEntries = $derived(entries.filter((e) => e.visible(ctx)));
 
+	// Completion-lock disables every entry but Profile. Hoisted OUT of the
+	// markup (#156 review F2) because the roving-tabindex resolution below has
+	// to consult it too — a tab stop parked on a disabled link is a tab stop
+	// the keyboard can never reach, and since the disabled links carry
+	// tabindex="-1" unconditionally, that silently drops the WHOLE nav out of
+	// the tab order.
+	function isDisabled(entry: NavEntry): boolean {
+		return completionLocked && entry.route !== '/profile';
+	}
+	const enabledEntries = $derived(visibleEntries.filter((e) => !isDisabled(e)));
+
 	// Route matching is SEGMENT-aware and LONGEST-WINS. Two entries can share a
 	// prefix ('/admin' and '/admin/invite'); a per-entry `startsWith` test would
 	// mark BOTH current on /admin/invite (two aria-current="page", two active
@@ -42,6 +54,27 @@
 		return best?.key ?? null;
 	});
 
+	// #156 — roving tabindex. `rovingKey` is the last entry focus landed on;
+	// `activeNavKey` falls back to the current page's entry (so Tab lands on
+	// where you are), then to the first entry, covering first render AND a
+	// roving key that vanished from under it (entries can change with
+	// `isAdmin`/`hasMultipleCollectives`/completion-lock).
+	//
+	// EVERY candidate is checked against `enabledEntries`, not `visibleEntries`
+	// (#156 review F2). A disabled entry is visible-but-unfocusable, so naming
+	// one the tab stop leaves zero links with tabindex="0" and strands the
+	// user — including out of reach of Profile, the only link that clears the
+	// lock. Both routes into that state are real: clicking a greyed link
+	// focuses it in Chrome (writing `rovingKey`), and the current route's own
+	// entry is disabled on any locked non-/profile render, since the layout's
+	// redirect is an $effect that runs after the first paint.
+	let rovingKey = $state<string | null>(null);
+	const activeNavKey = $derived.by(() => {
+		if (rovingKey !== null && enabledEntries.some((e) => e.key === rovingKey)) return rovingKey;
+		if (activeKey !== null && enabledEntries.some((e) => e.key === activeKey)) return activeKey;
+		return enabledEntries[0]?.key ?? null;
+	});
+
 	let railSide = $state<'left' | 'right'>('left');
 
 	$effect(() => {
@@ -58,18 +91,22 @@
 
 	function handleKeydown(e: KeyboardEvent): void {
 		const nav = (e.currentTarget as HTMLElement);
-		const links = Array.from(nav.querySelectorAll<HTMLAnchorElement>('a:not([tabindex="-1"])'));
+		// Members are every ENABLED link, not just the current tab stop — with
+		// roving tabindex only one link carries tabindex="0" at a time, so
+		// filtering on tabindex here (the old selector) would leave arrow-nav
+		// with a group of one. `aria-disabled` is the real enabled/disabled
+		// signal now.
+		const links = Array.from(
+			nav.querySelectorAll<HTMLAnchorElement>('a:not([aria-disabled="true"])')
+		);
 		const idx = links.indexOf(e.target as HTMLAnchorElement);
 		if (idx < 0) return;
 
-		let next = -1;
-		if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-			next = (idx + 1) % links.length;
-		} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-			next = (idx - 1 + links.length) % links.length;
-		}
+		const next = rovingNextIndex(e.key, idx, links.length);
 		if (next >= 0) {
 			e.preventDefault();
+			// `onfocus` on the target link below writes `rovingKey` back, so the
+			// tab stop travels with focus — no separate bookkeeping needed here.
 			links[next].focus();
 		}
 	}
@@ -85,7 +122,7 @@
 		>
 			{#each visibleEntries as entry (entry.key)}
 				{@const active = entry.key === activeKey}
-				{@const disabled = completionLocked && entry.route !== '/profile'}
+				{@const disabled = isDisabled(entry)}
 				<a
 					href={disabled ? '/profile' : entry.route}
 					class="nav-entry"
@@ -93,7 +130,11 @@
 					class:nav-entry--disabled={disabled}
 					aria-current={active ? 'page' : undefined}
 					aria-disabled={disabled ? 'true' : undefined}
-					tabindex={disabled ? -1 : 0}
+					tabindex={disabled ? -1 : entry.key === activeNavKey ? 0 : -1}
+					onfocus={() => {
+						// Disabled links never claim the stop — see `activeNavKey`.
+						if (!disabled) rovingKey = entry.key;
+					}}
 				>
 					<span class="nav-icon" aria-hidden="true">{@html entry.icon}</span>
 					<span class="nav-label">{entry.label()}</span>

@@ -21,6 +21,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { RsvpStatus } from '$lib/rsvp/rsvpData';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	interface Props {
 		status?: RsvpStatus | null;
@@ -59,6 +60,26 @@
 		// Tap the ACTIVE status -> clear the answer (null); tap any other -> set it.
 		onchange(status === value ? null : value);
 	}
+
+	// #156 — roving tabindex. `status` is nullable (a never-answered RSVP), so
+	// the active key falls back to the FIRST button rather than nothing —
+	// otherwise an unanswered row has zero tab stops. Per-instance $state by
+	// construction (this is a component, one instance per agenda row).
+	let roving = $state<RsvpStatus | null>(null);
+	const activeStatus = $derived(
+		roving !== null && BUTTONS.some((b) => b.value === roving) ? roving : (status ?? BUTTONS[0].value)
+	);
+
+	function handleKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+		const idx = buttons.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, buttons.length);
+		if (next < 0) return;
+		e.preventDefault();
+		buttons[next].focus();
+	}
 </script>
 
 <div
@@ -66,7 +87,21 @@
 	class="flex flex-col gap-1"
 	aria-busy={pending ? 'true' : undefined}
 >
-	<div class="inline-flex overflow-hidden rounded-md border border-ink-4">
+	<!-- #156 — WAI-APG TOOLBAR: arrows MOVE focus only, they never activate.
+	     Activation is destructive-ish here (tapping the ACTIVE status CLEARS
+	     the answer), so arrowing across the strip must not commit anything.
+	     `role="toolbar"` says so in the markup, where the old bare
+	     `role="group"` did not distinguish it from the app's arrow-SELECTS
+	     radiogroups; `aria-pressed` toggle buttons inside a toolbar are the
+	     APG pattern, so the state pin is unchanged. -->
+	<div
+		data-testid="rsvp-status-group"
+		role="toolbar"
+		tabindex="-1"
+		aria-label={m.rsvp_group_label()}
+		class="inline-flex overflow-hidden rounded-md border border-ink-4"
+		onkeydown={handleKeydown}
+	>
 		{#each BUTTONS as btn (btn.value)}
 			<button
 				data-testid="rsvp-btn-{btn.value}"
@@ -74,6 +109,8 @@
 				disabled={isDisabled}
 				aria-pressed={status === btn.value ? 'true' : 'false'}
 				aria-describedby={nonMember ? hintId : undefined}
+				tabindex={activeStatus === btn.value ? 0 : -1}
+				onfocus={() => (roving = btn.value)}
 				class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 disabled:cursor-default disabled:opacity-[0.45]"
 				class:bg-ink={status === btn.value}
 				class:text-paper={status === btn.value}

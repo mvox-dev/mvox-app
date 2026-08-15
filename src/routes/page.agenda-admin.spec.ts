@@ -69,7 +69,7 @@
 //       form wider than the ~343px a 375px viewport leaves inside the page
 //       padding. And NO element in any form subtree carries a fixed pixel
 //       width class of 344px or more.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
@@ -1604,3 +1604,98 @@ describe('agenda admin — creation forms stay inside a 375px viewport (class co
 // (*MVOX:Palestrina* — #149 review F1/F2: shared admin-toolbar pins — one frame,
 // wrap-not-overflow + w-fit hug, no empty frame for a non-editor, frame survives
 // an open sibling form)
+
+// ---------------------------------------------------------------------------
+// #156 — roving tabindex on the admin toolbar. WAI-APG TOOLBAR: no member is
+// ever "selected", so the stop is simply last-focused-else-first-ENABLED, and
+// arrows only move focus. The disabled-safety matters here: both create buttons
+// disable while a create is in flight, and a disabled button cannot hold focus —
+// a stop parked on one would strand the whole toolbar from the keyboard.
+// ---------------------------------------------------------------------------
+describe('agenda admin toolbar — roving tabindex (#156)', () => {
+	function toolbarButtons(container: HTMLElement): HTMLButtonElement[] {
+		return Array.from(
+			(q(container, 'agenda-admin-toolbar') as HTMLElement).querySelectorAll<HTMLButtonElement>(
+				'button'
+			)
+		);
+	}
+	function stops(container: HTMLElement): HTMLButtonElement[] {
+		return toolbarButtons(container).filter((b) => b.getAttribute('tabindex') === '0');
+	}
+
+	async function renderToolbar(): Promise<HTMLElement> {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, 'agenda-admin-toolbar')).not.toBeNull();
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-create')).not.toBeNull();
+			expect(q(container, 'event-create')).not.toBeNull();
+		});
+		return container;
+	}
+
+	it('the toolbar declares role="toolbar" with an accessible name', async () => {
+		const container = await renderToolbar();
+		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
+		expect(toolbar.getAttribute('role')).toBe('toolbar');
+		expect(toolbar.getAttribute('aria-label')).toBeTruthy();
+	});
+
+	it('exactly ONE control is the Tab stop, and it is the first member', async () => {
+		const container = await renderToolbar();
+		const btns = toolbarButtons(container);
+		expect(btns).toHaveLength(3);
+		expect(stops(container)).toEqual([btns[0]]);
+	});
+
+	it('ArrowRight moves focus forward and WRAPS; ArrowLeft wraps backwards; the stop travels along', async () => {
+		const container = await renderToolbar();
+		const btns = toolbarButtons(container);
+
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[1]);
+		await waitFor(() => {
+			expect(stops(container)).toEqual([btns[1]]);
+		});
+
+		await fireEvent.keyDown(btns[2], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[0]);
+
+		await fireEvent.keyDown(btns[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(btns[2]);
+	});
+
+	it('arrows MOVE ONLY — no form opens from arrow navigation', async () => {
+		const container = await renderToolbar();
+		const btns = toolbarButtons(container);
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		await fireEvent.keyDown(btns[1], { key: 'ArrowRight' });
+		expect(q(container, 'season-create-form')).toBeNull();
+		expect(q(container, 'event-create-form')).toBeNull();
+		expect(q(container, 'season-manage-panel')).toBeNull();
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the toolbar and the button still activates', async () => {
+		const container = await renderToolbar();
+		const btn = toolbarButtons(container)[0];
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(btn, { key });
+			fireEvent(btn, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
+	});
+
+	it('with a create form open, the shrunken toolbar still holds exactly one ENABLED Tab stop — never a disabled one', async () => {
+		const container = await renderToolbar();
+		await openSeasonForm(container);
+		await waitFor(() => {
+			expect(q(container, 'season-create-form')).not.toBeNull();
+		});
+		const remaining = stops(container);
+		expect(remaining).toHaveLength(1);
+		expect(remaining[0].disabled, 'the sole Tab stop must be operable').toBe(false);
+	});
+});

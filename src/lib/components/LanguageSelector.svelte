@@ -39,6 +39,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale, locales, setLocale, type Locale } from '$lib/paraglide/runtime.js';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	interface Props {
 		setLocaleImpl?: (locale: Locale) => void;
@@ -57,19 +58,51 @@
 	// No local $state mirror — it would only ever be written on a click that is
 	// simultaneously tearing this document down.
 	const current: Locale = getLocale();
+
+	// #156 — roving tabindex, TOOLBAR semantics: arrows move focus only, they
+	// must NEVER activate. `current` is deliberately non-reactive (see block
+	// comment — clicking reloads the document), so it can't drive the roving
+	// stop by itself; a small session-local `rovingLocale` + onfocus
+	// write-back lets the tab stop travel while the picker is open, without
+	// making the picker impossible to traverse before a locale is committed.
+	let rovingLocale = $state<Locale | null>(null);
+	const activeLocale = $derived(rovingLocale ?? current);
+
+	function handleKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const options = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
+		const idx = options.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, options.length);
+		if (next < 0) return;
+		e.preventDefault();
+		options[next].focus();
+	}
 </script>
 
+<!-- #156 — WAI-APG TOOLBAR, not a radiogroup: arrows MOVE focus only, they
+     never activate (activation reloads the document — see the block comment
+     above). `role="toolbar"` states that in the markup; under the old bare
+     `role="group"` nothing distinguished this from the app's arrow-SELECTS
+     radiogroups (roster view chips, library copy-sort), and svelte-check
+     flagged the keydown handler on a non-interactive role. `aria-pressed`
+     toggle buttons inside a toolbar are the APG pattern — state pin
+     unchanged. -->
 <div
 	data-testid="language-selector"
-	role="group"
+	role="toolbar"
+	tabindex="-1"
 	aria-label={m.profile_language_label()}
 	class="inline-flex flex-wrap overflow-hidden rounded-md border border-ink-4"
+	onkeydown={handleKeydown}
 >
 	{#each locales as locale (locale)}
 		<button
 			data-testid="language-option-{locale}"
 			type="button"
 			aria-pressed={locale === current ? 'true' : 'false'}
+			tabindex={locale === activeLocale ? 0 : -1}
+			onfocus={() => (rovingLocale = locale)}
 			class="flex min-h-11 items-center justify-center border-r border-ink-4 px-2 py-1 text-sm last:border-r-0"
 			class:bg-ink={locale === current}
 			class:text-paper={locale === current}

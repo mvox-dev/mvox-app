@@ -9,6 +9,7 @@
 	// `toRosterRow` — this component only renders whatever `loadRoster` returns.
 	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
@@ -339,6 +340,25 @@
 		// 'arrange' leaves `expandedIds` as-is — the arrange list doesn't read it,
 		// and whichever collapsed/expanded shape was live comes right back when
 		// the user switches to one of the other two chips.
+	}
+
+	// #156 — view-mode chip roving tabindex. Radiogroup semantics (arrow moves
+	// AND selects): `viewMode` already models single selection, so there is no
+	// separate roving $state to keep in sync — the pressed chip IS the tab
+	// stop. Membership is resolved live at keypress (the Arrange chip is
+	// conditionally rendered for non-admins), matching the nav's own walk.
+	function handleViewModeKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
+		const idx = chips.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, chips.length);
+		if (next < 0) return;
+		e.preventDefault();
+		const mode = chips[next].dataset.viewMode as 'collapsed' | 'expanded' | 'arrange' | undefined;
+		if (!mode) return;
+		setViewMode(mode);
+		chips[next].focus();
 	}
 
 	/** #155/S1 arrange-mode shell — one row per section, EVERY nesting level, in
@@ -2581,20 +2601,34 @@
 			{#if view === 'grouped' && !sectionsError}
 				<!-- #155/S1 — the 3-chip view-mode selector, ABOVE the groups (pinned
 				     document-order contract the old collapse-all/expand-all toggle
-				     held). Radio-style single selection: `aria-pressed` is the pin,
-				     exactly one chip is "true". Arrange is rights-gated (admin-only,
-				     fail-closed on 'loading'/'error' same as every other admin control
-				     on this page) — non-editors get exactly the two display chips. -->
+				     held). Radio-style single selection — and since #156 it says so:
+				     `role="radiogroup"` + `role="radio"` + `aria-checked`, exactly one
+				     chip "true". The role is load-bearing, not decoration: arrows here
+				     both MOVE and SELECT (`handleViewModeKeydown`), which is radiogroup
+				     behaviour and NOT what the app's other roving groups do (those are
+				     `role="toolbar"`, arrows move only) — under a bare `role="group"`
+				     nothing in the markup told a screen-reader user which of the two
+				     they were in. `aria-checked` REPLACES `aria-pressed`: pressed-state
+				     on `role="radio"` is an invalid ARIA mix, the same trap
+				     page.sections-a11y.spec.ts caught on `role="option"`.
+				     Arrange is rights-gated (admin-only, fail-closed on
+				     'loading'/'error' same as every other admin control on this page)
+				     — non-editors get exactly the two display chips. -->
 				<div
 					data-testid="roster-view-modes"
-					role="group"
+					role="radiogroup"
+					tabindex="-1"
 					aria-label={m.roster_view_modes_label()}
 					class="inline-flex flex-wrap items-center gap-1.5 self-start"
+					onkeydown={handleViewModeKeydown}
 				>
 					<button
 						type="button"
 						data-testid="roster-view-chip-collapsed"
-						aria-pressed={viewMode === 'collapsed' ? 'true' : 'false'}
+						data-view-mode="collapsed"
+						role="radio"
+						aria-checked={viewMode === 'collapsed' ? 'true' : 'false'}
+						tabindex={viewMode === 'collapsed' ? 0 : -1}
 						class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {viewMode === 'collapsed'
 							? 'border-ink bg-ink text-paper'
 							: 'border-ink-4 text-ink-2 hover:text-ink'}"
@@ -2605,7 +2639,10 @@
 					<button
 						type="button"
 						data-testid="roster-view-chip-expanded"
-						aria-pressed={viewMode === 'expanded' ? 'true' : 'false'}
+						data-view-mode="expanded"
+						role="radio"
+						aria-checked={viewMode === 'expanded' ? 'true' : 'false'}
+						tabindex={viewMode === 'expanded' ? 0 : -1}
 						class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {viewMode === 'expanded'
 							? 'border-ink bg-ink text-paper'
 							: 'border-ink-4 text-ink-2 hover:text-ink'}"
@@ -2617,7 +2654,10 @@
 						<button
 							type="button"
 							data-testid="roster-view-chip-arrange"
-							aria-pressed={viewMode === 'arrange' ? 'true' : 'false'}
+							data-view-mode="arrange"
+							role="radio"
+							aria-checked={viewMode === 'arrange' ? 'true' : 'false'}
+							tabindex={viewMode === 'arrange' ? 0 : -1}
 							class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {viewMode === 'arrange'
 								? 'border-ink bg-ink text-paper'
 								: 'border-ink-4 text-ink-2 hover:text-ink'}"
@@ -2851,12 +2891,27 @@
 									     `role="button"` reorder control, and nesting a real `<button>`
 									     inside one both pollutes its accessible name and creates the
 									     `nested-interactive` violation. Sitting outside the row's subtree
-									     is also what makes them keyboard-operable in their own right —
-									     nothing they emit can reach `handleHandleKeydown`, so no
-									     `stopPropagation()` on either handler is needed any more (review
-									     F1 shipped one when they were still children; the containment
-									     fix retires it — the `event.target !== event.currentTarget` guard
-									     inside `handleHandleKeydown` stays as belt-and-braces).
+									     also means nothing they emit can reach `handleHandleKeydown`, so
+									     no `stopPropagation()` on either handler is needed any more
+									     (review F1 shipped one when they were still children; the
+									     containment fix retires it — the
+									     `event.target !== event.currentTarget` guard inside
+									     `handleHandleKeydown` stays as belt-and-braces).
+									     TABINDEX="-1" — POINTER/TOUCH ONLY, deliberately. Mihkel's
+									     ruling, recorded in `.claude/workflows/roving-tabindex-pipeline.js`
+									     (#156 SPIKE brief: "EXCLUDED: buttons with tabindex=-1 that are
+									     mouse/touch only (like indent/unindent per Mihkel ruling)"), and
+									     re-affirmed by #156 review checklist item 10. These two are the
+									     ONLY controls in the row action cluster with a full keyboard
+									     equivalent elsewhere: focus the row, Space/Enter to grab, then
+									     ArrowRight indents / ArrowLeft unindents through the SAME
+									     `handleIndent`/`handleUnindent` seam (`handleHandleKeydown`,
+									     ~line 2100). Two tab stops per row for a move the row itself
+									     already offers is noise, so they are dropped from the tab order
+									     rather than roved. Rename and delete have NO such equivalent, so
+									     they stay real tab stops until a row-level story exists for them
+									     — the asymmetry inside this wrapper is intentional, not an
+									     oversight. Pinned in page.roster-indent.spec.ts.
 									     No text nodes inside either button (SVG glyph only,
 									     `aria-hidden`): the accessible name comes from `aria-label`, and
 									     a text glyph here would land in the slot's own text — leaking
@@ -2874,6 +2929,7 @@
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
 											!canIndent(row.id)}
+										tabindex="-1"
 										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
 										onclick={() => void handleIndent(node)}
 									>
@@ -2889,6 +2945,7 @@
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
 											!canUnindent(row.id)}
+										tabindex="-1"
 										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
 										onclick={() => void handleUnindent(node)}
 									>

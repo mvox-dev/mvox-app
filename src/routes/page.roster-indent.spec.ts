@@ -808,5 +808,92 @@ describe('/roster — an unindent with no resolvable organization fails LOUDLY (
 	});
 });
 
+// ── #156: the nesting buttons are POINTER-ONLY, and the row is their keyboard ──
+
+// Mihkel's ruling, recorded in `.claude/workflows/roving-tabindex-pipeline.js`
+// ("EXCLUDED: buttons with tabindex=-1 that are mouse/touch only (like
+// indent/unindent per Mihkel ruling)") and re-affirmed by #156 review checklist
+// item 10. Nothing in the source pinned it before — this block does, so an edit
+// that quietly restores or removes the two tab stops fails here rather than in
+// a later a11y sweep.
+//
+// The exclusion is only defensible because the row-grab machine above offers
+// the SAME two writes from the keyboard. That equivalence is asserted directly
+// (same seam, same arguments), not assumed.
+describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the row grab as their keyboard equivalent (#156, checklist item 10)', () => {
+	const ALL_IDS = ['sec-sop', 'sec-sop1', 'sec-sop2', 'sec-alto', 'sec-tenor'];
+
+	it('every indent AND unindent button carries tabindex="-1" — no Tab stops for the nesting pair', async () => {
+		const container = await renderInArrangeMode();
+		for (const id of ALL_IDS) {
+			expect(indentBtn(container, id).getAttribute('tabindex'), `indent ${id}`).toBe('-1');
+			expect(unindentBtn(container, id).getAttribute('tabindex'), `unindent ${id}`).toBe('-1');
+		}
+	});
+
+	it('they stay pointer-operable — a click still runs the write (the exclusion removes the TAB STOP, not the control)', async () => {
+		const container = await renderInArrangeMode();
+		await fireEvent.click(indentBtn(container, 'sec-alto'));
+		await waitFor(() => {
+			expect(reparentMock).toHaveBeenCalledTimes(1);
+		});
+		expect(reparentMock).toHaveBeenCalledWith(CFG, 'sec-alto', 'sec-sop');
+	});
+
+	it('the row-grab keyboard path produces the IDENTICAL write to the indent button — this is what makes dropping the tab stop safe (WCAG 2.1.1)', async () => {
+		// Button path.
+		const byButton = await renderInArrangeMode();
+		await fireEvent.click(indentBtn(byButton, 'sec-alto'));
+		await waitFor(() => expect(reparentMock).toHaveBeenCalledTimes(1));
+		const buttonCall = reparentMock.mock.calls[0];
+
+		cleanup();
+		reparentMock.mockClear();
+
+		// Keyboard path: focus the row, Space to grab, ArrowRight to indent.
+		const byKeyboard = await renderInArrangeMode();
+		const target = row(byKeyboard, 'sec-alto');
+		target.focus();
+		await fireEvent.keyDown(target, { key: ' ' });
+		await waitFor(() => expect(target.getAttribute('data-grabbed')).toBe('true'));
+		await fireEvent.keyDown(row(byKeyboard, 'sec-alto'), { key: 'ArrowRight' });
+		await waitFor(() => expect(reparentMock).toHaveBeenCalledTimes(1));
+
+		expect(reparentMock.mock.calls[0]).toEqual(buttonCall);
+	});
+
+	it('the row-grab keyboard path produces the IDENTICAL write to the unindent button too', async () => {
+		const byButton = await renderInArrangeMode();
+		await fireEvent.click(unindentBtn(byButton, 'sec-sop1'));
+		await waitFor(() => expect(reparentMock).toHaveBeenCalledTimes(1));
+		const buttonCall = reparentMock.mock.calls[0];
+
+		cleanup();
+		reparentMock.mockClear();
+
+		const byKeyboard = await renderInArrangeMode();
+		const target = row(byKeyboard, 'sec-sop1');
+		target.focus();
+		await fireEvent.keyDown(target, { key: 'Enter' });
+		await waitFor(() => expect(target.getAttribute('data-grabbed')).toBe('true'));
+		await fireEvent.keyDown(row(byKeyboard, 'sec-sop1'), { key: 'ArrowLeft' });
+		await waitFor(() => expect(reparentMock).toHaveBeenCalledTimes(1));
+
+		expect(reparentMock.mock.calls[0]).toEqual(buttonCall);
+	});
+
+	it('the ASYMMETRY is deliberate: rename and delete in the SAME wrapper keep their normal tab stops (no row-level equivalent exists for them)', async () => {
+		const container = await renderInArrangeMode();
+		for (const id of ALL_IDS) {
+			const rename = q(container, `arrange-rename-${id}`);
+			const remove = q(container, `section-remove-${id}`);
+			expect(rename, `rename button for ${id}`).not.toBeNull();
+			expect(remove, `remove button for ${id}`).not.toBeNull();
+			expect(rename!.getAttribute('tabindex'), `rename ${id} must stay a Tab stop`).toBeNull();
+			expect(remove!.getAttribute('tabindex'), `remove ${id} must stay a Tab stop`).toBeNull();
+		}
+	});
+});
+
 // (*MVOX:Tallis* — #155/S3 RED)
 // (*MVOX:Byrd* — #155/S3 review fixes F1/F2/F3)

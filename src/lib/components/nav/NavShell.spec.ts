@@ -1,7 +1,7 @@
 // src/lib/components/nav/NavShell.spec.ts
 // @vitest-environment happy-dom
 import { afterEach, describe, it, expect } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/svelte';
+import { render, screen, cleanup, createEvent, fireEvent } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import NavShell from './NavShell.svelte';
 import type { NavEntry } from '$lib/nav/entries';
@@ -377,5 +377,135 @@ describe('NavShell — no visible entries', () => {
 			},
 		});
 		expect(container.querySelector('nav')).toBeNull();
+	});
+});
+
+
+// ---------------------------------------------------------------------------
+// #156 — roving tabindex. The nav is the pattern's reference implementation in
+// this app, so its invariants are pinned here rather than read off the source:
+// exactly ONE link carries tabindex="0", arrows move focus (and wrap), Tab is
+// left alone so focus can leave, and — review F2 — the single stop is NEVER
+// parked on a completion-locked link, which would drop the whole nav out of the
+// tab order and strand the user away from Profile, the one link that clears the
+// lock.
+// ---------------------------------------------------------------------------
+describe('NavShell — roving tabindex (#156)', () => {
+	function navLinks(container: HTMLElement): HTMLAnchorElement[] {
+		return Array.from(container.querySelectorAll<HTMLAnchorElement>('nav a'));
+	}
+	function tabStops(container: HTMLElement): HTMLAnchorElement[] {
+		return navLinks(container).filter((a) => a.getAttribute('tabindex') === '0');
+	}
+
+	it('exactly ONE link is the Tab stop, and it is the current route', () => {
+		const { container } = render(NavShell, {
+			props: { children: testChildren, entries: testEntries, activeRoute: '/roster' },
+		});
+		const stops = tabStops(container);
+		expect(stops).toHaveLength(1);
+		expect(stops[0].getAttribute('href')).toBe('/roster');
+	});
+
+	it('ArrowRight moves focus to the next link and WRAPS at the end; ArrowLeft wraps backwards', async () => {
+		const { container } = render(NavShell, {
+			props: { children: testChildren, entries: testEntries, activeRoute: '/' },
+		});
+		const links = navLinks(container);
+		expect(links).toHaveLength(3); // agenda, roster, profile
+
+		links[0].focus();
+		await fireEvent.keyDown(links[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(links[1]);
+
+		await fireEvent.keyDown(links[1], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(links[2]);
+
+		// …and round the end back to the first.
+		await fireEvent.keyDown(links[2], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(links[0]);
+
+		// Backwards from the first wraps to the last.
+		await fireEvent.keyDown(links[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(links[2]);
+	});
+
+	it('the Tab stop TRAVELS with focus — after arrowing, the newly focused link is the only "0"', async () => {
+		const { container } = render(NavShell, {
+			props: { children: testChildren, entries: testEntries, activeRoute: '/' },
+		});
+		const links = navLinks(container);
+		links[0].focus();
+		await fireEvent.keyDown(links[0], { key: 'ArrowRight' });
+
+		const stops = tabStops(container);
+		expect(stops).toHaveLength(1);
+		expect(stops[0]).toBe(links[1]);
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus can leave the group and links still activate', () => {
+		const { container } = render(NavShell, {
+			props: { children: testChildren, entries: testEntries, activeRoute: '/' },
+		});
+		const link = navLinks(container)[0];
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(link, { key });
+			fireEvent(link, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
+	});
+
+	it('completion-locked on a NON-profile route: the single Tab stop is Profile, not the disabled current-route entry (review F2)', () => {
+		// The layout's redirect to /profile is an $effect, so a locked user
+		// renders at least once on the route they asked for. If `activeNavKey`
+		// resolved to that (disabled) entry, EVERY link would read tabindex="-1".
+		const { container } = render(NavShell, {
+			props: {
+				children: testChildren,
+				entries: testEntries,
+				activeRoute: '/roster',
+				completionLocked: true,
+			},
+		});
+		const stops = tabStops(container);
+		expect(stops, 'the nav must not fall out of the tab order').toHaveLength(1);
+		expect(stops[0].getAttribute('href')).toBe('/profile');
+		expect(stops[0].textContent).toContain('Profile');
+	});
+
+	it('completion-locked: FOCUSING a disabled link does not steal the Tab stop (review F2 — Chrome focuses anchors on click)', async () => {
+		const { container } = render(NavShell, {
+			props: {
+				children: testChildren,
+				entries: testEntries,
+				activeRoute: '/profile',
+				completionLocked: true,
+			},
+		});
+		const agendaLink = screen.getByText('Agenda').closest('a') as HTMLAnchorElement;
+		expect(agendaLink.getAttribute('aria-disabled')).toBe('true');
+
+		await fireEvent.focus(agendaLink);
+
+		const stops = tabStops(container);
+		expect(stops, 'a disabled link must never become the sole tab stop').toHaveLength(1);
+		expect(stops[0].getAttribute('href')).toBe('/profile');
+	});
+
+	it('completion-locked: arrow navigation skips the disabled links entirely', async () => {
+		const { container } = render(NavShell, {
+			props: {
+				children: testChildren,
+				entries: testEntries,
+				activeRoute: '/profile',
+				completionLocked: true,
+			},
+		});
+		const profileLink = screen.getByText('Profile').closest('a') as HTMLAnchorElement;
+		profileLink.focus();
+		// Only ONE enabled member, so the wrap lands back on itself — never on a
+		// greyed entry.
+		await fireEvent.keyDown(profileLink, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(profileLink);
 	});
 });

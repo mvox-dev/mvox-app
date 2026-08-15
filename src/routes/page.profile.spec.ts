@@ -2,7 +2,7 @@
 //
 // #35 — profile edit v2 page tests. Targets the v2 surface: one input per field,
 // autosave-driven saves, save feedback on the active visibility button.
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
@@ -789,5 +789,127 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		});
 		// Escape is a pure dismiss — no write.
 		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #156 — roving tabindex on the per-field visibility tier group (ProfileField).
+// TOOLBAR semantics: arrows MOVE focus only. Activation here is destructive on
+// a second tap (a conflict tier resolves in its own favour — browse-then-
+// confirm), so an arrow that also selected would resolve conflicts by accident.
+//
+// The tricky part, and the reason this is pinned rather than read off the
+// source: the stop must fall back to the first ENABLED tier. The NAME field's
+// private tier is permanently disabled, and a disabled button cannot hold
+// focus — a stop parked there would strand the whole group from the keyboard.
+// ---------------------------------------------------------------------------
+describe('/profile — visibility tier group: roving tabindex (#156)', () => {
+	async function renderProfile(): Promise<HTMLElement> {
+		selectPolyphony();
+		h.listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
+		]);
+		const { container } = render(Page);
+		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		return container;
+	}
+
+	function tiers(container: HTMLElement, field: 'name' | 'email'): HTMLButtonElement[] {
+		return (['private', 'domain', 'public'] as const).map(
+			(level) =>
+				q(container, `[data-testid="profile-vis-${field}-${level}"]`) as HTMLButtonElement
+		);
+	}
+	function stops(btns: HTMLButtonElement[]): HTMLButtonElement[] {
+		return btns.filter((b) => b.getAttribute('tabindex') === '0');
+	}
+
+	it('the tier group is a role="toolbar" with an accessible name', async () => {
+		const container = await renderProfile();
+		const group = tiers(container, 'email')[0].closest('[role="toolbar"]');
+		expect(group, 'the tier group must declare toolbar semantics').not.toBeNull();
+		expect(group!.getAttribute('aria-label')).toBeTruthy();
+	});
+
+	it('exactly ONE tier is the Tab stop, per field', async () => {
+		const container = await renderProfile();
+		expect(stops(tiers(container, 'name'))).toHaveLength(1);
+		expect(stops(tiers(container, 'email'))).toHaveLength(1);
+	});
+
+	it('NAME: the stop is never the permanently-disabled private tier — it falls back to the first ENABLED one', async () => {
+		const container = await renderProfile();
+		const [priv, domain, pub] = tiers(container, 'name');
+		// The name field can never go private, and the CURRENTLY ACTIVE tier is
+		// also disabled (you cannot move a field to where it already is) — so
+		// `public` is the only enabled tier here.
+		expect(priv.disabled, 'the name field cannot go private').toBe(true);
+		expect(domain.disabled, 'the active tier is not a move target').toBe(true);
+		expect(pub.disabled).toBe(false);
+
+		expect(priv.getAttribute('tabindex')).toBe('-1');
+		expect(stops(tiers(container, 'name'))).toEqual([pub]);
+	});
+
+	it('arrow navigation SKIPS disabled tiers entirely — it never lands focus on one', async () => {
+		const container = await renderProfile();
+		const [priv, domain, pub] = tiers(container, 'name');
+		pub.focus();
+		expect(document.activeElement).toBe(pub);
+
+		// `public` is the only enabled member, so the wrap lands back on itself
+		// rather than on either disabled tier.
+		await fireEvent.keyDown(pub, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(pub);
+		await fireEvent.keyDown(pub, { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(pub);
+		expect(document.activeElement).not.toBe(priv);
+		expect(document.activeElement).not.toBe(domain);
+	});
+
+	it('EMAIL: arrows move between the ENABLED tiers and WRAP, skipping the disabled active tier', async () => {
+		const container = await renderProfile();
+		const [priv, domain, pub] = tiers(container, 'email');
+		// Email CAN go private; the active (domain) tier is the disabled one.
+		expect(priv.disabled).toBe(false);
+		expect(domain.disabled).toBe(true);
+		expect(pub.disabled).toBe(false);
+
+		priv.focus();
+		await fireEvent.keyDown(priv, { key: 'ArrowRight' });
+		expect(document.activeElement, 'domain is disabled — it must be stepped over').toBe(pub);
+
+		await fireEvent.keyDown(pub, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(priv);
+
+		await fireEvent.keyDown(priv, { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(pub);
+	});
+
+	it('arrows MOVE ONLY — no visibility write is issued by arrow navigation', async () => {
+		const container = await renderProfile();
+		const [priv, , pub] = tiers(container, 'email');
+		priv.focus();
+		await fireEvent.keyDown(priv, { key: 'ArrowRight' });
+		await fireEvent.keyDown(pub, { key: 'ArrowRight' });
+		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the tier still activates', async () => {
+		const container = await renderProfile();
+		const btn = tiers(container, 'email')[0];
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(btn, { key });
+			fireEvent(btn, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
+	});
+
+	it('Escape still dismisses a conflict preview — the roving handler did not swallow the pre-existing key', async () => {
+		const container = await renderProfile();
+		const btn = tiers(container, 'email')[0];
+		const event = createEvent.keyDown(btn, { key: 'Escape' });
+		fireEvent(btn, event);
+		expect(event.defaultPrevented).toBe(false);
 	});
 });

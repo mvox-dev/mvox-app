@@ -3,6 +3,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Level } from '$lib/profile/profileData';
 	import type { FieldKey } from '$lib/profile/fieldMove';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	interface Props {
 		field: FieldKey;
@@ -107,8 +108,39 @@
 		}
 	}
 
+	// #156 — roving tabindex. The derived active key must fall back to the
+	// first ENABLED tier, not simply `activeLevel` — a naive "active tier gets
+	// tabindex 0" rule can park the sole tab stop on a disabled button (e.g.
+	// the name field's private tier, or any tier during a write-lock) and
+	// strand the group. Arrows must NEVER activate here: a second activation
+	// on a conflict tier RESOLVES the conflict destructively (browse-then-
+	// confirm), so keydown navigation only ever moves focus.
+	let rovingLevel = $state<Level | null>(null);
+	const firstEnabledLevel = $derived.by(() => {
+		for (const level of LEVELS) {
+			if (!isButtonDisabled(level, stateOf(level))) return level;
+		}
+		return LEVELS[0];
+	});
+	const activeTabLevel = $derived(
+		rovingLevel !== null && !isButtonDisabled(rovingLevel, stateOf(rovingLevel))
+			? rovingLevel
+			: firstEnabledLevel
+	);
+
 	function handleGroupKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && previewLevel !== null) previewLevel = null;
+		if (e.key === 'Escape' && previewLevel !== null) {
+			previewLevel = null;
+			return;
+		}
+		const group = e.currentTarget as HTMLElement;
+		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+		const idx = buttons.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, buttons.length);
+		if (next < 0) return;
+		e.preventDefault();
+		buttons[next].focus();
 	}
 
 	function handleInput(e: Event) {
@@ -137,9 +169,18 @@
 		/>
 	</label>
 
+	<!-- #156 — WAI-APG TOOLBAR, not a radiogroup: arrows MOVE focus only,
+	     they never activate (a second activation on a conflict tier resolves
+	     the conflict destructively, so browse-then-confirm is the only safe
+	     shape here). `role="toolbar"` states that in the markup — under the
+	     old bare `role="group"` nothing distinguished these buttons from the
+	     app's arrow-SELECTS radiogroups, and svelte-check flagged the keydown
+	     handler on a non-interactive role. `aria-pressed` toggle buttons
+	     inside a toolbar are the APG pattern, so the state pin is unchanged. -->
 	<div
 		class="flex gap-2"
-		role="group"
+		role="toolbar"
+		tabindex="-1"
 		aria-label={FIELD_LABEL[field]()}
 		onkeydown={handleGroupKeydown}
 	>
@@ -162,6 +203,8 @@
 							: s === 'leak' || s === 'conflict'
 								? m.profile_visibility_leak({ level: LEVEL_LABEL[level]() })
 								: m.profile_visibility_move({ field: FIELD_LABEL[field](), level: LEVEL_LABEL[level]() })}
+				tabindex={activeTabLevel === level ? 0 : -1}
+				onfocus={() => (rovingLevel = level)}
 				onclick={() => clickLevel(level)}
 				class="flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:cursor-default"
 				class:border-ink={s === 'active'}

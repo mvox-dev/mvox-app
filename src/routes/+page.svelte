@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { authStore } from '$lib/auth/session';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
@@ -2949,6 +2950,37 @@
 	 *  stopped series run whose remainder is still recorded in the open form. */
 	const createEntryPointsBlocked = $derived(anyCreateSubmitting || seriesRunUnfinished);
 
+	// #156 — agenda admin toolbar roving tabindex. WAI-APG *toolbar* pattern,
+	// not a selector — no member is ever 'selected', so the roving stop is
+	// just 'last focused, else first enabled'. Keyed by testid rather than a
+	// domain id (the three members aren't rows of anything). The walk EXCLUDES
+	// [disabled] — `createEntryPointsBlocked` can disable both create buttons,
+	// and a disabled button cannot hold focus: a roving stop parked on one
+	// would strand the whole toolbar from the keyboard.
+	let toolbarRoving = $state<string | null>(null);
+	const toolbarActiveTestid = $derived.by(() => {
+		if (toolbarRoving === 'season-manage-gear' && showSeasonManageGear) return toolbarRoving;
+		if (toolbarRoving === 'season-create' && showSeasonCreate && !seasonCreateOpen && !createEntryPointsBlocked)
+			return toolbarRoving;
+		if (toolbarRoving === 'event-create' && showEventCreate && !eventCreateOpen && !createEntryPointsBlocked)
+			return toolbarRoving;
+		if (showSeasonManageGear) return 'season-manage-gear';
+		if (showSeasonCreate && !seasonCreateOpen && !createEntryPointsBlocked) return 'season-create';
+		if (showEventCreate && !eventCreateOpen && !createEntryPointsBlocked) return 'event-create';
+		return null;
+	});
+
+	function handleAdminToolbarKeydown(e: KeyboardEvent): void {
+		const toolbar = e.currentTarget as HTMLElement;
+		const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+		const idx = buttons.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, buttons.length);
+		if (next < 0) return;
+		e.preventDefault();
+		buttons[next].focus();
+	}
+
 	function setSeriesCreateError(msg: () => string, field: SeriesCreateErrorField): void {
 		seriesCreateError = msg;
 		seriesCreateErrorField = field;
@@ -3686,7 +3718,11 @@
 						{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen) || (showEventCreate && !eventCreateOpen)}
 							<div
 								data-testid="agenda-admin-toolbar"
+								role="toolbar"
+								aria-label={m.agenda_admin_toolbar_label()}
+								tabindex="-1"
 								class="mb-3 flex w-fit flex-wrap items-center gap-2 rounded-md border border-ink-4 p-1.5"
+								onkeydown={handleAdminToolbarKeydown}
 							>
 								<!-- #149 review F3 — the gear wears the SAME outline as its two
 								     siblings (`border border-ink text-ink`, same hover
@@ -3700,6 +3736,8 @@
 										data-testid="season-manage-gear"
 										bind:this={seasonManageGearEl}
 										aria-label={m.season_manage_gear_label()}
+										tabindex={toolbarActiveTestid === 'season-manage-gear' ? 0 : -1}
+										onfocus={() => (toolbarRoving = 'season-manage-gear')}
 										class="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink text-xs text-ink hover:bg-ink hover:text-paper"
 										onclick={openSeasonManagePanel}
 									>
@@ -3711,6 +3749,8 @@
 										type="button"
 										data-testid="season-create"
 										disabled={createEntryPointsBlocked}
+										tabindex={toolbarActiveTestid === 'season-create' ? 0 : -1}
+										onfocus={() => (toolbarRoving = 'season-create')}
 										class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 										onclick={openSeasonCreateForm}
 									>
@@ -3723,6 +3763,8 @@
 										data-testid="event-create"
 										bind:this={eventCreateButtonEl}
 										disabled={createEntryPointsBlocked}
+										tabindex={toolbarActiveTestid === 'event-create' ? 0 : -1}
+										onfocus={() => (toolbarRoving = 'event-create')}
 										class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 										onclick={() => openEventCreateForm('agenda')}
 									>

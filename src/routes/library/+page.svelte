@@ -6,6 +6,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 	import {
 		listWorks,
 		listEditions,
@@ -83,6 +84,27 @@
 	// refetches). Default 'nr' ascending.
 	type CopySortKey = 'nr' | 'member' | 'since';
 	let copySortKey = $state<CopySortKey>('nr');
+
+	// #156 — copy-sort chip roving tabindex. Radiogroup semantics, same as the
+	// roster view-mode chips: `copySortKey` already models single selection
+	// (shared across every open edition), so arrow-select needs no separate
+	// $state — the pressed chip IS the tab stop. The delegated keydown handler
+	// scopes its walk to `e.currentTarget` (one `copy-sort-{edition.id}` group
+	// per edition), so arrowing inside one edition's chips never touches
+	// another edition's — no per-edition keying needed beyond that scoping.
+	function handleCopySortKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
+		const idx = chips.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, chips.length);
+		if (next < 0) return;
+		e.preventDefault();
+		const key = chips[next].dataset.sortKey as CopySortKey | undefined;
+		if (!key) return;
+		copySortKey = key;
+		chips[next].focus();
+	}
 
 	/**
 	 * Sort value for a single copy under the given key, or null when the copy
@@ -891,18 +913,29 @@
 													{:else if (copiesByEdition.get(edition.id) ?? []).length === 0}
 														<p class="text-xs text-ink-2">{m.library_copies_empty()}</p>
 													{:else}
-														<!-- #112/#88 — compact sort control group: nr / member / since,
-														     aria-pressed marks the active key. -->
+														<!-- #112/#88 — compact sort control group: nr / member / since.
+														     #156 — the group now says what it is: `role="radiogroup"` +
+														     `role="radio"` + `aria-checked` (which REPLACES the old
+														     `aria-pressed` — pressed-state on `role="radio"` is an invalid
+														     ARIA mix, the same trap page.sections-a11y.spec.ts caught on
+														     `role="option"`). The role is load-bearing: arrows here both
+														     MOVE and SELECT (`handleCopySortKeydown`), unlike the app's
+														     `role="toolbar"` groups where arrows only move. -->
 														<div
 															data-testid="copy-sort-{edition.id}"
-															role="group"
+															role="radiogroup"
+															tabindex="-1"
 															aria-label={m.library_copy_sort_label()}
 															class="mb-1 flex items-center gap-1"
+															onkeydown={handleCopySortKeydown}
 														>
 															<button
 																type="button"
 																data-testid="copy-sort-nr-{edition.id}"
-																aria-pressed={copySortKey === 'nr'}
+																data-sort-key="nr"
+																role="radio"
+																aria-checked={copySortKey === 'nr' ? 'true' : 'false'}
+																tabindex={copySortKey === 'nr' ? 0 : -1}
 																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'nr'
 																	? 'border-ink bg-ink text-paper'
 																	: 'border-ink-5 text-ink-2'}"
@@ -913,7 +946,10 @@
 															<button
 																type="button"
 																data-testid="copy-sort-member-{edition.id}"
-																aria-pressed={copySortKey === 'member'}
+																data-sort-key="member"
+																role="radio"
+																aria-checked={copySortKey === 'member' ? 'true' : 'false'}
+																tabindex={copySortKey === 'member' ? 0 : -1}
 																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'member'
 																	? 'border-ink bg-ink text-paper'
 																	: 'border-ink-5 text-ink-2'}"
@@ -924,7 +960,10 @@
 															<button
 																type="button"
 																data-testid="copy-sort-since-{edition.id}"
-																aria-pressed={copySortKey === 'since'}
+																data-sort-key="since"
+																role="radio"
+																aria-checked={copySortKey === 'since' ? 'true' : 'false'}
+																tabindex={copySortKey === 'since' ? 0 : -1}
 																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'since'
 																	? 'border-ink bg-ink text-paper'
 																	: 'border-ink-5 text-ink-2'}"

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, cleanup, createEvent, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RepertoireElement, { ADD_WORK_KEY } from './RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
@@ -392,6 +392,113 @@ describe('RepertoireElement — management: repertoire status + remove', () => {
 		).toBe('true');
 		await fireEvent.click(container.querySelector('[data-testid="work-status-retired"]')!);
 		expect(onstatuschange).toHaveBeenCalledWith('ri-1', 'retired');
+	});
+
+	// ── #156 roving tabindex — TOOLBAR semantics, keyed PER ROW ──────────────
+	// Arrows MOVE focus only. All rows live in ONE component instance, so the
+	// roving stop is keyed by row.id; a scalar would drag every row's stop along
+	// with the first arrow press.
+	it('the status chips sit in a role="toolbar" with an accessible name, and exactly ONE carries tabindex="0"', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1', status: 'learning' })]);
+		const group = container.querySelector('[data-testid="work-status-group-ri-1"]');
+		expect(group, 'the status group').not.toBeNull();
+		expect(group!.getAttribute('role')).toBe('toolbar');
+		expect(group!.getAttribute('aria-label')).toBeTruthy();
+
+		const stops = group!.querySelectorAll('button[tabindex="0"]');
+		expect(stops).toHaveLength(1);
+		expect(stops[0].getAttribute('data-testid')).toBe('work-status-learning');
+	});
+
+	it('ArrowRight moves focus across the chips and WRAPS; ArrowLeft wraps backwards', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })]);
+		const chips = Array.from(
+			container.querySelectorAll<HTMLButtonElement>(
+				'[data-testid="work-status-group-ri-1"] button'
+			)
+		);
+		expect(chips.length).toBeGreaterThan(1);
+
+		chips[0].focus();
+		await fireEvent.keyDown(chips[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(chips[1]);
+
+		await fireEvent.keyDown(chips[chips.length - 1], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(chips[0]);
+
+		await fireEvent.keyDown(chips[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(chips[chips.length - 1]);
+	});
+
+	it('arrows MOVE ONLY — no onstatuschange write is emitted by arrow navigation', async () => {
+		const onstatuschange = vi.fn();
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], { onstatuschange });
+		const chips = Array.from(
+			container.querySelectorAll<HTMLButtonElement>(
+				'[data-testid="work-status-group-ri-1"] button'
+			)
+		);
+		chips[0].focus();
+		await fireEvent.keyDown(chips[0], { key: 'ArrowRight' });
+		await fireEvent.keyDown(chips[1], { key: 'ArrowRight' });
+		expect(onstatuschange).not.toHaveBeenCalled();
+	});
+
+	it('each ROW keeps its own Tab stop — arrowing in row A leaves row B alone (keyed roving state)', async () => {
+		// DIFFERENT statuses on purpose: the two rows start with their stops on
+		// different chips, so a scalar (un-keyed) roving state would visibly drag
+		// row B's stop onto row A's chip. Same-status rows would hide that bug.
+		const { container } = await renderExpandedManaged([
+			row({ id: 'ri-a', status: 'active' }),
+			row({ id: 'ri-b', status: 'learning' })
+		]);
+		const aChips = Array.from(
+			container.querySelectorAll<HTMLButtonElement>(
+				'[data-testid="work-status-group-ri-a"] button'
+			)
+		);
+		const bChips = Array.from(
+			container.querySelectorAll<HTMLButtonElement>(
+				'[data-testid="work-status-group-ri-b"] button'
+			)
+		);
+		const stops = (chips: HTMLButtonElement[]) =>
+			chips.filter((c) => c.getAttribute('tabindex') === '0');
+		const bStopBefore = stops(bChips);
+		expect(bStopBefore).toEqual([bChips[0]]); // 'learning'
+		expect(stops(aChips)).toEqual([aChips[1]]); // 'active'
+
+		aChips[0].focus();
+		await fireEvent.keyDown(aChips[0], { key: 'ArrowRight' });
+
+		// Row A's stop moved…
+		expect(stops(aChips)).toEqual([aChips[1]]);
+		// …and row B's did not follow it.
+		expect(stops(bChips)).toEqual(bStopBefore);
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the chip still activates', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })]);
+		const chip = container.querySelector('[data-testid="work-status-active"]') as HTMLButtonElement;
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(chip, { key });
+			fireEvent(chip, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
+	});
+
+	it('every chip disabled (row pending) — arrows move nothing and the walk does not crash', async () => {
+		const { container } = await renderExpandedManaged([row({ id: 'ri-1' })], {
+			pendingKeys: new Set(['ri-1'])
+		});
+		const chips = Array.from(
+			container.querySelectorAll<HTMLButtonElement>(
+				'[data-testid="work-status-group-ri-1"] button'
+			)
+		);
+		chips.forEach((c) => expect(c.disabled).toBe(true));
+		await fireEvent.keyDown(chips[0], { key: 'ArrowRight' });
+		expect(document.activeElement).not.toBe(chips[1]);
 	});
 
 	it('status buttons disable while their row id is pending', async () => {

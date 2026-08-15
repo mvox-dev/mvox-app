@@ -107,6 +107,7 @@
 	import type { PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
 	import type { Work } from '$lib/library/libraryData';
 	import type { ManageRightsState } from '$lib/repertoire/repertoireActions';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	const STATUS_OPTIONS: { value: RepertoireStatus; label: () => string }[] = [
 		{ value: 'learning', label: m.repertoire_status_learning },
@@ -122,6 +123,31 @@
 	 *  (workRows.ts) already nulls those out before they reach a row. */
 	function statusLabel(status: RepertoireStatus): string {
 		return STATUS_OPTIONS.find((opt) => opt.value === status)?.label() ?? status;
+	}
+
+	// #156 — roving tabindex, PER ROW. `manageRowControls` is a snippet
+	// rendered inside an {#each} in ONE component instance, so a scalar
+	// roving key would sync every row's tab stop together — keyed by row.id
+	// instead. The `?? 'active'` default (same one the badge/pressed-state
+	// use) already guarantees exactly one pressed chip, so no first-button
+	// fallback is needed; the [disabled] filter still is, since the whole set
+	// disables during a pending write.
+	let rovingStatusByRow = $state<Record<string, RepertoireStatus>>({});
+	function activeStatusFor(row: WorkRow): RepertoireStatus {
+		const roving = rovingStatusByRow[row.id];
+		if (roving !== undefined) return roving;
+		return row.status ?? 'active';
+	}
+
+	function handleStatusGroupKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
+		const idx = buttons.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, buttons.length);
+		if (next < 0) return;
+		e.preventDefault();
+		buttons[next].focus();
 	}
 
 	/** Repertoire the collective is NOT singing. Only a season editor ever sees
@@ -409,7 +435,20 @@
 				     the CURRENT status is exposed via aria-pressed, not just a class,
 				     so it stays legible to assistive tech. Labels still route through
 				     STATUS_OPTIONS — no raw schema string leaks into a locale. -->
-				<div class="flex flex-wrap gap-1">
+				<!-- #156 — WAI-APG TOOLBAR: arrows MOVE focus only, never activate.
+				     `role="toolbar"` says so in the markup — the old bare `role="group"`
+				     did not distinguish this from the app's arrow-SELECTS radiogroups
+				     (roster view chips, library copy-sort), and svelte-check flagged the
+				     keydown handler on a non-interactive role. `aria-pressed` toggle
+				     buttons inside a toolbar are the APG pattern; state pin unchanged. -->
+				<div
+					data-testid="work-status-group-{row.id}"
+					role="toolbar"
+					tabindex="-1"
+					aria-label={m.repertoire_status_group_label({ work: row.workName })}
+					class="flex flex-wrap gap-1"
+					onkeydown={handleStatusGroupKeydown}
+				>
 					{#each STATUS_OPTIONS as opt (opt.value)}
 						<button
 							type="button"
@@ -417,6 +456,9 @@
 							class="rounded-full border border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase disabled:cursor-default disabled:opacity-[0.45] aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper"
 							aria-pressed={(row.status ?? 'active') === opt.value}
 							disabled={pendingKeys.has(row.id)}
+							tabindex={activeStatusFor(row) === opt.value ? 0 : -1}
+							onfocus={() =>
+								(rovingStatusByRow = { ...rovingStatusByRow, [row.id]: opt.value })}
 							aria-label={m.repertoire_status_button_aria_label({
 								status: opt.label(),
 								work: row.workName

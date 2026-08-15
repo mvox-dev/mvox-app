@@ -290,11 +290,11 @@ async function renderWithEditionUnfolded() {
 	return container;
 }
 
-/** Click a sort control and wait for it to become the active (pressed) key. */
+/** Click a sort control and wait for it to become the active (checked) key. */
 async function activate(container: HTMLElement, key: 'nr' | 'member' | 'since') {
 	await fireEvent.click(container.querySelector(sortBtn(key))!);
 	await waitFor(() => {
-		expect(container.querySelector(sortBtn(key))!.getAttribute('aria-pressed')).toBe('true');
+		expect(container.querySelector(sortBtn(key))!.getAttribute('aria-checked')).toBe('true');
 	});
 }
 

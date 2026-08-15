@@ -30,6 +30,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
+		rsvp_group_label: () => 'RSVP',
 		rsvp_non_member_hint: () => 'Only members can RSVP.',
 		rsvp_save_failed: () => 'Could not save your answer.'
 	}

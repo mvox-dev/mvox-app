@@ -127,6 +127,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
+		rsvp_group_label: () => 'RSVP',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_recent: () => 'Recent',
@@ -138,6 +139,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// #85 — the fourth badge state: a past event with no record for me.
 		attendance_status_not_recorded: () => 'Not recorded',
 		attendance_toggle_aria_label: (p: { name: string; status: string }) => `Mark ${p.name} as ${p.status}`,
+		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
 		attendance_badge_aria_label: (p: { status: string }) => `Attendance: ${p.status}`,
 		attendance_rsvp_none: () => 'No answer',
 		attendance_rsvp_aria_label: (p: { name: string; rsvp: string }) => `RSVP for ${p.name}: ${p.rsvp}`,

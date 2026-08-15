@@ -8,7 +8,8 @@
 // for a user-facing selector:
 //
 //   Component: src/lib/components/LanguageSelector.svelte
-//     - container  [data-testid="language-selector"] (role="group", labelled)
+//     - container  [data-testid="language-selector"] (labelled; role="toolbar"
+//       since #156 — arrows move focus here and never activate)
 //     - one native <button type="button"> per locale:
 //         [data-testid="language-option-<locale>"] showing the locale's
 //         NATIVE name (English / Eesti / Latviešu / Українська)
@@ -26,7 +27,7 @@
 //   Integration: the selector renders on the actual /profile route — both in
 //   the ready state and with no collective selected (language choice is app
 //   chrome, like the sign-out link, not gated on membership).
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
@@ -149,14 +150,18 @@ describe('LanguageSelector — options (#123)', () => {
 		}
 	});
 
-	it('exposes a group role with an accessible name', async () => {
+	it('exposes a toolbar role with an accessible name', async () => {
 		const { container } = await renderSelector();
 		const selector = q(container, '[data-testid="language-selector"]');
-		expect(selector?.getAttribute('role')).toBe('group');
+		// #156 — role="toolbar", not the original bare "group": arrows MOVE
+		// focus here and never activate (activation reloads the document), which
+		// is the WAI-APG toolbar contract. The app's arrow-SELECTS groups (roster
+		// view chips, library copy-sort) are role="radiogroup" instead.
+		expect(selector?.getAttribute('role')).toBe('toolbar');
 		// Label content is Comenius territory — only require that one exists.
 		const label =
 			selector?.getAttribute('aria-label') ?? selector?.getAttribute('aria-labelledby');
-		expect(label, 'selector group needs aria-label or aria-labelledby').toBeTruthy();
+		expect(label, 'selector toolbar needs aria-label or aria-labelledby').toBeTruthy();
 	});
 
 	it('marks the current locale as selected via aria-pressed', async () => {
@@ -314,15 +319,19 @@ describe('LanguageSelector — keyboard accessibility (#123)', () => {
 	// Native <button> elements give Tab focus + Enter/Space activation for
 	// free (happy-dom cannot synthesize key→click, so the contract is pinned
 	// structurally: real buttons, in the tab order, programmatically focusable).
-	it('locale options are native buttons in the tab order', async () => {
+	it('locale options are native buttons, and the group holds exactly one Tab stop (roving tabindex, #156)', async () => {
 		const { container } = await renderSelector();
+		let zeroStops = 0;
 		for (const locale of LOCALES) {
 			const el = option(container, locale);
 			expect(el, `missing option for ${locale}`).not.toBeNull();
 			expect(el!.tagName, `${locale} option must be a native <button>`).toBe('BUTTON');
 			expect((el as HTMLButtonElement).type).toBe('button');
-			expect(el!.getAttribute('tabindex')).not.toBe('-1');
+			if (el!.getAttribute('tabindex') === '0') zeroStops++;
 		}
+		// Exactly one option is the Tab stop — the others sit at tabindex="-1"
+		// but stay reachable via the group's own arrow-key handler.
+		expect(zeroStops).toBe(1);
 	});
 
 	it('locale options are focusable (tab target)', async () => {
@@ -330,6 +339,55 @@ describe('LanguageSelector — keyboard accessibility (#123)', () => {
 		const et = option(container, 'et') as HTMLButtonElement;
 		et.focus();
 		expect(document.activeElement).toBe(et);
+	});
+
+	// #156 — roving tabindex, TOOLBAR semantics: arrows MOVE focus and never
+	// activate. Activation reloads the document (see the component's block
+	// comment), so an arrow that selected would blow the page away mid-browse.
+	it('ArrowRight moves focus forward and WRAPS; ArrowLeft wraps backwards', async () => {
+		const { container } = await renderSelector();
+		const opts = LOCALES.map((l) => option(container, l) as HTMLButtonElement);
+		expect(opts).toHaveLength(4);
+
+		opts[0].focus();
+		await fireEvent.keyDown(opts[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(opts[1]);
+
+		await fireEvent.keyDown(opts[3], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(opts[0]);
+
+		await fireEvent.keyDown(opts[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(opts[3]);
+	});
+
+	it('arrows NEVER activate — the setLocale seam is untouched by arrow navigation', async () => {
+		const setLocaleImpl = vi.fn();
+		const { container } = await renderSelector({ setLocaleImpl });
+		const opts = LOCALES.map((l) => option(container, l) as HTMLButtonElement);
+		opts[0].focus();
+		await fireEvent.keyDown(opts[0], { key: 'ArrowRight' });
+		await fireEvent.keyDown(opts[1], { key: 'ArrowRight' });
+		expect(setLocaleImpl).not.toHaveBeenCalled();
+	});
+
+	it('the Tab stop TRAVELS with focus — after arrowing, the focused option is the only "0"', async () => {
+		const { container } = await renderSelector();
+		const opts = LOCALES.map((l) => option(container, l) as HTMLButtonElement);
+		opts[0].focus();
+		await fireEvent.keyDown(opts[0], { key: 'ArrowRight' });
+		const stops = opts.filter((o) => o.getAttribute('tabindex') === '0');
+		expect(stops).toHaveLength(1);
+		expect(stops[0]).toBe(opts[1]);
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the option still activates', async () => {
+		const { container } = await renderSelector();
+		const el = option(container, 'en') as HTMLButtonElement;
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(el, { key });
+			fireEvent(el, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
 	});
 });
 

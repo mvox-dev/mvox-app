@@ -40,6 +40,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
+		rsvp_group_label: () => 'RSVP',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
 		// #101 TE.1 -- every agenda row now carries an event-detail link.
@@ -52,6 +53,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// direct AgendaList-level test needs the 4 badge-label keys even though
 		// it never passes myAttendanceByEventId (default {} -> every row reads
 		// as 'not-recorded').
+		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
 		attendance_status_present: () => 'Present',
 		attendance_status_absent: () => 'Absent',
 		attendance_status_late: () => 'Late',

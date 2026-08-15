@@ -13,7 +13,7 @@
 // aria-label on the take-attendance button). A few guard tests pin down
 // behaviour that already exists (aria-pressed, save-failed role="alert",
 // locale key parity) so GREEN can't regress it.
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, createEvent, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -486,7 +486,7 @@ describe('#86 — a11y: attendance tally is a live region', () => {
 // 9 — P/A/L toggles are keyboard-operable (F5)
 // ---------------------------------------------------------------------------
 describe('#86 — a11y: P/A/L toggles are keyboard-operable', () => {
-	it('every toggle is a native <button> (guaranteeing Tab + Space/Enter operability)', () => {
+	it('every toggle is a native <button> reachable via Tab (roving tabindex — one "0" stop per member group, the rest "-1" and still arrow-key operable)', () => {
 		const { container } = render(AttendanceSurface, {
 			item: agendaItem('past-1'),
 			members: rosterTwo,
@@ -496,9 +496,115 @@ describe('#86 — a11y: P/A/L toggles are keyboard-operable', () => {
 		expect(toggles.length).toBeGreaterThan(0);
 		toggles.forEach((toggle) => {
 			expect(toggle.tagName).toBe('BUTTON');
-			// Native buttons are focusable by default; no tabindex needed unless set to -1
-			expect(toggle.getAttribute('tabindex')).not.toBe('-1');
 		});
+		// #156 — roving tabindex: each member's P/A/L group has exactly ONE
+		// tabindex="0" stop (Tab reaches the group once), the other two sit at
+		// "-1" and remain reachable via the group's own arrow-key handler —
+		// still WCAG 2.1.1 keyboard-operable, just not each its own Tab stop.
+		for (const memberId of ['m1', 'm2']) {
+			const group = container.querySelector(`[data-testid="attendance-status-group-${memberId}"]`);
+			const zeroStops = group?.querySelectorAll('button[tabindex="0"]');
+			expect(zeroStops?.length).toBe(1);
+		}
+	});
+
+	// #156 — roving tabindex, per member. Arrows MOVE focus only: activating a
+	// status here TOGGLES the record (tapping the active one clears it), so an
+	// arrow that selected would silently rewrite attendance while browsing.
+	it('ArrowRight moves focus across a member’s P/A/L strip and WRAPS; ArrowLeft wraps backwards', async () => {
+		const { container } = render(AttendanceSurface, {
+			item: agendaItem('past-1'),
+			members: rosterTwo,
+			attendanceByMemberId: {}
+		});
+		const btns = Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid^="attendance-toggle-m1-"]')
+		);
+		expect(btns.length).toBeGreaterThan(1);
+
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[1]);
+
+		await fireEvent.keyDown(btns[btns.length - 1], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[0]);
+
+		await fireEvent.keyDown(btns[0], { key: 'ArrowLeft' });
+		expect(document.activeElement).toBe(btns[btns.length - 1]);
+	});
+
+	it('arrowing stays INSIDE one member’s group — it never crosses into another member’s strip', async () => {
+		const { container } = render(AttendanceSurface, {
+			item: agendaItem('past-1'),
+			members: rosterTwo,
+			attendanceByMemberId: {}
+		});
+		const m1 = Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid^="attendance-toggle-m1-"]')
+		);
+		const last = m1[m1.length - 1];
+		last.focus();
+		await fireEvent.keyDown(last, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(m1[0]);
+		expect(
+			(document.activeElement as HTMLElement).getAttribute('data-testid')
+		).not.toContain('-m2-');
+	});
+
+	it('arrows MOVE ONLY — no ontoggle write is emitted by arrow navigation', async () => {
+		const ontoggle = vi.fn();
+		const { container } = render(AttendanceSurface, {
+			item: agendaItem('past-1'),
+			members: rosterTwo,
+			attendanceByMemberId: {},
+			ontoggle
+		});
+		const btns = Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid^="attendance-toggle-m1-"]')
+		);
+		btns[0].focus();
+		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
+		await fireEvent.keyDown(btns[1], { key: 'ArrowRight' });
+		expect(ontoggle).not.toHaveBeenCalled();
+	});
+
+	it('the per-member Tab stop TRAVELS with focus, and each member keeps its OWN stop (keyed roving state)', async () => {
+		const { container } = render(AttendanceSurface, {
+			item: agendaItem('past-1'),
+			members: rosterTwo,
+			attendanceByMemberId: {}
+		});
+		const m1 = Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid^="attendance-toggle-m1-"]')
+		);
+		m1[0].focus();
+		await fireEvent.keyDown(m1[0], { key: 'ArrowRight' });
+
+		const m1Stops = m1.filter((b) => b.getAttribute('tabindex') === '0');
+		expect(m1Stops).toEqual([m1[1]]);
+
+		// m2 is untouched — its stop is still its own first status.
+		const m2 = Array.from(
+			container.querySelectorAll<HTMLButtonElement>('[data-testid^="attendance-toggle-m2-"]')
+		);
+		const m2Stops = m2.filter((b) => b.getAttribute('tabindex') === '0');
+		expect(m2Stops).toEqual([m2[0]]);
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the toggle still activates', () => {
+		const { container } = render(AttendanceSurface, {
+			item: agendaItem('past-1'),
+			members: rosterTwo,
+			attendanceByMemberId: {}
+		});
+		const btn = container.querySelector(
+			'[data-testid="attendance-toggle-m1-present"]'
+		) as HTMLButtonElement;
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(btn, { key });
+			fireEvent(btn, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
 	});
 
 	it('a non-pending toggle has type="button" and is not disabled (keyboard-reachable)', () => {
