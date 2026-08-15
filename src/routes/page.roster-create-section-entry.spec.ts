@@ -279,7 +279,7 @@ describe('/roster — a page-level "+ New section" control (finding F1, structur
 		// Reachable before the tree is ever expanded — the live failure required
 		// expand → find a member → open her picker → scroll a 440px dropdown.
 		expect(container.querySelector('[data-testid^="roster-row-"]')).toBeNull();
-		// ABOVE the groups (same document-order pin as sections-toggle-all).
+		// ABOVE the groups (same document-order pin as roster-view-modes, #155/S1).
 		const groups = q(container, 'roster-groups') as HTMLElement;
 		expect(
 			control!.compareDocumentPosition(groups) & Node.DOCUMENT_POSITION_FOLLOWING
@@ -417,7 +417,7 @@ describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 
 		// Expand everything so the nested group's DOM is observable (a child
 		// group renders inside its parent's expanded region).
-		const toggleAll = q(container, 'sections-toggle-all') as HTMLElement | null;
+		const toggleAll = q(container, 'roster-view-chip-expanded') as HTMLElement | null;
 		if (toggleAll) await fireEvent.click(toggleAll);
 
 		await openPageForm(container);

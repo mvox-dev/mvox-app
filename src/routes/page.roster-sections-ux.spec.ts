@@ -570,20 +570,29 @@ describe("/roster — the remove control never appears on another org's sections
 	});
 });
 
-// ── finding #9: collapse-all / expand-all + collapsed default ───────────────────
+// ── finding #9 (superseded by #155/S1's chip selector): collapsed default ───────
+//
+// The collapse-all/expand-all toggle these tests used to drive is GONE —
+// #155/S1 replaced it with the 3-chip view-mode selector
+// (roster-view-chip-collapsed/-expanded/-arrange). The collapsed-by-default
+// behavior finding #9 shipped is unchanged; only the control that drives it is
+// new. See page.roster-arrange.spec.ts for the chip selector's own contract.
 
-describe('/roster — collapse-all / expand-all toggle; sections default COLLAPSED (finding #9)', () => {
-	it('sections-toggle-all renders at the TOP of the sections list (before the groups in document order) with an accessible name', async () => {
+describe('/roster — the Collapsed/Expanded view-mode chips; sections default COLLAPSED (finding #9, superseded by #155/S1)', () => {
+	it('roster-view-modes renders at the TOP of the sections list (before the groups in document order) with an accessible name on each chip', async () => {
 		const container = await renderReady('admin');
 
-		const toggleAll = q(container, 'sections-toggle-all');
-		expect(toggleAll).not.toBeNull();
-		expect(toggleAll?.getAttribute('aria-label') || toggleAll?.textContent?.trim()).toBeTruthy();
+		const selector = q(container, 'roster-view-modes');
+		expect(selector).not.toBeNull();
+		const collapsedChip = q(container, 'roster-view-chip-collapsed');
+		expect(collapsedChip).not.toBeNull();
+		expect(
+			collapsedChip?.getAttribute('aria-label') || collapsedChip?.textContent?.trim()
+		).toBeTruthy();
 
 		const groups = q(container, 'roster-groups') as HTMLElement;
 		expect(
-			(toggleAll as HTMLElement).compareDocumentPosition(groups) &
-				Node.DOCUMENT_POSITION_FOLLOWING
+			(selector as HTMLElement).compareDocumentPosition(groups) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 	});
 
@@ -599,10 +608,10 @@ describe('/roster — collapse-all / expand-all toggle; sections default COLLAPS
 		expect(container.querySelectorAll('[data-testid^="roster-row-"]')).toHaveLength(0);
 	});
 
-	it('EXPAND-ALL: activating the toggle from the collapsed default expands EVERY section — including sub-sections — and the member rows appear', async () => {
+	it('EXPANDED chip: activating it from the collapsed default expands EVERY section — including sub-sections — and the member rows appear', async () => {
 		const container = await renderReady('admin');
 
-		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-view-chip-expanded') as HTMLElement);
 
 		await waitFor(() => {
 			// Sub-section headers only render once their parent is expanded — their
@@ -616,15 +625,15 @@ describe('/roster — collapse-all / expand-all toggle; sections default COLLAPS
 		expect(q(container, 'roster-row-m-eva')).not.toBeNull();
 	});
 
-	it('COLLAPSE-ALL: activating the toggle again collapses EVERY section — headers back to aria-expanded="false", member rows gone', async () => {
+	it('COLLAPSED chip: activating it after Expanded collapses EVERY section — headers back to aria-expanded="false", member rows gone', async () => {
 		const container = await renderReady('admin');
 
-		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-view-chip-expanded') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'roster-row-m-ada')).not.toBeNull();
 		});
 
-		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-view-chip-collapsed') as HTMLElement);
 		await waitFor(() => {
 			expect(container.querySelectorAll('[data-testid^="roster-row-"]')).toHaveLength(0);
 		});
@@ -633,11 +642,11 @@ describe('/roster — collapse-all / expand-all toggle; sections default COLLAPS
 		}
 	});
 
-	it('a MANUALLY part-expanded list still collapses fully: expand one section by hand, then toggle-all → everything collapses', async () => {
+	it('a MANUALLY part-expanded list still collapses fully: expand one section by hand, then the Collapsed chip → everything collapses', async () => {
 		const container = await renderReady('admin');
 		await ensureExpanded(container, 'sec-alto');
 
-		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-view-chip-collapsed') as HTMLElement);
 
 		await waitFor(() => {
 			expect(
@@ -964,42 +973,46 @@ describe('/roster — the touch long-press hint never promises a drop that dropO
 	});
 });
 
-// ── #110 review F3: the collapse-all label never lies about on-screen state ─────
-
-describe('/roster — toggle-all reflects what is ON SCREEN, not a stale id set (#110 review F3)', () => {
-	it('removing the only EXPANDED section flips the toggle back to expand-all, and the next tap expands instead of silently clearing a stale set', async () => {
+// ── #110 review F3 (superseded by #155/S1): a remove must not desync the
+// on-screen expand state from what drove it ──────────────────────────────────
+//
+// The old sections-toggle-all was a SINGLE control whose own label was
+// COMPUTED off live `expandedIds` (#110 review F3's concern: don't let that
+// computed label go stale against a removed section's leftover id). #155/S1's
+// chip selector has no such computed label — `roster-view-chip-expanded`'s
+// aria-pressed is a plain reflection of `viewMode`, never re-derived from
+// `expandedIds` — so that specific staleness class cannot occur by
+// construction. What still matters, and what these now check: a remove must
+// not silently desync the Expanded chip from what is ACTUALLY on screen
+// (still expanded, still failing loud on a rejected write, exactly like every
+// other section here).
+describe('/roster — a remove does not desync the Expanded chip from what is ON SCREEN (#110 review F3, superseded by #155/S1)', () => {
+	it('removing a section while Expanded is active leaves the chip pressed and the REMAINING sections still expanded', async () => {
 		const container = await renderReady('admin');
-		// Bass is the empty leaf — the one section carrying a remove control, and
-		// `canRemove` does not require it to be collapsed.
-		await ensureExpanded(container, 'sec-bass');
-		expect((q(container, 'sections-toggle-all') as HTMLElement).textContent?.trim()).toBe(
-			'roster_sections_collapse_all'
-		);
+		await fireEvent.click(q(container, 'roster-view-chip-expanded') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'roster-row-m-ada')).not.toBeNull();
+		});
 
+		// Bass is the empty leaf — the one section carrying a remove control.
 		await removeSection(container, 'sec-bass');
 		await waitFor(() => {
 			expect(q(container, 'section-group-sec-bass')).toBeNull();
 		});
 
-		// Every section still on screen is collapsed, so the control must say so…
-		await waitFor(() => {
-			expect((q(container, 'sections-toggle-all') as HTMLElement).textContent?.trim()).toBe(
-				'roster_sections_expand_all'
-			);
-		});
-		// …and one tap must actually expand.
-		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
-		await waitFor(() => {
-			expect(
-				(q(container, 'section-toggle-sec-sop') as HTMLElement).getAttribute('aria-expanded')
-			).toBe('true');
-		});
+		expect(
+			(q(container, 'roster-view-chip-expanded') as HTMLElement).getAttribute('aria-pressed')
+		).toBe('true');
+		expect(q(container, 'roster-row-m-ada')).not.toBeNull();
 	});
 
-	it('a FAILED remove keeps the section AND its expanded state — the revert restores what was on screen', async () => {
+	it('a FAILED remove keeps the section AND its expanded state — the Expanded chip stays pressed throughout', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const container = await renderReady('admin');
-		await ensureExpanded(container, 'sec-bass');
+		await fireEvent.click(q(container, 'roster-view-chip-expanded') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'roster-row-m-ada')).not.toBeNull();
+		});
 		deleteMock.mockRejectedValue(new Error('delete boom'));
 
 		await removeSection(container, 'sec-bass');
@@ -1010,9 +1023,9 @@ describe('/roster — toggle-all reflects what is ON SCREEN, not a stale id set 
 		expect(
 			(q(container, 'section-toggle-sec-bass') as HTMLElement).getAttribute('aria-expanded')
 		).toBe('true');
-		expect((q(container, 'sections-toggle-all') as HTMLElement).textContent?.trim()).toBe(
-			'roster_sections_collapse_all'
-		);
+		expect(
+			(q(container, 'roster-view-chip-expanded') as HTMLElement).getAttribute('aria-pressed')
+		).toBe('true');
 		consoleSpy.mockRestore();
 	});
 });

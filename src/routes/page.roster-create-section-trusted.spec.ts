@@ -218,7 +218,7 @@ async function renderReady(): Promise<HTMLElement> {
 	});
 	// Sections default collapsed (#110 finding #9); these specs are about the
 	// create flow and the remove gate, so expand everything up front.
-	const toggleAll = q(container, 'sections-toggle-all') as HTMLElement | null;
+	const toggleAll = q(container, 'roster-view-chip-expanded') as HTMLElement | null;
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
 		await waitFor(() => {

@@ -317,21 +317,52 @@
 		return ids;
 	});
 
-	// Whether ANY section is currently expanded — not "all", because a single
-	// manually-expanded section (finding #9's "manually part-expanded" case)
-	// must still read as "there's something open" and collapse fully on the
-	// next toggle-all tap, not expand further.
-	//
-	// #110 review F3 — derived from what is actually ON SCREEN
-	// (`allSectionIdsList` walks the live tree plus the unassigned pseudo-group),
-	// NOT from `expandedIds.size`. A set member whose section is gone (removed
-	// leaf, or a leftover from a previous collective) must not make the toggle
-	// read "Collapse all sections" over a fully-collapsed tree, where the first
-	// tap would visibly do nothing but clear the stale set.
-	const anySectionExpanded = $derived(allSectionIdsList.some((id) => expandedIds.has(id)));
+	// #155/S1 — the collapse-all/expand-all toggle is REPLACED by a 3-chip
+	// selector (Collapsed / Expanded / Arrange). Collapsed and Expanded are
+	// display modes over the SAME `expandedIds` opt-in set finding #9 shipped;
+	// Arrange swaps `roster-groups` out for the compact section list entirely
+	// (no member rows at all) and is where ALL section management will live
+	// (S2–S4). Radio-style, not a flip: each chip sets `expandedIds`
+	// DETERMINISTICALLY (empty / full) rather than toggling off the CURRENT
+	// state, so "Collapsed" and "Expanded" are idempotent regardless of what a
+	// user did with an individual section's own disclosure toggle in between —
+	// and switching OUT of Arrange always lands on a truthful collapsed/expanded
+	// screen, never a stale one.
+	let viewMode = $state<'collapsed' | 'expanded' | 'arrange'>('collapsed');
 
-	function toggleAllSections(): void {
-		expandedIds = anySectionExpanded ? new Set() : new Set(allSectionIdsList);
+	function setViewMode(mode: 'collapsed' | 'expanded' | 'arrange'): void {
+		viewMode = mode;
+		if (mode === 'collapsed') expandedIds = new Set();
+		else if (mode === 'expanded') expandedIds = new Set(allSectionIdsList);
+		// 'arrange' leaves `expandedIds` as-is — the arrange list doesn't read it,
+		// and whichever collapsed/expanded shape was live comes right back when
+		// the user switches to one of the other two chips.
+	}
+
+	/** #155/S1 arrange-mode shell — one row per section, EVERY nesting level, in
+	 *  tree pre-order, over the SAME `visibleSections` the grouped view renders
+	 *  (org-filtered, #124/F3). `memberCount` is read off the SAME `groupById`
+	 *  map the grouped headers use, so the arrange list's "(n)" is always the
+	 *  identical roll-up, never a re-derivation that could drift from it. */
+	type ArrangeRow = { id: string; name: string; depth: number; memberCount: number };
+	const arrangeRows = $derived.by(() => {
+		const list: ArrangeRow[] = [];
+		function walk(nodes: SectionNode[]): void {
+			for (const n of nodes) {
+				list.push({ id: n.id, name: n.name, depth: n.depth, memberCount: groupById.get(n.id)?.memberCount ?? 0 });
+				walk(n.children);
+			}
+		}
+		walk(visibleSections);
+		return list;
+	});
+
+	// Tailwind v4 needs full static class names (no dynamic template literals) —
+	// a fixed per-depth lookup, clamped at the deepest entry for any section
+	// tree that somehow nests beyond it.
+	const ARRANGE_INDENT_CLASSES = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16'] as const;
+	function arrangeIndentClass(depth: number): string {
+		return ARRANGE_INDENT_CLASSES[Math.min(depth, ARRANGE_INDENT_CLASSES.length - 1)];
 	}
 
 	// TS.2/#96 — section-picker wiring. Per-tap immediate write + optimistic-and-
@@ -546,8 +577,8 @@
 	/** The section whose header should catch focus once `id` is gone: its
 	 *  PREVIOUS sibling (focus moves UP the list rather than jumping across it),
 	 *  else its parent, else null — "no neighbouring header", and the caller
-	 *  falls back to the collapse-all control that always renders above the
-	 *  groups. */
+	 *  falls back to the Collapsed view-mode chip that always renders above the
+	 *  groups (#155/S1 — supersedes the old collapse-all control). */
 	function removeFocusFallbackId(id: string): string | null {
 		const siblingNodes = siblingsOf(sections, id);
 		if (!siblingNodes) return null;
@@ -564,7 +595,7 @@
 		const neighbour = targetId
 			? document.querySelector<HTMLElement>(`[data-testid="section-toggle-${targetId}"]`)
 			: null;
-		(neighbour ?? document.querySelector<HTMLElement>('[data-testid="sections-toggle-all"]'))?.focus();
+		(neighbour ?? document.querySelector<HTMLElement>('[data-testid="roster-view-chip-collapsed"]'))?.focus();
 	}
 
 	/** …and after a REFUSED one: nothing was removed, so the ✕ that the Confirm
@@ -620,9 +651,10 @@
 			// #110 review F3 — the node is gone for good, so its collapse-state entry
 			// is dead weight. Pruned only AFTER the write lands: a rejected delete
 			// restores the tree, and the section's expanded state must come back with
-			// it. (`anySectionExpanded` no longer depends on this pruning for
-			// correctness — it reads the live tree — but the set should not keep
-			// growing across removals either.)
+			// it. (Neither view-mode chip's `aria-pressed` depends on this pruning
+			// for correctness — #155/S1 reads `viewMode` directly, never a live
+			// re-derivation off `expandedIds` — but the set should not keep growing
+			// across removals either.)
 			if (expandedIds.has(id)) {
 				const next = new Set(expandedIds);
 				next.delete(id);
@@ -2048,7 +2080,7 @@
 			{#if view === 'grouped' && !sectionsError}
 				{#if admin === 'admin'}
 					<!-- #124 (F1+F2) — the page-level "+ New section" entry point, ABOVE
-					     the groups (same document-order contract as `sections-toggle-all`
+					     the groups (same document-order contract as `roster-view-modes`
 					     right below), admin-only (fail-closed, same gate as every other
 					     admin control), reachable with every section collapsed. See the
 					     script-side comment above `pageCreateOpen` for the SPIKE root
@@ -2130,50 +2162,102 @@
 						{/if}
 					</div>
 				{/if}
-				<!-- TU.2/#110 (finding #9) — collapse-all/expand-all, ABOVE the groups
-				     (pinned document-order contract) so it acts as a single entry point
-				     before diving into a (now collapsed-by-default) tree. -->
-				<button
-					type="button"
-					data-testid="sections-toggle-all"
-					aria-label={anySectionExpanded
-						? m.roster_sections_collapse_all()
-						: m.roster_sections_expand_all()}
-					class="self-start text-xs tracking-wide text-ink-2 uppercase underline hover:text-ink"
-					onclick={toggleAllSections}
+				<!-- #155/S1 — the 3-chip view-mode selector, ABOVE the groups (pinned
+				     document-order contract the old collapse-all/expand-all toggle
+				     held). Radio-style single selection: `aria-pressed` is the pin,
+				     exactly one chip is "true". Arrange is rights-gated (admin-only,
+				     fail-closed on 'loading'/'error' same as every other admin control
+				     on this page) — non-editors get exactly the two display chips. -->
+				<div
+					data-testid="roster-view-modes"
+					role="group"
+					aria-label={m.roster_view_modes_label()}
+					class="inline-flex flex-wrap items-center gap-1.5 self-start"
 				>
-					{anySectionExpanded ? m.roster_sections_collapse_all() : m.roster_sections_expand_all()}
-				</button>
-				<div data-testid="roster-groups" class="flex flex-col">
-					{#each visibleSections as node (node.id)}
-						{@render sectionGroup(node)}
-					{/each}
-					{#if unassignedGroup}
-						{@const isExpanded = expandedIds.has('unassigned')}
-						<section data-testid="section-group-unassigned" data-depth="0" class="flex flex-col">
-							<button
-								type="button"
-								data-testid="section-toggle-unassigned"
-								aria-expanded={isExpanded}
-								aria-controls={isExpanded ? 'section-region-unassigned' : undefined}
-								class="flex items-center gap-2 py-1.5 text-left"
-								onclick={() => toggleSection('unassigned')}
-							>
-								<span aria-hidden="true" class="text-ink-2">{isExpanded ? '▾' : '▸'}</span>
-								<span data-testid="section-header-unassigned" class="text-sm font-medium text-ink">
-									{m.roster_unassigned()} ({unassignedGroup.memberCount})
-								</span>
-							</button>
-							{#if isExpanded}
-								<ul id="section-region-unassigned" class="flex flex-col pl-5">
-									{#each unassignedGroup.members as row (row.memberId)}
-										{@render memberRow(row, false)}
-									{/each}
-								</ul>
-							{/if}
-						</section>
+					<button
+						type="button"
+						data-testid="roster-view-chip-collapsed"
+						aria-pressed={viewMode === 'collapsed' ? 'true' : 'false'}
+						class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {viewMode === 'collapsed'
+							? 'border-ink bg-ink text-paper'
+							: 'border-ink-4 text-ink-2 hover:text-ink'}"
+						onclick={() => setViewMode('collapsed')}
+					>
+						{m.roster_view_collapsed()}
+					</button>
+					<button
+						type="button"
+						data-testid="roster-view-chip-expanded"
+						aria-pressed={viewMode === 'expanded' ? 'true' : 'false'}
+						class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {viewMode === 'expanded'
+							? 'border-ink bg-ink text-paper'
+							: 'border-ink-4 text-ink-2 hover:text-ink'}"
+						onclick={() => setViewMode('expanded')}
+					>
+						{m.roster_view_expanded()}
+					</button>
+					{#if admin === 'admin'}
+						<button
+							type="button"
+							data-testid="roster-view-chip-arrange"
+							aria-pressed={viewMode === 'arrange' ? 'true' : 'false'}
+							class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {viewMode === 'arrange'
+								? 'border-ink bg-ink text-paper'
+								: 'border-ink-4 text-ink-2 hover:text-ink'}"
+							onclick={() => setViewMode('arrange')}
+						>
+							{m.roster_view_arrange()}
+						</button>
 					{/if}
 				</div>
+				{#if viewMode === 'arrange' && admin === 'admin'}
+					<!-- #155/S1 — the arrange-mode SHELL: a compact section list (name +
+					     recursive member count, nesting by indentation only), replacing
+					     `roster-groups` on screen. No member rows, no management controls
+					     yet (no remove/drag/toggle/picker/new-section) — S2–S4 add those. -->
+					<div data-testid="roster-arrange-list" class="flex flex-col">
+						{#each arrangeRows as row (row.id)}
+							<div
+								data-testid="arrange-row-{row.id}"
+								data-depth={row.depth}
+								class="flex items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)}"
+							>
+								<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<div data-testid="roster-groups" class="flex flex-col">
+						{#each visibleSections as node (node.id)}
+							{@render sectionGroup(node)}
+						{/each}
+						{#if unassignedGroup}
+							{@const isExpanded = expandedIds.has('unassigned')}
+							<section data-testid="section-group-unassigned" data-depth="0" class="flex flex-col">
+								<button
+									type="button"
+									data-testid="section-toggle-unassigned"
+									aria-expanded={isExpanded}
+									aria-controls={isExpanded ? 'section-region-unassigned' : undefined}
+									class="flex items-center gap-2 py-1.5 text-left"
+									onclick={() => toggleSection('unassigned')}
+								>
+									<span aria-hidden="true" class="text-ink-2">{isExpanded ? '▾' : '▸'}</span>
+									<span data-testid="section-header-unassigned" class="text-sm font-medium text-ink">
+										{m.roster_unassigned()} ({unassignedGroup.memberCount})
+									</span>
+								</button>
+								{#if isExpanded}
+									<ul id="section-region-unassigned" class="flex flex-col pl-5">
+										{#each unassignedGroup.members as row (row.memberId)}
+											{@render memberRow(row, false)}
+										{/each}
+									</ul>
+								{/if}
+							</section>
+						{/if}
+					</div>
+				{/if}
 			{:else}
 				<ul data-testid="roster-flat-list" class="flex flex-col">
 					{#each flatRows as row (row.memberId)}

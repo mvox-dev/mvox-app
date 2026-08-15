@@ -127,7 +127,7 @@ async function renderReady() {
 	// this file's picker triggers, don't render until expanded); this file's
 	// concern is the create/assign FAILURE path, not the collapse default, so
 	// expand everything up front via the same toggle-all control #9 shipped.
-	const toggleAll = container.querySelector('[data-testid="sections-toggle-all"]') as HTMLElement | null;
+	const toggleAll = container.querySelector('[data-testid="roster-view-chip-expanded"]') as HTMLElement | null;
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
 		await waitFor(() => {

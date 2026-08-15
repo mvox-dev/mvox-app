@@ -210,7 +210,7 @@ async function renderReady(admin: AdminState = 'admin'): Promise<HTMLElement> {
 	// tests that need a COLLAPSED starting point (the drag/reorder and
 	// disclosure-contract tests) call `collapse()`/`expand()` explicitly, which
 	// stay state-agnostic either way.
-	const toggleAll = q(container, 'sections-toggle-all') as HTMLElement | null;
+	const toggleAll = q(container, 'roster-view-chip-expanded') as HTMLElement | null;
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
 		await waitFor(() => {

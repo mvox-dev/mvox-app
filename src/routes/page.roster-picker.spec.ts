@@ -156,7 +156,7 @@ async function renderReady(admin: AdminState = 'admin') {
 	// concern is picker WIRING, not the collapse default (that is
 	// page.roster-sections-ux.spec.ts's / page.roster-sections.spec.ts's job),
 	// so expand everything up front via the same toggle-all control #9 shipped.
-	const toggleAll = container.querySelector('[data-testid="sections-toggle-all"]') as HTMLElement | null;
+	const toggleAll = container.querySelector('[data-testid="roster-view-chip-expanded"]') as HTMLElement | null;
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
 		await waitFor(() => {

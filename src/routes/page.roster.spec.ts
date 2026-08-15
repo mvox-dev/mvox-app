@@ -25,11 +25,14 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// F3 code-review fix — banner shown when the section-tree load fails but
 		// the roster itself loaded fine.
 		roster_sections_load_error: () => 'Section grouping failed to load.',
-		// TU.2/#110 finding #9 — the collapse-all/expand-all toggle above the
-		// groups; this file's concerns don't touch it, the keys just need to
-		// resolve so the grouped view renders without throwing.
-		roster_sections_expand_all: () => 'Expand all sections',
-		roster_sections_collapse_all: () => 'Collapse all sections'
+		// #155/S1 — the view-mode chip selector above the groups (supersedes the
+		// old collapse-all/expand-all toggle); this file's concerns don't touch
+		// it, the keys just need to resolve so the grouped view renders without
+		// throwing.
+		roster_view_modes_label: () => 'Roster view',
+		roster_view_collapsed: () => 'Collapsed',
+		roster_view_expanded: () => 'Expanded',
+		roster_view_arrange: () => 'Arrange'
 	}
 }));
 

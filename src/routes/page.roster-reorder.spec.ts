@@ -246,7 +246,7 @@ describe('/roster — drag handles render on the actual page: collapsed headers 
 		// Expand every section (incl. sub-sections) via the same toggle-all
 		// control finding #9 shipped — the exhaustive "expand literally
 		// everything" this test's premise needs.
-		await fireEvent.click(q(container, 'sections-toggle-all') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-view-chip-expanded') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'section-toggle-sec-sop1')).not.toBeNull();
 		});

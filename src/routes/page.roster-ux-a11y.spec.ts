@@ -19,8 +19,8 @@
 //   Guards (what TU.2 already carries, so GREEN can't regress it):
 //   - remove/confirm/cancel are native <button>s (Enter/Space for free) with
 //     contextual m.* aria-labels naming the section;
-//   - collapse-all/expand-all is a native <button> whose visible label and
-//     aria-label flip truthfully with state;
+//   - #155/S1 — the Collapsed/Expanded view-mode chips are native <button>s
+//     whose aria-pressed flips truthfully, radio-style, with state;
 //   - section headers stay proper disclosures (native <button>,
 //     aria-expanded);
 //   - the dashed drop-target hint is aria-hidden decoration, the hovered
@@ -72,8 +72,10 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_moved: (p) => `${p?.name} moved to position ${p?.position} of ${p?.total}`,
 		roster_section_reorder_failed: () => "The new order couldn't be saved.",
 		roster_section_reorder_pending: () => 'Saving new order…',
-		roster_sections_expand_all: () => 'Expand all sections',
-		roster_sections_collapse_all: () => 'Collapse all sections',
+		roster_view_modes_label: () => 'Roster view',
+		roster_view_collapsed: () => 'Collapsed',
+		roster_view_expanded: () => 'Expanded',
+		roster_view_arrange: () => 'Arrange',
 		roster_section_remove: (p) => `Remove ${p?.name}`,
 		roster_section_remove_confirm_short: () => 'Remove?',
 		roster_section_remove_confirm: (p) => `Confirm removing ${p?.name}`,
@@ -490,18 +492,21 @@ describe('#113 — a11y: collapse/expand controls', () => {
 		});
 	});
 
-	it('guard: collapse-all/expand-all is a native <button> whose visible label AND aria-label flip truthfully with state', async () => {
+	it('guard: #155/S1 — the Collapsed/Expanded view-mode chips are native <button>s whose aria-pressed flips truthfully, radio-style, on click', async () => {
 		const container = await renderReady();
-		const toggleAll = q(container, 'sections-toggle-all') as HTMLElement;
-		expect(toggleAll).not.toBeNull();
-		expect(toggleAll.tagName).toBe('BUTTON');
-		// Default collapsed → the offer is to expand.
-		expect(toggleAll.textContent).toContain('Expand all sections');
-		expect(toggleAll.getAttribute('aria-label')).toBe('Expand all sections');
-		await fireEvent.click(toggleAll);
+		const collapsedChip = q(container, 'roster-view-chip-collapsed') as HTMLElement;
+		const expandedChip = q(container, 'roster-view-chip-expanded') as HTMLElement;
+		expect(collapsedChip).not.toBeNull();
+		expect(expandedChip).not.toBeNull();
+		expect(collapsedChip.tagName).toBe('BUTTON');
+		expect(expandedChip.tagName).toBe('BUTTON');
+		// Default collapsed.
+		expect(collapsedChip.getAttribute('aria-pressed')).toBe('true');
+		expect(expandedChip.getAttribute('aria-pressed')).toBe('false');
+		await fireEvent.click(expandedChip);
 		await waitFor(() => {
-			expect(toggleAll.textContent).toContain('Collapse all sections');
-			expect(toggleAll.getAttribute('aria-label')).toBe('Collapse all sections');
+			expect(expandedChip.getAttribute('aria-pressed')).toBe('true');
+			expect(collapsedChip.getAttribute('aria-pressed')).toBe('false');
 		});
 	});
 
