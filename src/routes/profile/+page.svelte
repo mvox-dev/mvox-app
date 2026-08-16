@@ -93,6 +93,13 @@
 	const repairPlans = $derived(planLoadedDuplicateRepairs(loadedProfiles));
 	const planFor = (f: FieldKey) => repairPlans.find((p) => p.field === f);
 
+	// A field is movable only when EXACTLY ONE entity holds it. Zero holders means
+	// there is no value to move — `onmove` bails on `holders.length !== 1` and
+	// `ProfileField` carries no staged/pending target level, so enabling the picker
+	// for an empty field would render buttons that silently swallow the click.
+	// (Pre-typing tier selection would need real per-field staging state that
+	// `activeLevelFor`/`onAutosave` consult — a separate change, not a picker flag.)
+	// More than one holder is a conflict, handled by the conflict branch below.
 	const movableFor = (f: FieldKey) => resFor(f).holders.length === 1;
 	const isConflict = (f: FieldKey) => resFor(f).holders.length > 1 && planFor(f) === undefined;
 	const conflictLevelsFor = (f: FieldKey): Level[] =>
@@ -120,6 +127,21 @@
 		if (add) next.add(field);
 		else next.delete(field);
 		return next;
+	}
+
+	// #160 — `loadedProfiles` (not `confirmed`) is what drives the tier picker's
+	// enabled-state (via resolveField().holders → movableFor/resFor). It is
+	// populated by loadForSelected(), but the autosave queue's settle callbacks
+	// (reconcile/recordCreatedId) previously updated ONLY `confirmed` — so a
+	// first-save CREATE never appeared in `loadedProfiles` and the picker stayed
+	// stale until a reload re-fetched. Keep the two in sync at every settle point:
+	// one profile entity per level, so replacing any existing holder at `level`
+	// mirrors exactly what a reload's `profilesByLevel` would produce.
+	function upsertLoadedProfile(level: Level, id: string, name: string, email: string): void {
+		loadedProfiles = [
+			...loadedProfiles.filter((p) => p._sharing !== level),
+			{ _id: id, name, email, _sharing: level }
+		];
 	}
 
 	function resetState() {
@@ -222,14 +244,23 @@
 				pendingLevels = next;
 			},
 			reconcile(level, profileId, fields) {
+				// Which fields this settle answers for: the ones dispatched AT this level,
+				// i.e. whose active level was `level` BEFORE the mirror below rewrites it.
+				// `activeLevelFor` reads holders off `loadedProfiles`, and the mirror
+				// replaces this level's entity — so a save that CLEARS a field drops its
+				// only holder and flips `activeLevelFor` to the 'domain' fallback. Reading
+				// it after the mirror would then miss the field and leave its `savingFields`
+				// marker set forever (a tier button stuck at aria-busy="true").
+				const affected = FIELDS.filter((f) => activeLevelFor(f) === level);
 				confirmed = { ...confirmed, [level]: { id: profileId, name: fields.name, email: fields.email } };
-				// Clear per-field saving/failed on successful reconcile for any field
-				// whose active level matches this level.
-				for (const f of FIELDS) {
-					if (activeLevelFor(f) === level) {
-						savingFields = withFieldSet(savingFields, f, false);
-						failedFields = withFieldSet(failedFields, f, false);
-					}
+				// #160 — mirror the confirm onto loadedProfiles too, so the tier picker
+				// (which reads holders off loadedProfiles, not confirmed) reacts without
+				// a reload.
+				upsertLoadedProfile(level, profileId, fields.name, fields.email);
+				// Clear per-field saving/failed on successful reconcile.
+				for (const f of affected) {
+					savingFields = withFieldSet(savingFields, f, false);
+					failedFields = withFieldSet(failedFields, f, false);
 				}
 				if (level === 'domain') {
 					refreshCompletionGate();
@@ -237,6 +268,15 @@
 			},
 			recordCreatedId(level, profileId) {
 				confirmed = { ...confirmed, [level]: { ...confirmed[level], id: profileId } };
+				// #160 — partial failure: the shell was created but fields were not
+				// confirmed, so it holds NO value and is deliberately not a holder
+				// (`resolveField` counts only non-empty values) — the tier picker stays
+				// locked, as it should. What mirroring it onto loadedProfiles buys is the
+				// `dst` lookup in `onmove`: a later move INTO this tier finds the orphan
+				// shell and reuses it, instead of creating a second entity at the same
+				// level. (The retry's no-duplicate guarantee comes from `confirmed[level].id`
+				// above, which feeds `existingId`.)
+				upsertLoadedProfile(level, profileId, confirmed[level].name, confirmed[level].email);
 			},
 			markFailed(level) {
 				for (const f of FIELDS) {
