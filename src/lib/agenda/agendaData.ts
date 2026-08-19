@@ -43,12 +43,11 @@ const NO_SEASON = { seasonId: null, seasonConductors: [], seasonOwners: [], seas
  */
 export async function listFullAgenda(
 	cfg: EntuCfg,
-	personId: string,
 	now: Date,
 	fetchImpl: typeof fetch = fetch
 ): Promise<FullAgendaResult> {
 	const nowIso = now.toISOString();
-	const seasons = await listSeasons(cfg, personId, fetchImpl);
+	const seasons = await listSeasons(cfg, fetchImpl);
 
 	// Fetch rehearsals for ALL seasons, paired with season id so we can isolate
 	// the current season's events for the Recent section without re-fetching.
@@ -81,7 +80,13 @@ export async function listFullAgenda(
 	};
 }
 
-/** Convenience for callers: resolve db/personId/token from T4's stores, then delegate to listFullAgenda. */
+/**
+ * Convenience for callers: resolve db + token from T4's stores, then delegate to
+ * listFullAgenda.
+ *
+ * #161 review fix round 2 — the whole resolve is db-scoped, so `personId` is NOT
+ * threaded anywhere: `listSeasons` dropped it and `listFullAgenda` never read it.
+ */
 export async function loadFullAgenda(
 	now: Date = new Date(),
 	fetchImpl: typeof fetch = fetch
@@ -89,7 +94,7 @@ export async function loadFullAgenda(
 	const collective = get(selectedCollectiveStore);
 	const token = getToken();
 	if (!collective || !token) return { upcoming: [], recent: [], seasons: [], ...NO_SEASON };
-	return listFullAgenda({ db: collective.db, token }, collective.personId, now, fetchImpl);
+	return listFullAgenda({ db: collective.db, token }, now, fetchImpl);
 }
 
 // (*MVOX:Josquin*)

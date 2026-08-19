@@ -10,17 +10,18 @@
 	// the invite page's own db-picker (this surface acts on the person's
 	// CURRENTLY selected collective, same as every other rights-gated page).
 	//
-	// `resolveMyOrgId` / `resolveLibrarian` are called again here even though
-	// `resolveAdmin` already resolves the org internally — the EXISTING
-	// resolutions are the source of truth for "which org"/"which library" this
-	// surface acts on; no new lookup is invented (task instructions + spec).
+	// `resolveDatabaseEntityId` / `resolveLibrarian` are called again here even
+	// though `resolveAdmin` already resolves the collective internally — the
+	// EXISTING resolutions are the source of truth for "which collective"/"which
+	// library" this surface acts on; no new lookup is invented (task
+	// instructions + spec).
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import type { Collective } from '$lib/collectives/types';
 	import { resolveAdmin } from '$lib/nav/adminStore';
 	import { resolveLibrarian } from '$lib/library/librarianStore';
-	import { resolveMyOrgId } from '$lib/org/myOrg';
+	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import {
 		listAdmins,
@@ -162,7 +163,7 @@
 
 		try {
 			const [resolvedOrgId, libResult, rosterRows] = await Promise.all([
-				resolveMyOrgId(c, target.personId),
+				resolveDatabaseEntityId(c),
 				resolveLibrarian(c, target.personId),
 				loadRoster(c)
 			]);

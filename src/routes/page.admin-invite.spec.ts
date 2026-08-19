@@ -150,25 +150,7 @@ describe('/admin/invite — prerequisites', () => {
 		expect(h.resolveOrgMock).not.toHaveBeenCalled();
 	});
 
-	it("a not-visible prerequisite → the no-access state (a labeled heuristic — the authoritative gate is Entu's create POST)", async () => {
-		selectPolyphony();
-		h.resolveParentMock.mockRejectedValue(
-			new h.InviteCreateError('database entity not visible', {
-				phase: 'person-parent-resolve',
-				reason: 'not-visible'
-			})
-		);
-		h.resolveOrgMock.mockResolvedValue('org-1');
-
-		const { container } = render(Page);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-admin-no-access"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
-		expect(container.querySelector('[data-testid="invite-admin-load-error"]')).toBeNull();
-	});
-
-	it("a not-visible org resolution → the no-access state too (#67 — resolveOrgId replaces listOrganizations as the org-parent source)", async () => {
+	it("a not-visible org resolution → the no-access state (#67 — resolveOrgId replaces listOrganizations as the org-parent source; #161 review fix round 2 — loadPrerequisites resolves ONLY via resolveOrgId now, resolvePersonParentId is no longer called from the page)", async () => {
 		selectPolyphony();
 		h.resolveParentMock.mockResolvedValue('parent-1');
 		h.resolveOrgMock.mockRejectedValue(
@@ -188,10 +170,9 @@ describe('/admin/invite — prerequisites', () => {
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectPolyphony();
-		h.resolveParentMock.mockRejectedValue(
-			new h.InviteCreateError('resolve failed: 500', { phase: 'person-parent-resolve', reason: 'http' })
+		h.resolveOrgMock.mockRejectedValue(
+			new h.InviteCreateError('resolve failed: 500', { phase: 'org-resolve', reason: 'http' })
 		);
-		h.resolveOrgMock.mockResolvedValue('org-1');
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -251,13 +232,10 @@ describe('/admin/invite — ready form', () => {
 		// #67 — the org-entity resolve happened ONCE, internally, never as a list
 		// the admin picks from.
 		expect(h.resolveOrgMock).toHaveBeenCalledTimes(1);
-		// TU.1/#109 review — and it is PERSON-SCOPED: the acting admin's own person
-		// id in the chosen db (Collective.personId) is passed, so the org comes off
-		// her own member row instead of an `organization&limit=1` guess (which live
-		// returns the umbrella federation, not the collective).
+		// #161 review fix round 2 — `resolveOrgId` is DB-SCOPED, not
+		// person-scoped: no personId argument.
 		expect(h.resolveOrgMock).toHaveBeenCalledWith(
-			expect.objectContaining({ db: 'polyphony', token: 'jwt-admin' }),
-			'admin-p'
+			expect.objectContaining({ db: 'polyphony', token: 'jwt-admin' })
 		);
 	});
 
@@ -285,7 +263,7 @@ describe('/admin/invite — ready form', () => {
 		await waitFor(() => {
 			expect(submit.disabled).toBe(false);
 		});
-		expect(h.resolveParentMock).toHaveBeenCalledWith(
+		expect(h.resolveOrgMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor', token: 'jwt-admin' })
 		);
 	});

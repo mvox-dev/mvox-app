@@ -12,12 +12,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { collectiveState } from '$lib/collectives/store';
-	import {
-		createInvite,
-		InviteCreateError,
-		resolveOrgId,
-		resolvePersonParentId
-	} from '$lib/invite/inviteData';
+	import { createInvite, InviteCreateError, resolveOrgId } from '$lib/invite/inviteData';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	// #107 review F2 — a 401 here used to land in the generic 'load-error'
@@ -27,8 +22,8 @@
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
 	// #140/S3 — CONTROLLED MODE: the merged /admin page has ALREADY resolved a
-	// db + org (resolveMyOrgId, same underlying "person's own collective org"
-	// concept resolveOrgId answers) by the time it mounts this component —
+	// db + org (resolveDatabaseEntityId, same underlying "the collective"
+	// concept resolveOrgId answers — #161) by the time it mounts this component —
 	// redoing that resolution here would race the parent's own readiness by a
 	// full extra async round trip (page.navshell-merge.spec.ts: the invite
 	// section must be submit-ready in the SAME settle as the role-management
@@ -135,21 +130,13 @@
 			status = 'load-error';
 			return;
 		}
-		// The acting admin's own person id IN THIS DB — `resolveOrgId` reads her
-		// collective off her own member row, so a missing person id is a broken
-		// prerequisite (load error), never an org guess.
-		const personId = availableDbs.find((c) => c.db === targetDb)?.personId;
-		if (!personId) {
-			console.error('admin/invite: no person id for db', targetDb);
-			status = 'load-error';
-			return;
-		}
 		const cfg = { db: targetDb, token };
 		try {
-			const [, resolvedOrgId] = await Promise.all([
-				resolvePersonParentId(cfg),
-				resolveOrgId(cfg, personId)
-			]);
+			// `resolvePersonParentId` and `resolveOrgId` now resolve the SAME database
+			// entity (#161 review fix round 2 — both delegate to
+			// `resolveDatabaseEntityId`), so one resolve covers both call sites instead
+			// of firing two identical GETs.
+			const resolvedOrgId = await resolveOrgId(cfg);
 			orgId = resolvedOrgId;
 			resolvedForDb = targetDb;
 			status = 'ready';

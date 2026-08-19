@@ -83,7 +83,7 @@ const {
 	createSeasonMock,
 	createEventSeriesMock,
 	createEventMock,
-	resolveMyOrgIdMock,
+	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	discoverMock,
 	gotoMock,
@@ -102,7 +102,7 @@ const {
 	createSeasonMock: vi.fn(),
 	createEventSeriesMock: vi.fn(),
 	createEventMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn(),
+	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
@@ -135,9 +135,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 }));
 // T4's prior-event-type read — lazy-loaded by the event form.
 vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 // Only the ONE entity-rights round-trip is stubbed (`manageRightsFrom` and every
 // other helper stays real) — the empty-collective season-create fallback would
@@ -294,7 +294,7 @@ beforeEach(() => {
 	createSeasonMock.mockResolvedValue('season-new-1');
 	createEventSeriesMock.mockResolvedValue('series-new-1');
 	createEventMock.mockResolvedValue('ev-new-1');
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue([]);
@@ -316,7 +316,7 @@ afterEach(() => {
 	createSeasonMock.mockReset();
 	createEventSeriesMock.mockReset();
 	createEventMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();

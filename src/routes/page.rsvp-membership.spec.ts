@@ -71,9 +71,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 // ORGANIZATION's rights when the collective has no season at all (which is this
 // fixture: seasonId null + seasons []). Stubbed to "no visible collective" so the
 // fallback is a no-op here instead of a live member lookup from a unit test.
-vi.mock('$lib/org/myOrg', async (importActual) => ({
-	...(await importActual<typeof import('$lib/org/myOrg')>()),
-	resolveMyOrgId: vi.fn().mockResolvedValue(null)
+vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
+	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
+	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
 }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({

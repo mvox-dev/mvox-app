@@ -2,30 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSeasons, listRehearsals, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
 
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
-const personId = 'person-123';
 const ORG_ID = 'org-1';
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-/** An active member row parented to `orgId` (plus a section parent, live shape). */
-function memberBody(orgId: string | null) {
-	return {
-		entities: [
-			{
-				_id: 'm-1',
-				_parent: [
-					{ reference: 'sec-sop', entity_type: 'section' },
-					...(orgId ? [{ reference: orgId, entity_type: 'organization' }] : [])
-				]
-			}
-		],
-		count: 1
-	};
+/** The database entity lookup response (#161 — collective = database). */
+function databaseBody(dbEntityId: string | null) {
+	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };
 }
 
-/** Routed mock: member lookup (`resolveMyOrgId`), then the org-scoped seasons list. */
+/** Routed mock: database-entity lookup (`resolveDatabaseEntityId`), then the
+ *  collective-scoped seasons list. */
 function mockSeasonsFetch(opts: {
 	member?: unknown;
 	memberStatus?: number;
@@ -34,7 +23,7 @@ function mockSeasonsFetch(opts: {
 }) {
 	return vi.fn().mockImplementation((url: string) => {
 		const u = String(url);
-		if (u.includes('_type.string=member')) {
+		if (u.includes('_type.string=database')) {
 			return Promise.resolve(json(opts.member ?? { entities: [], count: 0 }, opts.memberStatus ?? 200));
 		}
 		return Promise.resolve(json(opts.seasons ?? { entities: [] }, opts.seasonsStatus ?? 200));
@@ -57,15 +46,15 @@ function eventRaw(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-// #144 review — re-fans the de-fan: `listSeasons` now scopes to the PERSON'S
-// OWN org (resolved via `resolveMyOrgId`, same as `resolveAdmin`/
-// `resolveMyLibraryId`) instead of reading every `season` row in the db. The
-// routed mock stands in for the two calls: the member lookup, then the
-// org-scoped seasons list.
-describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
-	it('queries seasons WITH a _parent.reference org filter, scoped to the own org', async () => {
-		const fetchImpl = mockSeasonsFetch({ member: memberBody(ORG_ID), seasons: { entities: [] } });
-		await listSeasons(cfg, personId, fetchImpl);
+// #144 review — re-fans the de-fan: `listSeasons` now scopes to the
+// DATABASE entity (#161, resolved via `resolveDatabaseEntityId`, same as
+// `resolveAdmin`/`resolveMyLibraryId`) instead of reading every `season` row
+// in the db. The routed mock stands in for the two calls: the database-entity
+// lookup, then the collective-scoped seasons list.
+describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
+	it('queries seasons WITH a _parent.reference filter, scoped to the database entity', async () => {
+		const fetchImpl = mockSeasonsFetch({ member: databaseBody(ORG_ID), seasons: { entities: [] } });
+		await listSeasons(cfg, fetchImpl);
 
 		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
 			String(c[0])
@@ -78,7 +67,7 @@ describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
 
 	it('maps + sorts seasons by start date', async () => {
 		const fetchImpl = mockSeasonsFetch({
-			member: memberBody(ORG_ID),
+			member: databaseBody(ORG_ID),
 			seasons: {
 				entities: [
 					{ _id: 'b', name: [{ string: 'B' }], start_date: [{ date: '2026-09-01' }], end_date: [{ date: '2027-05-31' }] },
@@ -86,7 +75,7 @@ describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
 				]
 			}
 		});
-		const seasons = await listSeasons(cfg, personId, fetchImpl);
+		const seasons = await listSeasons(cfg, fetchImpl);
 		expect(seasons.map((s) => s.id)).toEqual(['a', 'b']);
 		expect(seasons[0]).toEqual({
 			id: 'a',
@@ -103,7 +92,7 @@ describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
 	// Asking for it in THIS query is what removes the per-entity rights probe.
 	it('asks for _owner,_editor and surfaces the refs the caller can see', async () => {
 		const fetchImpl = mockSeasonsFetch({
-			member: memberBody(ORG_ID),
+			member: databaseBody(ORG_ID),
 			seasons: {
 				entities: [
 					{
@@ -116,7 +105,7 @@ describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
 				]
 			}
 		});
-		const seasons = await listSeasons(cfg, personId, fetchImpl);
+		const seasons = await listSeasons(cfg, fetchImpl);
 		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
 			String(c[0])
 		);
@@ -128,32 +117,27 @@ describe('listSeasons (org-scoped via resolveMyOrgId)', () => {
 
 	it('rights props ABSENT (non-granted caller — private bucket) → empty arrays, no throw', async () => {
 		const fetchImpl = mockSeasonsFetch({
-			member: memberBody(ORG_ID),
+			member: databaseBody(ORG_ID),
 			seasons: { entities: [{ _id: 'a', name: [{ string: 'A' }] }] }
 		});
-		const seasons = await listSeasons(cfg, personId, fetchImpl);
+		const seasons = await listSeasons(cfg, fetchImpl);
 		expect(seasons[0].owners).toEqual([]);
 		expect(seasons[0].editors).toEqual([]);
 	});
 
 	it('throws on a non-2xx response from the seasons query', async () => {
-		const fetchImpl = mockSeasonsFetch({ member: memberBody(ORG_ID), seasonsStatus: 500 });
-		await expect(listSeasons(cfg, personId, fetchImpl)).rejects.toThrow(/listSeasons failed: 500/);
+		const fetchImpl = mockSeasonsFetch({ member: databaseBody(ORG_ID), seasonsStatus: 500 });
+		await expect(listSeasons(cfg, fetchImpl)).rejects.toThrow(/listSeasons failed: 500/);
 	});
 
-	it('returns [] without querying seasons when the person has no visible active membership', async () => {
+	it('returns [] without querying seasons when no database entity is visible', async () => {
 		const fetchImpl = mockSeasonsFetch({ member: { entities: [], count: 0 } });
-		const seasons = await listSeasons(cfg, personId, fetchImpl);
+		const seasons = await listSeasons(cfg, fetchImpl);
 		expect(seasons).toEqual([]);
 		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
 			String(c[0])
 		);
 		expect(urls.some((u) => u.includes('_type.string=season'))).toBe(false);
-	});
-
-	it('throws (MyOrgLookupError) when the membership is ambiguous (two active member rows in one db)', async () => {
-		const fetchImpl = mockSeasonsFetch({ member: { ...memberBody(ORG_ID), count: 2 } });
-		await expect(listSeasons(cfg, personId, fetchImpl)).rejects.toThrow(/cannot tell which collective/);
 	});
 });
 

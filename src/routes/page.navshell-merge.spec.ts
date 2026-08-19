@@ -96,7 +96,7 @@ const h = vi.hoisted(() => {
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
 		resolveLibrarianMock: vi.fn(),
-		resolveMyOrgIdMock: vi.fn(),
+		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
 		// invite (#31/T4.5)
 		resolveParentMock: vi.fn(),
@@ -121,8 +121,8 @@ vi.mock('$lib/nav/adminStore', () => ({
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
 }));
-vi.mock('$lib/org/myOrg', () => ({
-	resolveMyOrgId: h.resolveMyOrgIdMock
+vi.mock('$lib/collective/databaseEntity', () => ({
+	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
@@ -198,7 +198,7 @@ const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds
 function loadOk() {
 	// role management ready
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveMyOrgIdMock.mockResolvedValue('org-1');
+	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
@@ -221,7 +221,7 @@ beforeEach(() => {
 		h.removeLibrarianMock,
 		h.resolveAdminMock,
 		h.resolveLibrarianMock,
-		h.resolveMyOrgIdMock,
+		h.resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
 		h.resolveParentMock,
 		h.resolveOrgMock,
@@ -413,7 +413,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		loadOk();
 		// Org ids are per-database — an org id from one collective is meaningless
 		// (and unresolvable) in another.
-		h.resolveMyOrgIdMock.mockImplementation((cfg: { db: string }) =>
+		h.resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(cfg.db === 'ramkoor' ? 'org-ram' : 'org-poly')
 		);
 		const rendered = render(AdminPage);
@@ -461,9 +461,8 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 	it('the embedded surface never self-resolves the org — it adopts the page-resolved pair', async () => {
 		await renderMergedReadyMulti();
 		expect(h.resolveOrgMock).not.toHaveBeenCalled();
-		expect(h.resolveMyOrgIdMock).toHaveBeenCalledWith(
-			expect.objectContaining({ db: 'ramkoor' }),
-			'admin-p2'
+		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
+			expect.objectContaining({ db: 'ramkoor' })
 		);
 	});
 });

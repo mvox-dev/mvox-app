@@ -30,7 +30,7 @@
 //
 //   DATA
 //     - series submit calls `createEventSeries(cfg, input)` (T1) — the ONE
-//       series-create seam. orgId from `resolveMyOrgId(cfg, personId)`; the
+//       series-create seam. orgId from `resolveDatabaseEntityId(cfg, personId)`; the
 //       panel's season id rides in `extraParentIds: [seasonId]`. NO `_sharing`
 //       / inherit-rights anywhere in the UI layer (the #132 design decision —
 //       the create body is entirely T1's business).
@@ -139,7 +139,7 @@ const {
 	loadRosterMock,
 	createEventSeriesMock,
 	createEventMock,
-	resolveMyOrgIdMock,
+	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	discoverMock,
 	gotoMock,
@@ -157,7 +157,7 @@ const {
 	loadRosterMock: vi.fn(),
 	createEventSeriesMock: vi.fn(),
 	createEventMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn(),
+	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
@@ -189,9 +189,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	getSeriesDefaults: getSeriesDefaultsMock
 }));
 vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
@@ -323,7 +323,7 @@ beforeEach(() => {
 	loadRosterMock.mockResolvedValue([]);
 	createEventSeriesMock.mockResolvedValue(NEW_SERIES_ID);
 	createEventMock.mockImplementation(async () => `ev-new-${createEventMock.mock.calls.length}`);
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue([]);
@@ -342,7 +342,7 @@ afterEach(() => {
 	loadRosterMock.mockReset();
 	createEventSeriesMock.mockReset();
 	createEventMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
@@ -660,7 +660,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 // ── series-only submit (generate OFF) ───────────────────────────────────────────
 
 describe('season panel — submit WITHOUT generation creates the series only', () => {
-	it('full flow: createEventSeries(cfg, {…}) ONCE, FULL shape — org from resolveMyOrgId, season in extraParentIds, weekly → intervalDays 7, from/until verbatim as startDate/endDate — and NO createEvent; form closes, panel stays open, series list re-reads', async () => {
+	it('full flow: createEventSeries(cfg, {…}) ONCE, FULL shape — org from resolveDatabaseEntityId, season in extraParentIds, weekly → intervalDays 7, from/until verbatim as startDate/endDate — and NO createEvent; form closes, panel stays open, series list re-reads', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		const seriesReadsBefore = listEventSeriesForSeasonMock.mock.calls.length;
@@ -687,7 +687,7 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 			defaultLocation: 'Main hall',
 			defaultDescription: 'Bring the black folder'
 		});
-		expect(resolveMyOrgIdMock).toHaveBeenCalledWith(CFG, 'person-p');
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(CFG);
 		expect(createEventMock).not.toHaveBeenCalled();
 
 		await waitFor(() => {
@@ -1035,7 +1035,7 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		expect(q(container, 'series-create-error')?.textContent?.trim()).toBe(
 			'series_create_type_required'
 		);
-		expect(resolveMyOrgIdMock).not.toHaveBeenCalled();
+		expect(resolveDatabaseEntityIdMock).not.toHaveBeenCalled();
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
 		expect(q(container, 'series-create-form')).not.toBeNull();
@@ -1275,7 +1275,7 @@ describe('season panel — the date range is validated BEFORE any fetch', () => 
 		expect(q(container, 'series-create-error')?.textContent?.trim()).toBe(
 			'series_create_from_required'
 		);
-		expect(resolveMyOrgIdMock).not.toHaveBeenCalled();
+		expect(resolveDatabaseEntityIdMock).not.toHaveBeenCalled();
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 	});
 
@@ -1308,7 +1308,7 @@ describe('season panel — the date range is validated BEFORE any fetch', () => 
 		expect(q(container, 'series-create-error')?.textContent?.trim()).toBe(
 			'series_create_until_before_from'
 		);
-		expect(resolveMyOrgIdMock).not.toHaveBeenCalled();
+		expect(resolveDatabaseEntityIdMock).not.toHaveBeenCalled();
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 	});
 });

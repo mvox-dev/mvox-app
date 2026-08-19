@@ -57,14 +57,15 @@ export interface ActiveMember {
 	 */
 	sectionIds: string[];
 	/**
-	 * TU.1/#109 (finding #10) — the member's COLLECTIVE ORGANIZATION id: the
-	 * `_parent` entry with `entity_type === 'organization'` (live-verified:
-	 * 133/133 active polyphony members carry exactly one, → EFK). Threaded
-	 * through to `RosterRow` so the roster page can hand `createSection` the
-	 * correct top-level parent org instead of the data layer guessing via
-	 * `limit=1` (which live-verifiably returns the umbrella federation, not the
-	 * collective). Optional: undefined when this reader cannot see an org parent.
-	 * Contract pinned by rosterData.org.spec.ts.
+	 * #161 (collective = database, Mihkel ruling 2026-08-16) — the member's
+	 * COLLECTIVE id: the `_parent` entry with `entity_type === 'database'`.
+	 * Threaded through to `RosterRow` so the roster page can hand
+	 * `createSection` the correct top-level parent instead of the data layer
+	 * guessing. Optional: undefined when this reader cannot see a database
+	 * parent, OR when the member's only non-section `_parent` is a LEGACY
+	 * "organization"-typed entry — that retired entity kind is not a collective
+	 * identity anymore, so it is never used as a fallback. Contract pinned by
+	 * rosterData.database.spec.ts.
 	 */
 	orgId?: string;
 }
@@ -126,11 +127,12 @@ export async function listActiveMembers(
 		const sectionIds = (raw._parent ?? [])
 			.filter((p) => p.entity_type === 'section')
 			.map((p) => p.reference);
-		// TU.1/#109 (finding #10) — the FIRST `_parent` entry that is an
-		// organization is the member's collective org; undefined when none is
-		// visible to this reader (never a throw — org visibility must not gate
-		// the roster, see rosterData.org.spec.ts).
-		const orgId = (raw._parent ?? []).find((p) => p.entity_type === 'organization')?.reference;
+		// #161 — the FIRST `_parent` entry that is the DATABASE entity is the
+		// member's collective; undefined when none is visible to this reader
+		// (never a throw — visibility must not gate the roster) OR when the only
+		// non-section entry is a LEGACY `organization` parent (see
+		// rosterData.database.spec.ts).
+		const orgId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
 		return {
 			memberId: raw._id,
 			personId,
@@ -180,10 +182,10 @@ export interface RosterRow {
 	 */
 	sectionIds?: string[];
 	/**
-	 * TU.1/#109 (finding #10) — carried through verbatim from
-	 * `ActiveMember.orgId` (see its doc): the member's collective-organization
-	 * id, so the page's create wiring can pass `createSection` an explicit
-	 * top-level parent org. Optional for pre-TU.1 fixtures.
+	 * #161 — carried through verbatim from `ActiveMember.orgId` (see its doc):
+	 * the member's collective (database entity) id, so the page's create wiring
+	 * can pass `createSection` an explicit top-level parent. Optional for
+	 * pre-#161 fixtures.
 	 */
 	orgId?: string;
 }

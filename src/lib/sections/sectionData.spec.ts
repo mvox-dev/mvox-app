@@ -24,7 +24,7 @@ function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-/** Raw wire-shape section entity. `parent` = parent SECTION id; omitted → org-parented (root). */
+/** Raw wire-shape section entity. `parent` = parent SECTION id; omitted → database-parented (root, #161). */
 function rawSection(id: string, name: string, order?: number, parent?: string) {
 	return {
 		_id: id,
@@ -32,7 +32,7 @@ function rawSection(id: string, name: string, order?: number, parent?: string) {
 		...(order === undefined ? {} : { display_order: [{ number: order }] }),
 		_parent: parent
 			? [{ reference: parent, entity_type: 'section' }]
-			: [{ reference: 'org-1', entity_type: 'organization' }]
+			: [{ reference: 'org-1', entity_type: 'database' }]
 	};
 }
 
@@ -184,20 +184,20 @@ describe('listSections — parses section entities into a recursive tree sorted 
 		]);
 	});
 
-	// TU.1/#109 review — the org must SURVIVE the parse. Live polyphony holds 16
-	// sections across four test orgs, all org-parented: with the org discarded
-	// they were one indistinguishable set of "siblings", which is what made the
-	// picker refuse a top-level name that only exists in another org.
-	it("carries each root's OWNING ORG (`_parent` entity_type 'organization'); a sub-section, being section-parented, has orgId null", async () => {
+	// #161 (collective = database, Mihkel ruling 2026-08-16) — the collective
+	// must SURVIVE the parse. Sections across different databases must not be
+	// treated as one indistinguishable set of "siblings", which is what made
+	// the picker refuse a top-level name that only exists in another database.
+	it("carries each root's OWNING COLLECTIVE (`_parent` entity_type 'database'); a sub-section, being section-parented, has orgId null", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
-					// EFK's root + its child, and another org's same-named root.
+					// One database's root + its child, and another database's same-named root.
 					{
 						_id: 'sec-efk-sop',
 						name: [{ string: 'Soprano' }],
 						display_order: [{ number: 1 }],
-						_parent: [{ reference: 'org-efk', entity_type: 'organization' }]
+						_parent: [{ reference: 'db-efk', entity_type: 'database' }]
 					},
 					{
 						_id: 'sec-efk-sop2',
@@ -209,15 +209,15 @@ describe('listSections — parses section entities into a recursive tree sorted 
 						_id: 'sec-sireen-sop',
 						name: [{ string: 'Soprano' }],
 						display_order: [{ number: 3 }],
-						_parent: [{ reference: 'org-sireen', entity_type: 'organization' }]
+						_parent: [{ reference: 'db-sireen', entity_type: 'database' }]
 					}
 				]
 			})
 		);
 		const tree = await listSections(cfg, fetchImpl);
 		expect(tree.map((n) => [n.id, n.orgId])).toEqual([
-			['sec-efk-sop', 'org-efk'],
-			['sec-sireen-sop', 'org-sireen']
+			['sec-efk-sop', 'db-efk'],
+			['sec-sireen-sop', 'db-sireen']
 		]);
 		expect(tree[0].children[0].orgId).toBeNull();
 	});

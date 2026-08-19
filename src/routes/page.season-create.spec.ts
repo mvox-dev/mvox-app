@@ -24,7 +24,7 @@
 //       that already exists — `_owner` subsumes editor). FAIL-CLOSED: a
 //       non-editor gets NO control, not a disabled one.
 //     - submit calls `createSeason(cfg, { name, orgId, startDate, endDate,
-//       conductorRefs })` — orgId from `resolveMyOrgId(cfg, personId)` (NEVER a
+//       conductorRefs })` — orgId from `resolveDatabaseEntityId(cfg, personId)` (NEVER a
 //       `_type.string=organization&limit=1` guess — live-verifiably returns the
 //       umbrella federation). NO `_sharing`, NO inherit-rights flag anywhere in
 //       the UI layer: the create body is entirely T1's business, and T1 pins
@@ -75,7 +75,7 @@ const {
 	loadFullAgendaMock,
 	loadRosterMock,
 	createSeasonMock,
-	resolveMyOrgIdMock,
+	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	discoverMock,
 	gotoMock,
@@ -85,7 +85,7 @@ const {
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	createSeasonMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn(),
+	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
@@ -100,9 +100,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: vi.fn(),
 	createEvent: vi.fn()
 }));
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 // Only the ONE entity-rights round-trip is stubbed (`manageRightsFrom` and every
 // other helper stays real): the season-create gate falls back to the ORGANIZATION's
@@ -262,7 +262,7 @@ beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
 	createSeasonMock.mockResolvedValue('season-new-1');
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue([]);
@@ -273,7 +273,7 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
 	createSeasonMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
@@ -492,7 +492,7 @@ describe('agenda — the conductor autocomplete searches the collective’s pers
 // ── submit: the write, its params, and the after-party ──────────────────────────
 
 describe('agenda — submit calls createSeason and refreshes', () => {
-	it("full flow: name + dates + one conductor → createSeason(cfg, { name, orgId: <resolveMyOrgId's answer>, startDate, endDate, conductorRefs }) fires ONCE; the form closes; the agenda REFRESHES (loadFullAgenda re-invoked)", async () => {
+	it("full flow: name + dates + one conductor → createSeason(cfg, { name, orgId: <resolveDatabaseEntityId's answer>, startDate, endDate, conductorRefs }) fires ONCE; the form closes; the agenda REFRESHES (loadFullAgenda re-invoked)", async () => {
 		const container = await renderReady();
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
 
@@ -507,7 +507,7 @@ describe('agenda — submit calls createSeason and refreshes', () => {
 			expect(createSeasonMock).toHaveBeenCalledTimes(1);
 		});
 		// FULL param shape (partial assertions hide bugs): the org comes from
-		// resolveMyOrgId — never a limit=1 guess, never hardcoded.
+		// resolveDatabaseEntityId — never a limit=1 guess, never hardcoded.
 		expect(createSeasonMock).toHaveBeenCalledWith(CFG, {
 			name: 'Autumn 2026',
 			orgId: ORG_EFK,
@@ -515,7 +515,7 @@ describe('agenda — submit calls createSeason and refreshes', () => {
 			endDate: '2026-12-20',
 			conductorRefs: ['p-ada']
 		});
-		expect(resolveMyOrgIdMock).toHaveBeenCalledWith(CFG, 'person-p');
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(CFG);
 
 		// Close + refresh: the agenda re-reads the world the write just changed.
 		await waitFor(() => {
@@ -622,7 +622,7 @@ describe('agenda — [+ Season] survives the states where no season is current',
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
 		// The org came from the person's membership, never a limit=1 guess.
-		expect(resolveMyOrgIdMock).toHaveBeenCalledWith(CFG, 'person-p');
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(CFG);
 		expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
 	});
 

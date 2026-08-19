@@ -757,4 +757,111 @@ describe('removeLibrarian — revokes the OWN EDITOR grant only', () => {
 	});
 });
 
+// ── #161 review fix — non-person rights values (database self-reference) ───────
+//
+// The DATABASE entity (the collective identity since #161) carries an `_owner`
+// value REFERENCING ITSELF (`entity_type: 'database'`, reference = the entity's
+// own `_id`) — Entu's bootstrap wires it that way. That value is NOT an admin:
+//
+//   - `listAdmins` must list PERSONS only — the database self-reference must
+//     never surface as a RolePerson row (the /admin page would render the
+//     collective itself as a removable "admin").
+//   - `removeAdmin`'s lockout guard must count only PERSON owners as remaining
+//     owners: with the self-reference present, removing the last HUMAN owner
+//     must still reject with RoleLockoutError — the self-reference cannot log
+//     in and cannot repair the rights, so counting it leaves the entity
+//     human-ownerless.
+//
+// Wire shape: aggregated rights values carry `entity_type` for the referenced
+// entity. Values WITHOUT `entity_type` (older reads) keep counting as persons —
+// fail-open on absence, filter only on a KNOWN non-person type.
+
+describe('#161 review — database self-reference in _owner is not a person', () => {
+	// The entity under management is the database entity itself; its _owner
+	// holds a reference back to itself.
+	const DB_ID = 'db-entity-1';
+	const SELF_REF_OWNER = {
+		_id: 'pv-own-self',
+		reference: DB_ID,
+		string: 'polyphony',
+		entity_type: 'database'
+	};
+	const ANNA_PERSON_OWNER = {
+		_id: 'pv-own-anna',
+		reference: 'p-anna',
+		string: 'Anna Arro',
+		entity_type: 'person'
+	};
+	const EMIL_PERSON_OWNER = {
+		_id: 'pv-own-emil',
+		reference: 'p-emil',
+		string: 'Emil Erg',
+		entity_type: 'person'
+	};
+
+	/** GET answers the rollup; any DELETE answers 200 (so a buggy impl that
+	 *  reaches the write phase fails on the ASSERTION, not on a mock gap). */
+	function makeRightsRouter(body: unknown): ReturnType<typeof vi.fn> {
+		return vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+			if (init?.method === 'DELETE') return json({ deleted: true });
+			return json(body);
+		});
+	}
+
+	it('listAdmins does NOT list the non-person self-reference — persons only, FULL shape', async () => {
+		const fetchImpl = makeRightsRouter(
+			rollup({ ownOwners: [SELF_REF_OWNER, ANNA_PERSON_OWNER], ownEditors: [BELA_EDITOR] })
+		);
+
+		const result = await listAdmins(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch);
+
+		// FULL-shape toEqual: a { id: 'db-entity-1', name: 'polyphony' } row is
+		// exactly the bug this pins against.
+		expect(result).toEqual({
+			persons: [
+				{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-own-anna'] },
+				{ id: 'p-bela', name: 'Bela Brauer', role: 'editor', valueIds: ['pv-ed-bela'] }
+			],
+			canManage: true
+		});
+	});
+
+	it('a rights value WITHOUT entity_type still lists as a person (older wire reads carry no entity_type — filter only on a KNOWN non-person type)', async () => {
+		// ANNA_OWNER / BELA_EDITOR (module fixtures) carry no entity_type at all.
+		const fetchImpl = makeRightsRouter(
+			rollup({ ownOwners: [ANNA_OWNER, SELF_REF_OWNER], ownEditors: [BELA_EDITOR] })
+		);
+
+		const result = await listAdmins(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch);
+		expect(result.persons.map((p) => p.id)).toEqual(['p-anna', 'p-bela']);
+	});
+
+	it('removeAdmin lockout guard counts PERSON owners only: last human owner + the self-reference → RoleLockoutError, NOTHING deleted', async () => {
+		const fetchImpl = makeRightsRouter(
+			rollup({ ownOwners: [ANNA_PERSON_OWNER, SELF_REF_OWNER] })
+		);
+
+		await expect(
+			removeAdmin(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch)
+		).rejects.toBeInstanceOf(RoleLockoutError);
+
+		// The guard runs BEFORE any write: only the rights GET happened.
+		expect(deleteUrls(fetchImpl)).toEqual([]);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it('removeAdmin still succeeds when ANOTHER person owner remains — deletes only the removed person\'s own value, never the self-reference', async () => {
+		const fetchImpl = makeRightsRouter(
+			rollup({ ownOwners: [ANNA_PERSON_OWNER, EMIL_PERSON_OWNER, SELF_REF_OWNER] })
+		);
+
+		await removeAdmin(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch);
+
+		const deletes = deleteUrls(fetchImpl);
+		expect(deletes).toHaveLength(1);
+		expect(deletes[0]).toContain('/testdb/property/pv-own-anna');
+	});
+});
+
 // (*MVOX:Tallis* — #134/S3 RED, rollup revision)
+// (*MVOX:Tallis* — #161 review-fix RED: person filter on rights values)

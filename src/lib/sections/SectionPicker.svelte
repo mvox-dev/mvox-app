@@ -52,13 +52,13 @@
 		/** The member's CURRENT section entity ids ([] = unassigned). */
 		selectedIds: string[];
 		/**
-		 * TU.1/#109 review — the member's OWN organization id (`RosterRow.orgId`).
-		 * Used for ONE thing: scoping the TOP-LEVEL duplicate check to this org's
-		 * own roots. `sections` is the whole db's section tree, and live polyphony
-		 * holds 16 sections across FOUR test orgs, all org-parented — without the
-		 * org, every root is a "sibling" of every other and an EFK admin typing a
-		 * top-level "Soprano II" is refused because Kammernaiskoor Sireen has one.
-		 * Undefined/null = org unknown → the check falls back to comparing all
+		 * #161 (collective = database) — the member's OWN collective id
+		 * (`RosterRow.orgId`, the database entity). Used for ONE thing: scoping the
+		 * TOP-LEVEL duplicate check to this collective's own roots. `sections` is
+		 * the whole db's section tree; without the collective id, every root is a
+		 * "sibling" of every other one (this may simplify further in a
+		 * single-collective database, but the scoping stays correct either way).
+		 * Undefined/null = collective unknown → the check falls back to comparing all
 		 * roots (conservative: a possible false duplicate beats a wrong create).
 		 */
 		orgId?: string | null;

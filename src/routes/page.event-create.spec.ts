@@ -18,7 +18,7 @@
 //
 //   DATA
 //     - submit calls `createEvent(cfg, input)` (T1, $lib/entity/entityCreate) —
-//       the ONE create seam. orgId from `resolveMyOrgId(cfg, personId)` (NEVER
+//       the ONE create seam. orgId from `resolveDatabaseEntityId(cfg, personId)` (NEVER
 //       a `_type.string=organization&limit=1` guess). NO `_sharing`, NO
 //       inherit-rights flag anywhere in the UI layer — the create body is
 //       entirely T1's business (`_type` + `_parent` + domain props only; rights
@@ -112,7 +112,7 @@ const {
 	loadFullAgendaMock,
 	loadRosterMock,
 	createEventMock,
-	resolveMyOrgIdMock,
+	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	discoverMock,
 	gotoMock,
@@ -129,7 +129,7 @@ const {
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	createEventMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn(),
+	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
@@ -162,9 +162,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 }));
 // T4's prior-event-type read — NEW module, lazy-loaded by the form.
 vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
@@ -397,7 +397,7 @@ beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
 	createEventMock.mockResolvedValue('ev-new-1');
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue([]);
@@ -415,7 +415,7 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
 	createEventMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
@@ -854,7 +854,7 @@ describe('agenda — selecting a series previews the inherited fields as PLACEHO
 // ── submission: the createEvent call, its params, and the after-party ───────────
 
 describe('agenda — submit calls createEvent with exactly what the viewer set', () => {
-	it('STANDALONE full flow (agenda-opened): every field set → createEvent(cfg, {…}) ONCE, full shape — org from resolveMyOrgId, season in extraParentIds, NO seriesId, Tallinn wall clock converted to the UTC instant', async () => {
+	it('STANDALONE full flow (agenda-opened): every field set → createEvent(cfg, {…}) ONCE, full shape — org from resolveDatabaseEntityId, season in extraParentIds, NO seriesId, Tallinn wall clock converted to the UTC instant', async () => {
 		const container = await renderReady();
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
 
@@ -889,7 +889,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 			conductorRefs: ['p-ada'],
 			capacity: 300
 		});
-		expect(resolveMyOrgIdMock).toHaveBeenCalledWith(CFG, 'person-p');
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(CFG);
 
 		// Close + refresh: the agenda re-reads the world the write just changed.
 		await waitFor(() => {

@@ -13,12 +13,12 @@ import { createSection } from './sectionActions';
 //   - `_type` resolved to a REFERENCE via resolveTypeId(cfg, 'section') (#10
 //     pinned wire-shape; the resolution GET is `_type.string=entity&
 //     name.string=section`, cached per db).
-//   - parentId present → `_parent` = that section id; NO org lookup happens.
-//   - parentId absent/null → "(top level)": `_parent` = the sole readable
-//     organization entity (`entity?_type.string=organization&limit=1`, same
-//     de-fan as inviteData.resolveInviteOrg); FAILS LOUD naming the db when no
-//     org is readable — v4E pins `parentConstraint: 'exactly_one_of'`, a
-//     parentless section is not a thing.
+//   - parentId present → `_parent` = that section id; NO lookup happens.
+//   - parentId absent/null → "(top level)": `_parent` = the DATABASE entity
+//     (`entity?_type.string=database&limit=1` — #161, collective = database);
+//     FAILS LOUD naming the db when no database entity is readable — v4E pins
+//     `parentConstraint: 'exactly_one_of'`, a parentless section is not a
+//     thing.
 //   - `_sharing: 'public'` explicit at create (v4E section sharing — federation
 //     discoverability; never rely on inherit).
 //   - name trimmed; empty/whitespace name throws with ZERO fetches.
@@ -37,15 +37,15 @@ beforeEach(() => {
 /**
  * Routes the three GET/POST shapes createSection may issue:
  *   type-resolution GET (`_type.string=entity`) → the section type-def id,
- *   org-resolution GET (`_type.string=organization`) → the sole org entity,
+ *   database-resolution GET (`_type.string=database`) → the sole database entity,
  *   anything else → the entity-create POST → `{ _id: newId }`.
  */
 function makeFetchMock(
-	opts: { typeId?: string; orgEntities?: Array<{ _id: string }>; newId?: string; createStatus?: number } = {}
+	opts: { typeId?: string; dbEntities?: Array<{ _id: string }>; newId?: string; createStatus?: number } = {}
 ) {
 	const {
 		typeId = 'section-type-42',
-		orgEntities = [{ _id: 'org-1' }],
+		dbEntities = [{ _id: 'org-1' }],
 		newId = 'sec-new-1',
 		createStatus = 200
 	} = opts;
@@ -53,19 +53,19 @@ function makeFetchMock(
 		if (String(url).includes('_type.string=entity')) {
 			return Promise.resolve(json({ entities: [{ _id: typeId }] }));
 		}
-		if (String(url).includes('_type.string=organization')) {
-			return Promise.resolve(json({ entities: orgEntities }));
+		if (String(url).includes('_type.string=database')) {
+			return Promise.resolve(json({ entities: dbEntities }));
 		}
 		return Promise.resolve(json({ _id: newId }, createStatus));
 	});
 }
 
-/** The one call that is neither type- nor org-resolution: the create POST. */
+/** The one call that is neither type- nor database-resolution: the create POST. */
 function createCall(fetchImpl: ReturnType<typeof makeFetchMock>): [string, RequestInit] {
 	const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
 	const found = calls.filter(
 		([url]) =>
-			!String(url).includes('_type.string=entity') && !String(url).includes('_type.string=organization')
+			!String(url).includes('_type.string=entity') && !String(url).includes('_type.string=database')
 	);
 	expect(found, 'exactly one entity-create call').toHaveLength(1);
 	return found[0];
@@ -76,7 +76,7 @@ function createCallBody(fetchImpl: ReturnType<typeof makeFetchMock>) {
 	return JSON.parse(String(init.body)) as Array<{ type: string; reference?: string; string?: string }>;
 }
 
-describe('createSection — top level (parentId absent): child of the resolved org', () => {
+describe('createSection — top level (parentId absent): child of the resolved database entity', () => {
 	it('POST body FULL SHAPE: _type ref (resolved) + _parent=org + name string + _sharing:public — and NOTHING else (no display_order, no voice, no current_section)', async () => {
 		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
 		await createSection(cfg, { name: 'Tenor' }, fetchImpl);
@@ -105,19 +105,19 @@ describe('createSection — top level (parentId absent): child of the resolved o
 		expect(String(url)).not.toMatch(/\/entity\/[^?]/);
 	});
 
-	it('resolves the org via `_type.string=organization&limit=1` (single-collective de-fan, same as inviteData) and RETURNS the new section id from the create response', async () => {
+	it('resolves the database entity via `_type.string=database&limit=1` (#161) and RETURNS the new section id from the create response', async () => {
 		const fetchImpl = makeFetchMock({ newId: 'sec-created-7' });
 		const id = await createSection(cfg, { name: 'Tenor', parentId: null }, fetchImpl);
 		expect(id).toBe('sec-created-7');
-		const orgCalls = (fetchImpl.mock.calls as Array<[string]>).filter(([url]) =>
-			String(url).includes('_type.string=organization')
+		const dbCalls = (fetchImpl.mock.calls as Array<[string]>).filter(([url]) =>
+			String(url).includes('_type.string=database')
 		);
-		expect(orgCalls).toHaveLength(1);
-		expect(String(orgCalls[0][0])).toContain('limit=1');
+		expect(dbCalls).toHaveLength(1);
+		expect(String(dbCalls[0][0])).toContain('limit=1');
 	});
 
-	it('FAILS LOUD naming the db when NO organization entity is readable (a section REQUIRES a parent — exactly_one_of), and nothing is created', async () => {
-		const fetchImpl = makeFetchMock({ orgEntities: [] });
+	it('FAILS LOUD naming the db when NO database entity is readable (a section REQUIRES a parent — exactly_one_of), and nothing is created', async () => {
+		const fetchImpl = makeFetchMock({ dbEntities: [] });
 		await expect(createSection(cfg, { name: 'Tenor' }, fetchImpl)).rejects.toThrow(/testdb/);
 		const creates = (fetchImpl.mock.calls as Array<[string, RequestInit | undefined]>).filter(
 			([, init]) => init?.method === 'POST'
@@ -126,17 +126,17 @@ describe('createSection — top level (parentId absent): child of the resolved o
 	});
 });
 
-describe('createSection — parentId present: sub-section, no org involved', () => {
-	it('`_parent` = the given SECTION id, and NO org-resolution GET is issued at all', async () => {
+describe('createSection — parentId present: sub-section, no database-entity lookup involved', () => {
+	it('`_parent` = the given SECTION id, and NO database-resolution GET is issued at all', async () => {
 		const fetchImpl = makeFetchMock();
 		await createSection(cfg, { name: 'Soprano 2', parentId: 'sec-sop' }, fetchImpl);
 
 		const body = createCallBody(fetchImpl);
 		expect(body.find((p) => p.type === '_parent')).toEqual({ type: '_parent', reference: 'sec-sop' });
-		const orgCalls = (fetchImpl.mock.calls as Array<[string]>).filter(([url]) =>
-			String(url).includes('_type.string=organization')
+		const dbCalls = (fetchImpl.mock.calls as Array<[string]>).filter(([url]) =>
+			String(url).includes('_type.string=database')
 		);
-		expect(orgCalls).toEqual([]);
+		expect(dbCalls).toEqual([]);
 	});
 });
 

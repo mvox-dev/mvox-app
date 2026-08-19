@@ -18,8 +18,8 @@
 // the caller exactly once and never logged or persisted here.
 
 import { entuFetch } from '$lib/entu/request';
-import { MyOrgLookupError, resolveMyOrgId } from '$lib/org/myOrg';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resolveDatabaseEntityId, DatabaseEntityLookupError } from '$lib/collective/databaseEntity';
 
 // #34 — the person-create `entu_user` property carries this fixed mint-trigger
 // literal, NEVER the invitee's real email. Any truthy string makes the server
@@ -73,107 +73,80 @@ export interface CreateInviteResult {
  * that #22 deleted, so this is the SAME parent without depending on `add_user`.
  * `add_user` is never read — a future restored add_user field can never re-arm the
  * #22 public-auto-provision exposure through this path. No hardcoded ids.
+ *
+ * #161 review fix round 2 — this used to run its OWN
+ * `entity?_type.string=database&limit=1` query, duplicating exactly the query
+ * `resolveDatabaseEntityId` ($lib/collective/databaseEntity) already owns.
+ * Delegates there now — same answer, `props=_id` for free, one lookup
+ * implementation instead of two that could drift apart.
  */
 export async function resolvePersonParentId(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-	const res = await entuFetch(
-		cfg.db,
-		'entity?_type.string=database&limit=1',
-		cfg.token,
-		{},
-		fetchImpl
-	);
-	if (!res.ok) {
-		// An HTTP/network failure is NEVER presented as "not admin" — it gets its own
-		// reason so the UI can render it as a retryable load error.
-		throw new InviteCreateError(
-			`resolving the person parent failed: HTTP ${res.status} reading the database entity`,
-			{ phase: 'person-parent-resolve', reason: 'http' }
-		);
+	let dbEntityId: string | null;
+	try {
+		dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
+	} catch (e) {
+		if (e instanceof DatabaseEntityLookupError) {
+			// An HTTP/network failure is NEVER presented as "not admin" — it gets its
+			// own reason so the UI can render it as a retryable load error.
+			throw new InviteCreateError(
+				`resolving the person parent failed: ${e.message}`,
+				{ phase: 'person-parent-resolve', reason: 'http' }
+			);
+		}
+		throw e; // e.g. AuthExpiredError — must reach the page's 401 branch untouched
 	}
-	const body = (await res.json()) as {
-		entities?: Array<{ _id?: string }>;
-	};
-	const entity = body.entities?.[0];
-	if (!entity) {
+	if (!dbEntityId) {
 		throw new InviteCreateError(
 			'no database entity is readable — creating invites requires rights on the database entity that this account does not appear to have',
 			{ phase: 'person-parent-resolve', reason: 'not-visible' }
 		);
 	}
-	// The parent IS the database entity's own _id. A 2xx that read back an entity
-	// without an _id is a contract violation (apparent-success trap) — fail loud
-	// rather than POST a person with an empty `_parent`.
-	if (!entity._id) {
-		throw new InviteCreateError(
-			'the database entity read back without an _id — cannot resolve the person parent',
-			{ phase: 'person-parent-resolve', reason: 'contract' }
-		);
-	}
-	return entity._id;
+	return dbEntityId;
 }
 
 /**
- * Resolve the invite target org: the organization entity the new member gets
- * created under — the ACTING ADMIN'S OWN collective, read off her own active
- * `member` row's `_parent` (`resolveMyOrgId`, $lib/org/myOrg). No guessing.
+ * Resolve the invite target collective: the DATABASE entity the new member
+ * gets created under (#161, collective = database, Mihkel ruling 2026-08-16).
+ * No guessing — `resolveDatabaseEntityId` ($lib/collective/databaseEntity)
+ * reads `entity?_type.string=database&limit=1`, exactly one per db.
  *
  * #67 (Mihkel ruling, 2026-08-08) stands as far as the UI goes: the invite
  * picker enumerates DATABASES, never organization entities — this is a single
  * internal resolve, not a user-facing list.
  *
- * TU.1/#109 review — what CHANGED, and why: this used to resolve
- * `entity?_type.string=organization&limit=1` and take the first hit, on the
- * premise that polyphony's extra org entities are ghosts nobody can read. That
- * premise is DISPROVEN (probe-67, 2026-08-12): the search answers `count: 6`,
- * all six org entities are `_sharing: domain` (so every authenticated member
- * reads all six), and the first hit is "Eesti Kammerkooride Liit"
- * (69c7f8718489bfcb0e81b05a) — the UMBRELLA FEDERATION — not the collective
- * "Eesti Filharmoonia Kammerkoor" (69c7f8718489bfcb0e81b065). Every member
- * created through /admin/invite was therefore parented under the umbrella, and
- * that wrong org then threads onward: the roster derives `RosterRow.orgId` from
- * the member's organization `_parent` and hands it to `createSection`, so the
- * bad parent would come straight back as a section under the umbrella. The
- * `limit=1` shape is retired here (and in `adminStore.resolveAdmin`); the one
- * remaining instance, `createSection`'s no-orgId fallback, now fails loud when
- * `count` > 1.
- *
- * Disposal of the legacy org entities stays on #37 — out of scope here.
+ * #161 review fix round 2 — the dead `personId` parameter is DELETED from the
+ * call contract (not merely renamed/shadowed): `resolveOrgId(cfg, fetchImpl?)`,
+ * `.length === 1`, pinned in inviteData.spec.ts. The retired person -> active
+ * member row -> organization `_parent` walk is gone — #159 deleted every
+ * organization instance, so that chain could only ever answer wrong or empty.
  */
 export async function resolveOrgId(
 	cfg: EntuCfg,
-	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-	if (!personId) {
-		throw new InviteCreateError('resolveOrgId: personId must not be empty', {
-			phase: 'org-resolve',
-			reason: 'contract'
-		});
-	}
-	let orgId: string | null;
+	let dbEntityId: string | null;
 	try {
-		orgId = await resolveMyOrgId(cfg, personId, fetchImpl);
+		dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
 	} catch (e) {
-		if (e instanceof MyOrgLookupError) {
-			// 'http' keeps the retryable-load-error shape the page already renders;
-			// an ambiguous membership is a contract problem, never "not admin".
-			throw new InviteCreateError(`resolving the invite org failed: ${e.message}`, {
+		if (e instanceof DatabaseEntityLookupError) {
+			// 'http' keeps the retryable-load-error shape the page already renders.
+			throw new InviteCreateError(`resolving the invite collective failed: ${e.message}`, {
 				phase: 'org-resolve',
-				reason: e.reason === 'http' ? 'http' : 'contract'
+				reason: 'http'
 			});
 		}
 		throw e; // e.g. AuthExpiredError — must reach the page's 401 branch untouched
 	}
-	if (!orgId) {
+	if (!dbEntityId) {
 		throw new InviteCreateError(
-			`no organization parent is readable for person ${personId} in db '${cfg.db}' — inviting requires an active membership whose organization parent this account can see`,
+			`no database entity is readable in db '${cfg.db}' — inviting requires visibility into the collective`,
 			{ phase: 'org-resolve', reason: 'not-visible' }
 		);
 	}
-	return orgId;
+	return dbEntityId;
 }
 
 /**
@@ -294,8 +267,9 @@ export async function createInvite(
 	// unbreaks the roster query (#18/T3.2), which under `private` returned only
 	// the invitee's own membership; domain sharing also covers her own read, so
 	// the slice3-era explicit `_viewer` grant is retired. NO explicit `_sharing`
-	// (#133): the direct parent is the organization, which carries `domain` +
-	// `_inheritrights:true`, so Entu's create-time copy (utils/entity.js:296-327)
+	// (#133): the direct parent is the database entity (#161, collective =
+	// database), which carries `domain` + `_inheritrights:true`, so Entu's
+	// create-time copy (utils/entity.js:296-327)
 	// already lands `domain` on the member without resending it. `_inheritrights`
 	// IS still sent explicitly here (kept per #133 audit). NO `name` property
 	// (#36) — the member carries no name; that lives on a separate

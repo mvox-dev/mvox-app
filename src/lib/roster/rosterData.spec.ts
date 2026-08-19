@@ -53,16 +53,16 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 					{
 						_id: 'member-2',
 						person: [{ reference: 'person-b' }],
-						_parent: [{ reference: 'org-1', entity_type: 'organization' }]
+						_parent: [{ reference: 'org-1', entity_type: 'database' }]
 					} // no section among _parent
 				]
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// TU.1/#109 (finding #10) — orgId now rides along too: member-2's fixture
-		// happens to carry an organization _parent, so she picks one up here even
-		// though this test predates that contract (see rosterData.org.spec.ts for
-		// the dedicated pins).
+		// #161 (collective = database) — orgId now rides along too: member-2's
+		// fixture happens to carry a database `_parent`, so she picks one up here
+		// even though this test predates that contract (see
+		// rosterData.database.spec.ts for the dedicated pins).
 		expect(members).toEqual<ActiveMember[]>([
 			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], orgId: undefined },
 			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], orgId: 'org-1' }
@@ -77,7 +77,7 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 						_id: 'member-1',
 						person: [{ reference: 'person-a' }],
 						_parent: [
-							{ reference: 'org-1', entity_type: 'organization' },
+							{ reference: 'org-1', entity_type: 'database' },
 							{ reference: 'sec-sop', entity_type: 'section' }
 						]
 					}
@@ -100,7 +100,7 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 						person: [{ reference: 'person-a' }],
 						_parent: [
 							{ reference: 'sec-sop', entity_type: 'section' },
-							{ reference: 'org-1', entity_type: 'organization' },
+							{ reference: 'org-1', entity_type: 'database' },
 							{ reference: 'sec-lead', entity_type: 'section' }
 						]
 					}

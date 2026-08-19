@@ -121,32 +121,13 @@ describe('createSection — caller-supplied orgId is the top-level parent (findi
 	});
 });
 
-describe('createSection — no orgId on a MULTI-ORG db: fail loud, never guess (finding #10)', () => {
-	it('org search count > 1 (live polyphony: 6 orgs, umbrella first): REJECTS naming the db, and NOTHING is created — the old behavior silently parented the section under the umbrella federation', async () => {
-		const fetchImpl = makeFetchMock({
-			orgResponse: { entities: [{ _id: 'org-umbrella' }], count: 6 }
-		});
-		await expect(createSection(cfg, { name: 'Tenor' }, fetchImpl)).rejects.toThrow(/testdb/);
-		expect(createCalls(fetchImpl)).toEqual([]);
-	});
-
-	it('legacy single-org fallback UNCHANGED: count 1 → that org is the parent (regression guard — the fix must not break genuinely single-org dbs)', async () => {
-		const fetchImpl = makeFetchMock({
-			orgResponse: { entities: [{ _id: 'org-solo' }], count: 1 }
-		});
-		await createSection(cfg, { name: 'Tenor' }, fetchImpl);
-
-		const creates = createCalls(fetchImpl);
-		expect(creates).toHaveLength(1);
-		const body = JSON.parse(String(creates[0][1].body)) as Array<{
-			type: string;
-			reference?: string;
-		}>;
-		expect(body.find((p) => p.type === '_parent')).toEqual({
-			type: '_parent',
-			reference: 'org-solo'
-		});
-	});
-});
+// #161 (collective = database, Mihkel ruling 2026-08-16) — the no-orgId
+// MULTI-ORG-db legacy-fallback describe block that used to live here is
+// RETIRED: `createSection`'s no-orgId path no longer searches for an
+// organization entity at all (organization instances no longer exist, #159) —
+// it resolves the DATABASE entity instead. That behavior (including its own
+// fail-loud-when-unreadable case) is pinned by
+// sectionActions.create-database.spec.ts now.
 
 // (*MVOX:Tallis* — TU.1/#109 RED, finding #10 root cause A: wrong top-level parent org)
+// (*MVOX:Palestrina* — #161 GREEN: legacy no-orgId multi-org fallback describe block retired)

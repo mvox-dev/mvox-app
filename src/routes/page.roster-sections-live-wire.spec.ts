@@ -12,23 +12,18 @@
 // section, not EFK Soprano's child. There is no parent relationship for any
 // renderer to draw.
 //
-// These tests close a real coverage gap while pinning that verdict: every
-// existing /roster page spec mocks `listSections` with PRE-BUILT SectionNode
-// trees, so the REAL wire-payload → listSections → page join had never been
-// exercised. Here the fetch seam alone is stubbed with VERBATIM live-shaped
-// JSON (rider fields and all) and the real listSections + groupBySection + page
-// run end-to-end:
-//
-//   1. the CURRENT live shape (org-parented everywhere) → flat roots, exactly
-//      what Mihkel saw — the rendering is faithfully showing broken data;
-//   2. the CORRECTED shape (Soprano II `_parent` → the Soprano SECTION, per
-//      v4E `parentConstraint: 'exactly_one_of'`) → Soprano II renders NESTED.
-//
-// (2) is the acceptance shape for the DATA FIX this task's GREEN half performs
-// against live polyphony (reparent or recreate — implementer's call; the
-// app-level route to creating it is pinned RED in
-// page.roster-create-section-org.spec.ts). If either test here FAILS, the
-// verdict was wrong and there IS a rendering bug — fix the code, not the data.
+// #161 (collective = database, Mihkel ruling 2026-08-16) — the "current live
+// data: org-parented sections are FLAT" describe block that used to live here
+// is RETIRED: it modeled TWO DIFFERENT ORGANIZATIONS' sections arriving in ONE
+// db's unscoped section list (the cross-collective contamination TU.1/#109
+// investigated). Organization instances no longer exist (#159) and a db now
+// carries exactly ONE database entity (`_type.string=database&limit=1`), so
+// that scenario can no longer occur live — every section in a db is parented
+// to THAT db's single collective. The surviving test below (the CORRECTED
+// nesting shape) is what remains meaningful: it exercises the REAL
+// wire-payload -> listSections -> page join for section-parented nesting,
+// with every root parented to the SAME database entity (single-collective
+// shape).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -54,10 +49,10 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── live wire fixtures (verbatim shape from the 2026-08-12 polyphony probe) ─────
+// ── live wire fixtures (verbatim shape from the 2026-08-12 polyphony probe,
+//    reparented to the single DATABASE entity per #161) ─────────────────────
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
+const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 const SEC_SOPRANO = '69c7f8728489bfcb0e81b07b';
 const SEC_SOPRANO_II = '69c7f8798489bfcb0e81b207';
 const SEC_ALTO = '69c7f8748489bfcb0e81b0cd';
@@ -84,12 +79,12 @@ function wireSection(
 	};
 }
 
-const orgParent = (orgId: string, orgName: string): WireParent => ({
-	_id: `pv-org-${orgId}`,
-	reference: orgId,
+const databaseParent = (dbEntityId: string, dbName: string): WireParent => ({
+	_id: `pv-db-${dbEntityId}`,
+	reference: dbEntityId,
 	property_type: '_parent',
-	string: orgName,
-	entity_type: 'organization'
+	string: dbName,
+	entity_type: 'database'
 });
 
 const sectionParent = (sectionId: string, sectionName: string): WireParent => ({
@@ -100,28 +95,14 @@ const sectionParent = (sectionId: string, sectionName: string): WireParent => ({
 	entity_type: 'section'
 });
 
-/** 1. CURRENT live data: every section org-parented — all flat (abbreviated). */
-function currentLiveWire(): unknown {
-	return {
-		entities: [
-			wireSection(SEC_SOPRANO, 'Soprano', 1, orgParent(ORG_EFK, 'Eesti Filharmoonia Kammerkoor')),
-			wireSection(SEC_SOPRANO_II, 'Soprano II', 3, orgParent(ORG_SIREEN, 'Kammernaiskoor Sireen')),
-			wireSection(SEC_ALTO, 'Alto', 4, orgParent(ORG_EFK, 'Eesti Filharmoonia Kammerkoor'))
-		],
-		count: 3,
-		limit: 500,
-		skip: 0
-	};
-}
-
-/** 2. CORRECTED data: Soprano II's `_parent` IS the Soprano section
- *  (v4E exactly_one_of — the org parent is replaced, not accompanied). */
+/** CORRECTED data: Soprano II's `_parent` IS the Soprano section
+ *  (v4E exactly_one_of — the database parent is replaced, not accompanied). */
 function correctedWire(): unknown {
 	return {
 		entities: [
-			wireSection(SEC_SOPRANO, 'Soprano', 1, orgParent(ORG_EFK, 'Eesti Filharmoonia Kammerkoor')),
+			wireSection(SEC_SOPRANO, 'Soprano', 1, databaseParent(DB_ENTITY, 'Polyphony')),
 			wireSection(SEC_SOPRANO_II, 'Soprano II', 3, sectionParent(SEC_SOPRANO, 'Soprano')),
-			wireSection(SEC_ALTO, 'Alto', 4, orgParent(ORG_EFK, 'Eesti Filharmoonia Kammerkoor'))
+			wireSection(SEC_ALTO, 'Alto', 4, databaseParent(DB_ENTITY, 'Polyphony'))
 		],
 		count: 3,
 		limit: 500,
@@ -137,7 +118,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [SEC_SOPRANO_II],
-			orgId: ORG_EFK
+			orgId: DB_ENTITY
 		}
 	];
 }
@@ -212,28 +193,6 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-describe('/roster over the REAL listSections — current live data: org-parented sections are FLAT (#124/F3 supersedes the earlier "renders flat, proving a data defect" pin)', () => {
-	// #124 (F3, 2026-08-12 gate walk) — this test used to pin that Soprano II
-	// rendered as a SIBLING top-level group of Soprano (proving finding #8 was a
-	// DATA defect — no section _parent to draw — rather than a rendering bug).
-	// That verdict about the DATA still stands (nothing about the fix touches
-	// how listSections/groupBySection interpret `_parent`), but the OBSERVABLE
-	// rendering changed: #124/F3 now filters the whole-db tree to the viewer's
-	// own org before it ever reaches groupBySection (same invariant
-	// page.roster-empty-remove.spec.ts pins), so Soprano II — org-parented to
-	// Kammernaiskoor Sireen, not the viewer's EFK — no longer renders on this
-	// roster AT ALL, flat sibling or otherwise.
-	it("Soprano (the viewer's own EFK root) renders top-level; Soprano II (Kammernaiskoor Sireen's org-parented root) doesn't render here at all — the foreign flat data never reaches the screen", async () => {
-		stubSectionsFetch(currentLiveWire());
-		const container = await renderReady();
-
-		const soprano = q(container, `section-group-${SEC_SOPRANO}`) as HTMLElement;
-		expect(soprano).not.toBeNull();
-		expect(soprano.getAttribute('data-depth')).toBe('0');
-		expect(q(container, `section-group-${SEC_SOPRANO_II}`)).toBeNull();
-	});
-});
-
 describe('/roster over the REAL listSections — CORRECTED data: a section-parented Soprano II renders NESTED (the acceptance shape for the live data fix)', () => {
 	it("Soprano II's group renders INSIDE Soprano's group at data-depth 1, with Ada's row in it; Soprano's header roll-up counts her", async () => {
 		stubSectionsFetch(correctedWire());
@@ -263,3 +222,4 @@ describe('/roster over the REAL listSections — CORRECTED data: a section-paren
 });
 
 // (*MVOX:Tallis* — TU.1/#109, finding #8 investigation verdict: data defect, rendering correct)
+// (*MVOX:Palestrina* — #161 GREEN: retired the cross-organization "flat, foreign" describe block; single database entity per db)

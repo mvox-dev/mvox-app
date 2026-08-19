@@ -37,19 +37,19 @@ export interface SectionNode {
 	/** Parent SECTION id; null for top-level (org-parented) sections. */
 	parentId: string | null;
 	/**
-	 * TU.1/#109 review — the OWNING ORGANIZATION id of a top-level section: the
-	 * `_parent` entry with `entity_type === 'organization'`. `null` for a
-	 * sub-section (its `_parent` IS the parent section — v4E
-	 * `parentConstraint: 'exactly_one_of'`, so there is no org entry to read).
+	 * #161 (collective = database, Mihkel ruling 2026-08-16) — the OWNING
+	 * COLLECTIVE id of a top-level section: the `_parent` entry with
+	 * `entity_type === 'database'`. `null` for a sub-section (its `_parent` IS
+	 * the parent section — v4E `parentConstraint: 'exactly_one_of'`, so there is
+	 * no database entry to read) AND for a root whose only non-section parent is
+	 * a LEGACY "organization"-typed entry (that retired entity kind is not a
+	 * collective identity anymore — never fall back to it).
 	 *
-	 * WHY: `parentId` alone loses the org, exactly as `ActiveMember` used to lose
-	 * it before rosterData.ts:133. Live polyphony holds 16 sections across FOUR
-	 * test orgs, ALL org-parented — with the org discarded, every one of them
-	 * looked like a sibling of every other, so the picker's sibling-scoped
-	 * duplicate check refused a top-level name that only exists in ANOTHER org
-	 * (e.g. an EFK admin blocked by Kammernaiskoor Sireen's "Soprano II").
+	 * WHY: `parentId` alone loses the collective, exactly as `ActiveMember` used
+	 * to lose it before rosterData.ts:133. The picker's sibling-scoped duplicate
+	 * check needs it to tell top-level roots of DIFFERENT databases apart.
 	 * `listSections` ALWAYS sets this; optional at the type level only so
-	 * pre-TU.1 fixtures stay type-clean (same convention as `RosterRow.orgId`).
+	 * pre-#161 fixtures stay type-clean (same convention as `RosterRow.orgId`).
 	 */
 	orgId?: string | null;
 	/** Indentation level: 0 for top-level, 1 for sub-sections, 2 for sub-sub, … */
@@ -102,17 +102,19 @@ export async function listSections(
 	const raw = body.entities ?? [];
 
 	// Pass 1 — build a node per fetched section (parentId = the parent SECTION
-	// id, null for org-parented roots; orgId = the organization `_parent`, null
-	// for section-parented sub-sections), keyed by id.
+	// id, null for database-parented roots; orgId = the database `_parent`, null
+	// for section-parented sub-sections and for a root whose only non-section
+	// parent is a legacy `organization` entry — #161), keyed by id.
 	const nodes = new Map<string, MutableNode>();
 	for (const r of raw) {
 		const name = r.name?.[0]?.string ?? '';
 		const displayOrder = r.display_order?.[0]?.number ?? Number.POSITIVE_INFINITY;
 		const parentId = (r._parent ?? []).find((p) => p.entity_type === 'section')?.reference ?? null;
-		// TU.1/#109 review — keep the ORG, don't discard it (see SectionNode.orgId):
-		// roots of different orgs are not siblings, and the picker needs to know.
+		// #161 — keep the DATABASE entity, don't discard it (see SectionNode.orgId):
+		// roots of different databases are not siblings, and the picker needs to
+		// know. A legacy `organization` `_parent` is never the collective anymore.
 		const orgId =
-			(r._parent ?? []).find((p) => p.entity_type === 'organization')?.reference ?? null;
+			(r._parent ?? []).find((p) => p.entity_type === 'database')?.reference ?? null;
 		nodes.set(r._id, { id: r._id, name, displayOrder, parentId, orgId, depth: 0, children: [] });
 	}
 

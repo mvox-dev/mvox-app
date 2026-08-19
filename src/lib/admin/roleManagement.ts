@@ -46,6 +46,15 @@ export interface RightsValue {
 	reference?: string;
 	/** display name of the referenced person. */
 	string?: string;
+	/**
+	 * The TYPE of the referenced entity (e.g. 'person', 'database'). Entu's
+	 * aggregated read can answer a rights value referencing a NON-person entity
+	 * — the database entity's own `_owner` carries a self-reference
+	 * (`entity_type: 'database'`, reference = its own `_id`) from bootstrap.
+	 * Absent on older wire reads — fail-open (treated as a person) rather than
+	 * dropping rows the reader has no type information for.
+	 */
+	entity_type?: string;
 	/** present (true) on entries SPLICED IN from the parent entity's rights. */
 	inherited?: boolean;
 }
@@ -101,8 +110,16 @@ export async function fetchRights(
 	const body = (await res.json()) as {
 		entity?: { _owner?: RightsValue[]; _editor?: RightsValue[] };
 	};
-	const owner = body.entity?._owner ?? [];
-	const editor = body.entity?._editor ?? [];
+	// #161 review fix — a rights value referencing a NON-person entity (the
+	// database entity's own self-reference `_owner`) is never a manageable
+	// admin/librarian row and never counts toward the lockout guard. Fail-open
+	// on absence: a value with no `entity_type` at all (older wire reads) keeps
+	// counting as a person; filter only on a KNOWN non-person type.
+	const isPersonValue = (v: RightsValue): boolean =>
+		v.entity_type === undefined || v.entity_type === 'person';
+
+	const owner = (body.entity?._owner ?? []).filter(isPersonValue);
+	const editor = (body.entity?._editor ?? []).filter(isPersonValue);
 
 	const ownOwners = owner.filter((v) => !v.inherited);
 	const ownOwnerIds = new Set(ownOwners.map((v) => v._id));

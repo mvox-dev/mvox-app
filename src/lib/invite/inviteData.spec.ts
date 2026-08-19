@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	createInvite,
@@ -165,85 +165,55 @@ describe('resolveOrgId', () => {
 	// #67 (Mihkel ruling) — replaces the old `listOrganizations` enumeration: a
 	// single internal resolve, never a list for a UI picker.
 	//
-	// TU.1/#109 review — the resolve is now PERSON-SCOPED (the acting admin's own
-	// active member row's organization `_parent`), NOT
-	// `_type.string=organization&limit=1`. Live (probe-67, 2026-08-12) that search
-	// answers `count: 6` and returns the UMBRELLA FEDERATION first, so every
-	// invited member was being parented under the wrong org.
+	// #161 (collective = database, Mihkel ruling 2026-08-16) — the resolve is
+	// DB-SCOPED (`_type.string=database&limit=1`, exactly one per db), NOT the
+	// retired person -> active member row -> organization `_parent` walk (#159
+	// deleted every organization instance, so that chain could only ever answer
+	// wrong or empty).
+	//
+	// #161 review fix round 2 — the dead `personId` parameter is DELETED from
+	// the call contract, not merely shadowed/guarded: `resolveOrgId(cfg,
+	// fetchImpl?)`, `.length === 1`.
 
-	const ADMIN_PERSON = 'person-admin';
-	const ORG_EFK = '69c7f8718489bfcb0e81b065';
+	const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 
-	function memberLookup(body: unknown, status = 200) {
+	function databaseLookup(body: unknown, status = 200) {
 		return vi.fn().mockImplementation(() => Promise.resolve(json(body, status)));
 	}
 
-	function memberBody(orgId: string | null, count = 1) {
-		return {
-			entities: [
-				{
-					_id: 'm-admin',
-					_parent: [
-						{ reference: 'sec-sop', entity_type: 'section' },
-						...(orgId ? [{ reference: orgId, entity_type: 'organization' }] : [])
-					]
-				}
-			],
-			count
-		};
-	}
-
-	it("resolves the acting admin's OWN organization from her member row — never an organization search", async () => {
-		const fetchImpl = memberLookup(memberBody(ORG_EFK));
-		const id = await resolveOrgId(cfg, ADMIN_PERSON, fetchImpl);
-		expect(id).toBe(ORG_EFK);
+	it('resolves the DATABASE entity — never a member/organization walk', async () => {
+		const fetchImpl = databaseLookup({ entities: [{ _id: DB_ENTITY }], count: 1 });
+		const id = await resolveOrgId(cfg, fetchImpl);
+		expect(id).toBe(DB_ENTITY);
 
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-		expect(String(url)).toContain('/polyphony/entity?_type.string=member');
-		expect(String(url)).toContain(`person.reference=${ADMIN_PERSON}`);
+		expect(String(url)).toContain('/polyphony/entity?_type.string=database');
+		expect(String(url)).not.toContain('_type.string=member');
 		expect(String(url)).not.toContain('_type.string=organization');
 		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jwt-admin');
 	});
 
-	it('rejects an empty personId before any fetch (contract) — no org is ever guessed', async () => {
-		const fetchImpl = vi.fn();
-		const err = await captureError(resolveOrgId(cfg, '', fetchImpl));
-		expect(err).toBeInstanceOf(InviteCreateError);
-		expect(err.phase).toBe('org-resolve');
-		expect(err.reason).toBe('contract');
-		expect(fetchImpl).not.toHaveBeenCalled();
-	});
-
 	it('throws http (with the status) on a non-2xx response', async () => {
-		const fetchImpl = memberLookup({}, 502);
-		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
+		const fetchImpl = databaseLookup({}, 502);
+		const err = await captureError(resolveOrgId(cfg, fetchImpl));
 		expect(err).toBeInstanceOf(InviteCreateError);
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('http');
 		expect(err.message).toMatch(/502/);
 	});
 
-	it('throws not-visible when the acting admin has no visible active membership', async () => {
-		const fetchImpl = memberLookup({ entities: [], count: 0 });
-		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
+	it('throws not-visible when no database entity is readable', async () => {
+		const fetchImpl = databaseLookup({ entities: [], count: 0 });
+		const err = await captureError(resolveOrgId(cfg, fetchImpl));
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('not-visible');
-		expect(err.message).toMatch(/organization/i);
+		expect(err.message).toMatch(/database/i);
 	});
 
-	it('throws not-visible when her member row carries no organization `_parent`', async () => {
-		const fetchImpl = memberLookup(memberBody(null));
-		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
-		expect(err.phase).toBe('org-resolve');
-		expect(err.reason).toBe('not-visible');
-	});
-
-	it('throws contract on an AMBIGUOUS membership (two active member rows in one db) — never picks the first', async () => {
-		const fetchImpl = memberLookup(memberBody(ORG_EFK, 2));
-		const err = await captureError(resolveOrgId(cfg, ADMIN_PERSON, fetchImpl));
-		expect(err.phase).toBe('org-resolve');
-		expect(err.reason).toBe('contract');
-		expect(err.message).toMatch(/2/);
+	it('declares exactly ONE required parameter (cfg) — no personId in the signature', () => {
+		// Function.length counts parameters before the first default — the target
+		// signature `(cfg, fetchImpl = fetch)` has length 1.
+		expect(resolveOrgId.length).toBe(1);
 	});
 });
 

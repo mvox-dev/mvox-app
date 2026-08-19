@@ -57,27 +57,29 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── live wire fixture (verbatim shape + real ids, 2026-08-12 spike probe) ───────
+// ── live wire fixture (verbatim shape + real ids, 2026-08-12 spike probe;
+//    reparented to the single DATABASE entity per #161 — collective = database,
+//    so a live db now carries exactly one collective, not several) ────────────
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065'; // Eesti Filharmoonia Kammerkoor — the VIEWER's org
-const ORG_TAM = '69c7f87f8489bfcb0e81b36a'; // Tartu Akadeemiline Meeskoor — a foreign org
+const ORG_EFK = '69c7f8718489bfcb0e81b065'; // the database entity — THE (only) collective
+const ORG_TAM = ORG_EFK; // #161: no more foreign collectives sharing one db's section list
 const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
-const EFK_BASS = '69c7f8768489bfcb0e81b163'; // 0 members live — the gate's OWN-org "Bass (0)"
-const TAM_BASS = '69c7f88a8489bfcb0e81b5bc'; // 0 members live — the gate's FOREIGN "Bass (0)"
+const EFK_BASS = '69c7f8768489bfcb0e81b163'; // 0 members live — the gate's own "Bass (0)"
+const TAM_BASS = '69c7f88a8489bfcb0e81b5bc'; // 0 members live — a second "Bass (0)" in the same collective
 const TAM_TENOR = '69c7f8878489bfcb0e81b506';
 const TYPE_SECTION = '69c7ea498489bfcb0e819ea3'; // the `section` type-definition entity
 const NEW_SECTION_ID = 'sec-new-live';
 
-function wireSection(id: string, name: string, displayOrder: number, orgId: string, orgName: string) {
+function wireSection(id: string, name: string, displayOrder: number, dbEntityId: string, dbName: string) {
 	return {
 		_id: id,
 		_parent: [
 			{
 				_id: `pv-${id}`,
-				reference: orgId,
+				reference: dbEntityId,
 				property_type: '_parent',
-				string: orgName,
-				entity_type: 'organization'
+				string: dbName,
+				entity_type: 'database'
 			}
 		],
 		display_order: [{ _id: `do-${id}`, number: displayOrder }],
@@ -85,16 +87,17 @@ function wireSection(id: string, name: string, displayOrder: number, orgId: stri
 	};
 }
 
-/** Both orgs' sections in ONE payload — the live db's actual answer to
- *  listSections' unscoped `_type.string=section` query. Both orgs contribute an
- *  empty "Bass": the exact two-Bass-(0) screen the gate walk photographed. */
+/** All sections in ONE payload — the live db's actual answer to listSections'
+ *  unscoped `_type.string=section` query, every root parented to the SAME
+ *  database entity (#161: single collective per db). Two "Bass" roots, both
+ *  empty — the exact two-Bass-(0) screen the gate walk photographed. */
 function liveSectionsWire(): unknown {
 	return {
 		entities: [
-			wireSection(EFK_SOPRANO, 'Soprano', 1, ORG_EFK, 'Eesti Filharmoonia Kammerkoor'),
-			wireSection(EFK_BASS, 'Bass', 15, ORG_EFK, 'Eesti Filharmoonia Kammerkoor'),
-			wireSection(TAM_TENOR, 'I Tenor', 10, ORG_TAM, 'Tartu Akadeemiline Meeskoor'),
-			wireSection(TAM_BASS, 'Bass', 16, ORG_TAM, 'Tartu Akadeemiline Meeskoor')
+			wireSection(EFK_SOPRANO, 'Soprano', 1, ORG_EFK, 'Polyphony'),
+			wireSection(EFK_BASS, 'Bass', 15, ORG_EFK, 'Polyphony'),
+			wireSection(TAM_TENOR, 'I Tenor', 10, ORG_TAM, 'Polyphony'),
+			wireSection(TAM_BASS, 'Bass', 16, ORG_TAM, 'Polyphony')
 		],
 		count: 4,
 		limit: 500,

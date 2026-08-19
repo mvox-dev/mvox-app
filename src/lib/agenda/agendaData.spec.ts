@@ -4,7 +4,7 @@ import type { AgendaItem } from './types';
 import type { Season } from '$lib/seasons/types';
 
 // Mock the read helpers (orchestration is tested independently of the queries) and
-// T4's selectedCollectiveStore (so loadFullAgenda's db/personId-threading is
+// T4's selectedCollectiveStore (so loadFullAgenda's db/token-threading is
 // observable). Mocking both also severs the transitive entu-config -> $env
 // import under happy-dom.
 const { listSeasonsMock, listRehearsalsMock, collectiveHolder } = vi.hoisted(() => ({
@@ -28,7 +28,6 @@ import { listFullAgenda, loadFullAgenda } from './agendaData';
 import { setToken } from '$lib/auth/storage';
 
 const cfg = { db: 'polyphony', token: 'jwt' };
-const personId = 'person-123';
 const NOW = new Date('2026-09-05T10:00:00.000Z');
 
 function item(id: string, startDatetime: string, conductors: string[] = []): AgendaItem {
@@ -44,11 +43,34 @@ beforeEach(() => {
 	listSeasonsMock.mockReset();
 	listRehearsalsMock.mockReset();
 	collectiveHolder.store.set(null);
+	// #161 review fix round 2 — every read in this module goes through the mocked
+	// helpers, so nothing here may touch the network. Making the global `fetch`
+	// throw means an argument-position shift (e.g. a stale 4-arg call sliding
+	// `fetchImpl` into the `now` slot) fails loudly instead of falling back.
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(() => {
+			throw new Error('unexpected network fetch in agendaData spec');
+		})
+	);
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
 
 // ---- listFullAgenda: upcoming items (same contract as the old listAgenda) ----
+
+// #161 review fix round 2 — arity guard. `personId` was dead weight in position 2
+// of a 4-arg signature: dropping it at a call site without dropping it here would
+// have slid `now` into `personId` and `fetchImpl` into `now`. Pin the shape so a
+// regression to 4 args fails here rather than at runtime.
+describe('listFullAgenda — signature', () => {
+	it('takes exactly (cfg, now) as required params — no dead personId slot', () => {
+		expect(listFullAgenda.length).toBe(2);
+	});
+});
 
 describe('listFullAgenda — upcoming items (de-fanned to one collective)', () => {
 	it('flattens ongoing seasons -> upcoming -> sorted ascending', async () => {
@@ -60,7 +82,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 			item('soon', '2026-09-10T16:00:00.000Z')
 		]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.upcoming.map((i) => i.id)).toEqual(['soon', 'late']);
 		expect(result.upcoming[0]).toEqual(item('soon', '2026-09-10T16:00:00.000Z'));
@@ -79,7 +101,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 			)
 		);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(listRehearsalsMock).toHaveBeenCalledTimes(2);
 		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'old', expect.anything());
@@ -92,7 +114,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		]);
 		listRehearsalsMock.mockResolvedValue([item('sept', '2026-09-15T18:00:00.000Z')]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'fila', expect.anything());
 		expect(result.upcoming.map((i) => i.id)).toEqual(['sept']);
@@ -104,7 +126,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		]);
 		listRehearsalsMock.mockResolvedValue([item('future', '2026-09-12T18:00:00.000Z')]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'open', expect.anything());
 		expect(result.upcoming.map((i) => i.id)).toEqual(['future']);
@@ -119,13 +141,13 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 			item('next', '2026-09-05T18:00:00.000Z')
 		]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 		expect(result.upcoming.map((i) => i.id)).toEqual(['next']);
 	});
 
 	it('returns empty upcoming when the collective has no seasons', async () => {
 		listSeasonsMock.mockResolvedValue([]);
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 		expect(result.upcoming).toEqual([]);
 		expect(listRehearsalsMock).not.toHaveBeenCalled();
 	});
@@ -145,7 +167,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			item('upcoming', '2026-09-10T18:00:00.000Z')
 		]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.recent.map((i) => i.id)).toEqual(['past-new', 'past-old']);
 		expect(result.upcoming.map((i) => i.id)).toEqual(['upcoming']);
@@ -159,7 +181,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			item('r1', '2026-09-10T18:00:00.000Z')
 		]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.seasonId).toBe('s-cur');
 		expect(result.seasonConductors).toEqual(['p-anna', 'p-bert']);
@@ -174,7 +196,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		]);
 		listRehearsalsMock.mockResolvedValue([]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.seasons.map((s) => s.id)).toEqual(['s-cur', 's-next']);
 	});
@@ -183,7 +205,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		listSeasonsMock.mockResolvedValue([season('s-future', '2027-09-01', '2028-05-31')]);
 		listRehearsalsMock.mockResolvedValue([]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.seasonId).toBeNull();
 		expect(result.seasons.map((s) => s.id)).toEqual(['s-future']);
@@ -195,7 +217,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		]);
 		listRehearsalsMock.mockResolvedValue([]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.recent).toEqual([]);
 		expect(result.seasonId).toBeNull();
@@ -218,7 +240,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			)
 		);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		// Only the current season's past events appear in recent
 		expect(result.recent.map((i) => i.id)).toEqual(['cur-past']);
@@ -239,7 +261,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			)
 		);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		// recent must contain only the current season's events, not the old season's
 		expect(result.recent.map((i) => i.id)).toEqual(['cur-event']);
@@ -256,7 +278,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			item('upcoming-2', '2026-09-17T18:00:00.000Z')
 		]);
 
-		const result = await listFullAgenda(cfg, personId, NOW);
+		const result = await listFullAgenda(cfg, NOW);
 
 		expect(result.recent).toEqual([]);
 		expect(result.seasonId).toBe('s-cur');
@@ -264,19 +286,20 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 	});
 });
 
-// ---- loadFullAgenda (threads the T4 selected db + personId + token) ----
+// ---- loadFullAgenda (threads the T4 selected db + token) ----
 
-describe('loadFullAgenda (threads the T4 selected db + personId + token)', () => {
-	it('resolves db + personId from selectedCollectiveStore and token from storage', async () => {
+describe('loadFullAgenda (threads the T4 selected db + token)', () => {
+	it('resolves db from selectedCollectiveStore and token from storage — personId is never threaded', async () => {
 		collectiveHolder.store.set({ db: 'polyphony', personId: 'person-123' });
 		setToken('jwt-live');
 		listSeasonsMock.mockResolvedValue([]);
 
 		await loadFullAgenda(NOW);
 
+		// #161 review fix round 2 — `listSeasons` is db-scoped, not person-scoped:
+		// `listFullAgenda` no longer threads personId into the call.
 		expect(listSeasonsMock).toHaveBeenCalledWith(
 			{ db: 'polyphony', token: 'jwt-live' },
-			'person-123',
 			expect.anything()
 		);
 	});

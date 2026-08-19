@@ -13,10 +13,9 @@
 //     (#10 pinned wire-shape — never `{ string: '<typeName>' }`).
 //   - `_parent` = `[orgId, ...extraParentIds]`, ONE `{ type: '_parent',
 //     reference }` prop PER id, zero lookup fetches — the caller (agenda /
-//     season management, #132 T2/T4/T6) already holds the organization id
-//     (resolveMyOrgId) and the season / series ids. The data layer must not
-//     guess (see sectionActions.ts on why `_type.string=organization&limit=1`
-//     is live-verifiably wrong on a multi-org db).
+//     season management, #132 T2/T4/T6) already holds the collective's
+//     database entity id (`resolveDatabaseEntityId`, #161) and the season /
+//     series ids. The data layer must not guess.
 //
 //     THE ORG PARENT IS STRUCTURAL, NOT ONE ENTRY IN A LIST (#132 review F4):
 //     v4E marks the organization parent `required: true, parentCard: '1'` on
@@ -130,13 +129,15 @@ export interface CreateSeasonInput {
 	/** Season name (v4E required, non-blank). */
 	name: string;
 	/**
-	 * Organization entity id — the v4E `parentCard: '1'` REQUIRED parent, sent
-	 * as the first `_parent` `{ reference }`. Non-blank. The caller already
-	 * holds it (resolveMyOrgId); this module never looks it up or guesses it.
+	 * #161 (collective = database) — the collective's DATABASE entity id, the
+	 * v4E `parentCard: '1'` REQUIRED parent, sent as the first `_parent`
+	 * `{ reference }`. Non-blank. The field keeps its `orgId` name (an entity id
+	 * is an entity id); the caller already holds it (`resolveDatabaseEntityId`)
+	 * — this module never looks it up or guesses it.
 	 */
 	orgId: string;
 	/**
-	 * Further parent ids beyond the org (v4E season has none besides the org
+	 * Further parent ids beyond the collective (v4E season has none besides it
 	 * today — present for symmetry and forward compatibility). One `_parent`
 	 * prop per entry, verbatim, in order, deduped against `orgId`.
 	 */

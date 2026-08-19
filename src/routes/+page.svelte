@@ -68,7 +68,7 @@
 	import { createEvent, createEventSeries, createSeason } from '$lib/entity/entityCreate';
 	import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
 	import { generateEventDates, type RepeatPattern } from '$lib/events/recurrence';
-	import { resolveMyOrgId } from '$lib/org/myOrg';
+	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import {
 		listEventSeriesForSeason,
 		listEventsForSeason,
@@ -666,12 +666,13 @@
 
 	/**
 	 * The step-3 fallback: no season exists in this collective at all, so the only
-	 * entity that can answer "may I create one" is the organization itself. ONE
-	 * extra GET pair, and ONLY in the empty-collective case (a collective with any
-	 * season never reaches here). Supplementary — a failure leaves the gate closed.
+	 * entity that can answer "may I create one" is the DATABASE entity itself
+	 * (#161, collective = database). ONE extra GET pair, and ONLY in the
+	 * empty-collective case (a collective with any season never reaches here).
+	 * Supplementary — a failure leaves the gate closed.
 	 */
 	function loadOrgSeasonCreateRights(cfg: ManageCfg, personId: string, thisRequest: number) {
-		resolveMyOrgId(cfg, personId)
+		resolveDatabaseEntityId(cfg)
 			.then((orgId) => {
 				if (thisRequest !== requestId || !orgId) return;
 				return resolveManageRights(cfg, orgId, personId).then((state) => {
@@ -681,7 +682,7 @@
 				});
 			})
 			.catch((e) => {
-				console.error('agenda: resolving organization rights for season create failed', e);
+				console.error('agenda: resolving database entity rights for season create failed', e);
 			});
 	}
 
@@ -1506,7 +1507,7 @@
 	 */
 	let seasonCreateErrorField = $state<'name' | 'dates' | null>(null);
 	// #132/T2 review F1 — the in-flight guard. `submitSeasonCreate` awaits TWO
-	// round-trips (resolveMyOrgId, then createSeason) before the form unmounts, and
+	// round-trips (resolveDatabaseEntityId, then createSeason) before the form unmounts, and
 	// a season create is NOT idempotent: three clicks in that window used to produce
 	// three real season entities that the admin then has to delete by hand in Entu.
 	let seasonCreateSubmitting = $state(false);
@@ -1679,14 +1680,14 @@
 		try {
 			let orgId: string | null;
 			try {
-				orgId = await resolveMyOrgId(cfg, current.personId);
+				orgId = await resolveDatabaseEntityId(cfg);
 			} catch (e) {
-				console.error('agenda: resolving the organization for season create failed', e);
+				console.error('agenda: resolving the database entity for season create failed', e);
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
 			}
 			if (!orgId) {
-				console.error('agenda: season create with no resolvable organization', current.personId);
+				console.error('agenda: season create with no resolvable database entity', current.personId);
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
 			}
@@ -2584,7 +2585,7 @@
 
 	/**
 	 * Submit: `createEvent` is the ONE create seam (T1) — org from
-	 * `resolveMyOrgId`, the chosen season in `extraParentIds`, the chosen
+	 * `resolveDatabaseEntityId`, the chosen season in `extraParentIds`, the chosen
 	 * series (if any) in its own named `seriesId`. Only EXPLICITLY-SET fields
 	 * reach the call: an untouched inherited field (name/duration/location)
 	 * stays blank/absent here, never a frozen copy of the series default —
@@ -2660,14 +2661,14 @@
 		try {
 			let orgId: string | null;
 			try {
-				orgId = await resolveMyOrgId(cfg, current.personId);
+				orgId = await resolveDatabaseEntityId(cfg);
 			} catch (e) {
-				console.error('agenda: resolving the organization for event create failed', e);
+				console.error('agenda: resolving the database entity for event create failed', e);
 				setEventCreateError(m.event_create_failed, null);
 				return;
 			}
 			if (!orgId) {
-				console.error('agenda: event create with no resolvable organization', current.personId);
+				console.error('agenda: event create with no resolvable database entity', current.personId);
 				setEventCreateError(m.event_create_failed, null);
 				return;
 			}
@@ -3259,7 +3260,7 @@
 
 	/**
 	 * Submit: series-only when generation is OFF — `createEventSeries` (T1) is
-	 * the ONE seam, org from `resolveMyOrgId`, the panel's season in
+	 * the ONE seam, org from `resolveDatabaseEntityId`, the panel's season in
 	 * `extraParentIds`. WITH generation, bulk-creates one `createEvent` per
 	 * `generateEventDates` date, STRICTLY SERIAL, ascending (Entu rate/ordering
 	 * — #132/T5's pinned contract). Validation runs BEFORE any fetch, each
@@ -3425,9 +3426,9 @@
 		try {
 			let orgId: string | null;
 			try {
-				orgId = await resolveMyOrgId(cfg, current.personId);
+				orgId = await resolveDatabaseEntityId(cfg);
 			} catch (e) {
-				console.error('agenda: resolving the organization for series create failed', e);
+				console.error('agenda: resolving the database entity for series create failed', e);
 				// #137 — the org read straddled a switch: the refusal belongs to a form
 				// that is gone, and since #138 review 2 the screen may already be
 				// showing ANOTHER collective's restored run. Diagnose, write nothing.
@@ -3435,7 +3436,7 @@
 				return;
 			}
 			if (!orgId) {
-				console.error('agenda: series create with no resolvable organization', current.personId);
+				console.error('agenda: series create with no resolvable database entity', current.personId);
 				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}

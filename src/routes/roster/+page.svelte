@@ -188,18 +188,18 @@
 	// "Whose roster is this?" is answered from the AUTHENTICATED VIEWER's own
 	// roster row (matched by `personId`, carried on `selected` from the token's
 	// accounts map — see `Collective.personId`), never a guess from row order.
-	/** The collective's organization id, read off the VIEWER's own roster row
-	 *  (matched by `personId`) — falls back to the first row exposing an
-	 *  `orgId` ONLY when the viewer has no row of her own on this roster (an
-	 *  admin auditing a roster she isn't a member of, or a single-org fixture
-	 *  that never gave the viewer a matching `personId`); null when neither
-	 *  answers anything (org unknown to this reader entirely). The fallback is
-	 *  intentionally the OLD heuristic, kept as a last resort rather than
-	 *  removed outright: on the single-org fixtures it always ran against, "the
-	 *  first row's org" and "the viewer's org" are the same answer — the
-	 *  multi-org ambiguity #124/F3 fixes only bites when the viewer's OWN row
-	 *  is present but sorts non-first, which the primary lookup above already
-	 *  handles before the fallback is ever reached. */
+	/** #161 (collective = database) — the collective's DATABASE entity id, read
+	 *  off the VIEWER's own roster row (matched by `personId`) — falls back to
+	 *  the first row exposing an `orgId` ONLY when the viewer has no row of her
+	 *  own on this roster (an admin auditing a roster she isn't a member of, or
+	 *  a fixture that never gave the viewer a matching `personId`); null when
+	 *  neither answers anything (collective unknown to this reader entirely).
+	 *  The fallback is intentionally the OLD heuristic, kept as a last resort
+	 *  rather than removed outright: in a single-collective database, "the
+	 *  first row's collective" and "the viewer's collective" are the same
+	 *  answer — the multi-org ambiguity #124/F3 fixes only bites when the
+	 *  viewer's OWN row is present but sorts non-first, which the primary
+	 *  lookup above already handles before the fallback is ever reached. */
 	const currentOrgId = $derived(
 		rows.find((r) => r.personId === selected?.personId)?.orgId ??
 			rows.find((r) => r.orgId)?.orgId ??
@@ -278,11 +278,11 @@
 	});
 
 	/**
-	 * True when `id` is NOT known to belong to a different organization. Permissive
-	 * when either side is unknown — a reader who cannot see any org `_parent`
-	 * (rosterData never throws on that) or a tree from a pre-TU.1 fixture must not
-	 * lose its own controls; the check exists to exclude sections we can POSITIVELY
-	 * place in another org.
+	 * True when `id` is NOT known to belong to a different collective (#161: the
+	 * database entity). Permissive when either side is unknown — a reader who
+	 * cannot see any collective `_parent` (rosterData never throws on that) or a
+	 * tree from a pre-#161 fixture must not lose its own controls; the check
+	 * exists to exclude sections we can POSITIVELY place in another collective.
 	 */
 	function isOwnOrgSection(id: string): boolean {
 		const org = rootOrgBySectionId.get(id) ?? null;
@@ -1320,8 +1320,8 @@
 	}
 
 	/** Unindent guard: not already top-level (a top-level section's `parentId`
-	 *  is null — its parent is the organization, and there is no level above
-	 *  that to promote to). */
+	 *  is null — its parent is the collective's database entity (#161), and there
+	 *  is no level above that to promote to). */
 	function canUnindent(id: string): boolean {
 		return (findSectionNode(sections, id)?.parentId ?? null) !== null;
 	}
@@ -1422,7 +1422,7 @@
 		const parent = findSectionNode(sections, node.parentId);
 		if (!parent) return;
 		if (parent.parentId === null) {
-			// The parent is top-level — promoting past it lands on the organization.
+			// The parent is top-level — promoting past it lands on the collective's database entity (#161).
 			const orgId = parent.orgId ?? currentOrgId;
 			if (!orgId) {
 				// #155/S3 review F3 — this used to log and return SILENTLY while the
@@ -1435,7 +1435,7 @@
 				// `reorderError` (the role="alert" banner above the groups), and so
 				// does this one now: fail loudly over silent degradation, same shape
 				// as `performReparent`'s own no-cfg path.
-				console.error('roster: unindent to top level with no known organization id', node.id);
+				console.error('roster: unindent to top level with no known collective (database entity) id', node.id);
 				reorderError = true;
 				return;
 			}

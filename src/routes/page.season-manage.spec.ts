@@ -78,7 +78,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const {
 	loadFullAgendaMock,
 	loadRosterMock,
-	resolveMyOrgIdMock,
+	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	discoverMock,
 	gotoMock,
@@ -92,7 +92,7 @@ const {
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn(),
+	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
@@ -119,9 +119,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: vi.fn(),
 	createEvent: vi.fn()
 }));
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
@@ -328,7 +328,7 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue([]);
@@ -343,7 +343,7 @@ afterEach(() => {
 	cleanup();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();

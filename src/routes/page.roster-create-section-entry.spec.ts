@@ -45,7 +45,7 @@
 //                                 offered as a parent)
 //     roster-new-section-submit   fires createSection(cfg, { name, parentId,
 //                                 orgId: <the VIEWER's own org id> }) — orgId
-//                                 from the authenticated person (resolveMyOrgId
+//                                 from the authenticated person (resolveDatabaseEntityId
 //                                 or her own roster row), NEVER a limit=1 guess
 //     roster-new-section-cancel   closes the form; nothing written
 //     roster-new-section-error    inline validation error (duplicate/empty),
@@ -79,7 +79,7 @@ const {
 	createSectionMock,
 	reorderMock,
 	deleteMock,
-	resolveMyOrgIdMock
+	resolveDatabaseEntityIdMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
@@ -88,7 +88,7 @@ const {
 	createSectionMock: vi.fn(),
 	reorderMock: vi.fn(),
 	deleteMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn()
+	resolveDatabaseEntityIdMock: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
@@ -103,11 +103,11 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	deleteSection: deleteMock
 }));
 // The viewer's-own-org seam — mocked so EITHER legitimate derivation (a
-// resolveMyOrgId fetch, or reading the authenticated person's own roster row)
+// resolveDatabaseEntityId fetch, or reading the authenticated person's own roster row)
 // lands on the same org in these tests.
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
@@ -215,7 +215,7 @@ beforeEach(() => {
 	createSectionMock.mockResolvedValue('sec-new-1');
 	reorderMock.mockResolvedValue(undefined);
 	deleteMock.mockResolvedValue(undefined);
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 });
 
 afterEach(() => {
@@ -227,7 +227,7 @@ afterEach(() => {
 	createSectionMock.mockReset();
 	reorderMock.mockReset();
 	deleteMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });

@@ -9,17 +9,18 @@ import {
 	resolveMyLibraryId
 } from './librarianStore';
 
-// #143 review — `resolveLibrarian` now derives the library entity from the
-// PERSON'S OWN collective org (mirroring the TU.1/#109 `resolveAdmin` fix)
-// instead of `entity?_type.string=library&limit=1`, which live-verifiably picks
-// an arbitrary library entity once more than one is visible to a reader. The
-// routed mock below stands in for THREE calls: the member lookup
-// (`resolveMyOrgId`), the org-scoped library list (`resolveMyLibraryId`), and
-// the library GET by id (rights read).
+// #161 (collective = database, Mihkel ruling 2026-08-16) — `resolveLibrarian`
+// derives the library entity from the DATABASE entity (mirroring the #161
+// `resolveAdmin` fix) instead of the retired person -> active member row ->
+// organization `_parent` walk (#159 deleted every organization instance, so
+// that chain could only ever answer wrong or empty). The routed mock below
+// stands in for THREE calls: the database-entity lookup
+// (`resolveDatabaseEntityId`), the database-scoped library list
+// (`resolveMyLibraryId`), and the library GET by id (rights read).
 
 const cfg = { db: 'polyphony', token: 'test-token' };
 const personId = 'person-123';
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
+const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 
 function json(body: unknown, status = 200) {
 	return {
@@ -29,26 +30,15 @@ function json(body: unknown, status = 200) {
 	} as unknown as Response;
 }
 
-/** An active member row parented to `orgId` (plus a section parent, live shape). */
-function memberBody(orgId: string | null) {
-	return {
-		entities: [
-			{
-				_id: 'm-1',
-				_parent: [
-					{ reference: 'sec-sop', entity_type: 'section' },
-					...(orgId ? [{ reference: orgId, entity_type: 'organization' }] : [])
-				]
-			}
-		],
-		count: 1
-	};
+/** The database entity lookup response. */
+function databaseBody(dbEntityId: string | null) {
+	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };
 }
 
-/** Routed mock: member lookup, then org-scoped library list, then library GET by id. */
+/** Routed mock: database-entity lookup, then database-scoped library list, then library GET by id. */
 function mockFetch(opts: {
-	member?: unknown;
-	memberStatus?: number;
+	database?: unknown;
+	databaseStatus?: number;
 	libraryByOrg?: unknown;
 	libraryByOrgStatus?: number;
 	libraryById?: Record<string, unknown>;
@@ -56,9 +46,9 @@ function mockFetch(opts: {
 }) {
 	return vi.fn().mockImplementation((url: string) => {
 		const u = String(url);
-		if (u.includes('_type.string=member')) {
+		if (u.includes('_type.string=database')) {
 			return Promise.resolve(
-				json(opts.member ?? { entities: [], count: 0 }, opts.memberStatus ?? 200)
+				json(opts.database ?? { entities: [], count: 0 }, opts.databaseStatus ?? 200)
 			);
 		}
 		if (u.includes('_type.string=library')) {
@@ -75,29 +65,29 @@ function mockFetch(opts: {
 }
 
 describe('resolveMyLibraryId', () => {
-	it('resolves the library scoped to the person\'s own org', async () => {
+	it('resolves the library scoped to the DATABASE entity', async () => {
 		const fetchImpl = mockFetch({
-			member: memberBody(ORG_EFK),
+			database: databaseBody(DB_ENTITY),
 			libraryByOrg: { entities: [{ _id: 'library-1' }] }
 		});
-		expect(await resolveMyLibraryId(cfg, personId, fetchImpl)).toBe('library-1');
+		expect(await resolveMyLibraryId(cfg, fetchImpl)).toBe('library-1');
 
 		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
 			String(c[0])
 		);
-		expect(urls.some((u) => u.includes(`_type.string=library`) && u.includes(`_parent.reference=${ORG_EFK}`))).toBe(
-			true
-		);
+		expect(
+			urls.some((u) => u.includes(`_type.string=library`) && u.includes(`_parent.reference=${DB_ENTITY}`))
+		).toBe(true);
 	});
 
-	it('returns null when the person has no visible active membership', async () => {
-		const fetchImpl = mockFetch({ member: { entities: [], count: 0 } });
-		expect(await resolveMyLibraryId(cfg, personId, fetchImpl)).toBeNull();
+	it('returns null when no database entity is visible', async () => {
+		const fetchImpl = mockFetch({ database: { entities: [], count: 0 } });
+		expect(await resolveMyLibraryId(cfg, fetchImpl)).toBeNull();
 	});
 
-	it('returns null when no library entity is parented under the own org', async () => {
-		const fetchImpl = mockFetch({ member: memberBody(ORG_EFK), libraryByOrg: { entities: [] } });
-		expect(await resolveMyLibraryId(cfg, personId, fetchImpl)).toBeNull();
+	it('returns null when no library entity is parented under the database entity', async () => {
+		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), libraryByOrg: { entities: [] } });
+		expect(await resolveMyLibraryId(cfg, fetchImpl)).toBeNull();
 	});
 
 	// #143 review F4 — a failed read must NEVER be answerable as `null`: that is
@@ -105,8 +95,8 @@ describe('resolveMyLibraryId', () => {
 	// and `admin/+page.svelte` branches on `state === 'error'` precisely to keep
 	// a transient 500 from rendering as the factual claim "no library here".
 	it('THROWS on HTTP failure of the library lookup (never null — null is the "no library" FACT)', async () => {
-		const fetchImpl = mockFetch({ member: memberBody(ORG_EFK), libraryByOrgStatus: 500 });
-		await expect(resolveMyLibraryId(cfg, personId, fetchImpl)).rejects.toThrow(/HTTP 500/);
+		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), libraryByOrgStatus: 500 });
+		await expect(resolveMyLibraryId(cfg, fetchImpl)).rejects.toThrow(/HTTP 500/);
 	});
 });
 
@@ -117,7 +107,7 @@ describe('resolveLibrarian', () => {
 
 	it('returns librarian state and libraryId when personId is in _owner', async () => {
 		const fetchImpl = mockFetch({
-			member: memberBody(ORG_EFK),
+			database: databaseBody(DB_ENTITY),
 			libraryByOrg: { entities: [{ _id: 'library-1' }] },
 			libraryById: { 'library-1': { _owner: [{ reference: personId }] } }
 		});
@@ -127,7 +117,7 @@ describe('resolveLibrarian', () => {
 
 	it('returns librarian state and libraryId when personId is in _editor', async () => {
 		const fetchImpl = mockFetch({
-			member: memberBody(ORG_EFK),
+			database: databaseBody(DB_ENTITY),
 			libraryByOrg: { entities: [{ _id: 'library-1' }] },
 			libraryById: { 'library-1': { _editor: [{ reference: personId }] } }
 		});
@@ -137,7 +127,7 @@ describe('resolveLibrarian', () => {
 
 	it('returns not-librarian with libraryId when personId is absent from _owner and _editor', async () => {
 		const fetchImpl = mockFetch({
-			member: memberBody(ORG_EFK),
+			database: databaseBody(DB_ENTITY),
 			libraryByOrg: { entities: [{ _id: 'library-1' }] },
 			libraryById: { 'library-1': { _owner: [{ reference: 'other' }] } }
 		});
@@ -147,7 +137,7 @@ describe('resolveLibrarian', () => {
 
 	it('returns not-librarian with libraryId when _owner and _editor are absent (no rights to see private bucket)', async () => {
 		const fetchImpl = mockFetch({
-			member: memberBody(ORG_EFK),
+			database: databaseBody(DB_ENTITY),
 			libraryByOrg: { entities: [{ _id: 'library-1' }] },
 			libraryById: { 'library-1': {} }
 		});
@@ -155,14 +145,14 @@ describe('resolveLibrarian', () => {
 		expect(result).toEqual({ state: 'not-librarian', libraryId: 'library-1' });
 	});
 
-	it('returns not-librarian with null libraryId when no library entity is parented under the own org', async () => {
-		const fetchImpl = mockFetch({ member: memberBody(ORG_EFK), libraryByOrg: { entities: [] } });
+	it('returns not-librarian with null libraryId when no library entity is parented under the database entity', async () => {
+		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), libraryByOrg: { entities: [] } });
 		const result = await resolveLibrarian(cfg, personId, fetchImpl);
 		expect(result).toEqual({ state: 'not-librarian', libraryId: null });
 	});
 
-	it('returns not-librarian with null libraryId when the person has no visible active membership', async () => {
-		const fetchImpl = mockFetch({ member: { entities: [], count: 0 } });
+	it('returns not-librarian with null libraryId when no database entity is visible', async () => {
+		const fetchImpl = mockFetch({ database: { entities: [], count: 0 } });
 		const result = await resolveLibrarian(cfg, personId, fetchImpl);
 		expect(result).toEqual({ state: 'not-librarian', libraryId: null });
 	});
@@ -171,24 +161,18 @@ describe('resolveLibrarian', () => {
 	// used to come back as `not-librarian` (via a `null` libraryId), which
 	// `admin/+page.svelte` renders as "this collective has no library" — no
 	// error, no retry, `refreshLibrarians` skipped — for a real librarian.
-	it('returns error (NOT not-librarian) on HTTP failure of the org-scoped library list', async () => {
-		const fetchImpl = mockFetch({ member: memberBody(ORG_EFK), libraryByOrgStatus: 500 });
+	it('returns error (NOT not-librarian) on HTTP failure of the database-scoped library list', async () => {
+		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), libraryByOrgStatus: 500 });
 		const result = await resolveLibrarian(cfg, personId, fetchImpl);
 		expect(result).toEqual({ state: 'error', libraryId: null });
 	});
 
 	it('returns error with null libraryId on HTTP failure of the library rights read', async () => {
 		const fetchImpl = mockFetch({
-			member: memberBody(ORG_EFK),
+			database: databaseBody(DB_ENTITY),
 			libraryByOrg: { entities: [{ _id: 'library-1' }] },
 			libraryByIdStatus: 500
 		});
-		const result = await resolveLibrarian(cfg, personId, fetchImpl);
-		expect(result).toEqual({ state: 'error', libraryId: null });
-	});
-
-	it('returns error with null libraryId when the membership is ambiguous (two active member rows in one db)', async () => {
-		const fetchImpl = mockFetch({ member: { ...memberBody(ORG_EFK), count: 2 } });
 		const result = await resolveLibrarian(cfg, personId, fetchImpl);
 		expect(result).toEqual({ state: 'error', libraryId: null });
 	});

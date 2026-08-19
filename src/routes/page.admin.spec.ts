@@ -7,7 +7,7 @@
 //   'not-admin' → no-access block, NO role data is fetched; 'error' → load-error
 //   + retry (a network failure is NEVER presented as "not admin" — house rule)
 // - ready → two managed lists:
-//     - Administrators: `listAdmins(cfg, orgId)` — orgId from `resolveMyOrgId`
+//     - Administrators: `listAdmins(cfg, orgId)` — orgId from `resolveDatabaseEntityId`
 //       (the person's own member `_parent`; never an `organization&limit=1`
 //       guess, which live-returns the umbrella federation)
 //     - Librarians: `listLibrarians(cfg, libraryId)` — libraryId from
@@ -132,7 +132,7 @@ const h = vi.hoisted(() => {
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
 		resolveLibrarianMock: vi.fn(),
-		resolveMyOrgIdMock: vi.fn(),
+		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveOrgMock: vi.fn(),
@@ -156,8 +156,8 @@ vi.mock('$lib/nav/adminStore', () => ({
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
 }));
-vi.mock('$lib/org/myOrg', () => ({
-	resolveMyOrgId: h.resolveMyOrgIdMock
+vi.mock('$lib/collective/databaseEntity', () => ({
+	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
@@ -243,7 +243,7 @@ function selectPolyphony() {
 
 function loadOk() {
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveMyOrgIdMock.mockResolvedValue('org-1');
+	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
 	h.listLibrariansMock.mockResolvedValue(listing([CILLA]));
@@ -300,7 +300,7 @@ beforeEach(() => {
 		h.removeLibrarianMock,
 		h.resolveAdminMock,
 		h.resolveLibrarianMock,
-		h.resolveMyOrgIdMock,
+		h.resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
 		h.resolveParentMock,
 		h.resolveOrgMock,
@@ -379,7 +379,7 @@ describe('/admin — access gate', () => {
 // ── ready — the two managed lists ───────────────────────────────────────────────
 
 describe('/admin — role lists', () => {
-	it('renders the admin + librarian lists off listAdmins(cfg, orgId) / listLibrarians(cfg, libraryId) — org from resolveMyOrgId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
+	it('renders the admin + librarian lists off listAdmins(cfg, orgId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
 		selectPolyphony();
 		loadOk();
 
@@ -395,9 +395,8 @@ describe('/admin — role lists', () => {
 		expect(q(librarians, 'librarian-entry-p-cilla')).not.toBeNull();
 		expect(librarians.textContent).toContain('Cilla Cane');
 
-		expect(h.resolveMyOrgIdMock).toHaveBeenCalledWith(
-			expect.objectContaining(CFG),
-			'admin-p'
+		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
+			expect.objectContaining(CFG)
 		);
 		expect(h.resolveLibrarianMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
@@ -916,7 +915,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		});
 
 		h.resolveAdminMock.mockResolvedValue('admin');
-		h.resolveMyOrgIdMock.mockImplementation((cfg: { db: string }) =>
+		h.resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			cfg.db === 'alpha' ? alphaGate.then(() => 'org-alpha') : Promise.resolve('org-beta')
 		);
 		h.resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
@@ -938,9 +937,8 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		const { container } = render(Page);
 		// Alpha is genuinely in flight and parked at the gate before we switch.
 		await waitFor(() => {
-			expect(h.resolveMyOrgIdMock).toHaveBeenCalledWith(
-				expect.objectContaining({ db: 'alpha' }),
-				'p-alpha'
+			expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
+				expect.objectContaining({ db: 'alpha' })
 			);
 		});
 

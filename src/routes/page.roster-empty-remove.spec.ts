@@ -28,7 +28,7 @@
 // multi-org db the first row can belong to another org — and then the ✕
 // migrates onto the FOREIGN org's sections while the viewer's own empty
 // sections lose theirs. "Whose roster is this?" must be answered from the
-// AUTHENTICATED person (resolveMyOrgId, or her own row via personId) — the
+// AUTHENTICATED person (resolveDatabaseEntityId, or her own row via personId) — the
 // same never-guess rule createSection's org threading already follows.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,7 +46,7 @@ const {
 	createSectionMock,
 	reorderMock,
 	deleteMock,
-	resolveMyOrgIdMock
+	resolveDatabaseEntityIdMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
@@ -55,7 +55,7 @@ const {
 	createSectionMock: vi.fn(),
 	reorderMock: vi.fn(),
 	deleteMock: vi.fn(),
-	resolveMyOrgIdMock: vi.fn()
+	resolveDatabaseEntityIdMock: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
@@ -70,11 +70,11 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	deleteSection: deleteMock
 }));
 // The viewer's-own-org seam — mocked so EITHER legitimate derivation (a
-// resolveMyOrgId fetch, or reading the authenticated person's own roster row)
+// resolveDatabaseEntityId fetch, or reading the authenticated person's own roster row)
 // lands on the same org in these tests.
-vi.mock('$lib/org/myOrg', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/org/myOrg')>();
-	return { ...actual, resolveMyOrgId: resolveMyOrgIdMock };
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
+	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
@@ -181,7 +181,7 @@ beforeEach(() => {
 	createSectionMock.mockResolvedValue('sec-new-1');
 	reorderMock.mockResolvedValue(undefined);
 	deleteMock.mockResolvedValue(undefined);
-	resolveMyOrgIdMock.mockResolvedValue(ORG_EFK);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 });
 
 afterEach(() => {
@@ -193,7 +193,7 @@ afterEach(() => {
 	createSectionMock.mockReset();
 	reorderMock.mockReset();
 	deleteMock.mockReset();
-	resolveMyOrgIdMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -294,7 +294,7 @@ describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER'
 		// before every EFK member; the current `rows.find((r) => r.orgId)`
 		// derivation therefore answers SIREEN and hangs the destructive control
 		// on the wrong org's sections. The viewer is Pete (personId 'person-p',
-		// EFK) — resolveMyOrgId answers EFK, and so does his own roster row.
+		// EFK) — resolveDatabaseEntityId answers EFK, and so does his own roster row.
 		loadRosterMock.mockResolvedValue([
 			{
 				memberId: 'm-anna',

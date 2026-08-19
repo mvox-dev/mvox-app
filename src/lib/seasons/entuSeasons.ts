@@ -57,32 +57,32 @@ export function resetTypeIdCache(): void {
 // (*MVOX:Tallis*)
 
 /**
- * List the collective's seasons, scoped to the PERSON'S OWN org.
+ * List the collective's seasons, scoped to the DATABASE entity.
  *
- * #144 review — re-fans the de-fan: single-collective made "the selected db IS
- * the collective" true for polyphony today, but it stops being true the moment
- * a db holds more than one organization's seasons, and nothing here enforced
- * that assumption — it just read every `season` row in the db. Scoped the same
- * way `resolveAdmin`/`resolveMyLibraryId` scope their reads: resolve the org
- * from the person's own active membership (`resolveMyOrgId`), then filter by
- * `_parent.reference`. No visible membership -> no org to scope to -> `[]`
- * (not an error: same "nothing visible" shape `resolveMyOrgId` documents).
+ * #161 (collective = database, Mihkel ruling 2026-08-16) — seasons are children
+ * of the DATABASE entity. Scoped the same way `resolveAdmin`/`resolveMyLibraryId`
+ * scope their reads: resolve the database entity (`resolveDatabaseEntityId`),
+ * then filter by `_parent.reference`. No visible database entity -> `[]` (not
+ * an error: same "nothing visible" shape `resolveDatabaseEntityId` documents).
+ *
+ * #161 review fix round 2 — the dead `personId` parameter is DELETED from the
+ * call contract (not merely renamed/shadowed): `listSeasons(cfg, fetchImpl?)`,
+ * `.length === 1`, pinned in entuSeasons.database.spec.ts.
  */
 export async function listSeasons(
 	cfg: EntuCfg,
-	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<Season[]> {
-	const { resolveMyOrgId } = await import('$lib/org/myOrg');
-	const orgId = await resolveMyOrgId(cfg, personId, fetchImpl);
-	if (!orgId) return [];
+	const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
+	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
+	if (!dbEntityId) return [];
 
 	const res = await entuFetch(
 		cfg.db,
 		// `_owner,_editor` ride along (#91 F1): the repertoire management controls
 		// need `_editor` on the season, and asking for it HERE replaces a separate
 		// per-entity rights GET with zero extra round-trips.
-		`entity?_type.string=season&_parent.reference=${encodeURIComponent(orgId)}&props=name,start_date,end_date,conductor,_owner,_editor&limit=200`,
+		`entity?_type.string=season&_parent.reference=${encodeURIComponent(dbEntityId)}&props=name,start_date,end_date,conductor,_owner,_editor&limit=200`,
 		cfg.token,
 		{},
 		fetchImpl
