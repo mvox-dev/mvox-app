@@ -150,6 +150,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
@@ -200,15 +201,12 @@ function upcomingSeason(): Season {
 function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } = {}) {
 	const { editor = true, withUpcomingSeason = false } = opts;
 	const season = currentSeason(editor);
-	return {
-		upcoming: [],
-		recent: [],
+	return fullAgendaResult({
 		seasonId: season.id,
-		seasonConductors: [],
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
-	};
+	});
 }
 
 /** The collective's persons — the conductor autocomplete's source. The VIEWER
@@ -588,15 +586,7 @@ describe('agenda — form validation refuses the write with an inline error', ()
 
 /** loadFullAgenda's resolution with NO current season. */
 function noCurrentSeasonResult(seasons: Season[]) {
-	return {
-		upcoming: [],
-		recent: [],
-		seasonId: null,
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: [],
-		seasons
-	};
+	return fullAgendaResult({ seasons });
 }
 
 /** A season that ENDED yesterday — no longer current, never upcoming. */

@@ -8,6 +8,7 @@
 // GREEN; see rsvpOptimistic.spec.ts for the write-dispatch unit coverage and
 // RsvpControl.spec.ts / AgendaList.spec.ts for the presentational + prop-wiring
 // contracts.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -147,7 +148,7 @@ afterEach(() => {
 
 describe('+page — resolves member id + existing rsvps alongside the agenda (#12 data half)', () => {
 	it('calls findMyMemberId with {db,token} for the selected collective and the selected person id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -161,7 +162,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 	});
 
 	it('calls listMyRsvps with {db,token} for the selected collective and the selected person id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();

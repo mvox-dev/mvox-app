@@ -286,6 +286,91 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 	});
 });
 
+// ---- listFullAgenda: the MANAGEABLE season (#167) ----
+//
+// #167 RED — the page's event/series creation gates need the season an ADMIN
+// manages, which is NOT always the viewer's current season: a just-created
+// season with a future start date has no "current" status yet, but it is
+// exactly the season the admin must populate with events NOW.
+//
+// Contract pinned here (GREEN wires conductorLogic's `manageableSeason` into
+// `listFullAgenda`): `FullAgendaResult` gains three fields —
+//   manageableSeasonId       string | null
+//   manageableSeasonOwners   string[]  (the manageable season's visible `_owner` refs)
+//   manageableSeasonEditors  string[]  (its visible `_editor` refs)
+// When a current season exists these MIRROR seasonId/seasonOwners/seasonEditors.
+// When only future seasons exist, they carry the SOONEST-starting future
+// season's data, while the VIEWER fields keep their existing semantics
+// (`seasonId` stays null, `recent` stays empty — those pins above must keep
+// passing untouched).
+
+describe('listFullAgenda — manageable season (#167)', () => {
+	function seasonWithRights(
+		id: string,
+		startDate: string,
+		owners: string[],
+		editors: string[]
+	): Season {
+		return { id, name: `Season ${id}`, startDate, endDate: '', conductors: [], owners, editors };
+	}
+
+	it('a current season exists → manageable* mirrors the current season fields', async () => {
+		listSeasonsMock.mockResolvedValue([
+			seasonWithRights('s-cur', '2026-09-01', ['p-owner'], ['p-editor']),
+			seasonWithRights('s-next', '2027-09-01', [], [])
+		]);
+		listRehearsalsMock.mockResolvedValue([]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		expect(result.seasonId).toBe('s-cur');
+		expect(result.manageableSeasonId).toBe('s-cur');
+		expect(result.manageableSeasonOwners).toEqual(['p-owner']);
+		expect(result.manageableSeasonEditors).toEqual(['p-editor']);
+	});
+
+	it('FUTURE-only season: seasonId stays null (viewer semantics) but manageable* carries the future season', async () => {
+		listSeasonsMock.mockResolvedValue([
+			seasonWithRights('s-future', '2027-09-01', ['p-owner'], ['p-editor'])
+		]);
+		listRehearsalsMock.mockResolvedValue([]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		// viewer semantics untouched:
+		expect(result.seasonId).toBeNull();
+		expect(result.recent).toEqual([]);
+		// admin semantics (#167):
+		expect(result.manageableSeasonId).toBe('s-future');
+		expect(result.manageableSeasonOwners).toEqual(['p-owner']);
+		expect(result.manageableSeasonEditors).toEqual(['p-editor']);
+	});
+
+	it('several future seasons, none started → the SOONEST-starting one is manageable', async () => {
+		listSeasonsMock.mockResolvedValue([
+			seasonWithRights('s-2028', '2028-09-01', [], []),
+			seasonWithRights('s-2027', '2027-09-01', ['p-owner'], []),
+			seasonWithRights('s-2029', '2029-09-01', [], [])
+		]);
+		listRehearsalsMock.mockResolvedValue([]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		expect(result.manageableSeasonId).toBe('s-2027');
+		expect(result.manageableSeasonOwners).toEqual(['p-owner']);
+	});
+
+	it('no seasons at all → manageableSeasonId null, rights lists empty', async () => {
+		listSeasonsMock.mockResolvedValue([]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		expect(result.manageableSeasonId).toBeNull();
+		expect(result.manageableSeasonOwners).toEqual([]);
+		expect(result.manageableSeasonEditors).toEqual([]);
+	});
+});
+
 // ---- loadFullAgenda (threads the T4 selected db + token) ----
 
 describe('loadFullAgenda (threads the T4 selected db + token)', () => {
@@ -304,6 +389,9 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 		);
 	});
 
+	// #167 — the empty shape carries the manageable* fields too (full-shape
+	// toEqual, so a partial NO_SEASON object fails here rather than as an
+	// `undefined` leaking into the page's gates).
 	it('returns empty result without reading when no collective is selected', async () => {
 		setToken('jwt-live'); // token present, but no collective
 		const result = await loadFullAgenda(NOW);
@@ -314,7 +402,10 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 			seasonId: null,
 			seasonConductors: [],
 			seasonOwners: [],
-			seasonEditors: []
+			seasonEditors: [],
+			manageableSeasonId: null,
+			manageableSeasonOwners: [],
+			manageableSeasonEditors: []
 		});
 		expect(listSeasonsMock).not.toHaveBeenCalled();
 	});
@@ -329,7 +420,10 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 			seasonId: null,
 			seasonConductors: [],
 			seasonOwners: [],
-			seasonEditors: []
+			seasonEditors: [],
+			manageableSeasonId: null,
+			manageableSeasonOwners: [],
+			manageableSeasonEditors: []
 		});
 		expect(listSeasonsMock).not.toHaveBeenCalled();
 	});

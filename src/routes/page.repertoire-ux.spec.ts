@@ -19,6 +19,7 @@
 //     the sm (640px) breakpoint so its widest "Work — Edition" option can no
 //     longer overflow a phone-width agenda row; sm:w-auto keeps the existing
 //     inline dropdown on desktop.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -108,7 +109,7 @@ const REPERTOIRE_ITEMS = [
 /** person-p holds `_editor` on BOTH the season and the event, so every
  *  surface under test (status row, Remove, "Add to programme") renders. */
 function installWorld() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [
 			{
 				id: 'ev-1',
@@ -126,7 +127,7 @@ function installWorld() {
 		seasonConductors: [],
 		seasonOwners: [],
 		seasonEditors: ['person-p']
-	});
+	}));
 
 	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);

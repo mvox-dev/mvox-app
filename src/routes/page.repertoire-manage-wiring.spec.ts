@@ -11,6 +11,7 @@
 // under test) and stub the network at `fetch`. Everything between a tap and the
 // wire — rights resolution, the picker derivations, the write queue, the Entu
 // request shapes — runs for real.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -141,14 +142,14 @@ function installWorld(options: WorldOptions = {}) {
 	// round-trips. The fetch router below therefore has NO rights route left: a
 	// regression back to per-entity probing surfaces as an unrouted 404 here, and
 	// as a failure of the "issues NO per-entity rights probe" spec.
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [{ ...upcoming[0], editors: eventEditor ? ['person-p'] : [] }],
 		recent: [],
 		seasonId: 'season-1',
 		seasonConductors: [],
 		seasonOwners: [],
 		seasonEditors: seasonEditor ? ['person-p'] : []
-	});
+	}));
 
 	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);
@@ -244,12 +245,12 @@ function postsTo(fetchMock: ReturnType<typeof installWorld>, fragment: string) {
 }
 
 beforeEach(() => {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming,
 		recent: [],
 		seasonId: 'season-1',
 		seasonConductors: [], seasonOwners: [], seasonEditors: []
-	});
+	}));
 	resetTypeIdCache();
 });
 

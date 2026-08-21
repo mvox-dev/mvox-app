@@ -8,6 +8,7 @@
 //      with the current season id, once the agenda load settles;
 //   2. the resolved rows reach the actual rendered agenda row;
 //   3. tapping PDF signs the url AT CLICK TIME (never a pre-signed href).
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -155,12 +156,12 @@ afterEach(() => {
 
 describe('+page — Works element wiring (#90 TR.2)', () => {
 	it('resolves works for every agenda event (upcoming AND recent) with the current season id', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent,
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		});
+		}));
 		loadWorksByEventIdMock.mockResolvedValue({});
 		setAuthedWithOneCollective();
 
@@ -181,12 +182,12 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('renders the resolved works inside the matching agenda row — the element a member actually sees', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		});
+		}));
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow()] });
 		setAuthedWithOneCollective();
 
@@ -205,12 +206,12 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('signs the PDF url AT CLICK TIME — the file id round-trips from the row to signFileUrl', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		});
+		}));
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
 		vi.spyOn(window, 'open').mockReturnValue(null);
@@ -233,12 +234,12 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('navigates the tab opened in the click gesture to the freshly signed url', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		});
+		}));
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
 		const tab = { location: { href: '' }, opener: {} as unknown, close: vi.fn() };
@@ -263,12 +264,12 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('a rejected signing closes the tab and surfaces an inline error — never a silent no-op', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		});
+		}));
 		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
 		signFileUrlMock.mockRejectedValue(new Error('403'));
 		const tab = { location: { href: '' }, opener: {} as unknown, close: vi.fn() };
@@ -290,12 +291,12 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 	});
 
 	it('a failed works read leaves the agenda intact, just work-free', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
-		});
+		}));
 		loadWorksByEventIdMock.mockRejectedValue(new Error('boom'));
 		setAuthedWithOneCollective();
 

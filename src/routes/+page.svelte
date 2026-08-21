@@ -167,6 +167,18 @@
 	// know the answer before it fetches — see includeInactive below).
 	let currentSeasonId = $state<string | null>(null);
 	let seasonManageRights = $state<ManageRightsState>('not-editor');
+	// #167 — the ADMIN's season pick (`manageableSeason`), DELIBERATELY separate
+	// from `currentSeasonId`/`seasonManageRights` above: those answer "which
+	// season is CURRENT" (viewer semantics — Recent scoping, season repertoire),
+	// and stay null for a just-created FUTURE-dated season. Event/series
+	// creation gate on THIS pair instead — the season an admin manages defaults
+	// to current-if-running, else the soonest not-yet-started season (see
+	// agendaData's `manageableSeasonId` doc). Mirrors currentSeasonId/
+	// seasonManageRights exactly whenever a live season is current — it diverges
+	// in the future-only case (the whole point of #167) and when the current
+	// season has LAPSED with a later one waiting (review F1).
+	let manageableSeasonId = $state<string | null>(null);
+	let manageableSeasonRights = $state<ManageRightsState>('not-editor');
 	// #132/T2 review F3 — the season-CREATION gate's own rights signal, DELIBERATELY
 	// separate from `seasonManageRights`. That one answers "may I manage the CURRENT
 	// season's repertoire", so it is fail-closed 'not-editor' whenever no season is
@@ -277,6 +289,24 @@
 	// same guard covers a stale rejection (M2 fix below), not just a stale resolve.
 	let requestId = 0;
 	/**
+	 * A SECOND, finer generation counter, for `worksByEventId` alone (#167 review
+	 * round 2, F1). `requestId` only changes on a collective switch, so it cannot
+	 * order two works reads issued WITHIN one agenda load — and there are exactly
+	 * such a pair: `loadWorksAndManagement` fires the filtered read immediately,
+	 * then the database-entity rights probe may come back 'editor' and
+	 * `upgradeRepertoireManagement` fires the UNFILTERED one. Both settled under
+	 * the same `requestId`, so the assignment was pure last-writer-wins; the
+	 * filtered read is a 4-collection JOIN plus one program_item read per event
+	 * (~45 requests on a 40-event season) racing a two-GET probe, so on a large
+	 * season it can easily land last and silently drop every retired/inactive
+	 * repertoire row — taking with it the only toggle that brings them back.
+	 *
+	 * Every site that issues a works read takes a ticket here and only assigns if
+	 * its ticket is still the newest, so the LATEST-ISSUED read wins regardless of
+	 * completion order.
+	 */
+	let worksLoadId = 0;
+	/**
 	 * `keepSeasonManage` (#132/T4 review F2): this reload is a SAME-COLLECTIVE
 	 * refresh after a write made from inside the season-manage panel, not a
 	 * collective switch. The panel (and the roster its conductor chips read
@@ -385,74 +415,144 @@
 		// loadRecentEvents() pair. Seasons and rehearsals are fetched once;
 		// conductor data rides on the already-fetched props (no separate reads).
 		loadFullAgenda()
-			.then(({ upcoming, recent, seasonId, seasonConductors, seasonOwners, seasonEditors, seasons: fullSeasons }) => {
-				if (thisRequest !== requestId) return; // superseded by a newer selection
-				agendaItems = upcoming;
-				agendaLoading = false;
-				recentItems = recent;
-				// #132/T2 — the full season list, for the season-creation entry point's
-				// "an upcoming season already exists" gate. No extra fetch.
-				seasons = fullSeasons;
-
-				// #90 TR.2 / #91 TR.3 — the Works element on every row, plus the
-				// management surface on top of it. Resolved HERE (not in a parallel
-				// branch above) because it needs the event ids and the current
-				// season id the agenda load just produced. Supplementary: a
-				// rejection leaves rows work-free, it never fails the agenda.
-				const worksCfg = { db: current.db, token: getToken() ?? '' };
-				const events = [...upcoming, ...recent];
-				const eventIds = events.map((item) => item.id);
-				currentSeasonId = seasonId;
-				// #91 review F1 — rights are PURE COMPUTATION on the season/event
-				// reads that already happened (they now carry `_owner`/`_editor`).
-				// The old shape fired one rights GET per agenda event — up to ~500
-				// concurrent requests, for every member including plain singers who
-				// will never see a control — and held the works load hostage to
-				// them, because `includeInactive` depended on the answer.
-				seasonManageRights =
-					seasonId === null ? 'not-editor' : manageRightsFrom(seasonOwners, seasonEditors, personId);
-				// #138 review F2 — the first moment THIS db's own season data is on
-				// hand, which is what `restoreSeriesCreateRun` needs to re-open the
-				// panel + form for a run that stopped here before the viewer left.
-				// Without it, returning to such a collective shows a silently dead
-				// set of create buttons (blocked by the surviving resume record) and
-				// no way out of it.
-				restoreSeriesCreateRun();
-				// #132/T2 review F3 — the season-CREATE gate needs its OWN rights
-				// signal. `seasonManageRights` is about managing the CURRENT season's
-				// repertoire, so it is 'not-editor' whenever no season is running —
-				// which is exactly when a season most needs creating (a collective
-				// with none yet; a season that lapsed yesterday). See
-				// `deriveSeasonCreateRights` for the ladder.
-				seasonCreateRights = deriveSeasonCreateRights(
+			.then(
+				({
+					upcoming,
+					recent,
 					seasonId,
+					seasonConductors,
 					seasonOwners,
 					seasonEditors,
-					fullSeasons,
-					personId
-				);
-				// Step 3 of the ladder — ONLY when nothing on this page can answer:
-				// no current season AND no season at all to borrow rights from.
-				if (seasonId === null && fullSeasons.length === 0) {
-					loadOrgSeasonCreateRights(worksCfg, personId, thisRequest);
+					seasons: fullSeasons,
+					// #167 review F4 — REQUIRED, never defaulted: the producer always
+					// emits these, and a default would silently restore the #167 bug
+					// (controls gated on a field nobody sets) instead of failing.
+					manageableSeasonId: mSeasonId,
+					manageableSeasonOwners: mOwners,
+					manageableSeasonEditors: mEditors
+				}) => {
+					if (thisRequest !== requestId) return; // superseded by a newer selection
+					agendaItems = upcoming;
+					agendaLoading = false;
+					recentItems = recent;
+					// #132/T2 — the full season list, for the season-creation entry point's
+					// "an upcoming season already exists" gate. No extra fetch.
+					seasons = fullSeasons;
+
+					// #90 TR.2 / #91 TR.3 — the Works element on every row, plus the
+					// management surface on top of it. Resolved HERE (not in a parallel
+					// branch above) because it needs the event ids and the current
+					// season id the agenda load just produced. Supplementary: a
+					// rejection leaves rows work-free, it never fails the agenda.
+					const worksCfg = { db: current.db, token: getToken() ?? '' };
+					const events = [...upcoming, ...recent];
+					const eventIds = events.map((item) => item.id);
+					currentSeasonId = seasonId;
+					// #91 review F1 — rights are PURE COMPUTATION on the season/event
+					// reads that already happened (they now carry `_owner`/`_editor`).
+					// The old shape fired one rights GET per agenda event — up to ~500
+					// concurrent requests, for every member including plain singers who
+					// will never see a control — and held the works load hostage to
+					// them, because `includeInactive` depended on the answer.
+					seasonManageRights =
+						seasonId === null
+							? 'not-editor'
+							: manageRightsFrom(seasonOwners, seasonEditors, personId);
+					// #167 — the ADMIN's rights, mirroring the derivation above but keyed
+					// on the MANAGEABLE season (current-if-running, else the soonest future
+					// one) rather than the viewer's current season. This is what lets
+					// event/series creation controls survive creating a season that has
+					// not started yet.
+					manageableSeasonId = mSeasonId;
+					manageableSeasonRights =
+						mSeasonId === null ? 'not-editor' : manageRightsFrom(mOwners, mEditors, personId);
+					// #138 review F2 — the first moment THIS db's own season data is on
+					// hand, which is what `restoreSeriesCreateRun` needs to re-open the
+					// panel + form for a run that stopped here before the viewer left.
+					// Without it, returning to such a collective shows a silently dead
+					// set of create buttons (blocked by the surviving resume record) and
+					// no way out of it.
+					restoreSeriesCreateRun();
+					// #132/T2 review F3 — the season-CREATE gate needs its OWN rights
+					// signal. `seasonManageRights` is about managing the CURRENT season's
+					// repertoire, so it is 'not-editor' whenever no season is running —
+					// which is exactly when a season most needs creating (a collective
+					// with none yet; a season that lapsed yesterday). See
+					// `deriveSeasonCreateRights` for the ladder.
+					seasonCreateRights = deriveSeasonCreateRights(
+						seasonId,
+						seasonOwners,
+						seasonEditors,
+						fullSeasons,
+						personId
+					);
+					eventManageRights = Object.fromEntries(
+						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
+					);
+					loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
+					// ── the DATABASE-entity rights fallback (#167 review F2/F3) ────
+					//
+					// Rights props live in the private bucket (#91): a viewer with no
+					// grant ON THE SEASON reads NO `_owner`/`_editor` at all — the same
+					// empty answer whether they are a plain singer or the database's
+					// `_owner` whose grant simply never got copied onto the season (the
+					// Mihkel case, #167 cause 2). Where the page's own reads carry no
+					// visible answer, the database entity is asked instead — ONCE per
+					// (db, person) (`loadDatabaseEntityRights` memoises), and its one
+					// answer feeds EVERY signal that was left unanswered, so the page
+					// cannot render "you may create events here" next to "you may not
+					// manage this season's repertoire" for the same person.
+					//
+					// Fail-closed throughout: only an explicit 'editor' opens anything;
+					// 'not-editor', 'error' and a rejection all leave the gates shut.
+					const manageableRightsInvisible =
+						mSeasonId !== null && mOwners.length === 0 && mEditors.length === 0;
+					const currentRightsInvisible =
+						seasonId !== null && seasonOwners.length === 0 && seasonEditors.length === 0;
+					// Step 3 of `deriveSeasonCreateRights`' ladder: no current season
+					// AND no season at all to borrow rights from — the brand-new
+					// collective, where the FIRST season must be creatable in-app.
+					const noSeasonToBorrowFrom = seasonId === null && fullSeasons.length === 0;
+					// `currentRightsInvisible` is a trigger in its OWN right (#167 review
+					// round 2, F2), not merely a consequence to act on inside the branch.
+					// The manageable and the current season are DIFFERENT entities
+					// whenever the current one has lapsed (review F1), and they were
+					// created at different moments — so the newer one can carry the
+					// viewer's `_owner`/`_editor` while the older one carries none. Gating
+					// the probe on the manageable season alone then produced exactly the
+					// contradiction this block exists to prevent: [+ Event] and the gear
+					// rendered against a dead repertoire surface for the current season.
+					if (manageableRightsInvisible || currentRightsInvisible || noSeasonToBorrowFrom) {
+						loadDatabaseEntityRights(worksCfg, personId).then((state) => {
+							if (thisRequest !== requestId) return;
+							if (state !== 'editor') return;
+							// Rights on the database entity are rights over the whole
+							// collective — every gate whose own read came back blank.
+							if (manageableRightsInvisible) manageableSeasonRights = 'editor';
+							seasonCreateRights = 'editor';
+							if (currentRightsInvisible && seasonManageRights !== 'editor') {
+								seasonManageRights = 'editor';
+								// `loadWorksAndManagement` has already run under the
+								// 'not-editor' answer: no pickers, no season repertoire, and
+								// the works read filtered to active rows. Re-run exactly
+								// those three (`refreshWorksAfterWrite`'s work) now that the
+								// answer has changed.
+								upgradeRepertoireManagement(worksCfg, eventIds, seasonId, thisRequest);
+							}
+						});
+					}
+					// Conductor event IDs: pure computation on already-loaded data (no IO).
+					const ids = computeConductorEventIds(personId, seasonConductors, recent);
+					conductorEventIds = ids;
+					// F3 fix — wire isConductor from the broader signal: a season conductor
+					// IS a conductor even before any past events exist this season (the
+					// per-event Set gates rows; this store is the coarser "is a conductor
+					// at all" signal for TA.3).
+					isConductor.set(
+						ids.size > 0 || seasonConductors.includes(personId) ? 'conductor' : 'not-conductor'
+					);
 				}
-				eventManageRights = Object.fromEntries(
-					events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
-				);
-				loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
-				// Conductor event IDs: pure computation on already-loaded data (no IO).
-				const ids = computeConductorEventIds(personId, seasonConductors, recent);
-				conductorEventIds = ids;
-				// F3 fix — wire isConductor from the broader signal: a season conductor
-				// IS a conductor even before any past events exist this season (the
-				// per-event Set gates rows; this store is the coarser "is a conductor
-				// at all" signal for TA.3).
-				isConductor.set(
-					ids.size > 0 || seasonConductors.includes(personId)
-						? 'conductor'
-						: 'not-conductor'
-				);
-			})
+			)
 			.catch((err) => {
 				// M2 fix: without this catch, a rejected load left agendaLoading
 				// stuck at true forever — permanent skeleton, no error, no recovery.
@@ -619,6 +719,8 @@
 	function resetManagement() {
 		currentSeasonId = null;
 		seasonManageRights = 'not-editor';
+		manageableSeasonId = null;
+		manageableSeasonRights = 'not-editor';
 		seasonCreateRights = 'not-editor';
 		eventManageRights = {};
 		seasonRepertoire = [];
@@ -665,24 +767,75 @@
 	}
 
 	/**
-	 * The step-3 fallback: no season exists in this collective at all, so the only
-	 * entity that can answer "may I create one" is the DATABASE entity itself
-	 * (#161, collective = database). ONE extra GET pair, and ONLY in the
-	 * empty-collective case (a collective with any season never reaches here).
-	 * Supplementary — a failure leaves the gate closed.
+	 * The in-flight/settled database-entity rights answers, keyed by db + person
+	 * (#167 review F3). The probe is a GET PAIR — `resolveDatabaseEntityId`
+	 * (uncached by design) then one `entity/{id}?props=_owner,_editor` — and its
+	 * trigger, "the season read shows no visible rights", is the NORMAL read for
+	 * every non-granted member (#91's rights buckets). Without this memo every
+	 * plain singer paid that pair on every agenda load and every collective
+	 * switch, for an answer that cannot change between two loads of the same
+	 * page; with it, at most one pair per (collective, person) per page life.
+	 * The promise itself is cached, so two loads racing share ONE round-trip.
 	 */
-	function loadOrgSeasonCreateRights(cfg: ManageCfg, personId: string, thisRequest: number) {
-		resolveDatabaseEntityId(cfg)
-			.then((orgId) => {
-				if (thisRequest !== requestId || !orgId) return;
-				return resolveManageRights(cfg, orgId, personId).then((state) => {
-					if (thisRequest !== requestId) return;
-					// 'error' is not a grant — fail closed.
-					seasonCreateRights = state === 'editor' ? 'editor' : 'not-editor';
-				});
+	const databaseEntityRightsByDbPerson = new Map<string, Promise<ManageRightsState>>();
+
+	/**
+	 * "May this person manage things in this collective?", answered by the
+	 * DATABASE entity itself (#161, collective = database) — the only entity that
+	 * can answer when the page's own season/event reads show no rights at all.
+	 * ONE probe feeding every caller, so the season-create gate, the
+	 * season-manage gate and the event/series-create gate cannot disagree.
+	 *
+	 * Never throws: a failed lookup resolves to 'error' (NOT 'not-editor' — a
+	 * blip must not read as a verdict), which callers treat as no grant. A
+	 * failure is deliberately NOT memoised, so the next load retries.
+	 */
+	function loadDatabaseEntityRights(cfg: ManageCfg, personId: string): Promise<ManageRightsState> {
+		const key = `${cfg.db}::${personId}`;
+		const cached = databaseEntityRightsByDbPerson.get(key);
+		if (cached) return cached;
+		const probe = resolveDatabaseEntityId(cfg)
+			.then((orgId) =>
+				orgId === null
+					? // No database entity readable — an ANSWER ("this reader cannot see
+						// the collective entity"), not a failure: nothing to grant on.
+						Promise.resolve<ManageRightsState>('not-editor')
+					: resolveManageRights(cfg, orgId, personId)
+			)
+			.catch((e): ManageRightsState => {
+				console.error('agenda: resolving database entity rights failed', e);
+				return 'error';
 			})
-			.catch((e) => {
-				console.error('agenda: resolving database entity rights for season create failed', e);
+			.then((state) => {
+				if (state === 'error') databaseEntityRightsByDbPerson.delete(key);
+				return state;
+			});
+		databaseEntityRightsByDbPerson.set(key, probe);
+		return probe;
+	}
+
+	/**
+	 * The repertoire-management reads `loadWorksAndManagement` skipped because,
+	 * at the moment it ran, `seasonManageRights` was still 'not-editor' (#167
+	 * review F2 — the database-entity answer arrives later). Exactly the three
+	 * reads `refreshWorksAfterWrite` does for a rights-holder: the pickers, the
+	 * season repertoire (via `loadManagePickers`) and the UNFILTERED works read.
+	 */
+	function upgradeRepertoireManagement(
+		cfg: ManageCfg,
+		eventIds: string[],
+		seasonId: string | null,
+		thisRequest: number
+	) {
+		loadManagePickers(cfg, seasonId, thisRequest);
+		const thisWorksLoad = ++worksLoadId;
+		loadWorksByEventId(cfg, eventIds, seasonId, fetch, { includeInactive: true })
+			.then((byEvent) => {
+				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
+				worksByEventId = mergePendingRows(byEvent);
+			})
+			.catch(() => {
+				/* keep the filtered rows the first load produced */
 			});
 	}
 
@@ -713,15 +866,16 @@
 			Object.values(eventManageRights).some((right) => right === 'editor');
 		if (canManage) loadManagePickers(cfg, seasonId, thisRequest);
 
+		const thisWorksLoad = ++worksLoadId;
 		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = byEvent;
 			})
 			.catch(() => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = {};
 			});
 	}
@@ -804,11 +958,12 @@
 		const eventIds = [...agendaItems, ...recentItems].map((item) => item.id);
 		const seasonId = currentSeasonId;
 		const thisRequest = requestId;
+		const thisWorksLoad = ++worksLoadId;
 		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = mergePendingRows(byEvent);
 			})
 			.catch(() => {
@@ -1726,12 +1881,15 @@
 
 	// ── #132/T3 — season MANAGEMENT: [⚙] gear + inline panel ──────────────────
 	//
-	// Rights gate: `seasonManageRights` (already derived above — fail-closed,
-	// #91) AND a CURRENT season (`currentSeasonId`, also already derived): the
-	// gate is deliberately independent of T2's `showSeasonCreate` (a lapsed
-	// season's editor may still CREATE the next one, but there is nothing to
-	// MANAGE — see `deriveSeasonCreateRights`'s doc for why the two gates read
-	// different rights signals).
+	// Rights gate: `manageableSeasonRights` AND a manageable season
+	// (`manageableSeasonId`) — #167: the admin's pick (current-if-running, else
+	// the soonest future season), NOT the viewer's `currentSeasonId`/
+	// `seasonManageRights` (those stay scoped to season REPERTOIRE, which has
+	// nothing to manage before a season starts). The gate is deliberately
+	// independent of T2's `showSeasonCreate` (a lapsed season's editor may
+	// still CREATE the next one, but there is nothing to MANAGE — see
+	// `deriveSeasonCreateRights`'s doc for why the two gates read different
+	// rights signals).
 	//
 	// Local truth, not a re-derivation of `seasons` on every open: the panel's
 	// field state is seeded ONCE from `seasons` (loaded with the agenda — zero
@@ -1739,7 +1897,9 @@
 	// mutates it directly. This is what makes a saved rename survive close +
 	// reopen without a second save or a full agenda refetch (spec's close/
 	// reopen persistence contract).
-	const showSeasonManageGear = $derived(currentSeasonId !== null && seasonManageRights === 'editor');
+	const showSeasonManageGear = $derived(
+		manageableSeasonId !== null && manageableSeasonRights === 'editor'
+	);
 
 	let seasonManageOpen = $state(false);
 	let seasonManageName = $state('');
@@ -1860,13 +2020,17 @@
 	}
 
 	function openSeasonManagePanel(): void {
-		if (!selected || currentSeasonId === null) return;
+		// #167 — the panel manages the MANAGEABLE season (current-if-running,
+		// else the soonest future one), not `currentSeasonId`: a just-created
+		// future season has no current status yet but is exactly what the panel
+		// exists to populate.
+		if (!selected || manageableSeasonId === null) return;
 		seasonManageOpen = true;
 		seasonEditingField = null;
 		if (!seasonManageFieldsLoaded) {
 			// Ride the season list the agenda load already fetched — zero extra
 			// fetch, and pinned as the source for the initial field values.
-			const season = seasons.find((s) => s.id === currentSeasonId);
+			const season = seasons.find((s) => s.id === manageableSeasonId);
 			seasonManageName = season?.name ?? '';
 			seasonManageStartDate = season?.startDate ?? '';
 			seasonManageEndDate = season?.endDate ?? '';
@@ -1874,7 +2038,7 @@
 			seasonManageFieldsLoaded = true;
 		}
 		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const seasonId = currentSeasonId;
+		const seasonId = manageableSeasonId;
 		// #132/T3 review F4 — the page-wide collective-switch guard, which this
 		// panel's three reads were the ONLY async assignments on this page to skip.
 		// `loadForSelected` calls `resetSeasonManage()` on a new selection, but a
@@ -2027,7 +2191,7 @@
 	 *  a silently snapped-back value reads as a bug (house rule). An empty or
 	 *  UNCHANGED draft degrades to a plain cancel: no wire call at all. */
 	function confirmSeasonFieldEdit(field: SeasonEditableField): void {
-		if (!selected || currentSeasonId === null || seasonEditingField !== field) return;
+		if (!selected || manageableSeasonId === null || seasonEditingField !== field) return;
 		const before = seasonFieldValue(field);
 		const value = seasonEditDraft.trim();
 		seasonEditingField = null;
@@ -2044,7 +2208,7 @@
 		}
 
 		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const seasonId = currentSeasonId;
+		const seasonId = manageableSeasonId;
 		clearSeasonFieldError(field);
 		seasonEditPending = { ...seasonEditPending, [field]: true };
 		applySeasonFieldLocally(field, value); // optimistic — the panel is the truth it renders
@@ -2104,11 +2268,11 @@
 	}
 
 	function onSeasonManageConductorSelect(selection: { id: string | null; label: string }): void {
-		if (!selection.id || !selected || currentSeasonId === null) return;
+		if (!selection.id || !selected || manageableSeasonId === null) return;
 		const personId = selection.id;
 		if (seasonManageConductorIds.includes(personId)) return; // no duplicate chips
 		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const seasonId = currentSeasonId;
+		const seasonId = manageableSeasonId;
 		seasonManageConductorError = false; // this attempt starts clean
 		seasonManageConductorIds = [...seasonManageConductorIds, personId]; // optimistic
 		addSeasonConductor(cfg, seasonId, personId).catch((e) => {
@@ -2121,9 +2285,9 @@
 	}
 
 	function onSeasonManageConductorRemove(personId: string): void {
-		if (!selected || currentSeasonId === null) return;
+		if (!selected || manageableSeasonId === null) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const seasonId = currentSeasonId;
+		const seasonId = manageableSeasonId;
 		const before = seasonManageConductorIds;
 		seasonManageConductorError = false;
 		seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId); // optimistic
@@ -2186,10 +2350,13 @@
 	}
 
 	// Rights gate: the SAME formula `showSeasonManageGear` already computes —
-	// a CURRENT season, editor rights on it — deliberately independent of T2's
+	// #167: the MANAGEABLE season (current-if-running, else the soonest future
+	// one), editor rights on it — deliberately independent of T2's
 	// `showSeasonCreate` gate (an upcoming season hides [+ Season] but must not
 	// hide [+ Event]; see the RED spec's own doc on the two gates).
-	const showEventCreate = $derived(currentSeasonId !== null && seasonManageRights === 'editor');
+	const showEventCreate = $derived(
+		manageableSeasonId !== null && manageableSeasonRights === 'editor'
+	);
 
 	/** The event-create fields a validation message can belong to; `null` = a
 	 *  form-wide failure (no org, a failed write) that names no single box. */
@@ -2367,7 +2534,7 @@
 		closeSeriesCreateForm();
 		eventCreateLoadId += 1; // review F3 — a new form; nothing the last one asked for belongs here
 		eventCreateOrigin = origin;
-		const prefillSeasonId = origin === 'panel' ? (currentSeasonId ?? '') : '';
+		const prefillSeasonId = origin === 'panel' ? (manageableSeasonId ?? '') : '';
 		eventCreateSeasonId = prefillSeasonId;
 		eventCreateSeriesId = '';
 		eventCreateSeriesOptions = [];
@@ -2428,7 +2595,7 @@
 	 * that also runs on a collective switch, where stealing focus would be wrong.
 	 *
 	 * Best-effort by design (`?.`): on the agenda-born SUCCESS path the reload
-	 * blanks `currentSeasonId` until it resolves, so the button is briefly
+	 * blanks `manageableSeasonId` until it resolves, so the button is briefly
 	 * unmounted and there is nothing to focus — the pre-existing behaviour, not
 	 * a regression. Cancel/Escape, which reload nothing, always land.
 	 */
@@ -2606,8 +2773,10 @@
 		// #132/T4 review (2nd pass) F2 — the panel is scoped to ITS OWN season,
 		// while the form's season select is only PREFILLED from it and stays fully
 		// editable. Captured up front because the success path's `loadForSelected`
-		// blanks `currentSeasonId` (via `resetManagement`) before the refresh runs.
-		const panelSeasonId = currentSeasonId;
+		// blanks `manageableSeasonId` (via `resetManagement`) before the refresh
+		// runs. #167 — the panel's season is now the MANAGEABLE one, not
+		// `currentSeasonId`.
+		const panelSeasonId = manageableSeasonId;
 
 		// ── validation BEFORE any fetch (#132/T4 review F1) ──────────────────
 		// `createEvent` validates too, but a thrown-and-caught write is not a
@@ -2767,7 +2936,7 @@
 		| null;
 
 	let seriesCreateOpen = $state(false);
-	// Captured at OPEN, not re-read from `currentSeasonId` at submit — the form
+	// Captured at OPEN, not re-read from `manageableSeasonId` at submit — the form
 	// has no season picker of its own (unlike event-create's), so its season is
 	// fixed to whichever season the panel was managing when [+ Series] was
 	// clicked.
@@ -3073,11 +3242,11 @@
 		return date.slice(0, 10);
 	}
 
-	/** Opened ONLY from inside the panel — `currentSeasonId` is always the
+	/** Opened ONLY from inside the panel — `manageableSeasonId` is always the
 	 *  panel's own season while it is open, so there is nothing to guard here
 	 *  T4's two-entry-point form needs (no season switch is possible). */
 	function openSeriesCreateForm(): void {
-		if (currentSeasonId === null) return;
+		if (manageableSeasonId === null) return;
 		// #132/T6 review F1 — see `openSeasonCreateForm`.
 		// #138 — widened from `anyCreateSubmitting` to `createEntryPointsBlocked`
 		// (see that flag's doc): the CURRENT db can carry a stopped run's resume
@@ -3090,7 +3259,7 @@
 		// creation form.
 		closeSeasonCreateForm();
 		closeEventCreateForm();
-		seriesCreateSeasonId = currentSeasonId;
+		seriesCreateSeasonId = manageableSeasonId;
 		seriesCreateName = '';
 		seriesCreateType = 'rehearsal';
 		seriesCreateDuration = '';
@@ -3150,7 +3319,7 @@
 	 * (abandon it) are all back, and no new copy is needed.
 	 *
 	 * Called from the agenda load's success handler — that is the first moment
-	 * `currentSeasonId` and `seasons` describe the db being returned to, and
+	 * `manageableSeasonId` and `seasons` describe the db being returned to, and
 	 * `openSeasonManagePanel` needs both.
 	 */
 	function restoreSeriesCreateRun(): void {
@@ -3174,14 +3343,15 @@
 		if (seriesCreateOpen || (seriesCreateSubmitting && seriesRunDb === current.db)) return;
 		const entry = seriesCreateResumeByDb[current.db];
 		if (!entry) return;
-		if (currentSeasonId !== entry.form.seasonId) {
-			// The run's season is no longer this collective's CURRENT one, so the
-			// panel that owns the form cannot be opened for it and neither can the
-			// [+ Series] button that would duplicate it. Keeping the record would
-			// freeze the season/event entry points forever with nothing on screen to
-			// explain it, so reap it — loudly (house rule), never silently.
+		if (manageableSeasonId !== entry.form.seasonId) {
+			// The run's season is no longer this collective's MANAGEABLE one, so
+			// the panel that owns the form cannot be opened for it and neither can
+			// the [+ Series] button that would duplicate it. Keeping the record
+			// would freeze the season/event entry points forever with nothing on
+			// screen to explain it, so reap it — loudly (house rule), never
+			// silently.
 			console.warn(
-				'agenda: dropping a series resume record whose season is no longer current',
+				'agenda: dropping a series resume record whose season is no longer manageable',
 				current.db,
 				entry.form.seasonId
 			);
@@ -3367,9 +3537,10 @@
 		}
 		const cfg = { db: current.db, token: getToken() ?? '' };
 		// Captured up front (T4's F2 discipline): the bulk success path's
-		// `loadForSelected` re-derives `currentSeasonId` from the reload, so this
-		// is what the post-write refresh compares against.
-		const panelSeasonId = currentSeasonId;
+		// `loadForSelected` re-derives `manageableSeasonId` from the reload, so
+		// this is what the post-write refresh compares against (#167 — the
+		// panel's season is the MANAGEABLE one, not `currentSeasonId`).
+		const panelSeasonId = manageableSeasonId;
 		// #137 — the run's OWN db, pinned at submit. `selected` is a live
 		// `$derived` off the collective-picker store: a switch mid-run re-points
 		// it at the new collective, but `cfg` (and every closed-over id in this

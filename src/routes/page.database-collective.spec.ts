@@ -106,6 +106,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
@@ -139,15 +140,12 @@ function currentSeason(): Season {
 
 function agendaResult() {
 	const season = currentSeason();
-	return {
-		upcoming: [],
-		recent: [],
+	return fullAgendaResult({
 		seasonId: season.id,
-		seasonConductors: [],
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: [season]
-	};
+	});
 }
 
 function fixtureRows(): RosterRow[] {

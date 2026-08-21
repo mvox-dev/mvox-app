@@ -233,6 +233,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
 import { authStore } from '$lib/auth/session';
@@ -276,15 +277,13 @@ function currentSeason(viewerIsEditor: boolean): Season {
 function agendaResult(opts: { editor?: boolean } = {}) {
 	const { editor = true } = opts;
 	const season = currentSeason(editor);
-	return {
-		upcoming: [],
-		recent: [],
+	return fullAgendaResult({
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: [season]
-	};
+	});
 }
 
 /** The panel's existing lists (T3 shapes) — present so the panel renders. */

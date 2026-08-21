@@ -3,6 +3,7 @@
 // M2 fix (Bentham MUST-FIX): a rejecting loadAgenda() used to leave agendaLoading
 // stuck at true forever — permanent skeleton, no error, no recovery. This spec
 // covers the error state + retry affordance added in +page.svelte.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -172,7 +173,7 @@ describe('+page — agenda load error + retry (M2)', () => {
 
 	it('retry re-invokes loadAgenda and recovers on success', async () => {
 		loadFullAgendaMock.mockRejectedValueOnce(new Error('network down'));
-		loadFullAgendaMock.mockResolvedValueOnce({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValueOnce(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] }));
 		setAuthedWithOneCollective();
 		const { container } = render(Page);
 
@@ -196,7 +197,7 @@ describe('+page — agenda load error + retry (M2)', () => {
 		loadFullAgendaMock.mockImplementationOnce(
 			() => new Promise((_resolve, reject) => { rejectFirst = reject; })
 		);
-		loadFullAgendaMock.mockResolvedValueOnce({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] });
+		loadFullAgendaMock.mockResolvedValueOnce(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] }));
 		setAuthedWithTwoCollectives();
 		const { container } = render(Page);
 

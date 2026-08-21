@@ -2,7 +2,7 @@ import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
 import { selectedCollectiveStore } from '$lib/collectives/store';
 import { listSeasons, listRehearsals, type EntuCfg } from '$lib/seasons/entuSeasons';
-import { currentSeason, recentEvents } from '$lib/attendance/conductorLogic';
+import { currentSeason, manageableSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
 import type { Season } from '$lib/seasons/types';
 
@@ -29,9 +29,29 @@ export interface FullAgendaResult {
 	 * at zero extra fetch cost.
 	 */
 	seasons: Season[];
+	/**
+	 * #167 — the ADMIN's season pick (`manageableSeason`): the current season
+	 * when one runs and has not lapsed, else the soonest NOT-YET-STARTED season
+	 * -- a season is manageable regardless of its dates. `null` only when there
+	 * are no seasons at all. These MIRROR seasonId/seasonOwners/seasonEditors
+	 * whenever a live season is current; they diverge in the future-only case
+	 * and in the lapsed-season case (review F1), which is exactly what lets the
+	 * page's event/series creation controls survive creating a season that has
+	 * not started yet. The VIEWER fields above
+	 * (seasonId/seasonOwners/seasonEditors/recent) keep their existing
+	 * semantics untouched.
+	 */
+	manageableSeasonId: string | null;
+	manageableSeasonOwners: string[];
+	manageableSeasonEditors: string[];
 }
 
 const NO_SEASON = { seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] };
+const NO_MANAGEABLE_SEASON = {
+	manageableSeasonId: null,
+	manageableSeasonOwners: [],
+	manageableSeasonEditors: []
+};
 
 /**
  * #83 fix (F1+F2) -- combined load that fetches seasons + rehearsals ONCE (the
@@ -64,7 +84,16 @@ export async function listFullAgenda(
 		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));
 
 	const season = currentSeason(seasons, now);
-	if (!season) return { upcoming, recent: [], seasons, ...NO_SEASON };
+	const manageable = manageableSeason(seasons, now);
+	const manageableFields = manageable
+		? {
+				manageableSeasonId: manageable.id,
+				manageableSeasonOwners: manageable.owners,
+				manageableSeasonEditors: manageable.editors
+			}
+		: NO_MANAGEABLE_SEASON;
+
+	if (!season) return { upcoming, recent: [], seasons, ...NO_SEASON, ...manageableFields };
 
 	const seasonData = paired.find((p) => p.seasonId === season.id);
 	const recent = recentEvents(seasonData?.items ?? [], now);
@@ -76,7 +105,8 @@ export async function listFullAgenda(
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
-		seasonEditors: season.editors
+		seasonEditors: season.editors,
+		...manageableFields
 	};
 }
 
@@ -93,7 +123,8 @@ export async function loadFullAgenda(
 ): Promise<FullAgendaResult> {
 	const collective = get(selectedCollectiveStore);
 	const token = getToken();
-	if (!collective || !token) return { upcoming: [], recent: [], seasons: [], ...NO_SEASON };
+	if (!collective || !token)
+		return { upcoming: [], recent: [], seasons: [], ...NO_SEASON, ...NO_MANAGEABLE_SEASON };
 	return listFullAgenda({ db: collective.db, token }, now, fetchImpl);
 }
 

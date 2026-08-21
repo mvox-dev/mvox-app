@@ -19,6 +19,7 @@
 // (`[data-testid="agenda-recent-row-<id>"] [data-testid="attendance-panel"]`).
 // That scoping is the whole point: the current bottom-of-page panel exists in
 // the document but is NOT a descendant of any row, so these fail RED today.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -190,7 +191,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
  * delivers them: past-1 is the MOST RECENT (top) row.
  */
 function setThreeConductedRecentEventsFixture() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
@@ -201,7 +202,7 @@ function setThreeConductedRecentEventsFixture() {
 		seasonConductors: ['person-p'], // seat inherited season-wide — all three rows conducted
 		seasonOwners: [],
 		seasonEditors: []
-	});
+	}));
 	loadRosterMock.mockResolvedValue([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }

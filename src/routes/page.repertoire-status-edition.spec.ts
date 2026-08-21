@@ -19,6 +19,7 @@
 //   F5b — one unified edition picker (no [Pin] button); changing it drives
 //         pinEdition on the wire with no confirm step. A work with no
 //         editions gets no picker on the page either.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -111,7 +112,7 @@ const REPERTOIRE_ITEMS = [
  *  management surface under test renders. Write routes answer like the
  *  wiring spec's world so the GET → POST → DELETE replace flow completes. */
 function installWorld() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [
 			{
 				id: 'ev-1',
@@ -129,7 +130,7 @@ function installWorld() {
 		seasonConductors: [],
 		seasonOwners: [],
 		seasonEditors: ['person-p']
-	});
+	}));
 
 	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);

@@ -26,6 +26,7 @@
 //      - a CONDUCTOR can expand the summary into the full-roster per-member
 //        rates; a non-conductor has no expand affordance at all.
 
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deriveAttendanceRate, deriveAllMemberRates } from './attendanceSummary';
@@ -300,7 +301,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
  * past-4 was never recorded.
  */
 function setMemberFixture() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 		upcoming: [agendaItem('up-1', '2027-06-17T16:00:00.000Z')],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z'),
@@ -310,7 +311,7 @@ function setMemberFixture() {
 		],
 		seasonId: 's1',
 		seasonConductors: ['someone-else'], seasonOwners: [], seasonEditors: [], seasons: [] // person-p holds no conductor seat
-	});
+	}));
 	findMyMemberIdMock.mockResolvedValue('m-me');
 	listMyAttendanceMock.mockResolvedValue([
 		{ attendanceId: 'a1', eventId: 'past-1', status: 'present' },
@@ -326,7 +327,7 @@ function setMemberFixture() {
  * Expected rates: m1 attended 2 of 2, m2 attended 0 of 2.
  */
 function setConductorFixture() {
-	loadFullAgendaMock.mockResolvedValue({
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z'),
@@ -334,7 +335,7 @@ function setConductorFixture() {
 		],
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [], seasons: []
-	});
+	}));
 	findMyMemberIdMock.mockResolvedValue('m1');
 	listMyAttendanceMock.mockResolvedValue([
 		{ attendanceId: 'a1', eventId: 'past-1', status: 'present' },
@@ -508,7 +509,7 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 		// Setup: member with attendance records for 5 events, but only 2 of those
 		// events are in the current season's recentItems. Without the F1 fix,
 		// mySeasonRate would be { attended: 4, total: 2 } — "Attended 4 of 2".
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 			upcoming: [],
 			recent: [
 				agendaItem('current-1', '2027-06-10T16:00:00.000Z'),
@@ -516,7 +517,7 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 			],
 			seasonId: 's2',
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
-		});
+		}));
 		findMyMemberIdMock.mockResolvedValue('m-me');
 		// 5 records: 2 for current-season events, 3 for old-season events.
 		// listMyAttendance returns ALL (no season filter on the server side).
@@ -568,12 +569,12 @@ describe('+page — F2 fix: season roster rates error state', () => {
 
 describe('+page — F4 fix: summary and badges are gated on membership', () => {
 	it('a non-member does NOT see the season summary or attendance badges', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z')],
 			seasonId: 's1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
-		});
+		}));
 		// Confirmed non-member (null member id).
 		findMyMemberIdMock.mockResolvedValue(null);
 		listMyAttendanceMock.mockResolvedValue([]);
@@ -590,12 +591,12 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 	});
 
 	it('while membership is still loading, badges and summary are hidden (fail-safe)', async () => {
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z')],
 			seasonId: 's1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
-		});
+		}));
 		// Member lookup hangs forever — membership stays 'loading'.
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));
 		listMyAttendanceMock.mockResolvedValue([]);

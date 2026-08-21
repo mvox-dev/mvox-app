@@ -184,6 +184,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
@@ -222,29 +223,19 @@ function currentSeason(viewerIsEditor: boolean): Season {
 function agendaResult(opts: { editor?: boolean; conductors?: string[] } = {}) {
 	const { editor = true, conductors = [] } = opts;
 	const season = { ...currentSeason(editor), conductors };
-	return {
-		upcoming: [],
-		recent: [],
+	return fullAgendaResult({
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: [season]
-	};
+	});
 }
 
 /** NO season at all — the only state whose season-create gate needs the
  *  organization-rights round-trip (and the only place its 'error' can leak). */
 function noSeasonsResult() {
-	return {
-		upcoming: [],
-		recent: [],
-		seasonId: null as unknown as string,
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: [],
-		seasons: [] as Season[]
-	};
+	return fullAgendaResult();
 }
 
 function fixtureRows(): RosterRow[] {

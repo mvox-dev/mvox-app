@@ -208,6 +208,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
@@ -260,27 +261,29 @@ function upcomingSeason(): Season {
 function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } = {}) {
 	const { editor = true, withUpcomingSeason = false } = opts;
 	const season = currentSeason(editor);
-	return {
-		upcoming: [],
-		recent: [],
+	return fullAgendaResult({
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
-	};
+	});
 }
 
-/** No season is CURRENT — a lapsed one exists (its editor may CREATE a season,
- *  per T2, but there is no season to put an event under from this page). */
-function noCurrentSeasonResult(): ReturnType<typeof agendaResult> {
-	return {
-		upcoming: [],
-		recent: [],
-		seasonId: null as unknown as string,
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: [],
+/**
+ * The collective's ONLY season ended yesterday, with nothing queued behind it.
+ *
+ * This is NOT a "no season" shape, however much it reads like one:
+ * `currentSeason` ignores `end_date` by design (a lapsed season can still own
+ * real events — agendaData's "Fila hooaeg" note) and answers `season-0`, and
+ * `manageableSeason` finds no not-yet-started successor and falls back to that
+ * same season (step 3). The builder derives both from the season list, so this
+ * is a shape `listFullAgenda` can genuinely return — unlike the earlier
+ * hand-pinned version, which claimed `seasonId: null` AND
+ * `manageableSeasonId: null` for this very list (#167 review round 2, F3).
+ */
+function lapsedOnlySeasonResult(viewerIsEditor: boolean): ReturnType<typeof agendaResult> {
+	return fullAgendaResult({
 		seasons: [
 			{
 				id: 'season-0',
@@ -289,10 +292,10 @@ function noCurrentSeasonResult(): ReturnType<typeof agendaResult> {
 				endDate: isoDate(-1),
 				conductors: [],
 				owners: [],
-				editors: ['person-p']
+				editors: viewerIsEditor ? ['person-p'] : []
 			}
 		]
-	};
+	});
 }
 
 function fixtureRows(): RosterRow[] {
@@ -563,12 +566,31 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 		expect(q(container, 'event-create')).toBeNull();
 	});
 
-	it('NO current season (only a lapsed one the viewer edits): no event-create — there is no running season to put an event under', async () => {
-		loadFullAgendaMock.mockResolvedValue(noCurrentSeasonResult());
+	it('the only season LAPSED yesterday and nothing is queued behind it: event-create RENDERS — `manageableSeason` falls back to that season, and it is still where a new event belongs', async () => {
+		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(true));
 		const container = await renderReady();
 
 		await waitFor(() => {
 			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'event-create')).not.toBeNull();
+		});
+		// The rights rode along on the season list — no database-entity round-trip.
+		expect(resolveManageRightsMock).not.toHaveBeenCalled();
+	});
+
+	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides event-create', async () => {
+		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(false));
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		// The season carries no visible rights, so the database entity is asked —
+		// and its 'not-editor' answer (the suite default) is not a grant.
+		await waitFor(() => {
+			expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
 		});
 		expect(q(container, 'event-create')).toBeNull();
 	});

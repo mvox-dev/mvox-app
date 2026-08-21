@@ -8,6 +8,7 @@
 //   - confirmed non-member       → control disabled + hint
 //   - confirmed member           → control enabled, no hint
 //   - a rejected write           → per-row error surfaced + optimistic value reverts
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -187,7 +188,7 @@ afterEach(() => {
 
 describe('+page — membership 3-state gates the non-member hint', () => {
 	it('while membership is UNRESOLVED (findMyMemberId still in flight) the control is disabled with NO non-member hint', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {})); // never resolves — stays loading
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -200,7 +201,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a CONFIRMED non-member (findMyMemberId resolves null) shows disabled control + the hint', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue(null);
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -216,7 +217,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a CONFIRMED member (findMyMemberId resolves an id) enables the control and shows no hint', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -231,7 +232,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	});
 
 	it('a lookup FAILURE (findMyMemberId rejects) does NOT assert non-member — disabled, no false hint (fail-safe)', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockRejectedValue(new Error('lookup boom'));
 		listMyRsvpsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
@@ -252,7 +253,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 
 describe('+page — write-failure feedback (a rejected rsvp save)', () => {
 	it('a rejected write surfaces a per-row save-failed error AND reverts the optimistic value', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue([]);
 		applyRsvpChangeMock.mockRejectedValue(new Error('save failed'));

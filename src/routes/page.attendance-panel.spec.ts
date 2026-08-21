@@ -10,6 +10,7 @@
 // handler presence and asserted ABSENT). TA.3 wires it — the same conductor
 // fixture that previously asserted `take-attendance-btn` null now asserts it
 // present, and drives the full expand flow.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -211,7 +212,7 @@ function deferred<T>() {
 
 /** TWO conducted recent events sharing the same roster — for cross-event bleed regressions. */
 function setTwoConductedRecentEventsFixture() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
@@ -219,7 +220,7 @@ function setTwoConductedRecentEventsFixture() {
 		],
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // seat inherited season-wide — both events are conducted
-	});
+	}));
 	loadRosterMock.mockResolvedValue([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
@@ -231,12 +232,12 @@ function setTwoConductedRecentEventsFixture() {
 
 /** One conducted recent event + a two-member roster; m1 answered 'going', m2 never answered. */
 function setConductedRecentFixture() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // person-p inherits the seat (event list empty)
-	});
+	}));
 	loadRosterMock.mockResolvedValue([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
@@ -282,12 +283,12 @@ describe('+page — the Take attendance entry point (#84 TA.3)', () => {
 	});
 
 	it('a NON-conductor sees the recent row but no take-attendance button — the panel is unreachable', async () => {
-		loadFullAgendaMock.mockResolvedValue({ seasons: [],
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming: [],
 			recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
 			seasonId: 's1',
 			seasonConductors: ['other-person'], seasonOwners: [], seasonEditors: [] // person-p holds no seat
-		});
+		}));
 		setAuthedWithOneCollective('person-p');
 		const { container } = render(Page);
 

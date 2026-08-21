@@ -15,6 +15,7 @@
 // the actual page route, click the actual button, and assert on the button's
 // presence INSIDE the owning row — so an implementation that only patches a
 // component unit test without re-wiring AgendaList cannot go green here.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -183,7 +184,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
  *  row whose panel is open, not a page-wide blanket. Reverse-chron, as the
  *  page delivers them. */
 function setTwoConductedRecentEventsFixture() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
@@ -193,7 +194,7 @@ function setTwoConductedRecentEventsFixture() {
 		seasonConductors: ['person-p'], // seat inherited season-wide — both rows conducted
 		seasonOwners: [],
 		seasonEditors: []
-	});
+	}));
 	loadRosterMock.mockResolvedValue([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
 	]);

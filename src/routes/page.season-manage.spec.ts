@@ -57,6 +57,7 @@
 //       (the panel survives); Escape on the panel itself dismisses the panel.
 //     - a saved edit persists across close/reopen WITHOUT re-saving and WITHOUT
 //       a full agenda refetch — local state is the truth the panel renders.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -232,27 +233,28 @@ function upcomingSeason(): Season {
 function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } = {}) {
 	const { editor = true, withUpcomingSeason = false } = opts;
 	const season = currentSeason(editor);
-	return {
-		upcoming: [],
-		recent: [],
+	return fullAgendaResult({
 		seasonId: season.id,
 		seasonConductors: season.conductors,
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
-	};
+	});
 }
 
-/** No season is CURRENT — a lapsed one exists (its editor may CREATE, per T2,
- *  but there is nothing to MANAGE). */
-function noCurrentSeasonResult(): ReturnType<typeof agendaResult> {
-	return {
-		upcoming: [],
-		recent: [],
-		seasonId: null as unknown as string,
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: [],
+/**
+ * The collective's ONLY season ended yesterday, with nothing queued behind it.
+ *
+ * Not a "no season" shape: `currentSeason` ignores `end_date` by design and
+ * answers `season-0`, and `manageableSeason` has no not-yet-started successor
+ * to prefer, so it falls back to that same season (step 3). The builder derives
+ * both from the season list, so this is a shape `listFullAgenda` can genuinely
+ * return — unlike the earlier hand-pinned version, which claimed
+ * `seasonId: null` AND `manageableSeasonId: null` for this very list and so
+ * pinned the OPPOSITE of production behaviour (#167 review round 2, F3).
+ */
+function lapsedOnlySeasonResult(viewerIsEditor: boolean): ReturnType<typeof agendaResult> {
+	return fullAgendaResult({
 		seasons: [
 			{
 				id: 'season-0',
@@ -261,10 +263,10 @@ function noCurrentSeasonResult(): ReturnType<typeof agendaResult> {
 				endDate: isoDate(-1),
 				conductors: [],
 				owners: [],
-				editors: ['person-p']
+				editors: viewerIsEditor ? ['person-p'] : []
 			}
 		]
-	};
+	});
 }
 
 function fixtureRows(): RosterRow[] {
@@ -424,12 +426,31 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		expect(q(container, 'season-manage-gear')).toBeNull();
 	});
 
-	it('NO current season (only a lapsed one the viewer edits): no gear — nothing to manage, even though T2 may offer [+ Season]', async () => {
-		loadFullAgendaMock.mockResolvedValue(noCurrentSeasonResult());
+	it('the only season LAPSED yesterday and nothing is queued behind it: the gear RENDERS — its panel is the only way to fix that season’s dates', async () => {
+		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(true));
 		const container = await renderReady();
 
 		await waitFor(() => {
 			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+		});
+		// The rights rode along on the season list — no database-entity round-trip.
+		expect(resolveManageRightsMock).not.toHaveBeenCalled();
+	});
+
+	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the gear', async () => {
+		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(false));
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		// The season carries no visible rights, so the database entity is asked —
+		// and its 'not-editor' answer (the suite default) is not a grant.
+		await waitFor(() => {
+			expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
 		});
 		expect(q(container, 'season-manage-gear')).toBeNull();
 	});
@@ -570,10 +591,10 @@ describe('agenda — season fields edit inline (event/[id] per-field pattern)', 
 
 	it('a season with NO dates set says so — never a bare pencil, and never "Invalid Date"', async () => {
 		const season = currentSeason(true);
-		loadFullAgendaMock.mockResolvedValue({
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 			...agendaResult(),
 			seasons: [{ ...season, startDate: '', endDate: '' }]
-		});
+		}));
 		const container = await renderReady();
 		const panel = await openPanel(container);
 

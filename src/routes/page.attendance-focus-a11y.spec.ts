@@ -27,6 +27,7 @@
 // Route-level integration on the real +page.svelte — same mock composition as
 // page.attendance-hide-button.spec.ts, so a fix that only patches a component
 // unit test cannot go green here.
+import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -186,14 +187,14 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 }
 
 function setOneConductedRecentEventFixture() {
-	loadFullAgendaMock.mockResolvedValue({ seasons: [],
+	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
 		seasonId: 's1',
 		seasonConductors: ['person-p'],
 		seasonOwners: [],
 		seasonEditors: []
-	});
+	}));
 	loadRosterMock.mockResolvedValue([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
 	]);
