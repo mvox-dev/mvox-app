@@ -95,7 +95,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // deriveCopyAvailability) pulls entuFetch -> $lib/entu-config, which reads
 // $env/dynamic/public — unavailable outside a SvelteKit request context under
 // happy-dom. Same fix as page.profile.spec.ts.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));

@@ -26,7 +26,7 @@ describe('exchangeSession (db-less client exchange)', () => {
 
 		const [url, init] = fetchMock.mock.calls[0];
 		// db-less by design: the token's `accounts` map must span every collective.
-		expect(String(url)).toBe('https://api.entu.app/auth');
+		expect(String(url)).toBe('https://api.entu-test.invalid/auth');
 		expect(String(url)).not.toContain('?db=');
 		expect(init.headers.Authorization).toBe('Bearer session-abc');
 	});

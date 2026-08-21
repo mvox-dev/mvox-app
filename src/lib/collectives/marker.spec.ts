@@ -13,7 +13,7 @@ describe('checkCollectiveMarker', () => {
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const [url, init] = fetchImpl.mock.calls[0];
 		expect(url).toBe(
-			`https://api.entu.app/polyphony/entity?_type.string=${MVOX_COLLECTIVE_MARKER_TYPE}&props=name&limit=1`
+			`https://api.entu-test.invalid/polyphony/entity?_type.string=${MVOX_COLLECTIVE_MARKER_TYPE}&props=name&limit=1`
 		);
 		expect(init.headers.Authorization).toBe('Bearer jwt-abc');
 	});

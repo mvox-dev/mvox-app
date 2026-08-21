@@ -61,7 +61,7 @@ describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
 		);
 		const seasonsUrl = urls.find((u) => u.includes('_type.string=season'));
 		expect(seasonsUrl).toBeDefined();
-		expect(seasonsUrl).toContain('https://api.entu.app/polyphony/entity?');
+		expect(seasonsUrl).toContain('https://api.entu-test.invalid/polyphony/entity?');
 		expect(seasonsUrl).toContain(`_parent.reference=${ORG_ID}`);
 	});
 

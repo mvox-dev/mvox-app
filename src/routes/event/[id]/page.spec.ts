@@ -85,7 +85,7 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // SvelteKit request context. The REAL data layer keeps running against the
 // stubbed base url.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
 import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';

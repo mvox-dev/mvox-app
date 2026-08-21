@@ -43,7 +43,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';

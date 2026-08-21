@@ -50,7 +50,7 @@ vi.mock('$lib/sections/sectionActions', () => ({
 // Severs the entu-config → $env/dynamic/public import under happy-dom (same
 // pattern as page.roster-sections.spec.ts).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';

@@ -25,7 +25,7 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // $lib/entu/request -> $lib/entu-config. Severs the $env/dynamic/public chain
 // (unavailable outside a SvelteKit request context) — the same one-liner
 // layout.reactive-auth.spec.ts and every page spec use.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 // Mutable $app/state stub so a test can put the layout on /profile (loop exemption).
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));

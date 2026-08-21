@@ -893,7 +893,7 @@ describe('transport integration — real entuFetch/entuUrl underneath the seam',
 		const fetchImpl = makeFetchMock();
 		await createSeason(cfg, { ...minimalSeason }, fetchImpl);
 		const [url, init] = createCall(fetchImpl);
-		expect(String(url)).toBe('https://api.entu.app/testdb/entity');
+		expect(String(url)).toBe('https://api.entu-test.invalid/testdb/entity');
 		const headers = init.headers as Record<string, string>;
 		expect(headers.Authorization).toBe('Bearer jwt');
 		expect(headers['Content-Type']).toBe('application/json');

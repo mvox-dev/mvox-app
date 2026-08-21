@@ -80,6 +80,34 @@ describe('migration scripts can import the shared Entu data layer under node/tsx
 
 		expect(out).toContain('TAGGED OK');
 	});
+
+	// #163 C5 — the in-process `globalThis.fetch` monkeypatch (networkGuard.setup.ts)
+	// never reaches this REAL child `node` process; `MVOX_TEST_NO_NETWORK=1` is the
+	// only signal that survives the process boundary (vitest.config.ts `test.env`,
+	// inherited by execFileSync's default env). Confirms register-loader.mjs installs
+	// its own network-blocking `globalThis.fetch` here, so entuFetch's default
+	// (unmocked) fetchImpl is blocked in this REAL child process too — not just
+	// under vitest's in-process patch.
+	it('MVOX_TEST_NO_NETWORK=1, inherited from the parent test process, blocks entuFetch with no explicit fetchImpl', () => {
+		const out = runUnderMigrationLoader(
+			[
+				"import { entuFetch } from '$lib/entu/request';",
+				"if (process.env.MVOX_TEST_NO_NETWORK !== '1') throw new Error('fixture did not inherit MVOX_TEST_NO_NETWORK=1');",
+				'let caught: unknown;',
+				'try {',
+				"  await entuFetch('polyphony', 'entity?limit=1', 'fake-token');",
+				'} catch (e) {',
+				'  caught = e;',
+				'}',
+				"if (!(caught instanceof Error) || !/test isolation/i.test(caught.message)) {",
+				"  throw new Error('expected a test-isolation rejection, got ' + String(caught));",
+				'}',
+				"console.log('ISOLATED OK');"
+			].join('\n')
+		);
+
+		expect(out).toContain('ISOLATED OK');
+	});
 });
 
 // (*MVOX:Josquin*)

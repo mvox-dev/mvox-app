@@ -129,7 +129,7 @@ describe('listEventSeriesForSeason — series with event counts, no N+1', () => 
 
 		const seriesCall = calls.find((c) => c.url.includes('_type.string=event_series'));
 		expect(seriesCall).toBeDefined();
-		expect(seriesCall!.url).toContain('https://api.entu.app/polyphony/entity?');
+		expect(seriesCall!.url).toContain('https://api.entu-test.invalid/polyphony/entity?');
 		expect(seriesCall!.url).toContain('_parent.reference=season1');
 		expect(seriesCall!.url).toContain('name');
 	});

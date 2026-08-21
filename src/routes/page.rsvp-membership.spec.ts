@@ -56,7 +56,7 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 // $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
 // request context under happy-dom. Same one-line fix the library/profile specs
 // already use; the real modules keep running, only the base url is stubbed.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 // ...and the page resolves management rights per season/event on every load.
 // Only that ONE call is stubbed (the pure helpers and the write functions stay
 // real): left alone it issues a live request per agenda event, which is both a

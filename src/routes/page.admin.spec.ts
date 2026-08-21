@@ -175,7 +175,7 @@ vi.mock('$lib/invite/inviteData', () => ({
 // page.admin-invite.spec.ts.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';

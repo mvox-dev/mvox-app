@@ -137,7 +137,7 @@ vi.mock('$lib/invite/inviteData', () => ({
 // entu-config) and the store's `goto` import.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import { goto } from '$app/navigation';
 import NavShell from '$lib/components/nav/NavShell.svelte';

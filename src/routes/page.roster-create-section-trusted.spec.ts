@@ -42,7 +42,7 @@ vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 // sectionData and sectionActions are NOT mocked — the REAL read parses the
 // live-shaped wire and the REAL writes hit the fetch stub below.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';

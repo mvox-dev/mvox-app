@@ -39,7 +39,7 @@ const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // Severs the $env/dynamic/public chain (unavailable outside a SvelteKit request
 // context under happy-dom) — same one-liner every page spec uses.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 // The single-flight redirect guard is module state — every test gets a FRESH
 // module instance so one test's fired redirect can't leak into the next.

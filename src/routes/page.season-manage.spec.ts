@@ -131,7 +131,7 @@ vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // $env/dynamic/public is unavailable outside a SvelteKit request context under
 // happy-dom; stubbing the base url keeps every real module in play.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({

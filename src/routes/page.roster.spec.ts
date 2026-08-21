@@ -58,7 +58,7 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 // Same severing, for the OTHER real chain this page now pulls in: sectionData's
 // mock below keeps groupBySection real (importOriginal), which loads sectionData.ts's
 // own `entuFetch` import (→ $lib/entu-config → $env/dynamic/public) at module scope.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';

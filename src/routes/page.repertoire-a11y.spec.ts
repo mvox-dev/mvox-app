@@ -109,7 +109,7 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));

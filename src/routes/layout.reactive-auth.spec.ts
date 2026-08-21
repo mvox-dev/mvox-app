@@ -22,7 +22,7 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // #107 review F1 — entuFetch (imported below to fire a REAL 401) reaches
 // $lib/entu-config, which reads $env/dynamic/public: unavailable under
 // happy-dom outside a SvelteKit request context.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Layout from './+layout.svelte';
 import { entuFetch } from '$lib/entu/request';
@@ -42,7 +42,7 @@ function setAuthedAuthStore() {
 beforeEach(() => {
 	// The layout's completion-gate and admin effects fire entuFetch against the
 	// GLOBAL fetch the moment auth resolves. Left unstubbed, happy-dom issues REAL
-	// requests to api.entu.app — which answer 401 and, since #107's recovery, quite
+	// requests to api.entu-test.invalid — which answer 401 and, since #107's recovery, quite
 	// correctly tear the session down mid-test. Pin them to a benign 200 so the
 	// only 401 in this file is the one a test fires deliberately.
 	vi.stubGlobal(

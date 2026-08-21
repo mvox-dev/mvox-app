@@ -99,7 +99,7 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 // write layer reaches $env/dynamic/public (unavailable under happy-dom outside
 // a SvelteKit request context), and the works/rights loads are not this file's
 // subject.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn().mockResolvedValue('not-editor')

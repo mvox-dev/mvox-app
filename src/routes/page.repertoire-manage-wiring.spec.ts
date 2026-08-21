@@ -30,7 +30,7 @@ vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock })
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // $env/dynamic/public is unavailable outside a SvelteKit request context under
 // happy-dom; stubbing the base url keeps every real module in play.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu.app/' }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // Supplementary page data, irrelevant here — mocked to keep the fetch router
 // focused on the repertoire traffic under test.
@@ -324,8 +324,8 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			expect(postsTo(fetchMock, 'entity/ri-1').length).toBe(1);
 		});
 		const urls = fetchMock.mock.calls.map(([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`);
-		expect(urls).toContain('GET https://api.entu.app/polyphony/entity/ri-1?props=status');
-		expect(urls).toContain('DELETE https://api.entu.app/polyphony/property/val-status');
+		expect(urls).toContain('GET https://api.entu-test.invalid/polyphony/entity/ri-1?props=status');
+		expect(urls).toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-1')[0][1]!.body))).toEqual([
 			{ type: 'status', string: 'learning' }
 		]);
@@ -431,14 +431,14 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			const calls = fetchMock.mock.calls.map(
 				([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`
 			);
-			expect(calls).toContain('DELETE https://api.entu.app/polyphony/property/val-status');
+			expect(calls).toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
 		});
 		const calls = fetchMock.mock.calls.map(
 			([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`
 		);
-		const postIdx = calls.findIndex((c) => c === 'POST https://api.entu.app/polyphony/entity/ri-1');
+		const postIdx = calls.findIndex((c) => c === 'POST https://api.entu-test.invalid/polyphony/entity/ri-1');
 		const deleteIdx = calls.findIndex(
-			(c) => c === 'DELETE https://api.entu.app/polyphony/property/val-status'
+			(c) => c === 'DELETE https://api.entu-test.invalid/polyphony/property/val-status'
 		);
 		expect(deleteIdx).toBeGreaterThan(postIdx);
 	});
@@ -534,7 +534,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 				([, init]) => (init as RequestInit | undefined)?.method === 'DELETE'
 			);
 			expect(deletes.map(([url]) => String(url))).toContain(
-				'https://api.entu.app/polyphony/entity/ri-1'
+				'https://api.entu-test.invalid/polyphony/entity/ri-1'
 			);
 		});
 	});
@@ -640,7 +640,7 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 			const deletes = fetchMock.mock.calls
 				.filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
 				.map(([url]) => String(url));
-			expect(deletes).toContain('https://api.entu.app/polyphony/entity/pi-a');
+			expect(deletes).toContain('https://api.entu-test.invalid/polyphony/entity/pi-a');
 		});
 		const deletes = fetchMock.mock.calls
 			.filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
