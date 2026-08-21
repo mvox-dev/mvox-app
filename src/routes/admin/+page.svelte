@@ -321,16 +321,21 @@
 								>{person.name}
 								<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 							>
-							<button
-								type="button"
-								data-testid="admin-remove-{person.id}"
-								disabled={!canManageAdmins || isLastOwner(person) || isSelf(person)}
-								title={isSelf(person) ? m.admin_roles_remove_self_hint() : undefined}
-								class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
-								onclick={() => onRemoveAdmin(person.id)}
-							>
-								{m.admin_roles_remove({ name: person.name })}
-							</button>
+							<!-- #164 — the viewer's OWN row renders NO Remove button at all
+							     (not merely disabled): a disabled control was still read as
+							     clickable on live /admin. Same shape #148 chose for the
+							     library-owner row. -->
+							{#if !isSelf(person)}
+								<button
+									type="button"
+									data-testid="admin-remove-{person.id}"
+									disabled={!canManageAdmins || isLastOwner(person)}
+									class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
+									onclick={() => onRemoveAdmin(person.id)}
+								>
+									{m.admin_roles_remove({ name: person.name })}
+								</button>
+							{/if}
 						</li>
 					{/each}
 				</ul>

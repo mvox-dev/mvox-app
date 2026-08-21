@@ -689,7 +689,11 @@ describe('/admin — self-lockout guard (#147)', () => {
 		valueIds: ['pv-own-self']
 	};
 
-	it("an admin holding only _editor sees HER OWN remove button disabled, even though canManage is true and she isn't the last owner", async () => {
+	// #164 revision — the contract HARDENS: a disabled button was still a
+	// rendered control Mihkel read as clickable ("Eemalda Mihkel Putrinš" next
+	// to his own row). The self row now renders NO Remove button at all — same
+	// resolution #148 chose for the library-owner row.
+	it("an admin holding only _editor gets NO remove button on HER OWN row (#164 — not rendered, not merely disabled), even though canManage is true and she isn't the last owner", async () => {
 		selectPolyphony();
 		loadOk();
 		const EMIL = { id: 'p-emil', name: 'Emil Erg', role: 'owner' as const, valueIds: ['pv-own-emil'] };
@@ -699,32 +703,35 @@ describe('/admin — self-lockout guard (#147)', () => {
 
 		const { container } = await renderReady();
 
-		expect(q<HTMLButtonElement>(container, 'admin-remove-admin-p')!.disabled).toBe(true);
+		// Her row still renders (name + badge) — only the control is gone.
+		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
+		expect(q(container, 'admin-remove-admin-p')).toBeNull();
 		// Anna's and Emil's rows are untouched by the guard — different people.
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-anna')!.disabled).toBe(false);
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-emil')!.disabled).toBe(false);
 	});
 
-	it('an owner among TWO owners still gets HER OWN remove button disabled — self-lockout applies even when she is not the last owner', async () => {
+	it('an owner among TWO owners still gets NO remove button on HER OWN row — self-lockout applies even when she is not the last owner (#164)', async () => {
 		selectPolyphony();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_OWNER]));
 
 		const { container } = await renderReady();
 
-		// Two owners → isLastOwner is false for both, but isSelf still disables
-		// her own row.
-		expect(q<HTMLButtonElement>(container, 'admin-remove-admin-p')!.disabled).toBe(true);
+		// Two owners → isLastOwner is false for both, but the self row still
+		// offers no control.
+		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
+		expect(q(container, 'admin-remove-admin-p')).toBeNull();
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-anna')!.disabled).toBe(false);
 	});
 
-	it('clicking a self-disabled admin remove button never calls removeAdmin', async () => {
+	it('with the self button unrendered there is nothing to click — removeAdmin is unreachable for the own row (#164)', async () => {
 		selectPolyphony();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
 
 		const { container } = await renderReady();
-		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-remove-admin-p')!);
+		expect(q(container, 'admin-remove-admin-p')).toBeNull();
 		expect(h.removeAdminMock).not.toHaveBeenCalled();
 	});
 
@@ -743,12 +750,12 @@ describe('/admin — self-lockout guard (#147)', () => {
 		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
 	});
 
-	// The guard is only half the fix: a greyed-out "Remove Admin Person" with no
-	// stated reason is the bug report we'd get next. A `title` on a DISABLED
-	// button is not that reason — UAs suppress tooltips on disabled controls and
-	// the control is out of the tab order, so assistive tech never announces it.
-	// The reason has to be rendered text, like the last-owner hint next to it.
-	it('renders the self-lockout reason as VISIBLE text under the admin list, not only as a title on the disabled button', async () => {
+	// The guard is only half the fix: a self row with no button and no stated
+	// reason is the bug report we'd get next ("where did my Remove go?"). The
+	// reason has to be rendered text, like the last-owner hint next to it —
+	// under #164 the button is gone entirely, so this hint is the ONLY place
+	// the rule is explained.
+	it('renders the self-lockout reason as VISIBLE text under the admin list even though the own row carries no button', async () => {
 		selectPolyphony();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
@@ -799,6 +806,108 @@ describe('/admin — self-lockout guard (#147)', () => {
 
 		expect(q(container, 'librarian-remove-admin-p')).toBeNull();
 		expect(q(container, 'admin-roles-librarians-self-hint')).toBeNull();
+	});
+});
+
+// ── #164 — the viewer's OWN admin row renders NO Remove button ──────────────────
+//
+// Mihkel's report (2026-08-21), live /admin, two owners (db-root + himself):
+// his own row showed an active "Eemalda Mihkel Putrinš" button whose click
+// only then ran into the guard. A disabled control was not enough — the own
+// row must offer NO Remove control at all (the same shape #148 settled on for
+// the library-owner row). The server-side lockout guard in roleManagement.ts
+// stays untouched as defense in depth (pinned in roleManagement.spec.ts).
+
+describe('/admin — #164 self Remove button is NOT rendered on the own row', () => {
+	// selectPolyphony() gives the viewer personId 'admin-p'.
+	const SELF_OWNER = {
+		id: 'admin-p',
+		name: 'Mihkel Putrinš',
+		role: 'owner' as const,
+		valueIds: ['pv-own-self']
+	};
+	const DB_ROOT = {
+		id: 'p-dbroot',
+		name: 'db-root (mvox dev admin)',
+		role: 'owner' as const,
+		valueIds: ['pv-own-dbroot']
+	};
+
+	it("route integration — Mihkel's exact scenario: two owners, viewer is one of them; HIS row renders name+badge but NO Remove button; the OTHER owner's button renders enabled", async () => {
+		selectPolyphony();
+		loadOk();
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([DB_ROOT, SELF_OWNER]));
+
+		const { container } = await renderReady();
+		const admins = section(container, 'admin-roles-admins');
+
+		// The own row itself still renders — person, localized badge.
+		const selfRow = q(admins, 'admin-entry-admin-p');
+		expect(selfRow, 'expected the viewer\'s own admin row to render').not.toBeNull();
+		expect(selfRow!.textContent).toContain('Mihkel Putrinš');
+		expect(selfRow!.textContent).toContain('(omanik)');
+
+		// #164 core: NO Remove control inside the own row — not disabled, ABSENT.
+		expect(q(admins, 'admin-remove-admin-p')).toBeNull();
+		expect(selfRow!.querySelector('button')).toBeNull();
+
+		// The other owner's button is rendered AND enabled (two owners → not the
+		// last-owner case).
+		const removeDbRoot = q<HTMLButtonElement>(admins, 'admin-remove-p-dbroot');
+		expect(removeDbRoot, 'expected the other owner\'s Remove button').not.toBeNull();
+		expect(removeDbRoot!.disabled).toBe(false);
+	});
+
+	it("route integration — other admins' Remove buttons still WORK normally next to the buttonless own row: a click calls removeAdmin and the list refetches", async () => {
+		selectPolyphony();
+		loadOk();
+		h.listAdminsMock
+			.mockReset()
+			.mockResolvedValueOnce(listing([DB_ROOT, SELF_OWNER, BELA]))
+			.mockResolvedValueOnce(listing([DB_ROOT, SELF_OWNER]));
+
+		const { container } = await renderReady();
+		expect(q(container, 'admin-remove-admin-p')).toBeNull();
+
+		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-remove-p-bela')!);
+
+		await waitFor(() => {
+			expect(h.removeAdminMock).toHaveBeenCalledWith(
+				expect.objectContaining(CFG),
+				'org-1',
+				'p-bela'
+			);
+		});
+		await waitFor(() => {
+			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
+			expect(q(container, 'admin-entry-p-bela')).toBeNull();
+		});
+		// The own row survives the refetch — still buttonless.
+		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
+		expect(q(container, 'admin-remove-admin-p')).toBeNull();
+	});
+
+	it('a self row hides its button even when the viewer is the LAST owner — the own row never grows a control regardless of which guard also applies', async () => {
+		selectPolyphony();
+		loadOk();
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([SELF_OWNER, BELA]));
+
+		const { container } = await renderReady();
+
+		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
+		expect(q(container, 'admin-remove-admin-p')).toBeNull();
+		// Bela (editor, not self) keeps a working control.
+		expect(q<HTMLButtonElement>(container, 'admin-remove-p-bela')!.disabled).toBe(false);
+	});
+
+	it('rows NOT matching viewerId are unaffected: with no self row in the list, every entry renders its Remove button', async () => {
+		selectPolyphony();
+		loadOk(); // ANNA + BELA — the viewer 'admin-p' holds no listed grant
+
+		const { container } = await renderReady();
+
+		expect(q(container, 'admin-remove-p-anna')).not.toBeNull();
+		expect(q(container, 'admin-remove-p-bela')).not.toBeNull();
 	});
 });
 
@@ -983,3 +1092,4 @@ describe('/admin — navigation entry', () => {
 });
 
 // (*MVOX:Tallis* — #134/S3 RED)
+// (*MVOX:Tallis* — #164 RED: self Remove button not rendered on the own row)

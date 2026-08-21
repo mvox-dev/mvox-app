@@ -554,6 +554,34 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 
+	// #164 — defense in depth, pinned. The UI leg of the fix HIDES the Remove
+	// button on the viewer's own row, but the server-side guard here must stay
+	// exactly as it is: any code path that still reaches removeAdmin for the
+	// last own owner (stale client, direct call, other frontend) is refused
+	// BEFORE any write. This test must keep passing untouched through #164.
+	it('#164 defense in depth — a self-removal that would strip the last own _owner still rejects with RoleLockoutError before any write; with another owner remaining it still proceeds (the self rule is the UI\'s leg, not this layer\'s)', async () => {
+		// Leg 1: viewer removes HERSELF as the last own owner → refused, no write.
+		const lockedFetch = vi
+			.fn()
+			.mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER], ownEditors: [BELA_EDITOR] })));
+		await expect(removeAdmin(cfg, 'org-1', 'p-anna', lockedFetch)).rejects.toBeInstanceOf(
+			RoleLockoutError
+		);
+		expect(lockedFetch).toHaveBeenCalledTimes(1); // rights GET only, zero DELETEs
+
+		// Leg 2: the guard is the LAST-owner rule, not a self rule — this layer
+		// has no viewer identity at all. With Emil's owner value remaining,
+		// removing Anna's own grant still goes through unchanged.
+		const openFetch = vi
+			.fn()
+			.mockResolvedValueOnce(json(rollup({ ownOwners: [ANNA_OWNER, EMIL_OWNER] })))
+			.mockResolvedValue(json({}));
+		await removeAdmin(cfg, 'org-1', 'p-anna', openFetch);
+		const deletes = deleteUrls(openFetch);
+		expect(deletes).toHaveLength(1);
+		expect(deletes[0]).toContain('/property/pv-own-anna');
+	});
+
 	it('no matching grant at all (stale UI row): rejects with RoleGrantMissingError, nothing deleted', async () => {
 		const fetchImpl = vi
 			.fn()
