@@ -59,13 +59,13 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// #161 (collective = database) — orgId now rides along too: member-2's
+		// #161 (collective = database) — dbEntityId now rides along too: member-2's
 		// fixture happens to carry a database `_parent`, so she picks one up here
 		// even though this test predates that contract (see
 		// rosterData.database.spec.ts for the dedicated pins).
 		expect(members).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], orgId: undefined },
-			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], orgId: 'org-1' }
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], dbEntityId: undefined },
+			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
 		]);
 	});
 
@@ -85,9 +85,9 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// TU.1/#109 (finding #10) — orgId rides along (see comment above).
+		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
 		expect(members).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], orgId: 'org-1' }
+			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], dbEntityId: 'org-1' }
 		]);
 	});
 
@@ -108,13 +108,13 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// TU.1/#109 (finding #10) — orgId rides along (see comment above).
+		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
 		expect(members).toEqual<ActiveMember[]>([
 			{
 				memberId: 'member-1',
 				personId: 'person-a',
 				sectionIds: ['sec-sop', 'sec-lead'],
-				orgId: 'org-1'
+				dbEntityId: 'org-1'
 			}
 		]);
 	});

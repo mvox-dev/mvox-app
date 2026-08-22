@@ -44,7 +44,7 @@
 //                                 roots — a foreign org's section must not be
 //                                 offered as a parent)
 //     roster-new-section-submit   fires createSection(cfg, { name, parentId,
-//                                 orgId: <the VIEWER's own org id> }) — orgId
+//                                 dbEntityId: <the VIEWER's own org id> }) — dbEntityId
 //                                 from the authenticated person (resolveDatabaseEntityId
 //                                 or her own roster row), NEVER a limit=1 guess
 //     roster-new-section-cancel   closes the form; nothing written
@@ -142,7 +142,7 @@ function liveShapedTree(): SectionNode[] {
 			name: 'Soprano',
 			displayOrder: 1,
 			parentId: null,
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			depth: 0,
 			children: []
 		},
@@ -151,7 +151,7 @@ function liveShapedTree(): SectionNode[] {
 			name: 'Soprano II',
 			displayOrder: 3,
 			parentId: null,
-			orgId: ORG_SIREEN,
+			dbEntityId: ORG_SIREEN,
 			depth: 0,
 			children: []
 		},
@@ -160,7 +160,7 @@ function liveShapedTree(): SectionNode[] {
 			name: 'Alto',
 			displayOrder: 4,
 			parentId: null,
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			depth: 0,
 			children: []
 		}
@@ -176,7 +176,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [EFK_SOPRANO],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -184,7 +184,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }
@@ -354,7 +354,7 @@ describe('/roster — the "+ New section" control lives in Arrange mode (finding
 // ── F1: end-to-end — type name, submit, section APPEARS (and is announced) ──────
 
 describe('/roster — page-level create: type name, submit, the section appears in the arrange list', () => {
-	it("top-level create: createSection(cfg, { name, parentId: null, orgId: <viewer's org> }) fires ONCE; the new row renders TITLED with the name; success is ANNOUNCED (role=status non-empty); NO member assigned; NO refetch", async () => {
+	it("top-level create: createSection(cfg, { name, parentId: null, dbEntityId: <viewer's org> }) fires ONCE; the new row renders TITLED with the name; success is ANNOUNCED (role=status non-empty); NO member assigned; NO refetch", async () => {
 		const container = await renderArrangeReady();
 
 		await openPageForm(container);
@@ -369,7 +369,7 @@ describe('/roster — page-level create: type name, submit, the section appears 
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Tenor 2',
 			parentId: null,
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		});
 
 		// VISIBLE result: the arrange row is on screen, named.
@@ -421,7 +421,7 @@ describe('/roster — page-level create: type name, submit, the section appears 
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Soprano II',
 			parentId: null,
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		});
 	});
 });
@@ -441,7 +441,7 @@ describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 		expect(values).not.toContain(SIREEN_SOPRANO_II);
 	});
 
-	it("name 'Soprano II', parent Soprano: not refused by the foreign flat 'Soprano II'; createSection(cfg, { name, parentId: Soprano, orgId }) fires; the new row renders NESTED under Soprano's row at data-depth 1", async () => {
+	it("name 'Soprano II', parent Soprano: not refused by the foreign flat 'Soprano II'; createSection(cfg, { name, parentId: Soprano, dbEntityId }) fires; the new row renders NESTED under Soprano's row at data-depth 1", async () => {
 		const container = await renderArrangeReady();
 
 		await openPageForm(container);
@@ -458,7 +458,7 @@ describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Soprano II',
 			parentId: EFK_SOPRANO,
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		});
 
 		await waitFor(() => {

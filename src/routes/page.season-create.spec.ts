@@ -23,8 +23,8 @@
 //       on the CURRENT season (the src/routes/+page.svelte:284-292 derivation
 //       that already exists — `_owner` subsumes editor). FAIL-CLOSED: a
 //       non-editor gets NO control, not a disabled one.
-//     - submit calls `createSeason(cfg, { name, orgId, startDate, endDate,
-//       conductorRefs })` — orgId from `resolveDatabaseEntityId(cfg, personId)` (NEVER a
+//     - submit calls `createSeason(cfg, { name, dbEntityId, startDate, endDate,
+//       conductorRefs })` — dbEntityId from `resolveDatabaseEntityId(cfg, personId)` (NEVER a
 //       `_type.string=organization&limit=1` guess — live-verifiably returns the
 //       umbrella federation). NO `_sharing`, NO inherit-rights flag anywhere in
 //       the UI layer: the create body is entirely T1's business, and T1 pins
@@ -219,7 +219,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-grace',
@@ -227,7 +227,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Grace Hopper',
 			email: 'grace@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -235,7 +235,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }
@@ -490,7 +490,7 @@ describe('agenda — the conductor autocomplete searches the collective’s pers
 // ── submit: the write, its params, and the after-party ──────────────────────────
 
 describe('agenda — submit calls createSeason and refreshes', () => {
-	it("full flow: name + dates + one conductor → createSeason(cfg, { name, orgId: <resolveDatabaseEntityId's answer>, startDate, endDate, conductorRefs }) fires ONCE; the form closes; the agenda REFRESHES (loadFullAgenda re-invoked)", async () => {
+	it("full flow: name + dates + one conductor → createSeason(cfg, { name, dbEntityId: <resolveDatabaseEntityId's answer>, startDate, endDate, conductorRefs }) fires ONCE; the form closes; the agenda REFRESHES (loadFullAgenda re-invoked)", async () => {
 		const container = await renderReady();
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
 
@@ -508,7 +508,7 @@ describe('agenda — submit calls createSeason and refreshes', () => {
 		// resolveDatabaseEntityId — never a limit=1 guess, never hardcoded.
 		expect(createSeasonMock).toHaveBeenCalledWith(CFG, {
 			name: 'Autumn 2026',
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			startDate: '2026-09-01',
 			endDate: '2026-12-20',
 			conductorRefs: ['p-ada']
@@ -537,7 +537,7 @@ describe('agenda — submit calls createSeason and refreshes', () => {
 		});
 		expect(createSeasonMock).toHaveBeenCalledWith(CFG, {
 			name: 'Autumn 2026',
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			startDate: '2026-09-01',
 			endDate: '2026-12-20',
 			conductorRefs: []

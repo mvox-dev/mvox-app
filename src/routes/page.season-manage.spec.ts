@@ -277,7 +277,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-grace',
@@ -285,7 +285,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Grace Hopper',
 			email: 'grace@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -293,7 +293,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }

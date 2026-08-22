@@ -8,13 +8,13 @@
 // Two pinned wiring contracts:
 //
 // 1. ORG THREADING (finding #10, root cause A): the page must hand
-//    `createSection` the member's OWN organization id (`RosterRow.orgId`,
+//    `createSection` the member's OWN organization id (`RosterRow.dbEntityId`,
 //    carried from the member's `_parent` — see rosterData.org.spec.ts) so the
 //    data layer never falls back to the live-verifiably-wrong `limit=1`
 //    first-org guess (which returns the umbrella federation "Eesti
 //    Kammerkooride Liit", not the collective). Pinned call shape:
-//    `createSection(cfg, { name, parentId, orgId })` on EVERY create — the data
-//    layer ignores orgId when parentId is set, so uniform threading is correct
+//    `createSection(cfg, { name, parentId, dbEntityId })` on EVERY create — the data
+//    layer ignores dbEntityId when parentId is set, so uniform threading is correct
 //    and simplest.
 //
 // 2. LIVE-SHAPED CREATE → NESTED RENDER (findings #10 root cause B + #8): on
@@ -79,7 +79,7 @@ const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
 /** LIVE-SHAPED tree: four test orgs' sections, ALL FLAT ROOTS (abbreviated to
  *  the rows this spec asserts against — the point is that a flat "Soprano II"
  *  ALREADY EXISTS while Soprano has no children). Each root carries its OWNING
- *  ORG (TU.1/#109 review — `SectionNode.orgId`, read off the organization
+ *  ORG (TU.1/#109 review — `SectionNode.dbEntityId`, read off the organization
  *  `_parent`), which is what keeps Sireen's roots out of EFK's sibling set. */
 function liveShapedTree(): SectionNode[] {
 	return [
@@ -88,7 +88,7 @@ function liveShapedTree(): SectionNode[] {
 			name: 'Soprano',
 			displayOrder: 1,
 			parentId: null,
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			depth: 0,
 			children: []
 		},
@@ -97,7 +97,7 @@ function liveShapedTree(): SectionNode[] {
 			name: 'Soprano II',
 			displayOrder: 3,
 			parentId: null,
-			orgId: ORG_SIREEN,
+			dbEntityId: ORG_SIREEN,
 			depth: 0,
 			children: []
 		},
@@ -106,7 +106,7 @@ function liveShapedTree(): SectionNode[] {
 			name: 'Alto',
 			displayOrder: 4,
 			parentId: null,
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			depth: 0,
 			children: []
 		}
@@ -122,7 +122,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [EFK_SOPRANO],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -130,7 +130,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }
@@ -223,7 +223,7 @@ async function submit(container: HTMLElement): Promise<void> {
 // ── 1. org threading: the page passes the member's own org ──────────────────────
 
 describe("/roster — 'Create + assign' threads the MEMBER'S org id into createSection (finding #10)", () => {
-	it("top-level create for m-pete: createSection(cfg, { name, parentId: null, orgId: <m-pete's org> }) — the page, which KNOWS the org, must say it; the data layer must not guess", async () => {
+	it("top-level create for m-pete: createSection(cfg, { name, parentId: null, dbEntityId: <m-pete's org> }) — the page, which KNOWS the org, must say it; the data layer must not guess", async () => {
 		const container = await renderReady();
 
 		await openForm(container, 'm-pete');
@@ -236,7 +236,7 @@ describe("/roster — 'Create + assign' threads the MEMBER'S org id into createS
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Tenor',
 			parentId: null,
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		});
 	});
 
@@ -254,7 +254,7 @@ describe("/roster — 'Create + assign' threads the MEMBER'S org id into createS
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Soprano II',
 			parentId: null,
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		});
 	});
 
@@ -271,7 +271,7 @@ describe("/roster — 'Create + assign' threads the MEMBER'S org id into createS
 		expect(createSectionMock).not.toHaveBeenCalled();
 	});
 
-	it('sub-section create: orgId rides along uniformly (the data layer ignores it when parentId is set) — createSection(cfg, { name, parentId: Soprano, orgId })', async () => {
+	it('sub-section create: dbEntityId rides along uniformly (the data layer ignores it when parentId is set) — createSection(cfg, { name, parentId: Soprano, dbEntityId })', async () => {
 		const container = await renderReady();
 
 		await openForm(container, 'm-pete');
@@ -287,7 +287,7 @@ describe("/roster — 'Create + assign' threads the MEMBER'S org id into createS
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Soprano II',
 			parentId: EFK_SOPRANO,
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		});
 	});
 });

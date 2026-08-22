@@ -4,7 +4,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 // #161 RED — collective = database: a TOP-LEVEL section's owning collective is
 // the `_parent` entry with `entity_type === 'database'`, not `'organization'`
-// (#159 deleted every organization instance). `SectionNode.orgId` keeps its name
+// (#159 deleted every organization instance). `SectionNode.dbEntityId` keeps its name
 // but must carry the DATABASE entity id — the picker's sibling-scoped duplicate
 // check and the roster page's create threading both key on it.
 
@@ -16,7 +16,7 @@ function json(body: unknown, status = 200) {
 }
 
 describe('listSections — top-level sections carry the DATABASE entity as their collective (#161)', () => {
-	it("a root parented to the database entity: parentId null, orgId = the `entity_type: 'database'` reference; a sub-section keeps parentId = its section and orgId null", async () => {
+	it("a root parented to the database entity: parentId null, dbEntityId = the `entity_type: 'database'` reference; a sub-section keeps parentId = its section and dbEntityId null", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
@@ -42,15 +42,15 @@ describe('listSections — top-level sections carry the DATABASE entity as their
 		const root = roots[0];
 		expect(root.id).toBe('sec-sop');
 		expect(root.parentId).toBeNull();
-		expect(root.orgId).toBe(DB_ENTITY);
+		expect(root.dbEntityId).toBe(DB_ENTITY);
 
 		expect(root.children).toHaveLength(1);
 		expect(root.children[0].id).toBe('sec-sop-2');
 		expect(root.children[0].parentId).toBe('sec-sop');
-		expect(root.children[0].orgId).toBeNull();
+		expect(root.children[0].dbEntityId).toBeNull();
 	});
 
-	it('a root whose only parent is a LEGACY organization entry resolves orgId null — organization is not a collective identity anymore', async () => {
+	it('a root whose only parent is a LEGACY organization entry resolves dbEntityId null — organization is not a collective identity anymore', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
@@ -65,7 +65,7 @@ describe('listSections — top-level sections carry the DATABASE entity as their
 		);
 		const roots = await listSections(cfg, fetchImpl);
 		expect(roots).toHaveLength(1);
-		expect(roots[0].orgId).toBeNull();
+		expect(roots[0].dbEntityId).toBeNull();
 	});
 });
 

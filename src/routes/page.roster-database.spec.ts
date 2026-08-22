@@ -173,7 +173,7 @@ async function renderReady(): Promise<HTMLElement> {
 }
 
 describe('/roster on DATABASE-parented data (#161)', () => {
-	it("renders the member read off a database-parented member row, and a TOP-LEVEL create threads the DATABASE entity id: createSection(cfg, { name, parentId: null, orgId: <database entity> })", async () => {
+	it("renders the member read off a database-parented member row, and a TOP-LEVEL create threads the DATABASE entity id: createSection(cfg, { name, parentId: null, dbEntityId: <database entity> })", async () => {
 		const container = await renderReady();
 
 		// Open the picker on the (unassigned) member and start a top-level create.
@@ -198,7 +198,7 @@ describe('/roster on DATABASE-parented data (#161)', () => {
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Tenor',
 			parentId: null,
-			orgId: DB_ENTITY
+			dbEntityId: DB_ENTITY
 		});
 	});
 

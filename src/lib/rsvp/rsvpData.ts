@@ -6,7 +6,7 @@ import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 // scope for slice-2, see epic #8 "Out of slice-2").
 //
 // `member` resolution is DE-FANNED to match `listSeasons`/`listRehearsals`: no
-// orgId param. In polyphony (single-collective) a person has exactly one active
+// dbEntityId param. In polyphony (single-collective) a person has exactly one active
 // `member` row, so `person.reference` + `status.string=active` alone disambiguates
 // — same simplification already landed for seasons ("in polyphony all seasons are
 // EFK's"). Not the end state; flagged to team-lead alongside the RED report.

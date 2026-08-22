@@ -6,7 +6,7 @@
 //
 // Pinned wiring contract (GREEN must implement):
 //   - the page imports `resolveDatabaseEntityId` ($lib/collective/databaseEntity)
-//     — the #161 successor of `resolveMyOrgId` — and threads ITS id into
+//     — the #161 successor of `resolveMyDbEntityId` — and threads ITS id into
 //     `listAdmins`/`addAdmin`/`removeAdmin` (signature-compatible: an entity id
 //     is an entity id) and into the embedded InviteSurface's preset, so the
 //     member created by an invite is parented to the DATABASE entity.
@@ -66,7 +66,7 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock };
 });
-// Every OTHER wire path is disabled — a leftover resolveMyOrgId walk rejects.
+// Every OTHER wire path is disabled — a leftover resolveMyDbEntityId walk rejects.
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: h.entuFetchMock };
@@ -184,7 +184,7 @@ describe('/admin — the role lists are keyed to the DATABASE entity (#161)', ()
 });
 
 describe('/admin — the embedded InviteSurface targets the DATABASE entity (#161)', () => {
-	it('submitting an invite calls createInvite with orgId = the database entity id (the member is parented to the collective = database)', async () => {
+	it('submitting an invite calls createInvite with dbEntityId = the database entity id (the member is parented to the collective = database)', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
@@ -197,7 +197,7 @@ describe('/admin — the embedded InviteSurface targets the DATABASE entity (#16
 		});
 		expect(h.createInviteMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'polyphony' }),
-			{ orgId: DB_ENTITY }
+			{ dbEntityId: DB_ENTITY }
 		);
 	});
 });

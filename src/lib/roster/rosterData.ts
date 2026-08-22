@@ -67,7 +67,7 @@ export interface ActiveMember {
 	 * identity anymore, so it is never used as a fallback. Contract pinned by
 	 * rosterData.database.spec.ts.
 	 */
-	orgId?: string;
+	dbEntityId?: string;
 }
 
 /**
@@ -132,12 +132,12 @@ export async function listActiveMembers(
 		// (never a throw — visibility must not gate the roster) OR when the only
 		// non-section entry is a LEGACY `organization` parent (see
 		// rosterData.database.spec.ts).
-		const orgId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
+		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
 		return {
 			memberId: raw._id,
 			personId,
 			sectionIds,
-			orgId
+			dbEntityId
 		};
 	});
 }
@@ -182,12 +182,12 @@ export interface RosterRow {
 	 */
 	sectionIds?: string[];
 	/**
-	 * #161 — carried through verbatim from `ActiveMember.orgId` (see its doc):
+	 * #161 — carried through verbatim from `ActiveMember.dbEntityId` (see its doc):
 	 * the member's collective (database entity) id, so the page's create wiring
 	 * can pass `createSection` an explicit top-level parent. Optional for
 	 * pre-#161 fixtures.
 	 */
-	orgId?: string;
+	dbEntityId?: string;
 }
 
 /**
@@ -233,8 +233,8 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 		// ids, [] when unassigned) so groupBySection can join rows to the section
 		// tree and place a multi-section member in every matching group.
 		sectionIds: member.sectionIds,
-		// TU.1/#109 (finding #10) — carried through verbatim, see RosterRow.orgId doc.
-		orgId: member.orgId
+		// TU.1/#109 (finding #10) — carried through verbatim, see RosterRow.dbEntityId doc.
+		dbEntityId: member.dbEntityId
 	};
 }
 

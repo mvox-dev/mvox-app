@@ -73,7 +73,7 @@ const h = vi.hoisted(() => ({
 	resolveDatabaseEntityIdMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	resolveParentMock: vi.fn(),
-	resolveOrgMock: vi.fn(),
+	resolveInviteParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 	resolveCollectiveNameMarkerMock: vi.fn(),
 	updateCollectiveNameMock: vi.fn()
@@ -101,7 +101,7 @@ vi.mock('$lib/roster/rosterData', () => ({
 }));
 vi.mock('$lib/invite/inviteData', () => ({
 	resolvePersonParentId: h.resolveParentMock,
-	resolveOrgId: h.resolveOrgMock,
+	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
 // The seam under test — GREEN creates the real module; the page must consume
@@ -153,7 +153,7 @@ function loadOk() {
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(ROSTER);
 	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveOrgMock.mockResolvedValue('org-1');
+	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ ...MARKER });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }

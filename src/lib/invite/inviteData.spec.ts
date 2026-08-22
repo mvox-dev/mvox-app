@@ -3,7 +3,7 @@ import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	createInvite,
 	InviteCreateError,
-	resolveOrgId,
+	resolveInviteParentId,
 	resolvePersonParentId,
 	type CreateInviteInput
 } from './inviteData';
@@ -11,7 +11,7 @@ import {
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-admin' };
 
 const INPUT: CreateInviteInput = {
-	orgId: 'org-1'
+	dbEntityId: 'org-1'
 };
 
 function json(body: unknown, status = 200) {
@@ -101,12 +101,12 @@ function callsOf(fetchImpl: ReturnType<typeof makeFetchMock>) {
 // CreateInviteInput entirely, so an "omitting email must not typecheck" guard
 // would contradict the no-email design. No replacement fixture needed here.
 
-// @ts-expect-error — omitting orgId must not typecheck (the member's parent org is required)
-const _omitsOrgId: CreateInviteInput = {};
-void _omitsOrgId;
+// @ts-expect-error — omitting dbEntityId must not typecheck (the member's parent org is required)
+const _omitsDbEntityId: CreateInviteInput = {};
+void _omitsDbEntityId;
 
 // Forward guard: the correct shape DOES typecheck.
-const _validInput: CreateInviteInput = { orgId: 'o1' };
+const _validInput: CreateInviteInput = { dbEntityId: 'o1' };
 void _validInput;
 
 // ── resolvePersonParentId ──────────────────────────────────────────────────────
@@ -159,9 +159,9 @@ describe('resolvePersonParentId', () => {
 	});
 });
 
-// ── resolveOrgId ─────────────────────────────────────────────────────────────
+// ── resolveInviteParentId ─────────────────────────────────────────────────────────────
 
-describe('resolveOrgId', () => {
+describe('resolveInviteParentId', () => {
 	// #67 (Mihkel ruling) — replaces the old `listOrganizations` enumeration: a
 	// single internal resolve, never a list for a UI picker.
 	//
@@ -172,7 +172,7 @@ describe('resolveOrgId', () => {
 	// wrong or empty).
 	//
 	// #161 review fix round 2 — the dead `personId` parameter is DELETED from
-	// the call contract, not merely shadowed/guarded: `resolveOrgId(cfg,
+	// the call contract, not merely shadowed/guarded: `resolveInviteParentId(cfg,
 	// fetchImpl?)`, `.length === 1`.
 
 	const DB_ENTITY = '69c7f8718489bfcb0e81b065';
@@ -183,7 +183,7 @@ describe('resolveOrgId', () => {
 
 	it('resolves the DATABASE entity — never a member/organization walk', async () => {
 		const fetchImpl = databaseLookup({ entities: [{ _id: DB_ENTITY }], count: 1 });
-		const id = await resolveOrgId(cfg, fetchImpl);
+		const id = await resolveInviteParentId(cfg, fetchImpl);
 		expect(id).toBe(DB_ENTITY);
 
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
@@ -195,7 +195,7 @@ describe('resolveOrgId', () => {
 
 	it('throws http (with the status) on a non-2xx response', async () => {
 		const fetchImpl = databaseLookup({}, 502);
-		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+		const err = await captureError(resolveInviteParentId(cfg, fetchImpl));
 		expect(err).toBeInstanceOf(InviteCreateError);
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('http');
@@ -204,7 +204,7 @@ describe('resolveOrgId', () => {
 
 	it('throws not-visible when no database entity is readable', async () => {
 		const fetchImpl = databaseLookup({ entities: [], count: 0 });
-		const err = await captureError(resolveOrgId(cfg, fetchImpl));
+		const err = await captureError(resolveInviteParentId(cfg, fetchImpl));
 		expect(err.phase).toBe('org-resolve');
 		expect(err.reason).toBe('not-visible');
 		expect(err.message).toMatch(/database/i);
@@ -213,7 +213,7 @@ describe('resolveOrgId', () => {
 	it('declares exactly ONE required parameter (cfg) — no personId in the signature', () => {
 		// Function.length counts parameters before the first default — the target
 		// signature `(cfg, fetchImpl = fetch)` has length 1.
-		expect(resolveOrgId.length).toBe(1);
+		expect(resolveInviteParentId.length).toBe(1);
 	});
 });
 
@@ -223,9 +223,9 @@ describe('createInvite — input guards fire before any network call', () => {
 	// GREEN drops email from the type + this guard — #34 removes the `@` check
 	// along with the email field itself. No replacement test needed here.
 
-	it('rejects an empty orgId, naming the field', async () => {
+	it('rejects an empty dbEntityId, naming the field', async () => {
 		const fetchImpl = vi.fn();
-		await expect(createInvite(cfg, { ...INPUT, orgId: '' }, fetchImpl)).rejects.toThrow(/orgId/);
+		await expect(createInvite(cfg, { ...INPUT, dbEntityId: '' }, fetchImpl)).rejects.toThrow(/dbEntityId/);
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 });
@@ -274,7 +274,7 @@ describe('createInvite — happy path', () => {
 		expect(JSON.stringify(personCall!.body)).not.toContain('mari@example.com');
 	});
 
-	it('member payload is EXACTLY: _type ref, _parent=orgId, person ref, status:active, _inheritrights:true, NO explicit _sharing (#133: inherited from the domain-tier org parent) — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
+	it('member payload is EXACTLY: _type ref, _parent=dbEntityId, person ref, status:active, _inheritrights:true, NO explicit _sharing (#133: inherited from the domain-tier org parent) — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const memberCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'person'));

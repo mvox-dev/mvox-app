@@ -19,19 +19,19 @@ import { createSection } from './sectionActions';
 // without write rights on the umbrella. That is finding #10's "new section
 // creation doesn't work in live environment".
 //
-// Contract under test (GREEN must implement — see CreateSectionInput.orgId):
+// Contract under test (GREEN must implement — see CreateSectionInput.dbEntityId):
 //
-//   - `orgId` PRESENT, no parentId → `_parent` = orgId; ZERO org-lookup fetches
+//   - `dbEntityId` PRESENT, no parentId → `_parent` = dbEntityId; ZERO org-lookup fetches
 //     (the caller — the roster page — already knows the collective org from the
 //     member's own `_parent`; the data layer must not guess).
-//   - `orgId` ABSENT, no parentId → the legacy sole-org resolution stays, BUT a
+//   - `dbEntityId` ABSENT, no parentId → the legacy sole-org resolution stays, BUT a
 //     MULTI-ORG db (search response `count` > 1) FAILS LOUD naming the db and
 //     creates NOTHING — never silently parents under whichever org the API
 //     happened to return first.
-//   - `orgId` ABSENT, exactly one readable org (count 1 / count absent with one
+//   - `dbEntityId` ABSENT, exactly one readable org (count 1 / count absent with one
 //     entity) → that org, unchanged legacy behavior (sectionActions.create.spec.ts
 //     keeps passing).
-//   - parentId present → sub-section; orgId is irrelevant and no org lookup
+//   - parentId present → sub-section; dbEntityId is irrelevant and no org lookup
 //     happens (already pinned by sectionActions.create.spec.ts).
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
@@ -82,10 +82,10 @@ function orgLookupCalls(fetchImpl: ReturnType<typeof makeFetchMock>): Array<[str
 	);
 }
 
-describe('createSection — caller-supplied orgId is the top-level parent (finding #10)', () => {
-	it('orgId present, no parentId: `_parent` = the GIVEN org id — NOT whatever org the db lists first — and NO org-lookup GET is issued at all', async () => {
+describe('createSection — caller-supplied dbEntityId is the top-level parent (finding #10)', () => {
+	it('dbEntityId present, no parentId: `_parent` = the GIVEN org id — NOT whatever org the db lists first — and NO org-lookup GET is issued at all', async () => {
 		const fetchImpl = makeFetchMock();
-		await createSection(cfg, { name: 'Tenor', parentId: null, orgId: 'org-efk' }, fetchImpl);
+		await createSection(cfg, { name: 'Tenor', parentId: null, dbEntityId: 'org-efk' }, fetchImpl);
 
 		expect(orgLookupCalls(fetchImpl)).toEqual([]);
 		const creates = createCalls(fetchImpl);
@@ -101,9 +101,9 @@ describe('createSection — caller-supplied orgId is the top-level parent (findi
 		});
 	});
 
-	it('orgId present: FULL create body is exactly _type ref + _parent=orgId + name + _sharing:public — nothing else (#partial-assertions-hide-bugs)', async () => {
+	it('dbEntityId present: FULL create body is exactly _type ref + _parent=dbEntityId + name + _sharing:public — nothing else (#partial-assertions-hide-bugs)', async () => {
 		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
-		const id = await createSection(cfg, { name: 'Tenor', orgId: 'org-efk' }, fetchImpl);
+		const id = await createSection(cfg, { name: 'Tenor', dbEntityId: 'org-efk' }, fetchImpl);
 		expect(id).toBe('sec-new-1');
 
 		const body = JSON.parse(String(createCalls(fetchImpl)[0][1].body)) as Array<{
@@ -121,13 +121,13 @@ describe('createSection — caller-supplied orgId is the top-level parent (findi
 	});
 });
 
-// #161 (collective = database, Mihkel ruling 2026-08-16) — the no-orgId
+// #161 (collective = database, Mihkel ruling 2026-08-16) — the no-dbEntityId
 // MULTI-ORG-db legacy-fallback describe block that used to live here is
-// RETIRED: `createSection`'s no-orgId path no longer searches for an
+// RETIRED: `createSection`'s no-dbEntityId path no longer searches for an
 // organization entity at all (organization instances no longer exist, #159) —
 // it resolves the DATABASE entity instead. That behavior (including its own
 // fail-loud-when-unreadable case) is pinned by
 // sectionActions.create-database.spec.ts now.
 
 // (*MVOX:Tallis* — TU.1/#109 RED, finding #10 root cause A: wrong top-level parent org)
-// (*MVOX:Palestrina* — #161 GREEN: legacy no-orgId multi-org fallback describe block retired)
+// (*MVOX:Palestrina* — #161 GREEN: legacy no-dbEntityId multi-org fallback describe block retired)

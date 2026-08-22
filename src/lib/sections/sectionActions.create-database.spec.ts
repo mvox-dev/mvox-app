@@ -3,7 +3,7 @@ import { createSection } from './sectionActions';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 
 // #161 RED — collective = database: a TOP-LEVEL section is a direct child of the
-// DATABASE entity. The legacy no-orgId fallback (`entity?_type.string=
+// DATABASE entity. The legacy no-dbEntityId fallback (`entity?_type.string=
 // organization&limit=1`, sectionActions.ts:110-149) is REMOVED — organization
 // instances no longer exist (#159), so that query can only answer wrong or
 // empty. In its place: resolve the database entity
@@ -12,8 +12,8 @@ import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 //
 // Unchanged (pinned by sectionActions.create.spec.ts / create-org.spec.ts's
 // surviving cases): `parentId` present → the section IS the parent; explicit
-// collective id present (the `orgId` input field keeps its name — the roster
-// page now threads the DATABASE entity id through it) → verbatim, zero lookups.
+// collective id present (the `dbEntityId` input field — the roster page threads
+// the DATABASE entity id through it) → verbatim, zero lookups.
 
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
@@ -83,7 +83,7 @@ describe('createSection — top-level fallback resolves the DATABASE entity (#16
 
 	it('explicit collective id (the database entity id, threaded by the caller): verbatim `_parent`, and NEITHER the organization query NOR the database discovery fires', async () => {
 		const { fetchImpl, calls } = makeRouter();
-		await createSection(cfg, { name: 'Tenor', orgId: DB_ENTITY }, fetchImpl);
+		await createSection(cfg, { name: 'Tenor', dbEntityId: DB_ENTITY }, fetchImpl);
 
 		expect(calls.some((c) => c.url.includes('_type.string=organization'))).toBe(false);
 		expect(calls.some((c) => c.url.includes('_type.string=database'))).toBe(false);

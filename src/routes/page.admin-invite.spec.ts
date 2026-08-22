@@ -59,14 +59,14 @@ const h = vi.hoisted(() => {
 	return {
 		InviteCreateError,
 		resolveParentMock: vi.fn(),
-		resolveOrgMock: vi.fn(),
+		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn()
 	};
 });
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
-	resolveOrgId: h.resolveOrgMock,
+	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
 // Sever the $env chain the collectives store pulls in (discover → marker →
@@ -115,7 +115,7 @@ function selectTwoCollectives() {
 
 function loadOk() {
 	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveOrgMock.mockResolvedValue('org-1');
+	h.resolveInviteParentMock.mockResolvedValue('org-1');
 }
 
 async function submitForm(container: HTMLElement) {
@@ -127,7 +127,7 @@ async function submitForm(container: HTMLElement) {
 
 beforeEach(() => {
 	h.resolveParentMock.mockReset();
-	h.resolveOrgMock.mockReset();
+	h.resolveInviteParentMock.mockReset();
 	h.createInviteMock.mockReset();
 });
 
@@ -147,13 +147,13 @@ describe('/admin/invite — prerequisites', () => {
 		});
 		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
 		expect(h.resolveParentMock).not.toHaveBeenCalled();
-		expect(h.resolveOrgMock).not.toHaveBeenCalled();
+		expect(h.resolveInviteParentMock).not.toHaveBeenCalled();
 	});
 
-	it("a not-visible org resolution → the no-access state (#67 — resolveOrgId replaces listOrganizations as the org-parent source; #161 review fix round 2 — loadPrerequisites resolves ONLY via resolveOrgId now, resolvePersonParentId is no longer called from the page)", async () => {
+	it("a not-visible org resolution → the no-access state (#67 — resolveInviteParentId replaces listOrganizations as the org-parent source; #161 review fix round 2 — loadPrerequisites resolves ONLY via resolveInviteParentId now, resolvePersonParentId is no longer called from the page)", async () => {
 		selectPolyphony();
 		h.resolveParentMock.mockResolvedValue('parent-1');
-		h.resolveOrgMock.mockRejectedValue(
+		h.resolveInviteParentMock.mockRejectedValue(
 			new h.InviteCreateError('no organization entity is readable', {
 				phase: 'org-resolve',
 				reason: 'not-visible'
@@ -170,7 +170,7 @@ describe('/admin/invite — prerequisites', () => {
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectPolyphony();
-		h.resolveOrgMock.mockRejectedValue(
+		h.resolveInviteParentMock.mockRejectedValue(
 			new h.InviteCreateError('resolve failed: 500', { phase: 'org-resolve', reason: 'http' })
 		);
 
@@ -231,10 +231,10 @@ describe('/admin/invite — ready form', () => {
 
 		// #67 — the org-entity resolve happened ONCE, internally, never as a list
 		// the admin picks from.
-		expect(h.resolveOrgMock).toHaveBeenCalledTimes(1);
-		// #161 review fix round 2 — `resolveOrgId` is DB-SCOPED, not
+		expect(h.resolveInviteParentMock).toHaveBeenCalledTimes(1);
+		// #161 review fix round 2 — `resolveInviteParentId` is DB-SCOPED, not
 		// person-scoped: no personId argument.
-		expect(h.resolveOrgMock).toHaveBeenCalledWith(
+		expect(h.resolveInviteParentMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'polyphony', token: 'jwt-admin' })
 		);
 	});
@@ -257,13 +257,13 @@ describe('/admin/invite — ready form', () => {
 			'[data-testid="invite-admin-submit"]'
 		) as HTMLButtonElement;
 		expect(submit.disabled).toBe(true);
-		expect(h.resolveOrgMock).not.toHaveBeenCalled(); // no fetch until a db is chosen
+		expect(h.resolveInviteParentMock).not.toHaveBeenCalled(); // no fetch until a db is chosen
 
 		await fireEvent.change(select, { target: { value: 'ramkoor' } });
 		await waitFor(() => {
 			expect(submit.disabled).toBe(false);
 		});
-		expect(h.resolveOrgMock).toHaveBeenCalledWith(
+		expect(h.resolveInviteParentMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor', token: 'jwt-admin' })
 		);
 	});
@@ -322,10 +322,10 @@ describe('/admin/invite — done (show-once link)', () => {
 		// never reaches Entu.
 		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
-			{ orgId: string; email?: string; memberName?: string }
+			{ dbEntityId: string; email?: string; memberName?: string }
 		];
 		expect(cfgArg).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
-		expect(inputArg).toEqual({ orgId: 'org-1' });
+		expect(inputArg).toEqual({ dbEntityId: 'org-1' });
 		expect(inputArg).not.toHaveProperty('email');
 		expect(inputArg).not.toHaveProperty('memberName');
 

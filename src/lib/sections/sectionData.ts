@@ -49,9 +49,9 @@ export interface SectionNode {
 	 * to lose it before rosterData.ts:133. The picker's sibling-scoped duplicate
 	 * check needs it to tell top-level roots of DIFFERENT databases apart.
 	 * `listSections` ALWAYS sets this; optional at the type level only so
-	 * pre-#161 fixtures stay type-clean (same convention as `RosterRow.orgId`).
+	 * pre-#161 fixtures stay type-clean (same convention as `RosterRow.dbEntityId`).
 	 */
-	orgId?: string | null;
+	dbEntityId?: string | null;
 	/** Indentation level: 0 for top-level, 1 for sub-sections, 2 for sub-sub, … */
 	depth: number;
 	/** Child sections, sorted by displayOrder (ties by name). */
@@ -102,7 +102,7 @@ export async function listSections(
 	const raw = body.entities ?? [];
 
 	// Pass 1 — build a node per fetched section (parentId = the parent SECTION
-	// id, null for database-parented roots; orgId = the database `_parent`, null
+	// id, null for database-parented roots; dbEntityId = the database `_parent`, null
 	// for section-parented sub-sections and for a root whose only non-section
 	// parent is a legacy `organization` entry — #161), keyed by id.
 	const nodes = new Map<string, MutableNode>();
@@ -110,12 +110,12 @@ export async function listSections(
 		const name = r.name?.[0]?.string ?? '';
 		const displayOrder = r.display_order?.[0]?.number ?? Number.POSITIVE_INFINITY;
 		const parentId = (r._parent ?? []).find((p) => p.entity_type === 'section')?.reference ?? null;
-		// #161 — keep the DATABASE entity, don't discard it (see SectionNode.orgId):
+		// #161 — keep the DATABASE entity, don't discard it (see SectionNode.dbEntityId):
 		// roots of different databases are not siblings, and the picker needs to
 		// know. A legacy `organization` `_parent` is never the collective anymore.
-		const orgId =
+		const dbEntityId =
 			(r._parent ?? []).find((p) => p.entity_type === 'database')?.reference ?? null;
-		nodes.set(r._id, { id: r._id, name, displayOrder, parentId, orgId, depth: 0, children: [] });
+		nodes.set(r._id, { id: r._id, name, displayOrder, parentId, dbEntityId, depth: 0, children: [] });
 	}
 
 	// Pass 2 — every non-null parent ref must resolve within the fetched set.

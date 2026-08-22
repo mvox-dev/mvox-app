@@ -118,7 +118,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [SEC_SOPRANO_II],
-			orgId: DB_ENTITY
+			dbEntityId: DB_ENTITY
 		}
 	];
 }

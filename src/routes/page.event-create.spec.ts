@@ -18,7 +18,7 @@
 //
 //   DATA
 //     - submit calls `createEvent(cfg, input)` (T1, $lib/entity/entityCreate) —
-//       the ONE create seam. orgId from `resolveDatabaseEntityId(cfg, personId)` (NEVER
+//       the ONE create seam. dbEntityId from `resolveDatabaseEntityId(cfg, personId)` (NEVER
 //       a `_type.string=organization&limit=1` guess). NO `_sharing`, NO
 //       inherit-rights flag anywhere in the UI layer — the create body is
 //       entirely T1's business (`_type` + `_parent` + domain props only; rights
@@ -306,7 +306,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-grace',
@@ -314,7 +314,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Grace Hopper',
 			email: 'grace@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -322,7 +322,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }
@@ -901,7 +901,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		// standalone create passes it absent/undefined, never ''.
 		expect(createEventMock).toHaveBeenCalledWith(CFG, {
 			name: 'Spring concert',
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			extraParentIds: [SEASON_ID],
 			eventType: 'concert',
 			startDatetime: '2027-04-18T16:00:00.000Z',
@@ -935,7 +935,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 			expect(createEventMock).toHaveBeenCalledTimes(1);
 		});
 		const input = lastCreateInput();
-		expect(input.orgId).toBe(ORG_EFK);
+		expect(input.dbEntityId).toBe(ORG_EFK);
 		expect(input.seriesId).toBe('series-1');
 		expect(input.extraParentIds).toEqual([SEASON_ID]);
 		expect(input.eventType).toBe('rehearsal');

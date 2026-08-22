@@ -7,7 +7,7 @@
 //   'not-admin' → no-access block, NO role data is fetched; 'error' → load-error
 //   + retry (a network failure is NEVER presented as "not admin" — house rule)
 // - ready → two managed lists:
-//     - Administrators: `listAdmins(cfg, orgId)` — orgId from `resolveDatabaseEntityId`
+//     - Administrators: `listAdmins(cfg, dbEntityId)` — dbEntityId from `resolveDatabaseEntityId`
 //       (the person's own member `_parent`; never an `organization&limit=1`
 //       guess, which live-returns the umbrella federation)
 //     - Librarians: `listLibrarians(cfg, libraryId)` — libraryId from
@@ -139,7 +139,7 @@ const h = vi.hoisted(() => {
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
 		resolveParentMock: vi.fn(),
-		resolveOrgMock: vi.fn(),
+		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
 		// #165 — the admin page's `load()` now also resolves the collective-name
 		// marker on every ready-path render (same house-rule failure handling as
@@ -184,7 +184,7 @@ vi.mock('$lib/collectives/collectiveName', () => ({
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
-	resolveOrgId: h.resolveOrgMock,
+	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
 // Sever the $env chain the collectives store pulls in (discover → marker →
@@ -272,7 +272,7 @@ function loadOk() {
 	// #140/S3 — InviteSurface's own prerequisite resolution, so the embedded
 	// component settles into 'ready' instead of hanging mid-load.
 	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveOrgMock.mockResolvedValue('org-1');
+	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	// #165 scaffolding — this file has no opinion on the collective-name
 	// surface; a benign resolution keeps its OWN tests' `load()` reaching
 	// 'ready' the same as before this dependency existed.
@@ -325,7 +325,7 @@ beforeEach(() => {
 		h.resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
 		h.resolveParentMock,
-		h.resolveOrgMock,
+		h.resolveInviteParentMock,
 		h.createInviteMock,
 		h.resolveCollectiveNameMarkerMock,
 		h.updateCollectiveNameMock
@@ -403,7 +403,7 @@ describe('/admin — access gate', () => {
 // ── ready — the two managed lists ───────────────────────────────────────────────
 
 describe('/admin — role lists', () => {
-	it('renders the admin + librarian lists off listAdmins(cfg, orgId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
+	it('renders the admin + librarian lists off listAdmins(cfg, dbEntityId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
 		selectPolyphony();
 		loadOk();
 
@@ -517,7 +517,7 @@ describe('/admin — role lists', () => {
 // ── adding via the reused Autocomplete ──────────────────────────────────────────
 
 describe('/admin — adding people (reused #132 Autocomplete, roster-fed)', () => {
-	it('the admin combobox lists roster people MINUS current admins; a pick calls addAdmin(cfg, orgId, personId) and the list refetches with the new entry', async () => {
+	it('the admin combobox lists roster people MINUS current admins; a pick calls addAdmin(cfg, dbEntityId, personId) and the list refetches with the new entry', async () => {
 		selectPolyphony();
 		loadOk();
 		h.listAdminsMock
@@ -600,7 +600,7 @@ describe('/admin — adding people (reused #132 Autocomplete, roster-fed)', () =
 // ── removing ────────────────────────────────────────────────────────────────────
 
 describe('/admin — removing people', () => {
-	it('each admin entry carries a remove button; activating it calls removeAdmin(cfg, orgId, personId) and the list refetches', async () => {
+	it('each admin entry carries a remove button; activating it calls removeAdmin(cfg, dbEntityId, personId) and the list refetches', async () => {
 		selectPolyphony();
 		loadOk();
 		h.listAdminsMock
@@ -1058,9 +1058,9 @@ describe('/admin — a collective switch that lands mid-load', () => {
 			})
 		);
 		h.loadRosterMock.mockResolvedValue(ROSTER);
-		h.listAdminsMock.mockImplementation((_cfg: unknown, orgId: string) =>
+		h.listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
 			Promise.resolve(
-				orgId === 'org-alpha'
+				dbEntityId === 'org-alpha'
 					? listing([ANNA, BELA], true)
 					: listing([{ id: 'p-emil', name: 'Emil Erg', role: 'editor' as const, valueIds: ['pv-e'] }], false)
 			)

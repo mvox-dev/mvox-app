@@ -29,7 +29,7 @@
 //     - RIGHTS FALLBACK (#167 cause 2): when the manageable season's VISIBLE
 //       owners+editors are BOTH empty, the page resolves rights from the
 //       DATABASE entity instead — `resolveDatabaseEntityId(cfg)` then
-//       `resolveManageRights(cfg, orgId, personId)` (the exact seams the
+//       `resolveManageRights(cfg, dbEntityId, personId)` (the exact seams the
 //       season-create org fallback already uses). 'editor' → controls show;
 //       anything else (incl. 'error') → fail-closed, controls hidden.
 //     - VIEWER semantics unchanged: `seasonId`/recent keep meaning the CURRENT

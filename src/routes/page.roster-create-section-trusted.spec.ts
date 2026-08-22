@@ -107,7 +107,7 @@ function liveSectionsWire(): unknown {
 
 /** Multi-org rows, exactly as the live unscoped member query yields them: the
  *  ALPHABETICALLY-FIRST member belongs to the FOREIGN org (live: rows span five
- *  orgs, so whoever sorts first sets `currentOrgId` under the current code —
+ *  orgs, so whoever sorts first sets `currentDbEntityId` under the current code —
  *  that arbitrariness IS finding F3). The viewer ('person-p') is an EFK member. */
 function fixtureRows(): RosterRow[] {
 	return [
@@ -117,7 +117,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Aabel Tamm',
 			email: 'aabel@x.com',
 			sectionIds: [TAM_TENOR],
-			orgId: ORG_TAM
+			dbEntityId: ORG_TAM
 		},
 		{
 			memberId: 'm-efk-mari',
@@ -125,7 +125,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Mari Mets',
 			email: 'mari@x.com',
 			sectionIds: [EFK_SOPRANO],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-viewer',
@@ -133,7 +133,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Zelda Viewer',
 			email: 'zelda@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }

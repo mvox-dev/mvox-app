@@ -53,7 +53,7 @@
 		selectedIds: string[];
 		/**
 		 * #161 (collective = database) — the member's OWN collective id
-		 * (`RosterRow.orgId`, the database entity). Used for ONE thing: scoping the
+		 * (`RosterRow.dbEntityId`, the database entity). Used for ONE thing: scoping the
 		 * TOP-LEVEL duplicate check to this collective's own roots. `sections` is
 		 * the whole db's section tree; without the collective id, every root is a
 		 * "sibling" of every other one (this may simplify further in a
@@ -61,7 +61,7 @@
 		 * Undefined/null = collective unknown → the check falls back to comparing all
 		 * roots (conservative: a possible false duplicate beats a wrong create).
 		 */
-		orgId?: string | null;
+		dbEntityId?: string | null;
 		/** Fired per tap: a section id, or null for "(Unassigned)". */
 		onpick: (sectionId: string | null) => void;
 		/**
@@ -76,7 +76,7 @@
 		oncreate?: (input: { name: string; parentId: string | null }) => void;
 	}
 
-	const { memberId, memberName, sections, selectedIds, orgId, onpick, oncreate }: Props = $props();
+	const { memberId, memberName, sections, selectedIds, dbEntityId, onpick, oncreate }: Props = $props();
 
 	let open = $state(false);
 	/** The component root — the "inside" an outside-click is measured against. */
@@ -145,7 +145,7 @@
 		// conservative behaviour rather than silently allowing a real duplicate.
 		const isDuplicate = flatSections.some((node) => {
 			if (node.parentId !== parentId) return false;
-			if (parentId === null && orgId && node.orgId && node.orgId !== orgId) return false;
+			if (parentId === null && dbEntityId && node.dbEntityId && node.dbEntityId !== dbEntityId) return false;
 			return node.name.toLowerCase() === name.toLowerCase();
 		});
 		if (isDuplicate) {

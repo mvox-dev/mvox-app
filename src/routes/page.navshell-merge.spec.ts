@@ -100,7 +100,7 @@ const h = vi.hoisted(() => {
 		loadRosterMock: vi.fn(),
 		// invite (#31/T4.5)
 		resolveParentMock: vi.fn(),
-		resolveOrgMock: vi.fn(),
+		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
 		// #165 — the merged /admin page's `load()` also resolves the
 		// collective-name marker. Mocked here purely as scaffolding.
@@ -139,7 +139,7 @@ vi.mock('$lib/collectives/collectiveName', () => ({
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
-	resolveOrgId: h.resolveOrgMock,
+	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
 // Sever the $env chain the collectives store pulls in (discover → marker →
@@ -216,7 +216,7 @@ function loadOk() {
 	]);
 	// invite prerequisites ready
 	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveOrgMock.mockResolvedValue('org-1');
+	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
 	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
@@ -236,7 +236,7 @@ beforeEach(() => {
 		h.resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
 		h.resolveParentMock,
-		h.resolveOrgMock,
+		h.resolveInviteParentMock,
 		h.createInviteMock,
 		h.resolveCollectiveNameMarkerMock,
 		h.updateCollectiveNameMock
@@ -370,7 +370,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		await waitFor(() => {
 			expect(h.createInviteMock).toHaveBeenCalledWith(
 				expect.objectContaining({ db: 'polyphony' }),
-				expect.objectContaining({ orgId: expect.any(String) })
+				expect.objectContaining({ dbEntityId: expect.any(String) })
 			);
 		});
 		// The minted link surfaces — the external URL shape /invite/<token> is
@@ -401,7 +401,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 //
 // Review F1 — the embedded (controlled) invite surface used to render its own
 // collective picker while blocking the org re-resolution that picker depends
-// on: switching it moved the write's `db` to collective B while `orgId` stayed
+// on: switching it moved the write's `db` to collective B while `dbEntityId` stayed
 // the parent's org of collective A, minting a member parented under an entity
 // id that does not exist in B (silently orphaned — the TU.1/#109 failure
 // class). Multi-collective is first class (NAV_ENTRIES carries a
@@ -447,7 +447,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		expect(fixed!.textContent).toContain('RAM Koor');
 	});
 
-	it('submits against the SELECTED collective — db and orgId always come from the same collective', async () => {
+	it('submits against the SELECTED collective — db and dbEntityId always come from the same collective', async () => {
 		const { container } = await renderMergedReadyMulti();
 		const inviteSection = q<HTMLElement>(container, 'admin-invite-section')!;
 		const submit = q<HTMLButtonElement>(inviteSection, 'invite-admin-submit')!;
@@ -462,19 +462,19 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		});
 		expect(h.createInviteMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' }),
-			expect.objectContaining({ orgId: 'org-ram' })
+			expect.objectContaining({ dbEntityId: 'org-ram' })
 		);
 		// Never the OTHER collective's org — the mismatched pair that silently
 		// orphans the created member.
 		expect(h.createInviteMock).not.toHaveBeenCalledWith(
 			expect.anything(),
-			expect.objectContaining({ orgId: 'org-poly' })
+			expect.objectContaining({ dbEntityId: 'org-poly' })
 		);
 	});
 
 	it('the embedded surface never self-resolves the org — it adopts the page-resolved pair', async () => {
 		await renderMergedReadyMulti();
-		expect(h.resolveOrgMock).not.toHaveBeenCalled();
+		expect(h.resolveInviteParentMock).not.toHaveBeenCalled();
 		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' })
 		);

@@ -246,7 +246,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -254,7 +254,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }
@@ -1248,7 +1248,7 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
 		});
 		expect(createSeasonMock).toHaveBeenCalledWith(CFG, {
 			name: 'Autumn 2026',
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			startDate: '2026-09-01',
 			endDate: '2026-12-20',
 			conductorRefs: []
@@ -1273,7 +1273,7 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
 			expect(createEventMock).toHaveBeenCalledTimes(1);
 		});
 		expect(createEventMock).toHaveBeenCalledWith(CFG, {
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			extraParentIds: [SEASON_ID],
 			eventType: 'rehearsal',
 			startDatetime: '2026-09-15T16:00:00.000Z', // 19:00 EEST (+3)

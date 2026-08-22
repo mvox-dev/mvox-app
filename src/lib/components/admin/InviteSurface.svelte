@@ -12,7 +12,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { collectiveState } from '$lib/collectives/store';
-	import { createInvite, InviteCreateError, resolveOrgId } from '$lib/invite/inviteData';
+	import { createInvite, InviteCreateError, resolveInviteParentId } from '$lib/invite/inviteData';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	// #107 review F2 — a 401 here used to land in the generic 'load-error'
@@ -23,7 +23,7 @@
 
 	// #140/S3 — CONTROLLED MODE: the merged /admin page has ALREADY resolved a
 	// db + org (resolveDatabaseEntityId, same underlying "the collective"
-	// concept resolveOrgId answers — #161) by the time it mounts this component —
+	// concept resolveInviteParentId answers — #161) by the time it mounts this component —
 	// redoing that resolution here would race the parent's own readiness by a
 	// full extra async round trip (page.navshell-merge.spec.ts: the invite
 	// section must be submit-ready in the SAME settle as the role-management
@@ -34,26 +34,26 @@
 	//
 	// #140/S3 review F1 — in controlled mode the db picker is NOT rendered.
 	// It used to be (always), while both self-resolution effects early-returned
-	// on `presetDb && presetOrgId`: picking a DIFFERENT collective moved `dbId`
-	// to db B but left `orgId` at the parent's org of db A, and `canSubmit`
+	// on `presetDb && presetDbEntityId`: picking a DIFFERENT collective moved `dbId`
+	// to db B but left `dbEntityId` at the parent's org of db A, and `canSubmit`
 	// (both non-empty) stayed true — a createInvite against db B parenting the
 	// member under an org id that only exists in db A. Silently orphaned, the
 	// same wrong-org-parent class TU.1/#109 fixed. The embedded surface acts on
 	// the collective the /admin page has already selected (its own picker lives
 	// in the nav/collectives surface), so the name renders as static text and
-	// presetDb/presetOrgId stay the single source of truth — role management
+	// presetDb/presetDbEntityId stay the single source of truth — role management
 	// and invites can no longer target two different collectives at once.
 	//
 	// `heading` — the standalone route needs the page-level <h1>; embedded under
 	// /admin's own <h1> it must be an <h2> (heading hierarchy, review F2).
 	let {
 		presetDb = '',
-		presetOrgId = '',
+		presetDbEntityId = '',
 		presetDbName = '',
 		heading = 'h1'
 	}: {
 		presetDb?: string;
-		presetOrgId?: string;
+		presetDbEntityId?: string;
 		presetDbName?: string;
 		heading?: 'h1' | 'h2';
 	} = $props();
@@ -62,7 +62,7 @@
 	// LATER prop changes; `untrack` here just tells the compiler this initial
 	// read is intentional, not a missed reactivity dependency.
 	const initialPresetDb = untrack(() => presetDb);
-	const initialPresetOrgId = untrack(() => presetOrgId);
+	const initialPresetDbEntityId = untrack(() => presetDbEntityId);
 
 	type Status =
 		| 'loading'
@@ -84,22 +84,22 @@
 	// CONTROLLED MODE — the caller supplied BOTH halves of the (db, org) pair.
 	// Single predicate, used by the self-resolution effects AND the template, so
 	// "does not self-resolve" and "renders no picker" can never disagree.
-	const controlled = $derived(presetDb !== '' && presetOrgId !== '');
+	const controlled = $derived(presetDb !== '' && presetDbEntityId !== '');
 	// Display-only label for the fixed collective in controlled mode.
 	const presetLabel = $derived(
 		presetDbName || availableDbs.find((c) => c.db === presetDb)?.name || presetDb
 	);
 
-	let status = $state<Status>(initialPresetDb && initialPresetOrgId ? 'ready' : 'loading');
+	let status = $state<Status>(initialPresetDb && initialPresetDbEntityId ? 'ready' : 'loading');
 	let dbId = $state(initialPresetDb);
 	// The member's required org-entity parent — resolved internally per chosen
 	// `dbId` (never rendered as a picker; see #67 note in the original page).
-	let orgId = $state(initialPresetOrgId);
+	let dbEntityId = $state(initialPresetDbEntityId);
 	// Tracks which db's prerequisites are CURRENTLY resolved — set by a
 	// successful `loadPrerequisites` OR by the controlled-mode sync below.
 	// Effect B reads this to skip a redundant fetch when the caller already
 	// supplied a resolved org for the current `dbId`.
-	let resolvedForDb = $state(initialPresetDb && initialPresetOrgId ? initialPresetDb : '');
+	let resolvedForDb = $state(initialPresetDb && initialPresetDbEntityId ? initialPresetDb : '');
 
 	// Done-panel state — the token-carrying link exists ONLY here (component state).
 	let inviteLink = $state('');
@@ -109,7 +109,7 @@
 
 	let createError = $state<{ personId?: string } | null>(null);
 
-	const canSubmit = $derived(dbId !== '' && orgId !== '');
+	const canSubmit = $derived(dbId !== '' && dbEntityId !== '');
 
 	// Plain (non-reactive) flag, not $state — mirrors +layout.svelte's
 	// `lastAuthStatus`/`hydrating` pattern. Once the picker has been shown once
@@ -117,11 +117,11 @@
 	// ready state was reached), a LATER db switch keeps the select mounted and
 	// just disables submit while it re-resolves — it never collapses back to the
 	// bare loading spinner, which would unmount the select mid-interaction.
-	let hasShownForm = !!(initialPresetDb && initialPresetOrgId);
+	let hasShownForm = !!(initialPresetDb && initialPresetDbEntityId);
 
 	async function loadPrerequisites(targetDb: string): Promise<void> {
 		if (!hasShownForm) status = 'loading';
-		orgId = '';
+		dbEntityId = '';
 		const token = getToken();
 		if (!token) {
 			// Inconsistency on a protected route — fail loudly as a load error, never
@@ -132,12 +132,12 @@
 		}
 		const cfg = { db: targetDb, token };
 		try {
-			// `resolvePersonParentId` and `resolveOrgId` now resolve the SAME database
+			// `resolvePersonParentId` and `resolveInviteParentId` now resolve the SAME database
 			// entity (#161 review fix round 2 — both delegate to
 			// `resolveDatabaseEntityId`), so one resolve covers both call sites instead
 			// of firing two identical GETs.
-			const resolvedOrgId = await resolveOrgId(cfg);
-			orgId = resolvedOrgId;
+			const resolvedDbEntityId = await resolveInviteParentId(cfg);
+			dbEntityId = resolvedDbEntityId;
 			resolvedForDb = targetDb;
 			status = 'ready';
 			hasShownForm = true;
@@ -167,7 +167,7 @@
 	$effect(() => {
 		if (controlled) {
 			dbId = presetDb;
-			orgId = presetOrgId;
+			dbEntityId = presetDbEntityId;
 			resolvedForDb = presetDb;
 			hasShownForm = true;
 			status = 'ready';
@@ -185,7 +185,7 @@
 		if (availableDbs.length === 0) {
 			status = 'no-collective';
 			dbId = '';
-			orgId = '';
+			dbEntityId = '';
 			hasShownForm = false;
 			resolvedForDb = '';
 			return;
@@ -223,7 +223,7 @@
 		status = 'creating';
 		createError = null;
 		try {
-			const result = await createInvite({ db: dbId, token }, { orgId });
+			const result = await createInvite({ db: dbId, token }, { dbEntityId });
 			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
 			// The shown expiry is the minted token's OWN exp — never an assumed +7d.
 			const parsed = parseInviteToken(result.inviteToken, Date.now());
@@ -360,7 +360,7 @@
 			{#if controlled}
 				<!-- Controlled mode: the collective is FIXED by the embedding page
 				     (which resolved db + org together). Rendering a picker here would
-				     let `dbId` drift away from the `orgId` that came with it — see the
+				     let `dbId` drift away from the `dbEntityId` that came with it — see the
 				     review-F1 note in the script block. Static text, same label. -->
 				<p data-testid="invite-db-fixed" class="flex flex-col gap-1 text-sm">
 					<span>{m.admin_invite_db_label()}</span>

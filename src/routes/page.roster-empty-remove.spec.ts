@@ -10,7 +10,7 @@
 // TWO "Bass (0)" headers — one with the ✕, one without. The tree is rendered
 // UNFILTERED across all four test orgs ("the whole grouped tree arguably wants
 // the same filter" — the page's own #110 F2 comment), while `canRemove` gates
-// on `isOwnOrgSection`, so a FOREIGN org's empty section renders with a "(0)"
+// on `isOwnDbEntitySection`, so a FOREIGN org's empty section renders with a "(0)"
 // but no control. Two headers that read identically must not disagree.
 //
 // The #110 review F2 ruling stands: a DESTRUCTIVE affordance on another org's
@@ -21,9 +21,9 @@
 // tree filtered to the viewer's own org satisfies, and which showing foreign
 // groups without their controls (current behavior) violates.
 //
-// SECOND-ORDER root cause, pinned here too: `currentOrgId` — the org that
-// `isOwnOrgSection` compares against — is derived from the FIRST ROSTER ROW
-// (`rows.find((r) => r.orgId)`), i.e. whoever sorts first alphabetically, NOT
+// SECOND-ORDER root cause, pinned here too: `currentDbEntityId` — the org that
+// `isOwnDbEntitySection` compares against — is derived from the FIRST ROSTER ROW
+// (`rows.find((r) => r.dbEntityId)`), i.e. whoever sorts first alphabetically, NOT
 // from the VIEWER. `loadRoster`'s member query is not org-scoped, so on a
 // multi-org db the first row can belong to another org — and then the ✕
 // migrates onto the FOREIGN org's sections while the viewer's own empty
@@ -104,8 +104,8 @@ const EFK_BASS = '69c7f8768489bfcb0e81b163';
 const TAM_BASS = '69c7f88a8489bfcb0e81b5bc';
 const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
 
-function node(id: string, name: string, displayOrder: number, orgId: string): SectionNode {
-	return { id, name, displayOrder, parentId: null, orgId, depth: 0, children: [] };
+function node(id: string, name: string, displayOrder: number, dbEntityId: string): SectionNode {
+	return { id, name, displayOrder, parentId: null, dbEntityId, depth: 0, children: [] };
 }
 
 /** The GATE-WALK shape: EFK's four voices (Bass EMPTY) plus another org's
@@ -134,7 +134,7 @@ function efkRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [EFK_SOPRANO],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-bea',
@@ -142,7 +142,7 @@ function efkRows(): RosterRow[] {
 			name: 'Bea Noe',
 			email: '',
 			sectionIds: [EFK_ALTO],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		},
 		{
 			memberId: 'm-pete',
@@ -150,7 +150,7 @@ function efkRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [EFK_TENOR],
-			orgId: ORG_EFK
+			dbEntityId: ORG_EFK
 		}
 	];
 }
@@ -254,7 +254,7 @@ describe('/roster — F3: every empty section the page SHOWS offers a WORKING (n
 		// THE INVARIANT (fix-agnostic): an arrange row the page chose to render
 		// whose text reads "(0)" — every fixture node is a childless leaf — must
 		// offer a WORKING remove control. Today the foreign org's "Bass (0)"
-		// would render disabled/absent (canRemove's isOwnOrgSection gate) if it
+		// would render disabled/absent (canRemove's isOwnDbEntitySection gate) if it
 		// rendered at all, which is exactly the on-screen inconsistency the gate
 		// walk failed. A tree scoped to the viewer's own org satisfies this;
 		// rendering foreign rows control-less does not.
@@ -291,7 +291,7 @@ describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER'
 	it("multi-org roster where a FOREIGN member sorts first alphabetically: the EFK viewer still gets a WORKING ✕ on EFK's empty Bass, and Sireen's empty section gets none rendered at all", async () => {
 		// `loadRoster`'s member query is not org-scoped — on a multi-org db the
 		// rows legitimately span orgs, sorted by name. Anna (Sireen) sorts
-		// before every EFK member; the current `rows.find((r) => r.orgId)`
+		// before every EFK member; the current `rows.find((r) => r.dbEntityId)`
 		// derivation therefore answers SIREEN and hangs the destructive control
 		// on the wrong org's sections. The viewer is Pete (personId 'person-p',
 		// EFK) — resolveDatabaseEntityId answers EFK, and so does his own roster row.
@@ -302,7 +302,7 @@ describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER'
 				name: 'Anna Aaviksoo',
 				email: 'anna@x.com',
 				sectionIds: [],
-				orgId: ORG_SIREEN
+				dbEntityId: ORG_SIREEN
 			},
 			...efkRows()
 		] satisfies RosterRow[]);

@@ -10,22 +10,21 @@ import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 // collective id now resolves the DATABASE entity instead. GREEN.
 //
 // CONTRACT (pinned by sectionActions.create.spec.ts + sectionActions.create-database.spec.ts;
-// the surviving `orgId`-present cases of sectionActions.create-org.spec.ts still hold):
+// the surviving `dbEntityId`-present cases of sectionActions.create-org.spec.ts still hold):
 //
-//   - `createSection(cfg, { name, parentId?, orgId? })` creates ONE `section`
+//   - `createSection(cfg, { name, parentId?, dbEntityId? })` creates ONE `section`
 //     entity and resolves to the NEW ENTITY's id.
 //   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, 'section')
 //     (#10 pinned wire-shape — never `{ string: 'section' }`).
 //   - `parentId` present → `_parent` reference = that SECTION id (sub-section);
-//     `orgId` is irrelevant, no lookup happens.
+//     `dbEntityId` is irrelevant, no lookup happens.
 //   - `parentId` absent/null → "(top level)": the section is a direct child of
 //     the COLLECTIVE (the DATABASE entity — #161).
-//       - `orgId` present → `_parent` = that id VERBATIM, ZERO lookup fetches.
+//       - `dbEntityId` present → `_parent` = that id VERBATIM, ZERO lookup fetches.
 //         The caller (the roster page) already knows the collective (database
 //         entity) id from the member's own `_parent` — the data layer must not
-//         guess. The field keeps its `orgId` name (an entity id is an entity
-//         id) but carries the DATABASE entity id now.
-//       - `orgId` absent → resolve the database entity
+//         guess.
+//       - `dbEntityId` absent → resolve the database entity
 //         (`entity?_type.string=database&limit=1`, exactly one per db,
 //         guaranteed by entu — the multi-org ambiguity guard this used to need
 //         has nothing left to guard). No readable database entity fails loud
@@ -53,20 +52,19 @@ export interface CreateSectionInput {
 	/** Parent SECTION id; absent/null = top level (direct child of the collective). */
 	parentId?: string | null;
 	/**
-	 * #161 (collective = database, Mihkel ruling 2026-08-16) — the COLLECTIVE id
-	 * the caller already holds, used as `_parent` for a TOP-LEVEL create
-	 * (parentId absent/null). The field keeps its `orgId` name (an entity id is
-	 * an entity id) but carries the DATABASE entity id now — the roster page
-	 * threads it through from the member's own `_parent`.
+	 * #161 (collective = database, Mihkel ruling 2026-08-16) — the collective's
+	 * DATABASE entity id, which the caller already holds (the roster page reads
+	 * it off the member's own `_parent`), used as `_parent` for a TOP-LEVEL
+	 * create (parentId absent/null).
 	 *
 	 * The data layer must not guess. Contract pinned by
 	 * sectionActions.create-database.spec.ts:
-	 *   - orgId present + no parentId → `_parent` = orgId, ZERO lookup fetches.
-	 *   - orgId absent + no parentId → resolve the database entity
+	 *   - dbEntityId present + no parentId → `_parent` = dbEntityId, ZERO lookup fetches.
+	 *   - dbEntityId absent + no parentId → resolve the database entity
 	 *     (`_type.string=database&limit=1`, exactly one per db).
-	 *   - parentId present → orgId is irrelevant (sub-section, parent IS the section).
+	 *   - parentId present → dbEntityId is irrelevant (sub-section, parent IS the section).
 	 */
-	orgId?: string | null;
+	dbEntityId?: string | null;
 }
 
 /**
@@ -91,13 +89,13 @@ export async function createSection(
 	let parentRef: string;
 	if (input.parentId) {
 		// Sub-section: the given section IS the parent, no lookup at all —
-		// orgId is irrelevant here (see CreateSectionInput.orgId doc).
+		// dbEntityId is irrelevant here (see CreateSectionInput.dbEntityId doc).
 		parentRef = input.parentId;
-	} else if (input.orgId) {
+	} else if (input.dbEntityId) {
 		// #161 — the caller already knows the collective (database entity) id
 		// (the roster page reads it off the member's own `_parent`); use it
 		// verbatim, ZERO lookup fetches. The data layer must not guess.
-		parentRef = input.orgId;
+		parentRef = input.dbEntityId;
 	} else {
 		// #161 (collective = database, Mihkel ruling 2026-08-16) — the legacy
 		// "sole organization entity, limit 1" fallback is RETIRED (organization

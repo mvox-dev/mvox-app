@@ -59,7 +59,7 @@
 	// `selectedCollectiveIdentityStore` instead (see the load effect below).
 	const selected = $derived($selectedCollectiveStore);
 	let cfg = $state<Cfg | null>(null);
-	let orgId = $state<string | null>(null);
+	let dbEntityId = $state<string | null>(null);
 	let libraryId = $state<string | null>(null);
 	let viewerId = $state<string | null>(null);
 	let admins = $state<RolePerson[]>([]);
@@ -138,13 +138,13 @@
 
 	async function refreshAdmins(thisLoad: number): Promise<void> {
 		if (thisLoad !== loadSeq) return; // the collective moved on before this read
-		if (!cfg || !orgId || !viewerId) return;
+		if (!cfg || !dbEntityId || !viewerId) return;
 		// #146 — roster rides along as the id→name lookup for rows whose display
 		// name hasn't caught up in Entu's aggregated read yet (see
 		// resolveNamesFromRoster in roleManagement.ts). `undefined` for fetchImpl
 		// keeps its own default (real `fetch`) rather than reaching for the
 		// browser global here.
-		const listing = await listAdmins(cfg, orgId, viewerId, undefined, roster);
+		const listing = await listAdmins(cfg, dbEntityId, viewerId, undefined, roster);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
 		admins = listing.persons;
 		canManageAdmins = listing.canManage;
@@ -195,7 +195,7 @@
 		}
 
 		try {
-			const [resolvedOrgId, libResult, rosterRows, resolvedNameMarker] = await Promise.all([
+			const [resolvedDbEntityId, libResult, rosterRows, resolvedNameMarker] = await Promise.all([
 				resolveDatabaseEntityId(c),
 				resolveLibrarian(c, target.personId),
 				loadRoster(c),
@@ -216,7 +216,7 @@
 				status = 'load-error';
 				return;
 			}
-			orgId = resolvedOrgId;
+			dbEntityId = resolvedDbEntityId;
 			libraryId = libResult.libraryId;
 			roster = rosterRows;
 			nameMarker = resolvedNameMarker;
@@ -370,11 +370,11 @@
 	// lands mid-write invalidates the snapshot, so neither the refetched rows nor
 	// the error banner can leak into the collective the viewer moved to.
 	async function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
-		if (!selection.id || !cfg || !orgId) return;
+		if (!selection.id || !cfg || !dbEntityId) return;
 		const thisLoad = loadSeq;
 		actionError = false;
 		try {
-			await addAdmin(cfg, orgId, selection.id);
+			await addAdmin(cfg, dbEntityId, selection.id);
 			await refreshAdmins(thisLoad);
 		} catch (e) {
 			if (thisLoad !== loadSeq) return;
@@ -398,11 +398,11 @@
 	}
 
 	async function onRemoveAdmin(personId: string): Promise<void> {
-		if (!cfg || !orgId) return;
+		if (!cfg || !dbEntityId) return;
 		const thisLoad = loadSeq;
 		actionError = false;
 		try {
-			await removeAdmin(cfg, orgId, personId);
+			await removeAdmin(cfg, dbEntityId, personId);
 			await refreshAdmins(thisLoad);
 		} catch (e) {
 			if (thisLoad !== loadSeq) return;
@@ -660,7 +660,7 @@
 				     `heading="h2"` keeps it under this page's h1 (review F2). -->
 				<InviteSurface
 					presetDb={cfg?.db ?? ''}
-					presetOrgId={orgId ?? ''}
+					presetDbEntityId={dbEntityId ?? ''}
 					presetDbName={selected?.name ?? ''}
 					heading="h2"
 				/>

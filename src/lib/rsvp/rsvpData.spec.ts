@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 // ── findMyMemberId ────────────────────────────────────────────────────────────
-// DE-FANNED to match listSeasons/listRehearsals: no orgId param — person +
+// DE-FANNED to match listSeasons/listRehearsals: no dbEntityId param — person +
 // status=active alone resolves the singer's active member row in the collective.
 
 describe('findMyMemberId', () => {

@@ -36,14 +36,14 @@ const h = vi.hoisted(() => {
 	return {
 		InviteCreateError,
 		resolveParentMock: vi.fn(),
-		resolveOrgMock: vi.fn(),
+		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn()
 	};
 });
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
-	resolveOrgId: h.resolveOrgMock,
+	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
@@ -78,7 +78,7 @@ function selectPolyphony() {
 
 beforeEach(() => {
 	h.resolveParentMock.mockReset();
-	h.resolveOrgMock.mockReset();
+	h.resolveInviteParentMock.mockReset();
 	h.createInviteMock.mockReset();
 });
 
@@ -93,7 +93,7 @@ afterEach(() => {
 describe('/admin/invite — session expired (#107 review F2)', () => {
 	it('an auth-expired PREREQUISITE load shows the session-expired notice — not the generic load error, and never "not admin"', async () => {
 		h.resolveParentMock.mockRejectedValue(authExpiredError());
-		h.resolveOrgMock.mockRejectedValue(authExpiredError());
+		h.resolveInviteParentMock.mockRejectedValue(authExpiredError());
 		selectPolyphony();
 
 		const { container } = render(Page);
@@ -111,7 +111,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 
 	it('an auth-expired CREATE shows the session-expired notice — not "invite creation failed"', async () => {
 		h.resolveParentMock.mockResolvedValue('parent-1');
-		h.resolveOrgMock.mockResolvedValue('org-1');
+		h.resolveInviteParentMock.mockResolvedValue('org-1');
 		h.createInviteMock.mockRejectedValue(authExpiredError());
 		selectPolyphony();
 
@@ -137,7 +137,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 	it('a GENERIC prerequisite failure still shows the loud load error + retry, and not-visible still shows no-access', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		h.resolveParentMock.mockRejectedValue(new Error('network down'));
-		h.resolveOrgMock.mockRejectedValue(new Error('network down'));
+		h.resolveInviteParentMock.mockRejectedValue(new Error('network down'));
 		selectPolyphony();
 
 		const generic = render(Page);
@@ -153,7 +153,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		h.resolveParentMock.mockRejectedValue(
 			new h.InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
 		);
-		h.resolveOrgMock.mockRejectedValue(
+		h.resolveInviteParentMock.mockRejectedValue(
 			new h.InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
 		);
 		selectPolyphony();

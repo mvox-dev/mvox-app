@@ -177,8 +177,8 @@
 	// `sections`, not just this collective's. Live polyphony holds 16 sections
 	// across FOUR test orgs, all org-parented.
 	//
-	// SPIKE root cause (2026-08-12, #124 check 4): `currentOrgId` used to read
-	// `rows.find((r) => r.orgId)?.orgId` — i.e. whichever roster row `loadRoster`
+	// SPIKE root cause (2026-08-12, #124 check 4): `currentDbEntityId` used to read
+	// `rows.find((r) => r.dbEntityId)?.dbEntityId` — i.e. whichever roster row `loadRoster`
 	// happened to sort first (alphabetically), NOT the viewer. `loadRoster`'s
 	// member query is not org-scoped either, so on a multi-org db the first row
 	// can legitimately belong to another org, silently migrating every
@@ -190,7 +190,7 @@
 	// accounts map — see `Collective.personId`), never a guess from row order.
 	/** #161 (collective = database) — the collective's DATABASE entity id, read
 	 *  off the VIEWER's own roster row (matched by `personId`) — falls back to
-	 *  the first row exposing an `orgId` ONLY when the viewer has no row of her
+	 *  the first row exposing a `dbEntityId` ONLY when the viewer has no row of her
 	 *  own on this roster (an admin auditing a roster she isn't a member of, or
 	 *  a fixture that never gave the viewer a matching `personId`); null when
 	 *  neither answers anything (collective unknown to this reader entirely).
@@ -200,20 +200,20 @@
 	 *  answer — the multi-org ambiguity #124/F3 fixes only bites when the
 	 *  viewer's OWN row is present but sorts non-first, which the primary
 	 *  lookup above already handles before the fallback is ever reached. */
-	const currentOrgId = $derived(
-		rows.find((r) => r.personId === selected?.personId)?.orgId ??
-			rows.find((r) => r.orgId)?.orgId ??
+	const currentDbEntityId = $derived(
+		rows.find((r) => r.personId === selected?.personId)?.dbEntityId ??
+			rows.find((r) => r.dbEntityId)?.dbEntityId ??
 			null
 	);
 
 	/** #124 (F3) — the section tree filtered to the viewer's OWN org: a
-	 *  top-level (root) section is kept only when its `orgId` matches
-	 *  `currentOrgId`; a kept root's WHOLE subtree comes along with it (a
+	 *  top-level (root) section is kept only when its `dbEntityId` matches
+	 *  `currentDbEntityId`; a kept root's WHOLE subtree comes along with it (a
 	 *  sub-section carries no org `_parent` of its own — v4E
 	 *  `parentConstraint: 'exactly_one_of'` — so it can never be split from its
-	 *  root). Permissive when `currentOrgId` is unknown (an unauthenticated
-	 *  reader, or a pre-#124 fixture with no `orgId` on any row) — keeps
-	 *  everything, same "unknown means don't restrict" rule `isOwnOrgSection`
+	 *  root). Permissive when `currentDbEntityId` is unknown (an unauthenticated
+	 *  reader, or a pre-#124 fixture with no `dbEntityId` on any row) — keeps
+	 *  everything, same "unknown means don't restrict" rule `isOwnDbEntitySection`
 	 *  below already followed. This is what actually fixes the F3
 	 *  inconsistency: a foreign org's section is no longer RENDERED at all, so
 	 *  there is no "(0)" without a ✕ left on screen to disagree with the
@@ -225,7 +225,7 @@
 	 *  the fix for that is the data fix (reparent to a REAL sub-section),
 	 *  tracked separately, not a rendering carve-out here. */
 	const visibleSections = $derived(
-		currentOrgId === null ? sections : sections.filter((n) => (n.orgId ?? null) === currentOrgId)
+		currentDbEntityId === null ? sections : sections.filter((n) => (n.dbEntityId ?? null) === currentDbEntityId)
 	);
 
 	const groups = $derived(groupBySection(rows, visibleSections));
@@ -252,11 +252,11 @@
 
 	const flatRows = $derived([...rows].sort((a, b) => a.name.localeCompare(b.name)));
 
-	// ── #110 review F2 / #124 F3: `isOwnOrgSection` — a defense-in-depth backstop.
+	// ── #110 review F2 / #124 F3: `isOwnDbEntitySection` — a defense-in-depth backstop.
 	//
-	// `currentOrgId`/`visibleSections` above already keep a foreign org's section
+	// `currentDbEntityId`/`visibleSections` above already keep a foreign org's section
 	// OUT of the render entirely (#124/F3), so in practice every node reaching
-	// `canRemove` below has already passed that filter. `isOwnOrgSection` stays as
+	// `canRemove` below has already passed that filter. `isOwnDbEntitySection` stays as
 	// a second, independent check on the same question (never trust one gate for
 	// a destructive control) — see #110 review F2's original ruling: a
 	// destructive affordance on another org's entity must never ship, belt AND
@@ -264,11 +264,11 @@
 	/** section id → the OWNING org id of its top-level root. Sub-sections carry no
 	 *  org `_parent` of their own (v4E `parentConstraint: 'exactly_one_of'`), so
 	 *  the root's org is propagated down the subtree. */
-	const rootOrgBySectionId = $derived.by(() => {
+	const rootDbEntityBySectionId = $derived.by(() => {
 		const map = new Map<string, string | null>();
 		function walk(nodes: SectionNode[], rootOrg: string | null): void {
 			for (const n of nodes) {
-				const org = n.parentId === null ? (n.orgId ?? null) : rootOrg;
+				const org = n.parentId === null ? (n.dbEntityId ?? null) : rootOrg;
 				map.set(n.id, org);
 				walk(n.children, org);
 			}
@@ -284,10 +284,10 @@
 	 * tree from a pre-#161 fixture must not lose its own controls; the check
 	 * exists to exclude sections we can POSITIVELY place in another collective.
 	 */
-	function isOwnOrgSection(id: string): boolean {
-		const org = rootOrgBySectionId.get(id) ?? null;
-		if (org === null || currentOrgId === null) return true;
-		return org === currentOrgId;
+	function isOwnDbEntitySection(id: string): boolean {
+		const org = rootDbEntityBySectionId.get(id) ?? null;
+		if (org === null || currentDbEntityId === null) return true;
+		return org === currentDbEntityId;
 	}
 
 	// TU.2/#110 (finding #9) — collapse state is an OPT-IN set (every section
@@ -612,9 +612,9 @@
 	 *  unindent's grandparent) or the ORGANIZATION (unindent promoting to top
 	 *  level) — `reparentSection`'s wire call takes either id verbatim, but the
 	 *  LOCAL tree update needs to know which so it can set `depth`/`parentId`/
-	 *  `orgId` correctly (see `SectionNode.orgId`'s own doc: only top-level
+	 *  `dbEntityId` correctly (see `SectionNode.dbEntityId`'s own doc: only top-level
 	 *  nodes carry it). */
-	type ReparentTarget = { kind: 'section'; sectionId: string } | { kind: 'org'; orgId: string };
+	type ReparentTarget = { kind: 'section'; sectionId: string } | { kind: 'org'; dbEntityId: string };
 
 	/** Move `id` (with its subtree) to `target`, landing right after
 	 *  `insertAfterId` among its NEW siblings (`null` = append at the end — used
@@ -634,8 +634,8 @@
 		const newDepth =
 			target.kind === 'org' ? 0 : (findSectionNode(nodes, target.sectionId)?.depth ?? 0) + 1;
 		const newParentId = target.kind === 'org' ? null : target.sectionId;
-		const newOrgId = target.kind === 'org' ? target.orgId : null;
-		const movedNode: SectionNode = { ...withDepth(removed, newDepth), parentId: newParentId, orgId: newOrgId };
+		const newDbEntityId = target.kind === 'org' ? target.dbEntityId : null;
+		const movedNode: SectionNode = { ...withDepth(removed, newDepth), parentId: newParentId, dbEntityId: newDbEntityId };
 
 		let atIndex: number | undefined;
 		if (insertAfterId !== null) {
@@ -915,14 +915,14 @@
 		// org id into every create (the data layer ignores it when parentId is
 		// set, so uniform threading is correct and simplest — see
 		// page.roster-create-section-org.spec.ts). The page already knows it
-		// (RosterRow.orgId, carried from the member's `_parent`) — never let the
+		// (RosterRow.dbEntityId, carried from the member's `_parent`) — never let the
 		// data layer fall back to its `limit=1` guess, which live-verifiably
 		// returns the umbrella federation, not the collective.
-		const orgId = rows.find((r) => r.memberId === memberId)?.orgId;
+		const dbEntityId = rows.find((r) => r.memberId === memberId)?.dbEntityId;
 
 		let newId: string;
 		try {
-			newId = await createSection(cfg, { ...input, orgId });
+			newId = await createSection(cfg, { ...input, dbEntityId });
 		} catch (e) {
 			console.error('roster: section create failed', memberId, input, e);
 			sectionWriteError = { memberId, kind: 'create' };
@@ -941,7 +941,7 @@
 			// `parentConstraint: 'exactly_one_of'`). Without this the just-created
 			// root would have an unknown org and the next top-level create in the
 			// same session couldn't tell it apart from another org's roots.
-			orgId: input.parentId ? null : (orgId ?? null),
+			dbEntityId: input.parentId ? null : (dbEntityId ?? null),
 			depth,
 			children: []
 		};
@@ -1071,7 +1071,7 @@
 
 		let newId: string;
 		try {
-			newId = await createSection(cfg, { name, parentId, orgId: currentOrgId });
+			newId = await createSection(cfg, { name, parentId, dbEntityId: currentDbEntityId });
 		} catch (e) {
 			console.error('roster: page-level section create failed', name, parentId, e);
 			pageCreateError = m.roster_section_create_failed;
@@ -1091,7 +1091,7 @@
 			// section is parented to the VIEWER's own org, a sub-section is
 			// section-parented and carries no org `_parent` at all (v4E
 			// `parentConstraint: 'exactly_one_of'`).
-			orgId: parentId ? null : (currentOrgId ?? null),
+			dbEntityId: parentId ? null : (currentDbEntityId ?? null),
 			depth,
 			children: []
 		};
@@ -1146,7 +1146,7 @@
 	 *  Only the ROOT level needs the filter: a sub-section carries no org
 	 *  `_parent` of its own (v4E `parentConstraint: 'exactly_one_of'`), so a
 	 *  rendered root's whole subtree is org-coherent by construction — the same
-	 *  reasoning `visibleSections`/`rootOrgBySectionId` above already rest on. */
+	 *  reasoning `visibleSections`/`rootDbEntityBySectionId` above already rest on. */
 	function visibleSiblingsOf(id: string): SectionNode[] | null {
 		const siblings = siblingsOf(sections, id);
 		if (siblings === null) return null;
@@ -1374,7 +1374,7 @@
 		reorderStatus = '';
 		const before = sections;
 		sections = applyReparent(sections, node.id, target, insertAfterId);
-		const newParentId = target.kind === 'org' ? target.orgId : target.sectionId;
+		const newParentId = target.kind === 'org' ? target.dbEntityId : target.sectionId;
 		try {
 			await reparentSection(cfg, node.id, newParentId);
 			// Read AFTER the optimistic patch above: this is the destination group
@@ -1423,14 +1423,14 @@
 		if (!parent) return;
 		if (parent.parentId === null) {
 			// The parent is top-level — promoting past it lands on the collective's database entity (#161).
-			const orgId = parent.orgId ?? currentOrgId;
-			if (!orgId) {
+			const dbEntityId = parent.dbEntityId ?? currentDbEntityId;
+			if (!dbEntityId) {
 				// #155/S3 review F3 — this used to log and return SILENTLY while the
 				// button stayed ENABLED (`canUnindent` only asks whether there IS a
 				// parent, not whether the promote target is resolvable): the user
 				// tapped a live control, nothing moved, nothing was announced, no
 				// banner appeared. Reachable whenever no visible root carries an
-				// `orgId` — the same permissive-when-unknown state `visibleSections`
+				// `dbEntityId` — the same permissive-when-unknown state `visibleSections`
 				// deliberately tolerates. Every other failure on this page raises
 				// `reorderError` (the role="alert" banner above the groups), and so
 				// does this one now: fail loudly over silent degradation, same shape
@@ -1439,7 +1439,7 @@
 				reorderError = true;
 				return;
 			}
-			await performReparent(node, { kind: 'org', orgId }, parent.id, () =>
+			await performReparent(node, { kind: 'org', dbEntityId }, parent.id, () =>
 				m.roster_section_unindented_top({ name: node.name })
 			);
 			return;
@@ -2321,7 +2321,7 @@
 				memberName={row.name}
 				{sections}
 				selectedIds={row.sectionIds ?? []}
-				orgId={row.orgId}
+				dbEntityId={row.dbEntityId}
 				onpick={(sectionId) => handlePick(row.memberId, sectionId)}
 				oncreate={(input) => handleCreate(row.memberId, input)}
 			/>
@@ -2706,7 +2706,7 @@
 								     with children/members"), matching indent/unindent's own
 								     always-shown-sometimes-disabled shape. -->
 								{@const canDelete =
-									row.memberCount === 0 && node.children.length === 0 && isOwnOrgSection(row.id)}
+									row.memberCount === 0 && node.children.length === 0 && isOwnDbEntitySection(row.id)}
 								{#if arrangeDropHintBeforeId === row.id}
 									{@render dropIndicator()}
 								{/if}

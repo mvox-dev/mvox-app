@@ -6,7 +6,7 @@ import type { MyProfile } from '$lib/profile/profileData';
 // #161 RED — collective = database: a member's collective is the `_parent` entry
 // with `entity_type === 'database'`, NOT `'organization'` (#159 deleted every
 // organization instance; entu-api parents members created through the invite
-// flow under the database entity now). `ActiveMember.orgId` / `RosterRow.orgId`
+// flow under the database entity now). `ActiveMember.dbEntityId` / `RosterRow.dbEntityId`
 // keep their names (an entity id is an entity id — the roster page threads it
 // into createSection unchanged) but must carry the DATABASE entity id.
 //
@@ -22,7 +22,7 @@ function json(body: unknown, status = 200) {
 }
 
 describe('listActiveMembers — the collective id comes from the DATABASE `_parent` (#161)', () => {
-	it("a member parented to [section, database]: orgId = the `entity_type: 'database'` reference, sections untouched", async () => {
+	it("a member parented to [section, database]: dbEntityId = the `entity_type: 'database'` reference, sections untouched", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
@@ -44,12 +44,12 @@ describe('listActiveMembers — the collective id comes from the DATABASE `_pare
 				memberId: 'm-ada',
 				personId: 'p-ada',
 				sectionIds: ['sec-sop'],
-				orgId: DB_ENTITY
+				dbEntityId: DB_ENTITY
 			}
 		]);
 	});
 
-	it('a member whose only non-section parent is a LEGACY organization entry resolves NO collective (orgId undefined) — organization is not a collective identity anymore', async () => {
+	it('a member whose only non-section parent is a LEGACY organization entry resolves NO collective (dbEntityId undefined) — organization is not a collective identity anymore', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
@@ -63,21 +63,21 @@ describe('listActiveMembers — the collective id comes from the DATABASE `_pare
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		expect(members[0].orgId).toBeUndefined();
+		expect(members[0].dbEntityId).toBeUndefined();
 	});
 });
 
 describe('toRosterRow — carries the database-entity collective id through verbatim (#161)', () => {
-	it('RosterRow.orgId = ActiveMember.orgId (the database entity id)', () => {
+	it('RosterRow.dbEntityId = ActiveMember.dbEntityId (the database entity id)', () => {
 		const profiles: MyProfile[] = [
 			{ _id: 'prof-1', name: 'Ada Lovelace', email: 'ada@x.com', _sharing: 'domain' }
 		];
 		const row = toRosterRow(
-			{ memberId: 'm-ada', personId: 'p-ada', sectionIds: [], orgId: DB_ENTITY },
+			{ memberId: 'm-ada', personId: 'p-ada', sectionIds: [], dbEntityId: DB_ENTITY },
 			profiles
 		);
 		expect(row).not.toBeNull();
-		expect(row?.orgId).toBe(DB_ENTITY);
+		expect(row?.dbEntityId).toBe(DB_ENTITY);
 	});
 });
 

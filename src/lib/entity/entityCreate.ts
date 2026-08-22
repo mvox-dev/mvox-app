@@ -11,23 +11,25 @@
 //     onto an EXISTING entity).
 //   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, <typeName>)
 //     (#10 pinned wire-shape — never `{ string: '<typeName>' }`).
-//   - `_parent` = `[orgId, ...extraParentIds]`, ONE `{ type: '_parent',
+//   - `_parent` = `[dbEntityId, ...extraParentIds]`, ONE `{ type: '_parent',
 //     reference }` prop PER id, zero lookup fetches — the caller (agenda /
 //     season management, #132 T2/T4/T6) already holds the collective's
 //     database entity id (`resolveDatabaseEntityId`, #161) and the season /
 //     series ids. The data layer must not guess.
 //
-//     THE ORG PARENT IS STRUCTURAL, NOT ONE ENTRY IN A LIST (#132 review F4):
-//     v4E marks the organization parent `required: true, parentCard: '1'` on
-//     season AND event_series AND event. A flat `parentIds: string[]` made it
-//     forgettable — every call site had to REMEMBER to prepend the org, and a
-//     season-or-series-only list still type-checked and still POSTed. So the
-//     org is its own REQUIRED field and the create builds `_parent` from it;
-//     the remaining (optional, 0..N) v4E parents — season, section, series —
-//     ride in `extraParentIds`, verbatim and in order, deduped against the org.
+//     THE COLLECTIVE PARENT IS STRUCTURAL, NOT ONE ENTRY IN A LIST (#132 review
+//     F4): v4E marks that `parentCard: '1'` parent `required: true` on season AND
+//     event_series AND event (v4E still spells the parent entity `organization`;
+//     since #161 the app materialises it as the collective's DATABASE entity —
+//     #159 deleted every organization instance). A flat `parentIds: string[]`
+//     made it forgettable — every call site had to REMEMBER to prepend it, and a
+//     season-or-series-only list still type-checked and still POSTed. So it is
+//     its own REQUIRED field (`dbEntityId`) and the create builds `_parent` from
+//     it; the remaining (optional, 0..N) v4E parents — season, section, series —
+//     ride in `extraParentIds`, verbatim and in order, deduped against it.
 //
 //     MULTI-PARENT IS STILL THE POINT (#132 review F3): v4E parents an event
-//     under its organization AND (optionally) its season AND (optionally) its
+//     under its collective AND (optionally) its season AND (optionally) its
 //     series — and `listRehearsals` selects by `_parent.reference=<seasonId>`,
 //     which matches an entity's OWN `_parent` values with NO ancestor
 //     expansion. A series-parented event that carries only the series id is
@@ -35,23 +37,24 @@
 //     inherits nothing from its series. So a series occurrence sends BOTH.
 //
 //     …AND THE SERIES PARENT IS NAMED TOO (#132 review F2): `createEvent` takes
-//     `seriesId` as its own field for the same reason the org got promoted —
-//     it is the ONE parent whose presence changes validation (it is what makes
-//     a blank `name` legal, see below), and a series id riding anonymously in
-//     `extraParentIds` is invisible to that check. The module must never sniff
-//     a parent's kind — that costs the lookup fetch this contract forbids. The
-//     season / section ids stay in `extraParentIds`; `_parent` is built as
-//     `[orgId, seriesId?, ...extraParentIds]`, deduped, one prop per id.
+//     `seriesId` as its own field for the same reason the collective parent got
+//     promoted — it is the ONE parent whose presence changes validation (it is
+//     what makes a blank `name` legal, see below), and a series id riding in
+//     `extraParentIds` anonymously is invisible to that check. The module must
+//     never sniff a parent's kind — that costs the lookup fetch this contract
+//     forbids. The season / section ids stay in `extraParentIds`; `_parent` is
+//     built as `[dbEntityId, seriesId?, ...extraParentIds]`, deduped, one prop
+//     per id.
 //
 //   - CRITICAL DESIGN DECISION (#132, settled with Mihkel 2026-08-13): the
 //     create body carries NO `_sharing` and NO inherit-rights flag — ONLY
 //     `_type` + `_parent` + domain props. Rights and visibility are TRUSTED to
-//     Entu's rights-inheritance chain from the organization entity (org has
-//     `_sharing: domain` + `_owner`/`_editor`; the inherit flag defaults true
-//     and propagates org → season → event_series → event). This is a
-//     DELIBERATE DEVIATION from every existing create in the app
-//     (createSection sends `_sharing: 'public'` explicitly — that one is a
-//     v4E-pinned per-type policy, not the pattern here). Subsumes #122.
+//     Entu's rights-inheritance chain from the collective's DATABASE entity
+//     (#161) — the inherit flag defaults true and propagates collective →
+//     season → event_series → event. This is a DELIBERATE DEVIATION from every
+//     existing create in the app (createSection sends `_sharing: 'public'`
+//     explicitly — that one is a v4E-pinned per-type policy, not the pattern
+//     here). Subsumes #122.
 //     NOTE (implementers): the inherit-rights literal itself must NEVER
 //     appear in this module, not even in a comment — the T4.4 sole-create-path
 //     guard (soleCreatePath.spec.ts) scans every non-spec src/ file for it as
@@ -68,10 +71,10 @@
 //     (createSection's pattern). Entu's `mandatory` is a soft UI hint that
 //     rejects nothing server-side, so this module is the ONLY enforcement
 //     point. The required set is v4E's, verbatim (#132 review F1/F2/F3):
-//       season       — name, start_date, end_date (+ the org parent)
+//       season       — name, start_date, end_date (+ the collective parent)
 //       event_series — name, event_type, interval_days, start_time,
-//                      duration_minutes, start_date, end_date (+ org parent)
-//       event        — start_datetime, event_type (+ org parent), plus `name`
+//                      duration_minutes, start_date, end_date (+ collective parent)
+//       event        — start_datetime, event_type (+ collective parent), plus `name`
 //                      whenever there is NO `seriesId` to inherit it from
 //     `end_date` before `start_date` is rejected too (an empty or inverted
 //     range makes the T2 occurrence generator produce nothing), and
@@ -131,15 +134,14 @@ export interface CreateSeasonInput {
 	/**
 	 * #161 (collective = database) — the collective's DATABASE entity id, the
 	 * v4E `parentCard: '1'` REQUIRED parent, sent as the first `_parent`
-	 * `{ reference }`. Non-blank. The field keeps its `orgId` name (an entity id
-	 * is an entity id); the caller already holds it (`resolveDatabaseEntityId`)
-	 * — this module never looks it up or guesses it.
+	 * `{ reference }`. Non-blank. The caller already holds it
+	 * (`resolveDatabaseEntityId`) — this module never looks it up or guesses it.
 	 */
-	orgId: string;
+	dbEntityId: string;
 	/**
 	 * Further parent ids beyond the collective (v4E season has none besides it
 	 * today — present for symmetry and forward compatibility). One `_parent`
-	 * prop per entry, verbatim, in order, deduped against `orgId`.
+	 * prop per entry, verbatim, in order, deduped against `dbEntityId`.
 	 */
 	extraParentIds?: string[];
 	/** ISO date (YYYY-MM-DD) — `start_date` `{ date }`. v4E required, non-blank. */
@@ -154,13 +156,15 @@ export interface CreateEventSeriesInput {
 	/** Series name (v4E required, non-blank) — the defaults-template name events inherit. */
 	name: string;
 	/**
-	 * Organization entity id — v4E `parentCard: '1'` REQUIRED parent, first
-	 * `_parent` `{ reference }`. Non-blank.
+	 * #161 (collective = database) — the collective's DATABASE entity id, the
+	 * v4E `parentCard: '1'` REQUIRED parent, sent as the first `_parent`
+	 * `{ reference }`. Non-blank. The caller already holds it
+	 * (`resolveDatabaseEntityId`) — this module never looks it up or guesses it.
 	 */
-	orgId: string;
+	dbEntityId: string;
 	/**
 	 * The optional v4E parents — normally `[seasonId]`, optionally a section.
-	 * One `_parent` prop per entry, verbatim, in order, deduped against `orgId`.
+	 * One `_parent` prop per entry, verbatim, in order, deduped against `dbEntityId`.
 	 */
 	extraParentIds?: string[];
 	/** Discriminator events inherit — `event_type` `{ string }`. v4E required, non-blank. */
@@ -198,13 +202,15 @@ export interface CreateEventInput {
 	 */
 	name?: string;
 	/**
-	 * Organization entity id — v4E `parentCard: '1'` REQUIRED parent, first
-	 * `_parent` `{ reference }`. Non-blank.
+	 * #161 (collective = database) — the collective's DATABASE entity id, the
+	 * v4E `parentCard: '1'` REQUIRED parent, sent as the first `_parent`
+	 * `{ reference }`. Non-blank. The caller already holds it
+	 * (`resolveDatabaseEntityId`) — this module never looks it up or guesses it.
 	 */
-	orgId: string;
+	dbEntityId: string;
 	/**
 	 * The `event_series` parent, when this event is a series occurrence — sent as
-	 * a `_parent` `{ reference }` right after the org. ITS OWN FIELD, not one
+	 * a `_parent` `{ reference }` right after the collective. ITS OWN FIELD, not one
 	 * anonymous entry in `extraParentIds` (#132 review F2), because it is the
 	 * ONE parent whose presence changes validation: the read-side inheritance
 	 * merge follows it, so it is what makes a blank `name` legal. A series id
@@ -220,7 +226,7 @@ export interface CreateEventInput {
 	 * `listRehearsals` selects on (`_parent.reference=<seasonId>`, no ancestor
 	 * expansion), so a series occurrence sends its season HERE and its series in
 	 * `seriesId`; both end up as `_parent` props. One `_parent` prop per entry,
-	 * in order, deduped against `orgId` and `seriesId`.
+	 * in order, deduped against `dbEntityId` and `seriesId`.
 	 */
 	extraParentIds?: string[];
 	/**
@@ -348,19 +354,20 @@ function requireDateRange(
 }
 
 /**
- * The `_parent` id list: the REQUIRED organization first (v4E parentCard '1'),
- * then the remaining parents verbatim in the order given, blanks dropped and no
- * id repeated (the org included — a caller may pass it through again, and
- * createEvent feeds its named `seriesId` in ahead of the free-form extras).
+ * The `_parent` id list: the REQUIRED collective (database entity) first (v4E
+ * parentCard '1'), then the remaining parents verbatim in the order given,
+ * blanks dropped and no id repeated (the collective included — a caller may
+ * pass it through again, and createEvent feeds its named `seriesId` in ahead of
+ * the free-form extras).
  */
 function parentIdsFor(
 	fn: string,
-	orgId: string,
+	dbEntityId: string,
 	extraParentIds: Array<string | undefined> | undefined
 ): string[] {
-	const org = requireText(fn, 'orgId', orgId);
-	const seen = new Set<string>([org]);
-	const ids = [org];
+	const primary = requireText(fn, 'dbEntityId', dbEntityId);
+	const seen = new Set<string>([primary]);
+	const ids = [primary];
 	for (const raw of extraParentIds ?? []) {
 		const id = raw?.trim();
 		if (!id || seen.has(id)) continue;
@@ -414,8 +421,8 @@ async function postCreate(
 }
 
 /**
- * Create a `season` entity under the given organization. Resolves to the new
- * season's entity id. See module contract above.
+ * Create a `season` entity under the given collective (database entity, #161).
+ * Resolves to the new season's entity id. See module contract above.
  */
 export async function createSeason(
 	cfg: EntuCfg,
@@ -425,7 +432,7 @@ export async function createSeason(
 	const fn = 'createSeason';
 	const name = requireText(fn, 'name', input.name);
 	const { start, end } = requireDateRange(fn, 'startDate', input.startDate, 'endDate', input.endDate);
-	const parentIds = parentIdsFor(fn, input.orgId, input.extraParentIds);
+	const parentIds = parentIdsFor(fn, input.dbEntityId, input.extraParentIds);
 
 	const props: WireProp[] = [
 		{ type: 'name', string: name },
@@ -437,8 +444,9 @@ export async function createSeason(
 }
 
 /**
- * Create an `event_series` entity (defaults template) under its organization
- * and season. Resolves to the new series' entity id. See module contract above.
+ * Create an `event_series` entity (defaults template) under its collective
+ * (database entity, #161) and season. Resolves to the new series' entity id.
+ * See module contract above.
  */
 export async function createEventSeries(
 	cfg: EntuCfg,
@@ -452,7 +460,7 @@ export async function createEventSeries(
 	const intervalDays = requireNumber(fn, 'intervalDays', input.intervalDays, 1);
 	const durationMinutes = requireNumber(fn, 'durationMinutes', input.durationMinutes, 1);
 	const { start, end } = requireDateRange(fn, 'startDate', input.startDate, 'endDate', input.endDate);
-	const parentIds = parentIdsFor(fn, input.orgId, input.extraParentIds);
+	const parentIds = parentIdsFor(fn, input.dbEntityId, input.extraParentIds);
 
 	const props: WireProp[] = [
 		{ type: 'name', string: name },
@@ -469,8 +477,9 @@ export async function createEventSeries(
 }
 
 /**
- * Create an `event` entity under its organization and (optionally) its season
- * and series. Resolves to the new event's entity id. See module contract above.
+ * Create an `event` entity under its collective (database entity, #161) and
+ * (optionally) its season and series. Resolves to the new event's entity id.
+ * See module contract above.
  */
 export async function createEvent(
 	cfg: EntuCfg,
@@ -485,7 +494,7 @@ export async function createEvent(
 	// nothing to inherit from, so a blank name is rejected rather than creating a
 	// permanently nameless event (#132 review F2).
 	const name = seriesId ? input.name : requireText(fn, 'name', input.name);
-	const parentIds = parentIdsFor(fn, input.orgId, [seriesId, ...(input.extraParentIds ?? [])]);
+	const parentIds = parentIdsFor(fn, input.dbEntityId, [seriesId, ...(input.extraParentIds ?? [])]);
 
 	const props: WireProp[] = [
 		// With a series parent, blank/absent means "track the series", not "".

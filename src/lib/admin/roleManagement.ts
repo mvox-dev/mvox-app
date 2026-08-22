@@ -308,12 +308,12 @@ async function revokeOwnGrant(
  */
 export async function listAdmins(
 	cfg: EntuCfg,
-	orgId: string,
+	dbEntityId: string,
 	viewerId: string,
 	fetchImpl: typeof fetch = fetch,
 	roster: RosterRow[] = []
 ): Promise<RoleListing> {
-	const { ownOwners, ownEditors, allOwners } = await fetchRights(cfg, orgId, fetchImpl);
+	const { ownOwners, ownEditors, allOwners } = await fetchRights(cfg, dbEntityId, fetchImpl);
 	return {
 		persons: resolveNamesFromRoster(toRolePersons(ownOwners, ownEditors), roster),
 		canManage: allOwners.some((v) => v.reference === viewerId)
@@ -322,20 +322,20 @@ export async function listAdmins(
 
 export async function addAdmin(
 	cfg: EntuCfg,
-	orgId: string,
+	dbEntityId: string,
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	await grantEditor(cfg, orgId, personId, fetchImpl);
+	await grantEditor(cfg, dbEntityId, personId, fetchImpl);
 }
 
 export async function removeAdmin(
 	cfg: EntuCfg,
-	orgId: string,
+	dbEntityId: string,
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	await revokeOwnGrant(cfg, orgId, personId, fetchImpl, 'owner+editor');
+	await revokeOwnGrant(cfg, dbEntityId, personId, fetchImpl, 'owner+editor');
 }
 
 /**

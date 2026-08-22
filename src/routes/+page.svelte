@@ -795,12 +795,12 @@
 		const cached = databaseEntityRightsByDbPerson.get(key);
 		if (cached) return cached;
 		const probe = resolveDatabaseEntityId(cfg)
-			.then((orgId) =>
-				orgId === null
+			.then((dbEntityId) =>
+				dbEntityId === null
 					? // No database entity readable — an ANSWER ("this reader cannot see
 						// the collective entity"), not a failure: nothing to grant on.
 						Promise.resolve<ManageRightsState>('not-editor')
-					: resolveManageRights(cfg, orgId, personId)
+					: resolveManageRights(cfg, dbEntityId, personId)
 			)
 			.catch((e): ManageRightsState => {
 				console.error('agenda: resolving database entity rights failed', e);
@@ -1833,15 +1833,15 @@
 		// Everything past here is asynchronous — the window the guard exists for.
 		seasonCreateSubmitting = true;
 		try {
-			let orgId: string | null;
+			let dbEntityId: string | null;
 			try {
-				orgId = await resolveDatabaseEntityId(cfg);
+				dbEntityId = await resolveDatabaseEntityId(cfg);
 			} catch (e) {
 				console.error('agenda: resolving the database entity for season create failed', e);
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
 			}
-			if (!orgId) {
+			if (!dbEntityId) {
 				console.error('agenda: season create with no resolvable database entity', current.personId);
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
@@ -1850,7 +1850,7 @@
 			try {
 				await createSeason(cfg, {
 					name,
-					orgId,
+					dbEntityId,
 					startDate: seasonCreateStartDate,
 					endDate: seasonCreateEndDate,
 					conductorRefs: seasonCreateConductors.map((c) => c.id)
@@ -2828,15 +2828,15 @@
 
 		eventCreateSubmitting = true;
 		try {
-			let orgId: string | null;
+			let dbEntityId: string | null;
 			try {
-				orgId = await resolveDatabaseEntityId(cfg);
+				dbEntityId = await resolveDatabaseEntityId(cfg);
 			} catch (e) {
 				console.error('agenda: resolving the database entity for event create failed', e);
 				setEventCreateError(m.event_create_failed, null);
 				return;
 			}
-			if (!orgId) {
+			if (!dbEntityId) {
 				console.error('agenda: event create with no resolvable database entity', current.personId);
 				setEventCreateError(m.event_create_failed, null);
 				return;
@@ -2848,7 +2848,7 @@
 			const trimmedDescription = eventCreateDescription.trim();
 
 			const input: CreateEventInput = {
-				orgId,
+				dbEntityId,
 				extraParentIds: [seasonId],
 				eventType: typeValue,
 				startDatetime,
@@ -3595,9 +3595,9 @@
 		// can tell whose run is on the wire. Released with the flag in the `finally`.
 		seriesRunDb = runDb;
 		try {
-			let orgId: string | null;
+			let dbEntityId: string | null;
 			try {
-				orgId = await resolveDatabaseEntityId(cfg);
+				dbEntityId = await resolveDatabaseEntityId(cfg);
 			} catch (e) {
 				console.error('agenda: resolving the database entity for series create failed', e);
 				// #137 — the org read straddled a switch: the refusal belongs to a form
@@ -3606,7 +3606,7 @@
 				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}
-			if (!orgId) {
+			if (!dbEntityId) {
 				console.error('agenda: series create with no resolvable database entity', current.personId);
 				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
@@ -3643,7 +3643,7 @@
 
 			const seriesInput: CreateEventSeriesInput = {
 				name,
-				orgId,
+				dbEntityId,
 				extraParentIds: [seasonId],
 				eventType: typeValue,
 				intervalDays,
@@ -3730,7 +3730,7 @@
 				const startDatetime = tallinnLocalToUtcIso(dates[i]);
 				try {
 					await createEvent(cfg, {
-						orgId,
+						dbEntityId,
 						seriesId,
 						extraParentIds: [seasonId],
 						eventType: typeValue,

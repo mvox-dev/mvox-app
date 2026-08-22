@@ -57,7 +57,7 @@ export class InviteCreateError extends Error {
 }
 
 export interface CreateInviteInput {
-	orgId: string;
+	dbEntityId: string;
 }
 
 export interface CreateInviteResult {
@@ -118,12 +118,20 @@ export async function resolvePersonParentId(
  * internal resolve, not a user-facing list.
  *
  * #161 review fix round 2 — the dead `personId` parameter is DELETED from the
- * call contract (not merely renamed/shadowed): `resolveOrgId(cfg, fetchImpl?)`,
+ * call contract (not merely renamed/shadowed): `resolveInviteParentId(cfg, fetchImpl?)`,
  * `.length === 1`, pinned in inviteData.spec.ts. The retired person -> active
  * member row -> organization `_parent` walk is gone — #159 deleted every
  * organization instance, so that chain could only ever answer wrong or empty.
+ *
+ * #174 review fix — named for its ROLE (the invite's member parent), matching
+ * the `resolvePersonParentId` sibling above, NOT for the value it returns. A
+ * return-value name (`resolveDbEntityId`) would sit one abbreviation away from
+ * the `resolveDatabaseEntityId` this very function delegates to, so a call site
+ * could no longer tell the wrapper from the wrapped without checking imports.
+ * What this adds over the raw lookup is InviteCreateError translation for the
+ * http / not-visible cases, which is invite-specific — hence the invite name.
  */
-export async function resolveOrgId(
+export async function resolveInviteParentId(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
@@ -161,8 +169,8 @@ export async function createInvite(
 	fetchImpl: typeof fetch = fetch
 ): Promise<CreateInviteResult> {
 	// Input guards BEFORE any fetch, each naming the offending field.
-	if (!input.orgId) {
-		throw new Error('createInvite: orgId must not be empty');
+	if (!input.dbEntityId) {
+		throw new Error('createInvite: dbEntityId must not be empty');
 	}
 
 	// ── All reads precede all writes ─────────────────────────────────────────────
@@ -276,7 +284,7 @@ export async function createInvite(
 	// per-visibility-level entity now (T4.3/T4.8).
 	const memberProps: Prop[] = [
 		{ type: '_type', reference: memberTypeId },
-		{ type: '_parent', reference: input.orgId },
+		{ type: '_parent', reference: input.dbEntityId },
 		{ type: 'person', reference: personId },
 		{ type: 'status', string: 'active' },
 		{ type: '_inheritrights', boolean: true }

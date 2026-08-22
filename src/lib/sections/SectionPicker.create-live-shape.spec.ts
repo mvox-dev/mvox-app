@@ -22,7 +22,7 @@
 // creating a top-level "Soprano II" was refused because Kammernaiskoor Sireen
 // has one. (The very same fixture carries three "Bass", two "Baritone" and two
 // "I Tenor" roots — live proof those roots are not one sibling set.) The picker
-// now takes the member's own `orgId` and compares top-level candidates only
+// now takes the member's own `dbEntityId` and compares top-level candidates only
 // against roots of THAT org; sub-section scope is unchanged.
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -77,12 +77,12 @@ function liveTree(): SectionNode[] {
 		['69c7f8768489bfcb0e81b163', 'Bass', 15, ORG_EFK],
 		['69c7f88a8489bfcb0e81b5bc', 'Bass', 16, ORG_TEST_4]
 	];
-	return flat.map(([id, name, displayOrder, orgId]) => ({
+	return flat.map(([id, name, displayOrder, dbEntityId]) => ({
 		id,
 		name,
 		displayOrder,
 		parentId: null,
-		orgId,
+		dbEntityId,
 		depth: 0,
 		children: []
 	}));
@@ -110,8 +110,8 @@ async function openFormAndType(
 	await fireEvent.click(q(container, 'section-create-submit') as HTMLElement);
 }
 
-/** The picker as the roster renders it for an EFK member (row.orgId = EFK). */
-function renderLivePicker(orgId: string | null = ORG_EFK) {
+/** The picker as the roster renders it for an EFK member (row.dbEntityId = EFK). */
+function renderLivePicker(dbEntityId: string | null = ORG_EFK) {
 	const oncreate = vi.fn();
 	const { container } = render(SectionPicker, {
 		props: {
@@ -119,7 +119,7 @@ function renderLivePicker(orgId: string | null = ORG_EFK) {
 			memberName: 'Ada Lovelace',
 			sections: liveTree(),
 			selectedIds: [],
-			orgId,
+			dbEntityId,
 			onpick: vi.fn(),
 			oncreate
 		}
@@ -166,7 +166,7 @@ describe('SectionPicker on the LIVE polyphony tree — finding #10 reproduced', 
 		expect(oncreate).not.toHaveBeenCalled();
 	});
 
-	it("org UNKNOWN (no orgId prop) stays conservative — every root is a possible sibling, so a top-level 'Soprano II' is still refused rather than risking a real duplicate", async () => {
+	it("org UNKNOWN (no dbEntityId prop) stays conservative — every root is a possible sibling, so a top-level 'Soprano II' is still refused rather than risking a real duplicate", async () => {
 		const { container, oncreate } = renderLivePicker(null);
 		await openFormAndType(container, 'Soprano II');
 

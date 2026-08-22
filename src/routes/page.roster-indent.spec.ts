@@ -55,7 +55,7 @@
 //
 //   UNINDENT = promote one level: ONE reparentSection(cfg, id, newParentId)
 //     call where newParentId is the GRANDPARENT section id — or the
-//     ORGANIZATION id (the page already holds `currentOrgId`, #124) when the
+//     ORGANIZATION id (the page already holds `currentDbEntityId`, #124) when the
 //     parent is top-level. The promoted section lands AFTER its former
 //     parent's subtree among its new siblings. Announced with
 //     `roster_section_unindented` (to a section) / `roster_section_unindented_top`
@@ -136,9 +136,9 @@ import {
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 // Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor — the #98/#152/S2 shape, WITH
-// `orgId` on the top-level nodes and the rows: the unindent-to-top-level write
-// needs the page to know the collective org id (`currentOrgId`, #124), and the
-// #124/F3 org filter only keeps top-level roots whose orgId matches it.
+// `dbEntityId` on the top-level nodes and the rows: the unindent-to-top-level write
+// needs the page to know the collective org id (`currentDbEntityId`, #124), and the
+// #124/F3 org filter only keeps top-level roots whose dbEntityId matches it.
 
 const ORG = 'org-1';
 
@@ -149,25 +149,25 @@ function fixtureTree(): SectionNode[] {
 			name: 'Soprano',
 			displayOrder: 1,
 			parentId: null,
-			orgId: ORG,
+			dbEntityId: ORG,
 			depth: 0,
 			children: [
-				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', orgId: null, depth: 1, children: [] },
-				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', orgId: null, depth: 1, children: [] }
+				{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', dbEntityId: null, depth: 1, children: [] },
+				{ id: 'sec-sop2', name: 'Soprano 2', displayOrder: 2, parentId: 'sec-sop', dbEntityId: null, depth: 1, children: [] }
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, orgId: ORG, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, orgId: ORG, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG, depth: 0, children: [] },
+		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG, depth: 0, children: [] }
 	];
 }
 
 function fixtureRows(): RosterRow[] {
 	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], orgId: ORG },
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], orgId: ORG },
-		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop2'], orgId: ORG },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], orgId: ORG },
-		{ memberId: 'm-tara', personId: 'p-tara', name: 'Tara Oja', email: 'tara@x.com', sectionIds: ['sec-tenor'], orgId: ORG }
+		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], dbEntityId: ORG },
+		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], dbEntityId: ORG },
+		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop2'], dbEntityId: ORG },
+		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], dbEntityId: ORG },
+		{ memberId: 'm-tara', personId: 'p-tara', name: 'Tara Oja', email: 'tara@x.com', sectionIds: ['sec-tenor'], dbEntityId: ORG }
 	];
 }
 
@@ -180,7 +180,7 @@ function fixtureTreeDeep(): SectionNode[] {
 			name: 'Soprano',
 			displayOrder: 1,
 			parentId: null,
-			orgId: ORG,
+			dbEntityId: ORG,
 			depth: 0,
 			children: [
 				{
@@ -188,24 +188,24 @@ function fixtureTreeDeep(): SectionNode[] {
 					name: 'Soprano 1',
 					displayOrder: 1,
 					parentId: 'sec-sop',
-					orgId: null,
+					dbEntityId: null,
 					depth: 1,
 					children: [
-						{ id: 'sec-sop1a', name: 'Soprano 1a', displayOrder: 1, parentId: 'sec-sop1', orgId: null, depth: 2, children: [] }
+						{ id: 'sec-sop1a', name: 'Soprano 1a', displayOrder: 1, parentId: 'sec-sop1', dbEntityId: null, depth: 2, children: [] }
 					]
 				}
 			]
 		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, orgId: ORG, depth: 0, children: [] }
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG, depth: 0, children: [] }
 	];
 }
 
 function fixtureRowsDeep(): RosterRow[] {
 	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], orgId: ORG },
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], orgId: ORG },
-		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop1a'], orgId: ORG },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], orgId: ORG }
+		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], dbEntityId: ORG },
+		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], dbEntityId: ORG },
+		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop1a'], dbEntityId: ORG },
+		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], dbEntityId: ORG }
 	];
 }
 
@@ -758,10 +758,10 @@ describe('/roster — the indent/unindent buttons are keyboard-operable in their
 });
 
 describe('/roster — an unindent with no resolvable organization fails LOUDLY (#155/S3 review F3)', () => {
-	/** Same tree as `fixtureTree`, with NO `orgId` anywhere — the permissive
+	/** Same tree as `fixtureTree`, with NO `dbEntityId` anywhere — the permissive
 	 *  "org unknown to this reader" state `visibleSections` deliberately keeps
 	 *  rendering (an unauthenticated/limited reader, or a pre-#124-shaped
-	 *  response). Every row is org-less too, so `currentOrgId` is null as well. */
+	 *  response). Every row is org-less too, so `currentDbEntityId` is null as well. */
 	function fixtureTreeNoOrg(): SectionNode[] {
 		return [
 			{
@@ -769,13 +769,13 @@ describe('/roster — an unindent with no resolvable organization fails LOUDLY (
 				name: 'Soprano',
 				displayOrder: 1,
 				parentId: null,
-				orgId: null,
+				dbEntityId: null,
 				depth: 0,
 				children: [
-					{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', orgId: null, depth: 1, children: [] }
+					{ id: 'sec-sop1', name: 'Soprano 1', displayOrder: 1, parentId: 'sec-sop', dbEntityId: null, depth: 1, children: [] }
 				]
 			},
-			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, orgId: null, depth: 0, children: [] }
+			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: null, depth: 0, children: [] }
 		];
 	}
 

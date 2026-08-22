@@ -30,7 +30,7 @@
 //
 //   DATA
 //     - series submit calls `createEventSeries(cfg, input)` (T1) — the ONE
-//       series-create seam. orgId from `resolveDatabaseEntityId(cfg, personId)`; the
+//       series-create seam. dbEntityId from `resolveDatabaseEntityId(cfg, personId)`; the
 //       panel's season id rides in `extraParentIds: [seasonId]`. NO `_sharing`
 //       / inherit-rights anywhere in the UI layer (the #132 design decision —
 //       the create body is entirely T1's business).
@@ -51,7 +51,7 @@
 //       ONE `createEvent(cfg, input)` per date from the REAL
 //       `generateEventDates`, IN ASCENDING ORDER, STRICTLY SERIAL (never two
 //       in flight — Entu rate/ordering). Each occurrence sets ONLY:
-//       orgId, seriesId (the id the series create just resolved),
+//       dbEntityId, seriesId (the id the series create just resolved),
 //       extraParentIds: [seasonId], eventType, startDatetime. Name /
 //       duration / location / description are NOT set — they inherit from
 //       the series via the read-side merge (listRehearsals/loadEventDetail).
@@ -675,7 +675,7 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 		// FULL param shape (partial assertions hide bugs).
 		expect(createEventSeriesMock).toHaveBeenCalledWith(CFG, {
 			name: 'Monday rehearsals',
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			extraParentIds: [SEASON_ID],
 			eventType: 'rehearsal',
 			intervalDays: 7,
@@ -786,7 +786,7 @@ describe('season panel — submit WITH generation bulk-creates the occurrences',
 		for (let i = 0; i < 3; i += 1) {
 			expect(createEventMock.mock.calls[i][0]).toEqual(CFG);
 			const input = eventInput(i);
-			expect(input.orgId).toBe(ORG_EFK);
+			expect(input.dbEntityId).toBe(ORG_EFK);
 			expect(input.seriesId).toBe(NEW_SERIES_ID);
 			expect(input.extraParentIds).toEqual([SEASON_ID]);
 			expect(input.eventType).toBe('rehearsal');
@@ -815,7 +815,7 @@ describe('season panel — submit WITH generation bulk-creates the occurrences',
 		// FULL param shape (partial assertions hide bugs).
 		expect(createEventSeriesMock).toHaveBeenCalledWith(CFG, {
 			name: 'Monday rehearsals',
-			orgId: ORG_EFK,
+			dbEntityId: ORG_EFK,
 			extraParentIds: [SEASON_ID],
 			eventType: 'rehearsal',
 			intervalDays: 7,

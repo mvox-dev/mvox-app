@@ -61,7 +61,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Soprano',
 				displayOrder: 1,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: []
 			},
@@ -70,7 +70,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Alto',
 				displayOrder: 2,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: []
 			}
@@ -97,7 +97,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Soprano',
 				displayOrder: 1,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: [
 					{
@@ -105,7 +105,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 						name: 'Soprano 1',
 						displayOrder: 1,
 						parentId: 'sec-sop',
-						orgId: null,
+						dbEntityId: null,
 						depth: 1,
 						children: [
 							{
@@ -113,7 +113,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 								name: 'Soprano 1a',
 								displayOrder: 1,
 								parentId: 'sec-sop1',
-								orgId: null,
+								dbEntityId: null,
 								depth: 2,
 								children: []
 							}
@@ -124,7 +124,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 						name: 'Soprano 2',
 						displayOrder: 2,
 						parentId: 'sec-sop',
-						orgId: null,
+						dbEntityId: null,
 						depth: 1,
 						children: []
 					}
@@ -135,7 +135,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Alto',
 				displayOrder: 2,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: []
 			}
@@ -159,7 +159,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Alto',
 				displayOrder: 1,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: []
 			},
@@ -168,7 +168,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Bass',
 				displayOrder: Number.POSITIVE_INFINITY,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: []
 			},
@@ -177,7 +177,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 				name: 'Chorus C',
 				displayOrder: Number.POSITIVE_INFINITY,
 				parentId: null,
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				depth: 0,
 				children: []
 			}
@@ -188,7 +188,7 @@ describe('listSections — parses section entities into a recursive tree sorted 
 	// must SURVIVE the parse. Sections across different databases must not be
 	// treated as one indistinguishable set of "siblings", which is what made
 	// the picker refuse a top-level name that only exists in another database.
-	it("carries each root's OWNING COLLECTIVE (`_parent` entity_type 'database'); a sub-section, being section-parented, has orgId null", async () => {
+	it("carries each root's OWNING COLLECTIVE (`_parent` entity_type 'database'); a sub-section, being section-parented, has dbEntityId null", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
@@ -215,11 +215,11 @@ describe('listSections — parses section entities into a recursive tree sorted 
 			})
 		);
 		const tree = await listSections(cfg, fetchImpl);
-		expect(tree.map((n) => [n.id, n.orgId])).toEqual([
+		expect(tree.map((n) => [n.id, n.dbEntityId])).toEqual([
 			['sec-efk-sop', 'db-efk'],
 			['sec-sireen-sop', 'db-sireen']
 		]);
-		expect(tree[0].children[0].orgId).toBeNull();
+		expect(tree[0].children[0].dbEntityId).toBeNull();
 	});
 
 	it('fails loud on a non-2xx response, with the status surfaced', async () => {

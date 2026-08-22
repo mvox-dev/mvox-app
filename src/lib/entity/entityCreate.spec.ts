@@ -10,7 +10,7 @@ import { createEvent, createEventSeries, createSeason } from './entityCreate';
 //   - EXACTLY TWO fetches per create: the resolveTypeId GET (cached) + ONE
 //     `POST entity` (COLLECTION endpoint, never entity/{id}).
 //   - `_type` as a resolved REFERENCE (#10 pinned wire-shape), `_parent` =
-//     `[orgId, ...extraParentIds]`, ONE prop PER id — zero lookup fetches, the
+//     `[dbEntityId, ...extraParentIds]`, ONE prop PER id — zero lookup fetches, the
 //     data layer never guesses an org/season. The ORG IS ITS OWN REQUIRED
 //     FIELD (#132 review F4: v4E marks it `required, parentCard: '1'` on all
 //     three types, and a flat id list made it forgettable), and on createEvent
@@ -133,13 +133,13 @@ function typeResolutionCalls(fetchImpl: ReturnType<typeof makeFetchMock>): strin
 // once, here, instead of silently weakening a dozen assertions.
 const minimalSeason = {
 	name: 'S',
-	orgId: 'org-1',
+	dbEntityId: 'org-1',
 	startDate: '2026-09-01',
 	endDate: '2027-05-31'
 };
 const minimalSeries = {
 	name: 'S',
-	orgId: 'org-1',
+	dbEntityId: 'org-1',
 	extraParentIds: ['season-1'],
 	eventType: 'rehearsal',
 	intervalDays: 7,
@@ -150,7 +150,7 @@ const minimalSeries = {
 };
 const minimalEvent = {
 	name: 'E',
-	orgId: 'org-1',
+	dbEntityId: 'org-1',
 	extraParentIds: ['season-1'],
 	eventType: 'concert',
 	startDatetime: '2026-09-07T16:00:00.000Z'
@@ -169,7 +169,7 @@ describe('createSeason — wire shape', () => {
 				name: 'Hooaeg 2026/27',
 				startDate: '2026-09-01',
 				endDate: '2027-05-31',
-				orgId: 'org-1'
+				dbEntityId: 'org-1'
 			},
 			fetchImpl
 		);
@@ -182,7 +182,7 @@ describe('createSeason — wire shape', () => {
 		expect(typeProp).toEqual({ type: '_type', reference: 'season-type-9' });
 	});
 
-	it('POST body FULL SHAPE without conductors: _type ref + _parent=orgId + name string + start_date/end_date as { date } — and NOTHING else (no _sharing, no _inheritrights, no conductor)', async () => {
+	it('POST body FULL SHAPE without conductors: _type ref + _parent=dbEntityId + name string + start_date/end_date as { date } — and NOTHING else (no _sharing, no _inheritrights, no conductor)', async () => {
 		const fetchImpl = makeFetchMock({ typeIds: { season: 'season-type-9' } });
 		await createSeason(
 			cfg,
@@ -190,7 +190,7 @@ describe('createSeason — wire shape', () => {
 				name: 'Hooaeg 2026/27',
 				startDate: '2026-09-01',
 				endDate: '2027-05-31',
-				orgId: 'org-1'
+				dbEntityId: 'org-1'
 			},
 			fetchImpl
 		);
@@ -217,7 +217,7 @@ describe('createSeason — wire shape', () => {
 				name: 'Hooaeg 2026/27',
 				startDate: '2026-09-01',
 				endDate: '2027-05-31',
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				conductorRefs: ['person-7', 'person-8']
 			},
 			fetchImpl
@@ -267,7 +267,7 @@ describe('createSeason — wire shape', () => {
 describe('createEventSeries — wire shape', () => {
 	const full = {
 		name: 'Mon rehearsals',
-		orgId: 'org-1',
+		dbEntityId: 'org-1',
 		extraParentIds: ['season-1'],
 		eventType: 'rehearsal',
 		intervalDays: 7,
@@ -387,7 +387,7 @@ describe('createEvent — wire shape', () => {
 			cfg,
 			{
 				name: 'Spring concert',
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				extraParentIds: ['season-1'],
 				eventType: 'concert',
 				startDatetime: '2027-04-11T17:00:00.000Z'
@@ -417,7 +417,7 @@ describe('createEvent — wire shape', () => {
 			cfg,
 			{
 				name: 'Mon rehearsal',
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				seriesId: 'series-1',
 				extraParentIds: ['season-1'],
 				eventType: 'rehearsal',
@@ -456,7 +456,7 @@ describe('createEvent — wire shape', () => {
 			cfg,
 			{
 				name: 'Mon rehearsal',
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				seriesId: 'series-42',
 				extraParentIds: ['season-1'],
 				eventType: 'rehearsal',
@@ -495,7 +495,7 @@ describe('createEvent — wire shape', () => {
 		await createEvent(
 			cfg,
 			{
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				seriesId: 'series-42',
 				extraParentIds: ['season-1'],
 				eventType: 'rehearsal',
@@ -525,7 +525,7 @@ describe('createEvent — wire shape', () => {
 			cfg,
 			{
 				name: 'Mon rehearsal',
-				orgId: 'org-1',
+				dbEntityId: 'org-1',
 				seriesId: 'series-42',
 				eventType: 'rehearsal',
 				startDatetime: '2026-09-07T16:00:00.000Z',
@@ -744,18 +744,18 @@ describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY
 		);
 	});
 
-	it('all three: a blank/missing orgId throws — v4E marks the organization parent required with parentCard "1" on season, event_series AND event, and a season-or-series-only parent list breaks org-scoped reads (#132 review F4)', async () => {
+	it('all three: a blank/missing dbEntityId throws — v4E marks the organization parent required with parentCard "1" on season, event_series AND event, and a season-or-series-only parent list breaks org-scoped reads (#132 review F4)', async () => {
 		await expectRejectedWithoutFetch(
-			(f) => createSeason(cfg, { ...minimalSeason, orgId: '' }, f),
-			/orgId must not be empty/
+			(f) => createSeason(cfg, { ...minimalSeason, dbEntityId: '' }, f),
+			/dbEntityId must not be empty/
 		);
 		await expectRejectedWithoutFetch(
-			(f) => createEventSeries(cfg, { ...minimalSeries, orgId: '   ' }, f),
-			/orgId must not be empty/
+			(f) => createEventSeries(cfg, { ...minimalSeries, dbEntityId: '   ' }, f),
+			/dbEntityId must not be empty/
 		);
 		await expectRejectedWithoutFetch(
-			(f) => createEvent(cfg, { ...minimalEvent, orgId: undefined as unknown as string }, f),
-			/orgId must not be empty/
+			(f) => createEvent(cfg, { ...minimalEvent, dbEntityId: undefined as unknown as string }, f),
+			/dbEntityId must not be empty/
 		);
 	});
 

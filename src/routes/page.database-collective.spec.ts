@@ -7,8 +7,8 @@
 // Pinned wiring contract (GREEN must implement):
 //   - the page's create flows import `resolveDatabaseEntityId` from
 //     `$lib/collective/databaseEntity` (the #161 successor of
-//     `resolveMyOrgId`/`$lib/org/myOrg`) and thread ITS result into the
-//     entityCreate write layer as the required structural parent (`orgId` input
+//     `resolveMyDbEntityId`/`$lib/org/myOrg`) and thread ITS result into the
+//     entityCreate write layer as the required structural parent (`dbEntityId` input
 //     field — the name stays, the value is the DATABASE entity id).
 //   - NO wire traffic for the resolution besides that seam: `entuFetch` is
 //     stubbed to REJECT here, so any leftover member/organization walk fails
@@ -18,7 +18,7 @@
 // flows share the same resolution call sites (src/routes/+page.svelte) and are
 // forced onto the same seam by the structural guard
 // (src/lib/collective/noOrganizationReferences.spec.ts — no non-spec file may
-// reference `resolveMyOrgId`).
+// reference `resolveMyDbEntityId`).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -64,7 +64,7 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
 // Every OTHER wire path is disabled: a leftover member/organization walk (the
-// retired `resolveMyOrgId` chain calls entuFetch directly) rejects loudly.
+// retired `resolveMyDbEntityId` chain calls entuFetch directly) rejects loudly.
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: entuFetchMock };
@@ -156,7 +156,7 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			orgId: DB_ENTITY
+			dbEntityId: DB_ENTITY
 		}
 	];
 }
@@ -250,7 +250,7 @@ describe('main page — season create resolves the DATABASE entity as the collec
 		// …and its answer is the create's structural parent.
 		expect(createSeasonMock).toHaveBeenCalledWith(
 			CFG,
-			expect.objectContaining({ name: 'Season 2027', orgId: DB_ENTITY })
+			expect.objectContaining({ name: 'Season 2027', dbEntityId: DB_ENTITY })
 		);
 
 		// The retired member/organization walk called entuFetch directly; with the
