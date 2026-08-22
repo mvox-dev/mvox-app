@@ -372,9 +372,14 @@ describe('/admin — access gate', () => {
 
 		// The gate ran per-person on the selected collective's cfg — the same
 		// person-scoped resolution the nav uses, never an org guess.
+		// #173 — the page now resolves the database entity ONCE, itself, and
+		// threads it in as resolveAdmin's 4th (pre-resolved-dbEntityId) param,
+		// so resolveAdmin's OWN internal resolution never runs.
 		expect(h.resolveAdminMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
-			'admin-p'
+			'admin-p',
+			undefined,
+			'org-1'
 		);
 	});
 
@@ -422,9 +427,14 @@ describe('/admin — role lists', () => {
 		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
+		// #173 — the page threads its own single resolution into resolveLibrarian's
+		// 4th (pre-resolved-dbEntityId) param too, so resolveLibrarian's internal
+		// resolution never runs.
 		expect(h.resolveLibrarianMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
-			'admin-p'
+			'admin-p',
+			undefined,
+			'org-1'
 		);
 		// The VIEWER rides along: her own `_owner` membership on each entity is
 		// what decides whether the write controls may be offered at all. The

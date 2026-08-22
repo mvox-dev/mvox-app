@@ -33,23 +33,34 @@ export function resetAdmin(): void {
 // when the database entity was actually read and the person is in neither
 // list. An unresolvable prerequisite (no visible database entity, HTTP
 // failure) is 'error', never a silent "not admin".
+//
+// #173 — `dbEntityId` (4th param, OPTIONAL) lets a caller that has ALREADY
+// resolved the database entity (e.g. admin/+page.svelte, which needs the id
+// for its own purposes anyway) thread it straight in, skipping the internal
+// `resolveDatabaseEntityId` round-trip. Omitted, behavior is identical to
+// before — this function resolves it itself.
 export async function resolveAdmin(
 	cfg: EntuCfg,
 	personId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	dbEntityId?: string
 ): Promise<AdminState> {
 	try {
 		const { entuFetch } = await import('$lib/entu/request');
-		const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
 
-		const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
-		// No visible database entity: we cannot evaluate any rights, so we do not
-		// pretend to have evaluated any.
-		if (!dbEntityId) return 'error';
+		let resolvedDbEntityId = dbEntityId;
+		if (!resolvedDbEntityId) {
+			const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
+			const resolved = await resolveDatabaseEntityId(cfg, fetchImpl);
+			// No visible database entity: we cannot evaluate any rights, so we do
+			// not pretend to have evaluated any.
+			if (!resolved) return 'error';
+			resolvedDbEntityId = resolved;
+		}
 
 		const res = await entuFetch(
 			cfg.db,
-			`entity/${dbEntityId}?props=_owner,_editor`,
+			`entity/${resolvedDbEntityId}?props=_owner,_editor`,
 			cfg.token,
 			{},
 			fetchImpl

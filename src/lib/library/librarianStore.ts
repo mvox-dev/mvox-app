@@ -62,21 +62,30 @@ export class LibraryLookupError extends Error {
 // drops it slides `fetchImpl` into the `personId` slot and silently falls back
 // to the global `fetch`. `resolveLibrarian` still takes `personId` — it needs it
 // for the `_owner`/`_editor` membership test — and no longer forwards it here.
+// #173 — `dbEntityId` (3rd param, OPTIONAL) lets a caller that has ALREADY
+// resolved the database entity thread it straight in, skipping the internal
+// `resolveDatabaseEntityId` round-trip. Omitted, behavior is identical to
+// before — this function resolves it itself.
 export async function resolveMyLibraryId(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	dbEntityId?: string
 ): Promise<string | null> {
 	const { entuFetch } = await import('$lib/entu/request');
-	const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
 
-	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
-	// No visible database entity: there is no collective to scope the library
-	// lookup to, so no library can be resolved.
-	if (!dbEntityId) return null;
+	let resolvedDbEntityId = dbEntityId;
+	if (!resolvedDbEntityId) {
+		const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
+		const resolved = await resolveDatabaseEntityId(cfg, fetchImpl);
+		// No visible database entity: there is no collective to scope the
+		// library lookup to, so no library can be resolved.
+		if (!resolved) return null;
+		resolvedDbEntityId = resolved;
+	}
 
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=library&_parent.reference=${encodeURIComponent(dbEntityId)}&props=_id&limit=1`,
+		`entity?_type.string=library&_parent.reference=${encodeURIComponent(resolvedDbEntityId)}&props=_id&limit=1`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -92,13 +101,16 @@ export async function resolveMyLibraryId(
 	return body.entities?.[0]?._id ?? null;
 }
 
+// #173 — `dbEntityId` (4th param, OPTIONAL) forwards straight to
+// `resolveMyLibraryId`; see its header for the round-trip-skipping contract.
 export async function resolveLibrarian(
 	cfg: EntuCfg,
 	personId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	dbEntityId?: string
 ): Promise<LibrarianResult> {
 	try {
-		const libraryId = await resolveMyLibraryId(cfg, fetchImpl);
+		const libraryId = await resolveMyLibraryId(cfg, fetchImpl, dbEntityId);
 		// #143 review F4 — `null` here is now ONLY the factual "no library entity
 		// is visible under the collective's database entity" (no database entity,
 		// or an empty library list). Every failure kind (database-entity lookup,

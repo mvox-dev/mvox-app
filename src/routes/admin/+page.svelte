@@ -10,11 +10,13 @@
 	// the invite page's own db-picker (this surface acts on the person's
 	// CURRENTLY selected collective, same as every other rights-gated page).
 	//
-	// `resolveDatabaseEntityId` / `resolveLibrarian` are called again here even
-	// though `resolveAdmin` already resolves the collective internally — the
-	// EXISTING resolutions are the source of truth for "which collective"/"which
-	// library" this surface acts on; no new lookup is invented (task
-	// instructions + spec).
+	// #173 — the database entity is resolved ONCE, here, and threaded into both
+	// `resolveAdmin` and `resolveLibrarian` via their pre-resolved-dbEntityId
+	// param (adminStore.preresolved.spec.ts / librarianStore.preresolved.spec.ts).
+	// Previously this page's own `resolveDatabaseEntityId` call plus the ones
+	// buried inside `resolveAdmin` and `resolveLibrarian` -> `resolveMyLibraryId`
+	// made THREE identical round-trips per load for one db-scoped, load-constant
+	// id; now there is exactly one.
 	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
@@ -183,7 +185,28 @@
 		nameError = false;
 		nameWritePending = false;
 
-		const adminState = await resolveAdmin(c, target.personId);
+		// #173 — resolve the database entity ONCE, here. It is db-scoped and
+		// constant for the whole load, so it is safe to thread the SAME id into
+		// both `resolveAdmin` and `resolveLibrarian` below instead of letting
+		// each resolve it again internally.
+		let resolvedDbEntityId: string | null;
+		try {
+			resolvedDbEntityId = await resolveDatabaseEntityId(c);
+		} catch (e) {
+			if (thisLoad !== loadSeq) return; // superseded by a newer selection
+			console.error('admin roles: database entity resolution failed', e);
+			status = 'load-error';
+			return;
+		}
+		if (thisLoad !== loadSeq) return; // superseded by a newer selection
+		if (!resolvedDbEntityId) {
+			// No visible database entity: mirrors `resolveAdmin`'s own "cannot
+			// evaluate any rights" answer for the same condition.
+			status = 'load-error';
+			return;
+		}
+
+		const adminState = await resolveAdmin(c, target.personId, undefined, resolvedDbEntityId);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
 		if (adminState === 'not-admin') {
 			status = 'no-access';
@@ -195,9 +218,8 @@
 		}
 
 		try {
-			const [resolvedDbEntityId, libResult, rosterRows, resolvedNameMarker] = await Promise.all([
-				resolveDatabaseEntityId(c),
-				resolveLibrarian(c, target.personId),
+			const [libResult, rosterRows, resolvedNameMarker] = await Promise.all([
+				resolveLibrarian(c, target.personId, undefined, resolvedDbEntityId),
 				loadRoster(c),
 				// #165 — a FAILED marker read must land here, in the SAME catch as every
 				// sibling resolution (load-error + retry), never rendered as "no name".
