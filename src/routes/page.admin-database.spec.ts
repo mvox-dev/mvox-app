@@ -33,7 +33,12 @@ const h = vi.hoisted(() => ({
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	resolveParentMock: vi.fn(),
-	createInviteMock: vi.fn()
+	createInviteMock: vi.fn(),
+	// #165 — the page's `load()` now also resolves the collective-name marker.
+	// Mocked here purely as scaffolding (this file has no opinion on that
+	// surface) so it doesn't fall through the disabled `entuFetch` wire below.
+	resolveCollectiveNameMarkerMock: vi.fn(),
+	updateCollectiveNameMock: vi.fn()
 }));
 
 vi.mock('$lib/admin/roleManagement', async (importOriginal) => {
@@ -67,6 +72,11 @@ vi.mock('$lib/entu/request', async (importOriginal) => {
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+// #165 scaffolding (see the hoisted mock's comment above).
+vi.mock('$lib/collectives/collectiveName', () => ({
+	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
+	updateCollectiveName: h.updateCollectiveNameMock
+}));
 // InviteSurface's data seam — createInvite captured so the spec can assert the
 // member's structural parent; resolvePersonParentId mocked (its own #161-correct
 // database read would otherwise hit the disabled wire).
@@ -131,6 +141,9 @@ beforeEach(() => {
 		memberId: 'm-new',
 		inviteToken: 'a.b.c'
 	});
+	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {

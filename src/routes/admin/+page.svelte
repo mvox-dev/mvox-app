@@ -15,10 +15,20 @@
 	// EXISTING resolutions are the source of truth for "which collective"/"which
 	// library" this surface acts on; no new lookup is invented (task
 	// instructions + spec).
+	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
-	import { selectedCollectiveStore } from '$lib/collectives/store';
-	import type { Collective } from '$lib/collectives/types';
+	import {
+		selectedCollectiveStore,
+		selectedCollectiveIdentityStore,
+		renameCollectiveInStore,
+		type CollectiveIdentity
+	} from '$lib/collectives/store';
+	import {
+		resolveCollectiveNameMarker,
+		updateCollectiveName,
+		type CollectiveNameMarker
+	} from '$lib/collectives/collectiveName';
 	import { resolveAdmin } from '$lib/nav/adminStore';
 	import { resolveLibrarian } from '$lib/library/librarianStore';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
@@ -43,7 +53,11 @@
 	type Cfg = { db: string; token: string };
 
 	let status = $state<Status>('loading');
-	let selected = $state<Collective | null>(null);
+	// The full selected collective — read ONLY for its display label (the invite
+	// section's `presetDbName`), so it deliberately DOES track a rename. Anything
+	// that decides "which collective is this page acting on" keys off
+	// `selectedCollectiveIdentityStore` instead (see the load effect below).
+	const selected = $derived($selectedCollectiveStore);
 	let cfg = $state<Cfg | null>(null);
 	let orgId = $state<string | null>(null);
 	let libraryId = $state<string | null>(null);
@@ -60,6 +74,18 @@
 	let canManageLibrarians = $state(false);
 	let roster = $state<RosterRow[]>([]);
 	let actionError = $state(false);
+
+	// #165 — the editable collective NAME (the `mvox_collective` marker's own
+	// `name`, not the store's picker label — see collectiveName.ts module doc).
+	// Same inline-edit shape as event/[id]/+page.svelte's field editing
+	// (beginFieldEdit/confirmFieldEdit, editingField, pencilRefs, focus
+	// management), collapsed to ONE field: no per-field key is needed.
+	let nameMarker = $state<CollectiveNameMarker | null>(null);
+	let editingName = $state(false);
+	let nameDraft = $state('');
+	let nameWritePending = $state(false);
+	let nameError = $state(false);
+	let namePencilRef = $state<HTMLButtonElement | undefined>(undefined);
 
 	const adminOwnerCount = $derived(admins.filter((p) => p.role === 'owner').length);
 
@@ -133,7 +159,9 @@
 		canManageLibrarians = listing.canManage;
 	}
 
-	async function load(target: Collective): Promise<void> {
+	// `target` is the collective IDENTITY (db + personId) — the page's data all
+	// hangs off those two, never off the display label.
+	async function load(target: CollectiveIdentity): Promise<void> {
 		const thisLoad = ++loadSeq;
 		status = 'loading';
 		actionError = false;
@@ -149,6 +177,11 @@
 		viewerId = target.personId;
 		canManageAdmins = false;
 		canManageLibrarians = false;
+		nameMarker = null;
+		editingName = false;
+		nameDraft = '';
+		nameError = false;
+		nameWritePending = false;
 
 		const adminState = await resolveAdmin(c, target.personId);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
@@ -162,10 +195,13 @@
 		}
 
 		try {
-			const [resolvedOrgId, libResult, rosterRows] = await Promise.all([
+			const [resolvedOrgId, libResult, rosterRows, resolvedNameMarker] = await Promise.all([
 				resolveDatabaseEntityId(c),
 				resolveLibrarian(c, target.personId),
-				loadRoster(c)
+				loadRoster(c),
+				// #165 — a FAILED marker read must land here, in the SAME catch as every
+				// sibling resolution (load-error + retry), never rendered as "no name".
+				resolveCollectiveNameMarker(c)
 			]);
 			if (thisLoad !== loadSeq) return; // superseded by a newer selection
 			// `resolveLibrarian` SWALLOWS its failures (non-2xx / throw) into
@@ -183,6 +219,7 @@
 			orgId = resolvedOrgId;
 			libraryId = libResult.libraryId;
 			roster = rosterRows;
+			nameMarker = resolvedNameMarker;
 			await Promise.all([
 				refreshAdmins(thisLoad),
 				libraryId ? refreshLibrarians(thisLoad) : Promise.resolve()
@@ -197,21 +234,135 @@
 	}
 
 	function retryLoad(): void {
-		if (selected) void load(selected);
+		if (loadedIdentity) void load(loadedIdentity);
 	}
+
+	// #165 — inline edit of the collective name. `beginNameEdit`/`cancelNameEdit`/
+	// `confirmNameEdit` mirror event/[id]/+page.svelte's beginFieldEdit/
+	// cancelFieldEdit/confirmFieldEdit shape, collapsed to the ONE field this
+	// surface owns (no per-field key needed).
+	function beginNameEdit(): void {
+		if (!nameMarker || nameWritePending) return;
+		nameError = false;
+		nameDraft = nameMarker.name;
+		editingName = true;
+	}
+
+	/** Escape AND blur both dismiss without writing — #165 AC deliberately
+	 *  diverges from the event page's blur-confirms for THIS surface.
+	 *  `restoreFocus` — same #105-shaped rule as the event page: a KEYBOARD
+	 *  dismissal (Escape) owes the pencil its focus back; a blur means the
+	 *  viewer already moved focus somewhere else deliberately. */
+	function cancelNameEdit(restoreFocus: boolean): void {
+		editingName = false;
+		nameDraft = '';
+		if (restoreFocus) tick().then(() => namePencilRef?.focus());
+	}
+
+	/** Enter confirms: an immediate write, no optimistic-then-reconcile queue
+	 *  needed (one field, one caller) — the editor closes at once and the
+	 *  pencil is disabled for the write's duration (`nameWritePending`), same
+	 *  posture as every other write surface on this page. A failed write
+	 *  reverts the displayed name and surfaces `nameError`; a successful one
+	 *  also renames the SELECTED COLLECTIVE STORE entry so the picker + agenda
+	 *  header pick it up without a reload (#165 AC).
+	 *
+	 *  The draft is TRIMMED once, up front, and the trimmed value is what the
+	 *  guards compare AND what goes on the wire (#165 review F4): the read side
+	 *  (`resolveCollectiveNameMarker`) trims, so writing the raw draft would
+	 *  round-trip padding — a "  Koor  " edit would fire a full GET/POST/DELETE
+	 *  cycle, show the padded label until the next reload, and then silently
+	 *  undo itself. Trimming first also makes a whitespace-only edit read as
+	 *  what it is: no change.
+	 *
+	 *  `restoreFocus` — the #105 rule, governing BOTH branches (review F2).
+	 *  Enter is a KEYBOARD dismissal, so it owes the pencil its focus back
+	 *  exactly like Escape does; the no-change branch hands that straight to
+	 *  `cancelNameEdit`, and the write branch cannot act on it immediately
+	 *  (the pencil is `disabled` for the write's duration and `focus()` is a
+	 *  no-op on a disabled element) so it lands in the `finally`, after
+	 *  `nameWritePending` has flipped back. A blur passes `false`: the viewer
+	 *  already moved focus somewhere deliberate. */
+	async function confirmNameEdit(restoreFocus: boolean): Promise<void> {
+		if (!editingName || !cfg || !nameMarker) return;
+		const draft = nameDraft.trim();
+		const before = nameMarker;
+		if (draft === '' || draft === before.name) {
+			// No writable change — dismiss without touching the wire.
+			cancelNameEdit(restoreFocus);
+			return;
+		}
+		editingName = false;
+		nameDraft = '';
+		const thisLoad = loadSeq;
+		const writeCfg = cfg;
+		nameWritePending = true;
+		try {
+			await updateCollectiveName(writeCfg, before.markerId, draft);
+			if (thisLoad !== loadSeq) return; // superseded by a newer selection
+			nameMarker = { ...before, name: draft };
+			renameCollectiveInStore(writeCfg.db, draft);
+			nameError = false;
+		} catch (e) {
+			if (thisLoad !== loadSeq) return;
+			console.error('admin collective name: write failed', e);
+			nameError = true;
+		} finally {
+			if (thisLoad === loadSeq) {
+				nameWritePending = false;
+				// `!editingName` — a re-opened editor since this write started owns
+				// focus now; a late restore would rip it out of the input.
+				if (restoreFocus && !editingName) {
+					await tick();
+					namePencilRef?.focus();
+				}
+			}
+		}
+	}
+
+	function handleNameKeydown(e: KeyboardEvent): void {
+		if (e.key === 'Escape') {
+			e.preventDefault();
+			// Keyboard dismissal — the pencil owes this focus back.
+			cancelNameEdit(true);
+		} else if (e.key === 'Enter') {
+			e.preventDefault();
+			// Keyboard dismissal too — same rule, whichever branch confirm takes.
+			void confirmNameEdit(true);
+		}
+	}
+
+	/** Svelte action: focus the element the instant it mounts — same helper
+	 *  event/[id]/+page.svelte uses for its own edit inputs. */
+	function focusOnMount(node: HTMLElement): void {
+		node.focus();
+	}
+
+	// Which identity this page's data belongs to — also what `retryLoad` re-runs
+	// against, so a retry can never silently target a different collective than
+	// the failed load did.
+	let loadedIdentity = $state<CollectiveIdentity | null>(null);
 
 	// EFFECT — react to the resolved selected collective: no-collective gate, or
 	// (re-)load. Same "no selected collective ⇒ no-collective" collapse the
 	// admin/invite page uses for its own picker (loading and none read the
 	// same to the user here — there is nothing actionable to distinguish).
+	//
+	// Keyed on `selectedCollectiveIdentityStore`, NOT `selectedCollectiveStore`
+	// (#165 review F1): this page's own `renameCollectiveInStore` republishes a
+	// fresh `Collective` object (same db, new label) and the raw store re-emits
+	// it, which would re-run `load()` on the page's OWN successful write and
+	// clobber the just-set optimistic name with whatever
+	// `resolveCollectiveNameMarker` answers next. The identity store emits only
+	// on a genuine db/person change, so no per-page guard is needed here.
 	$effect(() => {
-		const s = $selectedCollectiveStore;
-		selected = s;
-		if (!s) {
+		const id = $selectedCollectiveIdentityStore;
+		loadedIdentity = id;
+		if (!id) {
 			status = 'no-collective';
 			return;
 		}
-		void load(s);
+		void load(id);
 	});
 
 	// The write handlers SNAPSHOT the current sequence (they do not bump it —
@@ -303,6 +454,77 @@
 			</div>
 		{:else}
 			<!-- ready -->
+			<!-- #165 — the editable collective name, at the top of the ready view.
+			     `nameMarker === null` (marker resolved but not found in this db) hides
+			     the whole surface — nothing to edit. A FAILED resolution never reaches
+			     here: it lands in 'load-error' above, alongside every other sibling
+			     resolution (house rule). -->
+			{#if nameMarker}
+				<div class="flex flex-col gap-1.5">
+					{#if editingName}
+						<input
+							type="text"
+							data-testid="admin-collective-name-input"
+							aria-label={m.admin_collective_name_edit_aria_label()}
+							class="border-b border-ink bg-transparent font-display text-2xl"
+							value={nameDraft}
+							use:focusOnMount
+							oninput={(e) => (nameDraft = (e.currentTarget as HTMLInputElement).value)}
+							onblur={() => cancelNameEdit(false)}
+							onkeydown={handleNameKeydown}
+						/>
+					{:else}
+						<!-- #157's whole-field shape (the one event/[id]/+page.svelte settled
+						     on), not a bare pencil glyph: the WHOLE field is the button, so the
+						     tap target is `min-h-11 w-full` instead of a ~12px ✎ (#165 review
+						     F3 — `min-h-11` alone with `p-0` collapses the width to the glyph,
+						     under the 44x44 house minimum). `aria-labelledby` keeps the
+						     control's own accessible name pinned to the value span while the
+						     button carries its action label in an `sr-only` child.
+						     #165 review F6/F7 — this is page-level context (which collective
+						     you're administering), not a content section like "Administrators"
+						     below, so it is a plain <div>, not an <h2>: an empty-name marker
+						     would otherwise render a blank heading to screen readers. F7 — an
+						     empty marker name falls back to a translated "Unnamed collective"
+						     placeholder so the control is never blank, styled to read as a
+						     placeholder rather than real content. -->
+						<div
+							data-testid="admin-collective-name"
+							aria-labelledby="admin-collective-name-value"
+							class="font-display text-2xl"
+						>
+							<button
+								type="button"
+								data-testid="admin-collective-name-edit"
+								disabled={nameWritePending}
+								bind:this={namePencilRef}
+								class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
+								onclick={beginNameEdit}
+							>
+								<span class="sr-only">{m.admin_collective_name_edit_aria_label()}</span>
+								<!-- `group-hover:text-ink` — Tailwind's preflight sets no
+								     `cursor: pointer` on <button>, so growing the target to the
+								     whole field would otherwise leave a mouse user with no
+								     pointer cue at all (same note as the event page). -->
+								<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+								{#if nameMarker.name}
+									<span id="admin-collective-name-value">{nameMarker.name}</span>
+								{:else}
+									<span id="admin-collective-name-value" class="text-ink-3 italic">
+										{m.admin_collective_name_unnamed()}
+									</span>
+								{/if}
+							</button>
+						</div>
+					{/if}
+					{#if nameError}
+						<p data-testid="admin-collective-name-error" role="alert" class="text-sm text-red-700">
+							{m.admin_collective_name_save_error()}
+						</p>
+					{/if}
+				</div>
+			{/if}
+
 			{#if actionError}
 				<p data-testid="admin-roles-action-error" role="alert" class="text-sm text-red-700">
 					{m.admin_roles_action_error()}

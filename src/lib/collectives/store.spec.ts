@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, type Readable } from 'svelte/store';
 
 // Mock the discovery boundary (severs the entu-config → $env import under happy-dom)
 // and $app/navigation (goto can't run outside an app).
@@ -13,9 +13,11 @@ import {
 	urlCollectiveDbStore,
 	selectedCollectiveDbStore,
 	selectedCollectiveStore,
+	selectedCollectiveIdentityStore,
 	selectedDbStore,
 	pickerModeStore,
 	hydrateCollectives,
+	renameCollectiveInStore,
 	selectCollective
 } from './store';
 import type { Collective } from './types';
@@ -117,6 +119,73 @@ describe('hydrateCollectives', () => {
 		authAs({ polyphony: 'p1' });
 		discoverMock.mockResolvedValue({ collectives: [], erroredDbs: ['polyphony'] });
 		expect(await hydrateCollectives()).toEqual({ status: 'error', erroredDbs: ['polyphony'] });
+	});
+});
+
+// #165 review F1 — a rename must not wake readers that only care about WHICH
+// collective is selected (the root layout's completion gate and its admin
+// determination both re-resolve from scratch, the latter for 2 Entu
+// round-trips, and the Admin nav entry the viewer is standing on unmounts
+// while it does).
+describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
+	/** Record every emission of a store while `fn` runs. */
+	function emissions<T>(store: Readable<T>, fn: () => void): T[] {
+		const seen: T[] = [];
+		const stop = store.subscribe((v) => seen.push(v));
+		fn();
+		stop();
+		return seen;
+	}
+
+	it('renames the matching collective (the label the picker + agenda header read)', () => {
+		ready([A, B]);
+		renameCollectiveInStore('polyphony', 'Koor Polyphony');
+		expect(get(selectedCollectiveStore)).toEqual({ ...A, name: 'Koor Polyphony' });
+		// Siblings are untouched.
+		expect(get(collectiveState)).toEqual({
+			status: 'ready',
+			collectives: [{ ...A, name: 'Koor Polyphony' }, B],
+			erroredDbs: []
+		});
+	});
+
+	it('a same-name rename and an unknown db publish NOTHING at all', () => {
+		ready([A, B]);
+		const seen = emissions(selectedCollectiveStore, () => {
+			renameCollectiveInStore('polyphony', 'Polyphony'); // already named that
+			renameCollectiveInStore('nope', 'Whatever'); // not a known collective
+		});
+		// The initial emission on subscribe, and nothing more.
+		expect(seen).toHaveLength(1);
+	});
+
+	it('the IDENTITY store stays silent through a rename but fires on a real switch', () => {
+		ready([A, B]);
+		const seen = emissions(selectedCollectiveIdentityStore, () => {
+			renameCollectiveInStore('polyphony', 'Koor Polyphony');
+			renameCollectiveInStore('polyphony', 'Koor Polyphony II');
+			selectedCollectiveDbStore.set('ww'); // a genuine collective switch
+		});
+		expect(seen).toEqual([
+			{ db: 'polyphony', personId: 'p1' },
+			{ db: 'ww', personId: 'w1' }
+		]);
+	});
+
+	it('the IDENTITY store fires when the same db resolves to a different person', () => {
+		ready([A]);
+		const seen = emissions(selectedCollectiveIdentityStore, () => {
+			ready([{ ...A, personId: 'p2' }]);
+		});
+		expect(seen).toEqual([
+			{ db: 'polyphony', personId: 'p1' },
+			{ db: 'polyphony', personId: 'p2' }
+		]);
+	});
+
+	it('the IDENTITY store reports null when nothing is selected', () => {
+		collectiveState.set({ status: 'loading' });
+		expect(get(selectedCollectiveIdentityStore)).toBeNull();
 	});
 });
 

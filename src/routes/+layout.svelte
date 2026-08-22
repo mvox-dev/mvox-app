@@ -21,7 +21,7 @@
 	import {
 		hydrateCollectives,
 		urlCollectiveDbStore,
-		selectedCollectiveStore,
+		selectedCollectiveIdentityStore,
 		pickerModeStore,
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
@@ -111,15 +111,20 @@
 	// so no member-display surface can open a hole. Two sibling effects:
 	//
 	// EFFECT A — populate `completionGateStore`. Keyed on auth + selected collective
-	// ONLY (NOT pathname → no per-nav refetch). `resetGate()` to 'loading' on every
-	// (re)selection (no-flash: only a genuine read flips it). Generation-guarded so a
-	// stale collective's late resolve can't clobber a newer one (mirrors the
-	// +page.svelte requestId / profile generation discipline). FAIL-SAFE lives in
-	// resolveGate (a read throw → 'loading', never a false 'incomplete').
+	// IDENTITY ONLY (NOT pathname → no per-nav refetch; NOT the collective's display
+	// LABEL → #165 review F1: `selectedCollectiveStore` re-emits a fresh object on
+	// every `renameCollectiveInStore`, which through this effect would mean a
+	// gate teardown + re-resolve on a name edit that changed nothing this effect
+	// reads. `selectedCollectiveIdentityStore` emits only on a real db/person
+	// change). `resetGate()` to 'loading' on every (re)selection (no-flash: only a
+	// genuine read flips it). Generation-guarded so a stale collective's late
+	// resolve can't clobber a newer one (mirrors the +page.svelte requestId /
+	// profile generation discipline). FAIL-SAFE lives in resolveGate (a read throw
+	// → 'loading', never a false 'incomplete').
 	let gateGen = 0;
 	$effect(() => {
 		const auth = $authStore;
-		const selected = $selectedCollectiveStore;
+		const selected = $selectedCollectiveIdentityStore;
 		const g = ++gateGen;
 		if (auth.status !== 'authenticated' || !selected) {
 			resetGate();
@@ -139,7 +144,7 @@
 	// authenticated, so the two layers never collide.
 	$effect(() => {
 		const auth = $authStore;
-		const selected = $selectedCollectiveStore;
+		const selected = $selectedCollectiveIdentityStore;
 		const gate = $completionGateStore;
 		const path = page.url.pathname;
 		if (auth.status !== 'authenticated' || !selected) return;
@@ -156,12 +161,16 @@
 	});
 
 	// ── T5.2/#52 — admin determination for the nav shell Invite entry.
-	// Same generation-guard discipline as the gate effect above: keyed on
-	// auth + selected collective; stale resolves cannot clobber.
+	// Same generation-guard discipline as the gate effect above, and keyed on the
+	// same auth + collective IDENTITY (#165 review F1 — this one is the costly
+	// side of that bug: on a label-only store change it would `resetAdmin()` the
+	// store to 'loading', which unmounts the Admin nav entry the viewer is
+	// standing on, then spend 2 Entu round-trips re-deciding what it already
+	// knew).
 	let adminGen = 0;
 	$effect(() => {
 		const auth = $authStore;
-		const selected = $selectedCollectiveStore;
+		const selected = $selectedCollectiveIdentityStore;
 		const g = ++adminGen;
 		if (auth.status !== 'authenticated' || !selected) {
 			resetAdmin();

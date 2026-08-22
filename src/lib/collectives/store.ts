@@ -1,4 +1,4 @@
-import { writable, derived, get, type Readable, type Writable } from 'svelte/store';
+import { writable, derived, readable, get, type Readable, type Writable } from 'svelte/store';
 import { goto } from '$app/navigation';
 import { getToken } from '$lib/auth/storage';
 import { authStore } from '$lib/auth/session';
@@ -96,6 +96,43 @@ export const selectedCollectiveStore: Readable<Collective | null> = derived(
 	}
 );
 
+/**
+ * WHICH collective is selected, stripped of its display label.
+ *
+ * #165 review F1 — `selectedCollectiveStore` is derived off `collectiveState`,
+ * so ANY change to the collectives array (notably `renameCollectiveInStore`,
+ * a label-only edit) re-emits a fresh `Collective` object. Every reader that
+ * only cares about IDENTITY — "which db, acting as which person" — would then
+ * tear down and re-resolve on a rename: the root layout's completion gate
+ * (`resetGate()` → 'loading' + a re-resolve) and its admin determination
+ * (`resetAdmin()` → 'loading' + 2 Entu round-trips), the latter making the
+ * Admin nav entry the viewer is standing on VANISH and re-appear.
+ *
+ * This store emits ONLY when db/personId actually change, so those readers are
+ * immune to label churn by construction — no per-reader ad-hoc guard needed.
+ */
+export type CollectiveIdentity = { db: string; personId: string };
+
+function sameIdentity(a: CollectiveIdentity | null, b: CollectiveIdentity | null): boolean {
+	if (a === null || b === null) return a === b;
+	return a.db === b.db && a.personId === b.personId;
+}
+
+export const selectedCollectiveIdentityStore: Readable<CollectiveIdentity | null> =
+	readable<CollectiveIdentity | null>(null, (set) => {
+		// `last` is per-subscription-cycle, not module scope: a module-level
+		// latch would leak between tests (and between app teardowns).
+		let last: CollectiveIdentity | null = null;
+		let started = false;
+		return selectedCollectiveStore.subscribe((c) => {
+			const next = c ? { db: c.db, personId: c.personId } : null;
+			if (started && sameIdentity(last, next)) return;
+			started = true;
+			last = next;
+			set(next);
+		});
+	});
+
 /** The runtime db string to thread into Entu calls (T5+), or null if unresolved. */
 export const selectedDbStore: Readable<string | null> = derived(
 	selectedCollectiveStore,
@@ -110,6 +147,28 @@ export const pickerModeStore: Readable<CollectivePickerMode> = derived(collectiv
 	if ($state.collectives.length === 1) return 'static';
 	return 'picker';
 });
+
+/**
+ * #165 — rename the collective identified by `db` IN THE STORE, so the picker
+ * and agenda header (both single-source readers of `collectiveState`) reflect
+ * a just-written marker name without a full reload. A no-op when the state
+ * isn't 'ready' or `db` isn't a known collective (nothing to rename).
+ *
+ * #165 review F1(a) — a rename that changes nothing publishes NOTHING. Without
+ * this the function re-emitted a fresh state object (and so a fresh
+ * `Collective` out of every derived store) for an unknown db or a same-name
+ * write, waking every downstream reader for no reason at all.
+ */
+export function renameCollectiveInStore(db: string, name: string): void {
+	const state = get(collectiveState);
+	if (state.status !== 'ready') return;
+	const target = state.collectives.find((c) => c.db === db);
+	if (!target || target.name === name) return; // unknown db, or already named that
+	collectiveState.set({
+		...state,
+		collectives: state.collectives.map((c) => (c.db === db ? { ...c, name } : c))
+	});
+}
 
 /** Explicitly select a collective by db name (persist + reflect in the URL). */
 export async function selectCollective(db: string): Promise<void> {

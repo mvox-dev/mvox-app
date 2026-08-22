@@ -101,7 +101,11 @@ const h = vi.hoisted(() => {
 		// invite (#31/T4.5)
 		resolveParentMock: vi.fn(),
 		resolveOrgMock: vi.fn(),
-		createInviteMock: vi.fn()
+		createInviteMock: vi.fn(),
+		// #165 — the merged /admin page's `load()` also resolves the
+		// collective-name marker. Mocked here purely as scaffolding.
+		resolveCollectiveNameMarkerMock: vi.fn(),
+		updateCollectiveNameMock: vi.fn()
 	};
 });
 vi.mock('$lib/admin/roleManagement', () => ({
@@ -126,6 +130,11 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
+}));
+// #165 scaffolding (see the hoisted mock's comment above).
+vi.mock('$lib/collectives/collectiveName', () => ({
+	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
+	updateCollectiveName: h.updateCollectiveNameMock
 }));
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
@@ -209,6 +218,9 @@ function loadOk() {
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveOrgMock.mockResolvedValue('org-1');
 	h.createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
+	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
 beforeEach(() => {
@@ -225,7 +237,9 @@ beforeEach(() => {
 		h.loadRosterMock,
 		h.resolveParentMock,
 		h.resolveOrgMock,
-		h.createInviteMock
+		h.createInviteMock,
+		h.resolveCollectiveNameMarkerMock,
+		h.updateCollectiveNameMock
 	]) {
 		mock.mockReset();
 	}

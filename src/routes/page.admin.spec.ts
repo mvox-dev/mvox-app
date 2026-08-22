@@ -60,6 +60,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// 'owner'/'editor' would pass against `{person.role}` and prove nothing.
 		admin_roles_role_owner: () => 'omanik',
 		admin_roles_role_editor: () => 'toimetaja',
+		// #165 scaffolding — this file has no opinion on the collective-name
+		// surface (see loadOk()'s comment); it still renders on every ready page.
+		admin_collective_name_edit_aria_label: () => 'Edit collective name',
+		admin_collective_name_save_error: () => "Couldn't save.",
 		nav_admin: () => 'Admin',
 		// #140/S3 — the merged /admin page now also renders InviteSurface
 		// (src/lib/components/admin/InviteSurface.svelte); this file doesn't
@@ -136,7 +140,15 @@ const h = vi.hoisted(() => {
 		loadRosterMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveOrgMock: vi.fn(),
-		createInviteMock: vi.fn()
+		createInviteMock: vi.fn(),
+		// #165 — the admin page's `load()` now also resolves the collective-name
+		// marker on every ready-path render (same house-rule failure handling as
+		// its sibling resolutions). Mocked here purely as scaffolding so THIS
+		// file's pre-existing coverage keeps exercising its own contract
+		// unaffected — the #165 behavior itself is pinned in
+		// page.admin-collective-name.spec.ts.
+		resolveCollectiveNameMarkerMock: vi.fn(),
+		updateCollectiveNameMock: vi.fn()
 	};
 });
 vi.mock('$lib/admin/roleManagement', () => ({
@@ -161,6 +173,11 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
+}));
+// #165 — scaffolding only (see the hoisted mock's comment above).
+vi.mock('$lib/collectives/collectiveName', () => ({
+	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
+	updateCollectiveName: h.updateCollectiveNameMock
 }));
 // #140/S3 — the merged page also mounts InviteSurface; mock its data seam at
 // the same boundary page.admin-invite.spec.ts / page.navshell-merge.spec.ts use.
@@ -256,6 +273,11 @@ function loadOk() {
 	// component settles into 'ready' instead of hanging mid-load.
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveOrgMock.mockResolvedValue('org-1');
+	// #165 scaffolding — this file has no opinion on the collective-name
+	// surface; a benign resolution keeps its OWN tests' `load()` reaching
+	// 'ready' the same as before this dependency existed.
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -304,7 +326,9 @@ beforeEach(() => {
 		h.loadRosterMock,
 		h.resolveParentMock,
 		h.resolveOrgMock,
-		h.createInviteMock
+		h.createInviteMock,
+		h.resolveCollectiveNameMarkerMock,
+		h.updateCollectiveNameMock
 	]) {
 		mock.mockReset();
 	}
