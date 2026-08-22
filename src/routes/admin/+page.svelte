@@ -546,7 +546,11 @@
 							<!-- #164 — the viewer's OWN row renders NO Remove button at all
 							     (not merely disabled): a disabled control was still read as
 							     clickable on live /admin. Same shape #148 chose for the
-							     library-owner row. -->
+							     library-owner row.
+							     #175 — the explanatory reason moves INLINE, into the button's
+							     own position in this same row, instead of a separate paragraph
+							     below the whole list (which read as detached from the row it
+							     explained). -->
 							{#if !isSelf(person)}
 								<button
 									type="button"
@@ -557,6 +561,10 @@
 								>
 									{m.admin_roles_remove({ name: person.name })}
 								</button>
+							{:else}
+								<span data-testid="admin-roles-admins-self-hint" class="text-xs text-ink-2">
+									{m.admin_roles_remove_self_hint()}
+								</span>
 							{/if}
 						</li>
 					{/each}
@@ -564,16 +572,6 @@
 				{#if canManageAdmins}
 					{#if adminOwnerCount === 1}
 						<p class="text-xs text-ink-2">{m.admin_roles_last_owner_hint()}</p>
-					{/if}
-					<!-- #147 — the `title` on a *disabled* button is not a reliable
-					     affordance (most UAs suppress tooltips on disabled controls, and
-					     a disabled button is out of the tab order so its title is not
-					     announced). The reason has to be visible text, exactly like the
-					     last-owner hint above. -->
-					{#if admins.some(isSelf)}
-						<p data-testid="admin-roles-admins-self-hint" class="text-xs text-ink-2">
-							{m.admin_roles_remove_self_hint()}
-						</p>
 					{/if}
 					<Autocomplete
 						items={adminOptions}
