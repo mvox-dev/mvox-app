@@ -32,3 +32,7 @@ src/lib/paraglide/
 # (mkdtemp inside the repo — tsx needs the fixture under a "type": "module"
 # package so it goes through the ESM resolve hooks; removed in afterAll)
 scripts/migrations/.node-import-guard-*/
+scripts/migrations/snapshots/
+
+# Seed run reports — may contain member PII (names, emails); never commit
+scripts/migrations/seed-results/
