@@ -76,7 +76,7 @@ export interface ActiveMember {
  * legitimately includes every one of them via the same Gate-A mechanics that admit
  * her own membership row). Widened variant of `findMyMemberId`'s query shape
  * (rsvpData.ts:38-53): drops `person.reference`, widens `props`, widens `limit` to
- * roster scale (500, matching `listRehearsals`/`listMyRsvps` — entuSeasons.ts:99,
+ * roster scale (500, matching `listEvents`/`listMyRsvps` — entuSeasons.ts:99,
  * rsvpData.ts:67).
  *
  * NEVER projects `name` — the RULED target member carries no name prop-def; the
@@ -242,7 +242,7 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 
 /**
  * List active members, fan out ONE profile read per member (`Promise.all` — N
- * genuinely independent reads, not a shared cache key like `listRehearsals`' series
+ * genuinely independent reads, not a shared cache key like `listEvents`' series
  * cache), resolve each via `toRosterRow`, drop the nameless (#28), sort by name.
  * FAIL LOUD as a whole: any per-member `listProfilesForPerson` rejection (non-2xx /
  * unknown `_sharing`) propagates out of `Promise.all` and rejects `loadRoster` — a

@@ -5,7 +5,7 @@ import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 // `mvox_v4e_web` `src/lib/rsvp/rsvpData.ts` (tally functions dropped — out of
 // scope for slice-2, see epic #8 "Out of slice-2").
 //
-// `member` resolution is DE-FANNED to match `listSeasons`/`listRehearsals`: no
+// `member` resolution is DE-FANNED to match `listSeasons`/`listEvents`: no
 // dbEntityId param. In polyphony (single-collective) a person has exactly one active
 // `member` row, so `person.reference` + `status.string=active` alone disambiguates
 // — same simplification already landed for seasons ("in polyphony all seasons are

@@ -19,7 +19,7 @@ export interface MemberAttendanceRate {
 }
 
 /**
- * The singer's own season line: how many of `totalEvents` past rehearsals she
+ * The singer's own season line: how many of `totalEvents` past events she
  * attended (present or late), out of the total. `totalEvents` — not
  * `attendances.length` — is the denominator, since a past event with no
  * record for her still counts toward the season's total, just not toward

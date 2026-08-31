@@ -25,7 +25,7 @@
 //       trusted to Entu's inheritance chain from the org — the #132 design
 //       decision).
 //     - parents: the chosen SEASON id rides in `extraParentIds: [seasonId]`
-//       (what listRehearsals selects on); the chosen SERIES id rides in
+//       (what listEvents selects on); the chosen SERIES id rides in
 //       `seriesId` (T1's named field — the one parent that changes validation).
 //       No series chosen → `seriesId` absent/undefined (never `''` — the pin
 //       below is a full-shape toHaveBeenCalledWith that a `''` would fail).

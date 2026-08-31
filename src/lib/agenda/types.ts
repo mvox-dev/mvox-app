@@ -1,6 +1,7 @@
 // The agenda output contract — the shape Byrd's UI renders against. One flat,
-// upcoming, chronologically-sorted list of rehearsal-events for the selected
-// collective. Field names match the T5 design spec.
+// upcoming, chronologically-sorted list of events — ALL types since #194, not
+// rehearsals only — for the selected collective. Field names match the T5
+// design spec.
 export type AgendaItem = {
 	/** Entu event entity id. */
 	id: string;
@@ -21,6 +22,13 @@ export type AgendaItem = {
 	owners: string[];
 	/** `_editor` refs visible to the reading caller; same bucket caveat. */
 	editors: string[];
+	/** #194/#202 — the event's own `event_type`, verbatim off the wire ('' when
+	 *  absent). Free text (schema.ts's eight canonical values are a UI hint, not
+	 *  an enum) — NEVER inherited from the parent series, unlike duration/
+	 *  location/name: the agenda labels what the event itself claims to be.
+	 *  Optional so the many existing AgendaItem fixtures/literals that predate
+	 *  #194 keep type-checking; `listEvents` always sets it on real data. */
+	eventType?: string;
 };
 
 // (*MVOX:Josquin*)

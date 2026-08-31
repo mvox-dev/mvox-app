@@ -17,7 +17,7 @@ import { createEvent, createEventSeries, createSeason } from './entityCreate';
 //     THE SERIES PARENT IS ITS OWN FIELD TOO (`seriesId`, #132 review F2: it is
 //     the parent whose presence decides whether a blank `name` is legal, and an
 //     anonymous entry in a flat list is invisible to that check). A series
-//     occurrence therefore carries BOTH its season parent (what listRehearsals
+//     occurrence therefore carries BOTH its season parent (what listEvents
 //     selects on, in `extraParentIds`) and its series parent (what the
 //     inheritance merge follows, in `seriesId`).
 //   - CRITICAL (#132, Mihkel 2026-08-13): NO `_sharing`, NO `_inheritrights`
@@ -35,8 +35,10 @@ import { createEvent, createEventSeries, createSeason } from './entityCreate';
 //     this module is the only enforcement point): season name/start_date/
 //     end_date; series name/event_type/interval_days/start_time/
 //     duration_minutes/start_date/end_date; event start_datetime (+ event_type,
-//     stricter than v4E because listRehearsals filters on the event's OWN
-//     event_type.string; and event.name whenever no `seriesId` is given —
+//     stricter than v4E because every reader takes the event's OWN
+//     event_type.string and the series merge is deliberately not extended to it
+//     (#194/#202) — an omitted type is not inherited, it is an event with no
+//     type badge anywhere; and event.name whenever no `seriesId` is given —
 //     nothing to inherit from means a permanently nameless entity, #132 F2).
 //   - Only genuinely INHERITABLE-or-optional props may be omitted: event.name
 //     (v4E 'inherited from series.name if not set' — WITH a series parent),
@@ -450,7 +452,7 @@ describe('createEvent — wire shape', () => {
 		);
 	});
 
-	it('a SERIES occurrence carries ALL THREE parents — one `_parent` prop per id: ORG first (v4E parentCard 1), then the named `seriesId` (what the read-side inheritance merge follows), then the caller`s extras verbatim including the SEASON (what listRehearsals selects on, `_parent.reference=<seasonId>` with no ancestor expansion). Still exactly two fetches — no parent-kind sniffing.', async () => {
+	it('a SERIES occurrence carries ALL THREE parents — one `_parent` prop per id: ORG first (v4E parentCard 1), then the named `seriesId` (what the read-side inheritance merge follows), then the caller`s extras verbatim including the SEASON (what listEvents selects on, `_parent.reference=<seasonId>` with no ancestor expansion). Still exactly two fetches — no parent-kind sniffing.', async () => {
 		const fetchImpl = makeFetchMock();
 		await createEvent(
 			cfg,
@@ -698,14 +700,14 @@ describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY
 		);
 	});
 
-	it('createEvent: a blank eventType throws — listRehearsals filters on the event`s OWN event_type.string, so it can never be inherited', async () => {
+	it('createEvent: a blank eventType throws — every reader takes the event`s OWN event_type.string and the series merge is deliberately not extended to it (#194/#202), so it can never be inherited', async () => {
 		await expectRejectedWithoutFetch(
 			(f) => createEvent(cfg, { ...minimalEvent, eventType: '  ' }, f),
 			/eventType must not be empty/
 		);
 	});
 
-	it('createEvent: a blank start_datetime throws — v4E-required and inherited by NO reader (listRehearsals/eventDetail read the event`s own value with `?? ""`), so a dropped blank would silently create a dateless event that renders as a blank-time row and sorts to the TOP of the season (#132 review F1)', async () => {
+	it('createEvent: a blank start_datetime throws — v4E-required and inherited by NO reader (listEvents/eventDetail read the event`s own value with `?? ""`), so a dropped blank would silently create a dateless event that renders as a blank-time row and sorts to the TOP of the season (#132 review F1)', async () => {
 		await expectRejectedWithoutFetch(
 			(f) => createEvent(cfg, { ...minimalEvent, startDatetime: '' }, f),
 			/startDatetime must not be empty/
@@ -716,7 +718,7 @@ describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY
 		);
 	});
 
-	it('createEvent: a STANDALONE event (no seriesId) with a blank/absent name throws — v4E calls event.name inheritable, but with no series parent there is nothing to inherit from, and the create would otherwise succeed and leave a permanently nameless entity: listRehearsals maps it to "" (blank agenda row, detail link with no accessible name) and loadEventDetail renders a blank header (#132 review F2)', async () => {
+	it('createEvent: a STANDALONE event (no seriesId) with a blank/absent name throws — v4E calls event.name inheritable, but with no series parent there is nothing to inherit from, and the create would otherwise succeed and leave a permanently nameless entity: listEvents maps it to "" (blank agenda row, detail link with no accessible name) and loadEventDetail renders a blank header (#132 review F2)', async () => {
 		await expectRejectedWithoutFetch(
 			(f) => createEvent(cfg, { ...minimalEvent, name: undefined }, f),
 			/name must not be empty/

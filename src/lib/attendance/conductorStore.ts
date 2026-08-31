@@ -4,7 +4,7 @@
 //
 // The issue calls this "a pure data comparison on already-loaded event/season
 // data", and that is now literally true: conductor refs are fetched as part of
-// the existing listSeasons/listRehearsals props (no separate reads), so the
+// the existing listSeasons/listEvents props (no separate reads), so the
 // resolution here is a zero-request collapse of already-loaded data.
 //
 // A 2-state verdict ('conductor' | 'not-conductor') is the whole contract --

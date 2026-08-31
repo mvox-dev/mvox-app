@@ -1,6 +1,6 @@
 import { entuFetch } from '$lib/entu/request';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { RehearsalRaw, RightsRefs, Season, SeasonRaw, SeriesRaw } from './types';
+import type { EventRaw, RightsRefs, Season, SeasonRaw, SeriesRaw } from './types';
 
 /** The `_owner`/`_editor` refs the caller can actually see, flattened. Private
  *  bucket: a caller with no grant reads neither prop, which flattens to []. */
@@ -106,7 +106,7 @@ export async function listSeasons(
 }
 
 /**
- * List a season's rehearsal events as AgendaItems, applying the read-time
+ * List a season's events as AgendaItems, applying the read-time
  * series-inheritance merge. Season-scoped (events under the season).
  *
  * Series identification is DE-FANNED: single-collective drops the org arg, so we
@@ -115,26 +115,34 @@ export async function listSeasons(
  * itself is kept VERBATIM from the harvest: fetch each parent series once (cache →
  * no N+1), fill `duration_minutes`/`location` that are absent on the event; never a
  * formula (rights-leak); the explicit event value always wins.
+ *
+ * #194/#202 — renamed from `listRehearsals`: the query no longer filters on
+ * `event_type` (that hardcoded `event_type.string=rehearsal` hid every event
+ * whose free-text type wasn't the literal word 'rehearsal' — e.g. the Crede
+ * pilot's 'proov' rehearsals). Every event under the season comes back now,
+ * each carrying its OWN `eventType` verbatim ('' when absent) — never
+ * inherited from the series, unlike duration/location/name: the agenda labels
+ * what the event itself claims to be.
  */
-export async function listRehearsals(
+export async function listEvents(
 	cfg: EntuCfg,
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<AgendaItem[]> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=event&event_type.string=rehearsal&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,_parent,conductor,_owner,_editor&limit=500`,
+		`entity?_type.string=event&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor&limit=500`,
 		cfg.token,
 		{},
 		fetchImpl
 	);
-	if (!res.ok) throw new Error(`listRehearsals failed: ${res.status}`);
+	if (!res.ok) throw new Error(`listEvents failed: ${res.status}`);
 
-	const body = (await res.json()) as { entities?: RehearsalRaw[] };
+	const body = (await res.json()) as { entities?: EventRaw[] };
 	const raws = body.entities ?? [];
 	if (raws.length === 0) return [];
 
-	const seriesIdFor = (raw: RehearsalRaw): string =>
+	const seriesIdFor = (raw: EventRaw): string =>
 		(raw._parent ?? []).find((p) => p.entity_type === 'event_series')?.reference ?? '';
 
 	// Fetch each unique parent series ONCE (cache — avoids N+1).
@@ -171,6 +179,9 @@ export async function listRehearsals(
 				durationMinutes:
 					raw.duration_minutes?.[0]?.number ?? series?.duration_minutes?.[0]?.number ?? 0,
 				location: raw.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? '',
+				// #194/#202 — the event's OWN value only, never the series': the
+				// series-inheritance merge above is deliberately not extended here.
+				eventType: raw.event_type?.[0]?.string ?? '',
 				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : [])),
 				// Rights are NEVER merged from the series the way duration/location
 				// are: Entu keeps rights per entity, so a series editor is not

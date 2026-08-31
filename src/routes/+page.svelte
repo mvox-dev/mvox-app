@@ -150,7 +150,7 @@
 
 	// #83 — the agenda's 'Recent' section: ALL past events of the CURRENT season.
 	// Loaded as part of loadFullAgenda (one fetch pass for upcoming + recent —
-	// F1+F2 fix: no duplicate listSeasons/listRehearsals calls, no N+1 conductor
+	// F1+F2 fix: no duplicate listSeasons/listEvents calls, no N+1 conductor
 	// reads). `conductorEventIds` is computed PURELY from the already-loaded data
 	// (season.conductors + event.conductors on each AgendaItem).
 	let recentItems = $state<AgendaItem[]>([]);
@@ -424,7 +424,7 @@
 		const personId = current.personId;
 
 		// #83 fix (F1+F2) — ONE combined load replaces the old loadAgenda() +
-		// loadRecentEvents() pair. Seasons and rehearsals are fetched once;
+		// loadRecentEvents() pair. Seasons and events are fetched once;
 		// conductor data rides on the already-fetched props (no separate reads).
 		loadFullAgenda()
 			.then(
@@ -1607,11 +1607,20 @@
 	// F1 fix: filter myAttendance to only records whose eventId appears in
 	// recentItems (the current season's PAST events). Without this, records from
 	// previous seasons inflate `attended` while `total` stays at this season's
-	// past-event count — "Attended 31 of 2 rehearsals".
+	// past-event count — "Attended 31 of 2 events".
 	const mySeasonAttendance = $derived((() => {
 		const recentIds = new Set(recentItems.map((i) => i.id));
 		return myAttendance.filter((a) => recentIds.has(a.eventId));
 	})());
+	// #194/#202 review F1 — the denominator is EVERY past event of the season,
+	// not just rehearsals. Before #194 `recentItems` was rehearsals-only (the
+	// data layer filtered `event_type.string=rehearsal`), so the old wording
+	// "Attended {n} of {total} rehearsals" was true by construction; it is not
+	// any more. Rather than re-filter here on a free-text `event_type` (Estonian
+	// choirs type 'proov' — exactly the string #194 stopped trusting), the rate
+	// covers the whole calendar and `attendance_season_rate` was reworded to
+	// event-neutral in all four locales. Attendance is taken per EVENT, so an
+	// event-shaped denominator is also the one the records actually live on.
 	const mySeasonRate = $derived(deriveAttendanceRate(mySeasonAttendance, recentItems.length));
 
 	// #85 TA.4 — open/close the conductor's full-roster expansion, loading the
@@ -2459,7 +2468,7 @@
 	// The selected series' inherited name/duration/location/description —
 	// rendered as PLACEHOLDERS only, never copied into a value (the #132/T4
 	// preview contract: what this shows is exactly what the read-side merge
-	// (`listRehearsals`, `loadEventDetail`) would show for an untouched
+	// (`listEvents`, `loadEventDetail`) would show for an untouched
 	// occurrence).
 	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
 	// Deduped + sorted PRIOR event_type values — the type Autocomplete's source.
@@ -3006,7 +3015,7 @@
 	 *
 	 * An incomplete submit is refused BEFORE any fetch, each refusal naming its
 	 * own field (#132/T4 review F1): season (an event with no season parent is
-	 * invisible to every agenda read — `listRehearsals` selects on it), type,
+	 * invisible to every agenda read — `listEvents` selects on it), type,
 	 * start, and — for a STANDALONE event only — a name.
 	 */
 	async function submitEventCreate(): Promise<void> {
@@ -3188,6 +3197,16 @@
 	// clicked.
 	let seriesCreateSeasonId = $state('');
 	let seriesCreateName = $state('');
+	// #194/#202 review F3 — the 'rehearsal' pre-fill STAYS, deliberately. #194's
+	// checklist listed it for removal back when the agenda filtered on the
+	// literal string, i.e. when the pre-fill was steering data to fit a broken
+	// query. With the filter gone the pre-fill is simply the right default: a
+	// series typed 'rehearsal' renders LOCALIZED ('Proov' in et) through the
+	// shared eventTypeLabels map, whereas the hand-typed 'proov' it nudges
+	// Estonian users away from renders raw. Blanking it would trade that for an
+	// empty box plus a required-field error on submit — a UX downgrade with no
+	// picker to replace it. The localized type PICKER is #199, and that is where
+	// this default gets revisited.
 	let seriesCreateType = $state('rehearsal');
 	let seriesCreateDuration = $state('');
 	let seriesCreateLocation = $state('');
@@ -3697,10 +3716,13 @@
 			return;
 		}
 		// #132/T5 review F2 — NO silent `|| 'rehearsal'` fallback. `event_type` is
-		// the discriminator `listRehearsals` filters on, so a viewer who cleared
-		// the box (to type 'concert', or deliberately) would get a rehearsal
-		// series with no message and no way to see the mistake until the agenda
-		// is wrong. Refuse the blank, the way T4's sibling form on this page does.
+		// the event's own displayed discriminator (every reader takes the event's
+		// value, never the series' — #194/#202), so a viewer who cleared the box
+		// (to type 'concert', or deliberately) would get a rehearsal series with no
+		// message and no way to see the mistake until the agenda is wrong. Refuse
+		// the blank, the way T4's sibling form on this page does.
+		// (Pre-#194 the reason read "the discriminator `listRehearsals` filters
+		// on"; that filter is gone, the refusal stands on the display reason.)
 		const typeValue = seriesCreateType.trim();
 		if (!typeValue) {
 			setSeriesCreateError(m.series_create_type_required, 'type');

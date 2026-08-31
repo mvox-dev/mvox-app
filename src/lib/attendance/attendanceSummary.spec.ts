@@ -22,7 +22,7 @@
 //      - the season summary is ALWAYS visible at the top of the Recent
 //        section — zero attendance data renders "Attended 0 of N", it never
 //        hides the block.
-//      - a member sees her OWN rate ("Attended 12 of 15 rehearsals").
+//      - a member sees her OWN rate ("Attended 12 of 15 events").
 //      - a CONDUCTOR can expand the summary into the full-roster per-member
 //        rates; a non-conductor has no expand affordance at all.
 
@@ -115,7 +115,7 @@ describe('deriveAllMemberRates', () => {
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
-		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
+		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
@@ -155,7 +155,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_close: () => 'Close',
 		// #85 — season summary strings.
 		attendance_season_rate: (p: { attended: number; total: number }) =>
-			`Attended ${p.attended} of ${p.total} rehearsals`,
+			`Attended ${p.attended} of ${p.total} events`,
 		attendance_member_rate: (p: { attended: number; total: number }) =>
 			`${p.attended} of ${p.total}`,
 		attendance_season_summary: () => 'This season',
@@ -449,10 +449,10 @@ describe('+page — season summary (#85 TA.4)', () => {
 			summary.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 		// Not conditional on data: zero records renders the zero rate, not nothing.
-		expect(summary.textContent).toContain('Attended 0 of 4 rehearsals');
+		expect(summary.textContent).toContain('Attended 0 of 4 events');
 	});
 
-	it("a member sees her OWN rate — late counts as attended: 'Attended 2 of 4 rehearsals'", async () => {
+	it("a member sees her OWN rate — late counts as attended: 'Attended 2 of 4 events'", async () => {
 		// present @ past-1 + late @ past-3 = 2 attended; absent @ past-2 and
 		// unrecorded past-4 do not count. 4 past events total.
 		setMemberFixture();
@@ -462,7 +462,7 @@ describe('+page — season summary (#85 TA.4)', () => {
 			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="my-season-rate"]')!.textContent).toContain(
-			'Attended 2 of 4 rehearsals'
+			'Attended 2 of 4 events'
 		);
 	});
 });
@@ -538,8 +538,55 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 		// Correct: 2 attended out of 2 current-season events (both present/late
 		// count). The 3 old-season records must NOT inflate the count.
 		expect(container.querySelector('[data-testid="my-season-rate"]')!.textContent).toContain(
-			'Attended 2 of 2 rehearsals'
+			'Attended 2 of 2 events'
 		);
+	});
+});
+
+// #194/#202 review F1 — the season rate after the event_type filter came off.
+//
+// `recentItems` used to be rehearsals-only (the data layer filtered
+// `event_type.string=rehearsal`), so "Attended {n} of {total} rehearsals" was
+// true by construction. With #194 the same list carries concerts, meetings and
+// free-text types too. The resolution is (b) from the review: keep the whole
+// calendar in the denominator — attendance records hang off EVENTS, not off
+// rehearsals — and make the sentence event-neutral in all four locales. This
+// spec is the pin: a mixed-type Recent list must count EVERY past event, and
+// the rendered sentence must not say "rehearsals".
+describe('+page — season rate denominator covers ALL event types (#194/#202 review F1)', () => {
+	it('a mixed-type season counts every past event, and the sentence is event-neutral', async () => {
+		// 4 past events: 2 rehearsals (one 'rehearsal', one free-text 'proov'),
+		// 1 concert, 1 meeting. She was there for both rehearsals and the concert.
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
+			upcoming: [],
+			recent: [
+				{ ...agendaItem('past-r1', '2026-06-10T16:00:00.000Z'), eventType: 'rehearsal' },
+				{ ...agendaItem('past-r2', '2026-06-03T16:00:00.000Z'), eventType: 'proov' },
+				{ ...agendaItem('past-c1', '2026-05-27T16:00:00.000Z'), eventType: 'concert' },
+				{ ...agendaItem('past-m1', '2026-05-20T16:00:00.000Z'), eventType: 'meeting' }
+			],
+			seasonId: 's1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
+		}));
+		findMyMemberIdMock.mockResolvedValue('m-me');
+		listMyAttendanceMock.mockResolvedValue([
+			{ attendanceId: 'a1', eventId: 'past-r1', status: 'present' },
+			{ attendanceId: 'a2', eventId: 'past-r2', status: 'late' },
+			{ attendanceId: 'a3', eventId: 'past-c1', status: 'present' },
+			{ attendanceId: 'a4', eventId: 'past-m1', status: 'absent' }
+		]);
+		setAuthedWithOneCollective('person-p');
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
+		});
+		const rate = container.querySelector('[data-testid="my-season-rate"]')!;
+		// Denominator = 4 (all past events), not 2 (the rehearsal-shaped ones).
+		expect(rate.textContent).toContain('Attended 3 of 4 events');
+		// And the noun must not have survived the widening.
+		expect(rate.textContent).not.toContain('rehearsals');
 	});
 });
 

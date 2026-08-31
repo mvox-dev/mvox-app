@@ -47,12 +47,16 @@ export interface SeriesRaw {
 	default_location?: Array<{ string: string }>;
 }
 
-export interface RehearsalRaw extends RightsRefs {
+export interface EventRaw extends RightsRefs {
 	_id: string;
 	name?: Array<{ string: string }>;
 	start_datetime?: Array<{ datetime: string }>;
 	duration_minutes?: Array<{ number: number }>;
 	location?: Array<{ string: string }>;
+	// #194/#202 — free-text on the wire ('rehearsal', 'proov', 'concert', …). Read
+	// verbatim, NEVER inherited from the parent series (unlike duration/location):
+	// the agenda labels what the event itself claims to be.
+	event_type?: Array<{ string: string }>;
 	// `_parent` denormalizes each parent's `entity_type` (verified in the member-search
 	// contract) — used to find the event's `event_series` parent without an org arg.
 	_parent?: Array<{ reference: string; entity_type?: string }>;

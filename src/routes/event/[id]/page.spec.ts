@@ -3,7 +3,7 @@
 // #101 TE.1 (RED) — the event detail page at /event/[id]: header (name, type
 // badge, time range, duration, location), conductor line, description, and the
 // back-to-agenda link — plus the data layer that feeds it, including read-time
-// series inheritance (same merge listRehearsals performs — entuSeasons.ts:104)
+// series inheritance (same merge listEvents performs — entuSeasons.ts:104)
 // and the #77 conductor model via resolveConductors (conductorLogic.ts).
 //
 // CONTRACT under test (defined HERE, implemented in GREEN):
@@ -280,7 +280,7 @@ describe('loadEventDetail — full header shape', () => {
 	});
 });
 
-describe('loadEventDetail — series inheritance (read-time merge, verbatim listRehearsals semantics)', () => {
+describe('loadEventDetail — series inheritance (read-time merge, verbatim listEvents semantics)', () => {
 	it('missing name/duration/location/description fall back to the parent series values', async () => {
 		const fetchImpl = entuFetchStub({
 			event: eventEntity({

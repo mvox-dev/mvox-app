@@ -7,7 +7,7 @@ import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 
 vi.mock('$lib/paraglide/messages.js', () => {
 	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
-		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
+		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (params) => `${(params as { minutes: number }).minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
@@ -228,9 +228,9 @@ describe('AgendaList — multi-week gap marker', () => {
 });
 
 describe('AgendaList — empty state', () => {
-	it('renders agenda_empty_no_rehearsals when items is empty', () => {
+	it('renders agenda_empty_no_events when items is empty', () => {
 		const { container } = render(AgendaList, { items: [] });
-		expect(container.textContent).toContain('No upcoming rehearsals.');
+		expect(container.textContent).toContain('No upcoming events.');
 	});
 
 	it('renders no rows when items is empty', () => {
@@ -532,7 +532,7 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 	});
 
 	// #101 review fix (F2) — a link with no accessible name is announced as an
-	// unnamed link. `listRehearsals` now inherits a missing name from the parent
+	// unnamed link. `listEvents` now inherits a missing name from the parent
 	// series, but an event with no name ANYWHERE must still get a generic label
 	// rather than the bare "View details for ".
 	it('labels the row link with the event name', () => {

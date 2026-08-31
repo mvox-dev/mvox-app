@@ -54,7 +54,7 @@
 //       dbEntityId, seriesId (the id the series create just resolved),
 //       extraParentIds: [seasonId], eventType, startDatetime. Name /
 //       duration / location / description are NOT set — they inherit from
-//       the series via the read-side merge (listRehearsals/loadEventDetail).
+//       the series via the read-side merge (listEvents/loadEventDetail).
 //     - startDatetime per occurrence: the generated calendar date at the
 //       form's time, TALLINN wall clock → UTC instant (the TE.4 convention
 //       T4 pinned: 19:00 EEST = 16:00Z before the 2026-10-25 fall-back,

@@ -136,7 +136,7 @@ function installWorld(options: WorldOptions = {}) {
 		repertoireItems = [RI_ACTIVE, RI_RETIRED]
 	} = options;
 
-	// #91 review F1 — rights arrive WITH THE AGENDA now: listSeasons/listRehearsals
+	// #91 review F1 — rights arrive WITH THE AGENDA now: listSeasons/listEvents
 	// ask for `_owner,_editor` (private bucket → absent for a non-grantee, which
 	// IS the 'not-editor' signal), so the page derives them with zero extra
 	// round-trips. The fetch router below therefore has NO rights route left: a
@@ -375,7 +375,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		]);
 	});
 
-	// #91 review F1 — the fanout. `listRehearsals` reads up to 500 events, and the
+	// #91 review F1 — the fanout. `listEvents` reads up to 500 events, and the
 	// old shape fired one rights GET per event PLUS one for the season, on every
 	// page load, for every member.
 	it('issues NO per-entity rights probe — rights ride on the agenda read', async () => {

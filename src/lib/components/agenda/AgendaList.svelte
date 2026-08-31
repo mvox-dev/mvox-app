@@ -3,6 +3,9 @@
 	import type { Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
+	// #194/#202 — the SHARED type-label map (same one the event detail page
+	// uses, #101 F3 taught us what an unlocalized type string costs).
+	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from './RsvpControl.svelte';
 	import RepertoireElement from './RepertoireElement.svelte';
@@ -191,7 +194,7 @@
 
 	/**
 	 * Accessible name for a row's event-detail link. #101 review fix (F2): the
-	 * primary fix is upstream — `listRehearsals` now inherits a missing name from
+	 * primary fix is upstream — `listEvents` now inherits a missing name from
 	 * the parent series, same as `loadEventDetail` — but an event with no name
 	 * ANYWHERE (Entu's `mandatory` is a UI hint, not enforced) would still yield
 	 * the bare "View details for ", i.e. a link a screen reader announces
@@ -333,6 +336,16 @@
 						<span class="truncate text-sm text-ink">{item.name}</span>
 						<span aria-hidden="true" class="text-ink-3">▸</span>
 					</a>
+					<!-- #194/#202 — the type badge: '' (or absent) renders NOTHING, never
+					     an invented label. -->
+					{#if item.eventType}
+						<span
+							data-testid="event-type-badge-{item.id}"
+							class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
+						>
+							{eventTypeLabel(item.eventType)}
+						</span>
+					{/if}
 					{#if item.location}
 						<span class="truncate text-xs text-ink-2">{item.location}</span>
 					{/if}
@@ -391,8 +404,13 @@
 			{/each}
 		</div>
 	{:else if items.length === 0}
+		<!-- #194/#202 review F2 — was `agenda_empty_no_rehearsals` ("No upcoming
+		     rehearsals."). With the type filter gone the query covers EVERY event
+		     type, so the empty state must not claim a narrower search than the one
+		     that actually ran — and that exact sentence is what #194's bug report
+		     quoted. -->
 		<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
-			<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_rehearsals()}</p>
+			<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_events()}</p>
 		</div>
 	{:else}
 		{#each decoratedGroups as group (group.key)}
@@ -436,6 +454,16 @@
 								<span class="truncate text-sm text-ink">{item.name}</span>
 								<span aria-hidden="true" class="text-ink-3">▸</span>
 							</a>
+							<!-- #194/#202 — the type badge: '' (or absent) renders NOTHING, never
+							     an invented label. -->
+							{#if item.eventType}
+								<span
+									data-testid="event-type-badge-{item.id}"
+									class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
+								>
+									{eventTypeLabel(item.eventType)}
+								</span>
+							{/if}
 							{#if item.location}
 								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
 							{/if}

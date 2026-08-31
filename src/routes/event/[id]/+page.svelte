@@ -19,6 +19,10 @@
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
+	// #194/#202 — the type-label map is SHARED with the agenda's per-row badge
+	// (was inline here only, #101 review F3; a second inline copy is exactly
+	// the drift class the WorkRow/AttendanceBadge cleanups already paid for).
+	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	// #203 — the delete button's write call. Imported from seasonManage
 	// directly (NOT re-exported by this page's other imports from that module)
@@ -672,25 +676,8 @@
 		return `${timeFmt.format(start)}–${timeFmt.format(new Date(start.getTime() + minutes * 60_000))}`;
 	}
 
-	// #101 review fix (F3) — the badge rendered the raw Entu `event_type` string,
-	// the one user-visible string on this page that never passed through paraglide
-	// (an Estonian user read "REHEARSAL"). The eight known types come from the v4E
-	// schema's `event_type` note (schema.ts: rehearsal | concert | festival |
-	// retreat | workshop | meeting | social | other); an UNKNOWN type falls back to
-	// its raw value — visibly wrong beats invisibly blank.
-	const EVENT_TYPE_LABEL: Record<string, () => string> = {
-		rehearsal: m.event_type_rehearsal,
-		concert: m.event_type_concert,
-		festival: m.event_type_festival,
-		retreat: m.event_type_retreat,
-		workshop: m.event_type_workshop,
-		meeting: m.event_type_meeting,
-		social: m.event_type_social,
-		other: m.event_type_other
-	};
-	function eventTypeLabel(eventType: string): string {
-		return EVENT_TYPE_LABEL[eventType]?.() ?? eventType;
-	}
+	// #194/#202 — the label map + fallback moved to $lib/events/eventTypeLabels
+	// (imported above), shared with the agenda's per-row badge.
 
 	// ═══════════════════════════════════════════════════════════════════════
 	// #103 TE.3 — compose the WORKS and ATTENDANCE surfaces. Shape mirrors the

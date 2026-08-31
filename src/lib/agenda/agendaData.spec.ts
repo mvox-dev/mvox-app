@@ -7,16 +7,16 @@ import type { Season } from '$lib/seasons/types';
 // T4's selectedCollectiveStore (so loadFullAgenda's db/token-threading is
 // observable). Mocking both also severs the transitive entu-config -> $env
 // import under happy-dom.
-const { listSeasonsMock, listRehearsalsMock, collectiveHolder } = vi.hoisted(() => ({
+const { listSeasonsMock, listEventsMock, collectiveHolder } = vi.hoisted(() => ({
 	listSeasonsMock: vi.fn(),
-	listRehearsalsMock: vi.fn(),
+	listEventsMock: vi.fn(),
 	collectiveHolder: {
 		store: null as unknown as import('svelte/store').Writable<{ db: string; personId: string } | null>
 	}
 }));
 vi.mock('$lib/seasons/entuSeasons', () => ({
 	listSeasons: listSeasonsMock,
-	listRehearsals: listRehearsalsMock
+	listEvents: listEventsMock
 }));
 vi.mock('$lib/collectives/store', async () => {
 	const { writable } = await import('svelte/store');
@@ -30,8 +30,21 @@ import { setToken } from '$lib/auth/storage';
 const cfg = { db: 'polyphony', token: 'jwt' };
 const NOW = new Date('2026-09-05T10:00:00.000Z');
 
+// #194/#202 — AgendaItem now carries `eventType`; the orchestration layer must
+// pass it through untouched (upcoming AND recent are split by TIME only, never
+// by type — a concert is as much agenda as a rehearsal).
 function item(id: string, startDatetime: string, conductors: string[] = []): AgendaItem {
-	return { id, name: id, startDatetime, durationMinutes: 60, location: '', conductors, owners: [], editors: [] };
+	return {
+		id,
+		name: id,
+		startDatetime,
+		durationMinutes: 60,
+		location: '',
+		conductors,
+		owners: [],
+		editors: [],
+		eventType: 'rehearsal'
+	};
 }
 
 function season(id: string, startDate: string, endDate: string, conductors: string[] = []): Season {
@@ -41,7 +54,7 @@ function season(id: string, startDate: string, endDate: string, conductors: stri
 beforeEach(() => {
 	localStorage.clear();
 	listSeasonsMock.mockReset();
-	listRehearsalsMock.mockReset();
+	listEventsMock.mockReset();
 	collectiveHolder.store.set(null);
 	// #161 review fix round 2 — every read in this module goes through the mocked
 	// helpers, so nothing here may touch the network. Making the global `fetch`
@@ -77,7 +90,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		listSeasonsMock.mockResolvedValue([
 			season('s1', '2026-01-01', '2027-05-31')
 		]);
-		listRehearsalsMock.mockResolvedValue([
+		listEventsMock.mockResolvedValue([
 			item('late', '2026-09-20T16:00:00.000Z'),
 			item('soon', '2026-09-10T16:00:00.000Z')
 		]);
@@ -88,12 +101,29 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		expect(result.upcoming[0]).toEqual(item('soon', '2026-09-10T16:00:00.000Z'));
 	});
 
+	// #194/#202 — the split into upcoming/recent is by TIME only. A concert (or a
+	// free-text 'proov') coming back from listEvents lands on the agenda exactly
+	// like a rehearsal, eventType intact.
+	it('keeps non-rehearsal event types in upcoming, eventType passed through', async () => {
+		listSeasonsMock.mockResolvedValue([season('s1', '2026-01-01', '2027-05-31')]);
+		listEventsMock.mockResolvedValue([
+			{ ...item('reh', '2026-09-10T16:00:00.000Z'), eventType: 'rehearsal' },
+			{ ...item('concert', '2026-09-12T16:00:00.000Z'), eventType: 'concert' },
+			{ ...item('proov', '2026-09-14T16:00:00.000Z'), eventType: 'proov' }
+		]);
+
+		const result = await listFullAgenda(cfg, NOW);
+
+		expect(result.upcoming.map((i) => i.id)).toEqual(['reh', 'concert', 'proov']);
+		expect(result.upcoming.map((i) => i.eventType)).toEqual(['rehearsal', 'concert', 'proov']);
+	});
+
 	it('queries every season (no end_date pre-filter) -- a past season contributes 0 via the event gate', async () => {
 		listSeasonsMock.mockResolvedValue([
 			season('old', '2025-09-01', '2026-05-31'),
 			season('cur', '2026-09-01', '2027-05-31')
 		]);
-		listRehearsalsMock.mockImplementation((_cfg: unknown, id: string) =>
+		listEventsMock.mockImplementation((_cfg: unknown, id: string) =>
 			Promise.resolve(
 				id === 'old'
 					? [item('old-past', '2026-05-10T18:00:00.000Z')] // before NOW -> filtered out
@@ -103,8 +133,8 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		expect(listRehearsalsMock).toHaveBeenCalledTimes(2);
-		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'old', expect.anything());
+		expect(listEventsMock).toHaveBeenCalledTimes(2);
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'old', expect.anything());
 		expect(result.upcoming.map((i) => i.id)).toEqual(['cur-next']);
 	});
 
@@ -112,11 +142,11 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		listSeasonsMock.mockResolvedValue([
 			season('fila', '2025-09-01', '2026-07-28')
 		]);
-		listRehearsalsMock.mockResolvedValue([item('sept', '2026-09-15T18:00:00.000Z')]);
+		listEventsMock.mockResolvedValue([item('sept', '2026-09-15T18:00:00.000Z')]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'fila', expect.anything());
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'fila', expect.anything());
 		expect(result.upcoming.map((i) => i.id)).toEqual(['sept']);
 	});
 
@@ -124,11 +154,11 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		listSeasonsMock.mockResolvedValue([
 			season('open', '2026-09-01', '')
 		]);
-		listRehearsalsMock.mockResolvedValue([item('future', '2026-09-12T18:00:00.000Z')]);
+		listEventsMock.mockResolvedValue([item('future', '2026-09-12T18:00:00.000Z')]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		expect(listRehearsalsMock).toHaveBeenCalledWith(cfg, 'open', expect.anything());
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'open', expect.anything());
 		expect(result.upcoming.map((i) => i.id)).toEqual(['future']);
 	});
 
@@ -136,7 +166,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		listSeasonsMock.mockResolvedValue([
 			season('s', '2026-09-01', '2027-05-31')
 		]);
-		listRehearsalsMock.mockResolvedValue([
+		listEventsMock.mockResolvedValue([
 			item('past', '2026-09-05T07:00:00.000Z'), // before NOW (10:00)
 			item('next', '2026-09-05T18:00:00.000Z')
 		]);
@@ -149,7 +179,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		listSeasonsMock.mockResolvedValue([]);
 		const result = await listFullAgenda(cfg, NOW);
 		expect(result.upcoming).toEqual([]);
-		expect(listRehearsalsMock).not.toHaveBeenCalled();
+		expect(listEventsMock).not.toHaveBeenCalled();
 	});
 });
 
@@ -161,7 +191,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna'])
 		]);
-		listRehearsalsMock.mockResolvedValue([
+		listEventsMock.mockResolvedValue([
 			item('past-old', '2026-09-02T18:00:00.000Z'),
 			item('past-new', '2026-09-04T18:00:00.000Z'),
 			item('upcoming', '2026-09-10T18:00:00.000Z')
@@ -177,7 +207,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna', 'p-bert'])
 		]);
-		listRehearsalsMock.mockResolvedValue([
+		listEventsMock.mockResolvedValue([
 			item('r1', '2026-09-10T18:00:00.000Z')
 		]);
 
@@ -194,7 +224,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			season('s-cur', '2026-09-01', '2027-05-31'),
 			season('s-next', '2027-09-01', '2028-05-31')
 		]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listEventsMock.mockResolvedValue([]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
@@ -203,7 +233,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 
 	it('carries `seasons` even when NO season is current (all future)', async () => {
 		listSeasonsMock.mockResolvedValue([season('s-future', '2027-09-01', '2028-05-31')]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listEventsMock.mockResolvedValue([]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
@@ -215,7 +245,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-future', '2027-09-01', '2028-05-31', ['p-anna'])
 		]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listEventsMock.mockResolvedValue([]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
@@ -229,7 +259,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			season('s-old', '2025-09-01', '2026-05-31'),
 			season('s-cur', '2026-09-01', '2027-05-31')
 		]);
-		listRehearsalsMock.mockImplementation((_cfg: unknown, id: string) =>
+		listEventsMock.mockImplementation((_cfg: unknown, id: string) =>
 			Promise.resolve(
 				id === 's-old'
 					? [item('old-past', '2026-05-10T18:00:00.000Z')]
@@ -253,7 +283,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 			season('s-old', '2025-09-01', '2026-05-31'),
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna'])
 		]);
-		listRehearsalsMock.mockImplementation((_cfg: unknown, id: string) =>
+		listEventsMock.mockImplementation((_cfg: unknown, id: string) =>
 			Promise.resolve(
 				id === 's-old'
 					? [item('old-event', '2026-05-10T18:00:00.000Z')]
@@ -273,7 +303,7 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna'])
 		]);
-		listRehearsalsMock.mockResolvedValue([
+		listEventsMock.mockResolvedValue([
 			item('upcoming-1', '2026-09-10T18:00:00.000Z'),
 			item('upcoming-2', '2026-09-17T18:00:00.000Z')
 		]);
@@ -319,7 +349,7 @@ describe('listFullAgenda — manageable season (#167)', () => {
 			seasonWithRights('s-cur', '2026-09-01', ['p-owner'], ['p-editor']),
 			seasonWithRights('s-next', '2027-09-01', [], [])
 		]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listEventsMock.mockResolvedValue([]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
@@ -333,7 +363,7 @@ describe('listFullAgenda — manageable season (#167)', () => {
 		listSeasonsMock.mockResolvedValue([
 			seasonWithRights('s-future', '2027-09-01', ['p-owner'], ['p-editor'])
 		]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listEventsMock.mockResolvedValue([]);
 
 		const result = await listFullAgenda(cfg, NOW);
 
@@ -352,7 +382,7 @@ describe('listFullAgenda — manageable season (#167)', () => {
 			seasonWithRights('s-2027', '2027-09-01', ['p-owner'], []),
 			seasonWithRights('s-2029', '2029-09-01', [], [])
 		]);
-		listRehearsalsMock.mockResolvedValue([]);
+		listEventsMock.mockResolvedValue([]);
 
 		const result = await listFullAgenda(cfg, NOW);
 

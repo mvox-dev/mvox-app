@@ -335,7 +335,7 @@ export async function getSeriesDefaults(
 //     `_parent` → series value. The occurrences SURVIVE the series, stripped of
 //     the only link they had to it. And a series occurrence carries no own
 //     name / duration_minutes / location (the page's create path writes none —
-//     the READ side inherits them from the series: `listRehearsals`' merge and
+//     the READ side inherits them from the series: `listEvents`' merge and
 //     `eventDetail`'s), so what a "clean" series delete left behind was a set
 //     of nameless, 0-duration, location-less agenda rows, reclassified as
 //     "standalone" by `listEventsForSeason` (`seriesRefOf` now undefined), with

@@ -30,7 +30,7 @@
 //
 //     MULTI-PARENT IS STILL THE POINT (#132 review F3): v4E parents an event
 //     under its collective AND (optionally) its season AND (optionally) its
-//     series — and `listRehearsals` selects by `_parent.reference=<seasonId>`,
+//     series — and `listEvents` selects by `_parent.reference=<seasonId>`,
 //     which matches an entity's OWN `_parent` values with NO ancestor
 //     expansion. A series-parented event that carries only the series id is
 //     therefore invisible on the agenda; one that carries only the season id
@@ -82,10 +82,18 @@
 //
 //     v4E DEVIATIONS, both DELIBERATE and both STRICTER than the schema:
 //       * `event.event_type` is v4E-optional ('inherited from
-//         series.event_type if not set') but REQUIRED here: `listRehearsals`
-//         filters on the event's OWN `event_type.string`, and Entu's query
-//         layer does no series lookup, so an inherited-only event_type is
-//         invisible to the agenda read.
+//         series.event_type if not set') but REQUIRED here: the event's OWN
+//         `event_type.string` is its displayed discriminator, and NO reader
+//         inherits it from the series. `listEvents` maps
+//         `raw.event_type?.[0]?.string ?? ''` with the series merge
+//         deliberately not extended to it (#194/#202 — the agenda labels what
+//         the event itself claims to be), and the agenda/detail badges render
+//         that value verbatim. An inherited-only event_type therefore shows up
+//         as NO badge at all.
+//         (Pre-#194 the reason was narrower and is now GONE: `listRehearsals`
+//         used to FILTER on `event_type.string=rehearsal`, so an event without
+//         its own value was invisible to the agenda read entirely. #194 removed
+//         that filter; the requirement stands on the display reason above.)
 //       * `event.name` is v4E-optional-and-inheritable, but only WITH a series
 //         to inherit from — see below.
 //
@@ -93,7 +101,7 @@
 //     OMITTED from the body entirely (#132 review F2). `!== undefined` is not
 //     enough: the T4/T5 inline forms bind their text inputs to `$state('')`, so
 //     an untouched optional field arrives as `''`, and the read-side merges
-//     (entuSeasons.listRehearsals, eventDetail.loadEventDetail) use `??`, under
+//     (entuSeasons.listEvents, eventDetail.loadEventDetail) use `??`, under
 //     which an own `''` is a PRESENT value that SHADOWS the series default.
 //     Normalizing here means no call site has to remember. That leaves exactly
 //     three inheritable optionals — `event.name`, `event.location`,
@@ -110,11 +118,11 @@
 //     `seriesId` is set: v4E says 'inherited from series.name if not set' and
 //     BOTH readers implement that inheritance, so a generated occurrence tracks
 //     its series' name instead of freezing a copy of it. A STANDALONE event
-//     (T4's 'No series' option) has nothing to inherit from — `listRehearsals`
+//     (T4's 'No series' option) has nothing to inherit from — `listEvents`
 //     would map it to `''` and render a blank agenda row whose detail link has
 //     no accessible name — so there `name` is REQUIRED (#132 review F2).
 //     `start_datetime` gets NO such treatment either — it has
-//     no read-side inheritance anywhere (listRehearsals reads
+//     no read-side inheritance anywhere (listEvents reads
 //     `raw.start_datetime?.[0]?.datetime ?? ''`, eventDetail the same), so a
 //     dropped blank would create a dateless event that renders as a blank-time
 //     agenda row and sorts to the TOP of the season, silently (#132 review F1).
@@ -223,7 +231,7 @@ export interface CreateEventInput {
 	/**
 	 * The remaining optional v4E parents, verbatim (the caller picked) —
 	 * normally `[seasonId]`, optionally a section. The season parent is what
-	 * `listRehearsals` selects on (`_parent.reference=<seasonId>`, no ancestor
+	 * `listEvents` selects on (`_parent.reference=<seasonId>`, no ancestor
 	 * expansion), so a series occurrence sends its season HERE and its series in
 	 * `seriesId`; both end up as `_parent` props. One `_parent` prop per entry,
 	 * in order, deduped against `dbEntityId` and `seriesId`.
@@ -231,9 +239,11 @@ export interface CreateEventInput {
 	extraParentIds?: string[];
 	/**
 	 * Discriminator (rehearsal, concert, …) — `event_type` `{ string }`, required
-	 * and non-blank HERE though v4E calls it inheritable: `listRehearsals`
-	 * filters on the event's OWN `event_type.string`, so this one genuinely
-	 * cannot be inherited.
+	 * and non-blank HERE though v4E calls it inheritable: every reader takes the
+	 * event's OWN `event_type.string` and the series merge is deliberately not
+	 * extended to it (#194/#202 — the agenda labels what the event itself claims
+	 * to be), so an omitted value is not inherited, it is simply an event with no
+	 * type badge anywhere.
 	 */
 	eventType: string;
 	/**

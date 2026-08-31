@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listSeasons, listRehearsals, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
+import { listSeasons, listEvents, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
 
 const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
 const ORG_ID = 'org-1';
@@ -141,7 +141,7 @@ describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
 	});
 });
 
-describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', () => {
+describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => {
 	it('identifies the series parent by entity_type and returns AgendaItems', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
@@ -151,7 +151,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				]
 			});
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items).toEqual([
 			{
 				id: 'e1',
@@ -161,7 +161,10 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				location: 'Hall A',
 				conductors: [],
 				owners: [],
-				editors: []
+				editors: [],
+				// #194/#202 — every AgendaItem carries its event_type verbatim ('' when
+				// the event has none). Full-shape toEqual so a dropped field fails HERE.
+				eventType: ''
 			}
 		]);
 	});
@@ -179,12 +182,12 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 			// event has NO duration_minutes, NO location → both inherited
 			return json({ entities: [eventRaw()] });
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0]).toMatchObject({ durationMinutes: 120, location: 'Church Hall' });
 	});
 
 	// #101 review fix (F2) — `loadEventDetail` (the detail page) already inherited
-	// `name` from the parent series while `listRehearsals` (the agenda) did not.
+	// `name` from the parent series while `listEvents` (the agenda) did not.
 	// The asymmetry rendered a BLANK agenda row — and, once #101 made the row a
 	// link, an anchor with no accessible name — that opened a detail page showing
 	// a populated name.
@@ -195,7 +198,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 			// event has NO name of its own → inherited from the series
 			return json({ entities: [eventRaw({ name: [] })] });
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('Tuesday Series');
 		// …and the series GET must actually ASK for the name (props list).
 		const seriesCall = fetchImpl.mock.calls.find((c) => String(c[0]).includes('/entity/series1'))!;
@@ -208,7 +211,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				return json({ entity: { _id: 'series1', name: [{ string: 'Tuesday Series' }] } });
 			return json({ entities: [eventRaw()] }); // eventRaw carries 'Mon rehearsal'
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('Mon rehearsal');
 	});
 
@@ -217,7 +220,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
 			return json({ entities: [eventRaw({ name: [] })] });
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('');
 	});
 
@@ -229,7 +232,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				});
 			return json({ entities: [eventRaw({ duration_minutes: [{ number: 60 }], location: [{ string: 'Room 2' }] })] });
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0]).toMatchObject({ durationMinutes: 60, location: 'Room 2' });
 	});
 
@@ -244,7 +247,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				]
 			});
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items.map((i) => i.id)).toEqual(['early', 'late']); // sorted ascending
 		const seriesCalls = fetchImpl.mock.calls.filter((c) => String(c[0]).includes('/entity/series1'));
 		expect(seriesCalls).toHaveLength(1); // both events share series1 → one lookup
@@ -255,20 +258,20 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 			if (url.includes('/entity/series1')) return json({}, 500); // series lookup fails
 			return json({ entities: [eventRaw()] });
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0]).toMatchObject({ durationMinutes: 0, location: '' });
 	});
 
 	it('returns [] with no series fetch when there are no events', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
-		const items = await listRehearsals(cfg, 'season1', fetchImpl);
+		const items = await listEvents(cfg, 'season1', fetchImpl);
 		expect(items).toEqual([]);
 		expect(fetchImpl).toHaveBeenCalledTimes(1); // only the events query, no series lookups
 	});
 
 	it('throws on a non-2xx events response', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
-		await expect(listRehearsals(cfg, 'season1', fetchImpl)).rejects.toThrow(/listRehearsals failed: 403/);
+		await expect(listEvents(cfg, 'season1', fetchImpl)).rejects.toThrow(/listEvents failed: 403/);
 	});
 
 	// #91 review F1 — the programme controls gate on `_editor` on the EVENT.
@@ -280,7 +283,7 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				entities: [eventRaw({ _owner: [{ reference: 'p1' }], _editor: [{ reference: 'p2' }] })]
 			});
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(String(fetchImpl.mock.calls[0][0])).toContain('_owner,_editor');
 		expect(items[0]).toMatchObject({ owners: ['p1'], editors: ['p2'] });
 	});
@@ -291,8 +294,99 @@ describe('listRehearsals (de-fanned series id + verbatim inheritance merge)', ()
 				return json({ entity: { _id: 'series1', _editor: [{ reference: 'series-editor' }] } });
 			return json({ entities: [eventRaw()] });
 		});
-		const items = await listRehearsals(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0]).toMatchObject({ owners: [], editors: [] });
+	});
+});
+
+// ── #194 + #202 RED — listEvents (renamed from listRehearsals) queries ALL
+// event types.
+//
+// #194 (bug): the query hardcoded `event_type.string=rehearsal`. `event_type`
+// is FREE TEXT — Estonian users write 'proov', and the Crede pilot's 39 'proov'
+// rehearsals were all invisible on the agenda.
+// #202 (feature): a choir's calendar includes concerts, festivals, … — the
+// agenda shows ALL of them, labeled by type (the label is the UI's job; this
+// layer carries `eventType` verbatim on every AgendaItem).
+//
+// Contract pinned here (GREEN must implement in entuSeasons.ts):
+//   - the function is `listEvents` — `listRehearsals` no longer exists
+//   - the events query has NO `event_type` FILTER of any kind
+//   - the query ASKS for `event_type` in its props list
+//   - each AgendaItem carries `eventType` (first value's `.string`, '' when
+//     absent — same '??' posture as name/duration/location, but NEVER inherited
+//     from the series: the agenda labels what the event itself claims to be)
+describe('listEvents — no event_type filter, eventType carried (#194 + #202)', () => {
+	it('the rename is a RENAME: the module no longer exports listRehearsals', async () => {
+		const mod: Record<string, unknown> = await import('./entuSeasons');
+		expect(typeof mod.listEvents).toBe('function');
+		expect(mod.listRehearsals).toBeUndefined();
+	});
+
+	it('the events query carries NO event_type filter (all types come back)', async () => {
+		const fetchImpl = vi.fn(async (_url?: string) => json({ entities: [] }));
+		await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const url = String(fetchImpl.mock.calls[0][0]);
+		// No filter in ANY spelling — `event_type.string=…`, `event_type=…`.
+		// (`props=…,event_type,…` is fine and asserted separately below; a filter
+		// is a query PARAM starting with event_type.)
+		const params = [...new URL(url).searchParams.keys()];
+		expect(params.some((k) => k === 'event_type' || k.startsWith('event_type.'))).toBe(false);
+		// …and the scoping that IS the query survives the fix:
+		expect(url).toContain('_type.string=event');
+		expect(url).toContain('_parent.reference=season1');
+	});
+
+	it('asks for event_type in props and maps it onto eventType', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
+			return json({ entities: [eventRaw({ event_type: [{ string: 'proov' }] })] });
+		});
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const eventsUrl = String(fetchImpl.mock.calls[0][0]);
+		const props = new URL(eventsUrl).searchParams.get('props') ?? '';
+		expect(props.split(',')).toContain('event_type');
+		// Free-text value VERBATIM — 'proov' is exactly the #194 reproduction.
+		expect(items[0].eventType).toBe('proov');
+	});
+
+	it('returns events of ALL types side by side — rehearsal, concert, free-text, none', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
+			return json({
+				entities: [
+					eventRaw({ _id: 'e-reh', event_type: [{ string: 'rehearsal' }] }),
+					eventRaw({
+						_id: 'e-con',
+						name: [{ string: 'Kevadkontsert' }],
+						start_datetime: [{ datetime: '2026-09-02T16:00:00.000Z' }],
+						event_type: [{ string: 'concert' }]
+					}),
+					eventRaw({
+						_id: 'e-proov',
+						start_datetime: [{ datetime: '2026-09-03T16:00:00.000Z' }],
+						event_type: [{ string: 'proov' }]
+					}),
+					eventRaw({
+						_id: 'e-none',
+						start_datetime: [{ datetime: '2026-09-04T16:00:00.000Z' }]
+					})
+				]
+			});
+		});
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(items.map((i) => i.id)).toEqual(['e-reh', 'e-con', 'e-proov', 'e-none']);
+		expect(items.map((i) => i.eventType)).toEqual(['rehearsal', 'concert', 'proov', '']);
+	});
+
+	it('eventType is NEVER inherited from the parent series', async () => {
+		const fetchImpl = vi.fn(async (url: string) => {
+			if (url.includes('/entity/series1'))
+				return json({ entity: { _id: 'series1', event_type: [{ string: 'rehearsal' }] } });
+			return json({ entities: [eventRaw()] }); // event itself has NO event_type
+		});
+		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		expect(items[0].eventType).toBe('');
 	});
 });
 

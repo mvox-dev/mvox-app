@@ -25,7 +25,7 @@ import { resolve } from 'node:path';
 // name" hold for any key shape as long as the name is passed as a param.
 vi.mock('$lib/paraglide/messages.js', () => {
 	const known: Record<string, (p?: Record<string, unknown>) => string> = {
-		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
+		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p) => `${p?.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
@@ -53,7 +53,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		attendance_tally: (p) => `${p?.present} present · ${p?.absent} absent · ${p?.late} late`,
 		attendance_close: () => 'Close',
 		attendance_season_summary: () => 'This season',
-		attendance_season_rate: (p) => `Attended ${p?.attended} of ${p?.total} rehearsals`,
+		attendance_season_rate: (p) => `Attended ${p?.attended} of ${p?.total} events`,
 		attendance_member_rate: (p) => `${p?.attended} of ${p?.total}`,
 		attendance_all_members: () => 'All members',
 		attendance_season_loading: () => 'Loading…',

@@ -1,7 +1,7 @@
 import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
 import { selectedCollectiveStore } from '$lib/collectives/store';
-import { listSeasons, listRehearsals, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { listSeasons, listEvents, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { currentSeason, manageableSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
 import type { Season } from '$lib/seasons/types';
@@ -57,7 +57,7 @@ const NO_MANAGEABLE_SEASON = {
  * #83 fix (F1+F2) -- combined load that fetches seasons + rehearsals ONCE (the
  * same reads listAgenda already does), then splits the result into upcoming +
  * recent items and carries the season's conductor data along. This eliminates:
- *   - the duplicate listSeasons + listRehearsals calls that loadRecentEvents made
+ *   - the duplicate listSeasons + listEvents calls that loadRecentEvents made
  *   - the N+1 entity/{id}?props=conductor requests that resolveConductorEventIds
  *     fired (conductor refs are now on the already-fetched AgendaItem/Season)
  */
@@ -69,12 +69,13 @@ export async function listFullAgenda(
 	const nowIso = now.toISOString();
 	const seasons = await listSeasons(cfg, fetchImpl);
 
-	// Fetch rehearsals for ALL seasons, paired with season id so we can isolate
-	// the current season's events for the Recent section without re-fetching.
+	// Fetch events (ALL types, #194/#202) for ALL seasons, paired with season id
+	// so we can isolate the current season's events for the Recent section
+	// without re-fetching.
 	const paired = await Promise.all(
 		seasons.map(async (s) => ({
 			seasonId: s.id,
-			items: await listRehearsals(cfg, s.id, fetchImpl)
+			items: await listEvents(cfg, s.id, fetchImpl)
 		}))
 	);
 

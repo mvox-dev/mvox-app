@@ -77,7 +77,7 @@ const seriesEntities = [
 
 /** The season's events: two in s1, one in s2, none in s3, one standalone.
  *  Every event is MULTI-PARENT (season + optionally its series), exactly as
- *  listRehearsals already observes on the live db. */
+ *  listEvents already observes on the live db. */
 const countableEvents = [
 	{
 		_id: 'e1',

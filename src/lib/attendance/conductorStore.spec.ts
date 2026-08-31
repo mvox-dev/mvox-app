@@ -31,7 +31,7 @@ import { determineConductor } from './conductorStore';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
-		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
+		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (params: { minutes: number }) => `${params.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',

@@ -25,7 +25,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
-		agenda_empty_no_rehearsals: () => 'No upcoming rehearsals.',
+		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
@@ -65,7 +65,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_status_not_recorded: () => 'Not recorded',
 		attendance_season_summary: () => 'This season',
 		attendance_season_rate: (p: { attended: number; total: number }) =>
-			`Attended ${p.attended} of ${p.total} rehearsals`,
+			`Attended ${p.attended} of ${p.total} events`,
 		attendance_member_rate: (p: { attended: number; total: number }) =>
 			`${p.attended} of ${p.total}`,
 		attendance_all_members: () => 'All members'

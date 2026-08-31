@@ -3,11 +3,11 @@
 // #101 TE.1 — the /event/[id] detail page's data layer: one event, resolved to
 // its FULL header shape (name/type/time/duration/location/description/conductor).
 //
-// Series inheritance is the SAME read-time merge `listRehearsals` performs
+// Series inheritance is the SAME read-time merge `listEvents` performs
 // (entuSeasons.ts:104) — event value wins, series fills the gap, else 0/''. Kept
 // as its own small merge here rather than reused verbatim: this reads a SINGLE
 // event by id (no season-scoped list, no series cache), and additionally carries
-// `name`/`description`, which listRehearsals's AgendaItem never needed.
+// `name`/`description`, which listEvents's AgendaItem never needed.
 //
 // Conductor resolution reuses `resolveConductors` verbatim (#77's model,
 // conductorLogic.ts) against the event's own season (read here, not passed in —
@@ -117,7 +117,7 @@ interface EventRaw {
 	location?: Array<{ string: string }>;
 	description?: Array<{ string: string }>;
 	conductor?: Array<{ reference: string }>;
-	// Denormalized `entity_type` per parent (same shape RehearsalRaw relies on,
+	// Denormalized `entity_type` per parent (same shape EventRaw relies on,
 	// seasons/types.ts) — how the season/series parents are told apart without an
 	// org arg.
 	_parent?: Array<{ reference: string; entity_type?: string }>;
@@ -172,7 +172,7 @@ function domainOrPublicName(profiles: MyProfile[]): string {
  * module doc. Fails loud on a non-2xx event read (no silent empty detail) — the
  * season/series reads are best-effort (a missing/unreadable parent degrades to
  * "nothing to inherit/no conductors from it", never a thrown error, matching
- * `listRehearsals`'s own series-cache posture).
+ * `listEvents`'s own series-cache posture).
  */
 export async function loadEventDetail(
 	cfg: EntuCfg,
