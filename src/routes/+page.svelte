@@ -75,7 +75,10 @@
 		updateSeasonField,
 		addSeasonConductor,
 		removeSeasonConductor as apiRemoveSeasonConductor,
-		getSeriesDefaults
+		getSeriesDefaults,
+		deleteEvent as apiDeleteEvent,
+		deleteEventSeries as apiDeleteEventSeries,
+		countSeriesOccurrences as apiCountSeriesOccurrences
 	} from '$lib/seasons/seasonManage';
 	import type {
 		SeasonEditableField,
@@ -83,6 +86,15 @@
 		SeriesListItem,
 		StandaloneEvent
 	} from '$lib/seasons/seasonManage';
+	// #197 review F3/F5 — the delete-refusal discriminators live in their OWN
+	// module (see `deleteErrors.ts`'s header): the page's integration specs
+	// `vi.mock` `$lib/seasons/seasonManage` wholesale, so importing these from
+	// there would hand the page `undefined` under test.
+	import {
+		isDeleteForbidden,
+		isEventCascadePartial,
+		isSeriesCascadePartial
+	} from '$lib/seasons/deleteErrors';
 	import { listEventTypes } from '$lib/events/eventTypes';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
@@ -1917,6 +1929,55 @@
 	 *  exist but failed to load. Fail loudly (house rule). */
 	let seasonManageSeriesError = $state(false);
 	let seasonManageEventsError = $state(false);
+	/** #197 — a failed series/event DELETE surfaces an inline slot (per-attempt,
+	 *  not sticky: cleared at the START of every delete tap, not just on
+	 *  success, so a second try — success or failure — always reflects the
+	 *  latest attempt). The row that failed to delete STAYS in its list; this
+	 *  state only controls the error slot.
+	 *
+	 *  #197 review F5 — `list` says WHICH sub-panel renders the message. One
+	 *  shared slot lived under the standalone-EVENTS list, so a failed SERIES
+	 *  delete printed "Couldn't delete" below a list that had nothing to do with
+	 *  it (role="alert" still announced it, so the damage was visual, not
+	 *  SR-blocking).
+	 *
+	 *  #197 review F3 — `reason` distinguishes the ONE refusal the panel's own
+	 *  rights gate cannot predict. The gate is `_owner` OR `_editor` on the
+	 *  SEASON (`manageRightsFrom`), which every POST on this panel satisfies;
+	 *  Entu's DELETE additionally requires `_owner` on the TARGET entity, so a
+	 *  season editor who did not create the series gets a 403 forever and must
+	 *  not be told to "try again". `partial` is the series cascade that stopped
+	 *  part-way (see `deleteEventSeries`' contract). */
+	let seasonManageDeleteError = $state<{
+		list: 'series' | 'events';
+		reason: 'write' | 'forbidden' | 'partial' | 'partial-event';
+		deleted?: number;
+		total?: number;
+	} | null>(null);
+	/** #197 review F2 — the two-step inline confirm, the same idiom the roster's
+	 *  section delete uses (#110 review F4): a bare `×` firing an IRREVERSIBLE,
+	 *  undo-less delete on a mobile-shaped panel is one mis-tap from destroying
+	 *  a season's whole rehearsal series. Holds the id of the row currently
+	 *  showing confirm/cancel instead of its `×` — only ever one at a time, and
+	 *  arming one disarms the other. */
+	let seasonManageDeleteArmed = $state<string | null>(null);
+	/** #197 review 2nd pass F2 — the LIVE occurrence count of the armed series,
+	 *  re-read from the server when the row arms, or `null` while that read is in
+	 *  flight (and if it fails). The confirm quotes a number only when this holds
+	 *  one: the panel list derives its per-series counts client-side from ONE
+	 *  season-wide `limit=500` event read, so on a big season, or after an
+	 *  occurrence was created since that read, the figure it shows is not the
+	 *  figure the cascade will destroy — and this is the one control in the app
+	 *  that destroys an unbounded set of entities with no undo. */
+	let seasonManageArmedSeriesCount = $state<number | null>(null);
+	/** #197 review F5 — the id whose DELETE is on the wire. Disables that row's
+	 *  confirm button (and marks it `aria-busy`), so a double-tap cannot fire
+	 *  two DELETEs for the same entity. */
+	let seasonManageDeletePendingId = $state<string | null>(null);
+	/** #197 review F5 — the visually-hidden success announcement (WCAG 4.1.3).
+	 *  A successful delete otherwise just removes a row with nothing said, the
+	 *  same gap `roster-section-remove-status` exists to close. */
+	let seasonManageDeleteStatus = $state('');
 	/** A failed conductor add/remove reverts the optimistic chip — and, without
 	 *  this, said nothing (#132/T3 review F1). Same contract the three text/date
 	 *  fields already keep: a silently snapped-back value reads as a bug. */
@@ -2011,6 +2072,11 @@
 		seasonManageEvents = [];
 		seasonManageSeriesError = false;
 		seasonManageEventsError = false;
+		seasonManageDeleteError = null;
+		seasonManageDeleteArmed = null;
+		seasonManageArmedSeriesCount = null;
+		seasonManageDeletePendingId = null;
+		seasonManageDeleteStatus = '';
 		seasonManageConductorError = false;
 		seasonManageRosterLoading = false;
 		seasonEditingField = null;
@@ -2107,6 +2173,13 @@
 		if (seriesRunUnfinished) return;
 		seasonManageOpen = false;
 		seasonEditingField = null;
+		// #197 review F2 — a delete armed but never confirmed must not still be
+		// armed on the next open: the panel comes back with a "Delete?" button
+		// exactly where the × was, one tap from a destroy the operator walked away
+		// from. The error slot goes with it (per-attempt, never carried over).
+		seasonManageDeleteArmed = null;
+		seasonManageArmedSeriesCount = null;
+		seasonManageDeleteError = null;
 		// The dialog held focus (see the $effect below); dismissing it unmounts
 		// the focused element, so hand focus back to the control that opened it
 		// rather than dropping the keyboard user at <body> — the same debt every
@@ -2747,6 +2820,179 @@
 					e
 				);
 				seasonManageEventsError = true;
+			});
+	}
+
+	// #197 — per-row DELETE for the season-manage panel's series/standalone-event
+	// lists. The `seasonManageDeleteError` slot is reset at the START of every
+	// attempt so a second try, success or failure, always reflects the latest
+	// tap. A failed delete leaves the row exactly where it was — no optimistic
+	// removal (unlike the conductor chip above, there is nothing cheap to revert
+	// TO once a row is gone from the list).
+	//
+	// #197 review F2 — every delete is TWO taps: `armSeasonManageDelete` swaps
+	// the row's `×` for confirm/cancel, and only the confirm calls the write.
+
+	/** Arm a row's two-step confirm, moving focus onto the confirm button that
+	 *  replaces the `×` (the arming click unmounts the focused element — WCAG
+	 *  2.4.3, the roster's `armRemove` shape verbatim). A fresh attempt owns the
+	 *  error slot. */
+	async function armSeasonManageDelete(rowId: string, confirmTestid: string): Promise<void> {
+		seasonManageDeleteError = null;
+		seasonManageDeleteArmed = rowId;
+		seasonManageArmedSeriesCount = null;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-testid="${confirmTestid}"]`)?.focus();
+	}
+
+	/**
+	 * Arm a SERIES row, and re-read how many occurrences that series actually
+	 * holds right now (#197 review 2nd pass F2). Until that read lands the
+	 * confirm quotes no number at all: the panel's own `eventCount` comes from a
+	 * season-wide capped list read grouped client-side, so it under-reports a
+	 * season past 500 events and knows nothing of an occurrence created since —
+	 * and this confirm is the last thing an operator sees before an irreversible
+	 * cascade. A failed count read leaves the count-free confirm standing rather
+	 * than promising a stale figure; the delete itself still counts for real.
+	 */
+	async function armSeasonManageSeriesDelete(series: SeriesListItem): Promise<void> {
+		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		await armSeasonManageDelete(series.id, `season-manage-series-delete-confirm-${series.id}`);
+		if (!cfg) return;
+		try {
+			const live = await apiCountSeriesOccurrences(cfg, series.id);
+			// The list row is stale too — correct it, so the row's "Events: N" and
+			// the confirm never show two different numbers.
+			seasonManageSeries = seasonManageSeries.map((row) =>
+				row.id === series.id ? { ...row, eventCount: live } : row
+			);
+			if (seasonManageDeleteArmed === series.id) seasonManageArmedSeriesCount = live;
+		} catch (e) {
+			console.error('agenda: live occurrence count for the delete confirm failed', series.id, e);
+		}
+	}
+
+	/** Disarm, handing focus back to the `×` that comes back. */
+	async function disarmSeasonManageDelete(disarmTestid: string): Promise<void> {
+		seasonManageDeleteArmed = null;
+		seasonManageArmedSeriesCount = null;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-testid="${disarmTestid}"]`)?.focus();
+	}
+
+	/** The failed-delete slot's shape, from whatever the write layer rejected
+	 *  with (#197 review F3/F5). Duck-typed discriminators, never `instanceof`
+	 *  — the rejection crosses a mocked module boundary in the page's specs. */
+	function seasonManageDeleteFailure(
+		list: 'series' | 'events',
+		reason: unknown
+	): NonNullable<typeof seasonManageDeleteError> {
+		if (isDeleteForbidden(reason)) return { list, reason: 'forbidden' };
+		// Both cascades report how far they got; only the NOUN differs — the
+		// series one counts occurrence events, the event one counts the event's
+		// own attendance/programme rows (#197 review 2nd pass F1).
+		if (isSeriesCascadePartial(reason) || isEventCascadePartial(reason)) {
+			const partial = reason as { deletedCount?: number; totalCount?: number };
+			return {
+				list,
+				reason: isSeriesCascadePartial(reason) ? 'partial' : 'partial-event',
+				deleted: partial.deletedCount ?? 0,
+				total: partial.totalCount ?? 0
+			};
+		}
+		return { list, reason: 'write' };
+	}
+
+	/** The copy for a failed delete. `forbidden` deliberately does NOT invite a
+	 *  retry — the same caller will be refused every time (#197 review F3). */
+	function seasonManageDeleteErrorText(
+		failure: NonNullable<typeof seasonManageDeleteError>
+	): string {
+		switch (failure.reason) {
+			case 'forbidden':
+				return m.season_manage_delete_forbidden();
+			case 'partial':
+				return m.season_manage_delete_partial({
+					deleted: failure.deleted ?? 0,
+					total: failure.total ?? 0
+				});
+			case 'partial-event':
+				return m.season_manage_event_delete_partial({
+					deleted: failure.deleted ?? 0,
+					total: failure.total ?? 0
+				});
+			default:
+				return m.season_manage_delete_error();
+		}
+	}
+
+	/**
+	 * #197 review F4 — a successful delete just changed the world this page
+	 * reads, so the page re-reads it, exactly as the CREATE path does. The local
+	 * splice above is only the instant feedback: without the refresh the same
+	 * screen contradicted itself — the deleted standalone event kept its
+	 * <AgendaList> card directly below the panel, and a deleted series' now-gone
+	 * occurrences kept their agenda rows, until a manual reload.
+	 * `keepSeasonManage: true` is the panel-preserving reload (see
+	 * `loadForSelected`), and `refreshSeasonManageLists` re-reads the panel's own
+	 * two lists under the requestId the reload just bumped.
+	 */
+	function refreshAfterSeasonManageDelete(cfg: ManageCfg): void {
+		const panelSeasonId = manageableSeasonId;
+		loadForSelected({ keepSeasonManage: true });
+		if (panelSeasonId !== null) refreshSeasonManageLists(cfg, panelSeasonId);
+	}
+
+	function onSeasonManageSeriesDelete(series: SeriesListItem): void {
+		if (!selected) return;
+		if (seasonManageDeletePendingId !== null) return; // one delete on the wire at a time
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		seasonManageDeleteError = null;
+		seasonManageDeletePendingId = series.id;
+		apiDeleteEventSeries(cfg, series.id)
+			.then((deletedOccurrences) => {
+				seasonManageDeleteArmed = null;
+				seasonManageArmedSeriesCount = null;
+				seasonManageSeries = seasonManageSeries.filter((row) => row.id !== series.id);
+				// The cascade took the occurrences with it — say so, by name and
+				// count. #197 review 2nd pass F2: the count is the CASCADE's own
+				// return value, never the row's client-derived `eventCount`, which
+				// was read at a different moment by a different (capped) query.
+				seasonManageDeleteStatus =
+					deletedOccurrences > 0
+						? m.season_manage_series_deleted({ name: series.name, count: deletedOccurrences })
+						: m.season_manage_deleted({ name: series.name });
+				refreshAfterSeasonManageDelete(cfg);
+			})
+			.catch((e) => {
+				console.error('agenda: deleting event series failed', series.id, e);
+				seasonManageDeleteError = seasonManageDeleteFailure('series', e);
+			})
+			.finally(() => {
+				seasonManageDeletePendingId = null;
+			});
+	}
+
+	function onSeasonManageEventDelete(event: StandaloneEvent): void {
+		if (!selected) return;
+		if (seasonManageDeletePendingId !== null) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		seasonManageDeleteError = null;
+		seasonManageDeletePendingId = event.id;
+		apiDeleteEvent(cfg, event.id)
+			.then(() => {
+				seasonManageDeleteArmed = null;
+				seasonManageArmedSeriesCount = null;
+				seasonManageEvents = seasonManageEvents.filter((row) => row.id !== event.id);
+				seasonManageDeleteStatus = m.season_manage_deleted({ name: event.name });
+				refreshAfterSeasonManageDelete(cfg);
+			})
+			.catch((e) => {
+				console.error('agenda: deleting standalone event failed', event.id, e);
+				seasonManageDeleteError = seasonManageDeleteFailure('events', e);
+			})
+			.finally(() => {
+				seasonManageDeletePendingId = null;
 			});
 	}
 
@@ -4165,6 +4411,21 @@
 									{/if}
 								</div>
 
+								<!-- #197 review F5 — the delete RESULT, same contract as
+								     `roster-section-remove-status` (WCAG 4.1.3): mounted from the
+								     panel's first render (a live region announces only CHANGES to
+								     its contents) and visually hidden, because a sighted user
+								     watched the row vanish. Only SUCCESS lands here; a refused
+								     delete is a role="alert" under the list it belongs to. -->
+								<div
+									data-testid="season-manage-delete-status"
+									role="status"
+									aria-live="polite"
+									class="sr-only"
+								>
+									{seasonManageDeleteStatus}
+								</div>
+
 								<!-- event series -->
 								<div>
 									<div class="flex items-center justify-between">
@@ -4513,19 +4774,93 @@
 											class="mt-1 flex items-center justify-between text-xs text-ink"
 										>
 											<span>{series.name}</span>
-											<!-- The count is a SENTENCE, not a bare glyph: an unlabelled
-											     number announces as "Monday rehearsals 12" (#132/T3 review
-											     F2). Parameterised, count-safe copy — this pipeline has no
-											     ICU plural support (probed: ICU plural syntax compiles to
-											     garbage, and the messageFormat plugin's match shape flattens
-											     into separate keys), so a label form carries every count in
-											     all four locales. Real plural categories ride with the
-											     standing YELLOW-128.1 pluralization work. -->
-											<span class="text-ink-2"
-												>{m.season_manage_series_event_count({ count: series.eventCount })}</span
-											>
+											<div class="flex items-center gap-1">
+												<!-- The count is a SENTENCE, not a bare glyph: an unlabelled
+												     number announces as "Monday rehearsals 12" (#132/T3 review
+												     F2). Parameterised, count-safe copy — this pipeline has no
+												     ICU plural support (probed: ICU plural syntax compiles to
+												     garbage, and the messageFormat plugin's match shape flattens
+												     into separate keys), so a label form carries every count in
+												     all four locales. Real plural categories ride with the
+												     standing YELLOW-128.1 pluralization work. -->
+												<span class="text-ink-2"
+													>{m.season_manage_series_event_count({ count: series.eventCount })}</span
+												>
+												<!-- #197 — icon-only admin control, same 44x44 hit area as the
+												     conductor chip's × above. Deleting a series CASCADES to its
+												     occurrences (see seasonManage.ts's module contract for why
+												     refusing is not an option here), so #197 review F2 puts the
+												     roster's two-step inline confirm in front of it and F2 again
+												     puts the occurrence COUNT in the confirm label: the operator
+												     must see what the delete takes with it.
+												     #197 review 2nd pass F2 — that count is the LIVE one the arming
+												     click re-read (`seasonManageArmedSeriesCount`), not the list's
+												     client-side tally; while the read is in flight (or if it fails)
+												     the confirm quotes no number rather than a number the cascade
+												     never checks. -->
+												{#if seasonManageDeleteArmed === series.id}
+													<button
+														type="button"
+														data-testid="season-manage-series-delete-confirm-{series.id}"
+														aria-label={seasonManageArmedSeriesCount !== null &&
+														seasonManageArmedSeriesCount > 0
+															? m.season_manage_series_delete_confirm({
+																	name: series.name,
+																	count: seasonManageArmedSeriesCount
+																})
+															: m.season_manage_delete_confirm({ name: series.name })}
+														disabled={seasonManageDeletePendingId !== null}
+														aria-busy={seasonManageDeletePendingId === series.id}
+														class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+														onclick={() => onSeasonManageSeriesDelete(series)}
+													>
+														{seasonManageArmedSeriesCount !== null &&
+														seasonManageArmedSeriesCount > 0
+															? m.season_manage_series_delete_confirm_short({
+																	count: seasonManageArmedSeriesCount
+																})
+															: m.season_manage_delete_confirm_short()}
+													</button>
+													<button
+														type="button"
+														data-testid="season-manage-series-delete-cancel-{series.id}"
+														aria-label={m.season_manage_delete_cancel({ name: series.name })}
+														disabled={seasonManageDeletePendingId !== null}
+														class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+														onclick={() =>
+															void disarmSeasonManageDelete(
+																`season-manage-series-delete-${series.id}`
+															)}
+													>
+														{m.season_manage_delete_cancel_short()}
+													</button>
+												{:else}
+													<button
+														type="button"
+														data-testid="season-manage-series-delete-{series.id}"
+														aria-label={m.season_manage_series_delete({ name: series.name })}
+														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
+														onclick={() => void armSeasonManageSeriesDelete(series)}
+													>
+														&times;
+													</button>
+												{/if}
+											</div>
 										</div>
 									{/each}
+									{#if seasonManageDeleteError?.list === 'series'}
+										<!-- #197 review F5 — under the list that actually failed. The one
+										     shared slot used to render below the standalone-EVENTS list,
+										     so a failed SERIES delete printed its message visually
+										     detached from the row it was about. -->
+										<p
+											data-testid="season-manage-delete-error"
+											role="alert"
+											class="mt-1 text-xs text-red-700"
+										>
+											{seasonManageDeleteErrorText(seasonManageDeleteError)}
+										</p>
+									{/if}
 								</div>
 
 								<!-- standalone events -->
@@ -4563,10 +4898,69 @@
 										</p>
 									{/if}
 									{#each seasonManageEvents as event (event.id)}
-										<div data-testid="season-manage-event-{event.id}" class="mt-1 text-xs text-ink">
-											{event.name}
+										<div
+											data-testid="season-manage-event-{event.id}"
+											class="mt-1 flex items-center justify-between text-xs text-ink"
+										>
+											<span>{event.name}</span>
+											<!-- #197 review F2 — the same two-step confirm the series rows
+											     carry: an event delete is irreversible and there is no undo
+											     anywhere in the app. -->
+											<div class="flex items-center gap-1">
+												{#if seasonManageDeleteArmed === event.id}
+													<button
+														type="button"
+														data-testid="season-manage-event-delete-confirm-{event.id}"
+														aria-label={m.season_manage_event_delete_confirm({
+															name: event.name
+														})}
+														disabled={seasonManageDeletePendingId !== null}
+														aria-busy={seasonManageDeletePendingId === event.id}
+														class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+														onclick={() => onSeasonManageEventDelete(event)}
+													>
+														{m.season_manage_delete_confirm_short()}
+													</button>
+													<button
+														type="button"
+														data-testid="season-manage-event-delete-cancel-{event.id}"
+														aria-label={m.season_manage_delete_cancel({ name: event.name })}
+														disabled={seasonManageDeletePendingId !== null}
+														class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+														onclick={() =>
+															void disarmSeasonManageDelete(
+																`season-manage-event-delete-${event.id}`
+															)}
+													>
+														{m.season_manage_delete_cancel_short()}
+													</button>
+												{:else}
+													<button
+														type="button"
+														data-testid="season-manage-event-delete-{event.id}"
+														aria-label={m.season_manage_event_delete({ name: event.name })}
+														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
+														onclick={() =>
+															void armSeasonManageDelete(
+																event.id,
+																`season-manage-event-delete-confirm-${event.id}`
+															)}
+													>
+														&times;
+													</button>
+												{/if}
+											</div>
 										</div>
 									{/each}
+									{#if seasonManageDeleteError?.list === 'events'}
+										<p
+											data-testid="season-manage-delete-error"
+											role="alert"
+											class="mt-1 text-xs text-red-700"
+										>
+											{seasonManageDeleteErrorText(seasonManageDeleteError)}
+										</p>
+									{/if}
 								</div>
 							</div>
 						{/if}
