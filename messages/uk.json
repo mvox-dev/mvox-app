@@ -438,5 +438,13 @@
 	"series_create_no_dates": "Це повторення не дає жодної події. Змініть день або діапазон дат.",
 	"series_create_preview_count_one": "Буде створено 1 подію.",
 	"series_create_preview_count_other": "Буде створено подій: {count}.",
-	"series_create_resume_notice": "Серія вже існує. Повторне надсилання створить лише події, яких бракує ({remaining} з {total})."
+	"series_create_resume_notice": "Серія вже існує. Повторне надсилання створить лише події, яких бракує ({remaining} з {total}).",
+	"library_create_work_button": "Додати твір",
+	"library_create_work_name_label": "Назва",
+	"library_create_work_composer_label": "Композитор",
+	"library_create_work_submit": "Створити твір",
+	"library_create_work_cancel": "Скасувати",
+	"library_create_work_name_required": "Потрібно вказати назву твору.",
+	"library_create_work_created": "{name} створено.",
+	"library_create_work_error": "Не вдалося створити твір."
 }

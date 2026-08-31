@@ -32,6 +32,7 @@
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
+	import { createWork } from '$lib/entity/entityCreate';
 	import { getLocale } from '$lib/paraglide/runtime';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
@@ -190,6 +191,116 @@
 	let allCopies = $state<Copy[]>([]);
 	let allMembers = $state<ActiveMember[]>([]);
 	let memberNames = $state<Map<string, string>>(new Map());
+
+	// #198 — librarian-only inline "create work" affordance. Same
+	// open/close/local-insert shape as roster's page-level section create
+	// (pageCreateOpen/submitPageCreate): closed by default, no form in the DOM
+	// until opened, and a successful create is inserted LOCALLY into `works`
+	// (no listWorks refetch) — the parent is the LIBRARY entity id from
+	// `libraryEntityIdStore` (resolveLibrarian), never the database entity.
+	let createWorkOpen = $state(false);
+	let createWorkName = $state('');
+	let createWorkComposer = $state('');
+	let createWorkError = $state<(() => string) | null>(null);
+	let createWorkStatus = $state('');
+	let createWorkNameInput = $state<HTMLInputElement | null>(null);
+	// #198 review — in-flight latch. Without it a double-click (or Enter pressed
+	// twice, which routes to the same submitCreateWork) issues two POSTs and
+	// leaves two duplicate `work` entities in Entu, which has no bulk delete.
+	let createWorkPending = $state(false);
+
+	function openCreateWorkForm(): void {
+		createWorkName = '';
+		createWorkComposer = '';
+		createWorkError = null;
+		// A new attempt owns the live region too — the previous "X created."
+		// announcement must not sit there while a fresh form is open.
+		createWorkStatus = '';
+		createWorkOpen = true;
+	}
+
+	function closeCreateWorkForm(): void {
+		createWorkOpen = false;
+		createWorkName = '';
+		createWorkComposer = '';
+		createWorkError = null;
+	}
+
+	// Escape closes from ANY control in the form, not just the inputs — it is
+	// wired to the two buttons as well, so Escape still works with focus on
+	// Submit/Cancel. (Wiring it once on the wrapper <div> would be an a11y
+	// violation: a non-interactive element carrying keyboard listeners.)
+	function onCreateWorkEscapeKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		closeCreateWorkForm();
+	}
+
+	function onCreateWorkNameKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') {
+			onCreateWorkEscapeKeydown(event);
+			return;
+		}
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		void submitCreateWork();
+	}
+
+	async function submitCreateWork(): Promise<void> {
+		if (createWorkPending) return;
+		createWorkError = null;
+		createWorkStatus = '';
+		const current = selected;
+		const token = getToken();
+		const libraryId = $libraryEntityIdStore;
+		// Fail LOUDLY (house rule) — a librarian whose JWT expired while the
+		// librarian tools are still on screen must see why the write did not
+		// happen, not get a silent no-op. Same shape as roster's submitPageCreate.
+		if (!current || !token || !libraryId) {
+			console.error('library: create work with no cfg/library', {
+				hasCollective: !!current,
+				hasToken: !!token,
+				libraryId
+			});
+			createWorkError = m.library_create_work_error;
+			return;
+		}
+		const name = createWorkName.trim();
+		// Field-level validation BEFORE the write seam — the data layer's
+		// requireText would throw and land in the transport catch below, telling
+		// the librarian "could not create" for what is a missing required field.
+		// Same shape as roster's submitPageCreate.
+		if (!name) {
+			createWorkError = m.library_create_work_name_required;
+			return;
+		}
+		const composer = createWorkComposer.trim();
+		const cfg = { db: current.db, token };
+
+		let newId: string;
+		createWorkPending = true;
+		try {
+			newId = await createWork(cfg, { name, composer, libraryEntityId: libraryId });
+		} catch (e) {
+			console.error('library: create work failed', name, e);
+			createWorkError = m.library_create_work_error;
+			return;
+		} finally {
+			createWorkPending = false;
+		}
+
+		// LOCAL insertion — same "never refetch" contract as roster's
+		// page-level section create.
+		works = [...works, { id: newId, name, composer }];
+		createWorkStatus = m.library_create_work_created({ name });
+		closeCreateWorkForm();
+	}
+
+	// Auto-focus the name input the instant the inline form appears, same
+	// contract as roster's page-level create form.
+	$effect(() => {
+		if (createWorkOpen && createWorkNameInput) createWorkNameInput.focus();
+	});
 
 	async function loadForSelected(): Promise<void> {
 		const current = selected;
@@ -711,6 +822,98 @@
 							<p data-testid="bulk-checkout-error" class="text-xs text-red-700" role="alert">{bulkCheckoutError}</p>
 						{/if}
 					{/if}
+				</div>
+
+				<!-- #198 — librarian-only inline "create work" affordance, same
+				     open/close/local-insert shape as roster's page-level section
+				     create. -->
+				<div class="mt-3 flex flex-col gap-1.5 border-t border-dashed border-ink-5 pt-3">
+					{#if !createWorkOpen}
+						<button
+							type="button"
+							data-testid="create-work-button"
+							class="flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+							onclick={openCreateWorkForm}
+						>
+							{m.library_create_work_button()}
+						</button>
+					{:else}
+						<!-- `role="group"`, NOT `role="dialog"` — this is a non-modal
+						     inline form: no focus trap, no focus return, no backdrop. A
+						     dialog role would announce a boundary the form does not
+						     honour. The group keeps the accessible name. (Roster's
+						     page-level create form still carries the stale
+						     `role="dialog"` — same fix wanted there, separate commit.) -->
+						<div
+							data-testid="create-work-form"
+							role="group"
+							aria-label={m.library_create_work_button()}
+							class="flex flex-col gap-1.5"
+						>
+							<input
+								type="text"
+								data-testid="create-work-name"
+								bind:this={createWorkNameInput}
+								aria-label={m.library_create_work_name_label()}
+								placeholder={m.library_create_work_name_label()}
+								aria-invalid={createWorkError ? true : undefined}
+								aria-describedby={createWorkError ? 'create-work-error' : undefined}
+								value={createWorkName}
+								oninput={(e) => (createWorkName = (e.currentTarget as HTMLInputElement).value)}
+								onkeydown={onCreateWorkNameKeydown}
+								class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+							/>
+							<input
+								type="text"
+								data-testid="create-work-composer"
+								aria-label={m.library_create_work_composer_label()}
+								placeholder={m.library_create_work_composer_label()}
+								value={createWorkComposer}
+								oninput={(e) => (createWorkComposer = (e.currentTarget as HTMLInputElement).value)}
+								onkeydown={onCreateWorkNameKeydown}
+								class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+							/>
+							{#if createWorkError}
+								<p
+									id="create-work-error"
+									role="alert"
+									data-testid="create-work-error"
+									class="text-xs text-red-700"
+								>
+									{createWorkError()}
+								</p>
+							{/if}
+							<div class="flex gap-2">
+								<button
+									type="button"
+									data-testid="create-work-submit"
+									class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
+									disabled={createWorkPending}
+									onclick={() => void submitCreateWork()}
+									onkeydown={onCreateWorkEscapeKeydown}
+								>
+									{m.library_create_work_submit()}
+								</button>
+								<button
+									type="button"
+									data-testid="create-work-cancel"
+									class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink"
+									onclick={closeCreateWorkForm}
+									onkeydown={onCreateWorkEscapeKeydown}
+								>
+									{m.library_create_work_cancel()}
+								</button>
+							</div>
+						</div>
+					{/if}
+					<div
+						data-testid="create-work-status"
+						role="status"
+						aria-live="polite"
+						class="sr-only"
+					>
+						{createWorkStatus}
+					</div>
 				</div>
 			</section>
 		{:else if $librarianStore === 'error'}

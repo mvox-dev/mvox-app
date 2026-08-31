@@ -437,5 +437,13 @@
 	"series_create_no_dates": "Šis atkārtojums nerada nevienu notikumu. Mainiet dienu vai datumu diapazonu.",
 	"series_create_preview_count_one": "Tiks izveidots 1 notikums.",
 	"series_create_preview_count_other": "Tiks izveidoti {count} notikumi.",
-	"series_create_resume_notice": "Sērija jau pastāv. Atkārtota nosūtīšana izveidos tikai trūkstošos notikumus ({remaining} no {total})."
+	"series_create_resume_notice": "Sērija jau pastāv. Atkārtota nosūtīšana izveidos tikai trūkstošos notikumus ({remaining} no {total}).",
+	"library_create_work_button": "Pievienot darbu",
+	"library_create_work_name_label": "Nosaukums",
+	"library_create_work_composer_label": "Komponists",
+	"library_create_work_submit": "Izveidot darbu",
+	"library_create_work_cancel": "Atcelt",
+	"library_create_work_name_required": "Darba nosaukums ir obligāts.",
+	"library_create_work_created": "{name} izveidots.",
+	"library_create_work_error": "Neizdevās izveidot darbu."
 }

@@ -436,5 +436,13 @@
 	"series_create_no_dates": "See kordumine ei anna ühtegi sündmust. Muuda päeva või kuupäevavahemikku.",
 	"series_create_preview_count_one": "Luuakse 1 sündmus.",
 	"series_create_preview_count_other": "Luuakse {count} sündmust.",
-	"series_create_resume_notice": "Seeria on juba olemas. Uuesti saatmine loob ainult puuduma jäänud sündmused ({remaining} / {total})."
+	"series_create_resume_notice": "Seeria on juba olemas. Uuesti saatmine loob ainult puuduma jäänud sündmused ({remaining} / {total}).",
+	"library_create_work_button": "Lisa teos",
+	"library_create_work_name_label": "Pealkiri",
+	"library_create_work_composer_label": "Helilooja",
+	"library_create_work_submit": "Loo teos",
+	"library_create_work_cancel": "Tühista",
+	"library_create_work_name_required": "Teose pealkiri on kohustuslik.",
+	"library_create_work_created": "{name} loodud.",
+	"library_create_work_error": "Teose loomine ebaõnnestus."
 }

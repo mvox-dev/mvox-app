@@ -510,5 +510,44 @@ export async function createEvent(
 	return postCreate(cfg, 'event', parentIds, props, fetchImpl);
 }
 
+export interface CreateWorkInput {
+	/** Work title (v4E required, non-blank). */
+	name: string;
+	/**
+	 * The v4E parent — the collective's LIBRARY entity (librarian-rights scope,
+	 * `_editor` on library IS the librarian role), NOT the database entity. The
+	 * caller (the /library page) already holds this id via `libraryEntityIdStore`
+	 * (resolveLibrarian) — this module never looks it up or guesses it.
+	 */
+	libraryEntityId: string;
+	/** Composer name — `composer` `{ string }`; blank/omit → not sent (v4E optional). */
+	composer?: string;
+}
+
+/**
+ * Create a `work` entity under the collective's LIBRARY entity (librarian
+ * rights scope — never the database entity). Resolves to the new work's
+ * entity id. Same module contract as createSeason/createEventSeries/createEvent
+ * above, EXCEPT: #198 the parent is `libraryEntityId`, not a database entity,
+ * and rights are trusted to propagate from the library entity down (#132
+ * decision applies here too — NO `_sharing`, NO inherit-rights flag).
+ */
+export async function createWork(
+	cfg: EntuCfg,
+	input: CreateWorkInput,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	const fn = 'createWork';
+	const name = requireText(fn, 'name', input.name);
+	const libraryEntityId = requireText(fn, 'libraryEntityId', input.libraryEntityId);
+
+	const props: WireProp[] = [
+		{ type: 'name', string: name },
+		...optional('composer', input.composer)
+	];
+	return postCreate(cfg, 'work', [libraryEntityId], props, fetchImpl);
+}
+
 // (*MVOX:Tallis* — #132/T1 RED stubs + contract)
 // (*MVOX:Palestrina* — GREEN implementation + review-fix pass, #132/T1)
+// (*MVOX:Palestrina* — #198 GREEN: createWork joins the shared entity CREATE layer)
