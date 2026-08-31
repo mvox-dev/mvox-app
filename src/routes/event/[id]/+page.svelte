@@ -14,11 +14,21 @@
 	// which is the actual authority on whether it's valid.
 	import { tick } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	// #203 — the delete button's write call. Imported from seasonManage
+	// directly (NOT re-exported by this page's other imports from that module)
+	// so the event-delete spec's PARTIAL `vi.mock('$lib/seasons/seasonManage', …)`
+	// (which replaces only `deleteEvent` and keeps the rest real) lands cleanly.
+	import { deleteEvent } from '$lib/seasons/seasonManage';
+	// The error discriminators live in their OWN module, not in seasonManage —
+	// see deleteErrors.ts's header: importing them from seasonManage would make
+	// them `undefined` under the spec's wholesale-replacement mock shape.
+	import { isDeleteForbidden, isEventCascadePartial } from '$lib/seasons/deleteErrors';
 	import {
 		findMyMemberId,
 		listMyRsvps,
@@ -162,6 +172,22 @@
 	// error+retry treatment this page already gives the event read.
 	let tallyError = $state(false);
 
+	// ── #203 — delete state ────────────────────────────────────────────────────
+	// Same two-step confirm shape as the agenda's #197 season-manage delete rows:
+	// `deleteArmed` swaps the idle × for confirm/cancel (writes NOTHING),
+	// `deletePending` disables both buttons for the one write in flight, and
+	// `deleteError` — set only on a REJECTED confirm, never reset by arming/
+	// cancelling on its own attempt — carries which flavour of failure to show.
+	// Unlike the season-manage panel's per-row map, this page has exactly ONE
+	// deletable entity (the event it is standing on), so plain scalars suffice.
+	let deleteArmed = $state(false);
+	let deletePending = $state(false);
+	let deleteError = $state<{
+		reason: 'forbidden' | 'partial' | 'generic';
+		deleted?: number;
+		total?: number;
+	} | null>(null);
+
 	// ── #103 TE.3 — Works section state ───────────────────────────────────────
 	// The event's parent season id and the season's management rights — BOTH
 	// carried by `loadEventDetail` itself (`seasonId` off the event's `_parent`,
@@ -237,12 +263,14 @@
 			detail = null;
 			resetRsvpState();
 			resetComposeState();
+			resetDeleteState();
 			return;
 		}
 		status = 'loading';
 		detail = null;
 		resetRsvpState();
 		resetComposeState();
+		resetDeleteState();
 		try {
 			const cfg = { db: current.db, token: getToken() ?? '' };
 			const loaded = await loadEventDetail(cfg, id);
@@ -283,6 +311,15 @@
 		rsvpFailed = false;
 		tally = null;
 		tallyError = false;
+	}
+
+	/** #203 — a fresh (or superseded) load must not carry the PREVIOUS event's
+	 *  armed/pending/error delete state across the switch — same rule
+	 *  resetRsvpState/resetComposeState follow for their own surfaces. */
+	function resetDeleteState(): void {
+		deleteArmed = false;
+		deletePending = false;
+		deleteError = null;
 	}
 
 	/** #103 TE.3 — mirrors resetRsvpState for the works + attendance surfaces:
@@ -373,6 +410,91 @@
 		if (!current || !loaded || !canSeeTally(loaded, current.personId)) return;
 		tallyError = false;
 		loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation);
+	}
+
+	// ── #203 — delete: the ONE destructive action this page owns ───────────────
+	// Gated on `isEditor` in the template — the same predicate the pencils and
+	// tally run. Two-step confirm, same shape as the agenda's #197 season-manage
+	// delete rows: arming writes nothing, only the confirm button destroys.
+
+	// Review F1 — both halves are async for ONE reason (the roster's
+	// `armRemove`/`disarmRemove` spell it out, and `armSeasonManageDelete` follows
+	// it verbatim): each flip unmounts the very button that holds focus — arming
+	// unmounts the trigger, cancelling unmounts the confirm/cancel pair — so
+	// without explicit placement focus drops to <body> and the next Tab restarts
+	// at the top of the document (WCAG 2.4.3). `tick()` lets the swapped-in button
+	// render before the query for it runs. The FAILURE path needs no such care: a
+	// rejected confirm keeps the pair mounted, so focus never moves.
+
+	/** Tap the trigger — arms the confirm/cancel pair and hands focus to the
+	 *  confirm that replaced it. Writes nothing. A fresh attempt owns the error
+	 *  slot, same rule armSeasonManageDelete follows. */
+	async function armDelete(): Promise<void> {
+		deleteError = null;
+		deleteArmed = true;
+		await tick();
+		document.querySelector<HTMLElement>('[data-testid="event-detail-delete-confirm"]')?.focus();
+	}
+
+	/** Back to idle: the trigger returns (and catches focus), confirm/cancel
+	 *  unmount, nothing was called. */
+	async function cancelDelete(): Promise<void> {
+		deleteArmed = false;
+		deleteError = null;
+		await tick();
+		document.querySelector<HTMLElement>('[data-testid="event-detail-delete"]')?.focus();
+	}
+
+	/** The confirm tap: `deleteEvent` runs the #197 cascade (children first, the
+	 *  event last) and this page navigates home on success — the id it was
+	 *  standing on no longer exists. A REJECTED delete keeps the page up: no
+	 *  navigation, `deleteArmed` stays true (the confirm/cancel pair remains, so
+	 *  a retry or a cancel is still one tap away, same posture as
+	 *  onSeasonManageEventDelete's failure path), and `deleteError` is set from
+	 *  the discriminated failure — a 403 refusal (`isDeleteForbidden`) is NOT
+	 *  "try again": an `_editor` can pass the button's gate yet lack the
+	 *  `_owner` the DELETE endpoint demands (deleteErrors.ts). */
+	async function confirmDelete(): Promise<void> {
+		if (!selected || !detail || deletePending) return;
+		deletePending = true;
+		deleteError = null;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const evId = detail.id;
+		try {
+			await deleteEvent(cfg, evId);
+			goto('/');
+		} catch (e) {
+			console.error('event detail: delete failed', evId, e);
+			if (isDeleteForbidden(e)) {
+				deleteError = { reason: 'forbidden' };
+			} else if (isEventCascadePartial(e)) {
+				const partial = e as { deletedCount?: number; totalCount?: number };
+				deleteError = {
+					reason: 'partial',
+					deleted: partial.deletedCount ?? 0,
+					total: partial.totalCount ?? 0
+				};
+			} else {
+				deleteError = { reason: 'generic' };
+			}
+			deletePending = false;
+		}
+	}
+
+	/** The copy for a failed delete — mirrors seasonManageDeleteErrorText's
+	 *  switch. `forbidden` deliberately does not invite a retry. */
+	function deleteErrorText(failure: NonNullable<typeof deleteError>): string {
+		switch (failure.reason) {
+			case 'forbidden':
+				return m.event_detail_delete_forbidden();
+			case 'partial':
+				return m.event_detail_delete_partial({
+					deleted: failure.deleted ?? 0,
+					total: failure.total ?? 0
+				});
+			default:
+				return m.event_detail_delete_error();
+		}
 	}
 
 	// #102 TE.2 — same write-orchestration module the agenda uses
@@ -2031,6 +2153,74 @@
 							/>
 						{/if}
 					</section>
+				{/if}
+
+				<!-- #203 — delete: the ONE destructive action on this page, gated on the
+				     SAME isEditor predicate as the pencils/tally above (rights props live
+				     in the private bucket — a plain member reads no rights lists at all and
+				     must never see this affordance). Two-step confirm, same posture as the
+				     agenda's #197 season-manage delete rows: the trigger ARMS (writes
+				     nothing), the armed pair REPLACES it so two live delete triggers can
+				     never coexist, and only the confirm button destroys.
+				     Review F2 — it lives at the FOOT of the article, behind a rule, and it
+				     NAMES itself. The agenda's bare × is unambiguous because it sits at the
+				     right edge of a named list row; sat mid-page in the field stack this one
+				     read as a fifth field affordance next to the four edit pencils, with
+				     nothing but the glyph to separate "delete this whole event" from "edit
+				     the description". Last in both visual and tab order, with a visible
+				     label, is the affordance hierarchy an irreversible whole-entity delete
+				     deserves. -->
+				{#if isEditor}
+					<div
+						data-testid="event-detail-danger-zone"
+						class="mt-6 flex flex-col items-start gap-1 border-t border-ink-3/20 pt-3"
+					>
+						{#if deleteArmed}
+							<div class="flex items-center gap-2">
+								<button
+									type="button"
+									data-testid="event-detail-delete-confirm"
+									aria-label={m.event_detail_delete_confirm_aria_label()}
+									disabled={deletePending}
+									aria-busy={deletePending}
+									class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+									onclick={() => void confirmDelete()}
+								>
+									{m.event_detail_delete_confirm_short()}
+								</button>
+								<button
+									type="button"
+									data-testid="event-detail-delete-cancel"
+									aria-label={m.event_detail_delete_cancel_aria_label()}
+									disabled={deletePending}
+									class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+									onclick={() => void cancelDelete()}
+								>
+									{m.event_detail_delete_cancel_short()}
+								</button>
+							</div>
+						{:else}
+							<!-- No aria-label, per the #157 rule the pencils above follow: the
+							     button has visible content now, and aria-label would override
+							     name-from-contents and silence it. The × is kept as the visual
+							     marker but aria-hidden, so the accessible name is exactly the
+							     label a sighted user reads (WCAG 2.5.3 label-in-name). -->
+							<button
+								type="button"
+								data-testid="event-detail-delete"
+								class="flex min-h-11 min-w-11 items-center gap-1 px-1 text-xs text-red-700 underline hover:text-red-800"
+								onclick={() => void armDelete()}
+							>
+								<span aria-hidden="true">&times;</span>
+								{m.event_detail_delete_label()}
+							</button>
+						{/if}
+						{#if deleteError}
+							<p data-testid="event-detail-delete-error" role="alert" class="text-xs text-red-700">
+								{deleteErrorText(deleteError)}
+							</p>
+						{/if}
+					</div>
 				{/if}
 			</div>
 		{/if}
