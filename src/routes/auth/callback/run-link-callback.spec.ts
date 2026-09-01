@@ -19,8 +19,13 @@
 // src/routes/auth/callback/run-link-callback.ts):
 //   runLinkCallbackExchange(key: string, state: OAuthState): Promise<CallbackOutcome>
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OAuthState } from '$lib/auth/state';
+
+// #219 — the same-identity duplicate check re-reads the linked set through the
+// REAL listLinkedIdentities/entuFetch, so the `$env/dynamic/public` chain
+// (entu-config) must be severed the same way the page specs do.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const {
 	exchangeInviteMock,
@@ -276,4 +281,207 @@ describe('runLinkCallbackExchange — inconsistent state fails loudly, never deg
 	});
 });
 
+// ── #219: same-identity re-link — `redeemed` is NOT always a new link ───────────
+//
+// entu-api's same-person branch (`existingEntry.user._id === inviteData.entityId`)
+// still runs replaceInviteWithCredentials on the fresh placeholder and reports a
+// clean `redeemed` with NO conflict flag — on the wire a re-link of an identity
+// the person already has is indistinguishable from a legitimate new link. (The
+// conflict-status test above — "a SAME-person conflict is classified as
+// already_linked" — covers a DIFFERENT, defensive input shape that entu-api never
+// actually produces for this case. Do not conflate the two.)
+//
+// The only detection is client-side: at mint time the profile page snapshots the
+// CURRENT identities' {_id, uid, provider} into the OAuth-state blob
+// (state.linkedSnapshot); after `redeemed` the callback re-reads the linked set
+// via the REAL listLinkedIdentities — scoped to state.invite.db +
+// state.linkPersonId with result.token (the just-redeemed JWT for that db),
+// NEVER the selected-collective store — and the entry whose _id is NOT in the
+// snapshot is the just-bound one. If its uid+provider matches a snapshot pair,
+// the round trip changed nothing: DELETE the duplicate property VALUE
+// (property/{id}, not entity/{id}) with result.token and report the neutral
+// no-op. The sign-in itself NEVER fails on this path — the Path C persistence
+// sequence (getToken → setUser → setLastProvider → conditional setToken →
+// hydrateAuth) runs exactly as before.
+
+describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
+	// The blob type gains `linkedSnapshot` in GREEN; the intersection keeps this
+	// spec compiling at RED and stays valid once the field lands on OAuthState.
+	type LinkStateWithSnapshot = OAuthState & {
+		linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
+	};
+
+	const SNAPSHOT = [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }];
+
+	function snapshotState(overrides: Partial<LinkStateWithSnapshot> = {}): OAuthState {
+		return {
+			...linkState({ provider: 'google' }),
+			linkedSnapshot: SNAPSHOT,
+			...overrides
+		} as OAuthState;
+	}
+
+	const PRE_EXISTING_ENTRY = {
+		_id: 'eu-1',
+		uid: 'uid-g-1',
+		provider: 'google',
+		email: 'me@example.com'
+	};
+
+	/**
+	 * Route the REAL entuFetch's traffic: the identity re-read gets a canned
+	 * entity body; a DELETE gets the configured status. Anything else is a wiring
+	 * bug and throws loudly.
+	 */
+	function stubFetch(opts: {
+		entries: Array<{ _id: string; uid?: string; provider?: string; email?: string }>;
+		deleteStatus?: number;
+	}) {
+		const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+			if (init?.method === 'DELETE') {
+				return new Response('{}', { status: opts.deleteStatus ?? 200 });
+			}
+			if (String(url) === 'https://api.entu-test.invalid/polyphony/entity/person-me?props=entu_user') {
+				return new Response(JSON.stringify({ entity: { entu_user: opts.entries } }), {
+					status: 200
+				});
+			}
+			throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		return fetchMock;
+	}
+
+	function deleteCalls(fetchMock: ReturnType<typeof stubFetch>) {
+		return fetchMock.mock.calls.filter(([, init]) => init?.method === 'DELETE');
+	}
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it('a redeemed re-link whose uid+provider is in the snapshot DELETEs the duplicate and reports the neutral no-op', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		const fetchMock = stubFetch({
+			entries: [
+				PRE_EXISTING_ENTRY,
+				// The just-bound entry: NEW _id, same uid+provider — the duplicate.
+				{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+			]
+		});
+
+		const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+		// The neutral no-op outcome — ok:true, the sign-in never fails on this path.
+		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?link_noop=same_identity' });
+
+		// The re-read is scoped to state.invite.db + state.linkPersonId and carries
+		// result.token — the just-redeemed JWT for THAT db, never the broad one.
+		const readCall = fetchMock.mock.calls.find(
+			([, init]) => (init as RequestInit | undefined)?.method !== 'DELETE'
+		);
+		expect(readCall).toEqual([
+			'https://api.entu-test.invalid/polyphony/entity/person-me?props=entu_user',
+			{ headers: { Authorization: 'Bearer new-narrowed-jwt', Accept: 'application/json' } }
+		]);
+
+		// The duplicate removal targets the property VALUE id on state.invite.db
+		// with result.token — full request shape.
+		expect(deleteCalls(fetchMock)).toEqual([
+			[
+				'https://api.entu-test.invalid/polyphony/property/eu-9',
+				{
+					method: 'DELETE',
+					headers: { Authorization: 'Bearer new-narrowed-jwt', Accept: 'application/json' }
+				}
+			]
+		]);
+	});
+
+	it('the Path C persistence sequence still runs on the no-op path exactly as on success', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		getTokenMock.mockReturnValue('existing-broad-jwt');
+		stubFetch({
+			entries: [
+				PRE_EXISTING_ENTRY,
+				{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+			]
+		});
+
+		const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+		expect(outcome.ok).toBe(true);
+		expect(setUserMock).toHaveBeenCalledTimes(1);
+		expect(setUserMock.mock.calls[0][0]).toEqual({
+			_id: 'person-me',
+			email: 'me@example.com',
+			name: 'Me'
+		});
+		expect(setLastProviderMock).toHaveBeenCalledWith('google');
+		// The broader session token is still kept (#193 review F2 — unchanged).
+		expect(setTokenMock).not.toHaveBeenCalled();
+		expect(hydrateAuthMock).toHaveBeenCalledTimes(1);
+		expect(hydrateCollectivesMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('a rights-refused DELETE (any non-2xx) logs a console.warn with the status and still reports the no-op — never fails the sign-in', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			exchangeInviteMock.mockResolvedValue(REDEEMED);
+			const fetchMock = stubFetch({
+				entries: [
+					PRE_EXISTING_ENTRY,
+					{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+				],
+				deleteStatus: 403
+			});
+
+			const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+			expect(outcome).toEqual({ ok: true, redirectTo: '/profile?link_noop=same_identity' });
+			expect(deleteCalls(fetchMock)).toHaveLength(1);
+			expect(warnSpy).toHaveBeenCalled();
+			const warned = warnSpy.mock.calls.map((c) => c.join(' ')).join(' ');
+			expect(warned).toContain('403');
+		} finally {
+			warnSpy.mockRestore();
+		}
+	});
+
+	it('a redeemed link whose new entry carries a NOVEL uid+provider takes the existing success path — no DELETE', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		const fetchMock = stubFetch({
+			entries: [
+				PRE_EXISTING_ENTRY,
+				// New _id AND new identity — a legitimate second sign-in.
+				{ _id: 'eu-9', uid: 'uid-a-1', provider: 'apple', email: 'me@icloud.example' }
+			]
+		});
+
+		const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
+		expect(deleteCalls(fetchMock)).toHaveLength(0);
+	});
+
+	it('an intent-link blob WITHOUT linkedSnapshot (older blob) takes the success path — no crash, no delete', async () => {
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		// Even a wire-visible duplicate must not be touched: with no snapshot there
+		// is no way to tell which entry is new, and inventing one risks deleting a
+		// real identity.
+		const fetchMock = stubFetch({
+			entries: [
+				PRE_EXISTING_ENTRY,
+				{ _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' }
+			]
+		});
+
+		const outcome = await runLinkCallbackExchange('key1', linkState());
+
+		expect(outcome).toEqual({ ok: true, redirectTo: '/profile?linked=1' });
+		expect(deleteCalls(fetchMock)).toHaveLength(0);
+	});
+});
+
 // (*MVOX:Tallis* — #193 RED: link-callback redemption branch)
+// (*MVOX:Tallis* — #219 RED: same-identity re-link no-op guard)

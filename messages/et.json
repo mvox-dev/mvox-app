@@ -146,6 +146,7 @@
 	"profile_link_error_already_linked": "See sisselogimisviis on juba sinu kontoga seotud.",
 	"profile_link_error_step": "Sidumist ei õnnestunud lõpetada — see peatus sammul: {step}. Võid uuesti proovida.",
 	"profile_link_success": "See sisselogimisviis toimib nüüd kollektiivis {collective}.",
+	"profile_link_noop_same_identity": "See sisselogimisviis oli juba seotud. Midagi ei muutunud.",
 	"roster_title": "Liikmed",
 	"roster_no_collective": "Nimekirja vaatamiseks vali kollektiiv.",
 	"roster_load_error": "Liikmete nimekirja laadimine ebaõnnestus.",

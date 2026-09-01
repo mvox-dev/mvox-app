@@ -10,6 +10,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { encodeState, OAUTH_STATE_KEY, type OAuthState } from '$lib/auth/state';
 
+// #219 — run-link-callback.ts now imports listLinkedIdentities (for the
+// same-identity duplicate check), which transitively pulls in $lib/entu-config
+// -> `$env/dynamic/public`; that virtual module doesn't resolve under happy-dom
+// (same rationale as run-link-callback.spec.ts). Neither test here sets
+// `linkedSnapshot` on the stashed state, so the real listLinkedIdentities is
+// never actually invoked — this mock only keeps the import graph resolvable.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+
 const { exchangeSessionMock, exchangeInviteMock, setUserMock, setTokenMock } = vi.hoisted(() => ({
 	exchangeSessionMock: vi.fn(),
 	exchangeInviteMock: vi.fn(),

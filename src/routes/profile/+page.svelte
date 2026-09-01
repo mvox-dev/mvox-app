@@ -101,10 +101,9 @@
 	let linkError = $state<string | null>(null);
 	// #193 (review F1) — an UNKNOWN identity list is not a known-empty one. Every
 	// user has at least one bound identity, so an empty `linkedIdentities` after a
-	// failed read is a display LIE — and worse, `linkedProviderIds` (below) would
-	// go empty and defeat BOTH duplicate-link guards at once. This flag keeps the
-	// two states apart: the section says what broke, and linking stays blocked
-	// while the no-duplicate rule cannot be enforced.
+	// failed read is a display LIE. This flag keeps the two states apart: the
+	// section says what broke, and linking stays blocked (the picker CTA disables)
+	// while the bound set is unknown.
 	let linkedLoadFailed = $state(false);
 
 	// #193 (review F3) — focus custody across the activator→picker swap. The
@@ -154,18 +153,49 @@
 	);
 	let linkSucceeded = $state(!returnLinkErrorCode && page.url.searchParams.get('linked') === '1');
 
+	// #219 — the after-the-fact same-identity case: run-link-callback.ts detected
+	// (against the pre-mint snapshot) that the round trip changed nothing, and
+	// lands back here as `/profile?link_noop=same_identity`. Gama ruling: this is
+	// NOT an error — the user did nothing wrong — so it gets its own neutral,
+	// role="status" rendering, never the alert node. Same closed-whitelist
+	// treatment as `link_error`: the code is attacker-shaped input, and an
+	// unrecognized value renders nothing and is never echoed.
+	function returnLinkNoopMessage(code: string): string | null {
+		switch (code) {
+			case 'same_identity':
+				return m.profile_link_noop_same_identity();
+			default:
+				return null;
+		}
+	}
+	const returnLinkNoopCode = page.url.searchParams.get('link_noop');
+	let linkNoop = $state<string | null>(
+		!returnLinkErrorCode && returnLinkNoopCode ? returnLinkNoopMessage(returnLinkNoopCode) : null
+	);
+
 	/** The alert node shows whichever leg spoke last: mint-side, then return-side. */
 	const shownLinkError = $derived(linkError ?? returnLinkError);
 
 	/**
-	 * #193 (review F3) — providers already bound to this person. Re-linking one
-	 * takes entu-api's `existingEntry.user._id === inviteData.entityId` branch
-	 * (index.get.js:220-225), which still calls replaceInviteWithCredentials on the
-	 * fresh placeholder — producing a SECOND identity entry with the same
-	 * uid/provider/email. The exchange reports `redeemed`, so nothing downstream can
-	 * catch it: the only place to stop it is before the mint.
+	 * #219 — the linked-identities list de-duplicates by uid+provider (first
+	 * occurrence in entity order wins). A same-identity re-link (see
+	 * run-link-callback.ts) can leave — or, before its server-side cleanup lands,
+	 * HAS left — two bound-identity entries with identical uid+provider and
+	 * different _ids; one identity must render as one row. The template still
+	 * keys by `_id`, so a genuine second account at the same provider (different
+	 * uid) stays two rows.
 	 */
-	const linkedProviderIds = $derived(new Set(linkedIdentities.map((i) => i.provider)));
+	const dedupedLinkedIdentities = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: LinkedIdentity[] = [];
+		for (const identity of linkedIdentities) {
+			const key = `${identity.uid} ${identity.provider}`;
+			if (seen.has(key)) continue;
+			seen.add(key);
+			out.push(identity);
+		}
+		return out;
+	});
 
 	/**
 	 * #193 (review F1) — linking is PER-COLLECTIVE, not account-wide: the mint runs
@@ -495,9 +525,11 @@
 		// pinned to the URL and would otherwise linger through the whole session).
 		returnLinkError = null;
 		linkSucceeded = false;
+		linkNoop = null;
 		// #193 (review F3) — the picker replaces the activator, so the focused node
-		// is about to be removed. Hand focus to the first provider the user can
-		// actually pick (already-linked ones are disabled and unfocusable).
+		// is about to be removed. Hand focus to the first provider button (#219:
+		// every provider stays enabled while linkedLoadFailed is false, so this is
+		// simply the first one in AUTH_PROVIDERS order).
 		await tick();
 		linkPickerEl
 			?.querySelector<HTMLButtonElement>('[data-testid^="profile-link-provider-"]:not([disabled])')
@@ -532,16 +564,12 @@
 	// failure (e.g. the missing-self-_editor rights gap) surfaces loudly here and
 	// launches nothing.
 	async function handleLinkProvider(providerId: string): Promise<void> {
-		// Defense in depth behind the disabled control: minting for an already-bound
-		// provider would create a duplicate identity server-side (see
-		// `linkedProviderIds`), and the round trip reports success while doing it.
-		if (linkedProviderIds.has(providerId)) {
-			linkError = m.profile_link_error_already_linked();
-			return;
-		}
-		// …and the same guard is worthless when the list never loaded: an empty
-		// `linkedProviderIds` would wave every provider through. Refuse to mint
-		// while the bound set is unknown (review F1).
+		// #219 — an already-linked provider is a legitimate pick now (the pre-mint
+		// refusal is gone): entu-api's same-person branch still reports a clean
+		// `redeemed`, so the guard moved to the callback (run-link-callback.ts),
+		// which detects the no-op against the `linkedSnapshot` minted below. The
+		// only remaining reason to refuse a mint here is an UNKNOWN bound set —
+		// the list never loaded, so there is nothing to snapshot (review F1).
 		if (linkedLoadFailed) {
 			linkError = m.profile_link_error_step({ step: IDENTITY_READ_STEP });
 			return;
@@ -552,16 +580,24 @@
 		linkError = null;
 		returnLinkError = null;
 		linkSucceeded = false;
+		linkNoop = null;
 		try {
 			const { inviteToken } = await mintSelfLinkInvite(ctx.cfg, ctx.personId);
 			const url = buildOAuthInitUrl({
 				provider: providerId,
-				origin: window.location.origin,
+				origin: page.url.origin,
 				returnTo: '/profile?linked=1',
 				intent: 'link',
 				nonce: createNonce(),
 				invite: { db: ctx.cfg.db, token: inviteToken },
-				linkPersonId: ctx.personId
+				linkPersonId: ctx.personId,
+				// #219 — the pre-mint snapshot of the CURRENT identities, replayed by
+				// the callback's same-identity duplicate check.
+				linkedSnapshot: linkedIdentities.map(({ _id, uid, provider }) => ({
+					_id,
+					uid,
+					provider
+				}))
 			});
 			window.location.href = url;
 		} catch (e) {
@@ -831,9 +867,9 @@
 				<h2 class="text-sm font-semibold">
 					{m.profile_linked_accounts_title({ collective: linkScopeName })}
 				</h2>
-				{#if linkedIdentities.length > 0}
+				{#if dedupedLinkedIdentities.length > 0}
 					<ul class="flex flex-col gap-1">
-						{#each linkedIdentities as identity (identity._id)}
+						{#each dedupedLinkedIdentities as identity (identity._id)}
 							<li data-testid={`profile-linked-identity-${identity._id}`} class="text-sm text-ink-2">
 								{providerLabel(identity.provider)}{#if identity.email}
 									&nbsp;— {identity.email}
@@ -882,19 +918,15 @@
 					<p class="text-sm text-ink-2">{m.profile_link_choose_provider()}</p>
 					<div class="flex flex-col gap-2" bind:this={linkPickerEl}>
 						{#each AUTH_PROVIDERS as provider (provider.id)}
-							{@const already = linkedProviderIds.has(provider.id)}
 							<button
 								type="button"
 								data-testid={`profile-link-provider-${provider.id}`}
 								class="rounded-md border border-ink px-4 py-2 text-left text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-								disabled={linkBusy || already || linkedLoadFailed}
-								aria-busy={linkBusy && !already}
+								disabled={linkBusy || linkedLoadFailed}
+								aria-busy={linkBusy}
 								onclick={() => handleLinkProvider(provider.id)}
 							>
-								{provider.label}{#if already}<span
-										data-testid={`profile-link-already-linked-${provider.id}`}
-										class="block text-xs text-ink-2">{m.profile_link_error_already_linked()}</span
-									>{/if}
+								{provider.label}
 							</button>
 						{/each}
 						<button
@@ -915,6 +947,10 @@
 				{:else if linkSucceeded}
 					<p data-testid="profile-link-success" role="status" class="text-sm text-ink-2">
 						{m.profile_link_success({ collective: linkScopeName })}
+					</p>
+				{:else if linkNoop}
+					<p data-testid="profile-link-noop" role="status" class="text-sm text-ink-2">
+						{linkNoop}
 					</p>
 				{/if}
 			</section>

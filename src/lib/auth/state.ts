@@ -32,6 +32,16 @@ export interface OAuthState {
 	 * anyone else.
 	 */
 	linkPersonId?: string;
+	/**
+	 * #219 — `intent: 'link'` only: a pre-mint snapshot of the identities already
+	 * bound to `linkPersonId` ({_id, uid, provider} — no email, nothing beyond what
+	 * the duplicate check needs). Replayed by run-link-callback.ts after a
+	 * `redeemed` result: entu-api's same-person branch still reports a clean
+	 * `redeemed` when the user re-links a provider they already have, so the only
+	 * way to detect the no-op is comparing the post-redemption identity list back
+	 * against this snapshot.
+	 */
+	linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
 }
 
 export function createNonce(): string {

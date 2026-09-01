@@ -92,6 +92,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 			`Linking could not be completed — it stopped at step: ${p.step}. You can try again.`,
 		profile_link_success: (p: { collective: string }) =>
 			`That sign-in now works for ${p.collective}.`,
+		// #219 — the after-the-fact case: the round trip completed and nothing
+		// changed. Neutral copy, NOT an error (Gama ruling on #219).
+		profile_link_noop_same_identity: () => 'That sign-in was already linked. Nothing changed.',
 		profile_link_cancel: () => 'Cancel'
 	}
 }));
@@ -436,7 +439,9 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 			'person-p'
 		]);
 
-		// The OAuth state blob is the ONLY carrier — full shape.
+		// The OAuth state blob is the ONLY carrier — full shape. #219: the blob now
+		// also carries the pre-mint snapshot of the linked set ({_id, uid, provider}
+		// per identity), replayed by the callback's same-identity duplicate check.
 		await waitFor(() => expect(localStorage.getItem(OAUTH_STATE_KEY)).not.toBeNull());
 		expect(decodeState(localStorage.getItem(OAUTH_STATE_KEY)!)).toEqual({
 			nonce: expect.any(String),
@@ -444,7 +449,8 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 			intent: 'link',
 			provider: 'apple',
 			invite: { db: 'polyphony', token: 'tok.link.1' },
-			linkPersonId: 'person-p'
+			linkPersonId: 'person-p',
+			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
 		});
 
 		// Bearer hygiene: the token never enters any URL.
@@ -475,16 +481,18 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 	});
 });
 
-// ── review F3: a provider the person ALREADY has must not be re-linkable ────────
+// ── #219: an already-linked provider is a legitimate pick — the block is gone ───
 //
-// entu-api takes the `existingEntry.user._id === inviteData.entityId` branch
-// (routes/auth/index.get.js:220-225) and still calls replaceInviteWithCredentials
-// on the fresh placeholder — the person ends up with TWO entu_user entries
-// carrying the same uid/provider/email, and the exchange reports `redeemed`, so
-// nothing downstream can catch it. The only place to stop it is before the mint.
+// The #193 review-F3 pre-mint block punished the everyday "which Google was it?"
+// case. The guard MOVED to the callback: entu-api's same-person branch still
+// reports a clean `redeemed` with no conflict flag, so the round trip runs and
+// run-link-callback.ts detects the no-op afterwards against the pre-mint
+// snapshot riding the OAuth-state blob (see run-link-callback.spec.ts,
+// "same-identity re-link"). The picker's only remaining disabling condition is
+// linkedLoadFailed (review F1 — unchanged).
 
-describe('/profile — already-linked providers are not offered (#193 review F3)', () => {
-	it('the already-bound provider is disabled and says so; the others stay clickable', async () => {
+describe('/profile — already-linked providers stay offered (#219)', () => {
+	it('the already-bound provider is ENABLED and carries no "already linked" sub-label', async () => {
 		h.listLinkedIdentitiesMock.mockResolvedValue({
 			identities: [GOOGLE_ID],
 			pendingInvites: 0
@@ -492,16 +500,17 @@ describe('/profile — already-linked providers are not offered (#193 review F3)
 		const container = await openPicker();
 
 		const google = q(container, '[data-testid="profile-link-provider-google"]') as HTMLButtonElement;
-		expect(google.disabled).toBe(true);
-		expect(google.textContent).toContain('That sign-in is already linked to your account.');
+		expect(google.disabled).toBe(false);
+		expect(q(container, '[data-testid="profile-link-already-linked-google"]')).toBeNull();
+		expect(google.textContent).not.toContain('That sign-in is already linked to your account.');
 
 		const apple = q(container, '[data-testid="profile-link-provider-apple"]') as HTMLButtonElement;
 		expect(apple.disabled).toBe(false);
 	});
 
-	it('clicking the disabled already-linked provider mints NOTHING (no duplicate identity is created)', async () => {
+	it('clicking the already-linked provider mints and launches the round trip — snapshot riding the blob', async () => {
 		h.listLinkedIdentitiesMock.mockResolvedValue({
-			identities: [GOOGLE_ID, EMAIL_ID],
+			identities: [GOOGLE_ID],
 			pendingInvites: 0
 		});
 		const container = await openPicker();
@@ -509,12 +518,82 @@ describe('/profile — already-linked providers are not offered (#193 review F3)
 		await fireEvent.click(
 			q(container, '[data-testid="profile-link-provider-google"]') as HTMLElement
 		);
-		await fireEvent.click(
-			q(container, '[data-testid="profile-link-provider-e-mail"]') as HTMLElement
-		);
 
-		expect(h.mintSelfLinkInviteMock).not.toHaveBeenCalled();
-		expect(localStorage.getItem(OAUTH_STATE_KEY)).toBeNull();
+		// The real mint producer is driven with the route's own cfg + personId —
+		// same shape as for a not-yet-linked provider. No refusal, no linkError.
+		await waitFor(() => expect(h.mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
+		expect(h.mintSelfLinkInviteMock.mock.calls[0].slice(0, 2)).toEqual([
+			{ db: 'polyphony', token: 'jwt-member' },
+			'person-p'
+		]);
+		expect(q(container, '[data-testid="profile-link-error"]')).toBeNull();
+
+		// Full blob shape, toEqual — the pre-mint snapshot ({_id, uid, provider} of
+		// the CURRENT identities) is what the callback's duplicate check replays.
+		await waitFor(() => expect(localStorage.getItem(OAUTH_STATE_KEY)).not.toBeNull());
+		expect(decodeState(localStorage.getItem(OAUTH_STATE_KEY)!)).toEqual({
+			nonce: expect.any(String),
+			return_to: '/profile?linked=1',
+			intent: 'link',
+			provider: 'google',
+			invite: { db: 'polyphony', token: 'tok.link.1' },
+			linkPersonId: 'person-p',
+			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
+		});
+
+		// The launch is real: the page navigated to the Entu OAuth init URL (link
+		// intent — no login_hint), with the invite token in NO URL.
+		expect(window.location.href).toBe(
+			'https://api.entu-test.invalid/auth/google?next=http%3A%2F%2Flocalhost%2Fauth%2Fcallback%3Fkey%3D'
+		);
+		expect(window.location.href).not.toContain('tok.link.1');
+	});
+});
+
+// ── #219: the linked-identities list de-duplicates by uid+provider ──────────────
+//
+// The same-identity re-link the callback now cleans up can leave (or, before the
+// cleanup lands server-side, HAS left) two entu_user entries with identical
+// uid+provider and different _ids. One identity must render as ONE row — first
+// occurrence in entity order wins — while two genuinely different accounts at
+// the same provider stay two rows.
+
+describe('/profile — linked-identities list de-duplicates by uid+provider (#219)', () => {
+	const GOOGLE_DUP = { _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
+	const GOOGLE_OTHER = {
+		_id: 'eu-10',
+		uid: 'uid-g-2',
+		provider: 'google',
+		email: 'other@example.com'
+	};
+
+	it('two entries with the SAME uid+provider render exactly ONE row — the first occurrence wins', async () => {
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [GOOGLE_ID, GOOGLE_DUP],
+			pendingInvites: 0
+		});
+		const container = await renderReady();
+
+		await waitFor(() =>
+			expect(qa(container, '[data-testid^="profile-linked-identity"]').length).toBeGreaterThan(0)
+		);
+		const rows = qa(container, '[data-testid^="profile-linked-identity"]');
+		expect(rows).toHaveLength(1);
+		expect((rows[0] as HTMLElement).getAttribute('data-testid')).toBe(
+			'profile-linked-identity-eu-1'
+		);
+	});
+
+	it('two entries with the same provider but DIFFERENT uids stay TWO rows — the key is uid+provider, not provider alone', async () => {
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [GOOGLE_ID, GOOGLE_OTHER],
+			pendingInvites: 0
+		});
+		const container = await renderReady();
+
+		await waitFor(() =>
+			expect(qa(container, '[data-testid^="profile-linked-identity"]')).toHaveLength(2)
+		);
 	});
 });
 
@@ -733,12 +812,11 @@ describe('/profile — mint failures name their step (#193 review F2)', () => {
 // back out.
 
 describe('/profile — the picker keeps keyboard focus (#193 review F3)', () => {
-	it('opening the picker moves focus to the first provider the user can actually pick', async () => {
-		// The fixture must bind whichever provider LEADS AUTH_PROVIDERS, or the
-		// assertion is vacuous: focusing the first button and focusing the first
-		// ENABLED button are the same act when the first button is enabled. Since
-		// #206 that leader is smart-id, so smart-id is what we bind here — the
-		// focus then has to skip past it to mobile-id.
+	it('opening the picker focuses the FIRST provider button — an already-linked leader is a real pick now (#219)', async () => {
+		// #219 fixture: bind whichever provider LEADS AUTH_PROVIDERS (smart-id
+		// since #206). Under the old regime it was disabled and focus had to skip
+		// to mobile-id; with the block gone every provider is focusable, so focus
+		// lands on the true first button — the already-linked smart-id itself.
 		h.listLinkedIdentitiesMock.mockResolvedValue({
 			identities: [SMART_ID],
 			pendingInvites: 0
@@ -747,7 +825,7 @@ describe('/profile — the picker keeps keyboard focus (#193 review F3)', () => 
 
 		expect(document.activeElement).not.toBe(document.body);
 		expect((document.activeElement as HTMLElement).getAttribute('data-testid')).toBe(
-			'profile-link-provider-mobile-id'
+			'profile-link-provider-smart-id'
 		);
 	});
 
@@ -767,6 +845,57 @@ describe('/profile — the picker keeps keyboard focus (#193 review F3)', () => 
 	});
 });
 
+// ── #219: the same-identity no-op speaks in the NEUTRAL voice ───────────────────
+//
+// Gama ruling on #219: the after-the-fact case ("you completed a round trip and
+// nothing changed") is NOT an error — the user did nothing wrong. It gets its
+// own key (profile_link_noop_same_identity) rendered through the same
+// non-error styling path as profile_link_success, never through the
+// role="alert" error node.
+
+describe('/profile — same-identity no-op notice is neutral (#219)', () => {
+	it('?link_noop=same_identity renders the noop message as a status, NOT inside the error node', async () => {
+		pageStub.url = new URL('http://localhost/profile?link_noop=same_identity');
+		const container = await renderReady();
+
+		await waitFor(() => expect(q(container, '[data-testid="profile-link-noop"]')).not.toBeNull());
+		const noop = q(container, '[data-testid="profile-link-noop"]') as HTMLElement;
+		// Same non-error path as profile_link_success: role="status", never "alert".
+		expect(noop.getAttribute('role')).toBe('status');
+		expect(noop.textContent).toContain('That sign-in was already linked. Nothing changed.');
+		// The error container (profile_link_error_* path) stays empty — the noop
+		// must never ride the alert styling.
+		expect(q(container, '[data-testid="profile-link-error"]')).toBeNull();
+	});
+
+	it('a clean /profile URL shows no noop banner', async () => {
+		const container = await renderReady();
+
+		await waitFor(() =>
+			expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull()
+		);
+		expect(q(container, '[data-testid="profile-link-noop"]')).toBeNull();
+	});
+
+	// Closed whitelist, same rationale as ?link_error=: the parameter is
+	// attacker-shaped input — an unrecognized value renders nothing and is
+	// never echoed.
+	it.each(['<img src=x onerror=alert(1)>', 'totally-made-up'])(
+		'an unrecognized ?link_noop=%s renders nothing and never echoes',
+		async (code) => {
+			pageStub.url = new URL(`http://localhost/profile?link_noop=${encodeURIComponent(code)}`);
+			const container = await renderReady();
+
+			await waitFor(() =>
+				expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull()
+			);
+			expect(q(container, '[data-testid="profile-link-noop"]')).toBeNull();
+			const section = q(container, '[data-testid="profile-linked-accounts"]') as HTMLElement;
+			expect(section.innerHTML).not.toContain(code);
+		}
+	);
+});
+
 // ── i18n — the #193 keys exist, non-empty, in ALL FOUR locales ──────────────────
 
 describe('locale parity — every #193 key present and non-empty in en/et/lv/uk', () => {
@@ -782,6 +911,9 @@ describe('locale parity — every #193 key present and non-empty in en/et/lv/uk'
 		'profile_link_error_already_linked',
 		'profile_link_error_step',
 		'profile_link_success',
+		// #219 — the after-the-fact same-identity case, distinct from the
+		// pre-existing error key (Gama ruling: neutral copy in all four locales).
+		'profile_link_noop_same_identity',
 		'profile_link_cancel'
 	] as const;
 
@@ -814,3 +946,4 @@ describe('locale parity — every #193 key present and non-empty in en/et/lv/uk'
 });
 
 // (*MVOX:Tallis* — #193 RED: profile linked-accounts section + link flow wiring + i18n)
+// (*MVOX:Tallis* — #219 RED: link picker unblock, uid+provider list de-dup, neutral noop notice)

@@ -22,6 +22,12 @@ export interface OAuthInitArgs {
 	 * tripwire.
 	 */
 	linkPersonId?: string;
+	/**
+	 * #219 — `intent: 'link'` only: the pre-mint snapshot of the identities already
+	 * bound to `linkPersonId`, replayed by the callback's same-identity duplicate
+	 * check (see state.ts `linkedSnapshot`).
+	 */
+	linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
 }
 
 /**
@@ -44,6 +50,9 @@ export function buildOAuthInitUrl(args: OAuthInitArgs): string {
 		// across the OAuth round-trip. It never enters the returned Entu init URL.
 		...(args.invite ? { invite: args.invite } : {}),
 		...(args.linkPersonId ? { linkPersonId: args.linkPersonId } : {}),
+		...(args.intent === 'link' && args.linkedSnapshot
+			? { linkedSnapshot: args.linkedSnapshot }
+			: {})
 	});
 	localStorage.setItem(OAUTH_STATE_KEY, state);
 

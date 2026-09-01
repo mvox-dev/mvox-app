@@ -146,6 +146,7 @@
 	"profile_link_error_already_linked": "That sign-in is already linked to your account.",
 	"profile_link_error_step": "Linking could not be completed — it stopped at step: {step}. You can try again.",
 	"profile_link_success": "That sign-in now works for {collective}.",
+	"profile_link_noop_same_identity": "That sign-in was already linked. Nothing changed.",
 	"roster_title": "Roster",
 	"roster_no_collective": "Select a collective to view the roster.",
 	"roster_load_error": "Something went wrong loading the roster.",

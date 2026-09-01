@@ -19,7 +19,14 @@ import { getToken, setToken, setUser, setLastProvider } from '$lib/auth/storage'
 import { safeRedirectTarget } from '$lib/auth/redirect';
 import { hydrateAuth } from '$lib/auth/session';
 import { hydrateCollectives } from '$lib/collectives/store';
+import { listLinkedIdentities } from '$lib/profile/linkedIdentities';
+import { entuFetch } from '$lib/entu/request';
 import type { CallbackOutcome } from './run-callback-exchange';
+
+const SAME_IDENTITY_NOOP: CallbackOutcome = {
+	ok: true,
+	redirectTo: '/profile?link_noop=same_identity'
+};
 
 const INVALID_STATE: CallbackOutcome = {
 	ok: false,
@@ -109,6 +116,50 @@ export async function runLinkCallbackExchange(
 	}
 
 	await hydrateCollectives();
+
+	// #219 — same-identity re-link detection. `redeemed` alone cannot tell a
+	// legitimate new link from entu-api's same-person branch quietly re-binding a
+	// provider the person already has (index.get.js:220-225) — the only signal is
+	// comparing the post-redemption identity set back against the pre-mint
+	// snapshot the profile page rode in on the blob. Best-effort: any failure
+	// here (a bad re-read, an unreachable rights-refused DELETE) falls through to
+	// the ordinary success path below — the sign-in itself must never fail on
+	// this branch, and a missing snapshot (older blob) skips the check entirely
+	// rather than guessing which entry is new.
+	if (state.linkedSnapshot) {
+		try {
+			const relinked = await listLinkedIdentities(
+				{ db: invite.db, token: result.token },
+				linkPersonId,
+				fetch
+			);
+			const snapshotIds = new Set(state.linkedSnapshot.map((s) => s._id));
+			const newEntry = relinked.identities.find((i) => !snapshotIds.has(i._id));
+			const isDuplicate =
+				newEntry !== undefined &&
+				state.linkedSnapshot.some(
+					(s) => s.uid === newEntry.uid && s.provider === newEntry.provider
+				);
+			if (newEntry && isDuplicate) {
+				const deleteRes = await entuFetch(
+					invite.db,
+					`property/${newEntry._id}`,
+					result.token,
+					{ method: 'DELETE' },
+					fetch
+				);
+				if (!deleteRes.ok) {
+					console.warn(
+						'run-link-callback: same-identity duplicate DELETE failed, status',
+						deleteRes.status
+					);
+				}
+				return SAME_IDENTITY_NOOP;
+			}
+		} catch (e) {
+			console.warn('run-link-callback: same-identity re-read failed', e);
+		}
+	}
 
 	return { ok: true, redirectTo: safeRedirectTarget(state.return_to) };
 }
