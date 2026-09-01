@@ -28,7 +28,12 @@
 //   test TZ, which makes the DST cases below load-bearing.
 import { describe, expect, it } from 'vitest';
 
-import { generateEventDates, type RecurrenceParams } from './recurrence';
+import {
+	generateEventDates,
+	generateIntervalDates,
+	type IntervalRecurrenceParams,
+	type RecurrenceParams
+} from './recurrence';
 
 /** The 'YYYY-MM-DDTHH:MM' string every generated occurrence must equal —
  *  built the same way the fix requires (string formatting, no `Date`
@@ -233,5 +238,97 @@ describe('generateEventDates — the attached time', () => {
 	});
 });
 
+// ---------------------------------------------------------------------------
+// #196 review F1 — generateIntervalDates: the arbitrary-interval cadence behind
+// the standalone→series conversion. Its anchor is an EXISTING event's date (not
+// a day-of-week search) and its step is whatever the operator typed into
+// "Repeat every (days)", neither of which `generateEventDates` can express.
+// ---------------------------------------------------------------------------
+
+function intervalParams(over: Partial<IntervalRecurrenceParams> = {}): IntervalRecurrenceParams {
+	return {
+		startDate: '2027-04-18',
+		intervalDays: 7,
+		timeOfDay: '21:00',
+		until: '2027-05-16',
+		...over
+	};
+}
+
+describe('generateIntervalDates', () => {
+	it('EMITS the anchor itself and then steps by intervalDays, both bounds inclusive', () => {
+		// The anchor rides along because it is what the cadence is defined by; the
+		// conversion caller drops [0] (that occurrence is the converted event).
+		expect(generateIntervalDates(intervalParams())).toEqual([
+			atLocal('2027-04-18', 21, 0),
+			atLocal('2027-04-25', 21, 0),
+			atLocal('2027-05-02', 21, 0),
+			atLocal('2027-05-09', 21, 0),
+			atLocal('2027-05-16', 21, 0)
+		]);
+	});
+
+	it('honours an interval no named pattern can express (every 10 days)', () => {
+		expect(generateIntervalDates(intervalParams({ intervalDays: 10, until: '2027-05-08' }))).toEqual([
+			atLocal('2027-04-18', 21, 0),
+			atLocal('2027-04-28', 21, 0),
+			atLocal('2027-05-08', 21, 0)
+		]);
+	});
+
+	it('stops BEFORE overshooting `until` — an occurrence one day past the end is not emitted', () => {
+		expect(generateIntervalDates(intervalParams({ until: '2027-05-15' }))).toEqual([
+			atLocal('2027-04-18', 21, 0),
+			atLocal('2027-04-25', 21, 0),
+			atLocal('2027-05-02', 21, 0),
+			atLocal('2027-05-09', 21, 0)
+		]);
+	});
+
+	it('startDate === until yields exactly the anchor (the conversion’s "no further occurrences" case)', () => {
+		expect(generateIntervalDates(intervalParams({ until: '2027-04-18' }))).toEqual([
+			atLocal('2027-04-18', 21, 0)
+		]);
+	});
+
+	it('until BEFORE startDate → []', () => {
+		expect(generateIntervalDates(intervalParams({ until: '2027-04-17' }))).toEqual([]);
+	});
+
+	it.each([[0], [-7], [Number.NaN], [Number.POSITIVE_INFINITY]])(
+		'an interval of %s → [] — never an infinite walk, never a partial list',
+		(intervalDays) => {
+			expect(generateIntervalDates(intervalParams({ intervalDays }))).toEqual([]);
+		}
+	);
+
+	it('the wall-clock hour SURVIVES the DST fall-back (Europe/Tallinn, 2026-10-25) — calendar stepping, not milliseconds', () => {
+		expect(
+			generateIntervalDates({
+				startDate: '2026-10-19',
+				intervalDays: 7,
+				timeOfDay: '19:00',
+				until: '2026-11-02'
+			})
+		).toEqual([
+			atLocal('2026-10-19', 19, 0),
+			atLocal('2026-10-26', 19, 0),
+			atLocal('2026-11-02', 19, 0)
+		]);
+	});
+
+	it('the wall-clock hour SURVIVES the spring-forward (2026-03-29, 03:00 does not exist locally) — no `Date` is ever constructed AT the hour', () => {
+		expect(
+			generateIntervalDates({
+				startDate: '2026-03-28',
+				intervalDays: 1,
+				timeOfDay: '03:00',
+				until: '2026-03-30'
+			})
+		).toEqual(['2026-03-28T03:00', '2026-03-29T03:00', '2026-03-30T03:00']);
+	});
+});
+
 // (*MVOX:Tallis* — #132/T5 RED: the pure recurrence calculator's contract)
 // (*MVOX:Palestrina* — #141: string[] contract + DST spring-forward cases)
+// (*MVOX:Byrd* — #196 review F1: generateIntervalDates contract)

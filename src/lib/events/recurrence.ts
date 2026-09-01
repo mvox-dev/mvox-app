@@ -140,6 +140,53 @@ export function generateEventDates(params: RecurrenceParams): string[] {
 	return results;
 }
 
+/** #196 — an ARBITRARY-interval cadence, anchored on a date that already
+ *  exists. `generateEventDates` above only speaks the three named patterns
+ *  (daily/weekly/biweekly) and finds its own anchor by day-of-week; the
+ *  standalone→series conversion has neither — its `interval_days` is whatever
+ *  the operator typed, and its anchor is the CONVERTED EVENT'S own date. */
+export interface IntervalRecurrenceParams {
+	/** ISO calendar date (YYYY-MM-DD) of the FIRST occurrence — emitted itself,
+	 *  because it is what the whole cadence is anchored on. A caller converting
+	 *  an existing event drops `[0]`: that occurrence already exists. */
+	startDate: string;
+	/** Calendar days between occurrences (v4E `interval_days`), >= 1. */
+	intervalDays: number;
+	/** 'HH:MM' — attached to every emitted string verbatim (see `formatOccurrence`). */
+	timeOfDay: string;
+	/** ISO calendar date, INCLUSIVE upper bound. */
+	until: string;
+}
+
+/**
+ * The occurrence datetimes for a fixed-interval cadence, ascending, local wall
+ * clock — same 'YYYY-MM-DDTHH:MM' strings and same CALENDAR stepping as
+ * `generateEventDates` (a fixed-ms step drifts the wall-clock hour across a DST
+ * boundary; the string emission sidesteps the spring-forward normalization —
+ * see the module doc).
+ *
+ * `[]` — never a partial or an infinite walk — for an interval below 1, a
+ * non-finite interval, an unparseable bound, or `startDate` > `until`.
+ */
+export function generateIntervalDates(params: IntervalRecurrenceParams): string[] {
+	const { startDate, intervalDays, timeOfDay, until } = params;
+	// Truncated so a fractional interval cannot stall the cursor; < 1 refuses
+	// outright rather than looping forever on a zero step.
+	const step = Number.isFinite(intervalDays) ? Math.trunc(intervalDays) : 0;
+	if (step < 1) return [];
+	let cursor = parseIsoDate(startDate);
+	const untilDate = parseIsoDate(until);
+	if (Number.isNaN(cursor.getTime()) || Number.isNaN(untilDate.getTime())) return [];
+
+	const results: string[] = [];
+	while (cursor.getTime() <= untilDate.getTime()) {
+		results.push(formatOccurrence(cursor, timeOfDay));
+		cursor = addCalendarDays(cursor, step);
+	}
+	return results;
+}
+
 // (*MVOX:Tallis* — #132/T5 RED stub + contract)
 // (*MVOX:Palestrina* — #132/T5 GREEN: generateEventDates)
 // (*MVOX:Palestrina* — #141: string[] emission fixes DST spring-forward)
+// (*MVOX:Byrd* — #196 review F1: generateIntervalDates)
