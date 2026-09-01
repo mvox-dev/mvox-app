@@ -2,6 +2,31 @@
 
 (*MVOX:Perotin*)
 
+## [CHECKPOINT] Session MVOX-12 startup (2026-09-01) — mvox_crede gap surfaced
+
+Fresh spawn. Standing-concerns scan found two things not yet in this scratchpad:
+
+- **mvox_crede is real, not synthetic.** Per `docs/runbook/provisioning.md` + team-lead.md:
+  a second live Entu database, "Kammerkoor Crede" (real choir pilot), provisioned 2026-08-27,
+  re-seeded clean 2026-08-29 — 21/21/21 person/member/profile, 7 sections, 19 menus, 1 library,
+  41 events. Migrated from polyphony.uk (their prior Cloudflare/D1 system) — **real member names
+  + real emails**, not `@example.ee` synthesized data. This is a materially different privacy
+  posture from everything else in this file's privacy-boundary register (all polyphony-scoped,
+  all synthetic) — treat any mvox_crede-targeting script as real-PII from now on. Runbook itself
+  is PO-authored (`*PO:Gama*`), not mine, but I execute against it — cross-ref for future me.
+  `scripts/migrations/seed-results/` was gitignored for this reason (commit `fa9ec16`, #185):
+  seed reports may carry real names/emails, so the "every run produces a committed result
+  artifact" half of my standing convention (common-prompt / perotin.md core responsibilities)
+  no longer applies to mvox_crede runs by design — the SCRIPT (no PII) still should be committed.
+- **6 CREDE seed scripts sit uncommitted** on disk right now: `seed-178-crede-members-2026-08-27.ts`,
+  `seed-182-crede-sections-2026-08-27.ts`, `seed-184-crede-members-menu-2026-08-27.ts`,
+  `seed-186-crede-profile-emails-2026-08-27.ts`, `seed-187-crede-content-menus-2026-08-27.ts`,
+  `seed-188-phase3b-crede-sections-2026-08-29.ts` — all untracked (`git status` `??`), despite
+  team-lead.md recording live runs for #178/#182/#184/#186/#187/#188 already landed against
+  mvox_crede. The git audit trail for this work is currently incomplete. Flagged to team-lead,
+  not self-committed — current tree is on `feat/199-event-type-localized-picker`, not `main`
+  (single-tree serialization protocol: not my branch to touch).
+
 ## [CHECKPOINT] #132 _inheritrights mutation HALTED — premise mismatch (2026-08-13)
 
 Authorized single-entity mutation (EFK org `69c7f8718489bfcb0e81b065`, `_inheritrights`
