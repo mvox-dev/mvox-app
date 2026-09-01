@@ -2,6 +2,27 @@
 
 (*MVOX:Perotin*)
 
+## [PATTERN] Ledger fields: record observed, not intended (2026-09-02, Bentham review of #20)
+
+Routed to find the #20 widen-member-refs live ledger for Bentham's open carry item — it existed
+(`seed-results/widen-member-refs-2026-08-07-live-2026-08-07T15-24-56-647Z.json`, commit `241ea1a`)
+but had never reached him. Sent it; **verdict GREEN, carry closed.** Bentham verified against the
+raw file rather than my summary (his standing calibration) and it held up — worth noting the
+critique he sent back, since it's a real gap in my ledger-writing habit, not just this run:
+
+`propDefEntries[].name` in that ledger is the script's own label copied from `PROPDEF_TARGETS`,
+**not** a value read back from the entity — it only attests a POST landed at that id, not that the
+id's name matches. The actual identity proof lived in a separate function
+(`verifyPropDefsAbsent`, a live pre-write check that refuses on name mismatch) that wasn't
+reflected in the ledger schema itself. Bentham cross-checked parentage against an independent
+same-week probe (`probe-48-structural-inventory-2026-08-08`) rather than re-running a live query,
+which is the right no-live-ops way to settle it.
+
+**Going forward**: when a ledger field could be read either as "what we intended to hit" (a config
+constant echoed into output) or "what we observed" (a live read-back), name/shape the field so a
+reader can tell which without reading the source — e.g. `propDefTargets` (intended) vs
+`propDefTargetsVerified` (post pre-write check) as separate keys, not one ambiguous list.
+
 ## [CHECKPOINT] Session MVOX-12 startup (2026-09-01) — mvox_crede gap surfaced
 
 Fresh spawn. Standing-concerns scan found two things not yet in this scratchpad:

@@ -149,10 +149,11 @@ commits that follow, each of which gets its own `add -A`.
 
 ## 2026-09-01 — PO standing rules: registered review triggers
 
-Rules 1–3 are in `architecture-decisions.md:761-773` (native form controls + polyphony.uk as spec
-source). **Rule 4 landed after `bd3cd48` and is NOT yet in that file** — team-lead batched the append
-for the between-chains window. Registered here so it survives compaction; as steward I owe the
-`architecture-decisions.md` append once the tree is back on main and #199 has merged.
+**[CLOSED 2026-09-02]** All of this now lives in `architecture-decisions.md:779-854` as one
+consolidated section, landed at `44389f9`. Read that section, not this one, for the binding text —
+it is ahead of the notes below (rule 7 ISO-date, rule 5's `step="300"` addendum, and the rule-6
+`#210-is-CLOSED-but-unshipped` correction exist only there). The trigger summaries below are kept as
+my own shorthand.
 
 - **[TRIGGER-NATIVE-CONTROLS]** Custom dropdown/input component where a native control serves =
   **YELLOW minimum**. All dropdowns native `<select>`; all focused inputs native form controls; no
@@ -194,12 +195,11 @@ for the between-chains window. Registered here so it survives compaction; as ste
   (`type="datetime-local"`, event-create), `src/routes/event/[id]/+page.svelte:1753`
   (`type="datetime-local"`, event-detail `start_datetime`). Retrofit lands as its own board issue.
 
-**[QUEUED — between-chains authoring pass, my file]** Two edits to `architecture-decisions.md`, both
-approved, neither done: (1) reword the Path C trigger off the dead `setAccounts` symbol to its intent;
-(2) add rule 5 + its sanctioned-exception note to the standing-rules section. Deliberately NOT done
-mid-run: the pipeline's REVIEW agents read that file for their checklists, so changing an enforcement
-rule mid-flight would let two agents in one run apply different contracts — the same hazard the
-"freeze the spec before dispatching" decision already settles.
+**[DONE 2026-09-02 @ `44389f9`]** Both queued `architecture-decisions.md` edits are landed and
+verified this session: the Path C trigger is reworded off the dead `setAccounts` symbol to its intent
+(`:506-511`), and rules 5–7 sit in the standing-rules section (`:803-819`). Nothing owed. The
+between-chains timing rule that governed them still stands as doctrine: never change an enforcement
+rule mid-run, or two agents in one pipeline apply different contracts.
 
 (*MVOX:Bentham*)
 
@@ -226,15 +226,47 @@ side-effect-free per TYPE. Combine with no-owner-first ordering (prove the harde
 
 (*MVOX:Bentham*)
 
-## 2026-08-07 — #20 widen-member-refs — CODE reviewed, LIVE RUN NOT reviewed
+## 2026-09-02 — #20 widen-member-refs live run — LEDGER REVIEWED, carry CLOSED (one residual)
 
-[WIP — carry] The live run was authorized 2026-08-07 but no live ledger has crossed my desk. Two
-things to verify when it lands: (1) canary ledger line (touchSaveCanary), (2) last-mile visibility
-check used a non-omniscient identity. See git history of this file for the full review narrative.
+Ledger reached me 2026-09-02 via Pérotin; landed `241ea1a` (ancestor of `main`). I reviewed the JSON
+itself, not the summary. **Execution GREEN.** Ledger:
+`scripts/migrations/seed-results/widen-member-refs-2026-08-07-live-2026-08-07T15-24-56-647Z.json`.
 
-[DEFERRED — non-blocking carry for the #20 script] (a) `verifyMemberTypeSharing` halt message only
-explains the absent case, not the `'private'` case. (b) `MEMBER_TYPE_ID` not verified as parent of
-the two prop-def ids. Cheap close: assert `_parent === MEMBER_TYPE_ID` in `verifyPropDefsAbsent`.
+- **(1) canary ledger line — CLOSED, verified from data not prose.** `canaryMemberId` is
+  `69c7f8728489bfcb0e81b085` and IS `touchEntries[0]`, so canary-first ordering is provable from the
+  ledger rather than merely asserted in the commit message. 245/245 `touched`, 0 failures,
+  `exitCode 0`, both prop-defs `set`. All 245 carry a `newSharingPropId` and all 245 are **distinct** —
+  rotated property ids are the proof the re-aggregation genuinely ran, not a 200 assumed.
+- **(a) `verifyMemberTypeSharing` halt message — CLOSED.** Gates on `!== 'domain' && !== 'public'` and
+  interpolates the OBSERVED value, so `'private'` is reported concretely. It also carries an identity
+  guard I never asked for: `name !== 'member'` → refuse.
+- **(b) prop-def parentage — CLOSED, and my original note was wrong that nothing checked identity.**
+  `verifyPropDefsAbsent` does a live pre-write identity check (`name !== t.name` → refuse) plus an
+  already-has-`_sharing` refuse. Parentage proper closed independently:
+  `probe-48-structural-inventory-2026-08-08` (a SEPARATE run, a day later) records member
+  `typeId 69c7ea4a8489bfcb0e819edd` — matching `MEMBER_TYPE_ID` — carrying `person = 69c7ea4b…9f05`
+  and `section = 69c7ea4c…9f27`, exactly the two targets. Across all 20 registered types, `person` and
+  `section` are prop-def names on **member alone**, so there was never a wrong id to hit.
+
+**[RESIDUAL — still open; do NOT mark #20 fully verified]** The last-mile visibility check has not
+been done with a non-omniscient identity, and the ledger's own `verificationCaveat` says so plainly:
+the run executed under db-root's `ENTU_API_KEY`, which always reads the private bucket
+(`cleanupEntity` matches on `_owner` first). `touched`/`set` means the write landed and the property
+id rotated — **not** that a non-owner domain reader now sees `person`/`section`. That needs a real
+member browser session. Same open class as #29. My standing rule holds: a live probe of a
+rights-visibility claim must use a non-omniscient identity, never db-root.
+
+**[METHOD — retrospective parentage oracle]** To settle parentage of hardcoded ids in a PAST migration
+without a fresh live probe, an independent structural-inventory ledger from a DIFFERENT run is a valid
+oracle — a separate read pass, so it is not the migration vouching for itself. Cross-check the id AND
+confirm the prop-def name is unique across all types; otherwise "the inventory lists it under X" does
+not exclude a same-named prop-def elsewhere.
+
+**[GOTCHA-LEDGER-LABEL-IS-NOT-EVIDENCE]** `propDefEntries[].name` here is the script's OWN label from
+`PROPDEF_TARGETS`, copied into the ledger — NOT a value read back from the entity. A ledger line
+reading `{"propDefId":"…","name":"person","status":"set"}` therefore attests only that a POST landed
+at that id. The live identity proof lived in an entirely different function. **Ask which function
+produced a ledger field before crediting it as verification.**
 
 (*MVOX:Bentham*)
 
@@ -343,9 +375,14 @@ All of these are "the test/mock and the code agreed on a lie." Treat as one fami
   of any new module so it RESOLVES and types check — tests then fail on ASSERTIONS, not on module
   resolution. A RED commit that imports a not-yet-created file fails `pnpm check` and breaks
   per-commit-GREEN (YELLOW, not RED — the tip is what merges, but bisect value is lost).
-- **Per-commit-GREEN applies to the RED commit too** — `pnpm lint:fix` is not a GREEN-agent-only duty;
-  a spec committed lint-dirty at RED sails to merge-review because GREEN's lint:fix only touches files
-  GREEN edited.
+- **Per-commit-GREEN applies to the RED commit too.** ⚠ **The lint half of this rule is RETIRED
+  (2026-09-01) — do not enforce it.** It used to read "`pnpm lint:fix` is not a GREEN-agent-only duty."
+  There is no `lint`, `lint:fix` or `test:unit` script in `package.json`, and no prettier/biome/eslint
+  config at root — verified again 2026-09-02. **REDing a commit for lint cleanliness would cite a gate
+  nobody can run.** The surviving substance is per-commit `pnpm check` + `pnpm test`. See the two
+  correction boxes in `architecture-decisions.md` (`:203`, `:238`). Formatting-only cleanup commits are
+  still a scope smell, and one touching function bodies or conditionals is still RED — that reasoning
+  never depended on a linter existing.
 - **[STANDING — required-field-fold exception]** Adding a REQUIRED field to a shared type AND its
   first producer in ONE commit is the correct per-commit-GREEN shape, not a TDD violation — a separate
   RED asserting the field would itself fail `pnpm check`. Don't YELLOW the collapse; note any
