@@ -1,5 +1,25 @@
 # Finn — Research Coordinator Scratchpad
 
+## [DECISION-INPUT] polyphony.uk IS the polyphony prototype's own prod deploy (#177, 2026-08-27)
+
+`polyphony.uk` (Registry) / `crede.polyphony.uk` (Vault) = `~/projects/polyphony` deployed live,
+NOT a foreign legacy system. Real Crede data already sits locally, no live scrape/API needed:
+`~/projects/polyphony/apps/vault/production-backup.sql` (= `prod-backup.sql`, full D1 dump,
+committed `53d3f47` 2026-02-02 — **~7mo stale**, confirm freshness before a real migration run).
+22 `members` rows, single org `org_crede_001`, minus 1 test row (`tester`/mihkel.putrinsh@gmail.com)
+= 21 real candidates (20 if founder Mihkel Putrinš is excluded — judgment call, not mine).
+Schema: `members(id,name,email_id,email_contact,nickname,invited_by,joined_at)` — only 2/22 have
+`email_id` set, `email_contact` always NULL, 11/22 have `nickname`. Roles/voices/sections tables
+exist and are real but out of scope for #176 (persons/members/profiles only).
+**Live-fresher-pull path exists but untested**: `apps/vault/wrangler.toml` D1 binding
+`polyphony-vault-db` (`0ecb378b-b9e3-4243-a5e9-9cf4ffe98fd2`) — `wrangler d1 export --remote`
+would get current data IF mvox's `CLOUDFLARE_API_TOKEN`/`CLOUDFLARE_ACCOUNT_ID`
+(`~/.config/mvox/credentials.env`) has access to that account (unverified, didn't probe live).
+**mvox-app gotcha**: `profileData.ts` `createProfile()` (lines 60-104) does NOT take name/email —
+only `{personId, _inheritrights:false, _sharing, ownerIds?}`. Name/email need a SEPARATE property
+POST after create — any migration script needs 2 writes per profile, not 1. Full report sent to
+team-lead, msg_id `3567230f`.
+
 ## [WIP] 2026-08-09 (S48) — shutdown mid-dispatch, 10 subagents lost mid-flight
 
 Session ended via team-lead shutdown_request before any of 10 dispatched haiku
