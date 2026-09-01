@@ -41,17 +41,17 @@ gitignored, their call). Also noted (not yet actioned): seed-186 is the only one
 no `DRY_RUN` guard. Design only — no edits made, execution waits for a tree-free window between
 pipelines (tree currently serves #199 branch work).
 
-**[WIP] Plan APPROVED (2026-09-01), execution HOLDS on #199 merge + team-lead ping.** Locked
-sequence, in order, once tree is back on `main`:
-1. Redact seed-186: move `{name,email}` (keep `personId` inline) to
-   `scripts/migrations/snapshots/crede-profile-emails-2026-08-27.json`; load via
-   `readFileSync`+`JSON.parse` (seed-178 pattern). Fold in a `DRY_RUN` default-guard in the same
-   edit (team-lead approved bundling this).
-2. Verify seed-186 is clean (no residual names/emails in the .ts).
-3. Lift the gitignore shield lines team-lead added in `309bc9b` for the 6 `seed-1*-crede-*.ts` /
-   `seed-188-phase3b-crede-*.ts` patterns — otherwise they stay invisible to `git add`.
-4. Commit all 6 scripts (script-only, no result JSONs, no snapshot JSONs — those stay gitignored).
-Do NOT start step 1 until team-lead pings that #199 merged and the tree is free.
+**[DONE] Executed 2026-09-01, commit `d924e4d` (main, `16b857c..d924e4d`, pushed).** Ran the full
+locked sequence as git actor once team-lead confirmed #199 merged + tree clean on `main`:
+redacted seed-186 (`TARGETS` name+email → `scripts/migrations/snapshots/crede-profile-emails-
+2026-08-27.json`, `personId` inline, `readFileSync`+`JSON.parse` per seed-178 pattern, added the
+`DRY_RUN` guard it lacked) → grep-verified zero residual PII in the .ts → lifted both `309bc9b`
+gitignore shield lines → staged the 6 scripts + `.gitignore` **by explicit path** (no `-A`/`.`,
+per team-lead's instruction to not collide with Bentham's parallel `architecture-decisions.md`
+edit) → confirmed `git diff --cached --stat` matched intent → committed → pushed → confirmed
+`git status --porcelain` empty post-push. Audit-trail gap for #178/#182/#184/#186/#187/#188 is
+now closed. Snapshot JSON stayed gitignored throughout (verified via `git check-ignore` both
+before and after the shield lift).
 
 ## [PROBE-RESULT] Invite-acceptance grants NO self-`_editor` (2026-09-01, read-only, #193)
 

@@ -758,16 +758,34 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
 ---
 
-## Native form controls only + polyphony.uk as spec source (PO standing rules, 2026-09-01)
+## PO standing rules — native form controls, in-situ activation, polyphony.uk as spec source (2026-09-01)
 
 **Decision** (Mihkel via Gama, 2026-09-01 — applies to ALL current and future work):
 
+### Form controls (rules 1, 2, 4)
+
 1. **All dropdowns must be native `<select>` elements.** No custom dropdown components.
-2. **All focused input fields must use native form controls.** No custom-built inputs (no custom Autocomplete-style widgets for constrained choices).
-3. **When writing user stories, check polyphony.uk first.** The legacy app is the reference for how features were conceived — use it as a spec source before writing new stories.
+2. **All focused input fields must use native form controls.** No custom-built inputs — in particular, no custom Autocomplete-style widget where the choice set is constrained.
+4. **In-situ edit fields (pencil-decorated): the WHOLE field area is the click activator**, not just the pencil icon. Reference implementation: the collective name field on the admin page. Binds existing *and* future in-situ fields — especially event detail (`name`, `datetime`, `duration`, `location`, `description`, `conductor`).
 
-**Immediate application:** #199 event type picker = native `<select>` with predefined options, not Autocomplete free text (pipeline prompts already comply). Rules 1–2 bind every GREEN prompt and review checklist going forward; rule 3 binds Victoria/team-lead story authoring.
+### Story authoring (rule 3)
 
-**Bentham standing trigger:** custom dropdown/input component where a native control serves is YELLOW minimum.
+3. **When writing user stories, check polyphony.uk first.** The legacy app is the reference for how features were conceived — consult it as a spec source before writing new stories.
 
-(*MVOX:Palestrina*)
+**Numbering note**: rules 1–3 landed together at `bd3cd48`, where rule 3 is the spec-source rule; rule 4 (in-situ activation) was relayed afterwards. The original numbers are preserved rather than resequenced, so existing references from scratchpads and pipeline prompts stay valid — hence rule 4 sitting with the form-control family and rule 3 on its own.
+
+**Rationale**: consistency, accessibility, and mobile behaviour of native controls. Custom widgets are what produced the #199-class defect — a free-text Autocomplete admitted language-mismatched values into `event_type`, which is precisely what the localized picker replaced. Rule 4 closes a discoverability trap: a pencil glyph is a small hit target that reads as decoration, so the edit affordance goes unfound; widening the activator to the whole field costs nothing and matches the admin-page precedent.
+
+**Scope**: rules 1, 2, 4 bind every GREEN prompt and every review checklist. Rule 3 binds Victoria and team-lead at story-authoring time.
+
+**Review enforcement (Bentham)**:
+
+- **YELLOW minimum** — a custom dropdown or input component where a native control serves. `[TRIGGER-NATIVE-CONTROLS]`
+- **YELLOW minimum** — an in-situ edit field whose click activator is the pencil icon alone rather than the whole field area. `[TRIGGER-INSITU-WHOLE-FIELD]`
+- **Escalate to RED** only where the custom control additionally breaks an established contract — keyboard operability, form submission, or i18n of option labels. These are consistency and accessibility rules, and my standing calibration is never to RED on style alone.
+
+**First application**: #199 event type picker — native `<select>` over the canonical event types, replacing free-text Autocomplete. Merged at `e153604`.
+
+**Source**: PO standing rules relayed via Gama, 2026-09-01. Rules 1–3 recorded the same day by team-lead (`bd3cd48`); rule 4 relayed after that commit. Consolidated into a single section by Bentham as steward, at team-lead's request, so the four rules read as one decision rather than an entry plus an append.
+
+(*MVOX:Bentham*, consolidating team-lead's original entry)
