@@ -423,6 +423,7 @@
 	"series_create_from_label": "From",
 	"series_create_until_label": "Until",
 	"series_create_generate_label": "Generate events",
+	"series_create_skip_heading": "Skip dates",
 	"series_create_skip_date_label": "Skip date",
 	"series_create_skip_add": "Add",
 	"series_create_skip_remove": "Remove {date}",

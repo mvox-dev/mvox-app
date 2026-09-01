@@ -4601,6 +4601,12 @@
 												{m.series_create_generate_label()}
 											</label>
 
+											<p
+												data-testid="series-create-skip-heading"
+												class="text-xs tracking-wide text-ink-2 uppercase"
+											>
+												{m.series_create_skip_heading()}
+											</p>
 											<div class="flex items-center gap-2">
 												<input
 													type="date"
@@ -4625,7 +4631,7 @@
 												</button>
 											</div>
 											{#if seriesCreateSkipDates.length > 0}
-												<ul class="flex flex-wrap gap-1.5">
+												<ul data-testid="series-create-skip-list" class="flex flex-wrap gap-1.5">
 													{#each seriesCreateSkipDates as date (date)}
 														<!-- #132/T6 review F2 — icon-only ×, 44x44 (see the conductor chip). -->
 														<li

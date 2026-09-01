@@ -424,6 +424,7 @@
 	"series_create_from_label": "No",
 	"series_create_until_label": "Līdz",
 	"series_create_generate_label": "Izveidot notikumus",
+	"series_create_skip_heading": "Izlaist datumus",
 	"series_create_skip_date_label": "Izlaist datumu",
 	"series_create_skip_add": "Pievienot",
 	"series_create_skip_remove": "Noņemt {date}",

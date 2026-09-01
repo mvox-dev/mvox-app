@@ -425,6 +425,7 @@
 	"series_create_from_label": "Від",
 	"series_create_until_label": "До",
 	"series_create_generate_label": "Створити події",
+	"series_create_skip_heading": "Пропустити дати",
 	"series_create_skip_date_label": "Пропустити дату",
 	"series_create_skip_add": "Додати",
 	"series_create_skip_remove": "Прибрати {date}",

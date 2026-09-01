@@ -423,6 +423,7 @@
 	"series_create_from_label": "Alates",
 	"series_create_until_label": "Kuni",
 	"series_create_generate_label": "Loo sündmused",
+	"series_create_skip_heading": "Jäta vahele kuupäevad",
 	"series_create_skip_date_label": "Jäta vahele",
 	"series_create_skip_add": "Lisa",
 	"series_create_skip_remove": "Eemalda {date}",

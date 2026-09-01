@@ -1833,6 +1833,91 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 	});
 });
 
+// ── #200 — skip-dates discoverability ──────────────────────────────────────────
+//
+// Crede pilot 2026-08-31: the skip picker rendered as a bare unlabeled date box
+// + "Add" button, and Joosep — following the runbook step that NAMES the
+// feature — could not find it. The controls existed; nothing on screen said
+// what they were. The fix under test: a VISIBLE heading over the skip section.
+//
+//   NEW TESTIDS (pinned here for the GREEN implementer)
+//     series-create-skip-heading  the section heading — ALWAYS rendered with
+//                                 the form, visibly (no sr-only/hidden), its
+//                                 text from the message key
+//                                 `series_create_skip_heading` (Comenius
+//                                 supplies the copy — "Jäta vahele" in et)
+//     series-create-skip-list     the chip <ul> — rendered IFF at least one
+//                                 skip date exists (the empty list must not
+//                                 leave a stray labeled-but-blank row)
+describe('#200 — the skip-dates section carries a visible heading', () => {
+	it('opening the form renders series-create-skip-heading, VISIBLY, with its text sourced from the series_create_skip_heading message key (never hardcoded copy)', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		const heading = q(container, 'series-create-skip-heading');
+		expect(heading).not.toBeNull();
+		// The lenient m-proxy above renders the message KEY itself — so equality
+		// with the key proves the text goes through Paraglide, not a literal.
+		expect(heading!.textContent!.trim()).toBe('series_create_skip_heading');
+		// Visible means visible: not screen-reader-only, not hidden away.
+		expect(heading!.classList.contains('sr-only')).toBe(false);
+		expect(heading!.hasAttribute('hidden')).toBe(false);
+		expect(heading!.getAttribute('aria-hidden')).not.toBe('true');
+	});
+
+	it('LOCKED (resumable run): heading, skip input and add button all REMAIN rendered — disabled, never conditionally removed', async () => {
+		// The review-F5 stop recipe: occurrence #2 fails → the run is resumable
+		// and `seriesCreateLocked` engages.
+		createEventMock.mockImplementation(async () => {
+			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
+			return `ev-new-${createEventMock.mock.calls.length}`;
+		});
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+
+		// #200's discoverability fix must not regress into hide-when-locked:
+		// the section stays IN the document, announcing itself, merely inert.
+		expect(q(container, 'series-create-skip-heading')).not.toBeNull();
+		const input = q(container, 'series-create-skip-date') as HTMLInputElement;
+		const add = q(container, 'series-create-skip-add') as HTMLButtonElement;
+		expect(input).not.toBeNull();
+		expect(add).not.toBeNull();
+		expect(input.disabled).toBe(true);
+		expect(add.disabled).toBe(true);
+	});
+
+	it('the chip list (series-create-skip-list) renders IFF skip dates exist: absent on a fresh form, up with the first chip, gone when the last chip is removed', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		// Fresh form, no skip dates — no list (the heading alone marks the spot).
+		expect(q(container, 'series-create-skip-list')).toBeNull();
+
+		await fill(container, 'series-create-skip-date', '2026-09-14');
+		await fireEvent.click(q(container, 'series-create-skip-add') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'series-create-skip-list')).not.toBeNull();
+		});
+		expect(q(container, 'series-create-skip-2026-09-14')).not.toBeNull();
+
+		// Removing the only chip takes the list down with it.
+		await fireEvent.click(q(container, 'series-create-skip-remove-2026-09-14') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'series-create-skip-list')).toBeNull();
+		});
+	});
+});
+
+// (*MVOX:Tallis* — #200 RED: visible skip-dates heading via
+// series_create_skip_heading, always-rendered-when-locked guard,
+// series-create-skip-list IFF chips exist)
+
 // (*MVOX:Palestrina* — #132/T5 review fixes: daily-generation reachability,
 // range validation, empty-recurrence refusal, mid-run dismissal guard, preview
 // count/scroll, resumable partial bulk run)
