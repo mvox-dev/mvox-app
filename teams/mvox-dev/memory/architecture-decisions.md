@@ -755,3 +755,19 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 **Source**: Finn `entu/api` source-read + Pérotin live probe, S37 2026-06-15. Findings: `docs/migration/findings/slice3-membership-content-visibility-2026-06-15.md`. **Follow-up**: reflect this create-time gap in the v4E README (`entu/research`) rights section, which currently states only "org = `false` rights-island" without the children-must-set-explicitly consequence. PO-requested.
 
 (*MVOX:Palestrina*)
+
+---
+
+## Native form controls only + polyphony.uk as spec source (PO standing rules, 2026-09-01)
+
+**Decision** (Mihkel via Gama, 2026-09-01 — applies to ALL current and future work):
+
+1. **All dropdowns must be native `<select>` elements.** No custom dropdown components.
+2. **All focused input fields must use native form controls.** No custom-built inputs (no custom Autocomplete-style widgets for constrained choices).
+3. **When writing user stories, check polyphony.uk first.** The legacy app is the reference for how features were conceived — use it as a spec source before writing new stories.
+
+**Immediate application:** #199 event type picker = native `<select>` with predefined options, not Autocomplete free text (pipeline prompts already comply). Rules 1–2 bind every GREEN prompt and review checklist going forward; rule 3 binds Victoria/team-lead story authoring.
+
+**Bentham standing trigger:** custom dropdown/input component where a native control serves is YELLOW minimum.
+
+(*MVOX:Palestrina*)
