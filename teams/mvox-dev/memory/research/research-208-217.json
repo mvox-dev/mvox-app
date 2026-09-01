@@ -1,0 +1,406 @@
+[
+  {
+    "issueNumber": 208,
+    "scope": "Event-create form only (src/routes/+page.svelte, panel- and agenda-opened): stop substituting series-inherited values (name/duration/location/description from getSeriesDefaults) for the descriptive Paraglide placeholders on the four affected inputs. The issue body is authoritative — there are zero comments, so no supersessions. It offers three alternative presentations (pre-fill as editable VALUES; an \"inherited from series\" indicator beside the field; descriptive placeholder plus inherited value as secondary label) without picking one — the choice is materially load-bearing because the current design is a deliberate contract (#132/T4 \"preview contract\": placeholders-never-values so an untouched occurrence keeps LIVE inheritance from the series; the read-side merge in listEvents/loadEventDetail shows exactly what the placeholder previews). The capacity and datetime fields are NOT affected (capacity placeholder is static; datetime is #207 territory). getSeriesDefaults fetch, staleness guards, and reset paths (+page.svelte:2707/2737/2796/2810) stay as-is under the indicator/secondary-label options.",
+    "citations": [
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5930 (cited) -> 5964-5965 (current main)",
+        "current": "placeholder={eventCreateSeriesDefaults?.name || m.event_create_name_placeholder()} on the event-create-name input — exact quoted code, moved by #205/#199 churn",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5961 (cited) -> 5993-5995 (current main)",
+        "current": "duration placeholder is a TERNARY, not ||: eventCreateSeriesDefaults && durationMinutes !== null ? String(durationMinutes) : m.event_create_duration_placeholder() — same behavior, slightly different shape than the body implies",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "6022 (location), 6033 (description)",
+        "current": "'same pattern' claim verified: defaultLocation || m.event_create_location_placeholder() and defaultDescription || m.event_create_description_placeholder()",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "2586-2592 and 5952-5956",
+        "current": "the '#132/T4 preview contract' code comments the body references — state decl comment ('rendered as PLACEHOLDERS only, never copied into a value') and the F4 || rationale comment; both must be rewritten by the fix",
+        "status": "verified"
+      },
+      {
+        "file": "src/lib/seasons/seasonManage.ts",
+        "line": "222-269",
+        "current": "getSeriesDefaults + SeriesDefaults interface — the data source; doc comment explicitly frames it as the inheritance PREVIEW mirroring the read-side merge",
+        "status": "verified"
+      }
+    ],
+    "blastRadius": "TESTS pinning current behavior — src/routes/page.event-create.spec.ts is the epicenter: describe block \"selecting a series previews the inherited fields as PLACEHOLDERS\" (~lines 735-805 on main) has three tests asserting (a) defaults appear IN placeholders and .value stays '' (\"an own value would freeze the inheritance\"), (b) clearing an override restores the inherited placeholder, (c) deselecting the series drops inherited placeholders — all three flip or get rewritten. Submit-path tests in the same file assert the untouched inherited trio is NOT copied into createEvent (\"a copied value is the bug\") — these BREAK outright under the pre-fill-as-values option and survive under indicator/secondary-label. Header spec comments (lines 14, 91-98) encode the same contract. OTHER CONSUMERS of eventCreateSeriesDefaults beyond placeholders: the success announcement at +page.svelte:3609-3612 (trimmedName || eventCreateSeriesDefaults?.name || typeValue — pre-filled values would make trimmedName always win, silently changing \"own name wins\" semantics), and the staleness-guard comment at 2818. Five other spec files (event-create-after-season, event-convert, agenda-admin, event-type-picker, series-create) mock getSeriesDefaults as module boilerplate but assert nothing about placeholders — safe. ADJACENT, out of scope but same design tension: event/[id]/+page.svelte:1500 documents that editing an inherited duration permanently masks the series value; the detail page shows inherited values as real values via the read-side merge. Description placeholder inheritance (6033) exists but is currently UNTESTED (the trio test covers only name/duration/location) — RED should add it. Nothing becomes an obsolete param under indicator options; under a hypothetical revert-to-static-placeholders, the four || / ternary expressions are the only removals.",
+    "crossCuttingAxes": "LOCALES: existing event_create_*_placeholder keys verified present in all four (en/et/lv/uk). If the ruling picks an \"inherited from series\" indicator or secondary label, that is a NEW UI string requiring a Paraglide key in all four locales; if it picks pre-fill-as-values, no new strings. MULTI-COLLECTIVE/MULTI-DB: unaffected — getSeriesDefaults is already called with the selected {db, token} cfg and the change is presentation-only. RIGHTS TIERS: unaffected — form visibility gating unchanged; no new data exposed (series defaults are already fetched and shown). INVITE vs AUTO-PROVISIONED PERSONS: not identity-adjacent, N/A.",
+    "standingRuleHits": "Rules 1+2 (native controls/inputs) bind: the four inputs must stay native, and any new \"inherited from series\" indicator must be plain native markup (text/label), not a custom widget — Bentham enforces [TRIGGER-NATIVE-CONTROLS] at YELLOW. Rule 3 (polyphony.uk spec source) binds only story authoring; this issue is direct Mihkel feedback, no spec lookup needed. Rule 4 (whole-field+tab in-situ) does NOT bind — the create form uses ordinary always-active inputs, not pencil-decorated in-situ fields. Rules 5/6/7 (24h, Monday-first, ISO dates) do NOT bind — the four affected fields are name/duration/location/description; the datetime input is untouched here and belongs to #207.",
+    "openQuestions": "ONE blocking ambiguity: the body lists three mutually exclusive presentations (\"either — or\") with no ruling, and they are not interchangeable — pre-fill-as-VALUES severs live inheritance (createEvent would write own props onto the occurrence, so later series edits stop propagating; this reverses the #132/T4 preview contract and flips the submit-path tests asserting untouched fields are never sent), while the indicator and secondary-label options preserve live inheritance and only change presentation. Gama/PO must pick the mechanism BEFORE RED, since the test assertions differ per option. Two subordinate questions to settle in the same ruling: (1) if pre-fill-as-values wins, are untouched pre-filled values still suppressed from the createEvent call (compare-to-default) or intentionally written (freeze)? (2) does the ruling extend to the event/[id] detail page, which surfaces the same inheritance (inherited values shown as real values; duration edit permanently masks the series value per its own comment), or is #208 strictly the create form? Recommend confirming create-form-only.",
+    "sizeEstimate": "small",
+    "dependencies": "Serialize after the in-flight #206 pipeline (tree is on feat/206-signin-flow; no-parallel-branches rule). Coordinate ordering with #207 (calendar conventions): both edit the same event-create form block of src/routes/+page.svelte (datetime input at 5965 sits between #208's name field at 5964 and duration at 5993), so running them in parallel guarantees merge conflicts and line-citation churn — whichever lands second must re-verify line numbers. No dependency on #205 (merged; its churn is already reflected in the drifted citations above)."
+  },
+  {
+    "issueNumber": 209,
+    "scope": "Replace all 5 remaining `<Autocomplete>` (custom combobox) instances with native `<select>` per PO standing rule 1: three conductor pickers on the agenda page (season-manage panel, season-create form, event-create form — all multi-select via the existing chip pattern, which stays: a native-select pick adds a chip and the select resets to its placeholder option) and two single-pick person pickers on the admin page (add admin, add librarian). All five are roster-fed person pickers with option lists already derived to exclude already-picked/already-granted people. After conversion, `src/lib/components/Autocomplete.svelte` has zero remaining consumers (verified on main — #199 already converted the sixth, the event-type field, to a native select, which is the in-repo reference pattern at `src/routes/+page.svelte:5892` `event-create-type`) and can be deleted together with `Autocomplete.spec.ts`. Issue has NO comments — the body is the whole spec; nothing superseded. Labels: task + ready.",
+    "citations": [
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "~4947 → 4981",
+        "current": "Season-manage conductor `<Autocomplete items={seasonManageConductorOptions}>` now at main:4981 (options $derived at 2127)",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "~5765 → 5799",
+        "current": "Season-create conductor `<Autocomplete items={seasonConductorOptions}>` now at main:5799 (state at 1722)",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "~6008 → 6042",
+        "current": "Event-create conductor `<Autocomplete items={eventCreateConductorOptions}>` now at main:6042 (options $derived at 2847), inside `event-create-conductors-field`",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/admin/+page.svelte",
+        "line": "598",
+        "current": "`<Autocomplete items={adminOptions}>` exactly at main:598 (adminOptions $derived at 94)",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/admin/+page.svelte",
+        "line": "657",
+        "current": "`<Autocomplete items={librarianOptions}>` exactly at main:657 (librarianOptions $derived at 99)",
+        "status": "verified"
+      },
+      {
+        "file": "src/lib/components/Autocomplete.svelte",
+        "line": "n/a",
+        "current": "Claim 'may be removable if no other consumers' VERIFIED: only consumers on main are the 5 cited render sites (imports at +page.svelte:66, admin/+page.svelte:47); remaining mentions are comment-only (roleManagement.ts:211, +page.svelte comments) plus its own spec",
+        "status": "verified"
+      }
+    ],
+    "blastRadius": "Tests pinning current combobox behavior (all drive `autocomplete-input`/`autocomplete-option-<id>`/`autocomplete-listbox` testids and must be rewritten to native-select semantics): (1) src/routes/page.admin.spec.ts — `openCombobox` helper at :304, option-exclusion assertions :546-596, read-only-gate assertions :967-968/:998-999/:1105 that assert autocomplete-input presence/ABSENCE (become select presence/absence); (2) src/routes/page.agenda-admin.spec.ts — `addConductorChip` helper at :407 (types a filter query, clicks an option); (3) src/routes/page.season-create.spec.ts — 17 testid hits incl. its own testid contract comment :47-49 and filter-behavior tests :435-443 (typing-filters tests become meaningless for a select); (4) src/routes/page.season-manage.spec.ts — 7 hits; (5) src/routes/page.event-create.spec.ts — pick helper :501-507, presence :665. Deletable with the component: src/lib/components/Autocomplete.spec.ts (whole file, ~560 lines). Obsolete component props (allowFreeText/onQueryChange/errorId/emptyLabel) die with the component — no consumer uses allowFreeText on main. Obsolete i18n keys in ALL FOUR locale files: `season_conductor_no_matches`, `event_create_conductor_no_matches`, `admin_roles_empty` (empty-filter-state strings have no native-select equivalent); the `*_placeholder` keys ('Search people…'/'Search conductors…') either become the select's disabled placeholder-option label (wording is search-flavored, likely needs rewording) or are replaced. Escape-layering code: +page.svelte ~1798-1799 and ~2341 document a stopPropagation contract between the Autocomplete's open dropdown and the season-create form's Escape-to-close — native select handles Escape in the browser, so this layering logic and any test pinning it needs re-examination. Stale comments referencing Autocomplete: roleManagement.ts:211, roleManagement.spec.ts:300, +page.svelte:106/274/1696/1721/2125/2242/2594/2843. NOT in scope: SectionPicker.svelte (button-anchored tree picker with inline create form, no filter input — not an 'autofiltered dropdown'; issue explicitly scopes to the 5 Autocomplete instances).",
+    "crossCuttingAxes": "Multi-collective/multi-db: option lists are already derived per selected collective's roster; UI-only swap, no change — but tests must keep the per-collective exclusion assertions (admin combobox lists roster MINUS current admins, etc.). Locales (en/et/lv/uk): all existing label keys (`season_conductor_label`, `event_create_conductor_label`, `admin_roles_add_admin_label`, `admin_roles_add_librarian_label`) exist in all four and carry over as the select's accessible name; any NEW placeholder-option copy (e.g. 'Add a conductor…' — `event_create_conductor_placeholder` already has exactly this wording in all 4; the season/admin ones say 'Search…') needs all four locales + Paraglide keys, and the three obsolete no-matches keys should be removed from all four. Rights tiers: unchanged by design — admin/librarian pickers are already gated by canManageAdmins/canManageLibrarians (org _owner; read-only tier gets explanatory text instead, asserted at page.admin.spec.ts:951-999), conductor pickers live inside admin-gated season/event forms; tests must preserve the 'no picker rendered for non-managers' assertions in select form. Invite vs auto-provisioned persons: not identity-adjacent — pickers list roster persons uniformly regardless of provisioning path; no distinction exists today and none is introduced.",
+    "standingRuleHits": "Rule 1 (native `<select>`) — this issue IS its enforcement sweep; Bentham review trigger [TRIGGER-NATIVE-CONTROLS] applies. Rule 2 (native form controls for constrained choice sets) — backs rule 1 here; the architecture-decisions text names 'custom Autocomplete-style widget where the choice set is constrained' verbatim as the banned pattern. Rule 4 (whole-field+tab in-situ) — does NOT bind: none of the 5 sites is a pencil-decorated in-situ field. Rule 3 (polyphony.uk spec source) — not applicable, no new story authoring. Rules 5-7 (24h time / Monday-first / ISO dates, from #207) — not applicable, no time/date UI. Reference implementation for the conversion: #199's `event-create-type` select (merged e153604), cited in architecture-decisions.md as the rule's first application; note its 'never-blank select needs no placeholder option' rationale does NOT transfer — these five pickers need a blank/disabled placeholder option because 'nothing picked yet' is their rest state.",
+    "openQuestions": "Three small copy/UX calls the RED author should not invent silently — all Gama-resolvable, none PO-blocking in my judgment: (1) Placeholder-option copy: reuse existing `*_placeholder` keys as the select's disabled first option even where wording is search-flavored ('Search people…', 'Search conductors…'), or introduce reworded 'Add …' copy (new keys, 4 locales)? (2) Exhausted-options state: when every roster person is already picked/granted, the old combobox showed a 'No matching people' empty label; a native select would show only its placeholder option — render it disabled, hide it, or leave it inert? (3) Option ordering: the combobox relied on type-to-filter; a native select exposes the full roster list at once — keep roster order or sort alphabetically? None of these changes scope; they change strings/assertions, so settle before RED to avoid mid-chain contract edits (frozen-contract rule).",
+    "sizeEstimate": "medium",
+    "dependencies": "Serialization constraints (feedback_no_parallel_branches: one active branch team-wide): the tree is currently on feat/206-signin-flow with a TDD pipeline running, and agents fix-193/fix-205 are active on work that touched the SAME files #209 edits — #205 merged 2385 insertions into src/routes/+page.svelte today and #193 touched profile/admin surfaces. #209 must queue behind the #206 pipeline and any #205/#193 fix branches before its RED starts, and its line-number citations should be re-checked at branch time (they already drifted +34 lines from #205's merge). No schema, API, or seed-data dependencies — pure UI + tests + i18n. #207 (time/date rules), if queued against +page.svelte, is another same-file collision to sequence around."
+  },
+  {
+    "issueNumber": 211,
+    "scope": "Display-only change: make agenda event rows visually distinguishable by event type. Body is authoritative (zero comments, so no supersession). Current state on main (79b629d): the type badge is a uniform monochrome pill rendered in THREE places — AgendaList.svelte recent rows (~342-347), AgendaList.svelte upcoming rows (~460-465), and event/[id]/+page.svelte detail header (~1664-1669) — all three using the identical class string the issue quotes. Labels come from the shared eventTypeLabels.ts module (EVENT_TYPE_LABEL map, 8 canonical v4E types, own-property-guarded free-text fallback per #194/#202). The polyphony.uk reference (standing rule 3, explicitly invoked by the issue) is verified: ~/projects/polyphony/apps/vault/src/lib/utils/badges.ts getEventTypeBadgeClass() — color-coded badges only (no icons, no row tint): rehearsal=blue-100/800, concert=purple-100/800, retreat=green-100/800, festival=orange-100/800, default=gray-100/800; polyphony had only 4 event types vs mvox's 8, so half the mvox types have no spec color. Natural implementation shape: a color-class map living beside EVENT_TYPE_LABEL/CANONICAL_EVENT_TYPES (mirroring polyphony's badges.ts) applied at all three render sites, with the existing unknown-free-text fallback contract extended to styling (unknown type gets default style, absent type still renders nothing).",
+    "citations": [
+      {
+        "file": "src/lib/components/agenda/AgendaList.svelte",
+        "line": "343",
+        "current": "Badge exists but the citation is stale in two ways: the span is at 342-347 (quoted class string on line 344) for RECENT rows, and there is a SECOND identical badge at 460-465 (class on 462) for UPCOMING rows which the issue does not mention. Quoted class string 'w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase' matches verbatim in both.",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/event/[id]/+page.svelte",
+        "line": "1666",
+        "current": "Uncited third occurrence: data-testid='event-detail-type' badge with the identical class string at 1664-1669 — any consistency-minded fix touches it too.",
+        "status": "none-given"
+      },
+      {
+        "file": "src/lib/events/eventTypeLabels.ts",
+        "line": "1-50",
+        "current": "Shared label map + CANONICAL_EVENT_TYPES + eventTypeLabel() fallback — the natural home for a color map; not cited by the issue but load-bearing.",
+        "status": "none-given"
+      },
+      {
+        "file": "~/projects/polyphony/apps/vault/src/lib/utils/badges.ts",
+        "line": "getEventTypeBadgeClass",
+        "current": "Standing-rule-3 reference verified: color-coded badge classes per type (concert=purple, rehearsal=blue, retreat=green, festival=orange, default=gray; bg-*-100/text-*-800/border-*-200). Polyphony EVENT_TYPES = [rehearsal, concert, retreat, festival] only — 4 of mvox's 8.",
+        "status": "verified"
+      }
+    ],
+    "blastRadius": "Tests: src/lib/components/agenda/AgendaList.event-type.spec.ts and src/routes/page.agenda-event-types.spec.ts assert badge textContent.trim() with toBe — SVG/CSS-only styling passes untouched, but any TEXT glyph/emoji icon inside the badge span breaks them; src/routes/event/[id]/page.spec.ts (lines 414, 518, 605-621) uses toContain, icon-tolerant; src/lib/events/eventTypeLabels.spec.ts (pure label fn) and src/routes/page.event-type-picker.spec.ts (native select options) are unaffected by a display change. No test asserts the border-ink-4 class string, so restyling per se is test-safe. Shared surfaces: three duplicated badge markups (AgendaList x2 + event detail) — DRY pressure toward a shared component or class map; EVENT_TYPE_LABEL/CANONICAL_EVENT_TYPES are the AUTH_PROVIDERS-analog shared structures a color map must key against to avoid drift. Palette note: mvox app.css tokens are paper/ink + red/green/amber/indigo (+softs) only — polyphony's purple/blue/orange are NOT existing tokens; indigo is already used in roster/+page.svelte and amber in attendance/profile badges, so naive token reuse risks meaning collisions. No obsolete params.",
+    "crossCuttingAxes": "Multi-collective/multi-db: none — presentation-only, color map is a client constant; free-text event_type values from any db fall to the default style via the existing #194/#202 fallback contract. Locales: NO new strings needed if the distinction is color/decorative-icon (aria-hidden) — the adjacent text label is already localized (verified: all 8 event_type_* keys present in en/et/lv/uk); a legend or icon-only affordance WOULD need 4-locale Paraglide keys. Color alone must not be the sole channel (a11y/color-blind) — the existing text label alongside satisfies this if kept. Rights tiers: none — the badge renders wherever the agenda/detail renders, no tier-specific display. Invite vs auto-provisioned persons: not identity-adjacent, N/A.",
+    "standingRuleHits": "Rule 3 binds and is invoked by the issue body itself — polyphony.uk consulted (see citations): its answer is color-coded badges only, no icons, no row tint, with a gray default for unknowns. Rules 1/2 (native controls/inputs) do not bind — no form control in scope; they only become relevant if someone tries to restyle the event-type <select> options (native option elements can't carry per-option colors — leave the picker alone). Rule 4 (whole-field+tab in-situ) does not bind — the badge is not an edit field. Rules 5-7 (24h, Monday-first, ISO dates) do not bind — no time/date rendering changes.",
+    "openQuestions": "Four, all pre-RED: (1) Color assignments for the 4 mvox types absent from the polyphony spec — workshop/meeting/social/other. Polyphony defines only rehearsal=blue, concert=purple, retreat=green, festival=orange + gray default. Extend with new hues, or let the extra four share the default style? (2) Palette source: adopt polyphony's stock Tailwind hues verbatim, or translate into mvox's paper/ink token palette (only red/green/amber/indigo + softs exist; purple/blue/orange would be new @theme tokens; indigo and amber already carry meanings in roster/attendance UI)? (3) Mechanism: the issue lists options (colored badge / row tint / icon / combination) without choosing; the polyphony reference resolves to badge-color-only — confirm that reading satisfies Mihkel's 'at a glance', or does PO want icons/tint on top? (4) Scope boundary: title says agenda, but the identical badge renders on the event detail page — same treatment there, or agenda only?",
+    "sizeEstimate": "small",
+    "dependencies": "Serialize behind the currently running pipeline (working tree is on feat/206-signin-flow; no-parallel-branches rule). File-overlap watch: fix-205 follow-up agents are active this session and rule-4 retrofit work lives in src/routes/event/[id]/+page.svelte — if the detail-page badge is in #211 scope, order after any #205 fixes touching that file. No overlap with #193. No other queue issue known to touch AgendaList.svelte or eventTypeLabels.ts."
+  },
+  {
+    "issueNumber": 212,
+    "scope": "Two-part scope. (A) Body: in the #196 event-to-series conversion form (inline dialog `event-convert-form` inside the season-manage panel in `src/routes/+page.svelte`), display the event's own date as a read-only, non-editable start-date reference above/near the end-date picker, so the validation \"The end date cannot be before the event's own date\" (`event_convert_end_before_start`, fired at +page.svelte:3315 when `eventConvertEndDate < startDate`) has visible context. The value already exists: `tallinnWallClockParts(event.startDatetime).date` (+page.svelte:3079-3094) yields a Tallinn wall-clock YYYY-MM-DD string; no new data fetch or state var is needed — derivable in the template from the `{#each seasonManageEvents as event}` row that hosts the form. (B) Comment (Gama 2026-09-01, supersedes nothing but ADDS scope): mutual exclusion of action contexts — when the convert form opens, (1) disarm any armed delete two-step confirm (`seasonManageDeleteArmed = null` in `openEventConvertForm`, +page.svelte:3108-3120, which today closes the three sibling creation forms but does NOT disarm deletes) and (2) hide the row's action buttons (⟳ convert at :5522-5531, × delete/confirm/cancel block at :5532-5574) while the form is open — same pattern as `{#if !seriesCreateOpen}` around season-manage-add-series (:5021-5031) and `{#if !eventCreateOpen}` around season-manage-add-event (:5482-5493). Data layer (`src/lib/events/eventConvert.ts`) untouched.",
+    "citations": [
+      {
+        "file": "issue #212 body + comment",
+        "status": "none-given",
+        "current": "Neither the body nor the Gama comment cites file/line numbers; all anchors below were located by this research against current main (79b629d)."
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5580-5717",
+        "status": "verified",
+        "current": "event-convert-form dialog markup: interval (:5600), duration (:5622), end-date input (:5644-5660), submit/cancel — the form the start-date display goes into"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3286-3319",
+        "status": "verified",
+        "current": "submitEventConvert validation: startDate from tallinnWallClockParts(event.startDatetime) at :3290; end<start refusal with m.event_convert_end_before_start at :3314-3316"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3079-3094",
+        "status": "verified",
+        "current": "tallinnWallClockParts — returns { date: 'YYYY-MM-DD', time: 'HH:MM' } (ISO date, 24h), '' on unparseable"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3108-3120",
+        "status": "verified",
+        "current": "openEventConvertForm — closes 3 sibling creation forms, does NOT disarm seasonManageDeleteArmed (the comment's gap #1)"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5503-5578",
+        "status": "verified",
+        "current": "standalone event row: ⟳ convert button (:5522), armed delete confirm/cancel (:5532-5559), × delete (:5560-5574) — the buttons the comment says to hide while the form is open"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5021-5031 and 5482-5493",
+        "status": "verified",
+        "current": "the season-panel mutual-exclusion precedent the comment invokes: opener button hidden via {#if !seriesCreateOpen} / {#if !eventCreateOpen} while its own form is open"
+      },
+      {
+        "file": "messages/en.json",
+        "line": "419-435",
+        "status": "verified",
+        "current": "18 event_convert_* keys exist in all four locales (en/et/lv/uk each have 18); event_convert_end_date_label='Series ends' is the natural sibling for a new start label key"
+      }
+    ],
+    "blastRadius": "Tests asserting current behavior: `src/routes/page.event-convert.spec.ts` (~950 lines) — no test asserts the ⟳/× buttons are VISIBLE while the form is open, so hiding them shouldn't break existing tests, BUT the focus-restore tests (:884-895 Escape → focus returns to `season-manage-event-convert-ev-9`) depend on the ⟳ re-rendering after dismiss; `restoreEventConvertFocus` (:3167-3174) is already tick()-wrapped so the pattern survives, verify after GREEN. `src/routes/page.season-manage-delete.spec.ts` — 'arming a SECOND row disarms the first' (:666) and 'closing the panel disarms' (:679) establish the disarm family; the new disarm-on-convert-open is a third route, existing tests unaffected but new RED tests should mirror their shape. Other callers: `openEventConvertForm` has one call site (the ⟳ onclick); `seasonManageDeleteArmed` is SHARED between series rows and event rows (:5404, :5532) — disarming in openEventConvertForm also disarms an armed SERIES-row confirm (comment's wording is unqualified, so this is correct and free). Focus nuance: disarmSeasonManageDelete normally restores focus to the ×; the new disarm path should NOT do that (focus goes into the opening dialog). No shared component arrays involved (form is inline in +page.svelte; no AUTH_PROVIDERS analog). Data layer eventConvert.ts + its spec untouched. New i18n key requires all four message files + Paraglide regen. Obsolete params: none. Concurrency: tree currently on feat/206-signin-flow with a live pipeline — #212 work must wait its serialized turn (no-parallel-branches rule).",
+    "crossCuttingAxes": "Multi-collective/multi-db: no new exposure — the displayed date derives from the already-loaded event row; the collective-switch reset machinery (resetSeasonManage :2177-2201, dropConvertRun) needs no change since a derived read-only display holds no state; do NOT add a new $state var. Locales: one new UI string (start-date label, e.g. sibling of event_convert_end_date_label 'Series ends') → Paraglide key in all four of en/et/lv/uk (all currently carry 18 event_convert_* keys each). Rights tiers: form lives inside the editor-gated season-manage panel (page.season-manage-delete.spec.ts pins 'NON-editor: no gear, no panel'); #212 adds display-only content inside that gate — no new rights surface, no BFF change. Invite vs auto-provisioned persons: not identity-adjacent — N/A.",
+    "standingRuleHits": "Rule 7 (ISO dates) BINDS: the displayed start date must render YYYY-MM-DD; `tallinnWallClockParts` already yields exactly that string, so rendering it as text satisfies rule 7 with zero formatting code — whereas a disabled native `<input type=\"date\">` would render per browser locale (mm/dd/yyyy on US locale) until #207's override lands, violating rule 7. Rule 2 (native inputs) binds only conditionally: a read-only display is not a focused input, so plain text is compliant; if an input element is chosen anyway it must be native. Rule 5 (24h) N/A — issue asks for the DATE only, no time shown. Rule 6 (Monday-first) N/A — no day picker. Rule 1 (native selects) N/A. Rule 4 (whole-field in-situ) N/A — the field is read-only by spec, not an in-situ editable. Rule 3 (polyphony.uk spec source) already discharged at story-authoring.",
+    "openQuestions": "Two, both cheap: (1) Presentation of the read-only start date — the body says 'e.g. a labeled text field or a read-only date display'. Recommend a labeled TEXT display of the ISO string (satisfies rule 7 today); a disabled `<input type=\"date\">` would show locale-formatted dates until #207 lands. Worth a one-line Gama confirmation so RED pins the right assertion (text content vs input value). (2) Hide-buttons scope — 'hide the action buttons while the form is open': only the converting row's ⟳/× pair (matching the panel precedent where each opener hides only itself, and preserving the documented one-slot behavior where clicking another row's ⟳ replaces the open form), or ALL rows' action buttons (which would make switching rows impossible without Cancel)? Recommend converting-row-only; confirm with Gama before RED since the comment's wording ('hide the action buttons... action bar') is ambiguous between the two. Minor edge worth pinning in RED without a ruling: an event whose startDatetime is unparseable yields date='' — display renders empty/omitted and submit still refuses with event_convert_start_missing (current behavior).",
+    "sizeEstimate": "small",
+    "dependencies": "Serialization only (no-parallel-branches rule): (a) the tree is currently on feat/206-signin-flow with a live TDD pipeline — #212 waits for its merge; (b) #207 (calendar-conventions retrofit, rules 5-7) touches the same convert-form date inputs in +page.svelte — either order works if #212 renders the start date as an ISO text string (no locale-rendered input), but landing them in separate serialized slices avoids merge conflict in the :5580-5717 block; (c) #213 (season toolbar redesign), #216/#217 (deletion progress/cascade) touch the same file and the same season-manage delete mechanics that #212's disarm-on-open interlocks with — same-file ordering constraint, no logical blocker."
+  },
+  {
+    "issueNumber": 213,
+    "scope": "Simplify the agenda admin toolbar in src/routes/+page.svelte (main @ 79b629d): (1) single right-aligned cogwheel that TOGGLES the season-manage panel open/closed, replacing the current three-button toolbar; (2) remove the panel's internal close button (data-testid \"season-manage-close\", main:4756-4766) since the cogwheel now closes; (3) remove the page-level \"+ Sündmus\" button (data-testid \"event-create\", main:4730-4743) entirely — event creation stays reachable via the panel's \"season-manage-add-event\" button (main:5483-5491, verified present, calls openEventCreateForm('panel')); (4) \"+ Hooaeg\" (data-testid \"season-create\", main:4717-4728) stays with its current showSeasonCreate gate unchanged, positioned alongside or below the cogwheel (issue explicitly leaves placement to implementer). Issue has ZERO comments — the body is the whole contract (PO:Gama relaying Mihkel 2026-09-01 verbatim: \"Single cogwheel button, right-aligned. Remove +Event. Cogwheel is a toggle.\"). Note one imprecision in the body: it says + Hooaeg shows \"when no manageable season exists\" but the actual gate is seasonCreateRights==='editor' && !hasUpcomingSeason (main:1728), deliberately distinct from the gear's manageableSeasonId!==null && manageableSeasonRights==='editor' gate (main:1949, #167 comment documents the split); the body's \"current behavior — gated on showSeasonCreate\" clause governs, so no gate change. Toggle-close must inherit closeSeasonManagePanel's refusal guards (seriesRunUnfinished || eventConvertRunUnfinished, main:2298) — the panel is the only record/explanation of a stopped bulk run, a contract #135/#196 tests pin hard.",
+    "citations": [
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "~3871-3930 (cited as agenda-admin-toolbar div)",
+        "current": "DRIFTED by #205's 2385 insertions: the toolbar markup now sits at main:4688-4747 ({#if showSeasonManageGear || ...} through the three buttons). Coincidentally 3871-3930 on current main holds the RELATED #156 roving-tabindex logic (toolbarRoving state 3876, toolbarActiveTestid derived 3877-3885, handleAdminToolbarKeydown 3888-3896) — also in scope but not what the citation named.",
+        "status": "drifted"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "openEventCreateForm / closeEventCreateForm",
+        "current": "Verified on main: openEventCreateForm(origin:'agenda'|'panel') at 2687, closeEventCreateForm at 2730, restoreEventCreateFocus at 2764 (its 'agenda' branch focuses eventCreateButtonEl 2637, which unmounts with the button), dismissEventCreateForm at 2781. The 'agenda' origin and eventCreateButtonEl become dead code; the 'panel' path must survive intact.",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "openSeasonManagePanel / close logic",
+        "current": "Verified on main: openSeasonManagePanel at 2210, closeSeasonManagePanel at 2279 (with the seriesRunUnfinished/eventConvertRunUnfinished refusal at 2298 and gear-refocus at 2315), resetSeasonManage at 2177, Escape handler onSeasonManagePanelKeydown at 2342, panel focus $effect at 2325.",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "showSeasonCreate gate claim",
+        "current": "Verified: const showSeasonCreate = $derived(seasonCreateRights === 'editor' && !hasUpcomingSeason) at main:1728 — though the body's prose gloss ('no manageable season exists') mismatches the formula; it is no UPCOMING season.",
+        "status": "verified"
+      }
+    ],
+    "blastRadius": "Tests pinning current behavior (all on main, all vitest page specs): page.agenda-admin.spec.ts is the epicenter (~60 hits) — describe blocks that DIE or need rewrite: '#149 the entry points live in one shared admin toolbar' (535-609: three-direct-children, toolbar-survives-with-remaining-controls), 'three entry points render together' (468-533), 'roving tabindex #156' (1599-1682: role=toolbar, one Tab stop, ArrowRight wrap — degenerate with 1-2 buttons), 'rights gate across ALL controls' (615-659: asserts all THREE present for editor), mutual-exclusion tests using page-level [+ Event] (662-747), mid-run disabled-entry-point tests including the panel × (749-999: 'the panel's × is disabled…' 807, 'the panel's × cannot discard…' 979 — the × is being REMOVED so these transfer to the cogwheel), Cancel/Escape-refused (1001-1071), collective-switch teardown (1073-1200), 44px touch targets naming [+ Event] and the × (1348-1362). Also: page.event-create.spec.ts (23 hits — docblock and tests open the form via the page-level 'event-create' button; must reroute through gear→panel→season-manage-add-event), page.event-create-after-season.spec.ts (22), page.season-manage.spec.ts (18 — opens via gear, closes via 'season-manage-close'), page.event-convert.spec.ts (9), page.season-manage-delete.spec.ts (7), page.event-type-picker.spec.ts (5), page.series-create.spec.ts (5), page.season-manage-whole-field.spec.ts (2). Shared components: rovingNextIndex ($lib/a11y/roving) has 9 other consumers (NavShell, ProfileField, RsvpControl, AttendanceSurface, LanguageSelector, RepertoireElement, library, roster) — do NOT touch the helper, only this page's usage. Obsolete after change: openEventCreateForm's 'agenda' origin arm + eventCreateButtonEl (2637) + restoreEventCreateFocus's else-branch; showEventCreate derived (2558) loses its only page-level consumer (panel button gates on !eventCreateOpen only); toolbarRoving/toolbarActiveTestid/handleAdminToolbarKeydown likely collapse; message keys event_create, season_manage_close (and agenda_admin_toolbar_label if the toolbar frame is dropped) become orphaned in all four messages/*.json — each key's only consumer is +page.svelte (verified via git grep). No e2e/Playwright tests reference these testids; two .claude/workflows JS files mention them (historical pipeline prompts, not runtime code).",
+    "crossCuttingAxes": "Multi-collective/multi-db: applies — resetSeasonManage-on-switch (2177, dropConvertRun paths) and the per-db seriesCreateResumeByDb gating must survive the toggle refactor unchanged; page.agenda-admin.spec.ts 1073-1200 pins switch behavior through the entry points being modified. Locales (en/et/lv/uk): no new strings strictly required IF the cogwheel keeps season_manage_gear_label and signals state via aria-expanded (the standard disclosure pattern); if the team instead swaps the accessible label per state (open vs close), that is a NEW key in all four locale files + Paraglide. Removals: event_create and season_manage_close keys (all four files) become dead; agenda_admin_toolbar_label dead only if the role=toolbar frame is dropped. Rights tiers: gear stays gated on manageableSeasonRights==='editor' (1949), +Season on seasonCreateRights==='editor' && !hasUpcomingSeason (1728) — both unchanged; fail-closed tests (spec 615-659) keep their rights scenarios, just with two controls instead of three; non-editors see nothing, as now. Invite-vs-autoprovisioned persons: not identity-adjacent — N/A.",
+    "standingRuleHits": "Rules 1-2 (native controls/inputs) bind nominally and are already satisfied — the cogwheel is and must remain a native <button>; no dropdowns/inputs are introduced. Rule 4 (whole-field+tab in-situ) does NOT bind — no pencil-decorated in-situ fields are touched (the #205 whole-field editors inside the panel are out of scope and must not regress). Rule 3 (polyphony.uk spec source) N/A at RED time — the story is a direct Mihkel instruction relayed verbatim, already authored. Rules 5-7 (24h time / Monday-first / ISO dates, from #207) do not bind — no time/date/week UI in scope. One rule-adjacent note: the 44x44 touch-target house minimum (enforced throughout page.agenda-admin.spec.ts 1348+) applies to the cogwheel in both toggle states and to +Season wherever it lands.",
+    "openQuestions": "Two, both narrow: (1) Cogwheel behavior while a bulk series/conversion run is unfinished — closeSeasonManagePanel refuses teardown (main:2298, #135/#196 contract) and the current × renders DISABLED with disabled={seriesRunUnfinished} (main:4763) as the visible explanation. With the × removed, should the cogwheel render disabled during an unfinished run (visible refusal, matching precedent and the fail-loudly memory rule) or stay enabled as a silent no-op? Precedent strongly favors disabled, but it should be pinned in RED, and a PO/Gama nod costs little since it changes what the operator sees during a stopped run. (2) Keep or drop the role='toolbar' + roving-tabindex (#156) frame — with one button (occasionally two) the WAI-APG toolbar pattern is degenerate; dropping it deletes the #156 test block and agenda_admin_toolbar_label. This is arguably an implementer call, but #156 was itself a reviewed deliverable, so a one-line Gama confirmation ('toolbar semantics may go') avoids a YELLOW later. NOT open questions: +Season placement (body explicitly allows 'alongside or below'), Escape-to-close (body silent, keep — removing it would be an unrequested a11y regression), the +Season gate (body pins 'current behavior').",
+    "sizeEstimate": "medium",
+    "dependencies": "Serialize behind the active feat/206-signin-flow chain (working tree is on it now) and the fix-193/fix-205 agents' branches per the no-parallel-branches rule — #213 edits src/routes/+page.svelte, the same file #205 just rewrote (source of the citation drift), so rebasing across another +page.svelte change mid-chain is the exact collision the rule exists to prevent. No other queued issue is known to touch the agenda toolbar region itself. #207 (24h time) also edits +page.svelte time inputs — if both enter the queue, order them explicitly rather than interleaving."
+  },
+  {
+    "issueNumber": 214,
+    "scope": "Issue #214 (task, ready; 0 comments — body is authoritative) adds toggleable event-type filter chips above the agenda list: one chip per event type that has events in the current season (not all 8 canonical types), tap to filter / tap again to show all, positioned above the agenda event list, styled to complement #211's color/icon scheme. Verified against current main (79b629d): the render site is `<AgendaList>` at src/routes/+page.svelte:6107; agenda data comes from loadFullAgenda (src/lib/agenda/agendaData.ts), where `upcoming` spans ALL seasons' future events while `recent` is current-season past events — the issue's \"current season\" chip derivation does not match the upcoming list's actual season scope (see openQuestions). AgendaItem.eventType is free text on the wire ('' when absent), labels via the shared eventTypeLabel/EVENT_TYPE_LABEL map (src/lib/events/eventTypeLabels.ts, all 8 keys present in all 4 locales). The issue's single-vs-multi-select question is RESOLVED by standing rule 3: the legacy polyphony app (polyphony.uk source at ~/projects/polyphony/apps/vault/src/routes/events/+page.svelte:14-33,153-194) has exactly this pattern — SINGLE-select native <button> filter row with an explicit \"All\" chip, plus a DISTINCT filtered-empty message (events_filter_empty) separate from the plain empty state. #211 (same visual layer, AgendaList badges) is still OPEN and also `ready` — #214's visual requirement depends on it. The 'season header' the issue positions against does not exist on main; the actual anchors are the collective-name header (data-testid=\"selected-collective\") and the admin toolbar above AgendaList.",
+    "citations": [
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "6107",
+        "current": "<AgendaList items={agendaItems} ...> — the agenda render site; chips go immediately above this. Issue's positional anchor 'below the season header' names a UI element that does not exist on main: the page header shows the collective name (data-testid=\"selected-collective\", ~line 4600), and no season name/header renders above the agenda.",
+        "status": "drifted"
+      },
+      {
+        "file": "src/lib/events/eventTypeLabels.ts",
+        "line": "30",
+        "current": "CANONICAL_EVENT_TYPES (8 v4E types, derived from EVENT_TYPE_LABEL key order) + eventTypeLabel() with own-property guard for free-text values — the issue's '#199 canonical types' reference; #199 is CLOSED/merged (e153604). All 8 event_type_* Paraglide keys verified present in messages/{en,et,lv,uk}.json.",
+        "status": "verified"
+      },
+      {
+        "file": "src/lib/agenda/agendaData.ts",
+        "line": "64-110",
+        "current": "listFullAgenda: `upcoming` = future events of ALL seasons flattened; `recent` = current season's past events only; seasonId = currentSeason(). The issue's 'current season' chip-derivation premise only half-matches what the agenda actually shows.",
+        "status": "drifted"
+      },
+      {
+        "file": "src/lib/components/agenda/AgendaList.svelte",
+        "line": "293-510",
+        "current": "Recent section renders ABOVE the upcoming list inside the component; event-type badges at lines ~343 (recent) and ~461 (upcoming) are uniform — no per-type color/icon yet, because #211 is still OPEN. Issue's 'use the same color/icon scheme as #211' cites work that has not landed.",
+        "status": "verified"
+      },
+      {
+        "file": "~/projects/polyphony/apps/vault/src/routes/events/+page.svelte",
+        "line": "14-33, 153-215",
+        "current": "Legacy polyphony.uk pattern (standing rule 3 spec source): selectedFilter = $state<EventType | 'all'>('all'), single-select native <button> chip row with explicit 'All' chip (hardcoded type set, not data-derived), and distinct filtered-empty message events_filter_empty({type}) vs events_empty.",
+        "status": "verified"
+      }
+    ],
+    "blastRadius": "(1) src/lib/components/agenda/AgendaList.event-type.spec.ts explicitly pins \"the component never filters by type: a concert renders as a full row\" — filtering must happen at page level (pre-filter items/recentItems before passing to AgendaList), or that contract needs renegotiation; page-level filtering keeps it green. (2) AgendaList.spec.ts asserts data-testid=\"agenda-empty\" when items is empty — a filter yielding zero upcoming rows would show the misleading \"No upcoming events.\" (agenda_empty_no_events); legacy precedent has a distinct filtered-empty message, so a new state/message is needed. (3) src/routes/page.agenda-event-types.spec.ts asserts a rehearsal AND a concert both visible on the real page — safe only if default state is all-shown. (4) loadForSelected() in +page.svelte resets agenda state on collective switch — new filter state must reset there too or a stale type filter survives a collective switch. (5) Shared label infrastructure: EVENT_TYPE_LABEL/eventTypeLabel is shared with the event detail page and the #199 type picker — chips must reuse it, not duplicate (the AUTH_PROVIDERS-analog shared array here is CANONICAL_EVENT_TYPES, but chips derive from data, not the canonical list). (6) Filtering upcoming items also removes their inline repertoire rows, day-group headers, and gap markers (all derived from the items array) — existing group-ordering tests compute from given items, unaffected. (7) No obsolete params/props; no other AgendaList callers besides src/routes/+page.svelte.",
+    "crossCuttingAxes": "Multi-collective/multi-db: agenda reloads per selected collective; chip set must re-derive and filter state must reset on collective switch (see loadForSelected teardown). Locales: chip labels for the 8 canonical types already exist in all 4 locales (event_type_* keys); NEW strings needed in en/et/lv/uk + Paraglide keys for: the \"All\" chip label, the filter row's aria-label/group label, and a filtered-empty message (legacy has events_filter_all/events_filter_empty precedents). Free-text types render raw via eventTypeLabel (visibly-wrong-beats-blank posture) — no new keys for those. Rights tiers: none — filtering is a client-side view concern on data the caller already sees; chips visible to anyone who can see the agenda (members and non-members alike see the list; RSVP gating is separate and untouched). Invite-vs-autoprovisioned persons: not identity-adjacent, N/A.",
+    "standingRuleHits": "Rule 1 (native controls) BINDS: chips must be native <button> elements (aria-pressed for toggle state) — legacy precedent uses native buttons; hand-rolled div+onclick is a [TRIGGER-NATIVE-CONTROLS] YELLOW. Rule 3 (polyphony.uk spec source) BINDS and resolves the issue's own single-vs-multi question: legacy events page has single-select + explicit \"All\" chip + distinct filtered-empty message — that pattern governs. Rule 2 (native inputs): no focused input field involved, N/A. Rule 4 (whole-field in-situ): not an edit field, N/A. Rules 5-7 (24h/Monday-first/ISO dates): chips render no times or dates, N/A.",
+    "openQuestions": "(1) Chip-derivation scope vs list scope: the issue says chips come from \"types that have events in the current season\", but main's upcoming list spans ALL seasons (agendaData.ts). An upcoming next-season event whose type has no current-season chip is then either unfilterable-and-always-visible or silently orphaned — need a ruling: derive chips from current-season events (literal) or from all visible agenda events (likely intent). (2) Does the filter apply to the Recent section (current-season past events, rendered above upcoming) or only to upcoming rows? Legacy filtered its whole list. (3) Free-text and empty event_type values: does a free-text type ('proov') get its own raw-labeled chip, and where do ''-typed events go while a filter is active (always hidden vs always shown)? (4) Minor, likely Tallis-pinnable without PO: issue's \"tap again to deselect\" vs legacy's explicit \"All\" chip — the two can coexist (All chip + tap-again both clear); confirm both are wanted. Per feedback_ask_gama_first, route 1-3 to Gama before RED.",
+    "sizeEstimate": "medium",
+    "dependencies": "#211 (visual distinction for event types — OPEN, also `ready`, 0 comments) touches the same files (AgendaList.svelte badges, +page.svelte) and #214 explicitly requires reusing its color/icon scheme: sequence #211 before #214, or bundle both in one slice pipeline; shipping #214 first means plain chips restyled later. The concurrently-running feat/206-signin-flow branch touches only auth files (src/lib/auth/*, src/routes/auth/*) — no overlap with #214's surface. No other queue conflicts found."
+  },
+  {
+    "issueNumber": 215,
+    "scope": "Rework the series-creation recurrence preview in src/routes/+page.svelte (season panel form) so every generated occurrence date is rendered as a directly-toggleable row: tap/click (and Tab+Enter) toggles a date into/out of the skip set (skipped = greyed/struck but still visible), the live count updates, and the separate skip-date `<input type=date>` + \"Lisa\" button + removable chip list are deleted outright. Issue #200 (skip-date discoverability heading) is superseded and is already CLOSED — no conflict. There are no comments on #215, so the body is authoritative. IMPORTANT drift in the body itself: it claims \"Preview shows only a count\" — false on current main; since #132/T5 the preview already lists every generated date (scrollable, max-h-32, testid series-create-preview-date-<iso>) beneath the count. The real delta is (a) making those rows interactive toggles, (b) rendering the FULL candidate set including skipped dates (today `seriesCreatePreviewDates` calls generateEventDates WITH skipDates, so skipped dates vanish from the list — the new UI needs the unskipped candidate set plus skip-membership styling), (c) deleting the skip input/chips UI and its 4 Paraglide keys, (d) responsive layout. The submit pipeline is untouched: seriesCreateSkipDates still feeds generateEventDates (recurrence.ts signature unchanged), the SeriesCreateFormSnapshot.skipDates field and per-db resume mechanism stay, and the empty-set refusal (all dates toggled off → 0 events → refuse before writing the series) already exists. The resume-locked contract (review F5: form inert while a stopped run is resumable) must extend to the new toggles — while seriesCreateResume is non-null the rows show the remainder and must be non-interactive. Capability note, verified: losing the free-form skip input loses nothing functional — a skip date that is not an occurrence is a pinned no-op in recurrence.ts.",
+    "citations": [
+      {
+        "file": "(issue #215 body)",
+        "status": "none-given",
+        "current": "Issue body contains zero file/line citations; all anchors below were located by me against current main."
+      },
+      {
+        "file": "(issue #215 body claim: 'Preview shows only a count')",
+        "status": "wrong",
+        "current": "Preview already lists all dates: src/routes/+page.svelte:5279-5310 renders count (5291-5297, suppressed during resume) + one row per date in a max-h-32 scroll div (5304-5307, testid series-create-preview-date-<YYYY-MM-DD>)."
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5225-5277",
+        "status": "verified",
+        "current": "Skip UI to delete: heading (5227-5231), date input series-create-skip-date (5234-5245), Add button (5246-5253), chip list + per-chip × remove (5254-5277)."
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3691, 4024, 4121, 4164-4175",
+        "status": "verified",
+        "current": "seriesCreateSkipDateInput state (3691) + its resets (4024, 4121) + addSeriesCreateSkipDate/removeSeriesCreateSkipDate — all become obsolete/replaced by a toggle function."
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3948-3985",
+        "status": "verified",
+        "current": "seriesCreatePreviewDates ($derived calling real generateEventDates WITH skipDates — must be split into candidate-set-without-skips for the toggle list), seriesCreatePreviewRows (resume-remainder override, 3974-3977), seriesCreateIsoDay (3985)."
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3734, 3927, 3960, 4258, 4328",
+        "status": "verified",
+        "current": "SeriesCreateFormSnapshot.skipDates (3734), seriesCreateLocked = resume non-null (3927), skipDates fed to preview/submit/snapshot — all stay as-is."
+      },
+      {
+        "file": "src/lib/events/recurrence.ts",
+        "status": "verified",
+        "current": "generateEventDates skipDates contract (non-occurrence skip = no-op, no re-anchoring) — unchanged consumer."
+      },
+      {
+        "file": "messages/en.json",
+        "line": "463-467, 481-482",
+        "status": "verified",
+        "current": "series_create_skip_heading/_date_label/_add/_remove become obsolete (also et.json:463-466, lv.json:464-467, uk.json:465-468); series_create_preview_label + _count_one/_count_other stay ('Luuakse {count} sündmust' = et.json:481-482, matching the issue's quoted string)."
+      }
+    ],
+    "blastRadius": "Tests pinning current skip-input behavior, all on main: (1) src/routes/page.series-create.spec.ts — DOM-map comment lines 97-105 documents the skip testids; line 477/526-527 asserts the skip picker + Add button exist; 595-619 'adding a SKIP date chips it and drops it from the preview; removing restores'; 828-843 'skipped first/last occurrence moves the stored series bounds'; 867-884 'occurrences honour the SKIP set (2 events not 3)'; 1285-1307 + 1417 preview-count singular/plural; resume-section tests (~1340+) pin count suppression, rows=remainder, and form-inert-while-resumable (F5) — the skip-driving tests must be rewritten toggle-driven, the bounds/honour-skip-set behaviors must survive under the new interaction, and preview rows changing from excluding-skipped to showing-skipped-greyed breaks the previewDates() helper's assumptions (it reads testids; skipped rows now appear). (2) src/routes/page.agenda-admin.spec.ts:1450-1463 — 44×44 touch-target sweep on series-create-skip-add and series-create-skip-remove-<date> (icon-only): controls deleted, test must be replaced with touch-target assertions on the new toggle rows (house 44×44 minimum applies to each toggle). (3) Obsolete artifacts: seriesCreateSkipDateInput state + add/remove handlers + 4 Paraglide keys × 4 locales (16 message entries). (4) Unchanged consumers: recurrence.ts/generateEventDates, createEventSeries/createEvent submit path, resume-by-db snapshot (skipDates array shape kept), season-panel entry point. No shared component involved — the skip UI is inline markup, not an extracted component; no AUTH_PROVIDERS-style shared array.",
+    "crossCuttingAxes": "Multi-collective/multi-db: the per-db resume mechanism (seriesCreateResumeByDb, #138) snapshots skipDates and re-renders a stopped run's form after a collective switch — toggle state must round-trip through SeriesCreateFormSnapshot.skipDates unchanged (it does if toggles just write seriesCreateSkipDates), and toggles must be inert while seriesCreateLocked (resume non-null), matching review-F5's pinned inert-boxes contract. Locales: new UI strings needed in all four (en/et/lv/uk) — at minimum per-row accessible toggle labels (e.g. skip-{date}/restore-{date} aria-labels or an aria-pressed name) and possibly a visible 'skipped' state label; four existing keys retire across all four files; count keys already localized and live-updating (derived). Rights: no change — the form is only reachable via the season-manage gear, fail-closed for non-editors (pinned by spec line 451, 'NON-editor: no season-manage-gear at all'); toggling is client-side pre-submit state, no new capability exposed. Invite-vs-autoprovisioned persons: not identity-adjacent — N/A.",
+    "standingRuleHits": "Rule 1 (native selects): not directly hit — no dropdown involved. Rule 2 (native controls): binds the toggle implementation — each date toggle must be a native element (native `<button type=button>` with aria-pressed, or native checkbox), never a div+onclick; Bentham's [TRIGGER-NATIVE-CONTROLS] YELLOW applies. Rule 4/4b analog: every toggle must be a real Tab stop with Enter/Space activation — 'tap/click to toggle' in the body must not ship click-only ([TRIGGER-INSITU-WHOLE-FIELD]'s keyboard half; native button gets it free); whole-row activator (not a tiny glyph) matches rule 4's spirit and the 44×44 house minimum. Rule 7 (ISO dates): preview rows must keep displaying YYYY-MM-DD (current seriesCreateIsoDay slice already does; any redesign adding locale-formatted dates would violate it). Rule 5 (24h) and rule 6 (Monday-first): not touched by this issue itself, BUT #207's scope owns the adjacent day-select/time inputs in the same form — see dependencies. Rule 3 (polyphony.uk spec source): story already authored by Gama from Mihkel's direct words; no further story work.",
+    "openQuestions": "Two worth a cheap Gama ping, neither obviously blocking: (1) Layout intent for large sets — a daily series over a season is ~90 toggleable dates; current list scrolls inside max-h-32 specifically to keep submit/cancel on a phone screen. Does 'responsive preview' mean keep an inner-scroll column, or a wrapping chip/grid layout (which for 90 dates pushes the submit button far down on mobile)? RED can pin either; picking wrong wastes a GREEN round. (2) Skipped-date visibility on submit-refusal edge: with every date toggled off, submit hits the existing 'recurrence yields NOTHING' refusal — confirm that refusal (rather than disabling submit) is the intended UX for an all-skipped set. Everything else is determinate: skipped dates stay visible greyed/struck (explicit in body), count counts only ON dates (explicit), no separate skip input (explicit), #200 superseded and already closed.",
+    "sizeEstimate": "medium",
+    "dependencies": "Serialize behind the in-flight #206 branch (feat/206-signin-flow currently checked out; single-tree, no-parallel-branches rule). Strong same-region overlap with #207 (rules 5-7: 24h time at +page.svelte:5135, Monday-first day select at 5123-5130, ISO date rendering) — both edit the same series-create recurrence box in +page.svelte; whichever lands second must re-verify line anchors and #207's rule-7 ISO rendering must cover the new toggle rows if it lands after. Milder same-file overlap with #213 (season toolbar), #216 (series deletion progress), #212 (event-to-series conversion) — same +page.svelte, different regions; ordinary one-branch-at-a-time sequencing suffices. #200 requires nothing: already CLOSED as superseded."
+  },
+  {
+    "issueNumber": 216,
+    "scope": "Add a per-event progress counter during series cascade deletion, mirroring the existing creation-progress idiom. Verified current state on main (79b629d): the CREATE side keeps `seriesCreateProgress = $state<{current,total}|null>` (src/routes/+page.svelte:3714), sets `{ current: created + 1, total }` inside the bulk occurrence loop (:4475), and renders it as a `role=\"status\"` paragraph with `m.series_create_progress` (:5322-5329; key in all four messages/*.json). The DELETE side has no equivalent: `deleteEventSeries(cfg, seriesId, fetchImpl?)` (src/lib/seasons/seasonManage.ts:493-513) reads the occurrence work list via `listChildIds`, then serially calls `deleteEvent` per occurrence — the loop lives in the DATA layer, not the page, so unlike creation the page cannot count iterations itself; GREEN must thread an optional progress callback (e.g. `onProgress?(current,total)`) out of `deleteEventSeries`, positioned so it does NOT displace the existing 3rd positional `fetchImpl` param (seasonManage.delete.spec.ts calls it ~15 times with `impl` as arg 3). The page handler `onSeasonManageSeriesDelete` (:3016-3044) then holds a delete-progress state slot and renders it near the series list. The `total` must be the cascade's own work-list count, per the pinned #197 2nd-pass-F2 contract (\"never announce a number the write never checked\") — not `seasonManageArmedSeriesCount` and not the row's client-derived `eventCount`. New Paraglide key (creation-parallel, e.g. `series_delete_progress` \"Deleting event {current} of {total}…\") in en/et/lv/uk. Issue has zero comments — the body is the whole spec; nothing superseded. Standalone-event deletion (`deleteEvent`'s own attendance/program_item child cascade) is explicitly out of scope: the issue names series cascade only, counter granularity per occurrence event.",
+    "citations": [
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3714 (state), 4475 (set in bulk createEvent loop), 5322-5329 (render)",
+        "current": "`series_create_progress` key rendered in a role=\"status\" <p data-testid=\"series-create-progress\"> inside the series-create form; state set per-iteration as {current: created+1, total}",
+        "status": "verified"
+      },
+      {
+        "file": "src/lib/seasons/seasonManage.ts",
+        "line": "493-513",
+        "current": "Issue gives bare filename; actual path is src/lib/seasons/seasonManage.ts. The cascade delete function is `deleteEventSeries` — listChildIds work-list read, serial deleteEvent loop with SeriesCascadePartialError on failure, series entity DELETE last, resolves with deleted count",
+        "status": "verified"
+      },
+      {
+        "file": "messages/et.json",
+        "line": "475",
+        "current": "\"series_create_progress\": \"Loon sündmust {current} / {total}…\" — matches the issue's quoted Estonian pattern; en:475, lv:476, uk:477 have parallel keys",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3016-3044",
+        "current": "onSeasonManageSeriesDelete — the page-side series delete handler that will own the new progress state (issue implies but does not cite it)",
+        "status": "none-given"
+      }
+    ],
+    "blastRadius": "(1) src/routes/page.season-manage-delete.spec.ts:444 and :635 assert `deleteEventSeriesMock).toHaveBeenCalledWith(CFG, 'series-1')` — EXACT-args; if the page passes a progress callback as a 3rd/4th argument these two assertions FAIL and must be updated (e.g. expect.any(Function)). The suite also mocks deleteEventSeries at module level (:126), so route-level progress tests must make the mock invoke the callback. (2) src/lib/seasons/seasonManage.delete.spec.ts pins the signature `deleteEventSeries(cfg, seriesId, fetchImpl?)` and passes `impl` as 3rd positional arg throughout — an onProgress param inserted BEFORE fetchImpl breaks the whole file; it must go after fetchImpl or via an options object. (3) Callers of deleteEventSeries: exactly one non-spec caller, +page.svelte:86 import → onSeasonManageSeriesDelete. deleteEvent has a second caller (onSeasonManageEventDelete, :3046) — untouched if the callback lives only on deleteEventSeries. (4) Page state hygiene: the new delete-progress slot must be cleared in resetSeasonManage / on collective switch and on the .finally() of the delete, the same lifecycle seasonManageDeleteError/PendingId follow; seriesCreateProgress's reset points (:4026, :4049, :4125, :4508, :4535) are the pattern. (5) messages/*.json: one new key ×4 files; no existing key changes, so no Paraglide consumer breaks. (6) No shared component involved — the progress line is an inline <p role=\\\"status\\\">, same as creation; no AUTH_PROVIDERS-style shared array. (7) No params become obsolete; deleteEventSeries's deleted-count return value stays (the success announcement at :3033 depends on it).",
+    "crossCuttingAxes": "Multi-collective/multi-db: delete cfg is `{db: selected.db, token}` captured at click; a collective switch mid-cascade leaves the promise running against the OLD db while the panel resets — the new progress state must be dropped by the same resetSeasonManage/dbChanged path so a stale counter never renders over the new collective (note: creation has per-db resume machinery, seriesCreateResumeByDb #138; deletion deliberately has none — partial cascades surface via SeriesCascadePartialError and are retry-resumable server-side, so NO resume machinery should be built here). Locales: one new UI string with {current}/{total} params required in ALL FOUR of messages/en.json, et.json, lv.json, uk.json + Paraglide key — Comenius step; et copy per issue: \\\"Kustutan sündmust {current} / {total}…\\\". Rights tiers: no new surface — the counter renders inside the already rights-gated season-manage panel (gear requires _owner OR _editor on the season via manageRightsFrom; the delete itself additionally needs Entu _owner on target, already handled by EntityDeleteForbiddenError → forbidden copy). Progress visibility inherits the panel gate; nothing to add. Invite-vs-auto-provisioned persons: not identity-adjacent — N/A.",
+    "standingRuleHits": "None bind materially. Rules 1/2 (native selects/inputs): no form controls in scope — the deliverable is a read-only status line. Rule 4 (whole-field+tab in-situ): no in-situ edit fields touched. Rule 3 (polyphony.uk spec source): story already authored by Gama. Rules 5-7 (24h time / Monday-first / ISO dates, from #207): the string contains only counters, no times/dates/weeks. House patterns that DO apply (not standing rules but pinned by existing specs): role=\\\"status\\\" live region for the counter (matching series-create-progress and WCAG 4.1.3 posture of season-manage-delete-status), and fail-loudly on partial cascade (already in place via SeriesCascadePartialError → 'partial' copy — progress must not swallow it).",
+    "openQuestions": "One, minor: PLACEMENT. The issue says \\\"Show in the same position as the creation progress bar\\\", but that is literally impossible — the creation progress renders INSIDE the series-create form (+page.svelte:5322), which is not mounted during a delete; deletion fires from a series-list row in the season-manage panel. The defensible reading: same visual idiom (role=\\\"status\\\", text-xs) rendered under the SERIES list in the panel, adjacent to where season-manage-delete-error renders (:5455-5467). Recommend a one-line Gama confirm of that placement before RED pins a testid location; everything else in the body is unambiguous (granularity per occurrence event, counter semantics current-in-flight 1-based matching creation's `created + 1`).",
+    "sizeEstimate": "small",
+    "dependencies": "No file overlap with the concurrently running feat/206-signin-flow pipeline (its diff touches only src/lib/auth/* and src/routes/auth/* — none of +page.svelte, seasonManage.ts, messages/*.json). The team's no-parallel-branches rule still serializes #216 behind the running chain. Watch the fix-205 agent: #205 merged 2385 insertions into +page.svelte and any further #205 follow-up commits to +page.svelte before #216 starts will shift the line numbers cited above (anchor RED tests on testids/keys, not lines). No ordering constraint against other ready-queue issues known beyond that."
+  },
+  {
+    "issueNumber": 217,
+    "scope": "Add season delete to the season-management panel (the #132/T3 gear panel in src/routes/+page.svelte, gated at manageableSeasonRights === 'editor'). Two-step inline confirm in the #197 idiom (arm → confirm/cancel, one armed row at a time, pending-id double-tap guard, role=status success announcement), with the confirm quoting live server-side scope: count of event series + events + repertoire items that the cascade will destroy. New data-layer cascade (deleteSeason in src/lib/seasons/seasonManage.ts): delete each event series (via existing deleteEventSeries, which already cascades occurrences → attendance/program_item), each standalone event (via deleteEvent), each repertoire_item (child-of-season, read via repertoireData.ts's _type.string=repertoire_item&_parent.reference=seasonId), then the season entity itself — children-before-parent, serial (no Entu bulk delete), fail-loud with partial-progress errors in the deleteErrors.ts family, and the CHILD_READ_LIMIT refusal guard for over-cap seasons. Per-entity progress counter during the cascade in the series_create_progress render position. No comments on the issue — the body is the whole spec; the only supersession-adjacent note is that the cited \"#216 pattern\" does not exist on main yet (#216 is itself still open), so the actual in-repo precedent is the series-CREATION progress counter (series_create_progress, +page.svelte ~5322) and eventConvertProgress.",
+    "citations": [
+      {
+        "file": "src/lib/seasons/seasonManage.ts",
+        "line": "~454 (deleteEvent), ~486 (deleteEventSeries), ~318-360 (cascade contract comments)",
+        "current": "#197 delete layer exists exactly as the issue assumes: deleteEvent cascades attendance+program_item children; deleteEventSeries cascades occurrences and resolves with the deleted count; countSeriesOccurrences gives the live confirm figure; 403 → EntityDeleteForbiddenError",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "1950 and 2559",
+        "current": "manageableSeasonId !== null && manageableSeasonRights === 'editor' — the rights gate quoted by the issue, verbatim on current main (post-#205)",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "1931-2110 (panel state), 5400-5560 (series/event delete rows + two-step confirm markup)",
+        "current": "season management panel (gear view) and the #197 two-step confirm pattern the issue says to copy — both present; state slots seasonManageDeleteArmed / seasonManageDeletePendingId / seasonManageArmedSeriesCount / seasonManageDeleteStatus / seasonManageDeleteError",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "5322-5329",
+        "current": "series_create_progress counter (creation loop) — the REAL precedent for the progress counter; the issue cites '#216 pattern' but #216 is still OPEN and unimplemented, so no deletion-progress pattern exists on main yet",
+        "status": "drifted"
+      },
+      {
+        "file": "src/lib/repertoire/repertoireData.ts",
+        "line": "55",
+        "current": "repertoire_item is child-of-season (_type.string=repertoire_item&_parent.reference=seasonId, limit=500) — confirms the issue's cascade inventory (series + standalone events + repertoire items); repertoireActions.ts:167 already has deleteRepertoireItem",
+        "status": "verified"
+      },
+      {
+        "file": "src/routes/+page.svelte",
+        "line": "3012-3016 (refreshAfterSeasonManageDelete)",
+        "current": "post-delete refresh currently uses loadForSelected({keepSeasonManage:true}) + refreshSeasonManageLists — WRONG for season delete: the panel's subject is gone, so season delete needs the panel-tearing path (resetSeasonManage + manageableSeasonId recompute), not the panel-preserving one",
+        "status": "verified"
+      }
+    ],
+    "blastRadius": "Tests pinning current behavior: src/routes/page.season-manage-delete.spec.ts (pins panel delete testids/behaviors incl. 'closing the panel disarms' and the keepSeasonManage refresh — new season-delete rows join this family; if deleteEventSeries grows a progress callback the optional-param change must not break its pinned signature), src/lib/seasons/seasonManage.delete.spec.ts (pins deleteEvent/deleteEventSeries/countSeriesOccurrences wire contracts), page.season-manage.spec.ts (pins panel content — a new delete button inside the panel may trip strict content/focus-order assertions), page.season-create.spec.ts + page.event-create-after-season.spec.ts (season lifecycle around the same panel). Shared code: deleteErrors.ts gains a SeasonCascadePartialError-style discriminator alongside the existing three; seasonManageDeleteError's list: 'series'|'events' union widens; seasonManageDeleteFailure/seasonManageDeleteErrorText switch grows a branch. Post-delete state is the trickiest consumer: refreshAfterSeasonManageDelete's keepSeasonManage:true path is wrong for season delete — manageableSeasonId/manageableSeasonRights must reset and loadForSelected must recompute the next manageable season (or the empty/create-season state). messages/{en,et,lv,uk}.json all at 481 keys — new keys land in all four. The CHILD_READ_LIMIT refusal (seasonManage.ts ~line 380-410) binds the new cascade too. Concurrent-queue file collisions: #216 (same cascade functions + progress rendering — #217 arguably subsumes it), #213 (redesigns the very toolbar/gear that hosts the panel), #206 pipeline currently running on this tree (feat/206-signin-flow) — all touch +page.svelte.",
+    "crossCuttingAxes": "Multi-collective/multi-db: applies — the panel resets on collective switch (resetSeasonManage via loadForSelected); a season-delete cascade in flight when the db changes has no resume machinery (the #196 convert-resume is deliberately single-slot and not rebuilt elsewhere); existing precedent (deleteEventSeries) just runs its promise to completion and reports partial errors, which is the sane default here. cfg is always {db: selected.db, token} per call, so no cross-db leakage. Locales: applies — new UI strings needed (delete button label + aria, confirm text with scope counts, confirm/cancel shorts if reused keys don't fit, progress counter, success status, error + partial + forbidden variants) in ALL FOUR of en/et/lv/uk via Paraglide; the issue's Estonian sample 'Kustutan sündmust X / Y' is a sample, not the only locale. Rights tiers: applies — UI gate is manageableSeasonRights === 'editor' (same as every panel control), but Entu DELETE requires _owner on each target (#197 review F3), so an _editor-not-_owner caller gets a 403 → the existing forbidden message ('do not invite retry'); mixed-rights callers can produce partial cascades → partial-error machinery. Invite-vs-autoprovisioned persons: not applicable — nothing identity-adjacent; conductor references on the season are soft-deleted by Entu's referencing-property sweep automatically.",
+    "standingRuleHits": "Rules 1-2 (native controls/inputs): bind — all new controls must be native <button type=\"button\"> elements, which the #197 confirm idiom already uses; no custom widgets. Rule 3 (polyphony.uk spec source): story-authoring-time rule, already Gama's job — does not bind RED, though polyphony.uk could sanity-check season-delete behavior if disputes arise. Rule 4 (whole-field+tab in-situ): not applicable — no in-situ edit field here; buttons are native so Tab-reachability is free. Rules 5 (24h), 6 (Monday-first), 7 (ISO dates): not applicable — the feature renders counts and names, no time/date pickers or date displays.",
+    "openQuestions": "Two, both dispatch/spec-precision rather than deep product forks: (1) #216/#217 overlap — #217's progress counter during the season cascade requires threading per-entity progress through the same deleteEventSeries loop that #216 exists to instrument; running them separately duplicates work and creates a same-file conflict. Needs a Gama ruling on ordering: fold #216 into #217 (one slice, Closes both) or land #216 first. (2) Progress-counter denominator — the issue says 'Kustutan sündmust X / Y or similar per-entity feedback' but the confirm scope enumerates three entity kinds (series + events + repertoire items) while the sample counts only 'sündmust' (events); RED must pin whether Y is events-only or every deleted entity (series + events + repertoire items, possibly + cascaded attendance/program_item rows). A default of 'every top-level deleted entity, one shared counter' is defensible, but since Mihkel quoted specific copy, a one-line Gama confirm is cheap. Not open questions (already settled by existing contracts): 403 handling (forbidden, no retry), over-cap refusal (CHILD_READ_LIMIT), post-delete panel teardown (panel's subject is gone → panel closes, page recomputes manageable season).",
+    "sizeEstimate": "medium",
+    "dependencies": "Strong overlap with #216 (same cascade functions in seasonManage.ts + same progress-render area of +page.svelte) — decide fold-or-precede before RED. Same-file serialization with #213 (season toolbar/cogwheel redesign hosts the gear that opens this panel) — do not run in parallel. The tree currently has the #206 pipeline active on feat/206-signin-flow touching +page.svelte territory (and fix-193/fix-205 agents live) — the no-parallel-branches rule applies; queue #217 after the running chain merges."
+  }
+]

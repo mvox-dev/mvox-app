@@ -2,7 +2,15 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
-### [NEXT SESSION] 2026-09-02 00:35 EEST — session MVOX-12 checkpoint (pre-CLI-update restart likely: fable 5.1 needs claude ≥2.1.251, we're on 2.1.220)
+### [NEXT SESSION] 2026-09-02 01:20 EEST — session MVOX-13 wake (post CLI update, running 2.1.236 / fable 5.1)
+
+mvox-app main @ `44389f9`. #206 merged `1ccd497` + closed; between-chains batch committed `44389f9` (template merge-gate fix, rules 5-7 docs) — BOTH done before restart, so the between-chains queue is cleared. finn/bentham/perotin respawned 01:12. Mail inbox empty on wake. NEW on board: #218 (localize sign-in surface, Gama, sequenced after #207-#217).
+
+**Research 208-217 COMPLETE** — persisted at `teams/mvox-dev/memory/research/research-208-217.json` (workflow `wf_d94746dd-54a`, bb474219 session dir). Sizes: 208 S, 209 M, 211 S, 212 S, 213 M, 214 M, 215 M, 216 S, 217 M. Pre-RED rulings requested from po-team 01:20 (one mail, grouped per issue). Dependency notes: #211 before #214; fold #216 into #217 (pending ruling); #207/#208/#215 all edit the series/event-create block of +page.svelte — re-verify line anchors at branch time.
+
+**NEXT:** /mvox-pickup #207 → launch pipeline. Then per rulings: #208, #209, #211→#214, #212, #213, #215, #216+#217, #218.
+
+### [PREVIOUS] 2026-09-02 00:35 EEST — session MVOX-12 checkpoint (pre-CLI-update restart likely: fable 5.1 needs claude ≥2.1.251, we're on 2.1.220)
 
 mvox-app main @ `79b629d`. 10 issues closed this session: #199 #204 #200 #201 #196 #193 (`8fb676c`, 4-round review + classifier-halt recovery) #205 (`79b629d`, same pattern) + chores. PO-side is now Henry (po-team on fable 5.1 update; mail them, first-acted on wake).
 
