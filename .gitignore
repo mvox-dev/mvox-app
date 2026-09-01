@@ -36,3 +36,7 @@ scripts/migrations/snapshots/
 
 # Seed run reports — may contain member PII (names, emails); never commit
 scripts/migrations/seed-results/
+
+# Crede seed scripts hardcode real member PII (names/emails) — keep out of git until redacted (Pérotin owns refactor)
+scripts/migrations/seed-1*-crede-*.ts
+scripts/migrations/seed-188-phase3b-crede-*.ts
