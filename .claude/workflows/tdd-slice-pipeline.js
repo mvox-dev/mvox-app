@@ -73,6 +73,10 @@ const REPO = _args.repoPath
 const CO_AUTHOR = _args.coAuthor
 const tasks = _args.tasks
 
+const STRUCT_FINAL = '\n\nCRITICAL: your FINAL action MUST be calling the StructuredOutput tool with your result object. A prior run lost a completed GREEN because the agent ended with plain text instead.'
+// All template agents are schema-forced; agentS appends the StructuredOutput guard uniformly.
+const agentS = (prompt, opts) => agent(prompt + STRUCT_FINAL, opts)
+
 const VERDICT_SCHEMA = {
   type: 'object',
   properties: {
@@ -171,7 +175,7 @@ for (let i = 0; i < tasks.length; i++) {
     phase('SPIKE')
     log('SPIKE: ' + taskLabel)
 
-    const spike = await agent(
+    const spike = await agentS(
       task.spikePrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nYou are researching to discover facts that tests should assert. Read source, probe API behavior, report structured findings. Do NOT write code or tests — only research and report.',
       { label: 'spike-' + task.issueNumber, phase: 'SPIKE', schema: SPIKE_SCHEMA, model: 'claude-opus-5[1m]' }
     )
@@ -188,7 +192,7 @@ for (let i = 0; i < tasks.length; i++) {
     phase('SEED')
     log('SEED: ' + taskLabel)
 
-    const seed = await agent(
+    const seed = await agentS(
       task.seedPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nYou are performing schema/data setup via the Entu API. Follow the §8.6 discipline: dry-run first, verify, then execute. Commit ledger artifacts to the repo. Report what was created/modified.\n\nIMPORTANT: Do NOT include "Closes #" trailers in commit messages. SEED commits are infrastructure/data setup, not feature delivery — issue closure belongs to the MERGE phase only.',
       { label: 'seed-' + task.issueNumber, phase: 'SEED', schema: RESULT_SCHEMA, model: 'claude-opus-4-6[1m]' }
     )
@@ -205,7 +209,7 @@ for (let i = 0; i < tasks.length; i++) {
     phase('PREFLIGHT')
     log('PREFLIGHT: ' + taskLabel)
 
-    const preflight = await agent(
+    const preflight = await agentS(
       task.preflightPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nValidate data prerequisites before proceeding to RED/GREEN. READ-ONLY — do NOT modify any data. Report pass/fail per check. If any prerequisite is missing, report what needs to be fixed (migration, seed, config) before this task can proceed.',
       { label: 'preflight-' + task.issueNumber, phase: 'PREFLIGHT', schema: PROBE_SCHEMA, model: 'claude-sonnet-5[1m]' }
     )
@@ -222,8 +226,8 @@ for (let i = 0; i < tasks.length; i++) {
     phase('RED')
     log('RED: ' + taskLabel)
 
-    const red = await agent(
-      task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED), then commit:\ngit add -A && git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"',
+    const red = await agentS(
+      task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED). Stage EXPLICITLY by path — NEVER git add -A (the shared tree may hold dirty team memory files that must not ride into the branch). Then: git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"',
       { label: 'red-' + task.issueNumber, phase: 'RED', schema: RESULT_SCHEMA, model: 'claude-fable-5' }
     )
 
@@ -238,8 +242,8 @@ for (let i = 0; i < tasks.length; i++) {
   phase('GREEN')
   log('GREEN: ' + taskLabel)
 
-  const green = await agent(
-    task.greenPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\nBRANCH: ' + task.branch + ' (already checked out)\n\nVerification:\n1. cd ' + REPO + ' && pnpm test -- --run — ALL pass\n2. cd ' + REPO + ' && pnpm check — 0 type errors\n\nGit: git add -A && git commit -m "' + task.commitPrefix + ': ' + task.title + '"',
+  const green = await agentS(
+    task.greenPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\nBRANCH: ' + task.branch + ' (already checked out)\n\nVerification:\n1. cd ' + REPO + ' && pnpm test -- --run — ALL pass\n2. cd ' + REPO + ' && pnpm check — 0 type errors\n\nGit: stage EXPLICITLY by path (NEVER git add -A — dirty team memory files may sit in the tree), then git commit -m "' + task.commitPrefix + ': ' + task.title + '"',
     { label: 'green-' + task.issueNumber, phase: 'GREEN', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
 
@@ -259,7 +263,7 @@ for (let i = 0; i < tasks.length; i++) {
   while (!integrationPassed && integrationAttempts < 2) {
     integrationAttempts++
 
-    const integration = await agent(
+    const integration = await agentS(
       'Verify that all new features on branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ') are REACHABLE from the actual app — not just correct in isolation.\n\nWORKING DIRECTORY: ' + REPO + '\n\n## Wiring checks\n1. For every new component: grep for its import in a page/route file. If not imported anywhere, it is unreachable.\n2. For every new data function (exported from a .ts file): grep for its import. If only imported by test files, it is unreachable.\n3. For every new UI element: check that the page renders it (conditionally is fine, but the conditional must be reachable).\n4. Run: cd ' + REPO + ' && pnpm test -- --run && pnpm check\n\n## Report\nReturn passed=true if every new export is imported from at least one non-test file AND the page/route renders the feature. Return passed=false with a checks array listing each unreachable item.\n\nDo NOT fix anything — only verify and report.',
       { label: 'integration-' + task.issueNumber + '-' + integrationAttempts, phase: 'INTEGRATION', schema: PROBE_SCHEMA, model: 'claude-sonnet-5[1m]' }
     )
@@ -271,7 +275,7 @@ for (let i = 0; i < tasks.length; i++) {
       if (integrationAttempts < 2) {
         phase('GREEN-FIX')
         log('INTEGRATION found wiring gaps for ' + taskLabel + ', fixing (attempt ' + integrationAttempts + ')')
-        await agent(
+        await agentS(
           'Fix wiring gaps on branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ').\n\nWORKING DIRECTORY: ' + REPO + '\n\nThe INTEGRATION check found these unreachable features:\n' + failSummary + '\n\nFor each gap: add the missing import/render in the appropriate page or route file. Do NOT rewrite the feature — just wire it in.\n\nVerify: pnpm test -- --run && pnpm check. Commit the fix.',
           { label: 'green-fix-' + task.issueNumber + '-' + integrationAttempts, phase: 'GREEN-FIX', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
         )
@@ -294,7 +298,7 @@ for (let i = 0; i < tasks.length; i++) {
   while ((!verdict || verdict.verdict !== 'GREEN') && reviewAttempts < 3) {
     reviewAttempts++
 
-    verdict = await agent(
+    verdict = await agentS(
       'You are the architecture reviewer (Bentham) for mvox. Review branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ').\n\nWORKING DIRECTORY: ' + REPO + '\n\n## Review checklist\n' + task.reviewChecklist + '\n\nRun: cd ' + REPO + ' && git diff main...HEAD --stat\nRead changed files. Then: pnpm test -- --run && pnpm check\n\nIssue GREEN / YELLOW / RED verdict.\n\nFor non-GREEN: list findings as objects with:\n- description: what is wrong (specific file, line, behavior)\n- fixShape: (optional) your recommended fix — be specific about the root cause and what code change resolves it\n- blockerType: (optional) "code" if fixable by editing source, "data" if it needs a migration or live data change, "config" if it needs environment/config change. Omit for code-only findings.',
       { label: 'review-' + task.issueNumber + '-' + reviewAttempts, phase: 'REVIEW', schema: VERDICT_SCHEMA, model: 'claude-opus-5[1m]' }
     )
@@ -317,7 +321,7 @@ for (let i = 0; i < tasks.length; i++) {
       if (reviewAttempts < 3) {
         phase('FIX')
         log('Review ' + verdict.verdict + ' for ' + taskLabel + ', fixing (attempt ' + reviewAttempts + ')')
-        await agent(
+        await agentS(
           'Fix review findings for #' + task.issueNumber + ' (' + task.title + ') in ' + REPO + ' on branch ' + task.branch + '.\n\nVerdict: ' + verdict.verdict + '\n\n## Findings\n' + formatFindings(verdict.findings) + '\n\nFor each finding, understand the ROOT CAUSE before writing a fix. The "Recommended fix" (if provided) describes the fix shape — use it as a starting point but verify it against the actual code.\n\nFix, verify (pnpm test -- --run && pnpm check), commit.',
           { label: 'fix-' + task.issueNumber + '-' + reviewAttempts, phase: 'FIX', schema: RESULT_SCHEMA, model: 'claude-opus-5[1m]' }
         )
@@ -325,18 +329,22 @@ for (let i = 0; i < tasks.length; i++) {
     }
   }
 
-  if (!verdict || verdict.verdict === 'RED') {
-    log('REVIEW failed for ' + taskLabel)
-    return { success: false, failedAt: taskLabel + ' REVIEW', results: results, verdict: verdict }
+  if (!verdict || verdict.verdict !== 'GREEN') {
+    // NO MERGE ON NON-GREEN. YELLOW surviving the fix cap means the remaining findings are
+    // decision-shaped (proven on #193/#205/#206) — halt and hand to team-lead: triage findings,
+    // route product calls to PO, fix, obtain standing-reviewer (Bentham) verdict, merge manually
+    // with the gate documented in the commit body.
+    log('REVIEW did not reach GREEN for ' + taskLabel + ' (final: ' + (verdict ? verdict.verdict : 'none') + ') — halting; no merge on non-GREEN.')
+    return { success: false, failedAt: taskLabel + ' REVIEW (' + (verdict ? verdict.verdict : 'none') + ' after fix cap — no merge on non-GREEN)', results: results, verdict: verdict }
   }
-  log('REVIEW: ' + verdict.verdict)
+  log('REVIEW: GREEN')
 
   // ── MERGE ────────────────────────────────────────────────────────────────
   phase('MERGE')
   log('MERGE: ' + taskLabel)
 
-  const merge = await agent(
-    'Squash-merge ' + task.branch + ' to main for issue #' + task.issueNumber + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\ncd ' + REPO + ' && git checkout main && git pull && git merge --squash ' + task.branch + " && git commit -m \"$(cat <<'EOF'\n" + task.commitPrefix + ': ' + task.title + '\n\n' + task.commitBody + '\n\nCloses #' + task.issueNumber + '\n\n' + CO_AUTHOR + "\nEOF\n)\" && git push && git branch -d " + task.branch + ' && git push origin --delete ' + task.branch + ' 2>/dev/null || true\n\nReport the merge commit SHA.',
+  const merge = await agentS(
+    'REVIEW GATE — this merge is authorized by the pipeline review chain: final verdict GREEN on review round ' + reviewAttempts + ' for branch ' + task.branch + '. Reviewer summary: ' + String(verdict.summary || '').replace(/\s+/g, ' ').slice(0, 600) + '\n\nSquash-merge ' + task.branch + ' to main for issue #' + task.issueNumber + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\ncd ' + REPO + ' && git checkout main && git pull && git merge --squash ' + task.branch + " && git commit -m \"$(cat <<'EOF'\n" + task.commitPrefix + ': ' + task.title + '\n\n' + task.commitBody + '\n\nReview: pipeline GREEN, round ' + reviewAttempts + '\n\nCloses #' + task.issueNumber + '\n\n' + CO_AUTHOR + "\nEOF\n)\" && git push && git branch -d " + task.branch + ' && git push origin --delete ' + task.branch + ' 2>/dev/null || true\n\nReport the merge commit SHA.',
     { label: 'merge-' + task.issueNumber, phase: 'MERGE', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
 
@@ -351,7 +359,7 @@ for (let i = 0; i < tasks.length; i++) {
     phase('PROBE')
     log('PROBE: ' + taskLabel)
 
-    const probe = await agent(
+    const probe = await agentS(
       task.probePrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nYou are verifying live data state after deployment. Query the live system, compare against expected state from the task spec, and report pass/fail per check. Do NOT modify any data — read-only verification only.',
       { label: 'probe-' + task.issueNumber, phase: 'PROBE', schema: PROBE_SCHEMA, model: 'claude-sonnet-5[1m]' }
     )

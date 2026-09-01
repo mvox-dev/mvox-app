@@ -196,10 +196,11 @@ Any future spec or PR that introduces UI state needing persistence MUST follow t
 
 ```
 pnpm check     # 0 type errors
-pnpm test:unit # all tests pass
-pnpm lint:fix  # zero lint findings after autofix
+pnpm test      # all tests pass
 pnpm build     # builds clean
 ```
+
+> **Gate correction, 2026-09-01.** This block previously listed `pnpm lint:fix`, and `pnpm test:unit`. **Neither script exists**: `package.json` defines `check`, `test`, `test:watch`, `build`, `dev`, `preview`, `prepare` and the `migrate:*` family — no `lint`, and no lint/format config (prettier, biome, eslint) anywhere at root. Verified at `9fe28ec`; found via a #206 formatting footnote. `common-prompt.md`'s Quality Gates list was already correct, so the drift was confined to this file. See the companion correction on the session-16 decision below. A gate that names a non-existent script is unrunnable, so it silently becomes optional — and teaches everyone that this rulebook can be ignored.
 
 Intermediate broken states ("I'll fix it in the next commit") are not permitted. When a planned commit ordering would leave a transient broken intermediate, the GREEN-phase implementer surfaces-and-stops, proposes a re-sequence, and re-splits the work into atomic GREEN commits. The branch tip passing alone is not sufficient.
 
@@ -210,7 +211,7 @@ Intermediate broken states ("I'll fix it in the next commit") are not permitted.
 
 The team adopted "Path 2: every commit GREEN" via re-sequence — B13a (wrapper extend) → B13b (svelte rewrite consuming the extended wrapper) → B12 (server-load strip, now safe because the consumer no longer reads it). Three atomic GREEN commits instead of one commit + two broken intermediates. Net branch: 15 implementer commits, zero broken intermediates, bisect-clean across both re-sequences.
 
-This is sibling to the lint:fix-in-GREEN rule below — both rules close gaps between "tests pass at the tip" and "the branch is actually a clean unit of history." Per-commit-GREEN closes the gap for bisect viability and prevents the "transient broken-state hand-off lands in main on squash" failure mode.
+This is sibling to the GREEN-phase quality gate below (whose lint step is retired — see that section's correction box); both rules close gaps between "tests pass at the tip" and "the branch is actually a clean unit of history." Per-commit-GREEN closes the gap for bisect viability and prevents the "transient broken-state hand-off lands in main on squash" failure mode. **This decision itself is unaffected by the lint retirement** — its substance is the per-commit requirement, not which commands the gate runs.
 
 **Review enforcement (Bentham)**: For any feature-branch review, spot-check `pnpm check` + `pnpm test:unit` on at least two non-tip commits (e.g., the first GREEN commit and a mid-branch commit). If any commit fails the gate, the branch is YELLOW pending re-sequence — not auto-RED, because the tip is what merges, but the audit trail loses bisect value and the re-sequence cost is owed back. Implementers who surface-and-stop on a plan-ordering bug instead of merging through a broken intermediate are doing the right thing; team-lead's role is to accept the re-sequence proposal, not push through the original ordering.
 
@@ -220,18 +221,31 @@ This is sibling to the lint:fix-in-GREEN rule below — both rules close gaps be
 
 ---
 
-## GREEN-phase quality gate — `pnpm lint:fix` is part of GREEN, not optional (2026-05-23, session 16)
+## GREEN-phase quality gate (2026-05-23, session 16) — ⚠ LINT STEP RETIRED 2026-09-01
 
-**Decision**: GREEN-phase agents (Byrd + Josquin) MUST run `pnpm lint:fix` before handing off to the next phase. Test-passing alone is not GREEN. The full GREEN gate is:
+**Decision (as written in session 16)**: GREEN-phase agents (Byrd + Josquin) MUST run `pnpm lint:fix` before handing off to the next phase. Test-passing alone is not GREEN. **The lint step of this decision no longer holds — see the correction box below; the script it names does not exist.** The full GREEN gate, current:
 
 ```
 pnpm check     # 0 type errors
-pnpm test:unit # all tests pass
-pnpm lint:fix  # zero lint findings after autofix
+pnpm test      # all tests pass
 pnpm build     # builds clean
 ```
 
-Then hand off. The lint:fix step catches the divergence between "tests pass" and "code matches house style after Biome's view of it." Skipping lint:fix manufactures a downstream autofix commit that pollutes the PR history with whitespace + import-order changes that should have been in the GREEN impl commit.
+Then hand off.
+
+> ## ⚠ SUPERSEDED IN PART, 2026-09-01 — the lint step no longer exists
+>
+> This decision's headline was "`pnpm lint:fix` is part of GREEN, not optional." **That script is gone**, along with the lint scaffolding from CHORE-48 (`b9b3499`) that this decision was written to exercise. `package.json` at `9fe28ec` has no `lint`, no `lint:fix`, no `test:unit`, and there is no prettier/biome/eslint config at root — so the house style this rule enforced now has **no mechanical definition at all**.
+>
+> **What survives**: match the surrounding style of the file you are editing. That is now a review-time judgement, not a gate.
+>
+> **What is retired**: the gate step itself, and any YELLOW premised on skipping it.
+>
+> **What still applies**: the *review enforcement* clause below, which is really about commit-scope honesty rather than lint — a formatting-only cleanup commit is a smell; one that touches function bodies or conditionals is RED because the GREEN commit was misattributed work. That reasoning is independent of whether a linter exists.
+>
+> **Do not "restore" this gate by adding a bare `npx prettier --check`**: with no config, it reformats untouched files and produces exactly the noisy diffs this decision existed to prevent. Reinstating a linter is a real decision needing its own config, its own baseline pass, and PO sign-off — not a one-line script.
+>
+> Found 2026-09-01 from a #206 review footnote; verified against `package.json` at `9fe28ec`. `common-prompt.md` was already correct.
 
 **Rationale**: CHORE-A (PR #56) was the first GREEN cycle to exercise the lint scaffolding from CHORE-48 (`b9b3499`). `pnpm test` passed; `pnpm lint` did not. The result was a separate `db59557` autofix commit at the tip of the branch — palatable as a one-time scope-override on the first lint-cycle, but a smell that becomes noise if it repeats. Lift to a settled norm BEFORE CHORE-B GREEN so it doesn't compound.
 
@@ -489,7 +503,11 @@ For any PR touching the auth or data path:
 - **GREEN** when client-side calls go to `${ENTU_API_BASE}` directly via `src/lib/entu/client.ts` (or its consumers) and the resulting JWT is read from localStorage via `src/lib/auth/storage.ts`.
 - **RED** for any NEW `+server.ts` under `src/routes/api/` that proxies Entu data calls. The data path is browser-direct by decision; new BFF data routes require team-lead approval + an entry on the elevated-ops list with rationale.
 - **RED** for any client-side code that reads/writes the Entu JWT outside the `src/lib/auth/storage.ts` helpers (single source of truth for key names + version sentinel).
-- **RED** for any code path that writes `user` / `accounts` AFTER `setToken` — see the token-version invariant in `storage.ts`. The contract is: callers MUST sequence `setUser` + `setAccounts` BEFORE `setToken`; `setToken` is the gate that publishes the new auth state with the current version. Reversing the order across a version bump leaves stale data without triggering the wipe.
+- **RED** for any code path that publishes auth state derived from a **stale token** — see the token-version invariant in `storage.ts`. `setToken` is the gate that publishes the new auth state at the current version, so anything the new state is built from must be settled before it, and anything derived *from the token* must come after it.
+
+  **Enforce this by intent, not by symbol.** An earlier wording of this rule said "callers MUST sequence `setUser` + `setAccounts` BEFORE `setToken`" — but **there is no `setAccounts` in this codebase** (corrected 2026-09-01, found during the #193 review). Accounts are derived from the JWT claim by `hydrateAuth()`, which *necessarily* runs after `setToken`. A reviewer grepping for `setAccounts` finds nothing and either invents a violation or quietly drops the rule.
+
+  The verified-correct shape is `run-link-callback.ts:95-102`: read `getToken()` **first** (it self-clears on a stale version, so reading it later would wipe a user written earlier) → `setUser` → `setLastProvider` → **conditional** `setToken` → `hydrateAuth()`. Note the conditional: on the happy path the pre-existing session token is *broader* than the account-scoped redemption JWT, so keeping it is what stops a link silently dropping every other collective the user belongs to. RED the ordering only when a genuine stale-token publish is demonstrable — not when the call sequence merely differs from the literal list above.
 - **RED** for any `apiRequest` consumer that handles 401 itself instead of letting the wrapper's interceptor fire. The 401 → clear-with-preserve-provider → redirect is centralized.
 
 ### What would trigger revision
@@ -758,11 +776,11 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
 ---
 
-## PO standing rules — native form controls, in-situ activation, polyphony.uk as spec source (2026-09-01)
+## PO standing rules — native form controls, in-situ activation, time & date conventions, polyphony.uk as spec source (2026-09-01)
 
 **Decision** (Mihkel via Gama, 2026-09-01 — applies to ALL current and future work):
 
-### Form controls (rules 1, 2, 4)
+### Form controls (rules 1, 2, 4, 5, 6)
 
 1. **All dropdowns must be native `<select>` elements.** No custom dropdown components.
 2. **All focused input fields must use native form controls.** No custom-built inputs — in particular, no custom Autocomplete-style widget where the choice set is constrained.
@@ -782,19 +800,50 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
    Established by #157, hardened by #165 review F3/F6/F7; the same shape is settled in `src/routes/event/[id]/+page.svelte`.
 
+5. **Time pickers are 24h by default**; AM/PM only when explicitly set on the user's profile.
+
+   **This is the one sanctioned exception to rule 2**, scoped strictly to time-format enforcement. `<input type="time">` renders 12h or 24h from the **browser locale**, and no attribute overrides it — so enforcing 24h on an AM/PM-locale browser genuinely requires replacing native rendering. Mihkel's wording pre-acknowledges that, so the exception is granted, not something to re-argue at review.
+
+   Two scope points a narrow reading gets wrong. **Rule 5 binds `type="datetime-local"` too**, not just `type="time"` — same locale-driven rendering, and 2 of the 3 live surfaces are `datetime-local`. And it is a **display-only** requirement: both input types submit `HH:MM` in 24h regardless of what the browser paints, so a change that alters stored or submitted values is out of scope and wrong.
+
+   **Addendum — 5-minute resolution**: time inputs carry `step="300"`. Verified unimplemented as of `1ccd497` (no `step=` on any time input in the codebase).
+
+   Surfaces (all native as of `9fe28ec`; no custom time control exists yet): `src/routes/+page.svelte:5159` (`type="time"`, series-create start), `src/routes/+page.svelte:5965` (`type="datetime-local"`, event-create), `src/routes/event/[id]/+page.svelte:1753` (`type="datetime-local"`, event-detail `start_datetime`).
+
+6. **Monday is the first day of the week.** Day-of-week pickers list Monday first, not Sunday. European/Estonian standard; JS `getDay()` (0 = Sunday) is an implementation detail, not a display order — **the `value` attributes stay on the JS convention so recurrence maths is untouched; only the display order changes.**
+
+7. **All date displays and pickers use `YYYY-MM-DD` (ISO 8601).** Native `<input type="date">` and `<input type="datetime-local">` render per browser locale (`mm/dd/yyyy` in the US) — override to `YYYY-MM-DD`.
+
+   Affected surfaces per the source comment: season creation (`start_date`, `end_date`), season management (same two, editing), series creation ("Alates"/"Kuni"), event creation (date portion of `datetime-local`), event detail (`start_datetime` editing, date portion), skip dates in series creation, and any agenda/list date display.
+
+**Rules 5, 6 and 7 are one family** — calendar-convention overrides of native browser-locale rendering — and #207 tracks all three as a single retrofit slice, together with rule 5's `step="300"` addendum.
+
+> **⚠ Correction, 2026-09-02 — rule 6 has NOT shipped, despite #210 reading CLOSED.**
+>
+> An earlier draft of this section (mine, same day) said "Shipped for the series-creation picker as #210." **That is wrong, and I had it from a relay rather than from the code.** GitHub reports #210 as `CLOSED / COMPLETED`, but Gama's comment on #207 says "#210 closed as duplicate — scope absorbed here," and **the code is unchanged**: `src/routes/+page.svelte:5157-5163` still lists `<option value="0">` … `<option value="6">` in numeric order, and `series_create_day_0` is "Sunday"/"Pühapäev". So the picker is still Sunday-first.
+>
+> The trap: closing an issue as a duplicate records `COMPLETED` on GitHub unless it is explicitly marked *not planned*. A closed issue with a completed state is therefore **not** evidence that its change shipped. Anyone trusting #210 would let rule 6 silently never land, since #207 is now its only tracker.
+>
+> **Standing lesson**: for any "shipped as #N" claim in this file, verify against the code, not the issue state. (*MVOX:Bentham*)
+
 ### Story authoring (rule 3)
 
 3. **When writing user stories, check polyphony.uk first.** The legacy app is the reference for how features were conceived — consult it as a spec source before writing new stories.
 
-**Numbering note**: rules 1–3 landed together at `bd3cd48`, where rule 3 is the spec-source rule; rule 4 (in-situ activation) was relayed afterwards. The original numbers are preserved rather than resequenced, so existing references from scratchpads and pipeline prompts stay valid — hence rule 4 sitting with the form-control family and rule 3 on its own.
+**Numbering note**: rules 1–3 landed together at `bd3cd48`, where rule 3 is the spec-source rule; rules 4, 5 and 6 were relayed afterwards. The original numbers are preserved rather than resequenced, so existing references from scratchpads and pipeline prompts stay valid — hence rules 4–6 sitting with the form-control family and rule 3 on its own.
+
+**Sources**: rules 1–3 at `bd3cd48`; rule 4 + addendum relayed via Gama (trail in #205 comments); rules 5–7 on **#207** — rule 7's wording is quoted from the comment "Scope addition: YYYY-MM-DD date format (rule 7, Mihkel 2026-09-02)" (*PO:Gama*), read directly via `gh issue view 207 --comments`. Tracking issues: **#209** (rule 1), **#207** (rules 5 + 6 + 7 as one calendar-conventions slice).
 
 **Rationale**: consistency, accessibility, and mobile behaviour of native controls. Custom widgets are what produced the #199-class defect — a free-text Autocomplete admitted language-mismatched values into `event_type`, which is precisely what the localized picker replaced. Rule 4 closes a discoverability trap: a pencil glyph is a small hit target that reads as decoration, so the edit affordance goes unfound; widening the activator to the whole field costs nothing and matches the admin-page precedent.
 
-**Scope**: rules 1, 2, 4 bind every GREEN prompt and every review checklist. Rule 3 binds Victoria and team-lead at story-authoring time.
+**Scope**: rules 1, 2, 4, 5, 6 bind every GREEN prompt and every review checklist. Rule 3 binds Victoria and team-lead at story-authoring time.
 
 **Review enforcement (Bentham)**:
 
 - **YELLOW minimum** — a custom dropdown or input component where a native control serves. `[TRIGGER-NATIVE-CONTROLS]`
+- **YELLOW minimum** — a custom time control with **no** 24h-enforcement justification (it is then just a rule-2 violation). Where the justification IS present, do **not** reflexively flag it — instead check that the **AM/PM profile-preference path actually exists**: a control hardcoded to 24h with no way to honour the profile flag fails rule 5 exactly as a locale-driven one does. The exception buys a custom control to enforce a *default*, never to drop the preference. `[TRIGGER-24H-TIME]`
+- **YELLOW minimum** — a day-of-week control listing Sunday first, or one that reorders the display by renumbering the `value` attributes (that silently breaks recurrence maths — reorder the options, keep the values). `[TRIGGER-MONDAY-FIRST]`
+- **YELLOW minimum** — a date display or picker rendering anything other than `YYYY-MM-DD`, including a native `type="date"` / `type="datetime-local"` left to browser-locale rendering. Same display-only boundary as rule 5: the wire value of a native date input is already ISO, so a change that alters stored or submitted values is out of scope and wrong. `[TRIGGER-ISO-DATE]`
 - **YELLOW minimum** — an in-situ edit field whose activator is the pencil icon alone rather than the whole field area, **or whose activator is not reachable via Tab**. `[TRIGGER-INSITU-WHOLE-FIELD]` The reference pattern gets Tab-reachability for free from its native `<button>`, so a violation of the keyboard half almost always means someone hand-rolled a `div` + `onclick` instead — check the element, not just the handler. A profile `name`/`email` field left out of a retrofit is the same YELLOW (rule 4a: no exemption).
 - **Escalate to RED** only where the custom control additionally breaks an established contract — keyboard operability, form submission, or i18n of option labels. These are consistency and accessibility rules, and my standing calibration is never to RED on style alone.
 

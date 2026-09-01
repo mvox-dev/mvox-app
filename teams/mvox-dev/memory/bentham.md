@@ -7,6 +7,70 @@ metadata:
 
 # Bentham scratchpad
 
+## 2026-09-02 — [GOTCHA-ORDER-DEPENDENT-FIXTURE] a reorder in file A silently guts a test in file B
+
+New member of the "tests that pass while the code is broken" family, from #206 round 3.
+
+**Shape**: a test's teeth depend on the ORDER of a list defined in another file. `AUTH_PROVIDERS`
+(`src/lib/auth/providers.ts`) was reordered — google 1st → 5th, smart-id now leads — and a test in
+`page.profile-linked-accounts.spec.ts` went vacuous **without changing, and while still passing**.
+It bound google to make the LEADING button `disabled`, then asserted focus skipped to the first
+ENABLED one. Once google stopped leading, "focus the first button" and "focus the first enabled
+button" became the same act, so the assertion passed with or without the `:not([disabled])` filter
+it existed to guard. Nobody editing either file would connect them.
+
+**Audit question** (ask on any list-order change): *does any test's meaning depend on WHICH element
+leads this list?* Grep the list's consumers for fixtures pinning a specific member.
+
+**The durable fix is the forward-note, not the corrected fixture.** #206 upgraded the note in
+`providers.spec.ts` from "revisit on reorder" to "re-arm": point the fixture at the NEW leader AND
+re-verify that deleting the guard turns the test RED. A corrected fixture rots at the next reorder;
+a named re-verification procedure does not.
+
+**Reviewer move**: when a diff reorders a shared constant, demand the RED proof for any test that
+pins a member of it. On #206 the proof was decisive and better than expected — dropping
+`:not([disabled])` failed at `expect(document.activeElement).not.toBe(document.body)`, ONE assertion
+earlier than the testid check, because `.focus()` on a disabled element is a no-op. **The selector
+guards focus EXISTING, not merely focus being correct** — which the vacuous version could never have
+shown.
+
+(*MVOX:Bentham*)
+
+## 2026-09-01 — #193 profile auth linking, GREEN @ `4f52148` (merged `8fb676c`) — 4 rounds
+
+Three durable items; the per-PR narrative is not one of them.
+
+- **[CALIBRATION-MY-OWN-RED-TRIGGER-NAMES-A-DEAD-FUNCTION]** The Path C trigger in
+  `architecture-decisions.md` reads "callers MUST sequence `setUser` + **`setAccounts`** BEFORE
+  `setToken`". **There is no `setAccounts` in this codebase.** Accounts are derived from the JWT claim
+  by `hydrateAuth()`, which necessarily runs AFTER `setToken`. Enforce the trigger **by intent — never
+  publish accounts from a stale token** — not by grepping for a function that does not exist, or I
+  manufacture a false RED. The correct shape, verified at `run-link-callback.ts:95-102`: read
+  `getToken()` FIRST (it self-clears on a stale version, so reading later would wipe a user written
+  earlier) → `setUser` → `setLastProvider` → **conditional** `setToken` (skipped when a broader
+  pre-existing token exists) → `hydrateAuth()`. Keeping the broader token is load-bearing: the
+  redemption JWT is account-scoped, so persisting it would silently drop every other collective.
+  **TODO (between-chains, my file):** fix the trigger text in `architecture-decisions.md` — a settled
+  rule citing a non-existent symbol is a landmine for the next reviewer.
+- **[CALIBRATION-FIX-CHAIN-CONVERGENCE]** How to answer "are these rounds thrashing?" — classify by
+  KIND and track SEVERITY across rounds, don't count rounds. #193 went data-loss (a successful link
+  dropped the user's other collectives) → safety-hole (unknown identity list read as empty, defeating
+  BOTH duplicate-link guards) → copy+echo (no data impact). Monotonically decreasing ⇒ converging.
+  The causal shape was **each round reviewing surface the previous fix created** (round 1 added the
+  `?link_error=` consumer; round 3 flagged that consumer echoing its input) — which is healthy
+  widening review, NOT narrow fix-shape prescriptions. Only call thrashing when a later round repeats
+  an earlier round's KIND at equal-or-worse severity.
+- **[GOTCHA-COLLECTIVE-NAME-CANNOT-BE-EMPTY]** `marker.ts:70` is
+  `hit?.name?.[0]?.string?.trim() || db` — `||` after `.trim()`, so blank/whitespace names fall back
+  to the db name. Any `{collective}` / collective-name interpolation therefore **cannot** render
+  dangling copy. Don't re-raise it (I chased it on #193 and cleared it). Note the admin page's
+  `admin_collective_name_unnamed` is a *different* surface — the editable marker field, pre-fallback.
+
+Follow-up NOT carried by me: success banner names the currently-selected collective, not the mint-time
+one (needs return-URL threading). Routed to Gama for filing with the account-wide-linking question.
+
+(*MVOX:Bentham*)
+
 ## 2026-09-01 — [GOTCHA-STASH-U-CAPTURES-PII] gitignore does not purge what a stash already ate
 
 Crede seed scripts (`scripts/migrations/seed-1*-crede-*.ts`) hardcode real member PII — **20 real
@@ -108,6 +172,34 @@ for the between-chains window. Registered here so it survives compaction; as ste
   ELEMENT, not the handler.** Also verified there: `min-h-11 w-full` for the 44×44 minimum (`min-h-11`
   alone with `p-0` collapses width back to the glyph — #165 F3), `aria-labelledby` + `sr-only` action
   label, and a `group-hover` pointer cue (Tailwind preflight sets no `cursor:pointer` on `<button>`).
+- **[TRIGGER-24H-TIME]** (rule 5, 2026-09-01) Time pickers are **24h by default**; AM/PM only when
+  explicitly set on the user's profile. This is **the ONE sanctioned exception to rule 2's
+  native-controls mandate**, scoped strictly to time-format enforcement — `<input type="time">` renders
+  12h/24h from the **browser locale** and no attribute overrides it, so forcing 24h on an AM/PM-locale
+  browser genuinely requires replacing native rendering. Mihkel's wording pre-acknowledges this, so it
+  is sanctioned, not a violation to re-argue.
+
+  **Verdict shape**: a custom time control **without** the 24h-enforcement justification = YELLOW as
+  under rule 2. **With** it = do NOT reflexively flag — instead check the **AM/PM profile-preference
+  path actually exists**. A control hardcoded to 24h with no way to honour the profile flag fails
+  rule 5 just as surely as a locale-driven one does.
+
+  Two distinctions to hold: (a) **rule 5 binds `type="datetime-local"` too**, not just `type="time"` —
+  same locale-driven display, and 2 of the 3 live surfaces are datetime-local; don't read "time picker"
+  narrowly. (b) The **wire value of both is always 24h `HH:MM` regardless of display locale**, so this
+  is DISPLAY-only — a "fix" that changes stored or submitted values is out of scope and wrong.
+
+  **Retrofit surface, verified 2026-09-01** (all three native today; no custom time control exists):
+  `src/routes/+page.svelte:5159` (`type="time"`, series-create start), `src/routes/+page.svelte:5965`
+  (`type="datetime-local"`, event-create), `src/routes/event/[id]/+page.svelte:1753`
+  (`type="datetime-local"`, event-detail `start_datetime`). Retrofit lands as its own board issue.
+
+**[QUEUED — between-chains authoring pass, my file]** Two edits to `architecture-decisions.md`, both
+approved, neither done: (1) reword the Path C trigger off the dead `setAccounts` symbol to its intent;
+(2) add rule 5 + its sanctioned-exception note to the standing-rules section. Deliberately NOT done
+mid-run: the pipeline's REVIEW agents read that file for their checklists, so changing an enforcement
+rule mid-flight would let two agents in one run apply different contracts — the same hazard the
+"freeze the spec before dispatching" decision already settles.
 
 (*MVOX:Bentham*)
 
