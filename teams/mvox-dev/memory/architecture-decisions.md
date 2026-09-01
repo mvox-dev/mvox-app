@@ -766,7 +766,21 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
 1. **All dropdowns must be native `<select>` elements.** No custom dropdown components.
 2. **All focused input fields must use native form controls.** No custom-built inputs — in particular, no custom Autocomplete-style widget where the choice set is constrained.
-4. **In-situ edit fields (pencil-decorated): the WHOLE field area is the click activator**, not just the pencil icon. Reference implementation: the collective name field on the admin page. Binds existing *and* future in-situ fields — especially event detail (`name`, `datetime`, `duration`, `location`, `description`, `conductor`).
+4. **In-situ edit fields (pencil-decorated): the WHOLE field area is the activator**, not just the pencil icon. Binds existing *and* future in-situ fields — especially event detail (`name`, `datetime`, `duration`, `location`, `description`, `conductor`).
+
+   **Addendum (2026-09-01, Mihkel via Gama — full trail in issue #205 comments):**
+
+   - **4a — profile `name` / `email` ARE in scope for the retrofit.** The "always-editable is more direct" argument was raised and **overruled**: click-to-activate costs the user exactly what click-to-focus costs, so the consistency win is free. Do not exempt profile fields.
+   - **4b — every click-to-activate field must also be TAB-to-activate.** The activator is a real keyboard tab stop, never click-only.
+
+   **Reference implementation** — the collective name field on the admin page, `src/routes/admin/+page.svelte:513-531`. Read it before implementing another one; it already solves all four sub-problems:
+
+   - a native `<button type="button">` is the activator (`:518`), which is what makes 4b free — Tab-reachability, Enter/Space activation, and `disabled` semantics all come from the element rather than hand-rolled handlers;
+   - `min-h-11 w-full` makes the whole field the tap target and clears the 44×44 house minimum — `min-h-11` *alone* with `p-0` collapses the width back to the glyph (#165 review F3);
+   - `aria-labelledby` pins the control's accessible name to the value span while an `sr-only` child carries the action label (`:515`, `:526`);
+   - a `group-hover` cue supplies the pointer affordance, because Tailwind preflight sets no `cursor: pointer` on `<button>` (`:527-531`).
+
+   Established by #157, hardened by #165 review F3/F6/F7; the same shape is settled in `src/routes/event/[id]/+page.svelte`.
 
 ### Story authoring (rule 3)
 
@@ -781,7 +795,7 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 **Review enforcement (Bentham)**:
 
 - **YELLOW minimum** — a custom dropdown or input component where a native control serves. `[TRIGGER-NATIVE-CONTROLS]`
-- **YELLOW minimum** — an in-situ edit field whose click activator is the pencil icon alone rather than the whole field area. `[TRIGGER-INSITU-WHOLE-FIELD]`
+- **YELLOW minimum** — an in-situ edit field whose activator is the pencil icon alone rather than the whole field area, **or whose activator is not reachable via Tab**. `[TRIGGER-INSITU-WHOLE-FIELD]` The reference pattern gets Tab-reachability for free from its native `<button>`, so a violation of the keyboard half almost always means someone hand-rolled a `div` + `onclick` instead — check the element, not just the handler. A profile `name`/`email` field left out of a retrofit is the same YELLOW (rule 4a: no exemption).
 - **Escalate to RED** only where the custom control additionally breaks an established contract — keyboard operability, form submission, or i18n of option labels. These are consistency and accessibility rules, and my standing calibration is never to RED on style alone.
 
 **First application**: #199 event type picker — native `<select>` over the canonical event types, replacing free-text Autocomplete. Merged at `e153604`.

@@ -1,5 +1,27 @@
 # Finn — Research Coordinator Scratchpad
 
+## [DECISION] repo-guard now MANDATORY first line in every dispatched research prompt (2026-09-01, team-lead ruling)
+
+Second occurrence same day: #193 subagent AND 3-of-4 #206 subagents silently read `~/workspace`
+(stale legacy repo, remote `mvox_v4e_web.git`) instead of `~/workspace-app` despite explicit
+"cd ~/workspace-app first" instructions — produced a fully coherent but ENTIRELY WRONG picture
+of current app state each time (see prior entry detail, preserved below). Team-lead ruling: this
+is now a STRUCTURAL guard, not vigilance-per-dispatch. **Every subagent prompt I write must OPEN
+with**: `cd ~/workspace-app && git remote get-url origin` — abort and report back unless the
+output ends in `mvox-app.git`. Baked into the new `/mvox-pickup` intake skill; future pre-RED
+research increasingly runs as dynamic Workflows (Mihkel ruling) with this guard wired into every
+agent prompt already — my role is shifting toward deep-dive investigations (e.g. the #193
+entu-api source read) rather than fan-out verification sweeps, since Workflows absorb the latter.
+**Still apply the guard line myself** for any ad-hoc subagents I dispatch outside a Workflow.
+
+Original finding detail (2026-09-01, #206 research): 3 of 4 dispatched haiku Explore agents cited
+`~/workspace` findings — fictional 5s auto-redirect timer, nonexistent `ProviderButton` component,
+fictional server-side cookie clearing, a nonexistent E2E `tests/` dir, none of which exist in the
+real app. Mitigation that worked in the moment: personally re-verify load-bearing citations
+(Read the actual files myself) before trusting any haiku report touching `~/workspace-app`
+specifics — don't relay subagent findings on this repo pair uncritically even when the prompt
+told them the right path.
+
 ## [DECISION-INPUT] polyphony.uk IS the polyphony prototype's own prod deploy (#177, 2026-08-27)
 
 `polyphony.uk` (Registry) / `crede.polyphony.uk` (Vault) = `~/projects/polyphony` deployed live,

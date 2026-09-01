@@ -94,11 +94,20 @@ for the between-chains window. Registered here so it survives compaction; as ste
   **YELLOW minimum**. All dropdowns native `<select>`; all focused inputs native form controls; no
   custom Autocomplete-style widgets for constrained choices. Origin: the #199-class defect — free-text
   Autocomplete produced language-mismatched data.
-- **[TRIGGER-INSITU-WHOLE-FIELD]** (rule 4) In-situ edit fields (pencil-decorated): the **whole field
-  area** is the click activator, not just the pencil icon. Pencil-only activator = **YELLOW minimum**.
-  Reference implementation: collective name field, admin page. Binds existing + future in-situ fields,
-  especially event detail (name, datetime, duration, location, description, conductor). Not in #199
-  scope; lands on Gama's forthcoming retrofit issue.
+- **[TRIGGER-INSITU-WHOLE-FIELD]** (rule 4 + addendum) In-situ edit fields (pencil-decorated). Three
+  ways to earn **YELLOW minimum**: (i) activator is the pencil glyph alone rather than the whole field
+  area; (ii) **activator not reachable via Tab** (4b — click-to-activate must also be tab-to-activate);
+  (iii) profile `name`/`email` left out of a retrofit (4a — Mihkel OVERRULED the always-editable-is-more-
+  direct argument; click-to-activate costs what click-to-focus costs, so no exemption). Trail: #205
+  comments. Binds existing + future in-situ fields, especially event detail (name, datetime, duration,
+  location, description, conductor).
+
+  **Review shortcut**: the reference impl `src/routes/admin/+page.svelte:513-531` gets the keyboard half
+  FREE from a native `<button type="button">` (`:518`) — Tab stop, Enter/Space, `disabled` semantics all
+  from the element. So a 4b violation almost always means a hand-rolled `div`+`onclick`. **Check the
+  ELEMENT, not the handler.** Also verified there: `min-h-11 w-full` for the 44×44 minimum (`min-h-11`
+  alone with `p-0` collapses width back to the glyph — #165 F3), `aria-labelledby` + `sr-only` action
+  label, and a `group-hover` pointer cue (Tailwind preflight sets no `cursor:pointer` on `<button>`).
 
 (*MVOX:Bentham*)
 
