@@ -393,11 +393,19 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 		const expectRow = (id: string, name: string, count: number) => {
 			const row = q(container, `arrange-row-${id}`) as HTMLElement;
 			expect(row, `arrange row for ${id}`).not.toBeNull();
-			const text = row.textContent ?? '';
-			expect(text).toContain(name);
-			// The count is on the row as its own number — "(n)", the page's
-			// standing header convention.
-			expect(text.replace(/\s+/g, ' ')).toContain(`(${count})`);
+			// #205 — the NAME is rendered by the rename activator beside the row
+			// (that containment is what makes "tap the name" open the editor), and
+			// review F1 (round 2) put the count in its own span right AFTER it.
+			// Together they read "Soprano (3)", which is also what the row states
+			// as its own accessible name.
+			const nameText = q(container, `arrange-rename-${id}`)?.textContent ?? '';
+			expect(nameText, `name for ${id}`).toContain(name);
+			// The count is its own number — "(n)", the page's standing header
+			// convention.
+			expect((q(container, `arrange-count-${id}`)?.textContent ?? '').trim()).toBe(
+				`(${count})`
+			);
+			expect(row.getAttribute('aria-label'), `row label for ${id}`).toBe(`${name} (${count})`);
 		};
 		expectRow('sec-sop', 'Soprano', 3);
 		expectRow('sec-sop1', 'Soprano 1', 1);
@@ -546,7 +554,7 @@ describe('/roster — the view modes are a rendering switch over the one existin
 			'arrange-row-sec-men1'
 		]);
 		// Men's roll-up counts its sub-section's one member.
-		expect((q(container, 'arrange-row-sec-men') as HTMLElement).textContent).toContain('(1)');
+		expect((q(container, 'arrange-count-sec-men') as HTMLElement).textContent).toContain('(1)');
 		expect(q(container, 'arrange-row-sec-sop')).toBeNull();
 	});
 });

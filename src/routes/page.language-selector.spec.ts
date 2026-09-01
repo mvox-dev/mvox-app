@@ -255,7 +255,7 @@ describe('locale switch takes effect — rendered UI (#123)', () => {
 		try {
 			const first = render(ProfilePage);
 			await waitFor(() =>
-				expect(q(first.container, '[data-testid="profile-name"]')).not.toBeNull()
+				expect(q(first.container, '[data-testid="profile-field-name"]')).not.toBeNull()
 			);
 			expect(first.container.textContent).toContain('Language');
 
@@ -269,7 +269,7 @@ describe('locale switch takes effect — rendered UI (#123)', () => {
 			cleanup();
 			const second = render(ProfilePage);
 			await waitFor(() =>
-				expect(q(second.container, '[data-testid="profile-name"]')).not.toBeNull()
+				expect(q(second.container, '[data-testid="profile-field-name"]')).not.toBeNull()
 			);
 			expect(second.container.textContent).toContain('Keel');
 			expect(second.container.textContent).not.toContain('Language');
@@ -402,7 +402,7 @@ describe('integration — /profile route (#123)', () => {
 		const { container } = render(ProfilePage);
 		// Wait until the page has fully loaded (profile fields present) so the
 		// selector is asserted on the real ready-state page, not a flash frame.
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 		expect(q(container, '[data-testid="language-selector"]')).not.toBeNull();
 		for (const locale of LOCALES) {
 			expect(option(container, locale), `missing option for ${locale}`).not.toBeNull();

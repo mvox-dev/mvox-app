@@ -370,7 +370,7 @@ describe('/roster — the nesting buttons are SIBLINGS of the arrange row, not c
 		}
 	});
 
-	it('nothing inside a row contributes to its ACCESSIBLE NAME beyond its own text — no descendant aria-label/title/aria-labelledby, so "Soprano (3)" stays the whole name (WCAG 2.5.3)', async () => {
+	it('nothing inside a row contributes to its ACCESSIBLE NAME beyond the row\'s own label — no descendant aria-label/title/aria-labelledby, so "Soprano (3)" stays the whole name (WCAG 2.5.3)', async () => {
 		const container = await renderInArrangeMode();
 
 		for (const id of ALL_IDS) {
@@ -378,16 +378,21 @@ describe('/roster — the nesting buttons are SIBLINGS of the arrange row, not c
 			// A `textContent` assertion structurally CANNOT catch this: the
 			// buttons carry only an `aria-hidden` SVG, so the text stayed exactly
 			// "Soprano (3)" the whole time their `aria-label`s were being appended
-			// to the row's computed name by accname step 2F. Name computation
-			// recurses into children and takes each child's OWN name first —
-			// aria-labelledby, then aria-label, then title. None may be present.
-			expect(r.getAttribute('aria-label'), `row ${id} aria-label`).toBeNull();
+			// to the row's computed name by accname step 2F. The containment fix
+			// is what keeps them out; nothing left INSIDE the row may contribute a
+			// name of its own (aria-labelledby, then aria-label, then title).
 			expect(
 				r.querySelector('[aria-label], [title], [aria-labelledby]'),
 				`name-contributing descendant inside row ${id}`
 			).toBeNull();
 		}
-		expect(row(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('Soprano (3)');
+		// #205 — the NAME's home is the rename activator beside the row, and review
+		// F1 (round 2) moved the "(n)" roll-up out to its own span after it, so the
+		// row states the "<name> (<count>)" pair in its own `aria-label` and renders
+		// nothing visible itself. The pair is what must never be broken up.
+		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (3)');
+		expect(row(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('');
+		expect((q(container, 'arrange-count-sec-sop')?.textContent ?? '').trim()).toBe('(3)');
 	});
 });
 
@@ -425,7 +430,7 @@ describe('/roster — INDENT nests under the immediate previous sibling (#155/S3
 		]);
 		expect(row(container, 'sec-alto').className).toContain('pl-4');
 		// The tree RECALCULATED — the same groupBySection roll-up the headers use.
-		expect(row(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('Soprano (4)');
+		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (4)');
 		// The button tap must not leak into the row's grab state machine
 		// (the row's own role=button click handler sits right underneath).
 		expect(row(container, 'sec-alto').getAttribute('data-grabbed')).toBeNull();
@@ -489,7 +494,7 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 			'arrange-row-sec-tenor'
 		]);
 		expect(row(container, 'sec-sop1').className).toContain('pl-0');
-		expect(row(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('Soprano (2)');
+		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (2)');
 		// Promoted to TOP LEVEL — announced with the top-level wording, and the
 		// section now refuses to unindent any further.
 		expect(statusText(container)).toContain('roster_section_unindented_top');

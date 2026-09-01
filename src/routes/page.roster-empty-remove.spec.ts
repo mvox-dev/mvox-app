@@ -248,7 +248,10 @@ describe('/roster — F3: every empty section the page SHOWS offers a WORKING (n
 		// button is now ALWAYS rendered (per-row, like indent/unindent) and
 		// `disabled` when ineligible, rather than absent — "offers the remove
 		// control" therefore means "renders enabled", not merely "exists".
-		expect(q(container, 'arrange-row-' + EFK_BASS)?.textContent).toContain('(0)');
+		// #205 review F1 (round 2) — the "(n)" roll-up is its own `arrange-count-<id>`
+		// span beside the row now (the row itself renders no visible text), so the
+		// "(0)" this walk keys on is read from there.
+		expect(q(container, 'arrange-count-' + EFK_BASS)?.textContent).toContain('(0)');
 		expect((q(container, `section-remove-${EFK_BASS}`) as HTMLButtonElement).disabled).toBe(false);
 
 		// THE INVARIANT (fix-agnostic): an arrange row the page chose to render
@@ -260,15 +263,19 @@ describe('/roster — F3: every empty section the page SHOWS offers a WORKING (n
 		// rendering foreign rows control-less does not.
 		for (const id of renderedSectionIds(container)) {
 			const row = q(container, `arrange-row-${id}`);
-			if (!row?.textContent?.includes('(0)')) continue;
+			if (!row) continue;
+			if (!q(container, `arrange-count-${id}`)?.textContent?.includes('(0)')) continue;
+			// What the row VISIBLY reads as, for the failure message: name (from the
+			// rename activator) + roll-up, the two siblings that carry the text now.
+			const label = (row.closest('[data-drop-row]')?.textContent ?? '').replace(/\s+/g, ' ').trim();
 			const button = q(container, `section-remove-${id}`) as HTMLButtonElement | null;
 			expect(
 				button,
-				`rendered empty section "${row.textContent.trim()}" (${id}) has no remove control — empty sections must not be inconsistent (#114 check 4)`
+				`rendered empty section "${label}" (${id}) has no remove control — empty sections must not be inconsistent (#114 check 4)`
 			).not.toBeNull();
 			expect(
 				button!.disabled,
-				`rendered empty section "${row.textContent.trim()}" (${id}) has a DISABLED remove control — empty sections must not be inconsistent (#114 check 4)`
+				`rendered empty section "${label}" (${id}) has a DISABLED remove control — empty sections must not be inconsistent (#114 check 4)`
 			).toBe(false);
 		}
 	});

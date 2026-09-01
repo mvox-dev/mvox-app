@@ -217,6 +217,15 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 		// The draggable row itself is gone while renaming (no nested-interactive
 		// input inside a role="button" row).
 		expect(q(container, 'arrange-row-sec-alto')).toBeNull();
+		// #205 — the activator stays MOUNTED and disabled (the "ALWAYS rendered"
+		// contract above), but it must not print the name beside the input the
+		// user is typing into.
+		const activator = q(container, 'arrange-rename-sec-alto') as HTMLButtonElement;
+		expect(activator).not.toBeNull();
+		expect(activator.disabled).toBe(true);
+		expect(activator.textContent ?? '', 'no second copy of the name while renaming').not.toContain(
+			'Alto'
+		);
 	});
 
 	it('Enter saves: renameSection(cfg, id, trimmed) fires, the row shows the NEW name immediately (optimistic, no refetch), and the success is ANNOUNCED', async () => {
@@ -236,7 +245,7 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 			'Alto Voices'
 		);
 		await waitFor(() => {
-			expect(q(container, 'arrange-row-sec-alto')?.textContent).toContain('Alto Voices');
+			expect(q(container, 'arrange-rename-sec-alto')?.textContent).toContain('Alto Voices');
 		});
 		expect(q(container, 'arrange-rename-input-sec-alto')).toBeNull();
 
@@ -261,8 +270,8 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 			expect(q(container, 'arrange-rename-input-sec-alto')).toBeNull();
 		});
 		expect(renameMock).not.toHaveBeenCalled();
-		expect(q(container, 'arrange-row-sec-alto')?.textContent).toContain('Alto');
-		expect(q(container, 'arrange-row-sec-alto')?.textContent).not.toContain('Discarded');
+		expect(q(container, 'arrange-rename-sec-alto')?.textContent).toContain('Alto');
+		expect(q(container, 'arrange-rename-sec-alto')?.textContent).not.toContain('Discarded');
 	});
 
 	it('a REJECTED rename REVERTS the optimistic name and shows arrange-rename-error-<id> (role="alert")', async () => {
@@ -281,8 +290,8 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 			expect(error!.getAttribute('role')).toBe('alert');
 		});
 		// The name is back to what the server actually holds.
-		expect(q(container, 'arrange-row-sec-alto')?.textContent).toContain('Alto');
-		expect(q(container, 'arrange-row-sec-alto')?.textContent).not.toContain('Alto Voices');
+		expect(q(container, 'arrange-rename-sec-alto')?.textContent).toContain('Alto');
+		expect(q(container, 'arrange-rename-sec-alto')?.textContent).not.toContain('Alto Voices');
 		consoleSpy.mockRestore();
 	});
 
@@ -547,8 +556,8 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 			expect(q(container, 'arrange-row-sec-ten')).not.toBeNull();
 		});
 		// …and the optimistic name is still gone, the server's is what shows.
-		expect(q(container, 'arrange-row-sec-alto')?.textContent).toContain('Alto');
-		expect(q(container, 'arrange-row-sec-alto')?.textContent).not.toContain('Voices');
+		expect(q(container, 'arrange-rename-sec-alto')?.textContent).toContain('Alto');
+		expect(q(container, 'arrange-rename-sec-alto')?.textContent).not.toContain('Voices');
 		consoleSpy.mockRestore();
 	});
 

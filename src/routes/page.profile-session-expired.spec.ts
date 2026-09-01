@@ -104,7 +104,7 @@ describe('/profile — session expired (#107)', () => {
 		expect(container.querySelector('[data-testid="profile-load-error"]')).toBeNull();
 		expect(container.querySelector('[data-testid="profile-retry-load"]')).toBeNull();
 		// …and never the editable form, which would invite a save that cannot land.
-		expect(container.querySelector('[data-testid="profile-name"]')).toBeNull();
+		expect(container.querySelector('[data-testid="profile-field-name"]')).toBeNull();
 	});
 
 	it('a GENERIC profile load failure still shows the loud load error + retry (auth handling must not swallow it)', async () => {

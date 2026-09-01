@@ -1397,13 +1397,17 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 	// three inline-edit pencils, the conductor chip × in all three places it
 	// appears, and the series form's two skip-date controls. All icon-only bar
 	// [+ Add], so all need the WIDTH floor too.
-	it('panel inline-edit pencils (icon-only: name, start date, end date)', async () => {
+	it('panel inline-edit activators (#205 — whole-field now, no icon-only width floor: name, start date, end date)', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		expectTouchTarget(container, 'season-edit-btn-name', { iconOnly: true });
-		expectTouchTarget(container, 'season-edit-btn-start_date', { iconOnly: true });
-		expectTouchTarget(container, 'season-edit-btn-end_date', { iconOnly: true });
+		// #205 retired the icon-only pencil shape: these are whole-field
+		// activators (`w-full`, value inside — pinned in
+		// page.season-manage-whole-field.spec.ts), so the min-w-11 floor no
+		// longer applies; the 44px height floor still does.
+		expectTouchTarget(container, 'season-edit-btn-name');
+		expectTouchTarget(container, 'season-edit-btn-start_date');
+		expectTouchTarget(container, 'season-edit-btn-end_date');
 	});
 
 	it('panel conductor chip × (icon-only)', async () => {

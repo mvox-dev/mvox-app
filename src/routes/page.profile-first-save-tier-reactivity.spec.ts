@@ -120,6 +120,35 @@ const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const btn = (c: HTMLElement, testid: string) =>
 	q(c, `[data-testid="${testid}"]`) as HTMLButtonElement;
 
+// ── #205 — display-then-edit helpers ────────────────────────────────────────
+// The profile fields are whole-field activators now (standing UX rule 4):
+// `profile-<field>-edit` (a native button wrapping the value) activates the
+// `profile-<field>` input. Contract pinned in page.profile-whole-field.spec.ts.
+
+/** The display-state value element's text for a field (trimmed). */
+function displayValue(container: HTMLElement, field: 'name' | 'email'): string {
+	return (q(container, `[data-testid="profile-${field}-value"]`)?.textContent ?? '').trim();
+}
+
+/** Activate a field's whole-field button; answers the revealed input. */
+async function openEditor(
+	container: HTMLElement,
+	field: 'name' | 'email'
+): Promise<HTMLInputElement> {
+	const activator = q(
+		container,
+		`[data-testid="profile-${field}-edit"]`
+	) as HTMLButtonElement | null;
+	expect(activator, `profile-${field}-edit must render in display state`).not.toBeNull();
+	await fireEvent.click(activator!);
+	let editorInput: HTMLInputElement | null = null;
+	await waitFor(() => {
+		editorInput = q(container, `[data-testid="profile-${field}"]`) as HTMLInputElement | null;
+		expect(editorInput).not.toBeNull();
+	});
+	return editorInput!;
+}
+
 /** The domain entity the FIRST save creates (server-assigned id). */
 const CREATED_DOMAIN = { _id: 'server-dom-1', name: 'Ada', email: '', _sharing: 'domain' as const };
 
@@ -140,13 +169,13 @@ function armFirstTimeUserThenCreated() {
 async function renderFirstTimeProfile(): Promise<HTMLElement> {
 	selectPolyphony();
 	const { container } = render(Page);
-	await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 	return container;
 }
 
 /** Type a name and blur — blur fires the autosave synchronously. */
 async function typeNameAndSave(container: HTMLElement, value: string): Promise<void> {
-	const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+	const nameInput = await openEditor(container, 'name');
 	await fireEvent.input(nameInput, { target: { value } });
 	await fireEvent.blur(nameInput);
 	await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
@@ -218,7 +247,7 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 		// are not move targets — it stays a disabled, pressed button.
 		expect(btn(container, 'profile-vis-name-domain').getAttribute('aria-pressed')).toBe('true');
 		// Draft survived the save (no reload side effects).
-		expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ada');
+		expect(displayValue(container, 'name')).toBe('Ada');
 	});
 
 	it('AC1 (email): a field with NO value keeps its tiers disabled — the entity existing is not enough', async () => {
@@ -261,7 +290,7 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 
 		// The email save lands on the SAME domain entity (existingId set now).
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: CREATED_DOMAIN._id });
-		const emailInput = q(container, '[data-testid="profile-email"]') as HTMLInputElement;
+		const emailInput = await openEditor(container, 'email');
 		await fireEvent.input(emailInput, { target: { value: 'ada@example.org' } });
 		await fireEvent.blur(emailInput);
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2));
@@ -346,7 +375,7 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 		await waitFor(() => {
 			expect(btn(container, 'profile-vis-name-public').getAttribute('aria-pressed')).toBe('true');
 		});
-		expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ada');
+		expect(displayValue(container, 'name')).toBe('Ada');
 	});
 });
 
@@ -368,12 +397,8 @@ describe('/profile — #160 no regression on the already-loaded profile', () => 
 		h.listMyProfilesMock.mockResolvedValue(profiles);
 		selectPolyphony();
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
-		await waitFor(() =>
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe(
-				profiles[0].name
-			)
-		);
+		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
+		await waitFor(() => expect(displayValue(container, 'name')).toBe(profiles[0].name));
 		return container;
 	}
 
@@ -406,7 +431,7 @@ describe('/profile — #160 no regression on the already-loaded profile', () => 
 		const container = await renderWithLoaded([LOADED_DOMAIN]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: LOADED_DOMAIN._id });
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada Lovelace' } });
 		await fireEvent.blur(nameInput);
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
@@ -463,9 +488,7 @@ describe('/profile — #160 a save that CLEARS a field still releases its saving
 		h.listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC]);
 		selectPolyphony();
 		const { container } = render(Page);
-		await waitFor(() =>
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ada')
-		);
+		await waitFor(() => expect(displayValue(container, 'name')).toBe('Ada'));
 		return container;
 	}
 
@@ -476,7 +499,7 @@ describe('/profile — #160 a save that CLEARS a field still releases its saving
 		expect(btn(container, 'profile-vis-name-public').getAttribute('aria-pressed')).toBe('true');
 
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: LOADED_PUBLIC._id });
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: '' } });
 		await fireEvent.blur(nameInput);
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
@@ -529,14 +552,12 @@ describe('/profile — #160 the created-but-unconfirmed shell', () => {
 		h.listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC_NAME]);
 		selectPolyphony();
 		const { container } = render(Page);
-		await waitFor(() =>
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ada')
-		);
+		await waitFor(() => expect(displayValue(container, 'name')).toBe('Ada'));
 
 		h.applyProfileSaveMock.mockRejectedValueOnce(
 			new h.ProfileSaveError('field write failed after create', 'server-dom-1')
 		);
-		const emailInput = q(container, '[data-testid="profile-email"]') as HTMLInputElement;
+		const emailInput = await openEditor(container, 'email');
 		await fireEvent.input(emailInput, { target: { value: 'ada@example.org' } });
 		await fireEvent.blur(emailInput);
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
@@ -563,7 +584,7 @@ describe('/profile — #160 the created-but-unconfirmed shell', () => {
 		const container = await renderThenFailEmailCreate();
 
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
-		const emailInput = q(container, '[data-testid="profile-email"]') as HTMLInputElement;
+		const emailInput = await openEditor(container, 'email');
 		await fireEvent.input(emailInput, { target: { value: 'ada@example.com' } });
 		await fireEvent.blur(emailInput);
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2));

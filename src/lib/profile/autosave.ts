@@ -10,6 +10,8 @@ export interface AutosaveController {
 	keystroke(field: FieldKey): void;
 	blur(field: FieldKey): void;
 	visibilityChange(field: FieldKey): void;
+	/** #205 — Escape-cancels-edit: drop a field's pending idle timer WITHOUT firing onSave. */
+	cancel(field: FieldKey): void;
 	destroy(): void;
 }
 
@@ -45,6 +47,9 @@ export function createAutosave(config: AutosaveConfig): AutosaveController {
 		},
 		visibilityChange(field) {
 			fireAndClear(field);
+		},
+		cancel(field) {
+			clearTimer(field);
 		},
 		destroy() {
 			for (const id of timers.values()) clearTimeout(id);

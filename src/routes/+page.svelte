@@ -4782,19 +4782,35 @@
 											class="w-full border-b border-ink bg-transparent font-display text-lg text-ink"
 										/>
 									{:else}
-										<div class="flex items-center gap-2">
-											<p data-testid="season-manage-name" class="font-display text-lg text-ink">
-												{seasonManageName}
-											</p>
+										<!-- #205 whole-field shape (admin/+page.svelte:513-540 reference): ONE
+										     native <button> wraps pencil AND value so the whole field area is
+										     the click/tab activator, not just the ✎ glyph. `min-h-11 w-full` —
+										     `min-h-11` alone collapses the tap target back to the glyph (#165
+										     review F3). The button's accessible name is computed from its own
+										     text content: the sr-only action label plus the visible value (the
+										     ✎ is aria-hidden), so AT hears "<action> <value>".
+										     #205 review F1 — NO `aria-labelledby` on the button. `aria-labelledby`
+										     SUPERSEDES an element's own contents in the accname algorithm, so
+										     pointing it at the value span alone silently dropped the sr-only
+										     action verb: AT computed a bare "Season 2026" with nothing saying the
+										     control opens an editor — a strict regression on the pre-#205
+										     aria-label, which carried the whole "edit the season name" phrase
+										     from `season_manage_edit_name_label`. Content-derived naming (both children
+										     inside the button, the ✎ aria-hidden) is the whole point of this
+										     shape and is what the admin reference relies on too. -->
+										<div class="font-display text-lg text-ink">
 											<button
 												type="button"
 												data-testid="season-edit-btn-name"
-												aria-label={m.season_manage_edit_name_label()}
 												disabled={seasonEditPending.name === true}
-												class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink-3 hover:text-ink disabled:opacity-40"
+												class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-lg text-ink disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('name')}
 											>
-												<span aria-hidden="true">✎</span>
+												<span class="sr-only">{m.season_manage_edit_name_label()}</span>
+												<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
+													>✎</span
+												>
+												<span data-testid="season-manage-name">{seasonManageName}</span>
 											</button>
 										</div>
 									{/if}
@@ -4806,12 +4822,22 @@
 								</div>
 
 								<!-- dates. The VISIBLE label is not decoration (#132/T3 review F3):
-								     the aria-labels ride on the pencils only, so without it neither a
-								     sighted nor a screen-reader user reading the two values side by
-								     side can tell start from end — and an unset bound would render as
-								     a bare, unexplained ✎. -->
+								     the action label rides inside the activator only, so without the
+								     <p> above neither a sighted nor a screen-reader user reading the two
+								     values side by side can tell start from end — and an unset bound
+								     would render as a bare, unexplained ✎. -->
+								<!-- #205 review round 3 F3 — `min-w-0 flex-1` on BOTH date columns.
+								     Their activators carry `w-full`, but a flex ITEM defaults to
+								     `flex: 0 1 auto`, so that `w-full` resolved against a content-sized
+								     column: each date's activation region ended wherever its formatted
+								     value happened to end, while the name activator directly above
+								     spanned the panel. Three activators in one panel with three
+								     different widths read as three different kinds of control. Equal
+								     flex basis makes `w-full` mean the same thing in all three;
+								     `min-w-0` keeps a long formatted date from forcing its column past
+								     its share. -->
 								<div class="flex gap-4">
-									<div>
+									<div class="min-w-0 flex-1">
 										<p class="text-xs tracking-wide text-ink-2 uppercase">
 											{m.season_manage_start_date_label()}
 										</p>
@@ -4828,11 +4854,27 @@
 												class="border-b border-ink bg-transparent text-ink"
 											/>
 										{:else}
-											<div class="flex items-center gap-1">
-												<!-- #151 — text-base, not text-xs: this value is REPLACED in place
-												     by the date input above, which renders at the 16px control
-												     default (#130), so at text-xs it jumped 12px -> 16px -> 12px
-												     across an edit. Same for end_date below. -->
+											<!-- #151 — text-base, not text-xs: this value is REPLACED in place
+											     by the date input above, which renders at the 16px control
+											     default (#130), so at text-xs it jumped 12px -> 16px -> 12px
+											     across an edit. Same for end_date below. #205 whole-field shape
+											     (see the name field above for the full rationale, including why
+											     there is no `aria-labelledby` here).
+											     #205 review F5 — child order is sr-only, ✎, value: pencil LEADING,
+											     the admin reference order. All three activators in this one panel
+											     must agree or the ✎ visibly jumps from the left of the name to the
+											     right of the two dates directly beneath it. -->
+											<button
+												type="button"
+												data-testid="season-edit-btn-start_date"
+												disabled={seasonEditPending.start_date === true}
+												class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
+												onclick={() => beginSeasonFieldEdit('start_date')}
+											>
+												<span class="sr-only">{m.season_manage_edit_start_date_label()}</span>
+												<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
+													>✎</span
+												>
 												<span data-testid="season-manage-start_date" class="text-base text-ink-2">
 													{#if seasonManageStartDate}
 														{formatSeasonDate(seasonManageStartDate)}
@@ -4840,17 +4882,7 @@
 														{m.season_manage_date_unset()}
 													{/if}
 												</span>
-												<button
-													type="button"
-													data-testid="season-edit-btn-start_date"
-													aria-label={m.season_manage_edit_start_date_label()}
-													disabled={seasonEditPending.start_date === true}
-													class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-													onclick={() => beginSeasonFieldEdit('start_date')}
-												>
-													<span aria-hidden="true">✎</span>
-												</button>
-											</div>
+											</button>
 										{/if}
 										{#if seasonEditErrors.start_date}
 											<p
@@ -4862,7 +4894,7 @@
 											</p>
 										{/if}
 									</div>
-									<div>
+									<div class="min-w-0 flex-1">
 										<p class="text-xs tracking-wide text-ink-2 uppercase">
 											{m.season_manage_end_date_label()}
 										</p>
@@ -4879,7 +4911,19 @@
 												class="border-b border-ink bg-transparent text-ink"
 											/>
 										{:else}
-											<div class="flex items-center gap-1">
+											<!-- #205 whole-field shape (see name field above for rationale;
+											     sr-only, ✎, value — pencil leading, review F5). -->
+											<button
+												type="button"
+												data-testid="season-edit-btn-end_date"
+												disabled={seasonEditPending.end_date === true}
+												class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
+												onclick={() => beginSeasonFieldEdit('end_date')}
+											>
+												<span class="sr-only">{m.season_manage_edit_end_date_label()}</span>
+												<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
+													>✎</span
+												>
 												<span data-testid="season-manage-end_date" class="text-base text-ink-2">
 													{#if seasonManageEndDate}
 														{formatSeasonDate(seasonManageEndDate)}
@@ -4887,17 +4931,7 @@
 														{m.season_manage_date_unset()}
 													{/if}
 												</span>
-												<button
-													type="button"
-													data-testid="season-edit-btn-end_date"
-													aria-label={m.season_manage_edit_end_date_label()}
-													disabled={seasonEditPending.end_date === true}
-													class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink-3 hover:text-ink disabled:opacity-40"
-													onclick={() => beginSeasonFieldEdit('end_date')}
-												>
-													<span aria-hidden="true">✎</span>
-												</button>
-											</div>
+											</button>
 										{/if}
 										{#if seasonEditErrors.end_date}
 											<p

@@ -688,6 +688,29 @@
 		autosaveCtrl.blur(field);
 	}
 
+	// #205 — Escape-cancels-edit: ProfileField reverts its own draft locally
+	// (bind:value), but the PENDING idle-autosave timer for the cancelled
+	// keystrokes lives here — it must die too, or a cancelled edit would still
+	// autosave a few seconds later.
+	//
+	// #205 review round 3 F1 — killing the timer only covers the edits that
+	// never reached the server. Cross the 2s idle window mid-edit and the
+	// autosave has ALREADY written the half-typed value; `cancel()` then clears
+	// a timer that no longer exists, the display snaps back to the pre-edit
+	// value, and Entu silently keeps the mid-edit one — divergent, with no
+	// dirty indicator to admit it. ProfileField has already written the
+	// pre-edit value back through `bind:value` by the time this runs, so
+	// `isDirty` is now measured against what the mid-edit autosave confirmed:
+	// true exactly when a write landed that the cancel has to undo, false (a
+	// no-op) in the ordinary case where nothing was autosaved. The flush goes
+	// through the same `onAutosave` seam as every other save — no second write
+	// path — and defers to `writesInFlight` like the other write entry points,
+	// since a save still in flight owns the level's queue slot.
+	function handleCancel(field: FieldKey) {
+		autosaveCtrl.cancel(field);
+		if (!writesInFlight && isDirty(field)) onAutosave(field);
+	}
+
 	function handleVisibilityChange(field: FieldKey, toLevel: Level) {
 		// Fire autosave if dirty BEFORE the move (cross-queue lock will block the move
 		// until the save settles).
@@ -792,6 +815,7 @@
 						onvaluechange={handleValueChange}
 						onblur={handleBlur}
 						onresolve={handleResolve}
+						oncancel={handleCancel}
 					/>
 				{/each}
 			</div>

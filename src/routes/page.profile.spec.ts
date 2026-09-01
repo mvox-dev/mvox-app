@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
 //
-// #35 — profile edit v2 page tests. Targets the v2 surface: one input per field,
-// autosave-driven saves, save feedback on the active visibility button.
+// #35 — profile edit v2 page tests. Targets the v2 surface: one field editor
+// per field, autosave-driven saves, save feedback on the active visibility
+// button.
+//
+// AMENDED for #205 (standing UX rule 4): the fields are whole-field
+// display-then-edit now — `profile-<field>-edit` (a native button wrapping the
+// value) activates `profile-<field>` (the input). Everything here that types
+// goes through `openEditor`; value reads in display state go through
+// `displayValue`. The activation contract itself is pinned in
+// page.profile-whole-field.spec.ts.
 import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,6 +23,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_load_retry: () => 'Retry',
 		profile_field_name_label: () => 'Name',
 		profile_field_email_label: () => 'Email',
+		// #205 — whole-field display-then-edit activators (sr-only action labels).
+		profile_name_edit_label: () => 'Edit name',
+		profile_email_edit_label: () => 'Edit email',
 		profile_level_public_label: () => 'Public',
 		profile_level_public_hint: () => 'Anyone.',
 		profile_level_domain_label: () => 'Collective',
@@ -175,6 +186,41 @@ function selectPolyphony() {
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 
+// ── #205 — display-then-edit helpers ────────────────────────────────────────
+// The profile fields are whole-field activators now (standing UX rule 4): the
+// raw input only mounts after activating `profile-<field>-edit`. Ready
+// sentinels therefore wait on the ProfileField WRAPPER, and every test that
+// types must open the editor first. The full activation contract is pinned in
+// page.profile-whole-field.spec.ts — these helpers just keep this file on it.
+
+/** Wait until the profile surface is loaded (display state). */
+async function waitReady(container: HTMLElement): Promise<void> {
+	await waitFor(() =>
+		expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
+	);
+}
+
+/** The display-state value element's text for a field (trimmed). */
+function displayValue(container: HTMLElement, field: 'name' | 'email'): string {
+	return (q(container, `[data-testid="profile-${field}-value"]`)?.textContent ?? '').trim();
+}
+
+/** Activate a field's whole-field button; answers the revealed input. */
+async function openEditor(
+	container: HTMLElement,
+	field: 'name' | 'email'
+): Promise<HTMLInputElement> {
+	const btn = q(container, `[data-testid="profile-${field}-edit"]`) as HTMLButtonElement | null;
+	expect(btn, `profile-${field}-edit must render in display state`).not.toBeNull();
+	await fireEvent.click(btn!);
+	let editorInput: HTMLInputElement | null = null;
+	await waitFor(() => {
+		editorInput = q(container, `[data-testid="profile-${field}"]`) as HTMLInputElement | null;
+		expect(editorInput).not.toBeNull();
+	});
+	return editorInput!;
+}
+
 beforeEach(() => {
 	vi.useFakeTimers();
 	h.listMyProfilesMock.mockReset();
@@ -193,25 +239,26 @@ afterEach(() => {
 });
 
 describe('/profile v2 — render + seed', () => {
-	it('renders name and email inputs once loaded', async () => {
+	it('renders name and email whole-field activators once loaded (#205 — the raw inputs no longer live-mount)', async () => {
 		selectPolyphony();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
-		expect(q(container, '[data-testid="profile-email"]')).not.toBeNull();
+		await waitReady(container);
+		expect(q(container, '[data-testid="profile-name-edit"]')).not.toBeNull();
+		expect(q(container, '[data-testid="profile-email-edit"]')).not.toBeNull();
 	});
 
-	it('seeds inputs from the narrowest non-empty holder', async () => {
+	it('seeds the displays from the narrowest non-empty holder, and the editor opens pre-filled', async () => {
 		selectPolyphony();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
-		expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ada');
-		expect((q(container, '[data-testid="profile-email"]') as HTMLInputElement).value).toBe(
-			'ada@x.io'
-		);
+		await waitReady(container);
+		expect(displayValue(container, 'name')).toBe('Ada');
+		expect(displayValue(container, 'email')).toBe('ada@x.io');
+		const nameInput = await openEditor(container, 'name');
+		expect(nameInput.value).toBe('Ada');
 	});
 
 	it('shows load error with retry', async () => {
@@ -231,7 +278,7 @@ describe('/profile v2 — render + seed', () => {
 		selectPolyphony();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 		const signOut = q(container, 'a[href="/auth/logout"]');
 		expect(signOut).not.toBeNull();
 		expect(signOut?.textContent).toBe('Sign out');
@@ -243,7 +290,7 @@ describe('/profile v2 — render + seed', () => {
 		setLastProvider('google');
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 		const identity = q(container, '[data-testid="profile-identity"]');
 		expect(identity).not.toBeNull();
 		expect(identity?.textContent).toBe('Signed in as mihkel@example.com via Google');
@@ -255,7 +302,7 @@ describe('/profile v2 — render + seed', () => {
 		setLastProvider('smart-id');
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 		const identity = q(container, '[data-testid="profile-identity"]');
 		expect(identity?.textContent).toBe('Signed in as Mihkel via Smart-ID');
 	});
@@ -267,9 +314,9 @@ describe('/profile v2 — autosave on blur', () => {
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 		await fireEvent.blur(nameInput);
 
@@ -290,9 +337,9 @@ describe('/profile v2 — autosave on idle', () => {
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
@@ -309,10 +356,12 @@ describe('/profile v2 — autosave on visibility change', () => {
 		]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
-		// Edit the name (makes it dirty).
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		// Edit the name (makes it dirty). #205 — the tier toolbar must stay
+		// mounted and live WHILE the editor is open (only the display/input
+		// area swaps), so this click sequence still exercises save-before-move.
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 
 		// Click the public visibility button for name — should fire autosave first.
@@ -339,9 +388,9 @@ describe('/profile v2 — save feedback on active button', () => {
 		const d = deferred<{ profileId: string }>();
 		h.applyProfileSaveMock.mockReturnValueOnce(d.promise);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
@@ -381,19 +430,17 @@ describe('/profile v2 — save failure shows per-field error', () => {
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockRejectedValueOnce(new Error('save failed'));
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 		await fireEvent.blur(nameInput);
 
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-name-error"]')).not.toBeNull()
 		);
-		// Draft preserved (retryable).
-		expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe(
-			'Ada'
-		);
+		// Draft preserved (retryable) — the closed editor's display keeps it.
+		expect(displayValue(container, 'name')).toBe('Ada');
 	});
 });
 
@@ -404,7 +451,7 @@ describe('/profile v2 — name-private guard', () => {
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
 		const privBtn = q(
 			container,
@@ -419,9 +466,7 @@ describe('/profile v2 — name-private guard', () => {
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
-		await waitFor(() =>
-			expect(q(container, '[data-testid="profile-email"]')).not.toBeNull()
-		);
+		await waitReady(container);
 
 		const privBtn = q(
 			container,
@@ -437,9 +482,9 @@ describe('/profile v2 — name-private guard', () => {
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' }
 		]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 
 		// Blurring triggers the autosave blur, which calls onAutosave — the guard throws.
@@ -453,7 +498,7 @@ describe('/profile v2 — name-private guard', () => {
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
 		// The private button is disabled so a click won't fire onmove.
 		const privBtn = q(
@@ -474,10 +519,10 @@ describe('/profile v2 — sibling value pinned (privacy leak prevention)', () =>
 		]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
 		// Edit name and blur to trigger autosave.
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
@@ -503,10 +548,10 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 		const { container } = render(Page);
 
 		await waitFor(() => {
-			const input = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
-			expect(input).not.toBeNull();
-			expect(input.value).toBe('Ada Lovelace');
+			expect(displayValue(container, 'name')).toBe('Ada Lovelace');
 		});
+		const input = await openEditor(container, 'name');
+		expect(input.value).toBe('Ada Lovelace');
 	});
 
 	it('does NOT overwrite an existing domain name with EntuUser.name', async () => {
@@ -519,8 +564,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 		const { container } = render(Page);
 
 		await waitFor(() => {
-			const input = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
-			expect(input.value).toBe('Her Chosen Name');
+			expect(displayValue(container, 'name')).toBe('Her Chosen Name');
 		});
 	});
 
@@ -531,11 +575,9 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 
 		const { container } = render(Page);
 
-		await waitFor(() => {
-			const input = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
-			expect(input).not.toBeNull();
-			expect(input.value).toBe('');
-		});
+		await waitReady(container);
+		const input = await openEditor(container, 'name');
+		expect(input.value).toBe('');
 	});
 });
 
@@ -548,10 +590,10 @@ describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => 
 		const d = deferred<{ profileId: string }>();
 		h.applyProfileSaveMock.mockReturnValueOnce(d.promise);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 
 		// Edit and blur to start a save.
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
@@ -587,7 +629,7 @@ describe('/profile v2 — T4.8 completion gate SSOT', () => {
 			expect(q(container, '[data-testid="profile-completion-required"]')).not.toBeNull()
 		);
 
-		const nameInput = q(container, '[data-testid="profile-name"]') as HTMLInputElement;
+		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ann' } });
 		await fireEvent.blur(nameInput);
 
@@ -668,14 +710,14 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		]);
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
-		// Before any tap, the input shows the narrow-wins active value.
-		expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ann');
+		// Before any tap, the display shows the narrow-wins active value.
+		expect(displayValue(container, 'name')).toBe('Ann');
 
 		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
 		await fireEvent.click(pubBtn);
 
 		await waitFor(() => {
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Annie');
+			expect(displayValue(container, 'name')).toBe('Annie');
 			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).not.toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
 		});
@@ -747,13 +789,13 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 
 		await fireEvent.click(domBtn); // preview domain
 		await waitFor(() => {
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Annie');
+			expect(displayValue(container, 'name')).toBe('Annie');
 			expect(q(container, '[data-testid="profile-vis-name-domain-preview"]')).not.toBeNull();
 		});
 
 		await fireEvent.click(pubBtn); // switch preview to public
 		await waitFor(() => {
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('A. Smith');
+			expect(displayValue(container, 'name')).toBe('A. Smith');
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
 			// The domain preview marker is gone — the preview state moved, it didn't accumulate.
 			expect(q(container, '[data-testid="profile-vis-name-domain-preview"]')).toBeNull();
@@ -794,7 +836,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		await fireEvent.click(pubBtn); // 1st tap — preview
 
 		await waitFor(() => {
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Annie');
+			expect(displayValue(container, 'name')).toBe('Annie');
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
 		});
 
@@ -804,7 +846,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			// previewLevel back to null: input reverts to the narrow-wins active
 			// value, the preview marker/hint are gone, and the conflict note
 			// (not the preview note) shows again.
-			expect((q(container, '[data-testid="profile-name"]') as HTMLInputElement).value).toBe('Ann');
+			expect(displayValue(container, 'name')).toBe('Ann');
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).not.toBeNull();
@@ -832,7 +874,7 @@ describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
-		await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+		await waitReady(container);
 		return container;
 	}
 

@@ -17,10 +17,12 @@
 //   2. locale parity: every m.* key a scanned file actually uses exists,
 //      non-empty, in ALL FOUR locale files (en, et, lv, uk) — and the
 //      parameterised remove-confirmation labels carry {name} everywhere;
-//   3. focus-indicator hygiene: none of the changed surfaces may strip the
-//      browser's default focus ring (`outline-none`) — these files define no
-//      replacement focus style, so removing the default would leave keyboard
-//      users with NO visible focus indicator at all (WCAG 2.4.7).
+//   3. focus-indicator hygiene: no changed surface may strip the browser's
+//      default focus ring (`outline-none`) unless it supplies a replacement —
+//      stripping it bare leaves keyboard users with NO visible focus indicator
+//      at all (WCAG 2.4.7). Originally a blanket ban, which was exact while no
+//      file here had a replacement to offer; #205 gave the roster arrange row
+//      one (see FOCUS_STRIP_EXCEPTIONS below).
 //
 // Follows the #86/#93/#99 source-scan precedent (page.sections-a11y.spec.ts).
 import { describe, expect, it } from 'vitest';
@@ -185,13 +187,47 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 // ---------------------------------------------------------------------------
 // 3 — focus-indicator hygiene on the changed surfaces
 // ---------------------------------------------------------------------------
+// The invariant is "no focusable surface here is left with NO visible focus
+// state" — the blanket `outline-none` ban was the cheap proxy for it, exact
+// while no surface on this list had a replacement to offer. #205 review F2
+// (round 3) gave one surface a real replacement: the arrange row's own outline
+// spans the ~16px grip since the section name moved into the sibling rename
+// activator, so the row suppresses it and the wrapper that already owns the
+// hold and drop affordances paints a row-sized `focus-within:ring-2` instead —
+// focus, hold and drop finally enclosing the same rectangle (the ring itself is
+// pinned in page.roster-arrange-whole-field.spec.ts).
+//
+// So the guard now states the invariant directly: a strip is allowed only where
+// it is listed AND the replacement is actually present in the file. The allowed
+// list is exact, so a second, undocumented `outline-none` in the same file
+// still fails — this is an itemised exception, not an exemption.
+const FOCUS_STRIP_EXCEPTIONS: Record<string, { allowed: string[]; replacement: RegExp }> = {
+	'src/routes/roster/+page.svelte': {
+		allowed: ['focus:outline-none'],
+		replacement: /focus-within:ring-2/
+	}
+};
+
 describe('#113 — a11y: changed surfaces never strip the default focus indicator', () => {
 	for (const file of CHANGED_SURFACES) {
-		it(`${file} contains no outline-none (no replacement focus style exists on these surfaces)`, () => {
-			const offenders = readSource(file).match(/[\w:-]*outline-none/g) ?? [];
-			expect(offenders).toEqual([]);
+		it(`${file} strips no focus indicator without a replacement`, () => {
+			const source = readSource(file);
+			const offenders = source.match(/[\w:-]*outline-none/g) ?? [];
+			const exception = FOCUS_STRIP_EXCEPTIONS[file];
+
+			if (!exception) {
+				expect(offenders).toEqual([]);
+				return;
+			}
+			expect(offenders, `${file}: only the itemised strips are allowed`).toEqual(
+				exception.allowed
+			);
+			expect(
+				source,
+				`${file}: strips the default outline, so the replacement focus indicator must be present`
+			).toMatch(exception.replacement);
 		});
 	}
 });
 
-// (*MVOX:Tallis*)
+// (*MVOX:Tallis*; #205 review round-3 focus-strip exception *MVOX:Josquin*)

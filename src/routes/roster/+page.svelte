@@ -1769,14 +1769,24 @@
 		// #155/S2 — arrange mode has no `section-group-*` wrapper at all (its
 		// ROWS are the drop target, not a handle's containing group), so the
 		// touch hit test also recognises `arrange-row-*`.
+		// #205 review F3 — …and `data-drop-row`, the arrange row's LAYOUT wrapper.
+		// The rename activator is a SIBLING of `arrange-row-*`, not a descendant,
+		// so once it grew to cover the name column a finger over it resolved to
+		// null here — `touchOverId` dropped mid-gesture and the release was
+		// discarded. The wrapper spans the whole visual row (row + action
+		// cluster) and carries the same id, which is also where the native
+		// `ondrop` now lives, so both pointer paths agree on the target.
 		const under = document.elementFromPoint?.(x, y);
-		const match = under?.closest('[data-testid^="section-group-"], [data-testid^="arrange-row-"]') ?? null;
+		const match =
+			under?.closest(
+				'[data-testid^="section-group-"], [data-testid^="arrange-row-"], [data-drop-row]'
+			) ?? null;
 		const testid = match?.getAttribute('data-testid') ?? '';
 		const id = testid.startsWith('arrange-row-')
 			? testid.slice('arrange-row-'.length)
 			: testid.startsWith('section-group-')
 				? testid.slice('section-group-'.length)
-				: '';
+				: (match?.getAttribute('data-drop-row') ?? '');
 		return id && id !== 'unassigned' ? id : null;
 	}
 
@@ -2710,17 +2720,20 @@
 								{#if arrangeDropHintBeforeId === row.id}
 									{@render dropIndicator()}
 								{/if}
-								<!-- #155/S2 review F1 — NO `aria-label` here on purpose. An
-								     aria-label OVERRIDES the element's contents for naming, so
-								     `aria-label={row.name}` made the row announce "Soprano" while
-								     it visibly reads "Soprano (3)" — the recursive member roll-up
-								     S1 shipped went silent in arrange mode, and the accessible
-								     name became a strict SUBSET of the visible label (WCAG 2.5.3
-								     Label in Name). Naming this role="button" from its own text
-								     content restores the count and keeps the two in lockstep for
-								     free — no second string for Comenius to keep in sync. The
-								     reorder protocol is unaffected: it was never in the label, it
-								     comes from `aria-describedby` below. -->
+								<!-- #155/S2 review F1 / #205 review F2 — the row's `aria-label` is
+								     "{name} ({count})". S2 named this role="button" from its own CONTENTS
+								     to keep the member roll-up in the name (WCAG 2.5.3 Label in Name) —
+								     the failure mode then was `aria-label={row.name}` alone, which
+								     announced "Soprano" over a visible "Soprano (3)". #205 moved the
+								     NAME's home into the rename activator beside this row (that
+								     containment is what makes "tap the name" open the editor), leaving
+								     the row's own content as the "(3)" roll-up. The label restores the
+								     full "Soprano (3)" the S2 fix was defending and still CONTAINS the
+								     visible "(3)", so Label in Name holds; it is composed from the same
+								     two values the row and its neighbour render, so there is no second
+								     string for Comenius to keep in sync. The reorder protocol is
+								     unaffected: it was never in the label, it comes from
+								     `aria-describedby` below. -->
 								<!-- #155/S2 review F2 — the HELD SUBTREE and the DROP TARGET must not
 								     look the same. Both used to paint `bg-ink-5`, so mid-drag "these
 								     rows are coming with me" and "the section lands here" were the
@@ -2766,12 +2779,69 @@
 								     nested controls is implementation-defined, and they added two extra tab
 								     stops per row inside a composite widget #152 gave ONE roving tab stop.
 								     Hoisting them out of the subtree removes both at the source rather than
-								     guarding around the symptom. The wrapper is pure layout: no role, no
-								     testid, no handlers — every attribute the reorder machine resolves by
-								     (`data-testid="arrange-row-*"` for `handleElementFor` and the touch
-								     hit-test, `tabindex`, `aria-grabbed`, `data-grabbed*`, `draggable`, the
-								     depth padding and the drag tints) stays on the row itself. -->
-								<div class="flex items-center">
+								     guarding around the symptom. Everything the KEYBOARD/DRAG-SOURCE machine
+								     resolves by (`data-testid="arrange-row-*"` for `handleElementFor`,
+								     `tabindex`, `aria-grabbed`, `data-grabbed*`, `draggable`, `dragstart`,
+								     the depth padding) stays on the row itself. -->
+								<!-- #205 review F3 — the wrapper owns the DROP semantics. Once the rename
+								     activator grew to `flex-1` beside the row, the row no longer covered the
+								     full width a user perceives as "the row": `ondragover`/`ondrop` bound on
+								     the row never fired over the rename band, and the touch hit-test
+								     (`sectionIdUnderPointer` → `closest`) returned null there because the
+								     button is a SIBLING of the row, not a descendant. A drop released on the
+								     right half of a row was silently discarded. Binding the drop handlers and
+								     the `data-drop-row` hit-test hook here makes the drop target equal the
+								     visual row — including the action cluster — while the row keeps being the
+								     drag SOURCE and the keyboard control. `closest` returns the innermost
+								     match, so a point over the row still resolves through `arrange-row-*` to
+								     the same id. -->
+								<!-- #205 review F2 (round 2) — the HOLD affordances belong here too, for the
+								     same reason the drop tint does. `outline-dashed` (the row you are
+								     holding), `bg-indigo-soft` (its subtree) and `opacity-50` (the
+								     touch-dragged row) used to sit on `arrange-row-*`, which since #205
+								     spans the GRIP alone: the dashed "this is what you picked up" outline
+								     enclosed a bare grip and visibly EXCLUDED the section name that
+								     identifies it, while the drop target painted the full width. That is
+								     exactly the held-vs-target asymmetry S2 review F2 (below) exists to
+								     prevent — both must read as whole rows, distinguishable by TINT only.
+								     The mutual-exclusion argument in that comment survives the move
+								     unchanged: a descendant of the dragged section is by construction not
+								     its sibling, and only siblings accept the drop. Everything BEHAVIOURAL
+								     (role, tabindex, draggable, aria-grabbed, data-grabbed*, the handlers,
+								     the depth padding, and the grab cursor on the drag surface itself)
+								     stays on the row. -->
+								<!-- #205 review F2 (round 3) — the FOCUS indicator joins hold and drop
+								     on this wrapper. The row was the last thing still painting at grip
+								     size: since #205 `arrange-row-*` spans the ~16px grip alone, so the
+								     browser's default outline ringed a bare glyph while pressing Space
+								     immediately drew the held-row dashed outline around the full width
+								     — focus and hold disagreeing about what a row is, which is the same
+								     asymmetry round 2 fixed for hold-vs-drop. `focus-within` (not
+								     `focus`): the wrapper is `role="presentation"` and never itself
+								     focusable, and every focusable thing a user reaches inside it — the
+								     reorder row, the rename activator, delete — is part of the same
+								     visual row, so "focus is somewhere in this row" is exactly the state
+								     worth painting. A RING, not an outline: `outline-dashed` for the
+								     held state lives on this element too, and two outline-style
+								     utilities on one element fight over which wins. Ring and outline
+								     compose (box-shadow vs outline), so a held-and-focused row shows
+								     both, as it should. -->
+								<div
+									class="flex items-center focus-within:ring-2 focus-within:ring-indigo {(acceptsDrop &&
+										dragOverId === row.id) ||
+									acceptsTouchDrop
+										? 'bg-ink-5'
+										: ''} {touchDragId === row.id ? 'opacity-50' : ''} {heldSectionId === row.id
+										? 'outline-2 outline-dashed outline-indigo'
+										: ''} {heldSubtreeIds.has(row.id) ? 'bg-indigo-soft' : ''}"
+									role="presentation"
+									data-drop-row={row.id}
+									ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
+									ondragleave={acceptsDrop
+										? (event: DragEvent) => handleDragLeave(row.id, event)
+										: undefined}
+									ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
+								>
 									{#if renamingSectionId === row.id}
 										<!-- #155/S4 — RENAME mode: a SEPARATE, non-draggable row, never the
 										     `role="button"` reorder row with an `<input>` nested inside it
@@ -2801,6 +2871,7 @@
 											data-grabbed-subtree={heldSubtreeIds.has(row.id) ? 'true' : undefined}
 											role="button"
 											tabindex={activeArrangeRowId === row.id ? 0 : -1}
+											aria-label={`${row.name} (${row.memberCount})`}
 											aria-grabbed={draggedSectionId === row.id || grabbedSectionId === row.id
 												? 'true'
 												: 'false'}
@@ -2808,24 +2879,13 @@
 											aria-describedby="section-reorder-instructions"
 											draggable={structuralWritePending ? 'false' : 'true'}
 											style="touch-action: pan-y"
-											class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)} select-none {structuralWritePending
+											class="flex shrink-0 items-center gap-2 py-1.5 pr-2 {arrangeIndentClass(
+												row.depth
+											)} focus:outline-none select-none {structuralWritePending
 												? 'cursor-default'
-												: 'cursor-grab'} {touchDragId === row.id
-												? 'opacity-50'
-												: ''} {heldSectionId === row.id
-												? 'outline-2 outline-dashed outline-indigo'
-												: ''} {heldSubtreeIds.has(row.id)
-												? 'bg-indigo-soft'
-												: ''} {(acceptsDrop && dragOverId === row.id) || acceptsTouchDrop
-												? 'bg-ink-5'
-												: ''}"
+												: 'cursor-grab'}"
 											ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
 											ondragend={handleDragEnd}
-											ondragover={acceptsDrop ? (event: DragEvent) => handleDragOver(row.id, event) : undefined}
-											ondragleave={acceptsDrop
-												? (event: DragEvent) => handleDragLeave(row.id, event)
-												: undefined}
-											ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
 											onpointermove={handlePointerMove}
 											onpointerup={handlePointerUp}
 											onpointercancel={endTouchDrag}
@@ -2843,47 +2903,113 @@
 											onfocus={() => (rovingHandleId = row.id)}
 											onblur={() => handleHandleBlur(node)}
 										>
-											<!-- The touch grab zone. `aria-hidden` and drawn from bars rather
-											     than a `≡` character on purpose: the row is named by its own
-											     CONTENTS (review F1), so anything with text here would leak
-											     into the accessible name and desync it from the visible label
-											     again. Its only job is to be the element a finger presses —
-											     every other input path (mouse drag, keyboard) lives on the row. -->
+											<!-- The touch grab zone, and since #205 review F2 (round 2) the row's
+											     ONLY child. `aria-hidden` and drawn from bars rather than a `≡`
+											     character on purpose: nothing here may carry text — the row now
+											     renders NO visible text at all, which is what makes its explicit
+											     `aria-label` trivially satisfy WCAG 2.5.3 (nothing visible inside
+											     it for the name to have to contain).
+											     #205 review F2 (round 3) — grip-only drag is the intended
+											     tradeoff (team decision recorded on #205): it matches the touch
+											     pickup zone and keeps the drag gesture from competing with the
+											     rename activator's click, which now covers the rest of the row.
+											     What it owed was LEGIBILITY — three static bars at `text-ink-2`
+											     with no state at all told a pointer user nothing about where a
+											     drag can start. `hover:`/`active:` give it that affordance, and
+											     `min-h-11` stretches the reactive surface to the row's own
+											     height (set by the rename activator's `min-h-11` beside it), so
+											     what lights up is the whole strip you can actually grab rather
+											     than the ~18px the bars occupy. The bars stay centred
+											     (`justify-center`) and the strip stays `w-4`, so the no-scroll
+											     `touch-action: none` region grows in HEIGHT only and the rest
+											     of the row still pans (#155/S2 review F4).
+											     The affordance is gated on `structuralWritePending` for the
+											     same reason the row's `cursor-grab` is: while a structural
+											     write is outstanding `handlePointerDown` refuses the pickup
+											     outright, and a strip that still lights up under the cursor
+											     would be advertising a gesture the page will not honour. -->
 											<span
 												data-testid="arrange-grip-{row.id}"
 												aria-hidden="true"
 												style="touch-action: none"
-												class="flex w-4 shrink-0 flex-col justify-center gap-0.5 py-1 text-ink-2"
+												class="flex min-h-11 w-4 shrink-0 flex-col justify-center gap-0.5 rounded-sm py-1 text-ink-2 {structuralWritePending
+													? 'cursor-default'
+													: 'cursor-grab hover:bg-ink-5 hover:text-ink active:bg-ink-5 active:text-ink'}"
 												onpointerdown={(event: PointerEvent) => handlePointerDown(row.id, event)}
 											>
 												<span class="h-px w-full bg-current"></span>
 												<span class="h-px w-full bg-current"></span>
 												<span class="h-px w-full bg-current"></span>
 											</span>
-											<span class="text-sm text-ink">{row.name} ({row.memberCount})</span>
 										</div>
 									{/if}
-									<!-- #155/S4 — RENAME trigger: tap the section name (well, tap this
-									     button beside it — see the RENAME-mode comment above for why the
-									     input can't nest inside the `role="button"` row) to open inline
-									     edit. Sibling of the row, same reasoning as indent/unindent:
-									     keyboard-operable in its own right, no nested-interactive, no
-									     accessible-name pollution. -->
+									<!-- #205 whole-field shape (see admin/+page.svelte:513-540 and the
+									     season panel above for the full rationale) — the rename trigger
+									     WRAPS the section name so tapping the name area (not just the
+									     pencil) activates it. Still a sibling of the `role="button"` row
+									     (#155/S3 review R2/F1 nested-interactive fix stays intact) — the
+									     NAME simply moved out of the row and into this button, which is
+									     what makes the name area itself the tab-reachable activator.
+									     `flex-1 min-w-0` — not `w-full`, which would fight the fixed-width
+									     grip/indent/unindent/remove siblings in this flex row — grows the
+									     button to the remaining name-column width rather than
+									     shrink-wrapping the ✎ glyph (#165 review F3 trap). The drop target
+									     the button now covers is restored by the wrapper's `data-drop-row`
+									     (review F3, see above).
+									     #205 review F2 — the sr-only label is the BARE action verb, not
+									     `roster_section_rename({ name })`: the name is rendered visibly
+									     inside the button, so the parameterised string made the computed
+									     name stutter ("Rename Soprano Soprano"). Bare verb + visible value
+									     gives "Rename Soprano", the same "<action> <value>" contract the
+									     admin/season/profile activators use. `title` keeps the full
+									     parameterised string for the mouse tooltip (it never reaches the
+									     accessible name — contents win over title). -->
 									<button
 										type="button"
 										data-testid="arrange-rename-{row.id}"
-										aria-label={m.roster_section_rename({ name: row.name })}
 										title={m.roster_section_rename({ name: row.name })}
 										disabled={structuralWritePending || renamingSectionId === row.id}
-										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
+										class="group flex min-h-11 min-w-0 flex-1 appearance-none items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ink-2 hover:text-ink disabled:cursor-default"
 										onclick={() => startRename(node)}
 									>
-										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3 w-3 fill-current">
+										<span class="sr-only">{m.roster_section_rename_action()}</span>
+										<!-- The in-flight refusal dims the GLYPH, never the name (#155/S2 review
+										     F3): with the name living in here, `disabled:opacity-30` on the button
+										     washed out every section name on the page for the length of a reorder
+										     write — the exact regression F3 removed from the row. The refusal is
+										     already real (`disabled`), so the affordance only has to show on the
+										     control itself. -->
+										<svg
+											aria-hidden="true"
+											viewBox="0 0 16 16"
+											class="h-3 w-3 shrink-0 fill-current group-hover:text-ink group-disabled:opacity-30"
+										>
 											<path
 												d="M11.3 1.3a1 1 0 0 1 1.4 0l2 2a1 1 0 0 1 0 1.4l-8 8-3.7 1 1-3.7 8-8z"
 											/>
 										</svg>
+										<!-- While THIS row is being renamed the editor beside it already shows the
+										     name in an <input>; printing it here too would show it twice. The
+										     button itself stays mounted-and-disabled (the #155/S4 "ALWAYS
+										     rendered" contract). -->
+										{#if renamingSectionId !== row.id}
+											<span class="truncate text-sm">{row.name}</span>
+										{/if}
 									</button>
+									<!-- #205 review F1 (round 2) — the "(n)" roll-up reads AFTER the name, as it
+									     always has ("Soprano (3)"). The first GREEN left it inside the reorder
+									     row while the name moved into the activator BESIDE that row, so each
+									     row reversed to "grip (3) ✎ Soprano" — and, because the row was
+									     `grow` (basis auto) next to a `flex-1` (basis 0) activator, the free
+									     width split between them and pushed the name to roughly mid-row. The
+									     count is a SIBLING here rather than a child of the activator so that
+									     tapping it is not "rename", and outside the row so the row keeps no
+									     visible text of its own. The row is `shrink-0` around the grip now, so
+									     the activator's `flex-1` starts immediately after the depth indent and
+									     the indent step lands on the NAME, where the tree cue belongs. -->
+									<span data-testid="arrange-count-{row.id}" class="shrink-0 pl-2 text-sm text-ink"
+										>({row.memberCount})</span
+									>
 									<!-- #155/S3 — indent/unindent: ALWAYS rendered (not grab-gated), so a
 									     pointer-only admin can restructure the tree without ever touching
 									     the keyboard grab machine. SIBLINGS of the row, never children of

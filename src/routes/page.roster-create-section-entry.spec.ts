@@ -376,7 +376,10 @@ describe('/roster — page-level create: type name, submit, the section appears 
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-new-1')).not.toBeNull();
 		});
-		expect(q(container, 'arrange-row-sec-new-1')?.textContent).toContain('Tenor 2');
+		// #205 — the section NAME is rendered by the rename activator beside the
+		// row; the row states the "<name> (<count>)" pair as its accessible name.
+		expect(q(container, 'arrange-rename-sec-new-1')?.textContent).toContain('Tenor 2');
+		expect(q(container, 'arrange-row-sec-new-1')?.getAttribute('aria-label')).toBe('Tenor 2 (0)');
 
 		// ANNOUNCED result — the "invisible success" half of the finding: a
 		// role="status" live region carries a non-empty announcement.

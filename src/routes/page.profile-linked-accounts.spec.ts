@@ -32,6 +32,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_load_retry: () => 'Retry',
 		profile_field_name_label: () => 'Name',
 		profile_field_email_label: () => 'Email',
+		// #205 — whole-field display-then-edit activators (sr-only action labels).
+		profile_name_edit_label: () => 'Edit name',
+		profile_email_edit_label: () => 'Edit email',
 		profile_level_public_label: () => 'Public',
 		profile_level_public_hint: () => 'Anyone.',
 		profile_level_domain_label: () => 'Collective',
@@ -205,7 +208,7 @@ const EMAIL_ID = { _id: 'eu-2', uid: 'me@example.com', provider: 'e-mail', email
 async function renderReady(): Promise<HTMLElement> {
 	selectPolyphony();
 	const { container } = render(Page);
-	await waitFor(() => expect(q(container, '[data-testid="profile-name"]')).not.toBeNull());
+	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 	return container;
 }
 
@@ -626,7 +629,7 @@ describe('/profile — linked-identities read failure (#193 review F1)', () => {
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('it stopped at step: identity-read');
 		// The name/email editing surface — the page's primary purpose — survives.
-		expect(q(container, '[data-testid="profile-name"]')).not.toBeNull();
+		expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull();
 	});
 
 	it('blocks linking entirely while the bound set is unknown — no duplicate can be minted', async () => {
