@@ -73,6 +73,7 @@
 	import { listWorks, listAllEditions, type Edition, type Work } from '$lib/library/libraryData';
 	import type { ManageRightsState, PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
 	import { signFileUrl } from '$lib/repertoire/fileUrls';
+	import { workLabel } from '$lib/repertoire/workLabel';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RepertoireElement, {
 		ADD_PROGRAMME_KEY,
@@ -995,19 +996,24 @@
 		return out;
 	});
 
-	/** Editions not already on THIS event's programme, labelled "Work — Edition". */
+	/** Editions not already on THIS event's programme, labelled
+	 *  "Work - Composer — Edition" (#204). */
 	const pickableEditionsList = $derived.by(() => {
-		const workNameById = new Map(libraryWorks.map((work) => [work.id, work.name]));
+		const workById = new Map(libraryWorks.map((work) => [work.id, work]));
 		const programmed = new Set(
 			workRows.filter((row) => row.kind === 'program').map((row) => row.editionId)
 		);
 		return libraryEditions
 			.filter((edition) => !programmed.has(edition.id))
 			.map((edition) => {
-				const workName = workNameById.get(edition.workId ?? '') ?? '';
+				const work = workById.get(edition.workId ?? '');
+				// Guard on the composed label, not on `work`: a work that exists but
+				// carries no usable name/composer yields '' and must not prefix the
+				// edition with a dangling " — ".
+				const prefix = work === undefined ? '' : workLabel(work);
 				return {
 					id: edition.id,
-					label: workName === '' ? editionLabel(edition) : `${workName} — ${editionLabel(edition)}`
+					label: prefix === '' ? editionLabel(edition) : `${prefix} — ${editionLabel(edition)}`
 				};
 			});
 	});

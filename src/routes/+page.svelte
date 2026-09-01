@@ -32,6 +32,7 @@
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import { loadWorksByEventId } from '$lib/repertoire/workRows';
 	import { signFileUrl } from '$lib/repertoire/fileUrls';
+	import { workLabel } from '$lib/repertoire/workLabel';
 	import type {
 		ManageRightsState,
 		PickerOption,
@@ -1290,14 +1291,19 @@
 	});
 
 	/** Per EVENT: editions not already on that event's programme, labelled
-	 *  "Work — Edition" so the picker reads as music rather than as ids. */
+	 *  "Work - Composer — Edition" (#204) so the picker reads as music rather
+	 *  than as ids. */
 	const pickableEditionsByEventId = $derived.by(() => {
-		const workNameById = new Map(libraryWorks.map((work) => [work.id, work.name]));
+		const workById = new Map(libraryWorks.map((work) => [work.id, work]));
 		const all: PickerOption[] = libraryEditions.map((edition) => {
-			const workName = workNameById.get(edition.workId ?? '') ?? '';
+			const work = workById.get(edition.workId ?? '');
+			// Guard on the composed label, not on `work`: a work that exists but
+			// carries no usable name/composer yields '' and must not prefix the
+			// edition with a dangling " — ".
+			const prefix = work === undefined ? '' : workLabel(work);
 			return {
 				id: edition.id,
-				label: workName === '' ? editionLabel(edition) : `${workName} — ${editionLabel(edition)}`
+				label: prefix === '' ? editionLabel(edition) : `${prefix} — ${editionLabel(edition)}`
 			};
 		});
 		const out: Record<string, PickerOption[]> = {};

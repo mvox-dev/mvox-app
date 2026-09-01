@@ -107,6 +107,7 @@
 	import type { PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
 	import type { Work } from '$lib/library/libraryData';
 	import type { ManageRightsState } from '$lib/repertoire/repertoireActions';
+	import { workLabel } from '$lib/repertoire/workLabel';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 
 	const STATUS_OPTIONS: { value: RepertoireStatus; label: () => string }[] = [
@@ -515,7 +516,7 @@
 			>
 				<option value="">{m.repertoire_add_work_label()}</option>
 				{#each pickableWorksList as w (w.id)}
-					<option value={w.id}>{w.name}</option>
+					<option value={w.id}>{workLabel(w)}</option>
 				{/each}
 			</select>
 			<button

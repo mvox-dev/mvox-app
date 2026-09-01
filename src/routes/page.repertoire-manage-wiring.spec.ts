@@ -691,4 +691,145 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 	});
 });
 
+// ── #204 — work pickers show composer (agenda page route) ────────────────────
+//
+// RED contract: every work-picker label on the AGENDA page carries the
+// composer as "Name - Composer" (issue #204, "Silmavalgus - P. Uusberg"):
+//   • the "Add work" select's options, and
+//   • the "Add to programme" edition-picker's work half
+//     ("Work - Composer — Edition").
+// A work with no composer keeps its bare name — no dangling " - ".
+//
+// installWorld's fixtures stay untouched; this wrapper re-routes ONLY the
+// work/edition GETs so composers exist on the wire, and delegates the rest.
+type WireWork = { _id: string; name?: Array<{ string: string }>; composer?: Array<{ string: string }> };
+
+const DEFAULT_COMPOSER_WORKS: WireWork[] = [
+	{
+		_id: 'work-1',
+		name: [{ string: 'Spem in alium' }],
+		composer: [{ string: 'Thomas Tallis' }]
+	},
+	// work-2 deliberately has NO composer — the no-dangling case.
+	{ _id: 'work-2', name: [{ string: 'Old warhorse' }] },
+	{
+		_id: 'work-3',
+		name: [{ string: 'Nunc dimittis' }],
+		composer: [{ string: 'Rachmaninoff' }]
+	}
+];
+
+function installComposerWorld(options: WorldOptions = {}, works: WireWork[] = DEFAULT_COMPOSER_WORKS) {
+	const base = installWorld(options);
+	const wrapped = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+		const url = String(input);
+		const method = init?.method ?? 'GET';
+		if (method === 'GET' && url.includes('_type.string=work')) {
+			return json({ entities: works });
+		}
+		if (method === 'GET' && url.includes('_type.string=edition')) {
+			return json({
+				entities: [
+					{
+						_id: 'ed-1',
+						name: [{ string: '40-part original' }],
+						_parent: [{ reference: 'work-1', entity_type: 'work' }]
+					},
+					{
+						_id: 'ed-3',
+						name: [{ string: 'Eulenburg' }],
+						_parent: [{ reference: 'work-2', entity_type: 'work' }]
+					}
+				]
+			});
+		}
+		return base(input, init);
+	});
+	vi.stubGlobal('fetch', wrapped);
+	return wrapped;
+}
+
+describe('#204 — agenda page work pickers show composer', () => {
+	it('the "Add work" select labels its options "Name - Composer"', async () => {
+		installComposerWorld({ seasonEditor: true });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(container.querySelector('[data-testid="work-manage-add-work-select"]')).not.toBeNull();
+		});
+		const select = container.querySelector(
+			'[data-testid="work-manage-add-work-select"]'
+		) as HTMLSelectElement;
+		// work-1/work-2 are already in the repertoire; work-3 is the pickable one.
+		await vi.waitFor(() => {
+			expect(select.querySelectorAll('option').length).toBe(2);
+		});
+		const labels = [...select.querySelectorAll('option')].map((o) => (o.textContent ?? '').trim());
+		expect(labels).toEqual(['[repertoire_add_work_label]', 'Nunc dimittis - Rachmaninoff']);
+	});
+
+	it('the "Add to programme" edition picker labels read "Work - Composer — Edition"; a composerless work keeps its bare name', async () => {
+		installComposerWorld({ seasonEditor: false, eventEditor: true, programItems: [] });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-programme-select"]')
+			).not.toBeNull();
+		});
+		const select = container.querySelector(
+			'[data-testid="work-manage-add-programme-select"]'
+		) as HTMLSelectElement;
+		await vi.waitFor(() => {
+			expect(select.querySelectorAll('option').length).toBe(3);
+		});
+		const labels = [...select.querySelectorAll('option')].map((o) => (o.textContent ?? '').trim());
+		expect(labels).toEqual([
+			'[repertoire_add_programme_label]',
+			'Spem in alium - Thomas Tallis — 40-part original',
+			// work-2 has no composer: bare name, NO dangling " - " before the "—".
+			'Old warhorse — Eulenburg'
+		]);
+	});
+
+	it('an edition whose work has NO name on the wire falls back to the bare edition label — no leading " — "', async () => {
+		// Entu's `mandatory` is a UI hint only, so a nameless work entity is
+		// reachable; listWorks maps the missing name to ''. The work IS found in
+		// the map, so guarding on `work !== undefined` would emit " — Eulenburg".
+		installComposerWorld({ seasonEditor: false, eventEditor: true, programItems: [] }, [
+			{
+				_id: 'work-1',
+				name: [{ string: 'Spem in alium' }],
+				composer: [{ string: 'Thomas Tallis' }]
+			},
+			// work-2: no name property at all, and a whitespace-only composer.
+			{ _id: 'work-2', composer: [{ string: '   ' }] }
+		]);
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-programme-select"]')
+			).not.toBeNull();
+		});
+		const select = container.querySelector(
+			'[data-testid="work-manage-add-programme-select"]'
+		) as HTMLSelectElement;
+		await vi.waitFor(() => {
+			expect(select.querySelectorAll('option').length).toBe(3);
+		});
+		const labels = [...select.querySelectorAll('option')].map((o) => (o.textContent ?? '').trim());
+		expect(labels).toEqual([
+			'[repertoire_add_programme_label]',
+			'Spem in alium - Thomas Tallis — 40-part original',
+			'Eulenburg'
+		]);
+	});
+});
+
 // (*MVOX:Josquin* — #91 review fix-forward: end-to-end management wiring)
+// (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
+// (*MVOX:Tallis* — #204 review fix-forward: nameless work on the wire)

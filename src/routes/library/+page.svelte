@@ -28,6 +28,7 @@
 		type Lending,
 		type LoanChain
 	} from '$lib/library/libraryData';
+	import { workLabel } from '$lib/repertoire/workLabel';
 	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
@@ -772,7 +773,7 @@
 					<select data-testid="bulk-checkout-work-select" aria-label={m.library_bulk_checkout_work_placeholder()} value={bulkCheckoutWorkId} onchange={(e) => (bulkCheckoutWorkId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1">
 						<option value="">{m.library_bulk_checkout_work_placeholder()}</option>
 						{#each works as work (work.id)}
-							<option value={work.id}>{work.name}</option>
+							<option value={work.id}>{workLabel(work)}</option>
 						{/each}
 					</select>
 					{#if bulkCheckoutWorkId}

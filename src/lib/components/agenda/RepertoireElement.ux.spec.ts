@@ -331,10 +331,11 @@ describe('RepertoireElement — native mobile pickers, repertoire surface (#111 
 		expect(el.className).toMatch(/(^|\s)w-full(\s|$)/);
 		expect(el.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
 		const labels = [...el.querySelectorAll('option')].map((o) => o.textContent?.trim());
+		// #204 — the option label carries the composer: "Name - Composer".
 		expect(labels).toEqual([
 			'[repertoire_add_work_label]',
-			pickableWorksList[0].name,
-			pickableWorksList[1].name
+			`${pickableWorksList[0].name} - ${pickableWorksList[0].composer}`,
+			`${pickableWorksList[1].name} - ${pickableWorksList[1].composer}`
 		]);
 	});
 

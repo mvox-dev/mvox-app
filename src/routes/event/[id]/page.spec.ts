@@ -2097,6 +2097,70 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 	});
 });
 
+// ── #204 — the edition picker on the event DETAIL page shows the composer ────
+
+describe('/event/[id] — "Add to programme" picker shows composer (#204)', () => {
+	it('labels read "Work - Composer — Edition"; a composerless work keeps its bare name — no dangling " - "', async () => {
+		const { container } = renderComposePage({
+			event: eventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: editorSeason(),
+			programItems: programItemsFixture(),
+			works: [
+				{ _id: 'w-1', name: [{ string: 'Bogoróditse Djévo' }], composer: [{ string: 'Arvo Pärt' }] },
+				{ _id: 'w-2', name: [{ string: 'Locus iste' }], composer: [{ string: 'Anton Bruckner' }] },
+				// NO composer — the no-dangling-" - " case.
+				{ _id: 'w-3', name: [{ string: 'Ubi caritas' }] }
+			],
+			editions: [
+				// ed-1/ed-2 are already programmed (programItemsFixture) → filtered out.
+				{
+					_id: 'ed-1',
+					name: [{ string: 'Edition A' }],
+					_parent: [{ reference: 'w-1', entity_type: 'work' }]
+				},
+				{
+					_id: 'ed-2',
+					name: [{ string: 'Edition B' }],
+					_parent: [{ reference: 'w-2', entity_type: 'work' }]
+				},
+				{
+					_id: 'ed-3',
+					name: [{ string: 'Edition C' }],
+					_parent: [{ reference: 'w-1', entity_type: 'work' }]
+				},
+				{
+					_id: 'ed-4',
+					name: [{ string: 'Edition D' }],
+					_parent: [{ reference: 'w-3', entity_type: 'work' }]
+				}
+			]
+		});
+
+		// Wait for the PROGRAMME rows to land too — the picker's programmed-set
+		// filter (and the DOM node itself) re-derives when they do, so the select
+		// must be (re)queried after that, never captured early.
+		await waitFor(() => {
+			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+			const sel = container.querySelector(
+				'[data-testid="work-manage-add-programme-select"]'
+			) as HTMLSelectElement | null;
+			expect(sel).not.toBeNull();
+			// ed-1/ed-2 are programmed → filtered out: placeholder + ed-3 + ed-4.
+			expect(sel!.querySelectorAll('option').length).toBe(3);
+		});
+		const select = container.querySelector(
+			'[data-testid="work-manage-add-programme-select"]'
+		) as HTMLSelectElement;
+		const labels = [...select.querySelectorAll('option')]
+			.filter((o) => (o as HTMLOptionElement).value !== '')
+			.map((o) => (o.textContent ?? '').trim());
+		expect(labels).toEqual([
+			'Bogoróditse Djévo - Arvo Pärt — Edition C',
+			'Ubi caritas — Edition D'
+		]);
+	});
+});
+
 // (*MVOX:Tallis* — #101 TE.1 RED)
 // (*MVOX:Josquin* — #101 TE.1 review fixes F1/F3)
 // (*MVOX:Josquin* — #101 TE.1 review round 2, F1–F5)
@@ -2104,3 +2168,4 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 // (*MVOX:Josquin* — #102 TE.2 review round 2, F1/F2)
 // (*MVOX:Tallis* — #103 TE.3 RED)
 // (*MVOX:Palestrina* — #103 TE.3 review round 2, F1–F4)
+// (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
