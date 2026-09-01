@@ -4078,6 +4078,52 @@
 							</button>
 						</div>
 					{:else}
+						<!-- #201 — a fresh collective's agenda is otherwise a blank page: the
+						     working flow (season → event series → events are generated) is
+						     only discoverable via the runbook. Gated on the SAME three
+						     conditions the rest of this branch already tracks — never over
+						     the skeleton (`!agendaLoading`), only while there is truly
+						     nothing yet (`seasons.length === 0` — a lapsed season means the
+						     flow is already known), and only for someone who can actually act
+						     on it (`seasonCreateRights === 'editor'`, fail-closed like every
+						     other gate on this page). The CTA reuses the EXISTING inline
+						     season-create form via `openSeasonCreateForm` — step 1 of the
+						     lesson made actionable, no new creation path.
+						     #201 review F1 — `!seasonCreateOpen` is the SAME guard the
+						     toolbar's [+ Season] trigger already carries (see line ~4161):
+						     none of the other three gated values change when the form
+						     opens, so without it the banner stayed mounted directly above
+						     an open form, and a second CTA click re-ran
+						     `openSeasonCreateForm`, which unconditionally blanks
+						     seasonCreateName/StartDate/EndDate/Conductors — silently
+						     discarding whatever the editor had typed.
+						     `createEntryPointsBlocked` does NOT cover this: it is
+						     `anyCreateSubmitting || seriesRunUnfinished`, true only during a
+						     write or an unfinished series run, never while a form merely sits
+						     open. Unmounting (rather than only disabling the CTA) also stops
+						     the banner telling the user to "start with a season" while they
+						     are already doing exactly that. -->
+						{#if !agendaLoading && seasons.length === 0 && seasonCreateRights === 'editor' && !seasonCreateOpen}
+							<div
+								data-testid="agenda-onboarding"
+								class="mb-3 flex flex-col gap-2 rounded-md border border-dashed border-ink-4 p-3"
+							>
+								<ol class="flex flex-col gap-1 text-sm text-ink-2">
+									<li>{m.agenda_onboarding_step_season()}</li>
+									<li>{m.agenda_onboarding_step_series()}</li>
+									<li>{m.agenda_onboarding_step_events()}</li>
+								</ol>
+								<button
+									type="button"
+									data-testid="agenda-onboarding-cta"
+									disabled={createEntryPointsBlocked}
+									class="flex w-fit min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+									onclick={openSeasonCreateForm}
+								>
+									{m.agenda_onboarding_cta()}
+								</button>
+							</div>
+						{/if}
 						<!-- #149 — [⚙] season-manage, [+ Season] and [+ Event] triggers
 						     grouped into one admin toolbar (shared border, consistent
 						     button sizing) so they read as one admin surface instead of
