@@ -23,6 +23,14 @@ export const EVENT_TYPE_LABEL: Record<string, () => string> = {
 	other: m.event_type_other
 };
 
+/** #199 — the eight v4E schema `event_type` keys, in schema order. The ONE
+ *  source for any UI that must offer exactly these (and no free-text prior
+ *  values, no ''): derived from `EVENT_TYPE_LABEL`'s own key order rather than
+ *  a second hand-typed list, so the two can never drift apart. */
+export const CANONICAL_EVENT_TYPES = Object.keys(EVENT_TYPE_LABEL) as ReadonlyArray<
+	keyof typeof EVENT_TYPE_LABEL
+>;
+
 /** Localized label for a known type; the RAW value for an unknown one
  *  ('proov' stays 'proov'); '' for '' (no invented label for a type-less
  *  event).

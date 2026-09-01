@@ -94,8 +94,7 @@ const {
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
-	getSeriesDefaultsMock,
-	listEventTypesMock
+	getSeriesDefaultsMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -113,8 +112,7 @@ const {
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
-	getSeriesDefaultsMock: vi.fn(),
-	listEventTypesMock: vi.fn()
+	getSeriesDefaultsMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -133,8 +131,6 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	removeSeasonConductor: removeSeasonConductorMock,
 	getSeriesDefaults: getSeriesDefaultsMock
 }));
-// T4's prior-event-type read — lazy-loaded by the event form.
-vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
@@ -297,7 +293,6 @@ beforeEach(() => {
 		defaultLocation: 'Main hall',
 		defaultDescription: null
 	});
-	listEventTypesMock.mockResolvedValue(['rehearsal', 'concert']);
 });
 
 afterEach(() => {
@@ -319,7 +314,6 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	listEventTypesMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -450,14 +444,12 @@ async function fillValidSeason(container: HTMLElement): Promise<void> {
 	await fill(container, 'season-create-end', '2026-12-20');
 }
 
-/** Minimal VALID event-create fill: season, type (typed live — the T4 rule:
- *  the live query wins), start, name (standalone events need one). */
+/** Minimal VALID event-create fill: season, type (#199: the canonical
+ *  <select> — 'rehearsal' is already its default, kept explicit here for
+ *  readability), start, name (standalone events need one). */
 async function fillValidEvent(container: HTMLElement): Promise<void> {
 	await selectValue(container, 'event-create-season', SEASON_ID);
-	const typeField = q(container, 'event-create-type-field') as HTMLElement;
-	const typeInput = typeField.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-	expect(typeInput).not.toBeNull();
-	await fireEvent.input(typeInput, { target: { value: 'rehearsal' } });
+	await selectValue(container, 'event-create-type', 'rehearsal');
 	await fill(container, 'event-create-datetime', '2026-09-15T19:00');
 	await fill(container, 'event-create-name', 'Extra rehearsal');
 }
@@ -1495,7 +1487,12 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 		expectTouchTarget(container, 'autocomplete-option-p-ada');
 	});
 
-	it('event form conductor AND type autocompletes: each option row is a 44px-tall button', async () => {
+	// #199 dropped the type field's Autocomplete rows — `event-create-type` is
+	// now a native <select>, whose <option> touch targets are the platform's
+	// concern, not this app's CSS floor (same posture as every other native
+	// select on this page — event-create-season, series-create-repeat — none
+	// of which are touch-target-tested here either).
+	it('event form conductor autocomplete: each option row is a 44px-tall button', async () => {
 		const container = await renderReady();
 		await openEventFormFromAgenda(container);
 
@@ -1505,14 +1502,6 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 			'p-ada'
 		);
 		expectTouchTarget(container, 'autocomplete-option-p-ada');
-
-		// The type combobox is the free-text one — same rows, same floor.
-		await openAutocompleteOptions(
-			q(container, 'event-create-type-field') as HTMLElement,
-			'reh',
-			'rehearsal'
-		);
-		expectTouchTarget(container, 'autocomplete-option-rehearsal');
 	});
 
 	it('season-manage panel conductor autocomplete: each option row is a 44px-tall button', async () => {

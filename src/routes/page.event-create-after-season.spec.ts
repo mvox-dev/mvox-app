@@ -68,7 +68,6 @@ const {
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
 	getSeriesDefaultsMock,
-	listEventTypesMock,
 	loadWorksByEventIdMock,
 	listWorksMock,
 	listAllEditionsMock,
@@ -90,7 +89,6 @@ const {
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
 	getSeriesDefaultsMock: vi.fn(),
-	listEventTypesMock: vi.fn(),
 	loadWorksByEventIdMock: vi.fn(),
 	listWorksMock: vi.fn(),
 	listAllEditionsMock: vi.fn(),
@@ -113,7 +111,6 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	removeSeasonConductor: removeSeasonConductorMock,
 	getSeriesDefaults: getSeriesDefaultsMock
 }));
-vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
@@ -295,7 +292,6 @@ beforeEach(() => {
 		defaultLocation: 'Main hall',
 		defaultDescription: ''
 	});
-	listEventTypesMock.mockResolvedValue(['rehearsal', 'concert']);
 	loadWorksByEventIdMock.mockResolvedValue({});
 	listWorksMock.mockResolvedValue([]);
 	listAllEditionsMock.mockResolvedValue([]);
@@ -320,7 +316,6 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	listEventTypesMock.mockReset();
 	loadWorksByEventIdMock.mockReset();
 	listWorksMock.mockReset();
 	listAllEditionsMock.mockReset();

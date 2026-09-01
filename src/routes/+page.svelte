@@ -95,7 +95,10 @@
 		isEventCascadePartial,
 		isSeriesCascadePartial
 	} from '$lib/seasons/deleteErrors';
-	import { listEventTypes } from '$lib/events/eventTypes';
+	// #199 — the canonical, localized event-type picker shared by the series and
+	// event creation forms (replaces the free-text input / prior-type
+	// Autocomplete this page used to build the type field from).
+	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -2471,11 +2474,11 @@
 	// (`listEvents`, `loadEventDetail`) would show for an untouched
 	// occurrence).
 	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
-	// Deduped + sorted PRIOR event_type values — the type Autocomplete's source.
-	// Dedup/sort is deliberately done HERE (not in `listEventTypes`, which hands
-	// back the wire values verbatim) — see eventTypes.ts's module doc.
-	let eventCreateTypeOptions = $state<string[]>([]);
-	let eventCreateType = $state('');
+	// #199 — the canonical, localized <select> (CANONICAL_EVENT_TYPES); replaces
+	// the free-text Autocomplete built over prior `listEventTypes` values.
+	// Always one of the eight canonical keys — 'rehearsal' by default — so the
+	// form can never submit a blank or hand-typed type.
+	let eventCreateType = $state('rehearsal');
 	let eventCreateName = $state('');
 	let eventCreateDatetime = $state('');
 	let eventCreateDuration = $state('');
@@ -2488,24 +2491,6 @@
 	 *  review F2 shape: a form-wide "try again" that names no field is a dead end
 	 *  for anyone who cannot see which box is empty. `null` = form-wide. */
 	let eventCreateErrorField = $state<EventCreateErrorField>(null);
-	/** #132/T4 review F1 — the type Autocomplete's LIVE text, mirrored here via
-	 *  its `onQueryChange`. `eventCreateType` alone is not the truth of what the
-	 *  viewer sees: "afterparty" typed and never confirmed with Enter leaves the
-	 *  committed value at '' while the word is still in the box. */
-	let eventCreateTypeQuery = $state('');
-	/**
-	 * #132/T4 review (2nd pass) F1 — the type the viewer is ACTUALLY looking at.
-	 *
-	 * The LIVE box wins over the committed value, not the other way round. A
-	 * commit resets the Autocomplete's own input to '' and reports
-	 * `onQueryChange('')` (Autocomplete.svelte's `commit`), so a blank query means
-	 * "the box is empty — the committed value is all there is". A NON-blank query
-	 * means the viewer has typed since: whether or not she pressed Enter, that
-	 * word is what the box reads. The other precedence loses silently — commit
-	 * 'rehearsal', retype 'concert' without Enter, submit, and the write carries
-	 * 'rehearsal' with no refusal and no aria-invalid to show for it.
-	 */
-	const eventCreateEffectiveType = $derived((eventCreateTypeQuery.trim() || eventCreateType).trim());
 	/**
 	 * #132/T4 review (2nd pass) F3 — the open form's IDENTITY, for the three
 	 * async reads it fires. Every other async assignment on this page carries an
@@ -2557,25 +2542,6 @@
 		return eventCreateErrorField === field ? true : undefined;
 	}
 
-	/** Deduped (exact) + sorted (localeCompare) — the PAGE's job per the
-	 *  eventTypes.ts contract; `listEventTypes` hands back the wire values
-	 *  verbatim, duplicates included. Lazy: fired only when the form opens. */
-	function loadEventCreateTypeOptions(cfg: ManageCfg): void {
-		const thisLoad = eventCreateLoadId;
-		listEventTypes(cfg)
-			.then((raw) => {
-				if (thisLoad !== eventCreateLoadId) return; // review F3 — a closed/reopened form's reply
-				const unique = [...new Set(raw)];
-				unique.sort((a, b) => a.localeCompare(b));
-				eventCreateTypeOptions = unique;
-			})
-			.catch((e) => {
-				if (thisLoad !== eventCreateLoadId) return;
-				console.error('agenda: loading prior event types failed', e);
-				eventCreateTypeOptions = [];
-			});
-	}
-
 	/** The series options for a CHOSEN season — shared by the initial
 	 *  panel-prefilled open and every subsequent season-select change.
 	 *
@@ -2621,9 +2587,7 @@
 		eventCreateSeriesId = '';
 		eventCreateSeriesOptions = [];
 		eventCreateSeriesDefaults = null;
-		eventCreateType = '';
-		eventCreateTypeQuery = '';
-		eventCreateTypeOptions = [];
+		eventCreateType = 'rehearsal';
 		eventCreateName = '';
 		eventCreateDatetime = '';
 		eventCreateDuration = '';
@@ -2639,7 +2603,6 @@
 		if (!current) return;
 		const cfg = { db: current.db, token: getToken() ?? '' };
 		// Lazy, form-open-only reads — never on the plain agenda visit.
-		loadEventCreateTypeOptions(cfg);
 		getRoster(cfg).catch((e) => {
 			console.error('agenda: loading the roster for the event conductor autocomplete failed', e);
 		});
@@ -2654,9 +2617,7 @@
 		eventCreateSeriesId = '';
 		eventCreateSeriesOptions = [];
 		eventCreateSeriesDefaults = null;
-		eventCreateType = '';
-		eventCreateTypeQuery = '';
-		eventCreateTypeOptions = [];
+		eventCreateType = 'rehearsal';
 		eventCreateName = '';
 		eventCreateDatetime = '';
 		eventCreateDuration = '';
@@ -2749,24 +2710,6 @@
 				console.error('agenda: loading series defaults for event create failed', e);
 				eventCreateSeriesDefaults = null;
 			});
-	}
-
-	/** The type Autocomplete's `onSelect` — a list pick and a free-text commit
-	 *  both carry the chosen string in `label` (list picks have `id === label`
-	 *  per the eventTypes contract; free text has `id: null`). */
-	function handleEventCreateTypeSelect(selection: { id: string | null; label: string }): void {
-		const value = selection.label.trim();
-		if (!value) return;
-		eventCreateType = value;
-		clearEventCreateError();
-	}
-
-	/** The type Autocomplete's live text (#132/T4 review F1) — mirrored so submit
-	 *  can honour a typed-but-not-Entered type instead of writing '' and blaming
-	 *  the network for it. */
-	function handleEventCreateTypeQuery(query: string): void {
-		eventCreateTypeQuery = query;
-		if (query.trim()) clearEventCreateError();
 	}
 
 	function handleEventCreateConductorSelect(selection: { id: string | null; label: string }): void {
@@ -3043,10 +2986,9 @@
 			setEventCreateError(m.event_create_season_required, 'season');
 			return;
 		}
-		// What the type box actually READS — the live text if there is any, else
-		// the committed value (review F1, then its 2nd-pass correction: the live
-		// text has to WIN, or a retype-after-commit writes the old word silently).
-		const typeValue = eventCreateEffectiveType;
+		// #199 — the canonical <select> can never be blank (no '' placeholder, no
+		// free text), so this is a defensive floor rather than a reachable path.
+		const typeValue = eventCreateType;
 		if (!typeValue) {
 			setEventCreateError(m.event_create_type_required, 'type');
 			return;
@@ -3197,16 +3139,10 @@
 	// clicked.
 	let seriesCreateSeasonId = $state('');
 	let seriesCreateName = $state('');
-	// #194/#202 review F3 — the 'rehearsal' pre-fill STAYS, deliberately. #194's
-	// checklist listed it for removal back when the agenda filtered on the
-	// literal string, i.e. when the pre-fill was steering data to fit a broken
-	// query. With the filter gone the pre-fill is simply the right default: a
-	// series typed 'rehearsal' renders LOCALIZED ('Proov' in et) through the
-	// shared eventTypeLabels map, whereas the hand-typed 'proov' it nudges
-	// Estonian users away from renders raw. Blanking it would trade that for an
-	// empty box plus a required-field error on submit — a UX downgrade with no
-	// picker to replace it. The localized type PICKER is #199, and that is where
-	// this default gets revisited.
+	// #194/#202 review F3 — the 'rehearsal' default STAYS. #199 turned the box
+	// itself into the canonical, localized <select> (CANONICAL_EVENT_TYPES,
+	// schema order); 'rehearsal' remains its pre-selected option, the workflow's
+	// own default for a new series.
 	let seriesCreateType = $state('rehearsal');
 	let seriesCreateDuration = $state('');
 	let seriesCreateLocation = $state('');
@@ -4494,20 +4430,31 @@
 												}}
 												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 											/>
-											<input
-												type="text"
-												data-testid="series-create-type"
-												aria-label={m.series_create_type_label()}
-												aria-invalid={seriesCreateInvalid('type')}
-												aria-describedby={seriesCreateDescribedBy('type')}
-												disabled={seriesCreateLocked}
-												value={seriesCreateType}
-												oninput={(e) => {
-													seriesCreateType = (e.currentTarget as HTMLInputElement).value;
-													clearSeriesCreateError();
-												}}
-												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-											/>
+											<!-- #199 review F4 — same reasoning as event-create-type: a
+											     never-blank <select> has no placeholder to name itself
+											     with, so the visible name is a wrapping <label>. -->
+											<label class="flex w-full flex-col gap-0.5">
+												<span data-testid="series-create-type-label" class="text-xs text-ink-2">
+													{m.series_create_type_label()}
+												</span>
+												<select
+													data-testid="series-create-type"
+													aria-label={m.series_create_type_label()}
+													aria-invalid={seriesCreateInvalid('type')}
+													aria-describedby={seriesCreateDescribedBy('type')}
+													disabled={seriesCreateLocked}
+													value={seriesCreateType}
+													onchange={(e) => {
+														seriesCreateType = (e.currentTarget as HTMLSelectElement).value;
+														clearSeriesCreateError();
+													}}
+													class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+												>
+													{#each CANONICAL_EVENT_TYPES as type (type)}
+														<option value={type}>{eventTypeLabel(type)}</option>
+													{/each}
+												</select>
+											</label>
 											<input
 												type="number"
 												data-testid="series-create-duration"
@@ -5138,29 +5085,36 @@
 								class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
 								onkeydown={onEventCreateFormKeydown}
 							>
-								<div data-testid="event-create-type-field">
-									<Autocomplete
-										items={eventCreateTypeOptions.map((t) => ({ id: t, label: t }))}
-										onSelect={handleEventCreateTypeSelect}
-										onQueryChange={handleEventCreateTypeQuery}
-										errorId={eventCreateDescribedBy('type')}
-										allowFreeText={true}
-										placeholder={m.event_create_type_placeholder()}
-										label={m.event_create_type_label()}
-										emptyLabel={m.event_create_type_no_matches()}
-									/>
-								</div>
-								<!-- The committed type, echoed because the combobox blanks its own
-								     input on commit. Hidden the moment the viewer types again
-								     (review 2nd-pass F1): while the box says 'concert' this line
-								     saying 'rehearsal' would be showing the value the write no
-								     longer uses. -->
-								{#if eventCreateType && !eventCreateTypeQuery.trim()}
-									<p data-testid="event-create-type-value" class="text-xs text-ink-2">
-										{eventCreateType}
-									</p>
-								{/if}
-								
+								<!-- #199 — the canonical, localized picker: same shape as
+								     series-create-type. Always one of the eight schema types, no
+								     '' placeholder, no free text.
+								     #199 review F4 — the select is never blank, so it has no
+								     placeholder to name itself with (the way the season select
+								     does). A WRAPPING <label> gives it a VISIBLE name without
+								     reintroducing a '' option; the wrapper also keeps the
+								     association implicit, so no id is needed. -->
+								<label class="flex w-full flex-col gap-0.5">
+									<span data-testid="event-create-type-label" class="text-xs text-ink-2">
+										{m.event_create_type_label()}
+									</span>
+									<select
+										data-testid="event-create-type"
+										aria-label={m.event_create_type_label()}
+										aria-invalid={eventCreateInvalid('type')}
+										aria-describedby={eventCreateDescribedBy('type')}
+										value={eventCreateType}
+										onchange={(e) => {
+											eventCreateType = (e.currentTarget as HTMLSelectElement).value;
+											clearEventCreateError();
+										}}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									>
+										{#each CANONICAL_EVENT_TYPES as type (type)}
+											<option value={type}>{eventTypeLabel(type)}</option>
+										{/each}
+									</select>
+								</label>
+
 								<select
 									data-testid="event-create-season"
 									aria-label={m.event_create_season_label()}

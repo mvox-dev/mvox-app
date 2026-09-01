@@ -150,8 +150,7 @@ const {
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
-	getSeriesDefaultsMock,
-	listEventTypesMock
+	getSeriesDefaultsMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -168,8 +167,7 @@ const {
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
-	getSeriesDefaultsMock: vi.fn(),
-	listEventTypesMock: vi.fn()
+	getSeriesDefaultsMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -188,7 +186,6 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	removeSeasonConductor: removeSeasonConductorMock,
 	getSeriesDefaults: getSeriesDefaultsMock
 }));
-vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
@@ -332,7 +329,6 @@ beforeEach(() => {
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);
 	getSeriesDefaultsMock.mockResolvedValue(null);
-	listEventTypesMock.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -353,7 +349,6 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	listEventTypesMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -479,7 +474,7 @@ describe('season panel — the [+ Series] entry point', () => {
 // ── the form's fields (design sketch D) ─────────────────────────────────────────
 
 describe('season panel — the series form carries every sketch-D field', () => {
-	it('name (text), type (text, PRE-FILLED rehearsal), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates), generate (checkbox), skip picker', async () => {
+	it('name (text), type (#199: canonical select, PRE-SELECTED rehearsal — see page.event-type-picker.spec.ts for the full picker contract), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates), generate (checkbox), skip picker', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 
@@ -487,8 +482,9 @@ describe('season panel — the series form carries every sketch-D field', () => 
 		expect(name).not.toBeNull();
 		expect(name.tagName).toBe('INPUT');
 
-		const type = q(container, 'series-create-type') as HTMLInputElement;
+		const type = q(container, 'series-create-type') as HTMLSelectElement;
 		expect(type).not.toBeNull();
+		expect(type.tagName).toBe('SELECT');
 		expect(type.value).toBe('rehearsal');
 
 		const duration = q(container, 'series-create-duration') as HTMLInputElement;
@@ -1021,41 +1017,14 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		expect(q(container, 'series-create-form')).not.toBeNull();
 	});
 
-	it('review F2 — a CLEARED type is refused, never silently defaulted back to "rehearsal": event_type is the discriminator the agenda filters on, so a wrong one is invisible until the agenda is wrong', async () => {
-		const container = await renderReady();
-		await openSeriesForm(container);
-		await fillValidTemplate(container);
-		await fill(container, 'series-create-type', '   ');
-		await submit(container);
-
-		await waitFor(() => {
-			expect(q(container, 'series-create-error')).not.toBeNull();
-		});
-		expect(q(container, 'series-create-error')?.textContent?.trim()).toBe(
-			'series_create_type_required'
-		);
-		expect(resolveDatabaseEntityIdMock).not.toHaveBeenCalled();
-		expect(createEventSeriesMock).not.toHaveBeenCalled();
-		expect(createEventMock).not.toHaveBeenCalled();
-		expect(q(container, 'series-create-form')).not.toBeNull();
-	});
-
-	it('…and a type the viewer TYPED rides through verbatim onto the series and every generated occurrence', async () => {
-		const container = await renderReady();
-		await openSeriesForm(container);
-		await fillValidTemplate(container);
-		await fill(container, 'series-create-type', 'concert');
-		await enableMondayGeneration(container);
-		await submit(container);
-
-		await waitFor(() => {
-			expect(createEventMock).toHaveBeenCalledTimes(3);
-		});
-		expect(lastSeriesInput().eventType).toBe('concert');
-		for (let i = 0; i < 3; i += 1) {
-			expect(eventInput(i).eventType).toBe('concert');
-		}
-	});
+	// #199 superseded this pair: `series-create-type` is now the canonical
+	// <select> (CANONICAL_EVENT_TYPES, no '' option, no free text), so it can
+	// no longer be cleared to blank or typed into. Both the "cleared type is
+	// refused" refusal and the "typed type rides through verbatim" pin are
+	// replaced by page.event-type-picker.spec.ts's coverage of the picker
+	// itself (exactly the 8 canonical options; a PICKED type — e.g. 'concert'
+	// — stores its canonical key onto the series and every generated
+	// occurrence).
 
 	it('review F4 — a refusal is wired to ITS OWN box: aria-invalid + aria-describedby point at the error, and only that field carries them', async () => {
 		const container = await renderReady();

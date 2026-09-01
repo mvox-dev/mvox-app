@@ -9,7 +9,7 @@
 // stub. An editor still cannot BIRTH an event in-app. T4 wires the two entry
 // points — a page-level [+ Event] on the agenda and the panel's existing
 // season-manage-add-event — into ONE inline creation form (design sketch C):
-// event type with autocomplete over PRIOR types, season/series pickers, the
+// event type (a canonical localized picker since #199), season/series pickers, the
 // domain fields, and a series-inheritance PREVIEW (inherited values render as
 // placeholders, never as values, so what the form shows is exactly what the
 // read-side merge will show).
@@ -29,11 +29,11 @@
 //       `seriesId` (T1's named field — the one parent that changes validation).
 //       No series chosen → `seriesId` absent/undefined (never `''` — the pin
 //       below is a full-shape toHaveBeenCalledWith that a `''` would fail).
-//     - event types come from `listEventTypes(cfg)` ($lib/events/eventTypes —
-//       NEW module): the collective's prior `event_type` values VERBATIM
-//       (duplicates included). Loaded when the form OPENS, never on the agenda
-//       visit. The PAGE dedupes (exact) + sorts (localeCompare) them into the
-//       type Autocomplete's items (item id = the type string).
+//     - event types are the EIGHT canonical v4E keys, offered by the
+//       `event-create-type` <select> and labelled through paraglide. #199
+//       replaced the free-text Autocomplete — and the prior-values read that
+//       fed it — with that picker; full contract in
+//       page.event-type-picker.spec.ts.
 //     - series options for the selected season come from
 //       `listEventSeriesForSeason(cfg, seasonId)` (T3, $lib/seasons/seasonManage).
 //     - series defaults for the inheritance preview come from
@@ -56,13 +56,12 @@
 //     season-manage-add-event     T3's button INSIDE the panel — T4 makes it
 //                                 open the SAME form, season pre-filled.
 //     event-create-form           the inline form (same route — no goto)
-//     event-create-type-field     wrapper around the TYPE Autocomplete (the
-//                                 component's own `autocomplete-input` testid is
-//                                 per-instance; two instances share this form,
-//                                 so each gets a named wrapper)
-//     event-create-type-value     the committed type, visible (the Autocomplete
-//                                 clears itself on commit — the parent shows
-//                                 the pick)
+//     event-create-type           #199 — the canonical, localized <select>
+//                                 (same shape as series-create-type); replaced
+//                                 the free-text Autocomplete this doc used to
+//                                 describe here (event-create-type-field /
+//                                 event-create-type-value) — full picker
+//                                 contract in page.event-type-picker.spec.ts
 //     event-create-season         season <select>: one option per KNOWN season
 //                                 (agenda `seasons`, value = id, label = name)
 //                                 behind a '' placeholder option. Pre-filled
@@ -123,8 +122,7 @@ const {
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
-	getSeriesDefaultsMock,
-	listEventTypesMock
+	getSeriesDefaultsMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -140,8 +138,7 @@ const {
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
-	getSeriesDefaultsMock: vi.fn(),
-	listEventTypesMock: vi.fn()
+	getSeriesDefaultsMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -160,8 +157,6 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	removeSeasonConductor: removeSeasonConductorMock,
 	getSeriesDefaults: getSeriesDefaultsMock
 }));
-// T4's prior-event-type read — NEW module, lazy-loaded by the form.
-vi.mock('$lib/events/eventTypes', () => ({ listEventTypes: listEventTypesMock }));
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
@@ -376,10 +371,6 @@ function flush(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Prior event_type values as the seam returns them: VERBATIM, duplicates and
- *  all — the PAGE is what dedupes + sorts (pinned below). */
-const RAW_EVENT_TYPES = ['rehearsal', 'concert', 'rehearsal', 'sectional'];
-
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
@@ -410,7 +401,6 @@ beforeEach(() => {
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);
 	getSeriesDefaultsMock.mockResolvedValue(series1Defaults());
-	listEventTypesMock.mockResolvedValue([...RAW_EVENT_TYPES]);
 });
 
 afterEach(() => {
@@ -430,7 +420,6 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	listEventTypesMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -485,32 +474,20 @@ async function selectValue(container: HTMLElement, testid: string, value: string
 	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
-/** The TYPE Autocomplete's input (wrapped — two Autocomplete instances share
- *  this form, so the component's own `autocomplete-input` testid is ambiguous
- *  container-wide). */
-function typeInput(container: HTMLElement): HTMLInputElement {
-	const field = q(container, 'event-create-type-field') as HTMLElement;
-	expect(field).not.toBeNull();
-	const input = field.querySelector('[data-testid="autocomplete-input"]') as HTMLInputElement;
-	expect(input).not.toBeNull();
-	return input;
+/** #199 — `event-create-type` is the canonical, localized <select> (same
+ *  shape as `series-create-type`; full picker contract pinned in
+ *  page.event-type-picker.spec.ts). It replaced the free-text Autocomplete
+ *  this suite used to drive via a filter string + a commit keystroke: there
+ *  is no filtering and no free text any more, so choosing a type IS just
+ *  changing the select. */
+function typeSelect(container: HTMLElement): HTMLSelectElement {
+	const select = q(container, 'event-create-type') as HTMLSelectElement;
+	expect(select).not.toBeNull();
+	return select;
 }
 
-/** Commit an EXISTING type by picking its option. */
-async function pickType(container: HTMLElement, filter: string, type: string): Promise<void> {
-	const input = typeInput(container);
-	await fireEvent.input(input, { target: { value: filter } });
-	await waitFor(() => {
-		expect(q(container, `autocomplete-option-${type}`)).not.toBeNull();
-	});
-	await fireEvent.click(q(container, `autocomplete-option-${type}`) as HTMLElement);
-}
-
-/** Commit a NEW type as free text (allowFreeText — Enter with no highlight). */
-async function freeTextType(container: HTMLElement, type: string): Promise<void> {
-	const input = typeInput(container);
-	await fireEvent.input(input, { target: { value: type } });
-	await fireEvent.keyDown(input, { key: 'Enter' });
+async function chooseType(container: HTMLElement, type: string): Promise<void> {
+	await selectValue(container, 'event-create-type', type);
 }
 
 /** Pick a conductor through the form's conductor Autocomplete. */
@@ -544,7 +521,7 @@ function lastCreateInput(): CreateEventInput {
 // ── the entry points: rights-gated agenda button + the panel's [+ Event] ────────
 
 describe('agenda — the [+ Event] entry point (rights gate)', () => {
-	it('season editor + current season: event-create renders at page level (never inside an agenda row); merely rendering writes nothing and fetches no event types', async () => {
+	it('season editor + current season: event-create renders at page level (never inside an agenda row); merely rendering writes nothing', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
@@ -555,7 +532,6 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 		expect(control.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
 
 		expect(createEventMock).not.toHaveBeenCalled();
-		expect(listEventTypesMock).not.toHaveBeenCalled();
 		expect(q(container, 'event-create-form')).toBeNull();
 	});
 
@@ -656,7 +632,7 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 // ── the form's fields (design sketch C) ─────────────────────────────────────────
 
 describe('agenda — the event creation form carries every sketch-C field', () => {
-	it('name (text), datetime (datetime-local), duration + capacity (number), location (text), description (TEXTAREA), a type Autocomplete and a conductor Autocomplete', async () => {
+	it('name (text), datetime (datetime-local), duration + capacity (number), location (text), description (TEXTAREA), a type picker (#199 canonical select) and a conductor Autocomplete', async () => {
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 
@@ -684,7 +660,7 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 		expect(description).not.toBeNull();
 		expect(description.tagName).toBe('TEXTAREA');
 
-		expect(typeInput(container)).not.toBeNull();
+		expect(typeSelect(container).tagName).toBe('SELECT');
 		const conductors = q(container, 'event-create-conductors-field') as HTMLElement;
 		expect(conductors.querySelector('[data-testid="autocomplete-input"]')).not.toBeNull();
 	});
@@ -722,60 +698,14 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 	});
 });
 
-// ── the event-type autocomplete: prior types, deduped + sorted, free text ───────
-
-describe('agenda — the event-type autocomplete builds on PRIOR event types', () => {
-	it('listEventTypes fires ONCE, when the form OPENS — never on the agenda visit itself', async () => {
-		const container = await renderReady();
-		expect(listEventTypesMock).not.toHaveBeenCalled();
-
-		await openFormFromAgenda(container);
-		await waitFor(() => {
-			expect(listEventTypesMock).toHaveBeenCalledTimes(1);
-		});
-		expect(listEventTypesMock.mock.calls[0][0]).toEqual(CFG);
-	});
-
-	it('the raw values are DEDUPLICATED and SORTED into the options: [rehearsal, concert, rehearsal, sectional] offers exactly concert / rehearsal / sectional, in that order', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-
-		// ArrowDown on the closed combobox opens the full (unfiltered) list.
-		const input = typeInput(container);
-		await fireEvent.keyDown(input, { key: 'ArrowDown' });
-
-		const field = q(container, 'event-create-type-field') as HTMLElement;
-		await waitFor(() => {
-			expect(field.querySelector('[data-testid^="autocomplete-option-"]')).not.toBeNull();
-		});
-		const labels = [...field.querySelectorAll('[data-testid^="autocomplete-option-"]')].map((el) =>
-			el.textContent?.trim()
-		);
-		expect(labels).toEqual(['concert', 'rehearsal', 'sectional']);
-	});
-
-	it('picking a prior type commits it: event-create-type-value shows the pick', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-
-		await pickType(container, 'con', 'concert');
-
-		await waitFor(() => {
-			expect(q(container, 'event-create-type-value')?.textContent).toContain('concert');
-		});
-	});
-
-	it('FREE TEXT commits a NEW type (allowFreeText): "afterparty" is not among the options, Enter commits it anyway', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-
-		await freeTextType(container, 'afterparty');
-
-		await waitFor(() => {
-			expect(q(container, 'event-create-type-value')?.textContent).toContain('afterparty');
-		});
-	});
-});
+// #199 superseded the "event-type autocomplete builds on PRIOR event types"
+// describe block that lived here: `event-create-type` is now the same
+// canonical, localized <select> as `series-create-type` — no more
+// `listEventTypes` read (that module is DELETED — it had no callers left), no
+// more dedup/sort of prior free-text values, no
+// more free-text commit. That contract now lives in
+// page.event-type-picker.spec.ts (exactly the 8 canonical options, localized
+// labels, canonical-key writes).
 
 // ── conductors: the T2 Autocomplete, through the page's cached roster ───────────
 
@@ -882,7 +812,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
 		// 19:00 Europe/Tallinn on 18 Apr 2027 (EEST, UTC+3) = 16:00Z — the same
 		// wall-clock convention the event/[id] editor pins (TE.4).
@@ -926,7 +856,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		const container = await renderReady();
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
-		await freeTextType(container, 'rehearsal');
+		await chooseType(container, 'rehearsal');
 		// 18:30 Tallinn on 7 Sep 2026 (EEST, UTC+3) = 15:30Z.
 		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
 		await submit(container);
@@ -954,7 +884,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		const container = await renderReady();
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
-		await freeTextType(container, 'rehearsal');
+		await chooseType(container, 'rehearsal');
 		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
 		await fill(container, 'event-create-name', 'Extra rehearsal');
 		await fill(container, 'event-create-duration', '45');
@@ -976,7 +906,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		const eventReadsBefore = listEventsForSeasonMock.mock.calls.length;
 
 		await selectValue(container, 'event-create-series', 'series-1');
-		await freeTextType(container, 'rehearsal');
+		await chooseType(container, 'rehearsal');
 		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
 		await submit(container);
 
@@ -1007,7 +937,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 	it('no SEASON chosen (agenda-opened): submit refuses with event-create-error (role="alert"), createEvent is NEVER called, the form stays open — a season-less event is invisible to every agenda read', async () => {
 		const container = await renderReady();
 		await openFormFromAgenda(container);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Orphan event');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
@@ -1025,7 +955,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
@@ -1049,60 +979,19 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 
 // ── #132/T4 review: validation, the announced result, and the visible labels ───
 
-/** The type Autocomplete's committed value is private to the page; these read
- *  the box the viewer is actually looking at. */
-function typeInputValue(container: HTMLElement): string {
-	return typeInput(container).value;
-}
+// #199 superseded both pins that lived here: `event-create-type` is now the
+// canonical <select> — it always carries a value ('rehearsal' by default), so
+// there is no "typed but not committed" state and no "no type at all" refusal
+// to reach any more. The picker's own contract (exactly the 8 canonical
+// options, defaulting to rehearsal) is pinned in
+// page.event-type-picker.spec.ts instead.
 
 describe('agenda — event create REFUSES an incomplete form before it writes (review F1)', () => {
-	it('TYPED BUT NOT COMMITTED type (no Enter): the word is still in the box, so the write uses it — never a silent eventType: ""', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-		await selectValue(container, 'event-create-season', SEASON_ID);
-		// Typed, NOT confirmed — the trap: `event-create-type-value` never appears,
-		// but "afterparty" is right there in the input.
-		await fireEvent.input(typeInput(container), { target: { value: 'afterparty' } });
-		expect(q(container, 'event-create-type-value')).toBeNull();
-		expect(typeInputValue(container)).toBe('afterparty');
-		await fill(container, 'event-create-name', 'Cast party');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
-		await submit(container);
-
-		await waitFor(() => {
-			expect(createEventMock).toHaveBeenCalledTimes(1);
-		});
-		expect(lastCreateInput().eventType).toBe('afterparty');
-	});
-
-	it('NO type at all: refused with the TYPE message, createEvent never runs, the form stays open and the combobox is aria-invalid pointing at the message', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-		await selectValue(container, 'event-create-season', SEASON_ID);
-		await fill(container, 'event-create-name', 'Spring concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
-		await submit(container);
-
-		await waitFor(() => {
-			expect(q(container, 'event-create-error')).not.toBeNull();
-		});
-		const error = q(container, 'event-create-error') as HTMLElement;
-		expect(error.getAttribute('role')).toBe('alert');
-		// NOT the generic write-failure copy — that names no field and blames a
-		// network nobody asked.
-		expect(error.textContent?.trim()).toBe('event_create_type_required');
-		expect(createEventMock).not.toHaveBeenCalled();
-		expect(q(container, 'event-create-form')).not.toBeNull();
-		expect(typeInput(container).getAttribute('aria-invalid')).toBe('true');
-		expect(typeInput(container).getAttribute('aria-describedby')).toBe(error.id);
-		expect(error.id).toBe('event-create-error');
-	});
-
 	it('NO datetime: refused with the DATETIME message; the input carries aria-invalid + aria-describedby', async () => {
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
 		await submit(container);
 
@@ -1122,7 +1011,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
 
@@ -1142,7 +1031,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		const container = await renderReady();
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
-		await freeTextType(container, 'rehearsal');
+		await chooseType(container, 'rehearsal');
 		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
 		await submit(container);
 
@@ -1156,7 +1045,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
 		await waitFor(() => {
@@ -1185,7 +1074,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
@@ -1200,7 +1089,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
@@ -1255,58 +1144,14 @@ describe('agenda — every event-create field keeps a VISIBLE label (review F4 +
 	});
 });
 
-// ── #132/T4 review, 2nd pass: the live type box, the panel's own season, and
-//    the form's in-flight guards ─────────────────────────────────────────────────
+// ── #132/T4 review, 2nd pass: the panel's own season, and the form's
+//    in-flight guards ─────────────────────────────────────────────────────────
 
-describe('agenda — event create writes the type the viewer is LOOKING AT (2nd-pass F1)', () => {
-	it('a committed type RETYPED without Enter: the write carries the RETYPED word, and the echoed committed value stops showing', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
-		await waitFor(() => {
-			expect(q(container, 'event-create-type-value')?.textContent).toContain('concert');
-		});
-
-		// The combobox blanked its own input on that commit; the viewer now types
-		// a DIFFERENT type into the visibly empty box and never presses Enter.
-		await fireEvent.input(typeInput(container), { target: { value: 'workshop' } });
-		expect(typeInputValue(container)).toBe('workshop');
-		// …and the echo of the superseded commit goes with it — a line reading
-		// 'concert' beside a box reading 'workshop' names a value nothing uses.
-		expect(q(container, 'event-create-type-value')).toBeNull();
-
-		await fill(container, 'event-create-name', 'Summer workshop');
-		await fill(container, 'event-create-datetime', '2027-06-02T18:00');
-		await submit(container);
-
-		await waitFor(() => {
-			expect(createEventMock).toHaveBeenCalledTimes(1);
-		});
-		expect(lastCreateInput().eventType).toBe('workshop');
-	});
-
-	it('the box CLEARED back to empty falls back to the committed type — a deletion is not a refusal', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-		await selectValue(container, 'event-create-season', SEASON_ID);
-		await pickType(container, 'con', 'concert');
-		await fireEvent.input(typeInput(container), { target: { value: 'wor' } });
-		await fireEvent.input(typeInput(container), { target: { value: '' } });
-
-		await waitFor(() => {
-			expect(q(container, 'event-create-type-value')?.textContent).toContain('concert');
-		});
-		await fill(container, 'event-create-name', 'Spring concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
-		await submit(container);
-
-		await waitFor(() => {
-			expect(createEventMock).toHaveBeenCalledTimes(1);
-		});
-		expect(lastCreateInput().eventType).toBe('concert');
-	});
-});
+// #199 superseded the "event create writes the type the viewer is LOOKING AT
+// (2nd-pass F1)" describe block that lived here: it pinned the Autocomplete's
+// live-box-wins-over-committed-value precedence (retype without Enter, clear
+// back to committed) — behaviour a canonical <select> has no room for, since
+// every change IS the commit.
 
 describe("agenda — a panel-born create refreshes the PANEL's season, not the form's (2nd-pass F2)", () => {
 	it('the form’s season switched away: the panel keeps showing ITS OWN season’s series and events', async () => {
@@ -1321,7 +1166,7 @@ describe("agenda — a panel-born create refreshes the PANEL's season, not the f
 		// The panel is scoped to the CURRENT season; the form's select is merely
 		// prefilled from it, and the viewer moves the event to another season.
 		await selectValue(container, 'event-create-season', UPCOMING_SEASON_ID);
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Autumn opener');
 		await fill(container, 'event-create-datetime', '2027-10-04T19:00');
 		await submit(container);
@@ -1423,7 +1268,7 @@ describe('agenda — the inheritance preview covers DESCRIPTION too (2nd-pass F4
 		});
 		// …and a blank description still WRITES as absent — the preview says what
 		// the read side will supply, it does not freeze a copy into the event.
-		await pickType(container, 'con', 'concert');
+		await chooseType(container, 'concert');
 		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
 		await submit(container);
 
