@@ -15,15 +15,23 @@ export const OAUTH_STATE_KEY = 'mvox.oauth_state';
 export interface OAuthState {
 	nonce: string;
 	return_to: string;
-	intent: 'login' | 'reauth' | 'invite';
+	intent: 'login' | 'reauth' | 'invite' | 'link';
 	provider: string;
 	/**
-	 * Present only for `intent: 'invite'` (T4.5/#31) — the invite bearer token and
-	 * its db ride the localStorage blob, NEVER the OAuth round-trip (Entu's signed
-	 * server-side state carries only `next`, entu-api [provider].get.js:114-117),
-	 * and are replayed by the callback's account-scoped exchange.
+	 * Present only for `intent: 'invite'` (T4.5/#31) and `intent: 'link'` (#193) —
+	 * the invite bearer token and its db ride the localStorage blob, NEVER the
+	 * OAuth round-trip (Entu's signed server-side state carries only `next`,
+	 * entu-api [provider].get.js:114-117), and are replayed by the callback's
+	 * account-scoped exchange.
 	 */
 	invite?: { db: string; token: string };
+	/**
+	 * #193 — `intent: 'link'` only: the person the self-invite was minted on
+	 * (the initiating, already-authenticated user). Replayed by the callback as
+	 * `expectedEntityId` — the tripwire against binding the second identity to
+	 * anyone else.
+	 */
+	linkPersonId?: string;
 }
 
 export function createNonce(): string {

@@ -319,3 +319,146 @@ export async function createInvite(
 	return { personId, memberId: memberBody._id, inviteToken };
 }
 
+// ── #193 — self-link mint: mint an invite JWT on the CALLER'S OWN person ────────
+//
+// Reuses this module's sole mint mechanism (the `entu_user` trigger literal):
+// the mint trigger fires on the entity UPDATE endpoint too (POST
+// /{db}/entity/{personId} with the trigger property mints an invite JWT on an
+// EXISTING person and returns it unmasked exactly once — entu-api
+// utils/entity.js:462-467 via insertProperties; the update route returns raw
+// pIds, routes/[db]/entity/[_id]/index.post.js:138,152). APPEND is
+// platform-level: a fresh entu_user value never disturbs an existing bound
+// identity.
+//
+// Hazard 2 (orphan accumulation): findStoredInvite (entu-api routes/auth/
+// index.get.js:270-275) takes the FIRST value carrying `invite` — so any stale,
+// un-redeemed invite placeholder from an abandoned link attempt MUST be deleted
+// before minting a fresh one, or the fresh token would never be found on
+// redemption. A value carrying `uid` is a real bound identity and must NEVER be
+// touched.
+
+export type SelfLinkMintPhase = 'identity-read' | 'stale-invite-cleanup' | 'mint';
+export type SelfLinkMintReason = 'http' | 'contract' | 'missing-self-editor';
+
+export class SelfLinkMintError extends Error {
+	readonly phase: SelfLinkMintPhase;
+	readonly reason: SelfLinkMintReason;
+
+	constructor(message: string, opts: { phase: SelfLinkMintPhase; reason: SelfLinkMintReason }) {
+		super(message);
+		this.name = 'SelfLinkMintError';
+		this.phase = opts.phase;
+		this.reason = opts.reason;
+	}
+}
+
+interface StoredEntuUserEntry {
+	_id: string;
+	uid?: string;
+	provider?: string;
+	email?: string;
+	/** Masked as '***' on every read after the mint moment — presence alone marks it. */
+	invite?: string;
+}
+
+/**
+ * Mint a fresh self-link invite on the caller's OWN person, under the caller's
+ * own JWT. All reads precede all writes; stale un-redeemed invite placeholders
+ * are swept first (in order) so the fresh mint is the ONLY value carrying
+ * `invite` afterward. Every failure is a named, loud `SelfLinkMintError` — never
+ * a silent fallback.
+ */
+export async function mintSelfLinkInvite(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<{ inviteToken: string }> {
+	// ── 1. identity read — source of truth for the stale-placeholder sweep ──────
+	const readRes = await entuFetch(
+		cfg.db,
+		`entity/${personId}?props=entu_user`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!readRes.ok) {
+		throw new SelfLinkMintError(
+			`self-link identity read failed: HTTP ${readRes.status}`,
+			{ phase: 'identity-read', reason: 'http' }
+		);
+	}
+	const readBody = (await readRes.json()) as {
+		entity?: { entu_user?: StoredEntuUserEntry[] };
+	};
+	const entries = readBody.entity?.entu_user ?? [];
+	const stalePlaceholders = entries.filter(
+		(e) => typeof e.invite === 'string' && e.invite.length > 0
+	);
+
+	// ── 2. stale-invite cleanup BEFORE mint — sequential, ordered; a bound
+	// identity (carries `uid`, never `invite`) is excluded by the filter above and
+	// is NEVER deleted here.
+	for (const stale of stalePlaceholders) {
+		const delRes = await entuFetch(
+			cfg.db,
+			`property/${stale._id}`,
+			cfg.token,
+			{ method: 'DELETE' },
+			fetchImpl
+		);
+		if (!delRes.ok) {
+			throw new SelfLinkMintError(
+				`self-link stale invite cleanup failed: HTTP ${delRes.status} on property ${stale._id} — aborting before mint (no mint on top of an unconsumed stale invite)`,
+				{ phase: 'stale-invite-cleanup', reason: 'http' }
+			);
+		}
+	}
+
+	// ── 3. the mint — POST to the entity UPDATE endpoint (the existing person),
+	// body is EXACTLY the one trigger property (the sole-mint-mechanism literal).
+	const mintRes = await entuFetch(
+		cfg.db,
+		`entity/${personId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([{ type: 'entu_user', string: INVITE_MINT_TRIGGER }])
+		},
+		fetchImpl
+	);
+	if (!mintRes.ok) {
+		if (mintRes.status === 403) {
+			// The one known rights gap for invite-joined persons: the self-`_editor`
+			// grant (this module's editor-grant phase) is what auto-provisioned users
+			// get natively (entu-api routes/auth/index.get.js:330) — a 403 here means
+			// that grant is missing on THIS person.
+			throw new SelfLinkMintError(
+				`self-link mint refused: HTTP 403 — the person lacks self-_editor`,
+				{ phase: 'mint', reason: 'missing-self-editor' }
+			);
+		}
+		throw new SelfLinkMintError(`self-link mint failed: HTTP ${mintRes.status}`, {
+			phase: 'mint',
+			reason: 'http'
+		});
+	}
+	const mintBody = (await mintRes.json()) as {
+		properties?: Array<{ type?: string; invite?: string }>;
+	};
+	// The update response is the ONLY readable pass — every later entity GET masks
+	// the token as '***' (entu-api utils/entity.js:594-598). A 2xx without it is an
+	// apparent-success trap: never treated as a completed mint.
+	const inviteToken = (mintBody.properties ?? []).find(
+		(p) => p.type === 'entu_user' && typeof p.invite === 'string' && p.invite.length > 0
+	)?.invite;
+	if (!inviteToken) {
+		throw new SelfLinkMintError(
+			`self-link mint on person ${personId} returned 2xx without an invite token — API contract drift; do not retry blindly, inspect the person entity`,
+			{ phase: 'mint', reason: 'contract' }
+		);
+	}
+
+	return { inviteToken };
+}
+

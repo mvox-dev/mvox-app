@@ -59,7 +59,25 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 			`Signed in as ${p.account} via ${p.provider}`,
 		// #123 — LanguageSelector (now rendered as app chrome on this page) reads
 		// this key for its aria-label.
-		profile_language_label: () => 'Language'
+		profile_language_label: () => 'Language',
+		// #193 — linked accounts section, always rendered once status is 'ready'
+		// (see page.profile-linked-accounts.spec.ts for the dedicated feature tests).
+		profile_linked_accounts_title: (p: { collective: string }) =>
+			`Sign-ins that work for ${p.collective}`,
+		profile_link_another: () => 'Link another account',
+		profile_link_choose_provider: () => 'Choose a provider to link',
+		profile_link_error_conflict: () =>
+			'That account is already in use by another member here.',
+		profile_link_error_dead: () => 'The link attempt expired or was already used.',
+		profile_link_error_failed: () => 'Linking failed — you can try again.',
+		profile_link_error_missing_rights: () =>
+			'Your account is missing the rights needed to link another sign-in.',
+		profile_link_error_already_linked: () => 'That sign-in is already linked to your account.',
+		profile_link_error_step: (p: { step: string }) =>
+			`Linking could not be completed — it stopped at step: ${p.step}. You can try again.`,
+		profile_link_success: (p: { collective: string }) =>
+			`That sign-in now works for ${p.collective}.`,
+		profile_link_cancel: () => 'Cancel'
 	}
 }));
 
@@ -117,6 +135,10 @@ vi.mock('$lib/profile/applyProfileSave', () => ({
 	ProfileSaveError: h.ProfileSaveError
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+// #193 — the profile page reads `?link_error` / `?linked` off `page.url` (the
+// return leg of the provider-link round trip). Default: a clean /profile URL.
+const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
+vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 

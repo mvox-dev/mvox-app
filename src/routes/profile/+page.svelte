@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser, getLastProvider } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -25,6 +26,12 @@
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	// #193 — linked auth providers + "Link another account".
+	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
+	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
+	import { AUTH_PROVIDERS } from '$lib/auth/providers';
+	import { createNonce } from '$lib/auth/state';
+	import { buildOAuthInitUrl } from '../auth/[provider]/build-oauth-init-url';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
@@ -84,6 +91,91 @@
 	let repairFailed = $state(new Set<FieldKey>());
 	let busy = $state(false);
 	let pendingMoveTo: Record<FieldKey, Level | null> = { name: null, email: null };
+
+	// #193 — linked auth providers, loaded alongside the profile fields but kept
+	// on its OWN try/catch (below): a hiccup reading them must not take down the
+	// name/email editing surface, which is the page's primary purpose.
+	let linkedIdentities = $state<LinkedIdentity[]>([]);
+	let linkPickerOpen = $state(false);
+	let linkBusy = $state(false);
+	let linkError = $state<string | null>(null);
+	// #193 (review F1) — an UNKNOWN identity list is not a known-empty one. Every
+	// user has at least one bound identity, so an empty `linkedIdentities` after a
+	// failed read is a display LIE — and worse, `linkedProviderIds` (below) would
+	// go empty and defeat BOTH duplicate-link guards at once. This flag keeps the
+	// two states apart: the section says what broke, and linking stays blocked
+	// while the no-duplicate rule cannot be enforced.
+	let linkedLoadFailed = $state(false);
+
+	// #193 (review F3) — focus custody across the activator→picker swap. The
+	// picker REPLACES the CTA, so the focused node leaves the DOM; without an
+	// explicit hand-off a keyboard user lands on <body> and has to tab from the
+	// top of the page to reach the buttons that just appeared.
+	let linkAnotherEl = $state<HTMLButtonElement | null>(null);
+	let linkPickerEl = $state<HTMLDivElement | null>(null);
+
+	/** The step name used when the identity read — not a mint — is what failed. */
+	const IDENTITY_READ_STEP = 'identity-read';
+
+	// #193 (review F1) — the RETURN leg. run-link-callback.ts lands every
+	// redemption-side failure back here as `/profile?link_error=<code>` and a
+	// success as `/profile?linked=1`. Without a consumer the user came back to a
+	// completely normal-looking profile and never learned that the link failed.
+	// Read ONCE at init (not $derived): the outcome belongs to the navigation that
+	// mounted this page, and starting a new link attempt must be able to clear it.
+	// The value arrives from a URL the user controls, and lands in a role="alert"
+	// node — so the code is a CLOSED whitelist, matching exactly what
+	// run-link-callback.ts emits. Anything else is not ours and is never echoed.
+	function returnLinkErrorMessage(code: string): string {
+		switch (code) {
+			case 'conflict':
+				return m.profile_link_error_conflict();
+			case 'dead':
+				return m.profile_link_error_dead();
+			case 'failed':
+				return m.profile_link_error_failed();
+			case 'already_linked':
+				return m.profile_link_error_already_linked();
+			// unexpected / invalid / persist_failed — no user-actionable distinction,
+			// but the step stays NAMED rather than being swallowed into a generic
+			// "linking failed" (the whole point of the fail-loudly rule).
+			case 'unexpected':
+			case 'invalid':
+			case 'persist_failed':
+				return m.profile_link_error_step({ step: code });
+			default:
+				return m.profile_link_error_failed();
+		}
+	}
+
+	const returnLinkErrorCode = page.url.searchParams.get('link_error');
+	let returnLinkError = $state<string | null>(
+		returnLinkErrorCode ? returnLinkErrorMessage(returnLinkErrorCode) : null
+	);
+	let linkSucceeded = $state(!returnLinkErrorCode && page.url.searchParams.get('linked') === '1');
+
+	/** The alert node shows whichever leg spoke last: mint-side, then return-side. */
+	const shownLinkError = $derived(linkError ?? returnLinkError);
+
+	/**
+	 * #193 (review F3) — providers already bound to this person. Re-linking one
+	 * takes entu-api's `existingEntry.user._id === inviteData.entityId` branch
+	 * (index.get.js:220-225), which still calls replaceInviteWithCredentials on the
+	 * fresh placeholder — producing a SECOND identity entry with the same
+	 * uid/provider/email. The exchange reports `redeemed`, so nothing downstream can
+	 * catch it: the only place to stop it is before the mint.
+	 */
+	const linkedProviderIds = $derived(new Set(linkedIdentities.map((i) => i.provider)));
+
+	/**
+	 * #193 (review F1) — linking is PER-COLLECTIVE, not account-wide: the mint runs
+	 * against the selected collective's {db, personId}, so the second identity is
+	 * bound to that collective's person entity alone. The list already re-reads per
+	 * selected collective; naming the collective in the heading and the success line
+	 * keeps the words matching what actually happened. (Account-wide linking is a
+	 * separate product decision, not a copy change.)
+	 */
+	const linkScopeName = $derived(selected?.name ?? '');
 
 	const domainNameMissing = $derived($completionGateStore === 'incomplete');
 
@@ -157,7 +249,49 @@
 		repairFailed = new Set();
 		busy = false;
 		pendingMoveTo = { name: null, email: null };
+		linkedIdentities = [];
+		linkedLoadFailed = false;
+		linkPickerOpen = false;
+		linkBusy = false;
+		linkError = null;
 		autosaveCtrl.destroy();
+	}
+
+	/**
+	 * #193 (review F1) — the linked-identities read, isolated from the profile
+	 * fields load. It never rejects: a failure is recorded as `linkedLoadFailed`
+	 * (a NAMED, rendered state), not as an empty list. The one exception is a
+	 * session-expired rejection, which is a different failure class entirely
+	 * (#107): entuFetch already cleared the stale session and fired the sign-in
+	 * redirect, so the page says so instead of blaming the identity read.
+	 */
+	async function loadLinkedIdentities(
+		cfg: { db: string; token: string },
+		personId: string,
+		g: number
+	): Promise<void> {
+		try {
+			const linked = await listLinkedIdentities(cfg, personId);
+			if (g !== generation) return;
+			linkedIdentities = linked.identities;
+			linkedLoadFailed = false;
+		} catch (linkedErr) {
+			if (g !== generation) return;
+			if (isAuthExpiredError(linkedErr)) {
+				status = 'session-expired';
+				return;
+			}
+			console.error('profile: linked identities load failed', linkedErr);
+			linkedIdentities = [];
+			linkedLoadFailed = true;
+		}
+	}
+
+	/** Retry ONLY the linked-identities read — the profile fields are already loaded. */
+	function retryLinkedIdentities(): void {
+		const ctx = activeContext();
+		if (!ctx) return;
+		void loadLinkedIdentities(ctx.cfg, ctx.personId, generation);
 	}
 
 	async function loadForSelected(): Promise<void> {
@@ -211,6 +345,10 @@
 
 			draft = nextDraft;
 			status = 'ready';
+
+			// #193 — linked-identities read, own failure handling: a hiccup here must
+			// not take down the name/email editing surface above (already 'ready').
+			await loadLinkedIdentities(cfg, personId, g);
 		} catch (e) {
 			if (g !== generation) return;
 			// #107 — a session-expired rejection is a DIFFERENT failure class than
@@ -345,6 +483,92 @@
 			return null;
 		}
 		return { cfg: { db: current.db, token }, personId: current.personId };
+	}
+
+	// #193 — "Link another account": open the native provider picker. No mint
+	// happens until a provider is actually picked (the token is a live 24h
+	// bearer credential — never pre-minted).
+	async function openLinkPicker(): Promise<void> {
+		linkPickerOpen = true;
+		linkError = null;
+		// A new attempt supersedes the previous round trip's verdict (which is
+		// pinned to the URL and would otherwise linger through the whole session).
+		returnLinkError = null;
+		linkSucceeded = false;
+		// #193 (review F3) — the picker replaces the activator, so the focused node
+		// is about to be removed. Hand focus to the first provider the user can
+		// actually pick (already-linked ones are disabled and unfocusable).
+		await tick();
+		linkPickerEl
+			?.querySelector<HTMLButtonElement>('[data-testid^="profile-link-provider-"]:not([disabled])')
+			?.focus();
+	}
+
+	/** #193 (review F3) — a way BACK out of the picker, with focus returned to the CTA. */
+	async function closeLinkPicker(): Promise<void> {
+		linkPickerOpen = false;
+		linkError = null;
+		await tick();
+		linkAnotherEl?.focus();
+	}
+
+	function linkErrorMessage(e: unknown): string {
+		if (e instanceof SelfLinkMintError) {
+			// The rights gap is the one reason with its own user-actionable wording.
+			if (e.reason === 'missing-self-editor') return m.profile_link_error_missing_rights();
+			// #193 (review F2) — every OTHER mint failure keeps its step NAMED rather
+			// than collapsing into "linking failed, try again". `stale-invite-cleanup`
+			// in particular is not retry-fixable client-side (inviteData.ts aborts
+			// before the mint when the stale-placeholder DELETE fails), so a bare
+			// "you can try again" would be actively misleading.
+			return m.profile_link_error_step({ step: e.phase });
+		}
+		return m.profile_link_error_failed();
+	}
+
+	// Mint a self-invite on the user's OWN person AT CLICK TIME, then hand off to
+	// the second-provider OAuth round trip with `intent: 'link'`. The token rides
+	// the localStorage OAuth-state blob only — it never enters any URL. A mint
+	// failure (e.g. the missing-self-_editor rights gap) surfaces loudly here and
+	// launches nothing.
+	async function handleLinkProvider(providerId: string): Promise<void> {
+		// Defense in depth behind the disabled control: minting for an already-bound
+		// provider would create a duplicate identity server-side (see
+		// `linkedProviderIds`), and the round trip reports success while doing it.
+		if (linkedProviderIds.has(providerId)) {
+			linkError = m.profile_link_error_already_linked();
+			return;
+		}
+		// …and the same guard is worthless when the list never loaded: an empty
+		// `linkedProviderIds` would wave every provider through. Refuse to mint
+		// while the bound set is unknown (review F1).
+		if (linkedLoadFailed) {
+			linkError = m.profile_link_error_step({ step: IDENTITY_READ_STEP });
+			return;
+		}
+		const ctx = activeContext();
+		if (!ctx) return;
+		linkBusy = true;
+		linkError = null;
+		returnLinkError = null;
+		linkSucceeded = false;
+		try {
+			const { inviteToken } = await mintSelfLinkInvite(ctx.cfg, ctx.personId);
+			const url = buildOAuthInitUrl({
+				provider: providerId,
+				origin: window.location.origin,
+				returnTo: '/profile?linked=1',
+				intent: 'link',
+				nonce: createNonce(),
+				invite: { db: ctx.cfg.db, token: inviteToken },
+				linkPersonId: ctx.personId
+			});
+			window.location.href = url;
+		} catch (e) {
+			console.error('profile: self-link mint failed', e);
+			linkBusy = false;
+			linkError = linkErrorMessage(e);
+		}
 	}
 
 	// The autosave onSave callback — dispatches through the existing queue.
@@ -571,6 +795,105 @@
 					/>
 				{/each}
 			</div>
+
+			<!-- #193 — linked auth providers + "Link another account". Display
+				source is the person entity's ACTUAL bound identities
+				(listLinkedIdentities), never the localStorage last-provider (which
+				only knows how THIS session logged in). -->
+			<section
+				data-testid="profile-linked-accounts"
+				class="flex flex-col gap-2 border-t border-ink/10 pt-4"
+			>
+				<h2 class="text-sm font-semibold">
+					{m.profile_linked_accounts_title({ collective: linkScopeName })}
+				</h2>
+				{#if linkedIdentities.length > 0}
+					<ul class="flex flex-col gap-1">
+						{#each linkedIdentities as identity (identity._id)}
+							<li data-testid={`profile-linked-identity-${identity._id}`} class="text-sm text-ink-2">
+								{providerLabel(identity.provider)}{#if identity.email}
+									&nbsp;— {identity.email}
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+
+				<!-- #193 (review F1) — the identity read FAILED: say so, and keep the
+					list's absence from reading as "you have no linked accounts". Linking
+					stays blocked below, because the no-duplicate rule is derived from
+					exactly this list. -->
+				{#if linkedLoadFailed}
+					<div
+						data-testid="profile-linked-load-error"
+						role="alert"
+						class="flex flex-col items-start gap-2"
+					>
+						<p class="text-sm text-red-700">
+							{m.profile_link_error_step({ step: IDENTITY_READ_STEP })}
+						</p>
+						<button
+							type="button"
+							data-testid="profile-linked-retry"
+							class="rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+							onclick={retryLinkedIdentities}
+						>
+							{m.profile_load_retry()}
+						</button>
+					</div>
+				{/if}
+
+				{#if !linkPickerOpen}
+					<button
+						type="button"
+						data-testid="profile-link-another"
+						bind:this={linkAnotherEl}
+						class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+						disabled={linkedLoadFailed}
+						onclick={openLinkPicker}
+					>
+						{m.profile_link_another()}
+					</button>
+				{:else}
+					<p class="text-sm text-ink-2">{m.profile_link_choose_provider()}</p>
+					<div class="flex flex-col gap-2" bind:this={linkPickerEl}>
+						{#each AUTH_PROVIDERS as provider (provider.id)}
+							{@const already = linkedProviderIds.has(provider.id)}
+							<button
+								type="button"
+								data-testid={`profile-link-provider-${provider.id}`}
+								class="rounded-md border border-ink px-4 py-2 text-left text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+								disabled={linkBusy || already || linkedLoadFailed}
+								aria-busy={linkBusy && !already}
+								onclick={() => handleLinkProvider(provider.id)}
+							>
+								{provider.label}{#if already}<span
+										data-testid={`profile-link-already-linked-${provider.id}`}
+										class="block text-xs text-ink-2">{m.profile_link_error_already_linked()}</span
+									>{/if}
+							</button>
+						{/each}
+						<button
+							type="button"
+							data-testid="profile-link-cancel"
+							class="self-start rounded-md border border-ink/40 px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+							onclick={closeLinkPicker}
+						>
+							{m.profile_link_cancel()}
+						</button>
+					</div>
+				{/if}
+
+				{#if shownLinkError}
+					<p data-testid="profile-link-error" role="alert" class="text-sm text-red-700">
+						{shownLinkError}
+					</p>
+				{:else if linkSucceeded}
+					<p data-testid="profile-link-success" role="status" class="text-sm text-ink-2">
+						{m.profile_link_success({ collective: linkScopeName })}
+					</p>
+				{/if}
+			</section>
 		{/if}
 	</div>
 </main>

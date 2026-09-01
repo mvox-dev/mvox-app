@@ -18,7 +18,12 @@ import { findSourceFiles, isSoleCreatePathViolation } from '$lib/testing/soleLit
 // UI-side mechanism the `.ts`-only walk would miss.
 
 const MINT_NEEDLE = 'entu_user';
-const MINT_EXEMPT = ['lib/invite/inviteData.ts'];
+// #193 — lib/profile/linkedIdentities.ts READS the entu_user property (the
+// profile page's linked-accounts display) but is not a mint mechanism: the
+// literal that actually mints (INVITE_MINT_TRIGGER) still lives only in
+// inviteData.ts (see the narrower companion guard in
+// lib/invite/selfLink.spec.ts, which pins that literal to exactly one file).
+const MINT_EXEMPT = ['lib/invite/inviteData.ts', 'lib/profile/linkedIdentities.ts'];
 const REDEEM_NEEDLE = 'auth?account=';
 const REDEEM_EXEMPT = ['lib/invite/redeem.ts'];
 

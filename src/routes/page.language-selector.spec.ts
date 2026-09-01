@@ -31,6 +31,10 @@ import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+// #193 — the profile page reads `?link_error` / `?linked` off `page.url` (the
+// return leg of the provider-link round trip). Default: a clean /profile URL.
+const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
+vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 

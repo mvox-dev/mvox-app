@@ -5,6 +5,7 @@ import { safeRedirectTarget } from '$lib/auth/redirect';
 import { hydrateAuth } from '$lib/auth/session';
 import { hydrateCollectives } from '$lib/collectives/store';
 import { runInviteCallbackExchange } from './run-invite-callback';
+import { runLinkCallbackExchange } from './run-link-callback';
 
 export type CallbackOutcome =
 	| { ok: true; redirectTo: string }
@@ -44,6 +45,14 @@ export async function runCallbackExchange(key: string): Promise<CallbackOutcome>
 	// in invite mode. The non-invite path below is unchanged.
 	if (decoded.intent === 'invite') {
 		return runInviteCallbackExchange(key, decoded);
+	}
+
+	// #193: a link-intent blob takes the SAME account-scoped redemption family as
+	// invite, but with its own branch (run-link-callback.ts) — a self-link never
+	// tolerates the admin-invite branch's "persist the OTHER person" conflict
+	// handling. The db-less exchangeSession below is never called in link mode.
+	if (decoded.intent === 'link') {
+		return runLinkCallbackExchange(key, decoded);
 	}
 
 	const result = await exchangeSession({ sessionToken: key });

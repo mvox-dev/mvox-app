@@ -10,18 +10,26 @@ import { getToken } from '$lib/auth/storage';
 // Mock the collective-discovery boundary too (severs the same $env chain via
 // marker.ts → entu-config) and `$app/navigation` (the store imports `goto`), so
 // the post-exchange `hydrateCollectives` runs against a fake discovery result.
-const { exchangeMock, discoverMock, gotoMock, inviteCallbackMock } = vi.hoisted(() => ({
-	exchangeMock: vi.fn(),
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
-	inviteCallbackMock: vi.fn()
-}));
+const { exchangeMock, discoverMock, gotoMock, inviteCallbackMock, linkCallbackMock } = vi.hoisted(
+	() => ({
+		exchangeMock: vi.fn(),
+		discoverMock: vi.fn(),
+		gotoMock: vi.fn(),
+		inviteCallbackMock: vi.fn(),
+		linkCallbackMock: vi.fn()
+	})
+);
 vi.mock('$lib/auth/exchange', () => ({ exchangeSession: exchangeMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // T4.5: the invite-intent branch — mocked at its module boundary so this spec
 // stays a unit of the NON-invite path plus the delegation decision.
 vi.mock('./run-invite-callback', () => ({ runInviteCallbackExchange: inviteCallbackMock }));
+// #193: the link-intent branch — same rationale as the invite mock above (it
+// transitively pulls in $lib/invite/redeem -> $lib/entu-config ->
+// $env/dynamic/public, which doesn't resolve under happy-dom). The dedicated
+// dispatch-wiring pin lives in run-callback-exchange.link-dispatch.spec.ts.
+vi.mock('./run-link-callback', () => ({ runLinkCallbackExchange: linkCallbackMock }));
 
 // Imported after the mock is registered (vi.mock is hoisted above imports anyway).
 import { runCallbackExchange } from './run-callback-exchange';
@@ -62,6 +70,7 @@ beforeEach(() => {
 	discoverMock.mockResolvedValue({ collectives: [], erroredDbs: [] });
 	gotoMock.mockReset();
 	inviteCallbackMock.mockReset();
+	linkCallbackMock.mockReset();
 	// Pre-auth baseline: the store as it stands when the callback page loads and
 	// the root layout's onMount already resolved it as anonymous → 'loading'.
 	collectiveState.set({ status: 'loading' });

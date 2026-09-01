@@ -6,14 +6,22 @@ export interface OAuthInitArgs {
 	provider: string;
 	origin: string;
 	returnTo: string;
-	intent: 'login' | 'reauth' | 'invite';
+	intent: 'login' | 'reauth' | 'invite' | 'link';
 	nonce: string;
 	/**
 	 * T4.5/#31: for `intent: 'invite'` the invite token + db must ride the
 	 * localStorage state blob (never the Entu init URL — the token must not
-	 * transit oauth.ee).
+	 * transit oauth.ee). #193: `intent: 'link'` reuses the same carrier — the
+	 * self-minted invite has no cross-page handoff, so the token must never enter
+	 * ANY URL (neither the Entu init URL nor an mvox one).
 	 */
 	invite?: { db: string; token: string };
+	/**
+	 * #193 — `intent: 'link'` only: the initiating (already-authenticated)
+	 * person, replayed by the callback as the redemption's expectedEntityId
+	 * tripwire.
+	 */
+	linkPersonId?: string;
 }
 
 /**
@@ -32,18 +40,24 @@ export function buildOAuthInitUrl(args: OAuthInitArgs): string {
 		return_to: args.returnTo,
 		intent: args.intent,
 		provider: args.provider,
-		// Invite intent only: the blob is the ONLY carrier of the invite token across
-		// the OAuth round-trip. It never enters the returned Entu init URL.
+		// Invite/link intent only: the blob is the ONLY carrier of the invite token
+		// across the OAuth round-trip. It never enters the returned Entu init URL.
 		...(args.invite ? { invite: args.invite } : {}),
+		...(args.linkPersonId ? { linkPersonId: args.linkPersonId } : {}),
 	});
 	localStorage.setItem(OAUTH_STATE_KEY, state);
 
 	const callbackUrl = `${args.origin}/auth/callback?key=`;
 	const params = new URLSearchParams({ next: callbackUrl });
 
-	const user = getUser();
-	if (user?.email) {
-		params.set('login_hint', user.email);
+	// #193 Hazard 3: `intent: 'link'` SUPPRESSES login_hint — the user is linking
+	// a NEW provider, so pre-filling the account they already have would steer
+	// them back into the identity they're trying to add a second one alongside.
+	if (args.intent !== 'link') {
+		const user = getUser();
+		if (user?.email) {
+			params.set('login_hint', user.email);
+		}
 	}
 
 	return `${ENTU_API_BASE}auth/${args.provider}?${params.toString()}`;
