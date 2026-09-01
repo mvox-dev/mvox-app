@@ -27,6 +27,52 @@ Fresh spawn. Standing-concerns scan found two things not yet in this scratchpad:
   not self-committed — current tree is on `feat/199-event-type-localized-picker`, not `main`
   (single-tree serialization protocol: not my branch to touch).
 
+## [CHECKPOINT] CREDE PII audit + redaction plan sent (2026-09-01)
+
+Full read-through of all 6 uncommitted CREDE scripts (team-lead's pre-commit PII guard had
+already caught one). Only `seed-186-crede-profile-emails-2026-08-27.ts` has inline PII: a
+20-row `TARGETS` array hardcoding real full names + real personal emails. The other 5
+(178/182/184/187/188) are clean — either read PII at runtime from an already-gitignored
+`scripts/migrations/snapshots/*.json` (178) or contain only Entu entity ids + non-identifying
+config (182/184/187/188). Plan sent to team-lead: externalize seed-186's name+email fields to
+`scripts/migrations/snapshots/crede-profile-emails-2026-08-27.json` (matches seed-178's existing
+snapshot-read pattern; also flagged `seed-results/` as team-lead's alternative, equally
+gitignored, their call). Also noted (not yet actioned): seed-186 is the only one of the 6 with
+no `DRY_RUN` guard. Design only — no edits made, execution waits for a tree-free window between
+pipelines (tree currently serves #199 branch work).
+
+**[WIP] Plan APPROVED (2026-09-01), execution HOLDS on #199 merge + team-lead ping.** Locked
+sequence, in order, once tree is back on `main`:
+1. Redact seed-186: move `{name,email}` (keep `personId` inline) to
+   `scripts/migrations/snapshots/crede-profile-emails-2026-08-27.json`; load via
+   `readFileSync`+`JSON.parse` (seed-178 pattern). Fold in a `DRY_RUN` default-guard in the same
+   edit (team-lead approved bundling this).
+2. Verify seed-186 is clean (no residual names/emails in the .ts).
+3. Lift the gitignore shield lines team-lead added in `309bc9b` for the 6 `seed-1*-crede-*.ts` /
+   `seed-188-phase3b-crede-*.ts` patterns — otherwise they stay invisible to `git add`.
+4. Commit all 6 scripts (script-only, no result JSONs, no snapshot JSONs — those stay gitignored).
+Do NOT start step 1 until team-lead pings that #199 merged and the tree is free.
+
+## [PROBE-RESULT] Invite-acceptance grants NO self-`_editor` (2026-09-01, read-only, #193)
+
+Dispatch asked me to live-GET a polyphony invite-created person's `_editor` set. Halted the live
+probe before running it — two premise problems: (1) the only candidate (#189/#191, Joosep Loidap)
+is `mvox_crede`-scoped, not polyphony; (2) Joosep's self-`_editor`, even if present, would be
+contaminated evidence — #189 step 2 is an explicit manual `POST _editor:self` done by our own
+mint script BEFORE redemption, so a live read can't distinguish "Entu's invite-acceptance branch
+grants this" from "we granted it ourselves." Read `~/projects/entu-api/routes/auth/index.get.js`
+source instead — settles it without live data: `createUserForAccount` (auto-provision, L289)
+ends with an explicit `setEntity(..., [{type:'_editor', reference: person._id}])` (L330,
+Finn's existing citation); `replaceInviteWithCredentials` (the actual invite-ACCEPTANCE function,
+L279, invoked from the `query.invite` verify branch ~L216/223) only swaps the invite-marker
+`entu_user` prop for real OAuth creds — **zero `_editor` involvement anywhere in that function or
+its callers.** Verdict: auto-provision grants self-`_editor`; invite-acceptance does not. This is
+already correctly reflected in `docs/architecture/invite-flow.md:44` as **[CONV]** (mvox's own
+`inviteData.ts` grants it at MINT time, not Entu at redemption) — my read just adds the missing
+`[SRC]` proof for that line (not applied — outside my write scope, flagged to team-lead/whoever
+owns that file). No findings-doc written: `docs/migration/findings/` no longer exists in this
+repo (confirmed empty, stale legacy-repo convention) and the canonical home already covers this.
+
 ## [CHECKPOINT] #132 _inheritrights mutation HALTED — premise mismatch (2026-08-13)
 
 Authorized single-entity mutation (EFK org `69c7f8718489bfcb0e81b065`, `_inheritrights`

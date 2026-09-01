@@ -7,6 +7,101 @@ metadata:
 
 # Bentham scratchpad
 
+## 2026-09-01 — [GOTCHA-STASH-U-CAPTURES-PII] gitignore does not purge what a stash already ate
+
+Crede seed scripts (`scripts/migrations/seed-1*-crede-*.ts`) hardcode real member PII — **20 real
+emails in `seed-186`**, count verified by regex, content not read. Shielded going forward by
+`.gitignore` @ `309bc9b`; all 6 confirmed ignored via `git check-ignore -v`.
+
+**The finding**: "untracked + now-gitignored" is NOT the same as "never in git." All 6 files sit in
+THREE parentless commits — `478a0da`, `53952a0`, `a2240d9` — with subjects of the form
+`untracked files on <branch>: <sha> <subject>`. That subject shape + zero parents is the signature of
+**`git stash -u`**'s third (untracked-files) commit. `53952a0` additionally carries 7
+`seed-results/*crede*.json` run reports and 3 `snapshots/crede-*.json`.
+
+**Audit method that found it** (reachable-history probes MISS this entirely):
+```
+git log --all --oneline -- '<path-glob>'          # returned 0 for all 6 — false all-clear
+git fsck --unreachable | awk '$2=="commit"{print $3}' \
+  | while read c; do git ls-tree -r --name-only $c | grep -i <token>; done
+```
+Then classify each hit: `git log -1 --format='%s%n%p' <c>` — empty parent list + `untracked files on`
+⇒ stash artifact, never on a branch. Cross-check exposure with
+`git merge-base --is-ancestor <c> origin/main`.
+
+**Exposure verdict here: contained.** All three are unreachable, non-ancestors of `main` and
+`origin/main`; no `*crede*` path appears anywhere in pushed history (only `probe-credential-precheck`,
+a substring false positive on "**cre**dential" — beware that token collision). Residual risk is local
+only: unreachable objects survive in `.git/objects` until gc prunes them, so a raw filesystem copy of
+`.git` (backup, image, `cp -r`) carries the PII. `git push` / `git bundle --all` do NOT (reachable
+objects only).
+
+**HAZARD on the obvious remediation**: `git reflog expire --expire-unreachable=now --all` also expires
+the **stash reflog**, and `stash@{1}`+ exist ONLY there — it would silently destroy live stash
+entries. This tree currently holds 3 (`fix/74-bulk-shape-correction` WIP). Drain or drop stashes
+deliberately first; never hand someone the `--all` one-liner as a safe cleanup.
+
+**Pattern-shape YELLOW**: `seed-1*-crede-*.ts` is numbering-and-extension coupled — a future
+`seed-2xx-crede-*.ts`, `seed-crede-*.ts`, or `.json`/`.md` companion escapes it.
+`scripts/migrations/*crede*` is the content-shaped form. (`.gitignore:42`
+`seed-188-phase3b-crede-*.ts` is already redundant — line 41's `seed-1*` matches it; check-ignore
+reports 42 only because last-match-wins.)
+
+**Standing review trigger**: when a PII/secret leak is closed by adding a `.gitignore` line, that is
+a forward shield ONLY. Demand the unreachable-object audit above before accepting "contained," and
+require the ignore pattern be content-shaped rather than filename-numbering-shaped.
+
+**Follow-up sweep (2026-09-01, CLEAN)**: applied the same trigger to `seed-results/`+`snapshots/`,
+dir-ignored later with the comment "may contain member PII; never commit." 43 `seed-results/` files
+ARE in pushed history (2026-08-07→08-09, 40 still at tip), **0 email matches**. Control-checked the
+zero — 682,946 bytes read, 54 `_id` occurrences proving the stream had content, positive control
+found all 20 in `seed-186`. All polyphony-era ⇒ synthetic. Dir-ignores there are precautionary, not
+remedial; dropping the Crede shield lines post-redaction exposes nothing historical. **Method note:
+an empty grep is only evidence if you control-check that the input stream was non-empty** — otherwise
+it is the same false all-clear as the reachable-history probe above.
+
+## 2026-09-01 — [GOTCHA-SALVAGE-DIFF-MISSES-WORKTREE] the memory-file YELLOW prescription
+
+Standing YELLOW: branch diff vs main carries `teams/mvox-dev/memory/*` ⇒ scratchpads must not ride
+into a feature squash. Prescribe a FIX that PRESERVES the edits (agents keep writing scratchpads
+mid-chain by standing policy, so the salvage set is usually part-committed, part-working-tree):
+
+```
+git diff main -- teams/mvox-dev/memory/ > /tmp/claude-1000/memory-salvage-<issue>.patch
+test -s /tmp/claude-1000/memory-salvage-<issue>.patch          # refuse to proceed on empty
+git checkout main -- teams/mvox-dev/memory/ && git commit -m "chore: drop memory files from #<issue> branch"
+```
+
+**The trap**: `git diff main HEAD -- <path>` compares two COMMITS and ignores the working tree. With
+dirty-but-uncommitted scratchpads it returns **0 lines**, exits 0, writes an empty patch that looks
+successful — and the next step's `git checkout main -- <path>` then destroys the very edits the export
+existed to save. Measured on #199 @ `e819fff`: `main HEAD` form = 0 lines, `main` form = 120 lines,
+same paths, same moment. **Drop `HEAD`; add the `test -s` guard.**
+
+Two riders: `git commit` fails on an empty commit when the memory paths were never committed to the
+branch (the common case — `add -A` often doesn't bite), so make it conditional or `--allow-empty`.
+And re-run BOTH diff forms at review time; a clean RED commit does not bind the GREEN/i18n/FIX
+commits that follow, each of which gets its own `add -A`.
+
+## 2026-09-01 — PO standing rules: registered review triggers
+
+Rules 1–3 are in `architecture-decisions.md:761-773` (native form controls + polyphony.uk as spec
+source). **Rule 4 landed after `bd3cd48` and is NOT yet in that file** — team-lead batched the append
+for the between-chains window. Registered here so it survives compaction; as steward I owe the
+`architecture-decisions.md` append once the tree is back on main and #199 has merged.
+
+- **[TRIGGER-NATIVE-CONTROLS]** Custom dropdown/input component where a native control serves =
+  **YELLOW minimum**. All dropdowns native `<select>`; all focused inputs native form controls; no
+  custom Autocomplete-style widgets for constrained choices. Origin: the #199-class defect — free-text
+  Autocomplete produced language-mismatched data.
+- **[TRIGGER-INSITU-WHOLE-FIELD]** (rule 4) In-situ edit fields (pencil-decorated): the **whole field
+  area** is the click activator, not just the pencil icon. Pencil-only activator = **YELLOW minimum**.
+  Reference implementation: collective name field, admin page. Binds existing + future in-situ fields,
+  especially event detail (name, datetime, duration, location, description, conductor). Not in #199
+  scope; lands on Gama's forthcoming retrofit issue.
+
+(*MVOX:Bentham*)
+
 ## 2026-08-09 — Session MVOX-5 reviews (all GREEN)
 
 [#68 Phase 1 inventory @ e677bbb — GREEN + YELLOW-68.1] 1444 entities swept, 72 flagged in 3 cohorts.

@@ -41,7 +41,7 @@ if (property.type === 'entu_user' && property.string) {
 
 ## 3. mvox reads the token back — its one and only chance
 
-Right after create, mvox reads the minted token out of Entu's **response** · **[CONV]** `inviteData.ts:249-252` (it looks for `entu_user.invite`). This is the **only** readable pass: every later GET of the person masks the token as `***` · **[SRC]** `entu-api utils/entity.js:594-598`. So "created but no token in the response" is treated as a hard, fail-loud error — no half-made invite, no blind retry. mvox then grants the person self-`_editor` (so she can edit her own record on arrival) and creates the `member` entity.
+Right after create, mvox reads the minted token out of Entu's **response** · **[CONV]** `inviteData.ts:249-252` (it looks for `entu_user.invite`). This is the **only** readable pass: every later GET of the person masks the token as `***` · **[SRC]** `entu-api utils/entity.js:594-598`. So "created but no token in the response" is treated as a hard, fail-loud error — no half-made invite, no blind retry. mvox then grants the person self-`_editor` (so she can edit her own record on arrival) and creates the `member` entity — and mvox **must** do this itself: Entu's invite-acceptance path grants no rights at all · **[SRC]** `entu-api routes/auth/index.get.js:279` (`replaceInviteWithCredentials` writes only the `entu_user` credential property; zero `_editor` work — unlike auto-provision, which self-grants at `:330`).
 
 ## 4. The token becomes a link — shown once, then forgotten
 
