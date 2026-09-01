@@ -17,9 +17,12 @@
 //   - the provider CTAs stay rendered (the message must not replace the way
 //     back in);
 //   - an error arrival must NOT silently auto-redirect to the remembered
-//     provider (the user deserves to read WHY they were signed out — the
-//     existing `if (error) return` early-out already covers this; pinned here
-//     so the session-expired branch keeps it).
+//     provider (the user deserves to read WHY they were signed out).
+//     #206 update: the page performs NO navigation on mount at all — the
+//     remembered-provider auto-redirect (and the `if (error) return` early-out
+//     that used to guard it) is gone, the picker always renders. So this
+//     assertion now pins the absence of ANY mount-time redirect, not an
+//     error-guarded exception to one.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 

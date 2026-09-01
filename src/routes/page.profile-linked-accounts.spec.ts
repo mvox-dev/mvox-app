@@ -204,6 +204,9 @@ function selectPolyphony() {
 
 const GOOGLE_ID = { _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
 const EMAIL_ID = { _id: 'eu-2', uid: 'me@example.com', provider: 'e-mail', email: 'me@example.com' };
+// #206 — binds the provider that currently LEADS the picker, so the focus-skip
+// test below has something to skip. See that test for why it needs its own.
+const SMART_ID = { _id: 'eu-3', uid: 'EE38001085718', provider: 'smart-id', email: '' };
 
 async function renderReady(): Promise<HTMLElement> {
 	selectPolyphony();
@@ -731,12 +734,20 @@ describe('/profile — mint failures name their step (#193 review F2)', () => {
 
 describe('/profile — the picker keeps keyboard focus (#193 review F3)', () => {
 	it('opening the picker moves focus to the first provider the user can actually pick', async () => {
-		// Google is bound (beforeEach default) → disabled → focus must skip it.
+		// The fixture must bind whichever provider LEADS AUTH_PROVIDERS, or the
+		// assertion is vacuous: focusing the first button and focusing the first
+		// ENABLED button are the same act when the first button is enabled. Since
+		// #206 that leader is smart-id, so smart-id is what we bind here — the
+		// focus then has to skip past it to mobile-id.
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [SMART_ID],
+			pendingInvites: 0
+		});
 		await openPicker();
 
 		expect(document.activeElement).not.toBe(document.body);
 		expect((document.activeElement as HTMLElement).getAttribute('data-testid')).toBe(
-			'profile-link-provider-smart-id'
+			'profile-link-provider-mobile-id'
 		);
 	});
 

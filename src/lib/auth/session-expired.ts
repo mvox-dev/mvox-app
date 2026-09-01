@@ -4,11 +4,15 @@
 // so the two can never carry different params.
 //
 // Two params, each load-bearing (#107 review F3):
-//   • `error=session_expired` — the login page's onMount fast path short-circuits
-//     on ANY error param (`if (error) return`). Without it, a user with a
-//     remembered provider (which `preserveProvider: true` guarantees after a 401)
-//     is bounced straight back to the OAuth provider and never learns why they
-//     were signed out.
+//   • `error=session_expired` — selects the `session_expired` branch of the login
+//     page's role="alert" slot (src/routes/auth/login/+page.svelte), so the user
+//     reads WHY they were signed out instead of landing on a bare picker. Without
+//     it the arrival is indistinguishable from an ordinary sign-in. `preserveProvider:
+//     true` on the 401 recovery complements it: the remembered provider stays
+//     flagged "last used" in the picker, so the re-auth CTA is the obvious one.
+//     (#206 retired the login page's remembered-provider auto-redirect — the
+//     picker always renders now — so there is no longer any redirect to
+//     short-circuit; the flag is load-bearing purely for the copy.)
 //   • `redirect=<target>` — the same contract `resolveGuardRedirect` (guard.ts)
 //     emits and the login page reads to build each provider's `return_to`.
 //     Without it, a session that dies deep in /event/<id> dumps the user on the

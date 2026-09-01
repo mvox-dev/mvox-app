@@ -26,10 +26,11 @@ describe('sessionExpiredSignInHref', () => {
 		expect(url.searchParams.get('redirect')).toBe('/event/ev1?tab=works');
 	});
 
-	it('always carries the error flag — without it the login page silently bounces to the remembered provider', () => {
-		// The login page's onMount fast path is `if (error) return`, and the 401
-		// recovery preserves the provider, so the flag is what stops a signed-out
-		// user from being re-auth'd before they can read why.
+	it('always carries the error flag — without it the login page cannot select its session_expired branch and the arrival is indistinguishable from an ordinary sign-in', () => {
+		// #206 note: the login page's remembered-provider auto-redirect is retired
+		// (the picker always renders now), but the error flag still matters — it
+		// gates the session-expired copy so a signed-out user can read why before
+		// re-authing, and the 401 recovery preserves the provider for that CTA.
 		for (const href of [
 			sessionExpiredSignInHref('/roster'),
 			sessionExpiredSignInHref('https://evil.example/steal'),

@@ -9,11 +9,11 @@ export interface AuthProvider {
 }
 
 export const AUTH_PROVIDERS: ReadonlyArray<AuthProvider> = [
-	{ id: 'google', label: 'Continue with Google' },
 	{ id: 'smart-id', label: 'Smart-ID' },
 	{ id: 'mobile-id', label: 'Mobile-ID' },
 	{ id: 'id-card', label: 'ID-card' },
-	{ id: 'apple', label: 'Apple' },
-	{ id: 'e-mail', label: 'E-mail' }
+	{ id: 'e-mail', label: 'E-mail' },
+	{ id: 'google', label: 'Continue with Google' },
+	{ id: 'apple', label: 'Apple' }
 ];
 

@@ -1,22 +1,19 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { performLogout } from './perform-logout';
 
-	// Client-side logout: clear the localStorage token + reset auth state. No server
-	// cookie to clear (there is no server).
-	let done = $state(false);
-
+	// Client-side logout: clear the localStorage token + reset auth state, then
+	// hand off to /auth/login — the always-rendered picker there is the one true
+	// signed-out surface (#206). No server cookie to clear (there is no server).
+	//
+	// `replaceState: true` (#206 review F1) — this route is a redirector, not a
+	// destination. A pushed entry would leave /auth/logout on the history stack,
+	// and pressing Back would remount this component, re-fire onMount and push
+	// /auth/login again: the user could never step back past the sign-out to the
+	// page they came from. Replacing our own entry lets Back unwind normally.
 	onMount(() => {
 		performLogout();
-		done = true;
+		goto('/auth/login', { replaceState: true });
 	});
 </script>
-
-<main class="flex min-h-screen flex-col items-center justify-center gap-3 bg-paper px-6 text-ink">
-	<h1 class="font-display text-2xl">Signed out</h1>
-	{#if done}
-		<p class="text-sm text-ink">You have been signed out.</p>
-	{/if}
-	<a class="text-sm underline" href="/auth/login">Sign back in</a>
-	<a class="text-sm underline" href="/">Return home</a>
-</main>

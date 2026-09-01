@@ -1,7 +1,5 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { getLastProvider } from '$lib/auth/storage';
 	import { safeRedirectTarget } from '$lib/auth/redirect';
 	// Provider list shared with the invite landing (T4.5) — extracted verbatim to
@@ -26,15 +24,6 @@
 	function providerHref(id: string, intent: 'login' | 'reauth'): string {
 		return `/auth/${id}?return_to=${encodeURIComponent(returnTo)}&intent=${intent}`;
 	}
-
-	// Remembered-provider fast path: silently re-auth unless we arrived with an error
-	// or an explicit picker request (`?picker=1`).
-	onMount(() => {
-		if (error) return;
-		if (page.url.searchParams.get('picker') === '1') return;
-		const remembered = getLastProvider();
-		if (remembered) goto(providerHref(remembered, 'reauth'));
-	});
 </script>
 
 <main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper px-6 text-ink">
