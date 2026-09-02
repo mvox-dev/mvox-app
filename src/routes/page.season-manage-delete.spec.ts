@@ -60,16 +60,26 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
+// ONE exception (#216/#217): `season_manage_delete_progress` renders its real
+// et template, because the visible "Kustutan X / Y…" line IS the user story —
+// the progress tests below assert that text verbatim, interpolation included,
+// rather than the key-echo every other message gets. (The locale guard at the
+// bottom of this file pins the template in messages/et.json itself.)
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
 		{
-			get:
-				(_target, key) =>
-				(params?: Record<string, unknown>) =>
-					params === undefined ? String(key) : `${String(key)} ${JSON.stringify(params)}`
+			get: (_target, key) => {
+				if (key === 'season_manage_delete_progress')
+					return (params: { current: number; total: number }) =>
+						`Kustutan ${params.current} / ${params.total}…`;
+				return (params?: Record<string, unknown>) =>
+					params === undefined ? String(key) : `${String(key)} ${JSON.stringify(params)}`;
+			}
 		}
 	)
 }));
@@ -91,7 +101,9 @@ const {
 	getSeriesDefaultsMock,
 	deleteEventMock,
 	deleteEventSeriesMock,
-	countSeriesOccurrencesMock
+	countSeriesOccurrencesMock,
+	countSeasonScopeMock,
+	deleteSeasonMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -109,7 +121,9 @@ const {
 	getSeriesDefaultsMock: vi.fn(),
 	deleteEventMock: vi.fn(),
 	deleteEventSeriesMock: vi.fn(),
-	countSeriesOccurrencesMock: vi.fn()
+	countSeriesOccurrencesMock: vi.fn(),
+	countSeasonScopeMock: vi.fn(),
+	deleteSeasonMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -124,7 +138,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	getSeriesDefaults: getSeriesDefaultsMock,
 	deleteEvent: deleteEventMock,
 	deleteEventSeries: deleteEventSeriesMock,
-	countSeriesOccurrences: countSeriesOccurrencesMock
+	countSeriesOccurrences: countSeriesOccurrencesMock,
+	countSeasonScope: countSeasonScopeMock,
+	deleteSeason: deleteSeasonMock
 }));
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: vi.fn(),
@@ -312,6 +328,12 @@ beforeEach(() => {
 	countSeriesOccurrencesMock.mockImplementation(
 		async (_cfg: unknown, seriesId: string) => liveOccurrenceCount[seriesId] ?? 0
 	);
+	// #217 — the season's LIVE scope (the confirm's three numbers) and the
+	// cascade's own result. Deliberately numbers that appear NOWHERE else in the
+	// fixtures (not 12/14/9, not the 2 series rows), so an assertion can only
+	// pass by quoting countSeasonScope / deleteSeason themselves.
+	countSeasonScopeMock.mockResolvedValue({ series: 3, events: 21, repertoireItems: 6 });
+	deleteSeasonMock.mockResolvedValue({ series: 3, events: 21, repertoireItems: 6 });
 });
 
 afterEach(() => {
@@ -333,6 +355,8 @@ afterEach(() => {
 	deleteEventMock.mockReset();
 	deleteEventSeriesMock.mockReset();
 	countSeriesOccurrencesMock.mockReset();
+	countSeasonScopeMock.mockReset();
+	deleteSeasonMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -441,7 +465,12 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 		await waitFor(() => {
 			expect(deleteEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
-		expect(deleteEventSeriesMock).toHaveBeenCalledWith(CFG, 'series-1');
+		// #216 — the page now hands the cascade its progress sink: the counter is
+		// driven by the data layer's own ticks, so the call carries the options
+		// object (fetchImpl stays the unsupplied third positional).
+		expect(deleteEventSeriesMock).toHaveBeenCalledWith(CFG, 'series-1', undefined, {
+			onProgress: expect.any(Function)
+		});
 		// Never the sibling write — a series id goes to the SERIES delete only.
 		expect(deleteEventMock).not.toHaveBeenCalled();
 
@@ -633,7 +662,10 @@ describe('agenda — #197 delete is a TWO-step confirm, never a single tap', () 
 
 		await fireEvent.click(confirm);
 		await waitFor(() => {
-			expect(deleteEventSeriesMock).toHaveBeenCalledWith(CFG, 'series-1');
+			// #216 — the options object rides on every series delete now.
+			expect(deleteEventSeriesMock).toHaveBeenCalledWith(CFG, 'series-1', undefined, {
+				onProgress: expect.any(Function)
+			});
 		});
 	});
 
@@ -979,6 +1011,699 @@ describe('agenda — #212 opening the convert form disarms any armed delete', ()
 	});
 });
 
+// ═══ #217 (folding #216) — delete the SEASON itself, with ONE progress counter ══
+//
+// WHY (#217, Mihkel 2026-09-02): "There is no delete season control." #197
+// finished events and series; the season row has no ×. And #216: the series
+// cascade runs silently — creation shows "Loon sündmust X / Y…", deletion
+// shows nothing.
+//
+// PO rulings (Gama, 2026-09-02, last comments on #217/#216): one slice closes
+// both; ONE "X / Y" counter whose denominator is EVERY entity the cascade
+// deletes (series + events + repertoire items), rendered under the series list
+// next to the delete-error slot, role="status", the series_create_progress
+// idiom; the two-step confirm quotes the LIVE scope (N series, N events, N
+// repertoire items); the season delete is gated by the same
+// `manageableSeasonRights === 'editor'` check as every other panel control.
+//
+// Pinned wiring contract (GREEN must implement):
+//
+//   DATA — through src/lib/seasons/seasonManage.ts (wire contract pinned in
+//   seasonManage.delete.spec.ts):
+//     - arming the season × calls `countSeasonScope(cfg, seasonId)`; the confirm
+//       quotes its three numbers via the new key `season_delete_confirm_scope`
+//       (params: series / events / repertoire);
+//     - the confirm calls `deleteSeason(cfg, seasonId, undefined, { onProgress })`;
+//     - a series row's confirm now calls
+//       `deleteEventSeries(cfg, seriesId, undefined, { onProgress })` — the
+//       exact-args assertions earlier in this file carry the options object.
+//
+//   TESTIDS
+//     season-manage-delete-season           the season's own × BUTTON in the
+//                                           panel (editor-gated, accessible name)
+//     season-manage-delete-season-confirm   the armed two-step's halves, #197
+//     season-manage-delete-season-cancel    idiom (the × is GONE while armed)
+//     season-manage-delete-progress         the ONE cascade counter — role=
+//                                           "status", under the series list next
+//                                           to the delete-error slot, text from
+//                                           `season_manage_delete_progress`
+//                                           ("Kustutan {current} / {total}…" in
+//                                           et), shown for BOTH season delete
+//                                           (#217) and series delete (#216),
+//                                           gone when the cascade finishes
+//
+//   BEHAVIOR
+//     - one armed context at a time: the season delete shares the existing
+//       `seasonManageDeleteArmed` slot with the row deletes, so arming one
+//       disarms the other;
+//     - pending guard: the confirm disables while the cascade is on the wire;
+//     - success: the panel CLOSES, the reload is the plain
+//       `loadForSelected()` (NOT keepSeasonManage — the season is gone, the
+//       manageable season must be recomputed), and the role="status" region
+//       announces via the new key `season_delete_success` — which means that
+//       region must survive the panel's unmount, or the announcement is never
+//       made;
+//     - partial failure: the existing season-manage-delete-error slot, new
+//       'season' branch (`season_manage_season_delete_partial`, params
+//       deleted / total), under the series list; the panel and the season stay;
+//     - the counter is cleared on finish, on failure, and on a collective
+//       switch mid-cascade (resetSeasonManage).
+
+type PageOnProgress = (current: number, total: number, kind: string) => void;
+interface PageScope {
+	series: number;
+	events: number;
+	repertoireItems: number;
+}
+
+/** Tap the season's own ×, wait for the confirm that replaces it. */
+async function armSeasonDelete(container: HTMLElement): Promise<void> {
+	await waitFor(() => {
+		expect(q(container, 'season-manage-delete-season')).not.toBeNull();
+	});
+	await fireEvent.click(q(container, 'season-manage-delete-season') as HTMLElement);
+	await waitFor(() => {
+		expect(q(container, 'season-manage-delete-season-confirm')).not.toBeNull();
+	});
+}
+
+async function armAndConfirmSeasonDelete(container: HTMLElement): Promise<void> {
+	await armSeasonDelete(container);
+	await fireEvent.click(q(container, 'season-manage-delete-season-confirm') as HTMLElement);
+}
+
+/** deleteSeason mock the tests drive by hand: captures the page's onProgress
+ *  sink and resolves only when told to — the ONLY way to observe the counter's
+ *  intermediate states from outside. */
+function hangingDeleteSeason() {
+	let onProgress: PageOnProgress | undefined;
+	let resolveWith!: (scope: PageScope) => void;
+	let rejectWith!: (reason: unknown) => void;
+	deleteSeasonMock.mockImplementation(
+		async (_cfg: unknown, _seasonId: string, _impl: unknown, opts?: { onProgress?: PageOnProgress }) => {
+			onProgress = opts?.onProgress;
+			return await new Promise<PageScope>((res, rej) => {
+				resolveWith = res;
+				rejectWith = rej;
+			});
+		}
+	);
+	return {
+		tick: (current: number, total: number, kind: string) => onProgress?.(current, total, kind),
+		finish: (scope: PageScope) => resolveWith(scope),
+		fail: (reason: unknown) => rejectWith(reason)
+	};
+}
+
+describe('agenda — #217 the SEASON itself gets a delete control in the panel', () => {
+	it('editor: season-manage-delete-season renders INSIDE the panel as a real button with an accessible name; merely rendering writes and reads nothing', async () => {
+		const container = await renderReady();
+		const panel = await openPanelWithRows(container);
+
+		const btn = q(container, 'season-manage-delete-season') as HTMLElement;
+		expect(btn).not.toBeNull();
+		expect(btn.tagName).toBe('BUTTON');
+		// #217 review F3 — the name comes from the SEASON's own key, not the
+		// event row's: the two read alike today, so borrowing the event key
+		// leaves this × one copy edit away from announcing a season as an event.
+		const label = btn.getAttribute('aria-label') ?? '';
+		expect(label).toContain('season_manage_season_delete');
+		expect(label).toContain('Season 2026');
+		expect(panel.contains(btn)).toBe(true);
+
+		expect(deleteSeasonMock).not.toHaveBeenCalled();
+		expect(countSeasonScopeMock).not.toHaveBeenCalled();
+	});
+
+	it('NON-editor: no season delete affordance ANYWHERE on the page (fail-closed, like every other panel control)', async () => {
+		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
+		const container = await renderReady();
+
+		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-manage-delete-season')).toBeNull();
+		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
+	});
+});
+
+describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE scope', () => {
+	it('arming calls countSeasonScope(cfg, seasonId) and the confirm quotes ALL THREE of its numbers; the × is gone while armed; nothing is written', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armSeasonDelete(container);
+
+		expect(q(container, 'season-manage-delete-season')).toBeNull();
+		expect(q(container, 'season-manage-delete-season-cancel')).not.toBeNull();
+		await waitFor(() => {
+			expect(countSeasonScopeMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+		});
+
+		// Gama's #217 ruling: the confirm promises the FULL scope — N series, N
+		// events, N repertoire items — through `season_delete_confirm_scope`.
+		// The three fixture numbers (3 / 21 / 6) exist nowhere else on this
+		// panel, so this can only pass by quoting countSeasonScope's result.
+		//
+		// #217 review F1 — asserted on the VISIBLE text ALONE, not on a
+		// textContent+aria-label concatenation: a scope that lives only in the
+		// aria-label leaves a sighted operator staring at a bare "Delete?" in
+		// front of a whole-season cascade. The series row's rule, applied here.
+		await waitFor(() => {
+			const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
+			const visible = confirm.textContent ?? '';
+			expect(visible).toContain('season_delete_confirm_scope_short');
+			expect(visible).toContain('"series":3');
+			expect(visible).toContain('"events":21');
+			expect(visible).toContain('"repertoire":6');
+		});
+
+		// #217 review F2 — and the accessible name still NAMES the season, as
+		// every sibling confirm does, on top of the same three numbers.
+		const armed = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
+		const label = armed.getAttribute('aria-label') ?? '';
+		expect(label).toContain('season_delete_confirm_scope ');
+		expect(label).toContain('"name":"Season 2026"');
+		expect(label).toContain('"series":3');
+		expect(label).toContain('"events":21');
+		expect(label).toContain('"repertoire":6');
+
+		expect(deleteSeasonMock).not.toHaveBeenCalled();
+		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
+		expect(deleteEventMock).not.toHaveBeenCalled();
+	});
+
+	it('cancel disarms: the × comes back and nothing was written', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armSeasonDelete(container);
+		await fireEvent.click(q(container, 'season-manage-delete-season-cancel') as HTMLElement);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-season')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
+		expect(deleteSeasonMock).not.toHaveBeenCalled();
+	});
+
+	it('ONE armed context: arming the season disarms an armed series row, and arming a series (or event) row disarms the armed season', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		// Arm a series row first…
+		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-delete-confirm-series-1')).not.toBeNull();
+		});
+
+		// …then the season: the series confirm dies.
+		await armSeasonDelete(container);
+		expect(q(container, 'season-manage-series-delete-confirm-series-1')).toBeNull();
+
+		// …and an event row's arming kills the season confirm right back.
+		await fireEvent.click(q(container, 'season-manage-event-delete-ev-9') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-event-delete-confirm-ev-9')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
+		expect(deleteSeasonMock).not.toHaveBeenCalled();
+		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
+		expect(deleteEventMock).not.toHaveBeenCalled();
+	});
+
+	it('a failed scope read leaves a scope-free confirm (the existing name-only copy) that still deletes — a read must never block the delete', async () => {
+		countSeasonScopeMock.mockRejectedValue(new Error('boom'));
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armSeasonDelete(container);
+		await waitFor(() => {
+			expect(countSeasonScopeMock).toHaveBeenCalled();
+		});
+
+		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
+		const shown = `${confirm.textContent} ${confirm.getAttribute('aria-label')}`;
+		// Never a phantom scope: no scoped copy, none of the scope numbers.
+		expect(shown).not.toContain('season_delete_confirm_scope');
+		expect(shown).toContain('season_manage_delete_confirm');
+
+		await fireEvent.click(confirm);
+		await waitFor(() => {
+			expect(deleteSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID, undefined, {
+				onProgress: expect.any(Function)
+			});
+		});
+	});
+
+	// #217 review F2 — `SEASON_DELETE_ROW_ID` is a CONSTANT, so "the season × is
+	// armed" reads true again in the next collective: the armed check alone
+	// cannot tell the two apart, and the scope read needs the same generation
+	// guard the cascade's own ticks already carry.
+	it('a scope read still in flight when the operator switches collective never lands in the NEW collective’s confirm', async () => {
+		setToken('jwt-abc');
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
+			],
+			erroredDbs: []
+		});
+		urlCollectiveDbStore.set(null);
+		selectedCollectiveDbStore.set('polyphony');
+
+		let landPolyphonyRead!: (scope: PageScope) => void;
+		let reads = 0;
+		countSeasonScopeMock.mockImplementation(async () => {
+			reads += 1;
+			if (reads === 1) {
+				return await new Promise<PageScope>((res) => {
+					landPolyphonyRead = res;
+				});
+			}
+			// org-b's OWN read never lands either — so any scope on org-b's
+			// confirm could only have come from the collective the operator left.
+			return await new Promise<PageScope>(() => {});
+		});
+
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await openPanelWithRows(container);
+		await armSeasonDelete(container);
+		await waitFor(() => {
+			expect(countSeasonScopeMock).toHaveBeenCalledTimes(1);
+		});
+
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+
+		await openPanelWithRows(container);
+		await armSeasonDelete(container);
+		await waitFor(() => {
+			expect(countSeasonScopeMock).toHaveBeenCalledTimes(2);
+		});
+
+		landPolyphonyRead({ series: 3, events: 21, repertoireItems: 6 });
+		await new Promise((r) => setTimeout(r, 0));
+
+		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
+		const shown = `${confirm.textContent} ${confirm.getAttribute('aria-label')}`;
+		expect(shown).not.toContain('season_delete_confirm_scope');
+		expect(shown).not.toContain('"series":3');
+		expect(shown).toContain('season_manage_delete_confirm');
+	});
+});
+
+describe('agenda — #217/#216 ONE progress counter under the series list, for BOTH cascades', () => {
+	it('the season confirm calls deleteSeason(cfg, seasonId, undefined, {onProgress}); the counter renders role="status" under the series list and shows the exact "Kustutan X / Y…" texts in sequence, then disappears', async () => {
+		const run = hangingDeleteSeason();
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		// Not mounted before the cascade starts.
+		expect(q(container, 'season-manage-delete-progress')).toBeNull();
+
+		await armAndConfirmSeasonDelete(container);
+		await waitFor(() => {
+			expect(deleteSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID, undefined, {
+				onProgress: expect.any(Function)
+			});
+		});
+
+		run.tick(3, 7, 'event');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-progress')).not.toBeNull();
+		});
+		const progress = q(container, 'season-manage-delete-progress') as HTMLElement;
+		// The series_create_progress idiom, verbatim: role="status" so AT hears
+		// each update without focus theft.
+		expect(progress.getAttribute('role')).toBe('status');
+		expect(progress.textContent?.trim()).toBe('Kustutan 3 / 7…');
+		// Placement per Gama's ruling: under the series list, beside where the
+		// delete-error slot renders — i.e. inside the series sub-panel, not the
+		// standalone-events one and not off in the page footer.
+		const seriesSubPanel = (q(container, 'season-manage-series-series-1') as HTMLElement)
+			.parentElement;
+		expect(seriesSubPanel?.contains(progress)).toBe(true);
+
+		// The counter FOLLOWS the cascade — next tick, next number, same element.
+		run.tick(7, 7, 'repertoire');
+		await waitFor(() => {
+			expect(
+				(q(container, 'season-manage-delete-progress') as HTMLElement).textContent?.trim()
+			).toBe('Kustutan 7 / 7…');
+		});
+
+		// …and it does not outlive the cascade.
+		run.finish({ series: 2, events: 4, repertoireItems: 1 });
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-progress')).toBeNull();
+		});
+	});
+
+	it('the season confirm is disabled while the cascade runs — a double-tap cannot fire two cascades', async () => {
+		const run = hangingDeleteSeason();
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armAndConfirmSeasonDelete(container);
+		await waitFor(() => {
+			expect(
+				(q(container, 'season-manage-delete-season-confirm') as HTMLButtonElement).disabled
+			).toBe(true);
+		});
+		await fireEvent.click(q(container, 'season-manage-delete-season-confirm') as HTMLElement);
+		expect(deleteSeasonMock).toHaveBeenCalledTimes(1);
+
+		run.finish({ series: 3, events: 21, repertoireItems: 6 });
+	});
+
+	it('#216 — a SERIES delete drives the SAME counter through its own onProgress ticks', async () => {
+		let seriesProgress: PageOnProgress | undefined;
+		let finishSeries!: (deleted: number) => void;
+		deleteEventSeriesMock.mockImplementation(
+			async (
+				_cfg: unknown,
+				seriesId: string,
+				_impl: unknown,
+				opts?: { onProgress?: PageOnProgress }
+			) => {
+				seriesProgress = opts?.onProgress;
+				return await new Promise<number>((res) => {
+					finishSeries = (deleted: number) => {
+						seriesRows = seriesRows.filter((row) => row.id !== seriesId);
+						res(deleted);
+					};
+				});
+			}
+		);
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armAndConfirmDelete(container, 'series', 'series-1');
+		await waitFor(() => {
+			expect(deleteEventSeriesMock).toHaveBeenCalledTimes(1);
+		});
+
+		seriesProgress?.(1, 13, 'event');
+		await waitFor(() => {
+			expect(
+				(q(container, 'season-manage-delete-progress') as HTMLElement | null)?.textContent?.trim()
+			).toBe('Kustutan 1 / 13…');
+		});
+		expect(
+			(q(container, 'season-manage-delete-progress') as HTMLElement).getAttribute('role')
+		).toBe('status');
+
+		seriesProgress?.(13, 13, 'series');
+		await waitFor(() => {
+			expect(
+				(q(container, 'season-manage-delete-progress') as HTMLElement).textContent?.trim()
+			).toBe('Kustutan 13 / 13…');
+		});
+
+		finishSeries(12);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-progress')).toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-1')).toBeNull();
+		});
+	});
+
+	it('a collective switch mid-cascade clears the counter — and a late tick from the abandoned run never resurrects it', async () => {
+		setToken('jwt-abc');
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
+			],
+			erroredDbs: []
+		});
+		urlCollectiveDbStore.set(null);
+		selectedCollectiveDbStore.set('polyphony');
+
+		const run = hangingDeleteSeason();
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await openPanelWithRows(container);
+
+		await armAndConfirmSeasonDelete(container);
+		await waitFor(() => {
+			expect(deleteSeasonMock).toHaveBeenCalledTimes(1);
+		});
+		run.tick(2, 9, 'event');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-progress')).not.toBeNull();
+		});
+
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-progress')).toBeNull();
+		});
+
+		// The old run's late tick lands AFTER the switch: still no counter — the
+		// stale cascade must not paint over org-b's screen.
+		run.tick(3, 9, 'event');
+		await new Promise((r) => setTimeout(r, 0));
+		expect(q(container, 'season-manage-delete-progress')).toBeNull();
+	});
+
+	it('#217 review F3 — a cascade that COMPLETES after the collective switch lands nowhere: no reload of the new collective, no announcement of the old one', async () => {
+		setToken('jwt-abc');
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
+			],
+			erroredDbs: []
+		});
+		urlCollectiveDbStore.set(null);
+		selectedCollectiveDbStore.set('polyphony');
+
+		const run = hangingDeleteSeason();
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await openPanelWithRows(container);
+
+		await armAndConfirmSeasonDelete(container);
+		await waitFor(() => {
+			expect(deleteSeasonMock).toHaveBeenCalledTimes(1);
+		});
+
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+		// org-b's own load has settled; anything past this point would be the
+		// abandoned cascade tearing down the screen the operator moved to.
+		const loadsAfterSwitch = loadFullAgendaMock.mock.calls.length;
+
+		run.finish({ series: 3, events: 21, repertoireItems: 6 });
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(loadFullAgendaMock.mock.calls.length).toBe(loadsAfterSwitch);
+		expect((q(container, 'season-manage-delete-status') as HTMLElement)?.textContent?.trim()).toBe(
+			''
+		);
+	});
+});
+
+describe('agenda — #217 a successful season delete closes the panel and announces', () => {
+	it('on success: the panel CLOSES, the agenda reloads (recomputing the manageable season — NOT the panel-preserving reload), and the still-mounted status region announces season_delete_success with the season name', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+		const agendaLoadsBefore = loadFullAgendaMock.mock.calls.length;
+
+		await armAndConfirmSeasonDelete(container);
+
+		// The season is gone, so the panel it managed goes too — this is the
+		// plain loadForSelected() reload, not keepSeasonManage: true (a kept
+		// panel would be managing a deleted season).
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+		await waitFor(() => {
+			expect(loadFullAgendaMock.mock.calls.length).toBeGreaterThan(agendaLoadsBefore);
+		});
+
+		// The announcement must OUTLIVE the panel: a live region that unmounts
+		// with the panel announces nothing (WCAG 4.1.3 — the same contract as
+		// roster-section-remove-status).
+		await waitFor(() => {
+			const status = q(container, 'season-manage-delete-status') as HTMLElement | null;
+			expect(status).not.toBeNull();
+			expect(status?.getAttribute('role')).toBe('status');
+			expect(status?.textContent).toContain('season_delete_success');
+			expect(status?.textContent).toContain('Season 2026');
+		});
+	});
+});
+
+describe('agenda — #217 a FAILED season cascade lands in the delete-error slot with season copy', () => {
+	it('a cascade stopped part-way shows the season branch (season_manage_season_delete_partial with deleted/total) under the series list; the panel and the season control STAY; the counter is cleared', async () => {
+		// The duck-typed tagged shape the write layer rejects with — a plain
+		// object, exactly what crosses the vi.mock module boundary.
+		deleteSeasonMock.mockRejectedValue({
+			code: 'season-cascade-partial',
+			seasonId: SEASON_ID,
+			deletedCount: 3,
+			totalCount: 8,
+			failure: new Error('boom')
+		});
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armAndConfirmSeasonDelete(container);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-error')).not.toBeNull();
+		});
+		const alert = q(container, 'season-manage-delete-error') as HTMLElement;
+		expect(alert.getAttribute('role')).toBe('alert');
+		expect(alert.textContent).toContain('season_manage_season_delete_partial');
+		expect(alert.textContent).toContain('3');
+		expect(alert.textContent).toContain('8');
+		// NOT the series or event partial copy — the operator must hear that the
+		// SEASON is still standing.
+		expect(alert.textContent).not.toContain('season_manage_delete_partial ');
+		expect(alert.textContent).not.toContain('season_manage_event_delete_partial');
+
+		// Under the series list, beside the counter's slot (Gama's placement).
+		const seriesSubPanel = (q(container, 'season-manage-series-series-1') as HTMLElement)
+			.parentElement;
+		expect(seriesSubPanel?.contains(alert)).toBe(true);
+
+		// Nothing was torn down, nothing lingers: panel and season control stay,
+		// the counter does not.
+		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		expect(q(container, 'season-manage-delete-progress')).toBeNull();
+		expect(
+			q(container, 'season-manage-delete-season-confirm') ??
+				q(container, 'season-manage-delete-season')
+		).not.toBeNull();
+	});
+
+	it('a forbidden season delete reads as the permission copy, not a retry prompt', async () => {
+		deleteSeasonMock.mockRejectedValue(new EntityDeleteForbiddenError(SEASON_ID));
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await armAndConfirmSeasonDelete(container);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-error')).not.toBeNull();
+		});
+		const text = q(container, 'season-manage-delete-error')?.textContent ?? '';
+		expect(text).toContain('season_manage_delete_forbidden');
+		expect(text).not.toContain('season_manage_delete_error');
+	});
+});
+
+// ── #217/#216: the four locales carry the new keys ──────────────────────────────
+//
+// The page above renders keys through the lenient mock; THIS is where the real
+// copy is pinned. The et progress template is Gama's ruled idiom (the exact
+// string the progress tests above render through the mock's one verbatim key);
+// the en confirm template is the contract's ruled copy; lv/uk must exist and
+// carry the same placeholders (natural translations are Comenius's).
+
+describe('#217/#216 — i18n: the season-delete keys exist in en/et/lv/uk', () => {
+	type MessageFile = Record<string, string>;
+	const NEW_KEYS = [
+		'season_delete_confirm_scope',
+		'season_delete_confirm_scope_short',
+		'season_manage_delete_progress',
+		'season_delete_success',
+		'season_manage_season_delete',
+		'season_manage_season_delete_partial'
+	] as const;
+
+	function readLocale(locale: string): MessageFile {
+		return JSON.parse(
+			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as MessageFile;
+	}
+
+	it('every new key exists non-empty in all four locales, with its placeholders intact', () => {
+		for (const locale of ['en', 'et', 'lv', 'uk']) {
+			const msgs = readLocale(locale);
+			for (const key of NEW_KEYS) {
+				expect(msgs[key], `${locale}.json is missing ${key}`).toBeTruthy();
+			}
+			for (const ph of ['{name}', '{series}', '{events}', '{repertoire}']) {
+				expect(msgs.season_delete_confirm_scope, `${locale} confirm scope ${ph}`).toContain(ph);
+			}
+			// The visible half is name-free (the panel it sits in already names
+			// the season) but carries all three numbers.
+			for (const ph of ['{series}', '{events}', '{repertoire}']) {
+				expect(
+					msgs.season_delete_confirm_scope_short,
+					`${locale} confirm scope short ${ph}`
+				).toContain(ph);
+			}
+			for (const ph of ['{current}', '{total}']) {
+				expect(msgs.season_manage_delete_progress, `${locale} progress ${ph}`).toContain(ph);
+			}
+			for (const ph of ['{deleted}', '{total}']) {
+				expect(msgs.season_manage_season_delete_partial, `${locale} partial ${ph}`).toContain(ph);
+			}
+			// #217 review F3 — the season ×'s own accessible name, separate from
+			// the event row's identically-worded key so a copy edit on one cannot
+			// silently retitle the other.
+			expect(msgs.season_manage_season_delete, `${locale} season delete label`).toContain('{name}');
+		}
+	});
+
+	it('the ruled copy is verbatim: et/en progress counter, en confirm scope; the success announcement names the season', () => {
+		expect(readLocale('et').season_manage_delete_progress).toBe('Kustutan {current} / {total}…');
+		expect(readLocale('en').season_manage_delete_progress).toBe('Deleting {current} / {total}…');
+		// #217 review F2 — the two halves speak in their own voices: the
+		// aria-label in the siblings' "Confirm deleting {name}…" voice, the
+		// visible button in button voice.
+		expect(readLocale('en').season_delete_confirm_scope).toBe(
+			'Confirm deleting {name} with its {series} series, {events} events and {repertoire} repertoire items'
+		);
+		expect(readLocale('en').season_delete_confirm_scope_short).toBe(
+			'Delete {series} series, {events} events, {repertoire} items?'
+		);
+		expect(readLocale('en').season_delete_success).toContain('{name}');
+		expect(readLocale('et').season_delete_success).toContain('{name}');
+		// #217 review F3 — `season_delete_success` is NOT a redundant twin of the
+		// rows' `season_manage_deleted`, even though en/et spell them alike: lv
+		// agrees the participle with the subject's gender, so the season's
+		// announcement declines differently from an event's/series'. Pinned here
+		// so nobody "de-duplicates" the pair back into a mis-declined string.
+		expect(readLocale('lv').season_delete_success).not.toBe(
+			readLocale('lv').season_manage_deleted
+		);
+	});
+});
+
 // (*MVOX:Tallis* — #197 RED: delete buttons on series/standalone rows in the
 // season-manage panel — rights-gated rendering, delete-call wiring, row removal,
 // loud failure)
@@ -988,3 +1713,7 @@ describe('agenda — #212 opening the convert form disarms any armed delete', ()
 // cascade-reported deletion count, event-cascade copy)
 // (*MVOX:Tallis* — #212 RED: convert form disarms any armed delete — one action
 // context at a time)
+// (*MVOX:Tallis* — #217 RED (folds #216): season delete control + two-step
+// confirm quoting the live scope, deleteSeason wiring with onProgress, ONE
+// progress counter under the series list for both cascades, success close +
+// announcement, season-partial error branch, locale guard for the new keys)

@@ -27,6 +27,7 @@ import { entuFetch } from '$lib/entu/request';
 import {
 	EntityDeleteForbiddenError,
 	EventCascadePartialError,
+	SeasonCascadePartialError,
 	SeriesCascadePartialError
 } from './deleteErrors';
 import type { EntuCfg } from './entuSeasons';
@@ -482,6 +483,45 @@ export async function deleteEvent(
 	await deleteEntity(cfg, eventId, 'deleteEvent', fetchImpl);
 }
 
+// ── #217/#216 — the ONE progress counter, shared by the series cascade and ──
+// the season cascade that wraps it (Gama's 2026-09-02 ruling): the denominator
+// is every entity the cascade actually DELETES that the confirm promised —
+// series + events + repertoire items — never a child (attendance /
+// program_item) and never the season entity itself.
+
+/** The kinds the #217/#216 progress counter reports — exactly the entities its
+ *  ruled denominator counts. A child (attendance / program_item) delete is
+ *  real work the cascade still does, but it is outside the promised scope and
+ *  never produces one of these. */
+export type CascadeProgressKind = 'series' | 'event' | 'repertoire';
+
+/** `current`/`total` are 1-based over the WHOLE cascade's ruled denominator —
+ *  `deleteEventSeries` alone (occurrences + itself) or `deleteSeason`'s wider
+ *  one (every series' occurrences + itself, every standalone event, every
+ *  repertoire item). */
+export type CascadeOnProgress = (
+	current: number,
+	total: number,
+	kind: CascadeProgressKind
+) => void;
+
+/** Trailing, optional options object — added AFTER the existing `fetchImpl`
+ *  seam on `deleteEventSeries` so every pre-#216 positional caller (three
+ *  positional args) keeps working unchanged. */
+export interface CascadeOptions {
+	onProgress?: CascadeOnProgress;
+}
+
+/** What `countSeasonScope`/`deleteSeason` count: the three entity kinds the
+ *  season's cascade destroys, summing to the progress counter's denominator.
+ *  `events` is EVERY event the season holds — series occurrences AND
+ *  standalone — because the cascade deletes all of them. */
+export interface SeasonScope {
+	series: number;
+	events: number;
+	repertoireItems: number;
+}
+
 /**
  * Delete an `event_series` entity AND its occurrence events — #197. See module
  * contract above for why this cascades rather than refusing.
@@ -489,13 +529,23 @@ export async function deleteEvent(
  * Resolves with HOW MANY occurrences were deleted, so the panel announces the
  * number this cascade actually destroyed rather than the one its list happened
  * to be showing (#197 review 2nd pass F2).
+ *
+ * #216/#217 — the optional trailing `options.onProgress` ticks 1..N over
+ * `occurrences + 1` (the series entity itself is the final tick): every
+ * pre-existing positional caller (three args, no options) is untouched — the
+ * new parameter is trailing and optional, never inserted before `fetchImpl`.
  */
 export async function deleteEventSeries(
 	cfg: EntuCfg,
 	seriesId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	options: CascadeOptions = {}
 ): Promise<number> {
+	const { onProgress } = options;
 	const occurrenceIds = await listChildIds(cfg, seriesId, 'event', 'deleteEventSeries', fetchImpl);
+	// The series entity itself is the FINAL tick — #217's ruled denominator
+	// counts the series alongside its occurrences, not just the occurrences.
+	const total = occurrenceIds.length + 1;
 
 	let deleted = 0;
 	for (const eventId of occurrenceIds) {
@@ -505,10 +555,199 @@ export async function deleteEventSeries(
 			throw new SeriesCascadePartialError(seriesId, deleted, occurrenceIds.length, failure);
 		}
 		deleted += 1;
+		onProgress?.(deleted, total, 'event');
 	}
 
 	await deleteEntity(cfg, seriesId, 'deleteEventSeries', fetchImpl);
+	onProgress?.(total, total, 'series');
 	return deleted;
+}
+
+/**
+ * The season's live delete scope — #217's two-step confirm quotes these three
+ * numbers before arming an irreversible cascade, the season-level analogue of
+ * `countSeriesOccurrences`. `events` counts ALL of the season's events
+ * (occurrences AND standalone), because that is what the cascade destroys and
+ * the confirm's three numbers must sum to the counter's own denominator. A
+ * READ — deletes nothing. Honours the same `CHILD_READ_LIMIT` refusal as every
+ * cascade read: a confirm must never promise a number the write never checked.
+ */
+export async function countSeasonScope(
+	cfg: EntuCfg,
+	seasonId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<SeasonScope> {
+	const scope = await readSeasonScope(cfg, seasonId, 'countSeasonScope', fetchImpl);
+	return {
+		series: scope.seriesIds.length,
+		events: scope.eventEntities.length,
+		repertoireItems: scope.repertoireIds.length
+	};
+}
+
+interface SeasonScopeIds {
+	seriesIds: string[];
+	eventEntities: EventEntity[];
+	repertoireIds: string[];
+}
+
+/** The three scoped reads `countSeasonScope`/`deleteSeason` both need — kept
+ *  as ids (and, for events, `_parent`) rather than counts, because
+ *  `deleteSeason` iterates these same lists to know WHAT to delete. `op` names
+ *  the caller so an over-limit refusal's message says which one blew up. */
+async function readSeasonScope(
+	cfg: EntuCfg,
+	seasonId: string,
+	op: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<SeasonScopeIds> {
+	const seriesIds = await listChildIds(cfg, seasonId, 'event_series', op, fetchImpl);
+	const eventEntities = await listSeasonEvents(cfg, seasonId, op, fetchImpl);
+	const repertoireIds = await listChildIds(cfg, seasonId, 'repertoire_item', op, fetchImpl);
+	return { seriesIds, eventEntities, repertoireIds };
+}
+
+/** Like `listChildIds`, but for the season's own season-wide `event` read: it
+ *  carries each row's `_parent` too, so the season cascade can tell a series
+ *  OCCURRENCE from a STANDALONE event within the SAME read — exactly what
+ *  `listEventsForSeason` does for the read-side panel list, but with the
+ *  cascade's over-limit REFUSAL (`listEventsForSeason` has none: it is a
+ *  display read, never a destructive one). */
+async function listSeasonEvents(
+	cfg: EntuCfg,
+	seasonId: string,
+	op: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<EventEntity[]> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=event&_parent.reference=${encodeURIComponent(seasonId)}&props=_id,_parent&limit=${CHILD_READ_LIMIT}`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`${op} event lookup failed: ${res.status}`);
+	const body = (await res.json()) as { count?: number; entities?: EventEntity[] };
+	const rows = body.entities ?? [];
+	const total = body.count ?? rows.length;
+	if (total > rows.length) {
+		throw new Error(
+			`${op}: ${seasonId} has ${total} event children, more than the ${CHILD_READ_LIMIT}-row cascade read can carry — nothing was deleted`
+		);
+	}
+	return rows;
+}
+
+/**
+ * Delete a season AND its whole cascade — #217 (folds #216): every event
+ * series (occurrences first, via `deleteEventSeries`, so each inherits the
+ * child cascade for free), every STANDALONE event (via `deleteEvent`), every
+ * `repertoire_item` (a direct ENTITY delete — a repertoire item has no
+ * children of its own), then the season entity LAST. Serial throughout —
+ * Entu has no bulk delete, and serial is what makes "how far did it get"
+ * knowable when something fails.
+ *
+ * The whole scope is read and counted UP FRONT (`readSeasonScope`, honouring
+ * `CHILD_READ_LIMIT`) — the season entity itself sits OUTSIDE that count and
+ * never ticks, matching `countSeasonScope`'s promised denominator exactly.
+ *
+ * `options.onProgress` ticks 1..total over that denominator: each series
+ * cascade's own ticks (occurrences, then the series) are translated onto the
+ * season's absolute counter by adding how much of the denominator earlier
+ * series/events/repertoire items already accounted for; each standalone event
+ * and each repertoire item ticks once, directly, as it goes.
+ *
+ * A failure part-way ABORTS before the season's own DELETE and rejects with
+ * `SeasonCascadePartialError`, carrying how much of the denominator went —
+ * measured by the TICKS actually emitted, so a failing series credits exactly
+ * the entities it destroyed whether it stopped on an occurrence (tagged
+ * `SeriesCascadePartialError`) or on its OWN final delete with every occurrence
+ * already gone (a raw rejection) — plus the underlying `failure` chain (so a
+ * 403 buried three cascades deep still reads as the same permission story via
+ * `isDeleteForbidden`). The season's OWN final delete failing (every child
+ * gone) is NOT wrapped — same precedent as `deleteEventSeries`'s own final
+ * delete.
+ */
+export async function deleteSeason(
+	cfg: EntuCfg,
+	seasonId: string,
+	fetchImpl: typeof fetch = fetch,
+	options: CascadeOptions = {}
+): Promise<SeasonScope> {
+	const { onProgress } = options;
+	const { seriesIds, eventEntities, repertoireIds } = await readSeasonScope(
+		cfg,
+		seasonId,
+		'deleteSeason',
+		fetchImpl
+	);
+	const standaloneEventIds = eventEntities
+		.filter((event) => seriesRefOf(event) === undefined)
+		.map((event) => event._id);
+	const total = seriesIds.length + eventEntities.length + repertoireIds.length;
+
+	let done = 0;
+	let deletedSeries = 0;
+	let deletedEvents = 0;
+	let deletedRepertoire = 0;
+
+	for (const seriesId of seriesIds) {
+		const baseDone = done;
+		// The TICKS are the credit ledger for a series that fails part-way —
+		// review F1. Every entity inside the ruled denominator emits exactly one
+		// tick AFTER its DELETE succeeded, so the highest tick this series
+		// reached IS how much of the denominator it really destroyed. Reading it
+		// here (rather than only `SeriesCascadePartialError.deletedCount`) covers
+		// BOTH ways the series cascade can stop: an occurrence failing (the
+		// tagged partial — same number by construction) and the series' OWN
+		// final `deleteEntity` failing raw after every occurrence has gone, which
+		// carries no partial error at all and used to credit 0 — contradicting
+		// the counter the operator just watched tick.
+		let lastTicked = baseDone;
+		let occurrencesDeleted: number;
+		try {
+			occurrencesDeleted = await deleteEventSeries(cfg, seriesId, fetchImpl, {
+				onProgress: (current, _seriesTotal, kind) => {
+					lastTicked = baseDone + current;
+					onProgress?.(baseDone + current, total, kind);
+				}
+			});
+		} catch (failure) {
+			throw new SeasonCascadePartialError(seasonId, lastTicked, total, failure);
+		}
+		done = baseDone + occurrencesDeleted + 1;
+		deletedEvents += occurrencesDeleted;
+		deletedSeries += 1;
+	}
+
+	for (const eventId of standaloneEventIds) {
+		try {
+			await deleteEvent(cfg, eventId, fetchImpl);
+		} catch (failure) {
+			throw new SeasonCascadePartialError(seasonId, done, total, failure);
+		}
+		done += 1;
+		deletedEvents += 1;
+		onProgress?.(done, total, 'event');
+	}
+
+	for (const repertoireId of repertoireIds) {
+		try {
+			await deleteEntity(cfg, repertoireId, 'deleteSeason', fetchImpl);
+		} catch (failure) {
+			throw new SeasonCascadePartialError(seasonId, done, total, failure);
+		}
+		done += 1;
+		deletedRepertoire += 1;
+		onProgress?.(done, total, 'repertoire');
+	}
+
+	// The season itself sits OUTSIDE the ruled denominator — never ticked,
+	// same as `deleteEventSeries`'s own final delete failing raw (not wrapped)
+	// when every occurrence has already gone.
+	await deleteEntity(cfg, seasonId, 'deleteSeason', fetchImpl);
+
+	return { series: deletedSeries, events: deletedEvents, repertoireItems: deletedRepertoire };
 }
 
 // (*MVOX:Palestrina* — #132/T3 GREEN: season management data layer)
@@ -517,3 +756,6 @@ export async function deleteEventSeries(
 // (*MVOX:Palestrina* — #197 review F1/F3: series cascade + 403 discrimination)
 // (*MVOX:Palestrina* — #197 review 2nd pass F1/F2: event child cascade,
 //  deleted-count return value, live occurrence count for the confirm)
+// (*MVOX:Palestrina* — #217 GREEN (folds #216): countSeasonScope / deleteSeason
+//  cascade, deleteEventSeries onProgress option, ONE progress counter shared
+//  by both cascades)

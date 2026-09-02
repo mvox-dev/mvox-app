@@ -128,5 +128,46 @@ export function isEventCascadePartial(reason: unknown): boolean {
 	return (reason as { code?: unknown } | null | undefined)?.code === EVENT_CASCADE_PARTIAL;
 }
 
+/** Discriminator carried on a season cascade that stopped part-way (#217). */
+export const SEASON_CASCADE_PARTIAL = 'season-cascade-partial';
+
+/**
+ * Thrown by `deleteSeason` when one of the season's children (a series, a
+ * standalone event, or a repertoire item) fails to delete. The season itself
+ * is deliberately still standing (the cascade deletes children FIRST and
+ * aborts before the season DELETE), so the surviving children keep their
+ * `_parent` → season reference and a retry resumes where this stopped — the
+ * same no-orphans shape `SeriesCascadePartialError`/`EventCascadePartialError`
+ * keep one and two levels down. `deletedCount`/`totalCount` are counted over
+ * the SAME denominator the confirm promised (series + events + repertoire
+ * items) — the season entity itself is outside that count and never included.
+ */
+export class SeasonCascadePartialError extends Error {
+	readonly code = SEASON_CASCADE_PARTIAL;
+
+	constructor(
+		readonly seasonId: string,
+		readonly deletedCount: number,
+		readonly totalCount: number,
+		/** The child-delete rejection that stopped the cascade (named `failure`
+		 *  for the same reason as its siblings above — never collides with the
+		 *  built-in `Error.cause` slot). */
+		readonly failure: unknown
+	) {
+		super(
+			`deleteSeason: cascade stopped after ${deletedCount} of ${totalCount} entit(ies) of season ${seasonId}; the season was NOT deleted`
+		);
+		this.name = 'SeasonCascadePartialError';
+	}
+}
+
+/** True when a rejection reason means a SEASON cascade stopped part-way — some
+ *  of the season's series/events/repertoire items are gone, the season and the
+ *  rest are still there. */
+export function isSeasonCascadePartial(reason: unknown): boolean {
+	return (reason as { code?: unknown } | null | undefined)?.code === SEASON_CASCADE_PARTIAL;
+}
+
 // (*MVOX:Palestrina* — #197 review F1/F3: delete refusal + cascade discriminators)
 // (*MVOX:Palestrina* — #197 review 2nd pass F1: event-cascade discriminator)
+// (*MVOX:Palestrina* — #217 GREEN (folds #216): season-cascade discriminator)

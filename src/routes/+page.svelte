@@ -89,7 +89,9 @@
 		getSeriesDefaults,
 		deleteEvent as apiDeleteEvent,
 		deleteEventSeries as apiDeleteEventSeries,
-		countSeriesOccurrences as apiCountSeriesOccurrences
+		countSeriesOccurrences as apiCountSeriesOccurrences,
+		countSeasonScope as apiCountSeasonScope,
+		deleteSeason as apiDeleteSeason
 	} from '$lib/seasons/seasonManage';
 	import type {
 		SeasonEditableField,
@@ -104,7 +106,8 @@
 	import {
 		isDeleteForbidden,
 		isEventCascadePartial,
-		isSeriesCascadePartial
+		isSeriesCascadePartial,
+		isSeasonCascadePartial
 	} from '$lib/seasons/deleteErrors';
 	// #199 — the canonical, localized event-type picker shared by the series and
 	// event creation forms (replaces the free-text input / prior-type
@@ -2189,8 +2192,8 @@
 	 *  not be told to "try again". `partial` is the series cascade that stopped
 	 *  part-way (see `deleteEventSeries`' contract). */
 	let seasonManageDeleteError = $state<{
-		list: 'series' | 'events';
-		reason: 'write' | 'forbidden' | 'partial' | 'partial-event';
+		list: 'series' | 'events' | 'season';
+		reason: 'write' | 'forbidden' | 'partial' | 'partial-event' | 'partial-season';
 		deleted?: number;
 		total?: number;
 	} | null>(null);
@@ -2210,6 +2213,22 @@
 	 *  figure the cascade will destroy — and this is the one control in the app
 	 *  that destroys an unbounded set of entities with no undo. */
 	let seasonManageArmedSeriesCount = $state<number | null>(null);
+	/** #217 — the armed key `seasonManageDeleteArmed`/`seasonManageDeletePendingId`
+	 *  take when the SEASON itself (not a row) is armed/pending: the season
+	 *  control shares the ONE-armed-context slot every series/event row already
+	 *  uses, so arming the season disarms a row and vice versa. Never collides
+	 *  with a real entity id. */
+	const SEASON_DELETE_ROW_ID = '__season__';
+	/** #217 — the season's LIVE delete scope (`countSeasonScope`'s result),
+	 *  re-read when the season × arms, the season-level analogue of
+	 *  `seasonManageArmedSeriesCount`. `null` while that read is in flight, or
+	 *  if it fails — the confirm quotes no scope rather than a stale or
+	 *  half-true one. */
+	let seasonManageDeleteScope = $state<{
+		series: number;
+		events: number;
+		repertoireItems: number;
+	} | null>(null);
 	/** #197 review F5 — the id whose DELETE is on the wire. Disables that row's
 	 *  confirm button (and marks it `aria-busy`), so a double-tap cannot fire
 	 *  two DELETEs for the same entity. */
@@ -2218,6 +2237,32 @@
 	 *  A successful delete otherwise just removes a row with nothing said, the
 	 *  same gap `roster-section-remove-status` exists to close. */
 	let seasonManageDeleteStatus = $state('');
+	/** #216/#217 — the ONE progress counter shared by the series cascade and
+	 *  the season cascade that wraps it, rendered under the series list next to
+	 *  the delete-error slot (Gama's 2026-09-02 placement ruling). `null` when
+	 *  no cascade is running. */
+	let seasonManageDeleteProgress = $state<{ current: number; total: number } | null>(null);
+	/** #217 — bumped by every `resetSeasonManage` (a collective switch, or the
+	 *  agenda's own failure path), and captured by each cascade attempt at the
+	 *  moment it starts. An `onProgress` tick checks its captured value against
+	 *  the CURRENT one before touching `seasonManageDeleteProgress`: a tick from
+	 *  a cascade whose collective the operator has since left must not paint a
+	 *  stale counter over whatever is on screen now. Plain state, not `$state`
+	 *  — nothing renders off it directly. */
+	let seasonManageDeleteGeneration = 0;
+
+	/** Build the `onProgress` sink threaded into `deleteEventSeries`/
+	 *  `deleteSeason` for ONE delete attempt, bound to the generation captured
+	 *  when that attempt started (#217 — see `seasonManageDeleteGeneration`'s
+	 *  doc for why a late tick must be dropped rather than acted on). */
+	function makeSeasonManageDeleteProgress(
+		generation: number
+	): (current: number, total: number) => void {
+		return (current, total) => {
+			if (generation !== seasonManageDeleteGeneration) return;
+			seasonManageDeleteProgress = { current, total };
+		};
+	}
 	// #196 — the standalone-event → series conversion form, inline under the
 	// panel's own event row (`season-manage-event-convert-<id>` opens it). One
 	// slot for the whole panel — only one row's form is ever open, the same
@@ -2390,8 +2435,14 @@
 		seasonManageDeleteError = null;
 		seasonManageDeleteArmed = null;
 		seasonManageArmedSeriesCount = null;
+		seasonManageDeleteScope = null;
 		seasonManageDeletePendingId = null;
 		seasonManageDeleteStatus = '';
+		seasonManageDeleteProgress = null;
+		// #217 — a fresh generation so any tick still in flight from a cascade
+		// this reset just walked away from (a collective switch mid-cascade) is
+		// silently dropped instead of resurrecting the counter it just cleared.
+		seasonManageDeleteGeneration += 1;
 		eventConvertOpenId = null;
 		eventConvertIntervalDays = '7';
 		eventConvertDuration = '';
@@ -2512,6 +2563,7 @@
 		// from. The error slot goes with it (per-attempt, never carried over).
 		seasonManageDeleteArmed = null;
 		seasonManageArmedSeriesCount = null;
+		seasonManageDeleteScope = null;
 		seasonManageDeleteError = null;
 		// The dialog held focus (see the $effect below); dismissing it unmounts
 		// the focused element, so hand focus back to the control that opened it
@@ -3139,6 +3191,7 @@
 		seasonManageDeleteError = null;
 		seasonManageDeleteArmed = rowId;
 		seasonManageArmedSeriesCount = null;
+		seasonManageDeleteScope = null;
 		await tick();
 		document.querySelector<HTMLElement>(`[data-testid="${confirmTestid}"]`)?.focus();
 	}
@@ -3174,18 +3227,66 @@
 	async function disarmSeasonManageDelete(disarmTestid: string): Promise<void> {
 		seasonManageDeleteArmed = null;
 		seasonManageArmedSeriesCount = null;
+		seasonManageDeleteScope = null;
 		await tick();
 		document.querySelector<HTMLElement>(`[data-testid="${disarmTestid}"]`)?.focus();
+	}
+
+	/**
+	 * Arm the SEASON's own delete, and re-read its live scope (#217) — the
+	 * season-level analogue of `armSeasonManageSeriesDelete`. Until that read
+	 * lands (or if it fails) the confirm quotes no scope at all, rather than a
+	 * number the write never checked.
+	 *
+	 * The landing check is generation-guarded as well as armed-guarded (review
+	 * F2): `SEASON_DELETE_ROW_ID` is a CONSTANT, not an entity id, so "the
+	 * season × is armed" reads true again the moment the operator arms a
+	 * DIFFERENT collective's season — and a scope read still in flight from the
+	 * one they left would otherwise paint its numbers into a confirm whose
+	 * cascade never checked them. `resetSeasonManage` bumps the generation on
+	 * every switch, exactly as it does for the cascade's own progress ticks.
+	 */
+	async function armSeasonManageSeasonDelete(): Promise<void> {
+		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		const seasonId = manageableSeasonId;
+		const generation = seasonManageDeleteGeneration;
+		await armSeasonManageDelete(SEASON_DELETE_ROW_ID, 'season-manage-delete-season-confirm');
+		if (!cfg || seasonId === null) return;
+		try {
+			const scope = await apiCountSeasonScope(cfg, seasonId);
+			if (
+				generation === seasonManageDeleteGeneration &&
+				seasonManageDeleteArmed === SEASON_DELETE_ROW_ID
+			) {
+				seasonManageDeleteScope = scope;
+			}
+		} catch (e) {
+			console.error('agenda: live season scope for the delete confirm failed', seasonId, e);
+		}
 	}
 
 	/** The failed-delete slot's shape, from whatever the write layer rejected
 	 *  with (#197 review F3/F5). Duck-typed discriminators, never `instanceof`
 	 *  — the rejection crosses a mocked module boundary in the page's specs. */
 	function seasonManageDeleteFailure(
-		list: 'series' | 'events',
+		list: 'series' | 'events' | 'season',
 		reason: unknown
 	): NonNullable<typeof seasonManageDeleteError> {
 		if (isDeleteForbidden(reason)) return { list, reason: 'forbidden' };
+		// #217 — the season cascade's OWN partial shape, told apart from its
+		// series/event children's (a season failure can wrap either of those in
+		// its own `failure` chain, but `isDeleteForbidden`/the checks above
+		// already unwrapped a 403; anything else that reaches here for a season
+		// list is the season's own story, never a child's).
+		if (list === 'season' && isSeasonCascadePartial(reason)) {
+			const partial = reason as { deletedCount?: number; totalCount?: number };
+			return {
+				list,
+				reason: 'partial-season',
+				deleted: partial.deletedCount ?? 0,
+				total: partial.totalCount ?? 0
+			};
+		}
 		// Both cascades report how far they got; only the NOUN differs — the
 		// series one counts occurrence events, the event one counts the event's
 		// own attendance/programme rows (#197 review 2nd pass F1).
@@ -3219,6 +3320,11 @@
 					deleted: failure.deleted ?? 0,
 					total: failure.total ?? 0
 				});
+			case 'partial-season':
+				return m.season_manage_season_delete_partial({
+					deleted: failure.deleted ?? 0,
+					total: failure.total ?? 0
+				});
 			default:
 				return m.season_manage_delete_error();
 		}
@@ -3246,8 +3352,12 @@
 		if (seasonManageDeletePendingId !== null) return; // one delete on the wire at a time
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		seasonManageDeleteError = null;
+		seasonManageDeleteProgress = null;
 		seasonManageDeletePendingId = series.id;
-		apiDeleteEventSeries(cfg, series.id)
+		const generation = seasonManageDeleteGeneration;
+		apiDeleteEventSeries(cfg, series.id, undefined, {
+			onProgress: makeSeasonManageDeleteProgress(generation)
+		})
 			.then((deletedOccurrences) => {
 				seasonManageDeleteArmed = null;
 				seasonManageArmedSeriesCount = null;
@@ -3268,6 +3378,62 @@
 			})
 			.finally(() => {
 				seasonManageDeletePendingId = null;
+				if (generation === seasonManageDeleteGeneration) seasonManageDeleteProgress = null;
+			});
+	}
+
+	/**
+	 * Delete the SEASON itself — #217 (folds #216). The confirm has already
+	 * quoted the live scope (`armSeasonManageSeasonDelete`); this call is what
+	 * actually runs the cascade. On success the panel's whole subject is gone,
+	 * so the reload is the PLAIN `loadForSelected()` (never `keepSeasonManage`
+	 * — a kept panel would be managing a season that no longer exists), which
+	 * tears the panel down and recomputes the next manageable season. The
+	 * success announcement is set AFTER that reload: `loadForSelected`'s own
+	 * teardown (`resetSeasonManage`) blanks `seasonManageDeleteStatus` first,
+	 * and this line runs synchronously after it returns, so the announcement
+	 * survives into the still-mounted (panel-independent) status region.
+	 */
+	function onSeasonManageSeasonDelete(): void {
+		if (!selected || manageableSeasonId === null) return;
+		if (seasonManageDeletePendingId !== null) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = manageableSeasonId;
+		const seasonName = seasonManageName;
+		seasonManageDeleteError = null;
+		seasonManageDeleteProgress = null;
+		seasonManageDeletePendingId = SEASON_DELETE_ROW_ID;
+		const generation = seasonManageDeleteGeneration;
+		apiDeleteSeason(cfg, seasonId, undefined, {
+			onProgress: makeSeasonManageDeleteProgress(generation)
+		})
+			.then(() => {
+				// #217 review F3 — the same generation guard the progress sink and
+				// the `finally` below already carry: if the operator switched
+				// collective mid-cascade, `resetSeasonManage` has bumped the
+				// generation and this run belongs to a screen that is gone. Landing
+				// it anyway would reload the NEW collective's agenda (tearing down
+				// its just-loaded panel) and announce a season the operator has left
+				// behind.
+				if (generation !== seasonManageDeleteGeneration) return;
+				loadForSelected();
+				// Its own key, not the series/event rows' `season_manage_deleted`
+				// (#217 review F3): the two are byte-identical only in en/et/uk —
+				// lv agrees the participle with the noun's gender ("sezona … ir
+				// dzēsta" vs "notikums … ir dzēsts"), so one shared key would
+				// mis-decline half of its uses.
+				seasonManageDeleteStatus = m.season_delete_success({ name: seasonName });
+			})
+			.catch((e) => {
+				console.error('agenda: deleting season failed', seasonId, e);
+				// Symmetric guard: a stale failure must not paint an error slot in
+				// the collective the operator moved to.
+				if (generation !== seasonManageDeleteGeneration) return;
+				seasonManageDeleteError = seasonManageDeleteFailure('season', e);
+			})
+			.finally(() => {
+				seasonManageDeletePendingId = null;
+				if (generation === seasonManageDeleteGeneration) seasonManageDeleteProgress = null;
 			});
 	}
 
@@ -5102,10 +5268,77 @@
 							>
 								<!-- #213 — the internal close × is gone; the gear (above, in
 								     the toolbar) is the sole close control now, carrying the
-								     same refusal guard that button used to. The heading is the
-								     header's only content, so it sits directly in the panel's
-								     flex-col — no justify-between wrapper with one child. -->
-								<h2 class="font-display text-lg text-ink">{m.season_manage_panel_label()}</h2>
+								     same refusal guard that button used to.
+								     #217 — the season's OWN delete now shares this header row:
+								     the two-step confirm idiom every row already carries, on
+								     the ONE `seasonManageDeleteArmed` slot (arming the season
+								     disarms an armed row and vice versa — one destructive
+								     intent live at a time). Arming re-reads the live scope
+								     (`armSeasonManageSeasonDelete`) the same way a series row
+								     re-reads its occurrence count. -->
+								<div class="flex items-center justify-between gap-2">
+									<h2 class="font-display text-lg text-ink">{m.season_manage_panel_label()}</h2>
+									{#if seasonManageDeleteArmed === SEASON_DELETE_ROW_ID}
+										<div class="flex items-center gap-1">
+											<button
+												type="button"
+												data-testid="season-manage-delete-season-confirm"
+												aria-label={seasonManageDeleteScope !== null
+													? m.season_delete_confirm_scope({
+															name: seasonManageName,
+															series: seasonManageDeleteScope.series,
+															events: seasonManageDeleteScope.events,
+															repertoire: seasonManageDeleteScope.repertoireItems
+														})
+													: m.season_manage_delete_confirm({ name: seasonManageName })}
+												disabled={seasonManageDeletePendingId !== null}
+												aria-busy={seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
+												class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+												onclick={onSeasonManageSeasonDelete}
+											>
+												<!-- #217 review F1 — the VISIBLE text carries the scope too, not
+												     just the aria-label: the series row's rule ("the operator must
+												     see what the delete takes with it") applies hardest to the
+												     whole-season cascade. Same ternary shape as that row: while the
+												     scope read is in flight (or if it failed) the button falls back
+												     to the scope-free short copy rather than quoting a number the
+												     cascade never checked. -->
+												{seasonManageDeleteScope !== null
+													? m.season_delete_confirm_scope_short({
+															series: seasonManageDeleteScope.series,
+															events: seasonManageDeleteScope.events,
+															repertoire: seasonManageDeleteScope.repertoireItems
+														})
+													: m.season_manage_delete_confirm_short()}
+											</button>
+											<button
+												type="button"
+												data-testid="season-manage-delete-season-cancel"
+												aria-label={m.season_manage_delete_cancel({ name: seasonManageName })}
+												disabled={seasonManageDeletePendingId !== null}
+												class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+												onclick={() => void disarmSeasonManageDelete('season-manage-delete-season')}
+											>
+												{m.season_manage_delete_cancel_short()}
+											</button>
+										</div>
+									{:else}
+										<!-- #217 review F3 — the panel's most destructive control gets its OWN
+										     message key rather than borrowing the EVENT row's. The two read the
+										     same today, so one copy edit on the event key (rewording it to
+										     "Delete event …") would have this × announcing a season as an
+										     event. -->
+										<button
+											type="button"
+											data-testid="season-manage-delete-season"
+											aria-label={m.season_manage_season_delete({ name: seasonManageName })}
+											class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
+											onclick={() => void armSeasonManageSeasonDelete()}
+										>
+											&times;
+										</button>
+									{/if}
+								</div>
 
 								<!-- name -->
 								<div>
@@ -5370,21 +5603,6 @@
 											{m.season_manage_save_error()}
 										</p>
 									{/if}
-								</div>
-
-								<!-- #197 review F5 — the delete RESULT, same contract as
-								     `roster-section-remove-status` (WCAG 4.1.3): mounted from the
-								     panel's first render (a live region announces only CHANGES to
-								     its contents) and visually hidden, because a sighted user
-								     watched the row vanish. Only SUCCESS lands here; a refused
-								     delete is a role="alert" under the list it belongs to. -->
-								<div
-									data-testid="season-manage-delete-status"
-									role="status"
-									aria-live="polite"
-									class="sr-only"
-								>
-									{seasonManageDeleteStatus}
 								</div>
 
 								<!-- event series -->
@@ -5822,11 +6040,34 @@
 											</div>
 										</div>
 									{/each}
-									{#if seasonManageDeleteError?.list === 'series'}
+									<!-- #216/#217 — the ONE cascade progress counter, placed under
+									     the series list next to the delete-error slot (Gama's
+									     2026-09-02 ruling): it renders for BOTH a series delete and a
+									     season delete, since a season cascade IS a series cascade
+									     (repeated) plus standalone events and repertoire items — there
+									     is nowhere else on the panel that is "the cascade's own
+									     place" once the target can be the whole season. role="status"
+									     mirrors the `series-create-progress` idiom verbatim. -->
+									{#if seasonManageDeleteProgress !== null}
+										<p
+											data-testid="season-manage-delete-progress"
+											role="status"
+											class="mt-1 text-xs text-ink-2"
+										>
+											{m.season_manage_delete_progress({
+												current: seasonManageDeleteProgress.current,
+												total: seasonManageDeleteProgress.total
+											})}
+										</p>
+									{/if}
+									{#if seasonManageDeleteError?.list === 'series' || seasonManageDeleteError?.list === 'season'}
 										<!-- #197 review F5 — under the list that actually failed. The one
 										     shared slot used to render below the standalone-EVENTS list,
 										     so a failed SERIES delete printed its message visually
-										     detached from the row it was about. -->
+										     detached from the row it was about.
+										     #217 — the SEASON's own failure lands here too: there is no
+										     "season row" of its own, and this is where its progress
+										     counter already renders. -->
 										<p
 											data-testid="season-manage-delete-error"
 											role="alert"
@@ -6118,6 +6359,26 @@
 								</div>
 							</div>
 						{/if}
+						<!-- #197 review F5 — the delete RESULT, same contract as
+						     `roster-section-remove-status` (WCAG 4.1.3): mounted from the
+						     page's first render (a live region announces only CHANGES to its
+						     contents) and visually hidden, because a sighted user watched the
+						     row/panel vanish. Only SUCCESS lands here; a refused delete is a
+						     role="alert" under the list it belongs to.
+						     #217 — deliberately OUTSIDE `{#if seasonManageOpen}`: a season
+						     delete closes the panel on success, and a live region that
+						     unmounts with it announces nothing (the same #132/T3 review F1
+						     debt every self-unmounting control on this page pays). Row-level
+						     (series/event) deletes leave the panel open either way, so moving
+						     this out costs them nothing. -->
+						<div
+							data-testid="season-manage-delete-status"
+							role="status"
+							aria-live="polite"
+							class="sr-only"
+						>
+							{seasonManageDeleteStatus}
+						</div>
 						<!-- #132/T2 — page-level [+ Season] creation form. The trigger button
 						     now lives in the #149 admin toolbar above; this block is the
 						     form only. The status region is mounted from first render (a
