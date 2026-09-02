@@ -104,6 +104,20 @@
 		// anything but the default — every control was unreachable in the product
 		// while its unit tests stayed green.
 		worksManage?: WorksManage;
+		// #214 — an optional override for the "no upcoming rows" state. This
+		// component stays filter-agnostic: it has no idea a type filter exists,
+		// it just renders whatever the caller hands it here INSTEAD OF its own
+		// default agenda_empty_no_events message, whenever items is empty and
+		// loading is false. Omitted = the original default paragraph.
+		emptyState?: Snippet;
+		// #214 review F3 — the same override, for the RECENT list. This component
+		// still knows nothing about filters: handing it this snippet is the
+		// caller's way of saying "the Recent list is empty for a reason of MINE,
+		// keep the section (and the season summary in it) on screen and render
+		// this instead of the rows". Omitted = the original behaviour, where an
+		// empty recentItems means no Recent section at all — so an early-season
+		// agenda with no past events still renders nothing here.
+		recentEmptyState?: Snippet;
 	}
 	const {
 		items,
@@ -121,7 +135,9 @@
 		seasonSummary,
 		worksByEventId = {},
 		onpdfclick,
-		worksManage
+		worksManage,
+		emptyState,
+		recentEmptyState
 	}: Props = $props();
 
 	/**
@@ -297,7 +313,7 @@
 	{/if}
 {/snippet}
 
-{#if recentItems.length > 0}
+{#if recentItems.length > 0 || recentEmptyState}
 	<!-- #83 — 'Recent': ALL past events of the current season, reverse-chron (order
 	     as given, no re-sort here). Sits ABOVE the upcoming list (Byrd's brief).
 	     Each row: the existing (read-only, past) RsvpControl + a conductor-only
@@ -316,6 +332,13 @@
 		     never expected to attend (F4 fix). -->
 		{#if seasonSummary && membership === 'member'}
 			{@render seasonSummary()}
+		{/if}
+		{#if recentItems.length === 0 && recentEmptyState}
+			<!-- #214 review F3 — the caller emptied this list (a type filter), so the
+			     section, its header and the season summary above stay put: the
+			     summary is a WHOLE-season figure, never type-scoped, and losing it
+			     to a filter tap was an unreviewed side effect. -->
+			{@render recentEmptyState()}
 		{/if}
 		{#each recentItems as item (item.id)}
 			<div
@@ -410,14 +433,22 @@
 			{/each}
 		</div>
 	{:else if items.length === 0}
-		<!-- #194/#202 review F2 — was `agenda_empty_no_rehearsals` ("No upcoming
-		     rehearsals."). With the type filter gone the query covers EVERY event
-		     type, so the empty state must not claim a narrower search than the one
-		     that actually ran — and that exact sentence is what #194's bug report
-		     quoted. -->
-		<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
-			<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_events()}</p>
-		</div>
+		{#if emptyState}
+			<!-- #214 — the page substitutes its own filtered-empty message here
+			     (agenda-filter-empty) when a type filter, not a genuinely empty
+			     agenda, is what emptied `items`. This component never decides
+			     which — it just renders what it's given. -->
+			{@render emptyState()}
+		{:else}
+			<!-- #194/#202 review F2 — was `agenda_empty_no_rehearsals` ("No upcoming
+			     rehearsals."). With the type filter gone the query covers EVERY event
+			     type, so the empty state must not claim a narrower search than the one
+			     that actually ran — and that exact sentence is what #194's bug report
+			     quoted. -->
+			<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
+				<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_events()}</p>
+			</div>
+		{/if}
 	{:else}
 		{#each decoratedGroups as group (group.key)}
 			{#if group.gapWeeks}

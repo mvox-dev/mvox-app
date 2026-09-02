@@ -23,6 +23,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
+		// #214 — the filter chip row renders whenever the agenda has any
+		// events at all, so its message keys must exist in every mock that
+		// renders the real +page.svelte with a non-empty agenda.
+		agenda_filter_all: () => 'All',
+		agenda_filter_group_label: () => 'Filter by event type',
+		agenda_filter_empty: () => 'No events match this filter.',
 		// #101 TE.1 -- every agenda row now carries an event-detail link.
 		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		rsvp_status_going: () => 'Going',

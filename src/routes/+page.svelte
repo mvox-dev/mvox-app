@@ -109,6 +109,9 @@
 	// event creation forms (replaces the free-text input / prior-type
 	// Autocomplete this page used to build the type field from).
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
+	// #214 — the SAME #211 color scheme the row badges use, reused verbatim on
+	// the active filter chip (never a second hand-typed copy).
+	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -168,6 +171,74 @@
 	// (season.conductors + event.conductors on each AgendaItem).
 	let recentItems = $state<AgendaItem[]>([]);
 	let conductorEventIds = $state<Set<string>>(new Set());
+
+	// #214 — event type filter chips above the agenda. Gama's ruling
+	// (2026-09-02, all three comments): the chip set is derived from the
+	// event types PRESENT in the rendered agenda (recent + upcoming, every
+	// season it spans) — not the canonical 8, not "current season" literally.
+	// Single-select toggle with an explicit 'All' chip; the filter applies to
+	// the WHOLE agenda (Recent included).
+	type AgendaFilterBucket = (typeof CANONICAL_EVENT_TYPES)[number];
+	type AgendaTypeFilter = 'all' | AgendaFilterBucket;
+	let agendaTypeFilter = $state<AgendaTypeFilter>('all');
+	const CANONICAL_EVENT_TYPE_SET = new Set<string>(CANONICAL_EVENT_TYPES);
+	// Free-text or empty `event_type` values, and the canonical 'other' type
+	// itself, all group under the SAME 'other' filter bucket (ruling 3) — the
+	// row badge keeps showing the raw string; only FILTERING groups them.
+	function agendaFilterBucketOf(eventType: string | undefined): AgendaFilterBucket {
+		const type = eventType ?? '';
+		if (type !== 'other' && CANONICAL_EVENT_TYPE_SET.has(type)) return type as AgendaFilterBucket;
+		return 'other';
+	}
+	// The chips actually rendered: canonical order, only buckets present
+	// somewhere in the WHOLE agenda (recent counts toward derivation too).
+	const agendaFilterChips = $derived.by(() => {
+		const present = new Set<AgendaFilterBucket>();
+		for (const it of agendaItems) present.add(agendaFilterBucketOf(it.eventType));
+		for (const it of recentItems) present.add(agendaFilterBucketOf(it.eventType));
+		return CANONICAL_EVENT_TYPES.filter((type) => present.has(type));
+	});
+	const filteredAgendaItems = $derived(
+		agendaTypeFilter === 'all'
+			? agendaItems
+			: agendaItems.filter((it) => agendaFilterBucketOf(it.eventType) === agendaTypeFilter)
+	);
+	const filteredRecentItems = $derived(
+		agendaTypeFilter === 'all'
+			? recentItems
+			: recentItems.filter((it) => agendaFilterBucketOf(it.eventType) === agendaTypeFilter)
+	);
+	// #214 review F1 — the pressed affordance must NOT be carried by the hue
+	// alone. `eventTypeBadgeClass` maps social/other (and every free-text type,
+	// which all bucket into 'other') to the quiet DEFAULT_CLASS
+	// 'text-ink-2 border-ink-4' — the exact classes an INACTIVE chip carries,
+	// so tapping those chips changed nothing on screen while the All chip
+	// simultaneously lost its fill: a shortened agenda under no visibly
+	// selected chip. #211's map stays the single hue source (never a second
+	// hand-typed color map); the pressed state adds a scheme-INDEPENDENT
+	// weight + ring on top, which reads for a hued and a quiet type alike and
+	// collides with no utility family used by the base or hue classes.
+	const CHIP_PRESSED_CLASS = 'font-semibold ring-1 ring-ink';
+	function agendaTypeChipClass(type: AgendaFilterBucket): string {
+		return agendaTypeFilter === type
+			? `${eventTypeBadgeClass(type)} ${CHIP_PRESSED_CLASS}`
+			: 'border-ink-4 text-ink-2';
+	}
+	// Tap the active chip again -> back to 'all'; tap a different one -> that
+	// one becomes active; the explicit All chip always clears the filter.
+	function selectAgendaTypeFilter(value: AgendaTypeFilter) {
+		agendaTypeFilter = agendaTypeFilter === value ? 'all' : value;
+	}
+	// Gama ruling 1, consequence 2 — if the active type disappears from the
+	// list (its last event went away), the chip vanishes from
+	// `agendaFilterChips` above; this is what actually resets the filter so
+	// the user is never left staring at an empty list under a filter chip
+	// that is no longer even on screen.
+	$effect(() => {
+		if (agendaTypeFilter !== 'all' && !agendaFilterChips.includes(agendaTypeFilter)) {
+			agendaTypeFilter = 'all';
+		}
+	});
 
 	// #90 TR.2 — the works view model per event id (upcoming AND recent rows),
 	// resolved once the agenda itself has loaded (it needs the event ids and the
@@ -452,6 +523,8 @@
 			failedEventIds = new Set();
 			recentItems = [];
 			conductorEventIds = new Set();
+			// #214 — no collective, no agenda, no filter to be stale.
+			agendaTypeFilter = 'all';
 			worksByEventId = {};
 			pdfError = false;
 			resetManagement();
@@ -506,6 +579,12 @@
 		pdfError = false;
 		resetManagement();
 		if (!keepSeasonManage) {
+			// #214 — a genuine collective switch (this is the same "not
+			// keepSeasonManage = a real switch, not a same-collective creation
+			// refresh" signal the roster/season-manage resets right below already
+			// key off) never carries a filter over from the collective the user
+			// just left.
+			agendaTypeFilter = 'all';
 			// The roster ride-along is deliberate: the panel's conductor chips
 			// resolve their names off `rosterRows`, and nothing re-fetches it while
 			// the panel merely stays open — wiping it would turn every chip into
@@ -6419,19 +6498,85 @@
 								</div>
 							</div>
 						{/if}
+						<!-- #214 — event type filter chips, above the WHOLE agenda (Recent
+						     section included). Hidden entirely when the agenda has no
+						     events at all (nothing to filter). Native role="group" of
+						     native buttons per standing rules 1/2 — no hand-rolled widget. -->
+						{#if agendaFilterChips.length > 0}
+							<div
+								role="group"
+								aria-label={m.agenda_filter_group_label()}
+								class="flex flex-wrap gap-2 pb-3"
+							>
+								<button
+									type="button"
+									data-testid="agenda-filter-all"
+									aria-pressed={agendaTypeFilter === 'all' ? 'true' : 'false'}
+									class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeFilter ===
+									'all'
+										? 'border-ink bg-ink text-paper'
+										: 'border-ink-4 text-ink-2'}"
+									onclick={() => selectAgendaTypeFilter('all')}
+								>
+									{m.agenda_filter_all()}
+								</button>
+								{#each agendaFilterChips as type (type)}
+									<button
+										type="button"
+										data-testid="agenda-filter-{type}"
+										aria-pressed={agendaTypeFilter === type ? 'true' : 'false'}
+										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeChipClass(
+											type
+										)}"
+										onclick={() => selectAgendaTypeFilter(type)}
+									>
+										{eventTypeLabel(type)}
+									</button>
+								{/each}
+							</div>
+						{/if}
+						<!-- #214 — a filter yielding zero upcoming rows is a DIFFERENT truth
+						     than "no upcoming events": the collective HAS events, the filter
+						     hid them. Declared here (a plain value, not a child of
+						     <AgendaList>) so it can be handed to the `emptyState` prop only
+						     when a filter is actually active — Svelte only picks up a
+						     `{#snippet}` block placed directly inside a component's own tags
+						     as that prop; nesting it in an `{#if}` there would silently make
+						     it stray "children" content instead of ever reaching the prop. -->
+						{#snippet agendaFilterEmptyState()}
+							<div data-testid="agenda-filter-empty" class="flex min-h-[30vh] items-center justify-center">
+								<p class="font-display text-xl text-ink-2">{m.agenda_filter_empty()}</p>
+							</div>
+						{/snippet}
+						<!-- #214 review F3 — the Recent list's own filtered-empty line. It is
+						     handed over ONLY when the collective actually has recent events
+						     and the filter hid all of them: without it AgendaList drops the
+						     whole Recent section, taking #85's season summary (a whole-season
+						     figure, computed from the UNFILTERED recentItems) off screen for
+						     any type with no past events yet. With no recent events at all,
+						     the prop stays undefined and the section stays absent as before. -->
+						{#snippet agendaRecentFilterEmptyState()}
+							<p data-testid="agenda-recent-filter-empty" class="py-2 text-sm text-ink-2">
+								{m.agenda_filter_recent_empty()}
+							</p>
+						{/snippet}
 						<AgendaList
-							items={agendaItems}
+							items={filteredAgendaItems}
 							loading={agendaLoading}
 							{rsvpByEventId}
 							membership={gatedMembership}
 							{pendingEventIds}
 							{failedEventIds}
-							{recentItems}
+							recentItems={filteredRecentItems}
 							{conductorEventIds}
 							{myAttendanceByEventId}
 							{worksByEventId}
 							{worksManage}
 							{attendancePanel}
+							emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
+							recentEmptyState={agendaTypeFilter !== 'all' && recentItems.length > 0
+								? agendaRecentFilterEmptyState
+								: undefined}
 							onpdfclick={handlePdfClick}
 							onrsvpchange={handleRsvpChange}
 							ontakeattendance={openAttendancePanel}

@@ -36,6 +36,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (params: { weeks: number }) => `In ${params.weeks} weeks`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
+		// #214 — the filter chip row renders whenever the agenda has any
+		// events at all, so its message keys must exist in every mock that
+		// renders the real +page.svelte with a non-empty agenda.
+		agenda_filter_all: () => 'All',
+		agenda_filter_group_label: () => 'Filter by event type',
+		agenda_filter_empty: () => 'No events match this filter.',
 		// #107 — the session-expired notice this RED spec introduces.
 		session_expired_message: () => 'Your session has expired. Please sign in again.',
 		session_expired_signin: () => 'Sign in'

@@ -16,6 +16,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (params: { weeks: number }) => `In ${params.weeks} weeks`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
+		// #214 — the filter chip row renders whenever the agenda has any
+		// events at all, so its message keys must exist in every mock that
+		// renders the real +page.svelte with a non-empty agenda.
+		agenda_filter_all: () => 'All',
+		agenda_filter_group_label: () => 'Filter by event type',
+		agenda_filter_empty: () => 'No events match this filter.',
 		// #113 review F3 — the page header's collectives link is a paraglide key
 		// now (it was hardcoded English); this spec renders that header.
 		agenda_switch_collective: () => 'Switch collective'
