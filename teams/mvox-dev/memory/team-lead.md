@@ -20,9 +20,9 @@ mvox-app main @ `44389f9`. #206 merged `1ccd497` + closed; between-chains batch 
 
 **#219 MERGED 02:40** — squash `0f98490`, review GREEN round 1 (11/11 checklist, 2834/2834 tests, 0 type errors), issue CLOSED, branch deleted. Live gate open for Mihkel: second-Google link + observed status of a rights-refused property DELETE → record on #219. Docs stash popped + committed between chains.
 
-**#207 LAUNCHING 02:45** — two-task run from `teams/mvox-dev/memory/pipeline-args/args-207.json`: task 1 `feat/207-time-24h-monday-first` (rules 5+6, TimeSelect composite, localStorage pref + profile select + hint line, Monday-first), task 2 `feat/207-iso-date-text` (rule 7 numeric date text, Closes #207). All Gama rulings (01:39, 01:59) baked in: native date pickers stay (picker follow-up pending Mihkel), narrative headers keep weekday+month, recent-row → ISO, hint line `profile_time_format_hint`. If dead on relaunch: check both branches; delete incomplete, relaunch from the args file (task 1 already merged → drop it from tasks[]).
+**#207 MERGED 05:20** — part 1 `32845d6` (rules 5+6: TimeSelect.svelte, src/lib/preferences/timeFormat.ts, profile select + hint, Monday-first; review YELLOW→YELLOW→GREEN, 2 FIX rounds: spec hook-ordering, AM/PM meridiem state bug), part 2 `8e6d014` (rule 7 ISO text on 7 numeric sites; GREEN round 1). Issue CLOSED. Run `wf_1d3b1f12-c79`, 14 agents. Follow-ups pending Mihkel (NOT issues yet): native date-picker ISO rendering; text time displays following AM/PM pref.
 
-**QUEUE ORDER:** #207 (running) → #208 → #209 → #211 → #214 → #212 → #213 → #215 → #216+#217 → #218 (adjust per research sizes/deps).
+**QUEUE ORDER:** #208 → #209 → #211 → #214 → #212 → #213 → #215 → #216+#217 → #218 (adjust per research sizes/deps).
 
 **NEXT:** research-207 result → author tdd-slice-pipeline args → launch pipeline. Then per rulings: #208, #209, #211→#214, #212, #213, #215, #216+#217, #218.
 
