@@ -22,7 +22,9 @@ mvox-app main @ `44389f9`. #206 merged `1ccd497` + closed; between-chains batch 
 
 **#207 MERGED 05:20** — part 1 `32845d6` (rules 5+6: TimeSelect.svelte, src/lib/preferences/timeFormat.ts, profile select + hint, Monday-first; review YELLOW→YELLOW→GREEN, 2 FIX rounds: spec hook-ordering, AM/PM meridiem state bug), part 2 `8e6d014` (rule 7 ISO text on 7 numeric sites; GREEN round 1). Issue CLOSED. Run `wf_1d3b1f12-c79`, 14 agents. Follow-ups pending Mihkel (NOT issues yet): native date-picker ISO rendering; text time displays following AM/PM pref.
 
-**QUEUE ORDER:** #208 → #209 → #211 → #214 → #212 → #213 → #215 → #216+#217 → #218 (adjust per research sizes/deps).
+**RUN 3 MERGED 10:30** — `wf_65373ee9-a3f`, 29 agents: #208 `63033d4` (GREEN r1), #209 `5788866` (Y→G), #211 `e53b8e9` (Y→G; 12 `--color-type-*` tokens), #214 `b598a61` (Y→G). All CLOSED. Gama informed with live gates.
+
+**QUEUE ORDER:** #212 → #213 → #215 → #216+#217 → #218 (adjust per research sizes/deps).
 
 **NEXT:** research-207 result → author tdd-slice-pipeline args → launch pipeline. Then per rulings: #208, #209, #211→#214, #212, #213, #215, #216+#217, #218.
 
