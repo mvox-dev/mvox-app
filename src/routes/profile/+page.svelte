@@ -30,26 +30,12 @@
 	// #193 — linked auth providers + "Link another account".
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
-	import { AUTH_PROVIDERS } from '$lib/auth/providers';
+	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../auth/[provider]/build-oauth-init-url';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
-	const PROVIDER_LABELS: Record<string, string> = {
-		google: 'Google',
-		apple: 'Apple',
-		'smart-id': 'Smart-ID',
-		'mobile-id': 'Mobile-ID',
-		'id-card': 'ID-card',
-		'e-mail': 'E-mail'
-	};
-
-	function providerLabel(id: string | null): string {
-		if (!id) return '';
-		return PROVIDER_LABELS[id] ?? id.charAt(0).toUpperCase() + id.slice(1);
-	}
-
 	const identityUser = getUser();
 	const identityAccount = identityUser?.email || identityUser?.name || '';
 	const identityProvider = providerLabel(getLastProvider());
@@ -953,7 +939,7 @@
 								aria-busy={linkBusy}
 								onclick={() => handleLinkProvider(provider.id)}
 							>
-								{provider.label}
+								{provider.label()}
 							</button>
 						{/each}
 						<button

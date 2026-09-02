@@ -106,7 +106,7 @@ Choral-music terms that have no idiomatic translation should stay in English (or
 | choir | et: `koor`, lv: `koris`, uk: `хор` | Standard choral-community term in each language; not the more formal "ensemble" or "kollektiiv" |
 | Sign in | et: `Logi sisse`, lv: `Pierakstīties`, uk: `Увійти` | Standard UI login verb per locale; consistent across nav + login page |
 | Sign out | et: `Logi välja`, lv: `Izrakstīties`, uk: `Вийти` | Paired with Sign in convention |
-| Continue with [brand] | et: `Jätka [brand]uga`, lv: `Turpināt ar [brand]`, uk: `Продовжити з [brand]` | OAuth CTA pattern — infinitive in lv/uk, imperative in et |
+| ~~Continue with [brand]~~ | **RETIRED — superseded by #218 (Gama copy ruling, 2026-09-02)** | OAuth CTAs now render the provider noun alone (`auth_provider_*`): `Google`, not `Continue with Google`. Three specs assert the rendered sign-in surface does NOT contain "Continue with" — see the `auth_provider_*` section below. Do not reintroduce. |
 
 ### Proper nouns and brand names
 
@@ -528,3 +528,55 @@ Single new key added for the rehearsal inline edit form heading. All other neede
 | `rsvp_non_member_hint` | et/lv/uk | Ainult liikmed saavad RSVP kinnitada. / Tikai dalībnieki var apstiprināt RSVP. / Лише учасники можуть підтвердити RSVP. | Concept-translated (not the old app's longer `rsvp_not_member` sentence). `RSVP` kept as untranslated loanword in all 3, matching old app's `rsvp_error`/`rsvp_not_member` precedent. lv uses `dalībnieki` (matches `seasons_notice_assign_not_member` lv, not the old app's one-off `loceklis`). |
 
 (*MVOX:Comenius*)
+
+---
+
+### New key group: `auth_provider_*` + `login_*` (#218, session MVOX-13, 2026-09-02)
+
+11 keys for the sign-in surface: 5 `login_*` (heading, the `csrf_mismatch` /
+`missing_session_token` / generic error branches, the `· last used` marker) and
+6 `auth_provider_*` — the OAuth CTA labels, now the **single** source consumed by
+the login page, the invite landing and the profile page through
+`AUTH_PROVIDERS` / `providerLabel()` in `src/lib/auth/providers.ts`.
+
+**Copy ruling (Gama, 2026-09-02): the `Continue with [brand]` framing is
+RETIRED.** Provider CTAs render the provider noun alone — `Google`, never
+`Continue with Google`. The glossary row above is struck through accordingly.
+Three specs assert the rendered text does not contain `Continue with`
+(`src/routes/auth/login/page.login-i18n.spec.ts`,
+`src/routes/page.invite-landing.spec.ts`,
+`src/routes/page.profile-linked-accounts.spec.ts`), so a later i18n pass that
+reintroduces the pattern fails the build.
+
+**Product names stay untranslated in every locale.** `Smart-ID`, `Mobile-ID`,
+`Google`, `Apple` are brand names — the same rule as `Multivox` / `Entu` under
+"Proper nouns and brand names". Only the two generic nouns translate:
+`ID-card` names a document and `E-mail` names a medium, neither is a product.
+
+**`login_heading` keeps the product name in every locale** (en `Sign in to mvox`,
+et `Logi mvoxi sisse`, lv `Pieslēgties mvox`, uk `Увійти в mvox`) — after #206
+this is the single signed-out surface and carries no wordmark.
+
+**`login_last_used` is the WHOLE marker including the `·` separator**
+(en `· last used`); the `&nbsp;` before it lives in the markup, not the message.
+
+**`session_expired` is deliberately NOT a `login_error_*` key.** That branch keeps
+`session_expired_message` (#107 review F4) — the copy is shared with the guard's
+own notice, so a sibling key would only invite drift.
+
+| Key | Locale | Value | Rationale |
+|---|---|---|---|
+| `auth_provider_smart_id`, `auth_provider_mobile_id`, `auth_provider_google`, `auth_provider_apple` | en/et/lv/uk | identical to en (`Smart-ID`, `Mobile-ID`, `Google`, `Apple`) | Product / brand names — never translated. Deliberate 4-locale duplication, not a missing translation. |
+| `auth_provider_id_card` | et | `ID-kaart` | Generic noun, not a product: `kaart` = card. Standard Estonian term for the national ID card. |
+| `auth_provider_id_card` | lv | `ID-karte` | `karte` = card; hyphenated compound mirroring the en form. |
+| `auth_provider_id_card` | uk | `ID-картка` | `картка` = card — the standard Ukrainian term for ID/bank cards (not `карта`, which reads as a map). |
+| `auth_provider_e_mail` | et | `E-post` | `post` = mail; `E-post` is the standard Estonian term — the `e-mail` loanword is not used in formal UI. |
+| `auth_provider_e_mail` | lv | `E-pasts` | `pasts` = mail; standard Latvian term, parallel to et. |
+| `auth_provider_e_mail` | uk | `Електронна пошта` | "Electronic mail" spelled out — the standard Ukrainian term; no idiomatic hyphenated short form exists. |
+| `login_last_used` | et | `· viimati kasutatud` | "last used"; the `·` separator is carried inside the value so the marker is one translatable unit. |
+| `login_last_used` | lv | `· pēdējoreiz izmantots` | `pēdējoreiz` = the last time; masc. participle agreeing with the implied provider noun. |
+| `login_last_used` | uk | `· востаннє використано` | `востаннє` = for the last time + short passive `використано` — invariant, so it fits any provider name. |
+| `login_error_csrf_mismatch` | et | `Sisselogimislink aegus või oli vigane. Palun proovi uuesti.` | Link-centred phrasing (the user sees an expired link, not a "security check"); informal 2nd-sg matching the rest of the et auth surface. |
+| `login_error_generic` | et/lv/uk | `Midagi läks valesti.` / `Kaut kas nogāja greizi.` / `Щось пішло не так.` | Idiomatic "something went wrong" per locale + the established "please try again" tail; en value pinned verbatim to the pre-#218 hardcoded string. |
+
+(*MVOX:Palestrina, contributed for Comenius's stewardship*)

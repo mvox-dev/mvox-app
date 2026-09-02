@@ -27,7 +27,18 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		invite_error_conflict_continue: () => 'Continue to mvox',
 		invite_error_unexpected: () => 'Something inconsistent happened.',
 		invite_error_failed: () => 'Redeeming the invite failed.',
-		invite_retry: () => 'Try again'
+		invite_retry: () => 'Try again',
+		// #218 — provider labels resolve through Paraglide. AUTH_PROVIDERS binds
+		// `label` to these message functions AT MODULE LOAD, so a missing key
+		// here would make every provider-CTA render throw, not fall back.
+		// Bare nouns per Gama's #218 ruling — google is 'Google', not
+		// 'Continue with Google'.
+		auth_provider_smart_id: () => 'Smart-ID',
+		auth_provider_mobile_id: () => 'Mobile-ID',
+		auth_provider_id_card: () => 'ID-card',
+		auth_provider_e_mail: () => 'E-mail',
+		auth_provider_google: () => 'Google',
+		auth_provider_apple: () => 'Apple'
 	}
 }));
 
@@ -134,6 +145,29 @@ describe('/invite/[token] — callback outcomes (take precedence over fresh pars
 		const { container } = renderAt(TOKEN, '?outcome=error');
 		expect(container.querySelector('[data-testid="invite-landing-error"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="invite-retry"]')).not.toBeNull();
+	});
+});
+
+// ── #218 — provider CTA labels come from Paraglide, bare nouns ─────────────────
+
+describe('/invite/[token] — provider CTA labels come from Paraglide (#218)', () => {
+	it("renders six provider CTAs with the message-function label — google reads 'Google'", () => {
+		const { container } = renderAt(TOKEN);
+		const EXPECTED: Record<string, string> = {
+			'smart-id': 'Smart-ID',
+			'mobile-id': 'Mobile-ID',
+			'id-card': 'ID-card',
+			'e-mail': 'E-mail',
+			google: 'Google',
+			apple: 'Apple'
+		};
+		const ctas = Array.from(container.querySelectorAll('[data-testid^="invite-cta-"]'));
+		expect(ctas).toHaveLength(6);
+		for (const cta of ctas) {
+			const id = (cta.getAttribute('data-testid') ?? '').replace(/^invite-cta-/, '');
+			expect(cta.textContent?.trim(), `invite CTA label for ${id}`).toBe(EXPECTED[id]);
+		}
+		expect(container.textContent).not.toContain('Continue with');
 	});
 });
 

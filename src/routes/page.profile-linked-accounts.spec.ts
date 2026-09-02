@@ -101,7 +101,17 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// #219 — the after-the-fact case: the round trip completed and nothing
 		// changed. Neutral copy, NOT an error (Gama ruling on #219).
 		profile_link_noop_same_identity: () => 'That sign-in was already linked. Nothing changed.',
-		profile_link_cancel: () => 'Cancel'
+		profile_link_cancel: () => 'Cancel',
+		// #218 — provider display names resolve through Paraglide (single source
+		// in $lib/auth/providers). AUTH_PROVIDERS binds `label` to these message
+		// functions AT MODULE LOAD, so a missing key here would make the page
+		// render throw. Bare nouns per Gama's #218 ruling.
+		auth_provider_smart_id: () => 'Smart-ID',
+		auth_provider_mobile_id: () => 'Mobile-ID',
+		auth_provider_id_card: () => 'ID-card',
+		auth_provider_e_mail: () => 'E-mail',
+		auth_provider_google: () => 'Google',
+		auth_provider_apple: () => 'Apple'
 	}
 }));
 
@@ -951,5 +961,54 @@ describe('locale parity — every #193 key present and non-empty in en/et/lv/uk'
 	});
 });
 
+// ── #218 — ONE source for provider display names ────────────────────────────────
+//
+// Gama's scope addition on #218 (2026-09-02): the profile page's local
+// PROVIDER_LABELS map (from #60, predates #193) is DELETED; the linked-identity
+// rows and the 'Signed in as … via …' banner resolve through the same
+// Paraglide-keyed providerLabel exported from $lib/auth/providers as every
+// other consumer. After this there is exactly one place a provider's display
+// name comes from.
+
+describe('single provider-label source — PROVIDER_LABELS is gone (#218)', () => {
+	const profileSource = readFileSync(
+		resolve(process.cwd(), 'src/routes/profile/+page.svelte'),
+		'utf-8'
+	);
+
+	it('the profile page no longer defines its own PROVIDER_LABELS map', () => {
+		expect(profileSource).not.toContain('PROVIDER_LABELS');
+	});
+
+	it("the profile page resolves labels via providerLabel imported from '$lib/auth/providers'", () => {
+		expect(profileSource).toMatch(
+			/import\s*(?:type\s*)?\{[^}]*\bproviderLabel\b[^}]*\}\s*from\s*'\$lib\/auth\/providers'/
+		);
+	});
+
+	it('linked-identity rows read their provider names from that single source (exact prefix)', async () => {
+		h.listLinkedIdentitiesMock.mockResolvedValue({
+			identities: [GOOGLE_ID, EMAIL_ID],
+			pendingInvites: 0
+		});
+		const container = await renderReady();
+		await waitFor(() =>
+			expect(qa(container, '[data-testid^="profile-linked-identity"]')).toHaveLength(2)
+		);
+		const googleRow = q(container, '[data-testid="profile-linked-identity-eu-1"]');
+		const emailRow = q(container, '[data-testid="profile-linked-identity-eu-2"]');
+		expect(googleRow?.textContent?.trim()).toMatch(/^Google\b/);
+		expect(emailRow?.textContent?.trim()).toMatch(/^E-mail\b/);
+	});
+
+	it("the link picker's google button reads 'Google' — the 'Continue with' framing is retired", async () => {
+		const container = await openPicker();
+		const google = q(container, '[data-testid="profile-link-provider-google"]');
+		expect(google?.textContent?.trim()).toBe('Google');
+		expect(google?.textContent).not.toContain('Continue with');
+	});
+});
+
 // (*MVOX:Tallis* — #193 RED: profile linked-accounts section + link flow wiring + i18n)
 // (*MVOX:Tallis* — #219 RED: link picker unblock, uid+provider list de-dup, neutral noop notice)
+// (*MVOX:Tallis* — #218 RED: PROVIDER_LABELS deleted, providerLabel is the one source)

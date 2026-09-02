@@ -506,5 +506,16 @@
 	"library_create_work_cancel": "Tühista",
 	"library_create_work_name_required": "Teose pealkiri on kohustuslik.",
 	"library_create_work_created": "{name} loodud.",
-	"library_create_work_error": "Teose loomine ebaõnnestus."
+	"library_create_work_error": "Teose loomine ebaõnnestus.",
+	"login_heading": "Logi mvoxi sisse",
+	"login_error_csrf_mismatch": "Sisselogimislink aegus või oli vigane. Palun proovi uuesti.",
+	"login_error_missing_session_token": "Sisselogimine ei lõppenud. Palun proovi uuesti.",
+	"login_error_generic": "Midagi läks valesti. Palun proovi uuesti.",
+	"login_last_used": "· viimati kasutatud",
+	"auth_provider_smart_id": "Smart-ID",
+	"auth_provider_mobile_id": "Mobile-ID",
+	"auth_provider_id_card": "ID-kaart",
+	"auth_provider_e_mail": "E-post",
+	"auth_provider_google": "Google",
+	"auth_provider_apple": "Apple"
 }

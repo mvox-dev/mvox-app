@@ -95,7 +95,18 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 			`Linking could not be completed — it stopped at step: ${p.step}. You can try again.`,
 		profile_link_success: (p: { collective: string }) =>
 			`That sign-in now works for ${p.collective}.`,
-		profile_link_cancel: () => 'Cancel'
+		profile_link_cancel: () => 'Cancel',
+		// #218 — provider display names resolve through Paraglide (single source
+		// in $lib/auth/providers). AUTH_PROVIDERS binds `label` to these message
+		// functions AT MODULE LOAD, so a missing key here would make the page
+		// render throw. Bare nouns per Gama's #218 ruling, which is why the
+		// 'Signed in as … via Google' assertions below keep their exact text.
+		auth_provider_smart_id: () => 'Smart-ID',
+		auth_provider_mobile_id: () => 'Mobile-ID',
+		auth_provider_id_card: () => 'ID-card',
+		auth_provider_e_mail: () => 'E-mail',
+		auth_provider_google: () => 'Google',
+		auth_provider_apple: () => 'Apple'
 	}
 }));
 

@@ -508,5 +508,16 @@
 	"library_create_work_cancel": "Скасувати",
 	"library_create_work_name_required": "Потрібно вказати назву твору.",
 	"library_create_work_created": "{name} створено.",
-	"library_create_work_error": "Не вдалося створити твір."
+	"library_create_work_error": "Не вдалося створити твір.",
+	"login_heading": "Увійти в mvox",
+	"login_error_csrf_mismatch": "Термін дії посилання для входу минув або воно було недійсним. Спробуйте ще раз.",
+	"login_error_missing_session_token": "Вхід не завершився. Спробуйте ще раз.",
+	"login_error_generic": "Щось пішло не так. Спробуйте ще раз.",
+	"login_last_used": "· востаннє використано",
+	"auth_provider_smart_id": "Smart-ID",
+	"auth_provider_mobile_id": "Mobile-ID",
+	"auth_provider_id_card": "ID-картка",
+	"auth_provider_e_mail": "Електронна пошта",
+	"auth_provider_google": "Google",
+	"auth_provider_apple": "Apple"
 }

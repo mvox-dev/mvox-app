@@ -104,7 +104,7 @@
 						data-testid={`invite-cta-${provider.id}`}
 						class="rounded-md border border-ink px-4 py-2 text-center text-sm hover:bg-ink hover:text-paper"
 					>
-						{provider.label}
+						{provider.label()}
 					</a>
 				{/each}
 			</div>

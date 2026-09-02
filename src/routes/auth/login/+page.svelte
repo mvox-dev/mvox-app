@@ -5,11 +5,12 @@
 	// Provider list shared with the invite landing (T4.5) — extracted verbatim to
 	// $lib/auth/providers.
 	import { AUTH_PROVIDERS } from '$lib/auth/providers';
-	// #107 review F4 — the session-expired copy is the DURABLE surface (the
-	// per-page notice only flashes past before the redirect completes), so it
-	// must come from the four locale files, not a hardcoded English literal that
-	// can drift from `session_expired_message`. The page's other error branches
-	// stay un-i18n'd — pre-existing, out of #107's scope.
+	// #218 — the whole sign-in surface resolves through Paraglide: the heading,
+	// EVERY error branch, the '· last used' marker and the provider labels all
+	// come from the four locale files. `session_expired` is the one branch that
+	// does not use a `login_error_*` key: it rides `m.session_expired_message`
+	// (#107 review F4) because that copy is the DURABLE surface shared with the
+	// guard's own notice, so a second key would only invite drift.
 	import { m } from '$lib/paraglide/messages.js';
 
 	const error = $derived(page.url.searchParams.get('error'));
@@ -27,14 +28,14 @@
 </script>
 
 <main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper px-6 text-ink">
-	<h1 class="font-display text-2xl">Sign in to mvox</h1>
+	<h1 class="font-display text-2xl">{m.login_heading()}</h1>
 
 	{#if error}
 		<p class="text-sm text-red-700" role="alert">
-			{#if error === 'csrf_mismatch'}Your sign-in link expired or was invalid. Please try again.
-			{:else if error === 'missing_session_token'}Sign-in did not complete. Please try again.
+			{#if error === 'csrf_mismatch'}{m.login_error_csrf_mismatch()}
+			{:else if error === 'missing_session_token'}{m.login_error_missing_session_token()}
 			{:else if error === 'session_expired'}{m.session_expired_message()}
-			{:else}Something went wrong. Please try again.{/if}
+			{:else}{m.login_error_generic()}{/if}
 		</p>
 	{/if}
 
@@ -45,7 +46,7 @@
 				data-testid={`provider-${provider.id}`}
 				class="rounded-md border border-ink px-4 py-2 text-center text-sm hover:bg-ink hover:text-paper"
 			>
-				{provider.label}{#if provider.id === lastProvider}&nbsp;· last used{/if}
+				{provider.label()}{#if provider.id === lastProvider}&nbsp;{m.login_last_used()}{/if}
 			</a>
 		{/each}
 	</div>
