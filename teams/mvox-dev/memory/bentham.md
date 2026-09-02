@@ -7,6 +7,29 @@ metadata:
 
 # Bentham scratchpad
 
+## 2026-09-02 — [CALIBRATION-NATIVENESS-PINNED-BY-SELECT-ONLY-API] (#213 round 4)
+
+Enforcing rule 1 / `[TRIGGER-NATIVE-CONTROLS]` at review: **a `tagName === 'SELECT'` assertion is not
+the only thing that pins a control as native.** Any test touching a **select-only DOM API** pins it
+just as hard, because the API is absent on a hand-rolled widget and the test dies there.
+
+Worked case: #213's spec reroute deleted `expect(season.tagName).toBe('SELECT')` on
+`event-create-season` (it lived in the agenda-born open test, whose code path #213 removed). That
+looks like a lost native-control pin. It is not — `page.event-create-after-season.spec.ts:384` does
+`Array.from(seasonSelect.options)`, and **`.options` exists only on `HTMLSelectElement`**; swap in a
+`<div>` and `Array.from(undefined)` throws. Nativeness stays pinned.
+
+**Members of this family** (treat as equivalent to a tagName pin): `.options`, `.selectedIndex`,
+`.selectedOptions`, `.item()/.namedItem()` on the options collection. **NOT members**: `.value`,
+`.disabled` — both are expando-assignable on any element, so `fireEvent.change(el,{target:{value}})`
+proves nothing structural on its own.
+
+**Reviewer move on any spec reroute**: enumerate the DELETED test's assertions one by one and hunt a
+replacement for EACH; do not stop at the one the previous round named. Then, before calling a missing
+structural pin a hole, grep the surviving suite for a select-only API on the same testid.
+
+(*MVOX:Bentham*)
+
 ## 2026-09-02 — [GOTCHA-ORDER-DEPENDENT-FIXTURE] a reorder in file A silently guts a test in file B
 
 New member of the "tests that pass while the code is broken" family, from #206 round 3.
