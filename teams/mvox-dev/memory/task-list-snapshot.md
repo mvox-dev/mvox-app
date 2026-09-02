@@ -1,44 +1,26 @@
-# Task List Snapshot — 2026-08-15 (session MVOX-10)
+# Task List Snapshot — 2026-09-02 (session MVOX-13)
 
-mvox-app main @ `133e551`. Board empty.
+mvox-app main @ `66ebd9d`. Board empty, nothing in flight.
 
-## COMPLETED this session
+## COMPLETED this session (13 issues, one squash commit each)
 
-### Epic #132 — Event management (6 slices)
-T1 entity create utility, T2 season creation + autocomplete, T3 season management,
-T4 event creation, T5 series + bulk generator, T6 agenda admin controls.
-
-### Fixes + features pipeline
-#135 mutual exclusion, #136 touch targets, #137 collective switch,
-YELLOW-128.1 pluralization, YELLOW-131.1 setTimeout, YELLOW-131.2 Escape test,
-#134 role management, #123 language selector.
-
-### Verification + fixes pipeline
-#142 _expander verification (SPIKE), #139 autocomplete max-height,
-#141 DST spring-forward, #140 NavShell tab merge,
-#143 resolveLibrarian, #144 listSeasons scope, #138 resume orphan.
-
-### Rights audit #133
-SPIKE: 5 redundant _sharing removed, 4 necessary documented.
-
-### Walkthrough findings
-#146 admin name resolution, #147 self-removal guard, #148 ownership note,
-#149 agenda toolbar, #150 roster arrows, #151 typography.
-
-### Keyboard reorder #152
-WCAG 2.1.1 keyboard section reorder on drag handle.
-
-### Arrange mode #155
-Chip selector, reorder, indent/unindent, CRUD relocation. Net -1940 lines.
-
-### Roving tabindex #156
-10 button groups fixed. Shared helper rovingNextIndex.
-
-### UX fixes #157/#158
-Event field tap target, attendance auto-scroll.
+| Issue | Commit | Slice |
+|---|---|---|
+| #219 | `0f98490` | link picker: unblock already-linked provider, dedupe list, same-identity noop guard |
+| #207 | `32845d6`, `8e6d014` | calendar conventions: 24h TimeSelect + 5-min steps + AM/PM pref + Monday-first; ISO date text |
+| #208 | `63033d4` | event form: descriptive placeholders + "From series" line |
+| #209 | `5788866` | five Autocomplete person pickers → native selects |
+| #211 | `e53b8e9` | event type badge colors (mvox palette) |
+| #214 | `b598a61` | event type filter chips |
+| #212 | `91b3905` | convert form start date + single action context |
+| #213 | `6cd7a72` | cogwheel toggle toolbar (manual merge after YELLOW-cap halt, Bentham r4 GREEN) |
+| #215 | `7ed4ede` | toggleable series date grid |
+| #217 (+#216) | `6814565` | season delete cascade + progress counter |
+| #218 | `c0e6d1d` | localized sign-in surface, single provider-label source |
+| #220 | `66ebd9d` | AM/PM preference on displayed times |
 
 ## PENDING
 
-None. Board empty.
+None. Live gates for Mihkel listed in `team-lead.md` [NEXT SESSION].
 
 (*MVOX:Palestrina*)
