@@ -21,6 +21,38 @@
   --color-indigo-soft: #e0e7ff;
   --color-highlight: #f7e58a;
 
+  /* #211 — event-type badge scheme, translated into mvox's paper/ink palette
+   * (never stock Tailwind hues). Anchors carried over from polyphony's type
+   * colors (rehearsal=blue, concert=purple, retreat=green, festival=orange,
+   * per polyphony.uk); workshop and meeting are two NEW hues added for mvox's
+   * eight canonical types. Distinct from --color-indigo/--color-amber
+   * (roster/attendance meanings) and from --color-red/--color-green
+   * (error/active meanings) — see eventTypeStyles.ts for the classes built
+   * from these tokens. No dark-mode block exists in this file today (grepped
+   * 2026-09-02) — nothing to mirror here; see eventTypeStyles.spec.ts.
+   *
+   * CONTRAST FLOOR — 4.5:1, base-on-soft. The badge renders at text-[9px]
+   * font-mono uppercase, far below any WCAG large-text threshold, so the
+   * normal-text 4.5:1 bar applies to every base/soft pair below. Measured
+   * ratios (base on its own -soft), keep them true when re-hueing:
+   *   rehearsal 5.50   concert  5.32   festival 5.36
+   *   retreat   5.66   workshop 6.11   meeting  5.27
+   * Hue angle is Mihkel's to move at the live gate — lightness is not free:
+   * re-measure any new hex against its -soft partner and stay at or above
+   * 4.5:1 (the six sit in a deliberate 5.2–6.2 band). */
+  --color-type-rehearsal: #3d5a80;
+  --color-type-rehearsal-soft: #dbe4ef;
+  --color-type-concert: #6b4c85;
+  --color-type-concert-soft: #e6ddee;
+  --color-type-festival: #874711;
+  --color-type-festival-soft: #f0dcc5;
+  --color-type-retreat: #35604b;
+  --color-type-retreat-soft: #d9e8df;
+  --color-type-workshop: #215a61;
+  --color-type-workshop-soft: #d3e8ea;
+  --color-type-meeting: #8a4266;
+  --color-type-meeting-soft: #f0dce6;
+
   --color-voice-s: #fbe3c1;
   --color-voice-a: #fadcc4;
   --color-voice-t: #d6e9c2;

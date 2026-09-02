@@ -124,4 +124,122 @@ describe('AgendaList — event type badge (#194/#202)', () => {
 	});
 });
 
+// ─── #211 RED — event type badges become COLOR-CODED (mvox palette) ──────────
+//
+// PO ruling (Gama, 2026-09-02): six hued types (rehearsal/concert/festival/
+// retreat/workshop/meeting), social+other keep the quiet default; badge color
+// ONLY — no row tint, no icons; the label text ALWAYS stays on the badge; ONE
+// scheme (src/lib/events/eventTypeStyles.ts — pinned in eventTypeStyles.spec.ts)
+// consumed by the recent badge, the upcoming badge, the event-detail badge and
+// later #214's chips.
+//
+// At RED the module is absent, so Vite's import-analysis fails this WHOLE
+// file (the #194/#202 assertions above included). GREEN restores every one of
+// them — badge textContent stays unchanged; only classes change.
+const stylesModule = () =>
+	import('$lib/events/eventTypeStyles') as Promise<{
+		eventTypeBadgeClass: (type: string | undefined) => string;
+	}>;
+
+function expectClasses(badge: HTMLElement, classString: string) {
+	for (const cls of classString.split(/\s+/)) {
+		expect(badge.classList.contains(cls), `badge missing class '${cls}'`).toBe(true);
+	}
+}
+
+const noTypeToken = (el: Element) =>
+	expect(
+		[...el.classList].filter((cls) => cls.includes('type-')),
+		`unexpected type-* classes on <${el.tagName.toLowerCase()} data-testid="${el.getAttribute('data-testid')}">`
+	).toEqual([]);
+
+describe('AgendaList — event type badge COLORS (#211)', () => {
+	it('an UPCOMING rehearsal badge carries the rehearsal scheme classes; a social badge the quiet default', async () => {
+		const { eventTypeBadgeClass } = await stylesModule();
+		const { container } = render(AgendaList, {
+			items: [
+				item('r1', '2026-06-15T09:00:00.000Z', { eventType: 'rehearsal' }),
+				item('s1', '2026-06-16T18:00:00.000Z', { eventType: 'social' })
+			]
+		});
+
+		const rehearsalBadge = rowBadge(container, 'agenda-row-r1', 'r1')!;
+		expect(rehearsalBadge).not.toBeNull();
+		expectClasses(rehearsalBadge, eventTypeBadgeClass('rehearsal'));
+		// Color is an ADDITION: the localized label text stays on the badge.
+		expect(rehearsalBadge.textContent?.trim()).toBe('[msg:rehearsal]');
+
+		const socialBadge = rowBadge(container, 'agenda-row-s1', 's1')!;
+		expect(socialBadge).not.toBeNull();
+		expectClasses(socialBadge, eventTypeBadgeClass('social'));
+		// The quiet default carries NO type-* token at all.
+		noTypeToken(socialBadge);
+	});
+
+	it('a RECENT rehearsal badge carries the same scheme classes; a recent social badge the default', async () => {
+		const { eventTypeBadgeClass } = await stylesModule();
+		const { container } = render(AgendaList, {
+			items: [],
+			recentItems: [
+				item('past-r', '2026-06-01T09:00:00.000Z', { eventType: 'rehearsal' }),
+				item('past-s', '2026-06-02T18:00:00.000Z', { eventType: 'social' })
+			]
+		});
+
+		const rehearsalBadge = rowBadge(container, 'agenda-recent-row-past-r', 'past-r')!;
+		expect(rehearsalBadge).not.toBeNull();
+		expectClasses(rehearsalBadge, eventTypeBadgeClass('rehearsal'));
+		expect(rehearsalBadge.textContent?.trim()).toBe('[msg:rehearsal]');
+
+		const socialBadge = rowBadge(container, 'agenda-recent-row-past-s', 'past-s')!;
+		expect(socialBadge).not.toBeNull();
+		expectClasses(socialBadge, eventTypeBadgeClass('social'));
+		noTypeToken(socialBadge);
+	});
+
+	it('the badge base classes (shape, font, uppercase) stay shared across hued and default badges', async () => {
+		await stylesModule(); // RED gate: this test is about #211's markup contract
+		const { container } = render(AgendaList, {
+			items: [
+				item('r1', '2026-06-15T09:00:00.000Z', { eventType: 'rehearsal' }),
+				item('s1', '2026-06-16T18:00:00.000Z', { eventType: 'social' })
+			]
+		});
+		const base = ['w-fit', 'rounded-full', 'border', 'px-1.5', 'py-0.5', 'font-mono', 'uppercase'];
+		for (const id of ['r1', 's1']) {
+			const badge = rowBadge(container, `agenda-row-${id}`, id)!;
+			for (const cls of base) {
+				expect(badge.classList.contains(cls), `badge ${id} missing base class '${cls}'`).toBe(true);
+			}
+		}
+	});
+
+	// Gama ruling (3): badge color ONLY — no row-level tint, no icons.
+	it('GUARD: no type-* token leaks onto the ROW element, and no icon element inside the badge', async () => {
+		await stylesModule(); // RED gate: guards belong to #211's contract
+		const { container } = render(AgendaList, {
+			items: [item('r1', '2026-06-15T09:00:00.000Z', { eventType: 'rehearsal' })],
+			recentItems: [item('past-c', '2026-06-01T16:00:00.000Z', { eventType: 'concert' })]
+		});
+
+		for (const rowTestid of ['agenda-row-r1', 'agenda-recent-row-past-c']) {
+			const row = container.querySelector<HTMLElement>(`[data-testid="${rowTestid}"]`);
+			expect(row).not.toBeNull();
+			noTypeToken(row!);
+		}
+
+		for (const itemId of ['r1', 'past-c']) {
+			const badge = container.querySelector<HTMLElement>(
+				`[data-testid="event-type-badge-${itemId}"]`
+			);
+			expect(badge).not.toBeNull();
+			// The badge holds TEXT only: no svg/img/child element (icons ruled out),
+			// no emoji/glyph prepended to the label.
+			expect(badge!.children.length).toBe(0);
+			expect(badge!.querySelector('svg, img')).toBeNull();
+		}
+	});
+});
+
 // (*MVOX:Palestrina* — #194/#202 RED)
+// (*MVOX:Tallis* — #211 RED)

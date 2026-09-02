@@ -2173,3 +2173,67 @@ describe('/event/[id] — "Add to programme" picker shows composer (#204)', () =
 // (*MVOX:Tallis* — #103 TE.3 RED)
 // (*MVOX:Palestrina* — #103 TE.3 review round 2, F1–F4)
 // (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
+
+// ─── #211 RED — the event-detail badge consumes the SAME color scheme ────────
+//
+// Gama ruling (4): one scheme, three consumers — agenda row badge, event
+// detail badge, #214 chips. At RED the scheme module is absent, so Vite's
+// import-analysis fails this WHOLE file; GREEN restores every suite above —
+// the existing translated-badge toContain assertions must come back green
+// (color never displaces the label text).
+describe('/event/[id] — type badge color scheme (#211)', () => {
+	const styles = () =>
+		import('$lib/events/eventTypeStyles') as Promise<{
+			eventTypeBadgeClass: (type: string | undefined) => string;
+		}>;
+
+	const expectClasses = (badge: Element, classString: string) => {
+		for (const cls of classString.split(/\s+/)) {
+			expect(badge.classList.contains(cls), `badge missing class '${cls}'`).toBe(true);
+		}
+	};
+
+	it("a rehearsal's badge carries eventTypeBadgeClass('rehearsal') — label text intact", async () => {
+		const { eventTypeBadgeClass } = await styles();
+		const { container } = renderEventPage();
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-type"]')).not.toBeNull();
+		});
+		const badge = container.querySelector('[data-testid="event-detail-type"]')!;
+		expectClasses(badge, eventTypeBadgeClass('rehearsal'));
+		// The localized label STAYS on the badge (same assertion shape as the
+		// translated-badge suite above — color is an addition, never the carrier).
+		expect(badge.textContent).toContain('[event_type_rehearsal]');
+		// Icons ruled out: the badge holds text only.
+		expect(badge.children.length).toBe(0);
+	});
+
+	it("a social event's badge keeps the quiet default — no type-* token at all", async () => {
+		const { eventTypeBadgeClass } = await styles();
+		const { container } = renderEventPage({
+			event: eventEntity({ event_type: [{ string: 'social' }] })
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-type"]')).not.toBeNull();
+		});
+		const badge = container.querySelector('[data-testid="event-detail-type"]')!;
+		expectClasses(badge, eventTypeBadgeClass('social'));
+		expect([...badge.classList].filter((cls) => cls.includes('type-'))).toEqual([]);
+	});
+
+	it("an UNKNOWN free-text type ('flashmob') keeps the quiet default and its raw label", async () => {
+		const { eventTypeBadgeClass } = await styles();
+		const { container } = renderEventPage({
+			event: eventEntity({ event_type: [{ string: 'flashmob' }] })
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-type"]')).not.toBeNull();
+		});
+		const badge = container.querySelector('[data-testid="event-detail-type"]')!;
+		expectClasses(badge, eventTypeBadgeClass(undefined));
+		expect([...badge.classList].filter((cls) => cls.includes('type-'))).toEqual([]);
+		expect(badge.textContent).toContain('flashmob');
+	});
+});
+
+// (*MVOX:Tallis* — #211 RED: event-detail badge joins the type color scheme)

@@ -6,6 +6,8 @@
 	// #194/#202 — the SHARED type-label map (same one the event detail page
 	// uses, #101 F3 taught us what an unlocalized type string costs).
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
+	// #211 — the SAME color scheme the event detail badge consumes.
+	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from './RsvpControl.svelte';
 	import RepertoireElement from './RepertoireElement.svelte';
@@ -345,7 +347,7 @@
 					{#if item.eventType}
 						<span
 							data-testid="event-type-badge-{item.id}"
-							class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
+							class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(item.eventType)}"
 						>
 							{eventTypeLabel(item.eventType)}
 						</span>
@@ -463,7 +465,7 @@
 							{#if item.eventType}
 								<span
 									data-testid="event-type-badge-{item.id}"
-									class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
+									class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(item.eventType)}"
 								>
 									{eventTypeLabel(item.eventType)}
 								</span>

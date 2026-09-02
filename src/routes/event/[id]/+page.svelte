@@ -23,6 +23,8 @@
 	// (was inline here only, #101 review F3; a second inline copy is exactly
 	// the drift class the WorkRow/AttendanceBadge cleanups already paid for).
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
+	// #211 — the SAME color scheme the agenda badges consume.
+	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	// #203 — the delete button's write call. Imported from seasonManage
 	// directly (NOT re-exported by this page's other imports from that module)
@@ -1699,7 +1701,7 @@
 				{#if detail.eventType}
 					<span
 						data-testid="event-detail-type"
-						class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
+						class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(detail.eventType)}"
 					>
 						{eventTypeLabel(detail.eventType)}
 					</span>
