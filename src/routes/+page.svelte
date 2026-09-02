@@ -61,6 +61,7 @@
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { getLocale } from '$lib/paraglide/runtime.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
@@ -3924,7 +3925,8 @@
 	let seriesCreateFrom = $state('');
 	let seriesCreateUntil = $state('');
 	let seriesCreateGenerate = $state(false);
-	let seriesCreateSkipDateInput = $state('');
+	/** #215 — the ONLY skip mechanism now: toggled by tapping a candidate-date
+	 *  chip in the preview grid. No separate input/Add/removable-chip UI. */
 	let seriesCreateSkipDates = $state<string[]>([]);
 	let seriesCreateSubmitting = $state(false);
 	/**
@@ -4203,6 +4205,10 @@
 	 * recomputed on every param change via `$derived`. `null` (no render) unless
 	 * generation is ON AND time/from/until are set — plus a day WHEN THE PATTERN
 	 * USES ONE. An incomplete recurrence has nothing determinate to preview yet.
+	 *
+	 * #215 — this is now the SKIP-APPLIED set: it feeds the live count line and
+	 * the submit-disabled gate (Gama ruling 2 — all chips toggled off means this
+	 * comes back `[]`), never the grid itself.
 	 */
 	const seriesCreatePreviewDates = $derived.by(() => {
 		if (!seriesCreateGenerate) return null;
@@ -4221,28 +4227,104 @@
 	});
 
 	/**
-	 * The dates the preview actually LISTS — #132/T5 review F3.
-	 *
-	 * After a stopped run the count line is suppressed in favour of the resume
-	 * notice ("2 remaining of 3"), but the rows underneath kept coming from the
-	 * FULL recomputed set, so a run that stopped at 2 of 3 showed three dates
-	 * while a re-submit would create one. The list and the notice must describe
-	 * the SAME set: while `seriesCreateResume` is non-null that set is exactly
-	 * `remaining` — what submit will write.
+	 * #215 — every CANDIDATE occurrence, ignoring `seriesCreateSkipDates`
+	 * entirely: the chip grid renders this set (skipped chips stay rendered,
+	 * merely struck), never the skip-applied one above. Same gating as
+	 * `seriesCreatePreviewDates` (`null` unless generation is ON and the
+	 * recurrence is complete) so the two stay in lockstep on when a preview
+	 * exists at all — they differ only in which dates they list.
 	 */
-	const seriesCreatePreviewRows = $derived.by(() => {
-		if (seriesCreatePreviewDates === null) return null;
-		return seriesCreateResume ? seriesCreateResume.remaining : seriesCreatePreviewDates;
+	const seriesCreateCandidateDates = $derived.by(() => {
+		if (!seriesCreateGenerate) return null;
+		if (seriesCreateDayApplies && seriesCreateDay === '') return null;
+		if (!seriesCreateTime || !seriesCreateFrom || !seriesCreateUntil) {
+			return null;
+		}
+		return generateEventDates({
+			repeat: seriesCreateRepeat,
+			dayOfWeek: seriesCreateDayOfWeek,
+			timeOfDay: seriesCreateTime,
+			from: seriesCreateFrom,
+			until: seriesCreateUntil,
+			skipDates: []
+		});
 	});
 
+	/**
+	 * The dates the GRID actually renders — #132/T5 review F3, carried over by
+	 * #215. After a stopped run the chips must describe exactly what a
+	 * re-submit will create (`seriesCreateResume.remaining`), locked and all —
+	 * never the full recomputed candidate set, which could disagree with the
+	 * resume notice sitting right above it.
+	 */
+	const seriesCreateGridDates = $derived.by(() => {
+		if (seriesCreateCandidateDates === null) return null;
+		return seriesCreateResume ? seriesCreateResume.remaining : seriesCreateCandidateDates;
+	});
+
+	/**
+	 * #215 Gama ruling (2) — every candidate toggled OFF BY HAND leaves nothing
+	 * to submit; the count line already reads the 0 form, this wires that into
+	 * the button. Deliberately NOT the same trigger as "the recurrence itself
+	 * yields zero candidates" (Mondays over a Tue–Sun range): that case must
+	 * still let submit run so `submitSeriesCreate`'s own check can refuse it
+	 * with `series_create_no_dates` — a DIFFERENT message than the 0-count
+	 * line, per Gama's ruling. So this only engages once there is at least one
+	 * CANDIDATE (`seriesCreateCandidateDates.length > 0`) and toggling has
+	 * emptied the active set.
+	 *
+	 * Never true while a stopped run is resumable — the remainder there is
+	 * never empty (an empty remainder would already have closed the form out)
+	 * and submit must stay live to finish it.
+	 */
+	const seriesCreateNothingToSubmit = $derived(
+		!seriesCreateResume &&
+			seriesCreateCandidateDates !== null &&
+			seriesCreateCandidateDates.length > 0 &&
+			seriesCreatePreviewDates !== null &&
+			seriesCreatePreviewDates.length === 0
+	);
+
 	/** `date` (a `generateEventDates` 'YYYY-MM-DDTHH:MM' local string) as an ISO
-	 *  calendar day — the preview row testid and the skip-chip's own shape.
+	 *  calendar day — the chip's own testid/text shape (#215 — used to be the
+	 *  preview row's).
 	 *  #141 — a plain slice, never a `Date` readback: `generateEventDates`
 	 *  itself now emits the local string directly (see recurrence.ts's module
 	 *  doc) precisely so no caller reconstructs a `Date` at the occurrence's
 	 *  hour and risks the DST spring-forward normalization. */
 	function seriesCreateIsoDay(date: string): string {
 		return date.slice(0, 10);
+	}
+
+	/** #215 — `seriesCreateGridDates` grouped by calendar month (`YYYY-MM`),
+	 *  preserving ascending order (the generator already emits ascending, so a
+	 *  simple run-length grouping suffices — no sort). Each group carries the
+	 *  display-only month heading's key alongside its own dates so the grid can
+	 *  render `<h4>` + chips per month without re-scanning the full list per
+	 *  group (`$derived`, not a template-level filter). */
+	const seriesCreateMonthGroups = $derived.by(() => {
+		if (seriesCreateGridDates === null) return null;
+		const groups: { month: string; dates: string[] }[] = [];
+		for (const date of seriesCreateGridDates) {
+			const month = seriesCreateIsoDay(date).slice(0, 7);
+			const current = groups[groups.length - 1];
+			if (current && current.month === month) {
+				current.dates.push(date);
+			} else {
+				groups.push({ month, dates: [date] });
+			}
+		}
+		return groups;
+	});
+
+	/** `month` ('YYYY-MM') as a LOCALIZED month name (Intl, app locale) — the
+	 *  display-only heading's text. Never the raw machine form the testid
+	 *  already carries (#215 review pin). */
+	function seriesCreateMonthLabel(month: string): string {
+		const [year, monthNum] = month.split('-').map(Number);
+		return new Intl.DateTimeFormat(getLocale(), { month: 'long', year: 'numeric' }).format(
+			new Date(year, monthNum - 1, 1)
+		);
 	}
 
 	/** Opened ONLY from inside the panel — `manageableSeasonId` is always the
@@ -4280,7 +4362,6 @@
 		seriesCreateFrom = seasonManageStartDate;
 		seriesCreateUntil = seasonManageEndDate;
 		seriesCreateGenerate = false;
-		seriesCreateSkipDateInput = '';
 		seriesCreateSkipDates = [];
 		seriesCreateProgress = null;
 		// #138 review F1 — NO resume clear here. `createEntryPointsBlocked` above
@@ -4377,7 +4458,6 @@
 		seriesCreateFrom = form.from;
 		seriesCreateUntil = form.until;
 		seriesCreateSkipDates = [...form.skipDates];
-		seriesCreateSkipDateInput = '';
 		// A resume record only ever exists for a GENERATING run (a series-only
 		// create has nothing left to owe), and the preview/notice both need it on.
 		seriesCreateGenerate = true;
@@ -4420,17 +4500,16 @@
 		dismissSeriesCreateForm();
 	}
 
-	function addSeriesCreateSkipDate(): void {
-		const value = seriesCreateSkipDateInput.trim();
-		if (!value) return;
-		if (!seriesCreateSkipDates.includes(value)) {
-			seriesCreateSkipDates = [...seriesCreateSkipDates, value].sort();
-		}
-		seriesCreateSkipDateInput = '';
-	}
-
-	function removeSeriesCreateSkipDate(date: string): void {
-		seriesCreateSkipDates = seriesCreateSkipDates.filter((d) => d !== date);
+	/** #215 — the chip IS the skip mechanism: tapping a candidate date toggles
+	 *  it in/out of `seriesCreateSkipDates`. Inert while `seriesCreateLocked`
+	 *  (a resumable run's remainder is frozen with the rest of the form) — the
+	 *  chips there are also `disabled`, but the handler no-ops defensively
+	 *  rather than trust that alone. */
+	function toggleSeriesCreateSkipDate(iso: string): void {
+		if (seriesCreateLocked) return;
+		seriesCreateSkipDates = seriesCreateSkipDates.includes(iso)
+			? seriesCreateSkipDates.filter((d) => d !== iso)
+			: [...seriesCreateSkipDates, iso].sort();
 	}
 
 	/**
@@ -5535,88 +5614,62 @@
 												{m.series_create_generate_label()}
 											</label>
 
-											<p
-												data-testid="series-create-skip-heading"
-												class="text-xs tracking-wide text-ink-2 uppercase"
-											>
-												{m.series_create_skip_heading()}
-											</p>
-											<div class="flex items-center gap-2">
-												<input
-													type="date"
-													data-testid="series-create-skip-date"
-													aria-label={m.series_create_skip_date_label()}
-													disabled={seriesCreateLocked}
-													value={seriesCreateSkipDateInput}
-													oninput={(e) =>
-														(seriesCreateSkipDateInput = (
-															e.currentTarget as HTMLInputElement
-														).value)}
-													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-												/>
-												<button
-													type="button"
-													data-testid="series-create-skip-add"
-													disabled={seriesCreateLocked}
-													class="flex min-h-11 min-w-11 items-center justify-center text-xs text-ink underline disabled:opacity-50"
-													onclick={addSeriesCreateSkipDate}
-												>
-													{m.series_create_skip_add()}
-												</button>
-											</div>
-											{#if seriesCreateSkipDates.length > 0}
-												<ul data-testid="series-create-skip-list" class="flex flex-wrap gap-1.5">
-													{#each seriesCreateSkipDates as date (date)}
-														<!-- #132/T6 review F2 — icon-only ×, 44x44 (see the conductor chip). -->
-														<li
-															data-testid="series-create-skip-{date}"
-															class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
-														>
-															{date}
-															<button
-																type="button"
-																data-testid="series-create-skip-remove-{date}"
-																aria-label={m.series_create_skip_remove({ date })}
-																disabled={seriesCreateLocked}
-																class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
-																onclick={() => removeSeriesCreateSkipDate(date)}
-															>
-																&times;
-															</button>
-														</li>
-													{/each}
-												</ul>
-											{/if}
-
-											{#if seriesCreatePreviewRows !== null}
+											{#if seriesCreateMonthGroups !== null}
+												<!-- #215 — the preview lists EVERY candidate date as a native
+												     toggle chip; tapping one skips it (struck + muted, still
+												     rendered) instead of routing through a separate skip input.
+												     Gama ruling (1): wrapping grid, NO inner scroll region — a
+												     90-date daily season stays flat, grouped by month under a
+												     display-only heading. -->
 												<div data-testid="series-create-preview" class="text-xs text-ink-2">
 													<p class="tracking-wide uppercase">
 														{m.series_create_preview_label()}
 													</p>
-													<!-- The count says up front what submit will do; a daily series
-													     across a season is ~90 rows, so the list scrolls INSIDE the
-													     form rather than pushing submit/cancel off a phone screen.
+													<!-- The count says up front what submit will do.
 													     Suppressed once a stopped run is resumable: submit would then
 													     create only the remainder, and the resume notice below is the
 													     number that applies. -->
-													{#if !seriesCreateResume}
+													{#if !seriesCreateResume && seriesCreatePreviewDates !== null}
 														<p data-testid="series-create-preview-count" class="text-ink">
-															{seriesCreatePreviewRows.length === 1
+															{seriesCreatePreviewDates.length === 1
 																? m.series_create_preview_count_one()
 																: m.series_create_preview_count_other({
-																		count: seriesCreatePreviewRows.length
+																		count: seriesCreatePreviewDates.length
 																	})}
 														</p>
 													{/if}
-													<!-- Review F3 — the ROWS come from `seriesCreatePreviewRows`, which
-													     is the REMAINDER while a stopped run is resumable. Listing the
-													     full recomputed set there contradicted the resume notice right
-													     under it: three dates shown, one event actually created. -->
-													<div class="max-h-32 overflow-y-auto">
-														{#each seriesCreatePreviewRows as date (date)}
-															<p data-testid="series-create-preview-date-{seriesCreateIsoDay(date)}">
-																{seriesCreateIsoDay(date)}
-															</p>
+													<div class="flex flex-col gap-2">
+														{#each seriesCreateMonthGroups as group (group.month)}
+															<div class="flex flex-col gap-1.5">
+																<h4
+																	data-testid="series-create-month-{group.month}"
+																	class="text-xs tracking-wide text-ink-2 uppercase"
+																>
+																	{seriesCreateMonthLabel(group.month)}
+																</h4>
+																<div class="flex flex-wrap gap-1.5">
+																	{#each group.dates as date (date)}
+																		{@const iso = seriesCreateIsoDay(date)}
+																		{@const skipped =
+																			!seriesCreateResume && seriesCreateSkipDates.includes(iso)}
+																		<button
+																			type="button"
+																			data-testid="series-create-date-{iso}"
+																			aria-pressed={skipped ? 'false' : 'true'}
+																			aria-label={skipped
+																				? m.series_create_date_skipped({ date: iso })
+																				: undefined}
+																			disabled={seriesCreateLocked}
+																			class="flex min-h-11 min-w-11 items-center justify-center border border-ink-5 px-1.5 text-xs disabled:opacity-50 {skipped
+																				? 'text-ink-2 line-through'
+																				: 'text-ink'}"
+																			onclick={() => toggleSeriesCreateSkipDate(iso)}
+																		>
+																			{iso}
+																		</button>
+																	{/each}
+																</div>
+															</div>
 														{/each}
 													</div>
 												</div>
@@ -5655,7 +5708,7 @@
 												<button
 													type="button"
 													data-testid="series-create-submit"
-													disabled={seriesCreateSubmitting}
+													disabled={seriesCreateSubmitting || seriesCreateNothingToSubmit}
 													aria-busy={seriesCreateSubmitting}
 													class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 													onclick={() => void submitSeriesCreate()}

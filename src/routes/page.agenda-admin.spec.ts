@@ -1593,8 +1593,8 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 	// #132/T6 review F2 — the contract is EVERY admin button, not only the entry
 	// points and the submit/cancel pairs. These are the rest of them: the panel's
 	// three inline-edit pencils, the conductor chip × in all three places it
-	// appears, and the series form's two skip-date controls. All icon-only bar
-	// [+ Add], so all need the WIDTH floor too.
+	// appears, and (#215) the series preview's date-toggle chips, which replaced
+	// the skip-date input + [Add] + removable chips wholesale.
 	it('panel inline-edit activators (#205 — whole-field now, no icon-only width floor: name, start date, end date)', async () => {
 		const container = await renderReady();
 		await openPanel(container);
@@ -1641,19 +1641,32 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 		expectTouchTarget(container, 'event-create-conductor-remove-p-ada', { iconOnly: true });
 	});
 
-	it('series form skip-date controls: [+ Add] and each chip’s × (icon-only)', async () => {
+	it('#215 series preview date-toggle chips: every chip carries the FULL 44x44 floor (min-h-11 AND min-w-11 — a tap target, not a text link), skipped or not; the retired skip-add/skip-remove controls are gone', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-
-		expectTouchTarget(container, 'series-create-skip-add', { iconOnly: true });
-
-		await fill(container, 'series-create-skip-date', '2026-09-14');
-		await fireEvent.click(q(container, 'series-create-skip-add') as HTMLElement);
+		await fillValidSeries(container);
+		await enableMondayGeneration(container);
 		await waitFor(() => {
-			expect(q(container, 'series-create-skip-remove-2026-09-14')).not.toBeNull();
+			expect(q(container, 'series-create-date-2026-09-07')).not.toBeNull();
 		});
 
-		expectTouchTarget(container, 'series-create-skip-remove-2026-09-14', { iconOnly: true });
+		for (const iso of ['2026-09-07', '2026-09-14', '2026-09-21']) {
+			expectTouchTarget(container, `series-create-date-${iso}`, { iconOnly: true });
+		}
+
+		// A SKIPPED chip is still a tap target — restoring it is the same tap.
+		await fireEvent.click(q(container, 'series-create-date-2026-09-14') as HTMLElement);
+		await waitFor(() => {
+			expect(
+				q(container, 'series-create-date-2026-09-14')?.getAttribute('aria-pressed')
+			).toBe('false');
+		});
+		expectTouchTarget(container, 'series-create-date-2026-09-14', { iconOnly: true });
+
+		// The controls this grid replaced must be gone from the form entirely.
+		expect(q(container, 'series-create-skip-add')).toBeNull();
+		expect(q(container, 'series-create-skip-date')).toBeNull();
+		expect(container.querySelector('[data-testid^="series-create-skip-remove-"]')).toBeNull();
 	});
 
 	// #136 — the generate checkbox, the one non-button the contract covers (see

@@ -104,14 +104,29 @@
 //                                 panel season's end date
 //     series-create-generate      checkbox, UNCHECKED by default — ON enables
 //                                 the preview + the bulk generator
-//     series-create-skip-date     <input type="date"> — the skip picker
-//     series-create-skip-add      adds the picked date to the skip set
-//     series-create-skip-<date>   one chip per skipped date
-//     series-create-skip-remove-<date>  the chip's remove button
 //     series-create-preview       the live preview container — renders IFF
 //                                 generate is ON and day/time/from/until are
 //                                 all set; updates as params change ($derived)
-//     series-create-preview-date-<YYYY-MM-DD>  one row per generated date
+//     series-create-date-<YYYY-MM-DD>  #215 — ONE CHIP PER CANDIDATE DATE
+//                                 (generateEventDates WITHOUT skipDates): a
+//                                 native <button type="button"> whose text is
+//                                 the ISO date verbatim (#207 rule 7),
+//                                 aria-pressed={!skipped}. Tapping toggles the
+//                                 date in/out of `seriesCreateSkipDates` —
+//                                 skipped chips STAY RENDERED, struck + muted
+//                                 (line-through + text-ink-2), aria-pressed
+//                                 "false". 44x44 floor (min-h-11 min-w-11).
+//                                 The toggle IS the skip mechanism: there is
+//                                 NO separate skip input / Add / removable
+//                                 chip UI any more (#215 supersedes #200
+//                                 wholesale; the four series_create_skip_*
+//                                 message keys leave all four locales).
+//     series-create-month-<YYYY-MM>  #215 — display-only <h4> month heading
+//                                 grouping the chips; localized month name
+//                                 (Intl, app locale), never a toggle. The
+//                                 grid WRAPS — no inner scroll region: no
+//                                 max-h-* / overflow-y-auto class anywhere
+//                                 on or under series-create-preview.
 //     series-create-progress      role="status" — bulk progress indicator
 //     series-create-submit        fires the write(s)
 //     series-create-cancel        closes the form; nothing written
@@ -123,8 +138,17 @@
 //     series_create_duration_required / series_create_day_required
 //     series_create_progress {current, total}
 //     series_create_bulk_failed {created, total}
+//     series_create_preview_count_one / series_create_preview_count_other
+//       {count} — the live count line; the ALL-TOGGLED-OFF state reads the
+//       0 form of the _other key ("Luuakse 0 sündmust"), NEVER
+//       series_create_no_dates (that key keeps meaning "the recurrence
+//       generated nothing" — Gama ruling, #215)
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// #215 locale-key scan (source scan, no rendering — the ux-polish precedent).
+import { readFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
+import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
 // Params (progress/failure counts) are surfaced as JSON so their NAMES and
@@ -423,10 +447,43 @@ async function enableMondayGeneration(container: HTMLElement): Promise<void> {
 	await selectValue(container, 'series-create-day', '1');
 }
 
+/** #215 — every rendered candidate-date CHIP, in document order, skipped or
+ *  not (a skipped chip stays in the DOM, merely struck + aria-pressed
+ *  "false"). While a stopped run is resumable the chips are the REMAINDER
+ *  (review F3's contract carries over unchanged). */
 function previewDates(container: HTMLElement): string[] {
-	return [...container.querySelectorAll('[data-testid^="series-create-preview-date-"]')].map(
-		(el) => el.getAttribute('data-testid')?.replace('series-create-preview-date-', '') ?? ''
+	return [...container.querySelectorAll('[data-testid^="series-create-date-"]')].map(
+		(el) => el.getAttribute('data-testid')?.replace('series-create-date-', '') ?? ''
 	);
+}
+
+/** The chip for one candidate date. */
+function dateChip(container: HTMLElement, iso: string): HTMLButtonElement | null {
+	return container.querySelector(`[data-testid="series-create-date-${iso}"]`);
+}
+
+/** Tap a candidate-date chip — the ONLY skip mechanism since #215. */
+async function toggleDate(container: HTMLElement, iso: string): Promise<void> {
+	const chip = dateChip(container, iso);
+	expect(chip, `chip series-create-date-${iso} must be rendered`).not.toBeNull();
+	await fireEvent.click(chip as HTMLButtonElement);
+}
+
+/** The candidate dates currently ACTIVE (aria-pressed "true"), in order. */
+function activeDates(container: HTMLElement): string[] {
+	return [...container.querySelectorAll('[data-testid^="series-create-date-"]')]
+		.filter((el) => el.getAttribute('aria-pressed') === 'true')
+		.map((el) => el.getAttribute('data-testid')?.replace('series-create-date-', '') ?? '');
+}
+
+/** Month headings + chips in DOCUMENT ORDER, as testid suffixes — pins that
+ *  each chip sits under ITS month's heading, not just that both exist. */
+function gridSequence(container: HTMLElement): string[] {
+	return [
+		...container.querySelectorAll(
+			'[data-testid^="series-create-month-"], [data-testid^="series-create-date-"]'
+		)
+	].map((el) => el.getAttribute('data-testid') ?? '');
 }
 
 /** The input object the page handed createEventSeries on its most recent call. */
@@ -484,7 +541,7 @@ describe('season panel — the [+ Series] entry point', () => {
 // ── the form's fields (design sketch D) ─────────────────────────────────────────
 
 describe('season panel — the series form carries every sketch-D field', () => {
-	it('name (text), type (#199: canonical select, PRE-SELECTED rehearsal — see page.event-type-picker.spec.ts for the full picker contract), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates), generate (checkbox), skip picker', async () => {
+	it('name (text), type (#199: canonical select, PRE-SELECTED rehearsal — see page.event-type-picker.spec.ts for the full picker contract), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates), generate (checkbox) — and NO skip picker (#215: the chips are the skip mechanism)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 
@@ -556,8 +613,13 @@ describe('season panel — the series form carries every sketch-D field', () => 
 		expect((q(container, 'series-create-from') as HTMLInputElement).type).toBe('date');
 		expect((q(container, 'series-create-until') as HTMLInputElement).type).toBe('date');
 		expect((q(container, 'series-create-generate') as HTMLInputElement).type).toBe('checkbox');
-		expect((q(container, 'series-create-skip-date') as HTMLInputElement).type).toBe('date');
-		expect(q(container, 'series-create-skip-add')).not.toBeNull();
+		// #215 — the skip picker is GONE: the preview's date chips are the skip
+		// mechanism now. No input, no Add, no removable chip list, no heading.
+		expect(q(container, 'series-create-skip-date')).toBeNull();
+		expect(q(container, 'series-create-skip-add')).toBeNull();
+		expect(q(container, 'series-create-skip-list')).toBeNull();
+		expect(q(container, 'series-create-skip-heading')).toBeNull();
+		expect(container.querySelector('[data-testid^="series-create-skip-remove-"]')).toBeNull();
 	});
 
 	it('from/until default to the SEASON dates — the sketch-D pin — so a fresh form already spans the season', async () => {
@@ -598,6 +660,28 @@ describe('season panel — the recurrence preview is live and real', () => {
 			'2026-11-23',
 			'2026-11-30'
 		]);
+		// #215 — three months, three headings, every chip under ITS month's
+		// heading: the FULL document-order sequence, not a mere co-existence.
+		expect(gridSequence(container)).toEqual([
+			'series-create-month-2026-09',
+			'series-create-date-2026-09-07',
+			'series-create-date-2026-09-14',
+			'series-create-date-2026-09-21',
+			'series-create-date-2026-09-28',
+			'series-create-month-2026-10',
+			'series-create-date-2026-10-05',
+			'series-create-date-2026-10-12',
+			'series-create-date-2026-10-19',
+			'series-create-date-2026-10-26',
+			'series-create-month-2026-11',
+			'series-create-date-2026-11-02',
+			'series-create-date-2026-11-09',
+			'series-create-date-2026-11-16',
+			'series-create-date-2026-11-23',
+			'series-create-date-2026-11-30'
+		]);
+		// Fresh preview: every candidate is ACTIVE.
+		expect(activeDates(container)).toEqual(previewDates(container));
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
 	});
@@ -625,7 +709,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 		});
 	});
 
-	it('adding a SKIP date chips it and drops it from the preview; removing the chip restores it', async () => {
+	it('#215 — tapping a chip SKIPS it: aria-pressed flips to "false", the chip stays RENDERED (struck + muted), the other chips are untouched; tapping again restores it', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillTime(container, 'series-create-time', '19:00');
@@ -636,19 +720,108 @@ describe('season panel — the recurrence preview is live and real', () => {
 			expect(previewDates(container)).toHaveLength(4);
 		});
 
-		await fill(container, 'series-create-skip-date', '2026-09-14');
-		await fireEvent.click(q(container, 'series-create-skip-add') as HTMLElement);
+		await toggleDate(container, '2026-09-14');
 
 		await waitFor(() => {
-			expect(q(container, 'series-create-skip-2026-09-14')).not.toBeNull();
+			expect(dateChip(container, '2026-09-14')?.getAttribute('aria-pressed')).toBe('false');
 		});
-		expect(previewDates(container)).toEqual(['2026-09-07', '2026-09-21', '2026-09-28']);
+		// The skipped date does NOT leave the grid — greyed/struck, still there.
+		expect(previewDates(container)).toEqual([
+			'2026-09-07',
+			'2026-09-14',
+			'2026-09-21',
+			'2026-09-28'
+		]);
+		expect(activeDates(container)).toEqual(['2026-09-07', '2026-09-21', '2026-09-28']);
+		const skipped = dateChip(container, '2026-09-14') as HTMLButtonElement;
+		const skippedClasses = Array.from(skipped.classList);
+		expect(skippedClasses).toContain('line-through');
+		expect(skippedClasses).toContain('text-ink-2');
+		expect(skipped.textContent?.trim()).toBe('2026-09-14');
 
-		await fireEvent.click(q(container, 'series-create-skip-remove-2026-09-14') as HTMLElement);
+		// Tap again: restored — pressed, unstruck.
+		await toggleDate(container, '2026-09-14');
 		await waitFor(() => {
-			expect(q(container, 'series-create-skip-2026-09-14')).toBeNull();
+			expect(dateChip(container, '2026-09-14')?.getAttribute('aria-pressed')).toBe('true');
 		});
-		expect(previewDates(container)).toHaveLength(4);
+		expect(Array.from((dateChip(container, '2026-09-14') as HTMLElement).classList)).not.toContain(
+			'line-through'
+		);
+		expect(activeDates(container)).toHaveLength(4);
+	});
+
+	it('#215 — chip anatomy: a NATIVE <button type="button"> (rules 1/2) with the bare ISO date as its text (rule 7) and the 44x44 floor (min-h-11 min-w-11); the month heading is a display-only <h4> with a LOCALIZED month name, never the raw YYYY-MM', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await waitFor(() => {
+			expect(previewDates(container)).toEqual(['2026-09-07', '2026-09-14', '2026-09-21']);
+		});
+
+		for (const iso of ['2026-09-07', '2026-09-14', '2026-09-21']) {
+			const chip = dateChip(container, iso) as HTMLButtonElement;
+			expect(chip.tagName).toBe('BUTTON');
+			expect(chip.getAttribute('type')).toBe('button');
+			expect(chip.getAttribute('aria-pressed')).toBe('true');
+			expect(chip.textContent?.trim()).toBe(iso);
+			const classes = Array.from(chip.classList);
+			expect(classes, `${iso} chip must reserve the 44px height floor`).toContain('min-h-11');
+			expect(classes, `${iso} chip must reserve the 44px width floor`).toContain('min-w-11');
+		}
+
+		const heading = q(container, 'series-create-month-2026-09') as HTMLElement;
+		expect(heading).not.toBeNull();
+		expect(heading.tagName).toBe('H4');
+		// Display only — not a control of any kind.
+		expect(heading.closest('button')).toBeNull();
+		const monthText = heading.textContent?.trim() ?? '';
+		// Localized month name via Intl (the app locale) — content is
+		// Comenius/Intl business, but it must EXIST and must not be the raw
+		// machine form the testid already carries.
+		expect(monthText).not.toBe('');
+		expect(monthText).not.toMatch(/^\d{4}-\d{2}$/);
+	});
+
+	it('#215 — the grid WRAPS instead of scrolling: no max-h-* / overflow scroll class anywhere on or under the preview; a 90-chip daily season renders 3 month headings and all 90 chips flat', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fill(container, 'series-create-name', 'Daily grind');
+		await fill(container, 'series-create-duration', '90');
+		await fillTime(container, 'series-create-time', '19:00');
+		await fill(container, 'series-create-from', '2026-09-01');
+		await fill(container, 'series-create-until', '2026-11-29');
+		await selectValue(container, 'series-create-repeat', 'daily');
+		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
+
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(90); // 30 + 31 + 29
+		});
+		expect(
+			[
+				...(q(container, 'series-create-preview') as HTMLElement).querySelectorAll(
+					'[data-testid^="series-create-month-"]'
+				)
+			].map((el) => el.getAttribute('data-testid'))
+		).toEqual([
+			'series-create-month-2026-09',
+			'series-create-month-2026-10',
+			'series-create-month-2026-11'
+		]);
+
+		// Gama ruling (1): NO inner scroll region inside the form — the grid
+		// wraps. Scan the preview container AND every descendant for the
+		// scroll-trap classes the old list carried (max-h-32 overflow-y-auto).
+		const preview = q(container, 'series-create-preview') as HTMLElement;
+		const scrollTrap = /^(max-h-|overflow-y-auto$|overflow-auto$|overflow-scroll$|overflow-y-scroll$)/;
+		for (const el of [preview, ...preview.querySelectorAll('*')]) {
+			const offending = Array.from((el as HTMLElement).classList ?? []).filter((c) =>
+				scrollTrap.test(c)
+			);
+			expect(offending, `no inner scroll region: <${el.tagName}> carries ${offending}`).toEqual(
+				[]
+			);
+		}
 	});
 
 	it('generate OFF → no preview, even with a complete recurrence; toggling it ON brings the preview up, OFF takes it down', async () => {
@@ -916,13 +1089,15 @@ describe('season panel — submit WITH generation bulk-creates the occurrences',
 		});
 	});
 
-	it('…and a SKIPPED first/last occurrence moves the bounds with it — the stored range is what was actually created', async () => {
+	it('…and a SKIPPED first/last occurrence moves the bounds with it — the stored range is what was actually created (#215: skipped by tapping its chip)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
 		await enableMondayGeneration(container);
-		await fill(container, 'series-create-skip-date', '2026-09-07');
-		await fireEvent.click(q(container, 'series-create-skip-add') as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(3);
+		});
+		await toggleDate(container, '2026-09-07');
 		await submit(container);
 
 		await waitFor(() => {
@@ -955,13 +1130,15 @@ describe('season panel — submit WITH generation bulk-creates the occurrences',
 		expect(maxInFlight).toBe(1);
 	});
 
-	it('the occurrences honour the SKIP set: skipping 2026-09-14 creates 2 events, not 3', async () => {
+	it('the occurrences honour the SKIP set: toggling 2026-09-14 OFF creates 2 events, not 3 (#215: the chip IS the skip input)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
 		await enableMondayGeneration(container);
-		await fill(container, 'series-create-skip-date', '2026-09-14');
-		await fireEvent.click(q(container, 'series-create-skip-add') as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(3);
+		});
+		await toggleDate(container, '2026-09-14');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1405,6 +1582,65 @@ describe('season panel — the preview counts, scrolls, and refuses an empty set
 		);
 	});
 
+	it('#215 — the count line tracks TOGGLES live: 3 chips, one toggled off → the _other form with count 2, exactly', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(3);
+		});
+		expect(q(container, 'series-create-preview-count')?.textContent?.trim()).toBe(
+			'series_create_preview_count_other {"count":3}'
+		);
+
+		await toggleDate(container, '2026-09-14');
+
+		await waitFor(() => {
+			expect(q(container, 'series-create-preview-count')?.textContent?.trim()).toBe(
+				'series_create_preview_count_other {"count":2}'
+			);
+		});
+	});
+
+	it('#215 Gama ruling (2) — ALL chips toggled off: submit DISABLED, the count line reads the 0 form of series_create_preview_count ("Luuakse 0 sündmust") and series_create_no_dates is NOT shown; toggling one back on re-enables submit', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await waitFor(() => {
+			expect(previewDates(container)).toEqual(['2026-09-07', '2026-09-14', '2026-09-21']);
+		});
+		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
+
+		await toggleDate(container, '2026-09-07');
+		await toggleDate(container, '2026-09-14');
+		await toggleDate(container, '2026-09-21');
+
+		await waitFor(() => {
+			expect(activeDates(container)).toEqual([]);
+		});
+		// The explanation is the count line itself — the 0 form, exactly.
+		expect(q(container, 'series-create-preview-count')?.textContent?.trim()).toBe(
+			'series_create_preview_count_other {"count":0}'
+		);
+		// series_create_no_dates keeps meaning "the RECURRENCE generated
+		// nothing" — it must NOT appear for an all-toggled-off set.
+		expect(container.textContent).not.toContain('series_create_no_dates');
+		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(true);
+		// Nothing was written by any of that.
+		await flush();
+		expect(createEventSeriesMock).not.toHaveBeenCalled();
+		expect(createEventMock).not.toHaveBeenCalled();
+
+		// One back on → submit lives again.
+		await toggleDate(container, '2026-09-14');
+		await waitFor(() => {
+			expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
+		});
+		expect(activeDates(container)).toEqual(['2026-09-14']);
+	});
+
 	it('a recurrence that yields NOTHING (Mondays over a Tue–Sun range) is REFUSED before the series is written — never a silent success with a childless series behind it', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
@@ -1569,9 +1805,9 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 			'series-create-time-hour',
 			'series-create-time-minute',
 			'series-create-from',
-			'series-create-until',
-			'series-create-skip-date',
-			'series-create-skip-add'
+			'series-create-until'
+			// #215 — the skip picker is gone; the date CHIPS going inert while
+			// locked is pinned in the '#215 — LOCKED' case below.
 		]) {
 			expect(
 				(q(container, testid) as HTMLInputElement | HTMLButtonElement | null)?.disabled
@@ -1935,39 +2171,20 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 	});
 });
 
-// ── #200 — skip-dates discoverability ──────────────────────────────────────────
+// ── #215 — the toggleable date grid replaces the skip-dates input ──────────────
 //
-// Crede pilot 2026-08-31: the skip picker rendered as a bare unlabeled date box
-// + "Add" button, and Joosep — following the runbook step that NAMES the
-// feature — could not find it. The controls existed; nothing on screen said
-// what they were. The fix under test: a VISIBLE heading over the skip section.
+// Mihkel 2026-09-02: "responsive preview where dates are toggled directly."
+// The preview lists EVERY candidate date as a native toggle chip; tapping a
+// date toggles it skipped (greyed/struck, still visible) <-> active. The
+// separate skip input / [Add] / removable chip list — and with them #200's
+// heading — are GONE, and the four series_create_skip_* message keys leave
+// all four locales. #200 is superseded wholesale (already closed).
 //
-//   NEW TESTIDS (pinned here for the GREEN implementer)
-//     series-create-skip-heading  the section heading — ALWAYS rendered with
-//                                 the form, visibly (no sr-only/hidden), its
-//                                 text from the message key
-//                                 `series_create_skip_heading` (Comenius
-//                                 supplies the copy — "Jäta vahele" in et)
-//     series-create-skip-list     the chip <ul> — rendered IFF at least one
-//                                 skip date exists (the empty list must not
-//                                 leave a stray labeled-but-blank row)
-describe('#200 — the skip-dates section carries a visible heading', () => {
-	it('opening the form renders series-create-skip-heading, VISIBLY, with its text sourced from the series_create_skip_heading message key (never hardcoded copy)', async () => {
-		const container = await renderReady();
-		await openSeriesForm(container);
-
-		const heading = q(container, 'series-create-skip-heading');
-		expect(heading).not.toBeNull();
-		// The lenient m-proxy above renders the message KEY itself — so equality
-		// with the key proves the text goes through Paraglide, not a literal.
-		expect(heading!.textContent!.trim()).toBe('series_create_skip_heading');
-		// Visible means visible: not screen-reader-only, not hidden away.
-		expect(heading!.classList.contains('sr-only')).toBe(false);
-		expect(heading!.hasAttribute('hidden')).toBe(false);
-		expect(heading!.getAttribute('aria-hidden')).not.toBe('true');
-	});
-
-	it('LOCKED (resumable run): heading, skip input and add button all REMAIN rendered — disabled, never conditionally removed', async () => {
+// Chip mechanics, month grouping, wrap-not-scroll, and the live count are
+// pinned in the preview/count describes above; this block pins the LOCKED
+// behaviour and that the old UI (and its copy) is really gone.
+describe('#215 — chips while LOCKED, and the retired skip UI', () => {
+	it('LOCKED (resumable run): the REMAINDER renders as chips — disabled, still pressed — and clicking one changes NOTHING (the skip set is frozen with the rest of the form)', async () => {
 		// The review-F5 stop recipe: occurrence #2 fails → the run is resumable
 		// and `seriesCreateLocked` engages.
 		createEventMock.mockImplementation(async () => {
@@ -1983,42 +2200,90 @@ describe('#200 — the skip-dates section carries a visible heading', () => {
 			expect(q(container, 'series-create-resume')).not.toBeNull();
 		});
 
-		// #200's discoverability fix must not regress into hide-when-locked:
-		// the section stays IN the document, announcing itself, merely inert.
-		expect(q(container, 'series-create-skip-heading')).not.toBeNull();
-		const input = q(container, 'series-create-skip-date') as HTMLInputElement;
-		const add = q(container, 'series-create-skip-add') as HTMLButtonElement;
-		expect(input).not.toBeNull();
-		expect(add).not.toBeNull();
-		expect(input.disabled).toBe(true);
-		expect(add.disabled).toBe(true);
+		// Review F3's contract carries over: the rows are the REMAINDER.
+		await waitFor(() => {
+			expect(previewDates(container)).toEqual(['2026-09-14', '2026-09-21']);
+		});
+		for (const iso of ['2026-09-14', '2026-09-21']) {
+			const chip = dateChip(container, iso) as HTMLButtonElement;
+			expect(chip.disabled, `${iso} chip must be disabled while locked`).toBe(true);
+			expect(chip.getAttribute('aria-pressed')).toBe('true');
+		}
+
+		// A click on the inert chip must not move the skip set: aria-pressed,
+		// the count line and the resume notice all stand exactly as they were.
+		await fireEvent.click(dateChip(container, '2026-09-14') as HTMLButtonElement);
+		await flush();
+		expect(dateChip(container, '2026-09-14')?.getAttribute('aria-pressed')).toBe('true');
+		expect(activeDates(container)).toEqual(['2026-09-14', '2026-09-21']);
+		expect(q(container, 'series-create-resume')?.textContent).toContain('"remaining":2');
 	});
 
-	it('the chip list (series-create-skip-list) renders IFF skip dates exist: absent on a fresh form, up with the first chip, gone when the last chip is removed', async () => {
+	it('no trace of the retired skip UI remains anywhere in the open form — input, Add, list, chips, heading', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(3);
+		});
+		// Toggle one — even a non-empty skip set must not resurrect the chips.
+		await toggleDate(container, '2026-09-14');
 
-		// Fresh form, no skip dates — no list (the heading alone marks the spot).
+		expect(q(container, 'series-create-skip-date')).toBeNull();
+		expect(q(container, 'series-create-skip-add')).toBeNull();
 		expect(q(container, 'series-create-skip-list')).toBeNull();
-
-		await fill(container, 'series-create-skip-date', '2026-09-14');
-		await fireEvent.click(q(container, 'series-create-skip-add') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'series-create-skip-list')).not.toBeNull();
-		});
-		expect(q(container, 'series-create-skip-2026-09-14')).not.toBeNull();
-
-		// Removing the only chip takes the list down with it.
-		await fireEvent.click(q(container, 'series-create-skip-remove-2026-09-14') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'series-create-skip-list')).toBeNull();
-		});
+		expect(q(container, 'series-create-skip-heading')).toBeNull();
+		expect(container.querySelector('[data-testid^="series-create-skip-"]')).toBeNull();
 	});
 });
 
-// (*MVOX:Tallis* — #200 RED: visible skip-dates heading via
-// series_create_skip_heading, always-rendered-when-locked guard,
-// series-create-skip-list IFF chips exist)
+// ── #215 — the four series_create_skip_* keys leave all four locales ────────────
+//
+// Source scan, no rendering (the page.ux-polish-i18n.spec.ts precedent): the
+// retired UI's copy must go WITH the UI — a dead key in four locales is
+// translator work nothing renders — while the preview keys the grid still
+// leans on must stay, non-empty, everywhere.
+describe('#215 — locale files: skip keys retired, preview keys stay', () => {
+	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
+	const RETIRED_KEYS = [
+		'series_create_skip_heading',
+		'series_create_skip_date_label',
+		'series_create_skip_add',
+		'series_create_skip_remove'
+	] as const;
+	const KEPT_KEYS = [
+		'series_create_preview_label',
+		'series_create_preview_count_one',
+		'series_create_preview_count_other',
+		'series_create_no_dates'
+	] as const;
+
+	function messageFile(locale: string): MessageFile {
+		return JSON.parse(
+			readFileSync(resolvePath(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as MessageFile;
+	}
+
+	it.each(LOCALES)('%s: the four series_create_skip_* keys are ABSENT', (locale) => {
+		const file = messageFile(locale);
+		for (const key of RETIRED_KEYS) {
+			expect(key in file, `${key} must be gone from messages/${locale}.json`).toBe(false);
+		}
+	});
+
+	it.each(LOCALES)('%s: the preview keys the grid uses are present and non-empty', (locale) => {
+		const file = messageFile(locale);
+		for (const key of KEPT_KEYS) {
+			expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(false);
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #215 RED: toggleable date-chip grid replaces the skip-dates
+// input — native aria-pressed chips, month-grouped wrap-not-scroll grid, live
+// count with the 0-form submit gate, locked-run inert chips, skip UI + its
+// four locale keys retired)
 
 // (*MVOX:Palestrina* — #132/T5 review fixes: daily-generation reachability,
 // range validation, empty-recurrence refusal, mid-run dismissal guard, preview
