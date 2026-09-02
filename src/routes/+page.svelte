@@ -59,6 +59,7 @@
 	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
@@ -2596,7 +2597,17 @@
 	// form can never submit a blank or hand-typed type.
 	let eventCreateType = $state('rehearsal');
 	let eventCreateName = $state('');
-	let eventCreateDatetime = $state('');
+	// #207 rule 5 — the composite's two constituent parts. `eventCreateDatetime`
+	// stays the SAME canonical 'YYYY-MM-DDTHH:MM' string every downstream reader
+	// (validation, tallinnLocalToUtcIso) already expects, now DERIVED from the
+	// two parts rather than typed directly — '' while either part is missing,
+	// mirroring $lib/testing/timeControls' readDateTime contract (a half-filled
+	// composite must never surface a malformed datetime).
+	let eventCreateDate = $state('');
+	let eventCreateTime = $state('');
+	const eventCreateDatetime = $derived(
+		eventCreateDate && eventCreateTime ? `${eventCreateDate}T${eventCreateTime}` : ''
+	);
 	let eventCreateDuration = $state('');
 	let eventCreateLocation = $state('');
 	let eventCreateDescription = $state('');
@@ -2707,7 +2718,8 @@
 		eventCreateSeriesDefaults = null;
 		eventCreateType = 'rehearsal';
 		eventCreateName = '';
-		eventCreateDatetime = '';
+		eventCreateDate = '';
+		eventCreateTime = '';
 		eventCreateDuration = '';
 		eventCreateLocation = '';
 		eventCreateDescription = '';
@@ -2737,7 +2749,8 @@
 		eventCreateSeriesDefaults = null;
 		eventCreateType = 'rehearsal';
 		eventCreateName = '';
-		eventCreateDatetime = '';
+		eventCreateDate = '';
+		eventCreateTime = '';
 		eventCreateDuration = '';
 		eventCreateLocation = '';
 		eventCreateDescription = '';
@@ -5154,31 +5167,47 @@
 														class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 													>
 														<option value="">{m.series_create_day_placeholder()}</option>
-														<option value="0">{m.series_create_day_0()}</option>
+														<!-- #207 rule 6 — Monday-first DISPLAY order (1,2,3,4,5,6,0).
+														     VALUES stay JS getDay() numbers, untouched — only the
+														     rendering order changes. -->
 														<option value="1">{m.series_create_day_1()}</option>
 														<option value="2">{m.series_create_day_2()}</option>
 														<option value="3">{m.series_create_day_3()}</option>
 														<option value="4">{m.series_create_day_4()}</option>
 														<option value="5">{m.series_create_day_5()}</option>
 														<option value="6">{m.series_create_day_6()}</option>
+														<option value="0">{m.series_create_day_0()}</option>
 													</select>
 												{/if}
 											</div>
 
-											<input
-												type="time"
+											<!-- #207 rule 5 — the TimeSelect composite replaces the native
+											     type="time" input (whose rendering followed browser locale):
+											     24h by default, 5-minute resolution BY CONSTRUCTION of the
+											     minute options, AM/PM via the profile preference. The wrapper
+											     keeps the surface testid and, as a NAMED role="group", carries
+											     the accessible name the old input's aria-label carried; the
+											     aria-invalid/describedby wiring goes DOWN onto the selects
+											     themselves, where a screen reader actually announces it
+											     (#207 review F2). -->
+											<div
 												data-testid="series-create-time"
+												role="group"
 												aria-label={m.series_create_time_label()}
-												aria-invalid={seriesCreateInvalid('time')}
-												aria-describedby={seriesCreateDescribedBy('time')}
-												disabled={seriesCreateLocked}
-												value={seriesCreateTime}
-												oninput={(e) => {
-													seriesCreateTime = (e.currentTarget as HTMLInputElement).value;
-													clearSeriesCreateError();
-												}}
-												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-											/>
+												class="flex gap-2"
+											>
+												<TimeSelect
+													prefix="series-create-time"
+													value={seriesCreateTime}
+													disabled={seriesCreateLocked}
+													invalid={seriesCreateInvalid('time')}
+													describedBy={seriesCreateDescribedBy('time')}
+													onchange={(v) => {
+														seriesCreateTime = v;
+														clearSeriesCreateError();
+													}}
+												/>
+											</div>
 
 											<div class="flex gap-2">
 												<input
@@ -5971,19 +6000,45 @@
 									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
 
-								<input
-									type="datetime-local"
+								<!-- #207 rule 5 — a composite: the native date input stays (Gama
+								     ruling — native date pickers are kept), paired with the
+								     TimeSelect hour/minute composite instead of the datetime-local
+								     input's browser-locale time half. The wrapper keeps the surface
+								     testid and, as a NAMED role="group", carries the accessible name
+								     the old input's aria-label carried ("Date & time" names the whole
+								     group; the date input inside gets its own date-specific label).
+								     aria-invalid/describedby goes DOWN onto the real controls, where
+								     a screen reader actually announces it (#207 review F2). -->
+								<div
 									data-testid="event-create-datetime"
+									role="group"
 									aria-label={m.event_create_datetime_label()}
-									aria-invalid={eventCreateInvalid('datetime')}
-									aria-describedby={eventCreateDescribedBy('datetime')}
-									value={eventCreateDatetime}
-									oninput={(e) => {
-										eventCreateDatetime = (e.currentTarget as HTMLInputElement).value;
-										clearEventCreateError();
-									}}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								/>
+									class="flex flex-wrap gap-2"
+								>
+									<input
+										type="date"
+										data-testid="event-create-datetime-date"
+										aria-label={m.time_select_date_label()}
+										aria-invalid={eventCreateInvalid('datetime')}
+										aria-describedby={eventCreateDescribedBy('datetime')}
+										value={eventCreateDate}
+										oninput={(e) => {
+											eventCreateDate = (e.currentTarget as HTMLInputElement).value;
+											clearEventCreateError();
+										}}
+										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+									<TimeSelect
+										prefix="event-create-datetime"
+										value={eventCreateTime}
+										invalid={eventCreateInvalid('datetime')}
+										describedBy={eventCreateDescribedBy('datetime')}
+										onchange={(v) => {
+											eventCreateTime = v;
+											clearEventCreateError();
+										}}
+									/>
+								</div>
 								
 								<div class="flex gap-2">
 									<input

@@ -71,6 +71,13 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// #123 — LanguageSelector (now rendered as app chrome on this page) reads
 		// this key for its aria-label.
 		profile_language_label: () => 'Language',
+		// #207 rule 5 — the AM/PM preference control, app chrome like the
+		// language selector above (see page.profile-time-format.spec.ts for the
+		// dedicated feature tests).
+		profile_time_format_label: () => 'Time format',
+		profile_time_format_24h: () => '24-hour',
+		profile_time_format_ampm: () => 'AM/PM',
+		profile_time_format_hint: () => 'Applies on this device.',
 		// #193 — linked accounts section, always rendered once status is 'ready'
 		// (see page.profile-linked-accounts.spec.ts for the dedicated feature tests).
 		profile_linked_accounts_title: (p: { collective: string }) =>

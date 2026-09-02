@@ -72,9 +72,15 @@
 //                                 SELECTED season. DISABLED until a season is
 //                                 chosen.
 //     event-create-name           text input
-//     event-create-datetime       type="datetime-local", TALLINN wall clock —
-//                                 converted to the UTC instant on submit (the
-//                                 event/[id] TE.4 convention, exactly)
+//     event-create-datetime       #207 rule 5: a composite under this testid —
+//                                 event-create-datetime-date (native
+//                                 <input type="date">, kept per Gama) +
+//                                 -hour/-minute selects (TimeSelect, 24h
+//                                 default, 5-min steps by construction).
+//                                 State string stays 'YYYY-MM-DDTHH:MM',
+//                                 TALLINN wall clock — converted to the UTC
+//                                 instant on submit (the event/[id] TE.4
+//                                 convention, exactly)
 //     event-create-duration       number input (minutes)
 //     event-create-location       text input
 //     event-create-description    TEXTAREA (multiline)
@@ -204,6 +210,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
+import { HOURS_24, MINUTES_5, fillDateTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
@@ -640,9 +647,23 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 		expect(name).not.toBeNull();
 		expect(name.tagName).toBe('INPUT');
 
-		const datetime = q(container, 'event-create-datetime') as HTMLInputElement;
+		// #207 rule 5 — no longer a native datetime-local (whose time half
+		// renders per browser locale): a composite of a native DATE input
+		// (native picker stays, Gama ruling) + the TimeSelect hour/minute
+		// selects, under the SAME surface testid on a wrapper.
+		const datetime = q(container, 'event-create-datetime') as HTMLElement;
 		expect(datetime).not.toBeNull();
-		expect(datetime.type).toBe('datetime-local');
+		expect(datetime.tagName).not.toBe('INPUT');
+		const dtDate = q(container, 'event-create-datetime-date') as HTMLInputElement;
+		expect(dtDate).not.toBeNull();
+		expect(dtDate.type).toBe('date');
+		const dtHour = q(container, 'event-create-datetime-hour') as HTMLSelectElement;
+		const dtMinute = q(container, 'event-create-datetime-minute') as HTMLSelectElement;
+		expect(dtHour.tagName).toBe('SELECT');
+		expect(dtMinute.tagName).toBe('SELECT');
+		expect(optionValues(dtHour).filter((v) => v !== '')).toEqual(HOURS_24);
+		expect(optionValues(dtMinute).filter((v) => v !== '')).toEqual(MINUTES_5);
+		expect(q(container, 'event-create-datetime-ampm'), '24h is the default').toBeNull();
 
 		const duration = q(container, 'event-create-duration') as HTMLInputElement;
 		expect(duration).not.toBeNull();
@@ -816,7 +837,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await fill(container, 'event-create-name', 'Spring concert');
 		// 19:00 Europe/Tallinn on 18 Apr 2027 (EEST, UTC+3) = 16:00Z — the same
 		// wall-clock convention the event/[id] editor pins (TE.4).
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await fill(container, 'event-create-duration', '120');
 		await fill(container, 'event-create-location', 'Estonia Hall');
 		await fill(container, 'event-create-description', 'Doors at 18:30');
@@ -858,7 +879,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await selectValue(container, 'event-create-series', 'series-1');
 		await chooseType(container, 'rehearsal');
 		// 18:30 Tallinn on 7 Sep 2026 (EEST, UTC+3) = 15:30Z.
-		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
 		await submit(container);
 
 		await waitFor(() => {
@@ -885,7 +906,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
 		await chooseType(container, 'rehearsal');
-		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
 		await fill(container, 'event-create-name', 'Extra rehearsal');
 		await fill(container, 'event-create-duration', '45');
 		await submit(container);
@@ -907,7 +928,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 
 		await selectValue(container, 'event-create-series', 'series-1');
 		await chooseType(container, 'rehearsal');
-		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
 		await submit(container);
 
 		await waitFor(() => {
@@ -939,7 +960,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await openFormFromAgenda(container);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Orphan event');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -957,7 +978,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1002,9 +1023,24 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 			'event_create_datetime_required'
 		);
 		expect(createEventMock).not.toHaveBeenCalled();
-		const input = q(container, 'event-create-datetime') as HTMLInputElement;
-		expect(input.getAttribute('aria-invalid')).toBe('true');
-		expect(input.getAttribute('aria-describedby')).toBe('event-create-error');
+		// #207 review F2 — the composite WRAPPER keeps the surface testid and, as
+		// a named role="group", the accessible name; the aria-invalid /
+		// aria-describedby wiring lives on the FOCUSABLE CONTROLS inside, which
+		// is the only place a screen reader announces it. Asserting it on the
+		// wrapper alone was the partial assertion that let the regression pass.
+		const wrapper = q(container, 'event-create-datetime') as HTMLElement;
+		expect(wrapper.getAttribute('role')).toBe('group');
+		expect(wrapper.getAttribute('aria-label')).toBe('event_create_datetime_label');
+		for (const testid of [
+			'event-create-datetime-date',
+			'event-create-datetime-hour',
+			'event-create-datetime-minute'
+		]) {
+			const control = q(container, testid) as HTMLElement;
+			expect(['INPUT', 'SELECT'], `${testid} is a real form control`).toContain(control.tagName);
+			expect(control.getAttribute('aria-invalid'), testid).toBe('true');
+			expect(control.getAttribute('aria-describedby'), testid).toBe('event-create-error');
+		}
 	});
 
 	it('STANDALONE with no name: refused (a standalone event has no series to inherit a name from)', async () => {
@@ -1012,7 +1048,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1032,7 +1068,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
 		await chooseType(container, 'rehearsal');
-		await fill(container, 'event-create-datetime', '2026-09-07T18:30');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1046,7 +1082,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		await openFormFromAgenda(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 		await waitFor(() => {
 			expect(q(container, 'event-create-error')).not.toBeNull();
@@ -1076,7 +1112,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1091,7 +1127,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1168,7 +1204,7 @@ describe("agenda — a panel-born create refreshes the PANEL's season, not the f
 		await selectValue(container, 'event-create-season', UPCOMING_SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Autumn opener');
-		await fill(container, 'event-create-datetime', '2027-10-04T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-10-04', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1269,7 +1305,7 @@ describe('agenda — the inheritance preview covers DESCRIPTION too (2nd-pass F4
 		// …and a blank description still WRITES as absent — the preview says what
 		// the read side will supply, it does not freeze a copy into the event.
 		await chooseType(container, 'concert');
-		await fill(container, 'event-create-datetime', '2027-04-18T19:00');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await submit(container);
 
 		await waitFor(() => {

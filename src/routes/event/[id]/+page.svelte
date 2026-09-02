@@ -96,6 +96,7 @@
 	// had already been deleted from localStorage.
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import TimeSelect from '$lib/components/TimeSelect.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -1254,6 +1255,13 @@
 
 	let editingField = $state<EditableEventField | null>(null);
 	let editDraft = $state('');
+	// #207 rule 5 — start_datetime's own composite draft: the native date input
+	// and the TimeSelect hour/minute keep their own pieces here, combined into
+	// the SAME `editDraft` 'YYYY-MM-DDTHH:MM' string (or '' while either part is
+	// missing) every existing reader (draftWireValue/isUnchanged) already
+	// expects — see `updateStartDatetimeDraft` below.
+	let editDraftDate = $state('');
+	let editDraftTime = $state('');
 	let editErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
 	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
 
@@ -1452,11 +1460,37 @@
 		// a tap that beat the re-render (#104 review F1).
 		if (!detail || editWritePending[field]) return;
 		editErrors = { ...editErrors, [field]: false };
-		editDraft =
-			field === 'start_datetime'
-				? toTallinnLocalInputValue(detail.startDatetime)
-				: String(fieldValue(detail, field));
+		if (field === 'start_datetime') {
+			const seeded = toTallinnLocalInputValue(detail.startDatetime);
+			const [datePart, timePart] = seeded.split('T');
+			editDraftDate = datePart ?? '';
+			editDraftTime = timePart ?? '';
+			editDraft = seeded;
+		} else {
+			editDraft = String(fieldValue(detail, field));
+		}
 		editingField = field;
+	}
+
+	/** #207 — the start_datetime composite's own onchange seam: the native date
+	 *  input and the TimeSelect each call this with their OWN new part plus the
+	 *  OTHER part unchanged, recombining into the same 'YYYY-MM-DDTHH:MM'
+	 *  `editDraft` every other function here already reads. */
+	function updateStartDatetimeDraft(datePart: string, timePart: string): void {
+		editDraftDate = datePart;
+		editDraftTime = timePart;
+		editDraft = datePart && timePart ? `${datePart}T${timePart}` : '';
+	}
+
+	/** #207 — commit = focus leaving the WHOLE composite. `focusout` bubbles
+	 *  (unlike `blur`), so one listener on the wrapper catches every part; a
+	 *  `relatedTarget` still INSIDE the wrapper means focus only moved between
+	 *  the composite's own date/hour/minute controls, which must NOT commit. */
+	function handleStartDatetimeFocusOut(e: FocusEvent): void {
+		const wrapper = e.currentTarget as HTMLElement;
+		const next = e.relatedTarget as Node | null;
+		if (next && wrapper.contains(next)) return;
+		confirmFieldEdit('start_datetime', false);
 	}
 
 	/** Restores focus to the pencil button for `field`, once it has remounted
@@ -1484,6 +1518,8 @@
 	function cancelFieldEdit(field: EditableEventField, restoreFocus: boolean): void {
 		editingField = null;
 		editDraft = '';
+		editDraftDate = '';
+		editDraftTime = '';
 		if (restoreFocus) restorePencilFocus(field);
 	}
 
@@ -1749,17 +1785,42 @@
 				     mid-render), but a rights-holder still gets the pencil even then, so
 				     a timeless event can have a start set inline. -->
 				{#if editingField === 'start_datetime'}
-					<input
-						type="datetime-local"
+					<!-- #207 rule 5 — a composite under the SAME surface testid (now on
+					     this wrapper): the native date input (native picker stays, Gama
+					     ruling) plus the TimeSelect hour/minute composite. The wrapper is a
+					     NAMED role="group" — it supplies the accessible name for the whole
+					     composite, so the controls inside must NOT repeat that name
+					     (double-announcement, #207 review F2). Commit = focus leaving the
+					     WHOLE wrapper (see `handleStartDatetimeFocusOut`) — moving between
+					     the composite's own parts is not a commit; `focusout` bubbles, so
+					     one wrapper listener is correct for it. The Escape/Enter gesture,
+					     by contrast, goes on each real control: a role="group" is
+					     non-interactive and must not own key listeners (#207 review F3). -->
+					<div
 						data-testid="event-edit-input-start_datetime"
+						role="group"
 						aria-label={m.event_edit_start_datetime_aria_label()}
-						class="border-b border-ink bg-transparent text-ink-2"
-						value={editDraft}
-						use:focusOnMount
-						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('start_datetime', false)}
-						onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
-					/>
+						class="flex flex-wrap items-center gap-2 text-ink-2"
+						onfocusout={handleStartDatetimeFocusOut}
+					>
+						<input
+							type="date"
+							data-testid="event-edit-input-start_datetime-date"
+							aria-label={m.time_select_date_label()}
+							class="min-w-0 border-b border-ink bg-transparent text-ink-2"
+							value={editDraftDate}
+							use:focusOnMount
+							oninput={(e) =>
+								updateStartDatetimeDraft((e.currentTarget as HTMLInputElement).value, editDraftTime)}
+							onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
+						/>
+						<TimeSelect
+							prefix="event-edit-input-start_datetime"
+							value={editDraftTime}
+							onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
+							onchange={(v) => updateStartDatetimeDraft(editDraftDate, v)}
+						/>
+					</div>
 				{:else if startAt}
 					<!-- #151 — text-base, not text-sm: this line is REPLACED in place by the
 					     datetime-local input above, which renders at the 16px control default

@@ -24,6 +24,7 @@
 	import ProfileField from '$lib/components/profile/ProfileField.svelte';
 	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
+	import { timeFormatStore, setTimeFormat, type TimeFormat } from '$lib/preferences/timeFormat';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	// #193 — linked auth providers + "Link another account".
@@ -788,6 +789,32 @@
 		<div class="flex flex-col items-start gap-1">
 			<span class="text-sm text-ink-2">{m.profile_language_label()}</span>
 			<LanguageSelector />
+		</div>
+
+		<!--
+			#207 rule 5 — the AM/PM preference control: app chrome, like the
+			language selector above, not gated on `status` / collective selection.
+			localStorage-backed, per-device (Gama ruling 2026-09-02) — the hint
+			line states that fact, not a note about the control itself.
+		-->
+		<div class="flex flex-col items-start gap-1">
+			<label for="profile-time-format" class="text-sm text-ink-2">
+				{m.profile_time_format_label()}
+			</label>
+			<select
+				id="profile-time-format"
+				data-testid="profile-time-format"
+				value={$timeFormatStore}
+				onchange={(e) =>
+					setTimeFormat((e.currentTarget as HTMLSelectElement).value as TimeFormat)}
+				class="border border-ink-5 bg-paper px-2 py-1 text-ink"
+			>
+				<option value="24h">{m.profile_time_format_24h()}</option>
+				<option value="ampm">{m.profile_time_format_ampm()}</option>
+			</select>
+			<p data-testid="profile-time-format-hint" class="text-xs text-ink-3">
+				{m.profile_time_format_hint()}
+			</p>
 		</div>
 
 		{#if status === 'no-collective'}

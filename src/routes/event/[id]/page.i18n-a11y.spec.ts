@@ -571,8 +571,14 @@ describe('#105 — a11y: edit pencils and inputs are labelled per field', () => 
 			await fireEvent.click(container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!);
 			const input = await waitForTestid(container, `event-edit-input-${field}`);
 			expect(input.getAttribute('aria-label')).toBe(`[event_edit_${field}_aria_label]`);
-			// Escape out so the next field's pencil is back on screen.
-			await fireEvent.keyDown(input, { key: 'Escape' });
+			// Escape out so the next field's pencil is back on screen. #207 review
+			// F3 — start_datetime is a composite whose surface testid sits on a
+			// role="group" wrapper; a non-interactive role must not own key
+			// listeners, so the Escape gesture lives on the real controls inside
+			// and the key event originates there, exactly as it does in a browser.
+			const keyTarget =
+				container.querySelector(`[data-testid="event-edit-input-${field}-date"]`) ?? input;
+			await fireEvent.keyDown(keyTarget, { key: 'Escape' });
 			await waitFor(() => {
 				expect(container.querySelector(`[data-testid="event-edit-input-${field}"]`)).toBeNull();
 			});

@@ -86,9 +86,18 @@
 //     series-create-repeat        <select> weekly | biweekly | daily, in that
 //                                 order, 'weekly' pre-selected (no '' option —
 //                                 the wire needs an interval either way)
-//     series-create-day           <select> '' placeholder + '0'..'6' (JS
-//                                 getDay: 0 = Sunday … 6 = Saturday)
-//     series-create-time          <input type="time"> → start_time
+//     series-create-day           <select> '' placeholder + days in MONDAY-
+//                                 FIRST display order 1,2,3,4,5,6,0 (#207
+//                                 rule 6). VALUES stay JS getDay numbers
+//                                 (0 = Sunday … 6 = Saturday) — display
+//                                 order only
+//     series-create-time          #207 rule 5: TimeSelect composite on a
+//                                 wrapper under this testid —
+//                                 series-create-time-hour / -minute native
+//                                 selects (24h default, 5-min steps by
+//                                 construction; -ampm only in AM/PM
+//                                 preference mode) → start_time 'HH:MM'
+//                                 (wire shape unchanged)
 //     series-create-from          <input type="date">, PRE-FILLED with the
 //                                 panel season's start date
 //     series-create-until         <input type="date">, PRE-FILLED with the
@@ -231,6 +240,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
+import { HOURS_24, MINUTES_5, fillTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
 import { authStore } from '$lib/auth/session';
@@ -401,7 +411,7 @@ async function submit(container: HTMLElement): Promise<void> {
 async function fillValidTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
-	await fill(container, 'series-create-time', '19:00');
+	await fillTime(container, 'series-create-time', '19:00');
 	await fill(container, 'series-create-from', '2026-09-01');
 	await fill(container, 'series-create-until', '2026-09-21');
 }
@@ -507,19 +517,42 @@ describe('season panel — the series form carries every sketch-D field', () => 
 
 		const day = q(container, 'series-create-day') as HTMLSelectElement;
 		expect(day.tagName).toBe('SELECT');
+		// #207 rule 6 — MONDAY-FIRST display order: options reordered to
+		// 1,2,3,4,5,6,0 (placeholder stays first). VALUES untouched — they are
+		// JS getDay() numbers consumed by generateEventDates, and the Monday
+		// preview specs below (day '1' -> Mondays) pin that the semantics
+		// survive the reorder.
 		expect([...day.querySelectorAll('option')].map((o) => o.value)).toEqual([
 			'',
-			'0',
 			'1',
 			'2',
 			'3',
 			'4',
 			'5',
-			'6'
+			'6',
+			'0'
 		]);
 		expect(day.value).toBe('');
 
-		expect((q(container, 'series-create-time') as HTMLInputElement).type).toBe('time');
+		// #207 rule 5 — the time field is no longer a native <input type="time">
+		// (whose rendering follows browser locale): it is the TimeSelect
+		// composite under the SAME surface testid. 24h by default; 5-minute
+		// resolution BY CONSTRUCTION of the minute options (the step=300
+		// addendum — no step attribute exists on a select).
+		const timeWrapper = q(container, 'series-create-time') as HTMLElement;
+		expect(timeWrapper).not.toBeNull();
+		expect(timeWrapper.tagName).not.toBe('INPUT');
+		const timeHour = q(container, 'series-create-time-hour') as HTMLSelectElement;
+		const timeMinute = q(container, 'series-create-time-minute') as HTMLSelectElement;
+		expect(timeHour.tagName).toBe('SELECT');
+		expect(timeMinute.tagName).toBe('SELECT');
+		// Empty draft: placeholder selected, the full 24h / 5-minute pick lists behind it.
+		expect(timeHour.value).toBe('');
+		expect(timeMinute.value).toBe('');
+		expect(optionValues(timeHour).filter((v) => v !== '')).toEqual(HOURS_24);
+		expect(optionValues(timeMinute).filter((v) => v !== '')).toEqual(MINUTES_5);
+		// 24h default mode: no AM/PM select.
+		expect(q(container, 'series-create-time-ampm')).toBeNull();
 		expect((q(container, 'series-create-from') as HTMLInputElement).type).toBe('date');
 		expect((q(container, 'series-create-until') as HTMLInputElement).type).toBe('date');
 		expect((q(container, 'series-create-generate') as HTMLInputElement).type).toBe('checkbox');
@@ -542,7 +575,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 	it('generate ON + day/time/from/until set → series-create-preview lists EXACTLY the generated dates (real generateEventDates: 13 Mondays for Sep 1 – Dec 1 2026) — and previewing writes NOTHING', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-12-01');
 		await enableMondayGeneration(container);
@@ -572,7 +605,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 	it('the preview UPDATES LIVE as params change: shortening until 2026-12-01 → 2026-09-30 shrinks 13 Mondays to 4', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-12-01');
 		await enableMondayGeneration(container);
@@ -595,7 +628,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 	it('adding a SKIP date chips it and drops it from the preview; removing the chip restores it', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-30');
 		await enableMondayGeneration(container);
@@ -621,7 +654,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 	it('generate OFF → no preview, even with a complete recurrence; toggling it ON brings the preview up, OFF takes it down', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-30');
 		await selectValue(container, 'series-create-day', '1');
@@ -642,7 +675,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 	it('generate ON but recurrence INCOMPLETE (no day picked): no preview yet', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-30');
 		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
@@ -706,6 +739,64 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 		const input = lastSeriesInput();
 		expect(input.defaultLocation ?? '').toBe('');
 		expect(input.defaultDescription ?? '').toBe('');
+	});
+
+	it('#207 AM/PM preference (integration): the store flips the surface to 12h selects — and submit STILL sends the 24h HH:MM wire string', async () => {
+		// The preference is display-only: stored/submitted shapes never change.
+		// Runtime-resolved dynamic import (variable specifier keeps vite's
+		// import-analysis from failing the WHOLE file while the module is
+		// #207/GREEN's to create — only this test rides on it).
+		const timeFormatModulePath = '$lib/preferences/timeFormat';
+		const { timeFormatStore } = (await import(/* @vite-ignore */ timeFormatModulePath)) as
+			typeof import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const container = await renderReady();
+			await openSeriesForm(container);
+			await fill(container, 'series-create-name', 'Evening rehearsals');
+			await fill(container, 'series-create-duration', '90');
+
+			const ampm = q(container, 'series-create-time-ampm') as HTMLSelectElement;
+			expect(ampm, 'AM/PM mode must render the third select').not.toBeNull();
+			expect(optionValues(q(container, 'series-create-time-hour')).filter((v) => v !== '')).toEqual(
+				Array.from({ length: 12 }, (_, i) => String(i + 1))
+			);
+			// 7:05 PM → the canonical '19:05'.
+			await fireEvent.change(q(container, 'series-create-time-hour') as HTMLElement, {
+				target: { value: '7' }
+			});
+			await fireEvent.change(q(container, 'series-create-time-minute') as HTMLElement, {
+				target: { value: '05' }
+			});
+			await fireEvent.change(ampm, { target: { value: 'PM' } });
+
+			await fill(container, 'series-create-from', '2026-09-01');
+			await fill(container, 'series-create-until', '2026-09-21');
+			await submit(container);
+
+			await waitFor(() => {
+				expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+			});
+			// FULL param shape (partial assertions hide bugs): the wire carries
+			// 24h 'HH:MM' regardless of the display preference. The two untouched
+			// optionals are asserted blank/absent the way the optionals spec does.
+			const { defaultLocation, defaultDescription, ...rest } = lastSeriesInput();
+			expect(rest).toEqual({
+				name: 'Evening rehearsals',
+				dbEntityId: ORG_EFK,
+				extraParentIds: [SEASON_ID],
+				eventType: 'rehearsal',
+				intervalDays: 7,
+				startTime: '19:05',
+				durationMinutes: 90,
+				startDate: '2026-09-01',
+				endDate: '2026-09-21'
+			});
+			expect(defaultLocation ?? '').toBe('');
+			expect(defaultDescription ?? '').toBe('');
+		} finally {
+			timeFormatStore.set('24h');
+		}
 	});
 
 	it('the repeat select maps to intervalDays: biweekly → 14', async () => {
@@ -1003,7 +1094,7 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fill(container, 'series-create-duration', '90');
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1030,7 +1121,7 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fill(container, 'series-create-duration', '90');
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1041,7 +1132,15 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		expect(name.getAttribute('aria-invalid')).toBe('true');
 		expect(name.getAttribute('aria-describedby')).toBe('series-create-error');
 		// The boxes that were NOT refused stay clean — one message, one owner.
-		for (const testid of ['series-create-type', 'series-create-duration', 'series-create-time']) {
+		// #207 review F2 — the time composite is checked on its real CONTROLS:
+		// the aria-invalid/describedby wiring lives on the <select>s, not on the
+		// role="group" wrapper (where a screen reader would never announce it).
+		for (const testid of [
+			'series-create-type',
+			'series-create-duration',
+			'series-create-time-hour',
+			'series-create-time-minute'
+		]) {
 			const el = q(container, testid) as HTMLElement;
 			expect(el.getAttribute('aria-invalid')).toBeNull();
 			expect(el.getAttribute('aria-describedby')).toBeNull();
@@ -1095,7 +1194,7 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fill(container, 'series-create-name', 'Monday rehearsals');
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1128,7 +1227,7 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fill(container, 'series-create-duration', '90');
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await submit(container);
 		await waitFor(() => {
 			expect(q(container, 'series-create-error')).not.toBeNull();
@@ -1161,7 +1260,7 @@ describe('season panel — DAILY generation needs no day of week', () => {
 	it('daily HIDES the inert day select and previews immediately: generateEventDates ignores dayOfWeek for daily, so demanding one would gate generation behind a field with no effect', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-04');
 		await selectValue(container, 'series-create-repeat', 'daily');
@@ -1184,7 +1283,7 @@ describe('season panel — DAILY generation needs no day of week', () => {
 		await openSeriesForm(container);
 		await fill(container, 'series-create-name', 'Festival week');
 		await fill(container, 'series-create-duration', '90');
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-04');
 		await selectValue(container, 'series-create-repeat', 'daily');
@@ -1285,7 +1384,7 @@ describe('season panel — the preview counts, scrolls, and refuses an empty set
 	it('states how many events will be created (plural), and the singular form when exactly one', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-12-01');
 		await enableMondayGeneration(container);
@@ -1311,7 +1410,7 @@ describe('season panel — the preview counts, scrolls, and refuses an empty set
 		await openSeriesForm(container);
 		await fill(container, 'series-create-name', 'Impossible Mondays');
 		await fill(container, 'series-create-duration', '90');
-		await fill(container, 'series-create-time', '19:00');
+		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-06');
 		await enableMondayGeneration(container);
@@ -1465,7 +1564,10 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 			'series-create-description',
 			'series-create-repeat',
 			'series-create-day',
-			'series-create-time',
+			// #207 — series-create-time is now the TimeSelect composite; the
+			// disabled prop must reach its native selects.
+			'series-create-time-hour',
+			'series-create-time-minute',
 			'series-create-from',
 			'series-create-until',
 			'series-create-skip-date',

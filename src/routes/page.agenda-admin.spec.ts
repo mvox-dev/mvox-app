@@ -183,6 +183,7 @@ import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
+import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import {
@@ -450,7 +451,7 @@ async function fillValidSeason(container: HTMLElement): Promise<void> {
 async function fillValidEvent(container: HTMLElement): Promise<void> {
 	await selectValue(container, 'event-create-season', SEASON_ID);
 	await selectValue(container, 'event-create-type', 'rehearsal');
-	await fill(container, 'event-create-datetime', '2026-09-15T19:00');
+	await fillDateTime(container, 'event-create-datetime', '2026-09-15', '19:00');
 	await fill(container, 'event-create-name', 'Extra rehearsal');
 }
 
@@ -458,7 +459,7 @@ async function fillValidEvent(container: HTMLElement): Promise<void> {
 async function fillValidSeries(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
-	await fill(container, 'series-create-time', '19:00');
+	await fillTime(container, 'series-create-time', '19:00');
 	await fill(container, 'series-create-from', '2026-09-01');
 	await fill(container, 'series-create-until', '2026-09-21');
 }

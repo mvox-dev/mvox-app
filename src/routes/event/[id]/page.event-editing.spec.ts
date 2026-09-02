@@ -49,10 +49,21 @@
 //       for a rights-holder — otherwise the field could never be SET inline.
 //     • tap → event-edit-input-{field}, seeded with the CURRENT value:
 //         name / location        → <input type="text">
-//         start_datetime         → <input type="datetime-local">, seeded with
+//         start_datetime         → #207 rule 5: a composite under this same
+//                                  testid (on a wrapper) — a native
+//                                  <input type="date"> at -date plus the
+//                                  TimeSelect -hour/-minute selects (24h
+//                                  default, 5-min steps by construction; -ampm
+//                                  only in AM/PM preference mode). Seeded with
 //                                  the TALLINN wall-clock value the header
 //                                  itself displays (never raw UTC — the user
-//                                  edits the time she sees)
+//                                  edits the time she sees). Commit = focus
+//                                  leaving the WHOLE composite (focusout with
+//                                  an outside/absent relatedTarget); moving
+//                                  between the composite's own parts is not a
+//                                  commit. A PARTIAL composite (date without
+//                                  time or vice versa) reads as EMPTY — it
+//                                  must never produce a malformed string.
 //         duration_minutes       → <input type="number">
 //         description            → <textarea> (multiline)
 //       Every edit input carries its OWN accessible name (aria-label, the same
@@ -117,6 +128,15 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
+import {
+	HOURS_24,
+	MINUTES_5,
+	commitDateTime,
+	fillDateTime,
+	fillTime,
+	optionValues,
+	readDateTime
+} from '$lib/testing/timeControls';
 // The TE.4 contract module — does not exist yet; GREEN creates it.
 import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
 import { authStore } from '$lib/auth/session';
@@ -540,14 +560,35 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 		expect(input.value).toBe('Tuesday Rehearsal');
 	});
 
-	it('start_datetime → a datetime-local input seeded with the TALLINN wall-clock the header displays (19:00, not 16:00 UTC)', async () => {
+	it('start_datetime → #207 composite (date input + 24h hour/minute selects) seeded with the TALLINN wall-clock the header displays (19:00, not 16:00 UTC)', async () => {
 		const { container } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'start_datetime');
-		expect(input.tagName).toBe('INPUT');
-		expect((input as HTMLInputElement).type).toBe('datetime-local');
+		const wrapper = await beginEdit(container, 'start_datetime');
+		// #207 rule 5 — the surface testid now sits on a WRAPPER, not a native
+		// datetime-local input (whose time half renders per browser locale).
+		expect(wrapper.tagName).not.toBe('INPUT');
+		const date = container.querySelector(
+			'[data-testid="event-edit-input-start_datetime-date"]'
+		) as HTMLInputElement;
+		expect(date, 'native date input (picker stays, Gama ruling)').not.toBeNull();
+		expect(date.type).toBe('date');
+		expect(date.value).toBe('2026-09-01');
+		const hour = container.querySelector(
+			'[data-testid="event-edit-input-start_datetime-hour"]'
+		) as HTMLSelectElement;
+		const minute = container.querySelector(
+			'[data-testid="event-edit-input-start_datetime-minute"]'
+		) as HTMLSelectElement;
+		expect(hour.tagName).toBe('SELECT');
+		expect(minute.tagName).toBe('SELECT');
+		expect(optionValues(hour).filter((v) => v !== '')).toEqual(HOURS_24);
+		expect(optionValues(minute).filter((v) => v !== '')).toEqual(MINUTES_5);
+		expect(
+			container.querySelector('[data-testid="event-edit-input-start_datetime-ampm"]'),
+			'24h is the default mode'
+		).toBeNull();
 		// 2026-09-01T16:00Z = 19:00 Europe/Tallinn (EEST). The user edits the time
 		// she sees on this very page — never the raw UTC instant.
-		expect(input.value).toBe('2026-09-01T19:00');
+		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('2026-09-01T19:00');
 	});
 
 	it('duration_minutes → a number input seeded with the current minutes', async () => {
@@ -693,11 +734,11 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 
 	it('start_datetime: the Tallinn wall-clock input converts back to the UTC INSTANT on the wire, and the time line follows', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'start_datetime');
+		await beginEdit(container, 'start_datetime');
 		// The user picks 20:00 the next day, Tallinn time (EEST, UTC+3 in
 		// September) — the instant is therefore 17:00Z.
-		await fireEvent.input(input, { target: { value: '2026-09-02T20:00' } });
-		await fireEvent.blur(input);
+		await fillDateTime(container, 'event-edit-input-start_datetime', '2026-09-02', '20:00');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
@@ -734,6 +775,28 @@ describe('/event/[id] — Escape cancels the edit', () => {
 		// The pencil is back — the field is editable again.
 		expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
 		// Let any write Escape COULD have started settle before asserting none did.
+		await new Promise((r) => setTimeout(r, 30));
+		expect(editPosts(fetchStub)).toEqual([]);
+	});
+
+	it('#207 review F3 — Escape from INSIDE the start_datetime composite cancels: the gesture lives on the real controls, not on the role="group" wrapper', async () => {
+		const { container, fetchStub } = renderEditPage(editorEvent());
+		await beginEdit(container, 'start_datetime');
+		// Change the time, then Escape from the minute <select> itself — a
+		// non-interactive role="group" must not own key listeners, so every
+		// control inside carries the gesture and the event originates there.
+		await fillTime(container, 'event-edit-input-start_datetime', '20:00');
+		const minute = container.querySelector(
+			'[data-testid="event-edit-input-start_datetime-minute"]'
+		) as HTMLSelectElement;
+		await fireEvent.keyDown(minute, { key: 'Escape' });
+
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-edit-input-start_datetime"]')
+			).toBeNull();
+		});
+		expect(container.querySelector('[data-testid="event-edit-btn-start_datetime"]')).not.toBeNull();
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
 	});
@@ -776,20 +839,61 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 
 	it('an unchanged start_datetime blur writes nothing — the instant, not the string, is what compares', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'start_datetime');
-		expect(input.value).toBe('2026-09-01T19:00');
-		await fireEvent.blur(input);
+		await beginEdit(container, 'start_datetime');
+		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('2026-09-01T19:00');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
+	});
+
+	it('#207 legacy minute: a stored :03 start renders with 03 as a selected EXTRA option — never silently snapped to the 5-minute grid', async () => {
+		// 2026-09-01T16:03Z = 19:03 Europe/Tallinn — pre-#207 data was written
+		// at 1-minute resolution and must keep rendering exactly.
+		const { container, fetchStub } = renderEditPage(
+			editorEvent({
+				start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:03:00.000Z' }]
+			})
+		);
+		await beginEdit(container, 'start_datetime');
+		const minute = container.querySelector(
+			'[data-testid="event-edit-input-start_datetime-minute"]'
+		) as HTMLSelectElement;
+		expect(optionValues(minute), "the exact legacy minute is an option").toContain('03');
+		expect(minute.value).toBe('03');
+		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('2026-09-01T19:03');
+
+		// Re-saving WITHOUT a change writes nothing — display-only, the value
+		// is never rewritten by merely opening the editor.
+		await commitDateTime(container, 'event-edit-input-start_datetime');
+		await new Promise((r) => setTimeout(r, 30));
+		expect(editPosts(fetchStub)).toEqual([]);
+	});
+
+	it('#207 legacy minute: saving a DIFFERENT field on a :03 event never touches start_datetime', async () => {
+		const { container, fetchStub } = renderEditPage(
+			editorEvent({
+				start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:03:00.000Z' }]
+			})
+		);
+		const input = await beginEdit(container, 'name');
+		await fireEvent.input(input, { target: { value: 'Renamed rehearsal' } });
+		await fireEvent.blur(input);
+		await waitFor(() => {
+			expect(editPosts(fetchStub).length).toBeGreaterThan(0);
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		// FULL shape of everything written: the name, and ONLY the name.
+		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
+		expect(allProps).toEqual([{ type: 'name', string: 'Renamed rehearsal' }]);
 	});
 });
 
 describe('/event/[id] — degenerate drafts cancel instead of throwing or writing junk', () => {
 	it('a TIMELESS event: the pencil opens an empty picker, and blurring it neither throws nor writes', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent({ start_datetime: undefined }));
-		const input = await beginEdit(container, 'start_datetime');
-		expect(input.value).toBe('');
-		await fireEvent.blur(input);
+		await beginEdit(container, 'start_datetime');
+		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		// The editor closed (an uncaught RangeError out of the blur handler would
 		// strand the input open) and nothing was written.
 		await waitFor(() => {
@@ -804,9 +908,9 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 
 	it('a timeless event can still HAVE a start set inline — the empty picker is not a dead end', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent({ start_datetime: undefined }));
-		const input = await beginEdit(container, 'start_datetime');
-		await fireEvent.input(input, { target: { value: '2026-09-02T20:00' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'start_datetime');
+		await fillDateTime(container, 'event-edit-input-start_datetime', '2026-09-02', '20:00');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
@@ -820,9 +924,15 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 
 	it('CLEARING an existing datetime and blurring writes nothing (there is no "unset the start" gesture here)', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'start_datetime');
-		await fireEvent.input(input, { target: { value: '' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'start_datetime');
+		// #207 — clearing the DATE part leaves a PARTIAL composite (time still
+		// selected): it must read as empty and never emit a malformed string.
+		await fireEvent.input(
+			container.querySelector('[data-testid="event-edit-input-start_datetime-date"]')!,
+			{ target: { value: '' } }
+		);
+		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-input-start_datetime"]')).toBeNull();
 		});
@@ -1027,9 +1137,9 @@ describe('/event/[id] — DST transition days convert to the RIGHT instant', () 
 		// re-read AS UTC — which on a transition day sits on the WRONG side of the
 		// changeover, writing an instant an hour off from what the editor picked.
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'start_datetime');
-		await fireEvent.input(input, { target: { value: '2026-03-29T01:30' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'start_datetime');
+		await fillDateTime(container, 'event-edit-input-start_datetime', '2026-03-29', '01:30');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
@@ -1049,9 +1159,9 @@ describe('/event/[id] — DST transition days convert to the RIGHT instant', () 
 
 	it('fall back (25 Oct): 02:30 Tallinn is 23:30Z the day before, not 00:30Z', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'start_datetime');
-		await fireEvent.input(input, { target: { value: '2026-10-25T02:30' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'start_datetime');
+		await fillDateTime(container, 'event-edit-input-start_datetime', '2026-10-25', '02:30');
+		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);

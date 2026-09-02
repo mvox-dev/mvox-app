@@ -167,6 +167,7 @@ import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
+import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import {
@@ -361,7 +362,7 @@ function canonicalPairs(): Array<[string, string]> {
 async function fillValidSeriesTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
-	await fill(container, 'series-create-time', '19:00');
+	await fillTime(container, 'series-create-time', '19:00');
 	await fill(container, 'series-create-from', '2026-09-01');
 	await fill(container, 'series-create-until', '2026-09-21');
 }
@@ -468,7 +469,7 @@ describe('event form — event-create-type is a localized canonical picker', () 
 		const container = await renderReady();
 		await openEventFormFromPanel(container);
 		await fill(container, 'event-create-name', 'Tuesday rehearsal');
-		await fill(container, 'event-create-datetime', '2026-09-08T18:30');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-08', '18:30');
 		await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 
 		await waitFor(() => {
@@ -482,7 +483,7 @@ describe('event form — event-create-type is a localized canonical picker', () 
 		await openEventFormFromPanel(container);
 		await selectValue(container, 'event-create-type', 'workshop');
 		await fill(container, 'event-create-name', 'Score-reading workshop');
-		await fill(container, 'event-create-datetime', '2026-09-10T18:30');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-10', '18:30');
 		await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 
 		await waitFor(() => {
