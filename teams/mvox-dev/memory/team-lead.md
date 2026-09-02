@@ -24,6 +24,8 @@ mvox-app main @ `44389f9`. #206 merged `1ccd497` + closed; between-chains batch 
 
 **RUN 3 MERGED 10:30** — `wf_65373ee9-a3f`, 29 agents: #208 `63033d4` (GREEN r1), #209 `5788866` (Y→G), #211 `e53b8e9` (Y→G; 12 `--color-type-*` tokens), #214 `b598a61` (Y→G). All CLOSED. Gama informed with live gates.
 
+**RUN 4 LAUNCHING 10:55** — four tasks #212 → #213 → #215 → #217(+216), args `teams/mvox-dev/memory/pipeline-args/args-212-213-215-217.json` (all SPIKE re-anchored). #218 research DONE → `research/research-218.json`; runs SEPARATELY after run 4 once Gama rules the google label (CTA "Continue with Google" vs bare "Google"; recommended bare noun, 6 `auth_provider_*` keys as message-function refs, 5 `login_*` keys; PROVIDER_LABELS + providerLabel deleted; signed-in-as banner + 3 mocked specs need the new keys).
+
 **QUEUE ORDER:** #212 → #213 → #215 → #216+#217 → #218 (adjust per research sizes/deps).
 
 **NEXT:** research-207 result → author tdd-slice-pipeline args → launch pipeline. Then per rulings: #208, #209, #211→#214, #212, #213, #215, #216+#217, #218.
