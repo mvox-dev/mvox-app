@@ -2519,6 +2519,17 @@
 		seasonManageGearEl?.focus();
 	}
 
+	/** #213 — the gear is a disclosure TOGGLE: one control opens AND closes the
+	 *  panel (the panel's internal × is gone). Closing routes through
+	 *  `closeSeasonManagePanel`, so its refusal guard
+	 *  (`seriesRunUnfinished || eventConvertRunUnfinished`) still applies —
+	 *  though in practice the gear is `disabled` for that same condition
+	 *  (`seasonManageGearDisabled`) and never reaches this branch mid-run. */
+	function toggleSeasonManagePanel(): void {
+		if (seasonManageOpen) closeSeasonManagePanel();
+		else openSeasonManagePanel();
+	}
+
 	/** Focus moves INTO the dialog the moment it opens (#132/T3 review F1). Without
 	 *  this the panel's own Escape handler is unreachable in a real browser: the
 	 *  panel is a SIBLING of the gear's wrapper, so a keypress at the still-focused
@@ -2755,14 +2766,9 @@
 		return new Date(instantMs).toISOString();
 	}
 
-	// Rights gate: the SAME formula `showSeasonManageGear` already computes —
-	// #167: the MANAGEABLE season (current-if-running, else the soonest future
-	// one), editor rights on it — deliberately independent of T2's
-	// `showSeasonCreate` gate (an upcoming season hides [+ Season] but must not
-	// hide [+ Event]; see the RED spec's own doc on the two gates).
-	const showEventCreate = $derived(
-		manageableSeasonId !== null && manageableSeasonRights === 'editor'
-	);
+	// #213 removed the page-level [+ Event]; its own rights gate (the same
+	// `manageableSeasonId`/`manageableSeasonRights` formula as the gear) is
+	// gone with it — the gear IS that entry point now (`showSeasonManageGear`).
 
 	/** The event-create fields a validation message can belong to; `null` = a
 	 *  form-wide failure (no org, a failed write) that names no single box. */
@@ -2792,10 +2798,10 @@
 	}
 
 	let eventCreateOpen = $state(false);
-	// Which entry point opened the form — the ONLY thing that decides whether a
-	// successful create ALSO refreshes the panel's two lists (a page-level open
-	// has no panel to refresh).
-	let eventCreateOrigin = $state<'agenda' | 'panel' | null>(null);
+	// Which entry point opened the form — #213: always 'panel' now (the
+	// page-level open is gone); kept as a type so a successful create still
+	// knows to refresh the panel's two lists.
+	let eventCreateOrigin = $state<'panel' | null>(null);
 	let eventCreateSeasonId = $state('');
 	let eventCreateSeriesId = $state('');
 	let eventCreateSeriesOptions = $state<SeriesListItem[]>([]);
@@ -2856,10 +2862,6 @@
 	 *  changes nothing visible on this page at all. */
 	let eventCreateStatus = $state('');
 	let eventCreateNameInput = $state<HTMLInputElement | null>(null);
-	/** The page-level [+ Event] — focus's landing after the form unmounts itself
-	 *  (an agenda-born create/cancel), so the keyboard user is not dropped at
-	 *  <body>. A panel-born form hands focus back to the panel instead. */
-	let eventCreateButtonEl = $state<HTMLButtonElement | null>(null);
 
 	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
 		eventCreateError = msg;
@@ -2906,10 +2908,10 @@
 			});
 	}
 
-	/** Opened from the page-level [+ Event] (`origin: 'agenda'`, season starts
-	 *  EMPTY) or from T3's panel [+ Event] (`origin: 'panel'`, the panel's own
-	 *  season pre-filled and its series already offered). Same form either way. */
-	function openEventCreateForm(origin: 'agenda' | 'panel'): void {
+	/** Opened from T3's panel [+ Event] (`origin: 'panel'`) — #213 removed the
+	 *  page-level [+ Event]; this is the only entry point left. The panel's
+	 *  own season is pre-filled and its series already offered. */
+	function openEventCreateForm(origin: 'panel'): void {
 		// #132/T6 review F1 — see `openSeasonCreateForm`. The panel's [+ Event]
 		// is the entry point that made this reachable: it renders regardless of
 		// which other form is open, so a mid-generation click used to unmount the
@@ -2925,7 +2927,7 @@
 		closeEventConvertForm();
 		eventCreateLoadId += 1; // review F3 — a new form; nothing the last one asked for belongs here
 		eventCreateOrigin = origin;
-		const prefillSeasonId = origin === 'panel' ? (manageableSeasonId ?? '') : '';
+		const prefillSeasonId = manageableSeasonId ?? '';
 		eventCreateSeasonId = prefillSeasonId;
 		eventCreateSeriesId = '';
 		eventCreateSeriesOptions = [];
@@ -2980,21 +2982,16 @@
 	/**
 	 * The form is self-unmounting, and the element that had focus goes with it —
 	 * without this the keyboard user lands at <body> (#113 TU.5, #99 F1/F3, the
-	 * same debt `closeSeasonManagePanel` pays). A PANEL-born form hands focus
-	 * back to the still-open panel; an agenda-born one to the [+ Event] button
-	 * that re-renders in the form's place. `tick()` because both targets are
-	 * mounted only on the NEXT tick. NOT folded into `closeEventCreateForm` —
-	 * that also runs on a collective switch, where stealing focus would be wrong.
-	 *
-	 * Best-effort by design (`?.`): on the agenda-born SUCCESS path the reload
-	 * blanks `manageableSeasonId` until it resolves, so the button is briefly
-	 * unmounted and there is nothing to focus — the pre-existing behaviour, not
-	 * a regression. Cancel/Escape, which reload nothing, always land.
+	 * same debt `closeSeasonManagePanel` pays). Since #213 removed the page-level
+	 * [+ Event], every open is PANEL-born and the only landing spot left is the
+	 * still-open panel itself, so `origin` is 'panel' or nothing. `tick()`
+	 * because the panel is re-measured only on the NEXT tick. NOT folded into
+	 * `closeEventCreateForm` — that also runs on a collective switch, where
+	 * stealing focus would be wrong.
 	 */
-	function restoreEventCreateFocus(origin: 'agenda' | 'panel' | null): void {
+	function restoreEventCreateFocus(origin: 'panel' | null): void {
 		tick().then(() => {
 			if (origin === 'panel') seasonManagePanelEl?.focus();
-			else eventCreateButtonEl?.focus();
 		});
 	}
 
@@ -4103,23 +4100,46 @@
 		anyCreateSubmitting || seriesRunUnfinished || eventConvertRunUnfinished
 	);
 
+	/** #213 Gama ruling (1) — the gear (the only close control left) renders
+	 *  DISABLED while a bulk run is unfinished, following the
+	 *  `createEntryPointsBlocked` precedent, so the panel cannot be silently
+	 *  discarded mid-run: an enabled no-op would lie about the refusal
+	 *  `closeSeasonManagePanel` already enforces. Narrower than
+	 *  `createEntryPointsBlocked` on purpose — a merely in-flight season/event
+	 *  create (`anyCreateSubmitting`) does not disable it, only an unfinished
+	 *  series/conversion run does.
+	 *
+	 *  #213 review F2 — the refusal covers the CLOSE direction ONLY, hence the
+	 *  `seasonManageOpen` conjunct. A stopped series run can outlive its panel:
+	 *  `resetSeasonManage` (a failed agenda read on the same collective) guards
+	 *  only `eventConvertRunUnfinished`, so it closes the panel with
+	 *  `seriesRunUnfinished` still true. Disabling the gear in that state would
+	 *  disable OPENING too — and with `createEntryPointsBlocked` holding
+	 *  [+ Season] and the panel's add-event down, the whole admin surface would
+	 *  be dead with nothing on screen saying why (#138 review F2, #135). */
+	const seasonManageGearDisabled = $derived(
+		seasonManageOpen && (seriesRunUnfinished || eventConvertRunUnfinished)
+	);
+
 	// #156 — agenda admin toolbar roving tabindex. WAI-APG *toolbar* pattern,
 	// not a selector — no member is ever 'selected', so the roving stop is
 	// just 'last focused, else first enabled'. Keyed by testid rather than a
-	// domain id (the three members aren't rows of anything). The walk EXCLUDES
-	// [disabled] — `createEntryPointsBlocked` can disable both create buttons,
-	// and a disabled button cannot hold focus: a roving stop parked on one
-	// would strand the whole toolbar from the keyboard.
+	// domain id (the two #213 members aren't rows of anything). The walk
+	// EXCLUDES [disabled] — the gear can now be disabled mid-run and
+	// `createEntryPointsBlocked` can disable [+ Season] — and a disabled
+	// button cannot hold focus: a roving stop parked on one would strand the
+	// whole toolbar from the keyboard.
 	let toolbarRoving = $state<string | null>(null);
 	const toolbarActiveTestid = $derived.by(() => {
-		if (toolbarRoving === 'season-manage-gear' && showSeasonManageGear) return toolbarRoving;
-		if (toolbarRoving === 'season-create' && showSeasonCreate && !seasonCreateOpen && !createEntryPointsBlocked)
-			return toolbarRoving;
-		if (toolbarRoving === 'event-create' && showEventCreate && !eventCreateOpen && !createEntryPointsBlocked)
-			return toolbarRoving;
-		if (showSeasonManageGear) return 'season-manage-gear';
-		if (showSeasonCreate && !seasonCreateOpen && !createEntryPointsBlocked) return 'season-create';
-		if (showEventCreate && !eventCreateOpen && !createEntryPointsBlocked) return 'event-create';
+		const gearEnabled = showSeasonManageGear && !seasonManageGearDisabled;
+		const seasonEnabled = showSeasonCreate && !seasonCreateOpen && !createEntryPointsBlocked;
+		if (toolbarRoving === 'season-manage-gear' && gearEnabled) return toolbarRoving;
+		if (toolbarRoving === 'season-create' && seasonEnabled) return toolbarRoving;
+		// #213 review F1 — the fallback follows DOM order, and [+ Season] is the
+		// FIRST toolbar member now (the gear sits last so its `ml-auto` can push
+		// it alone to the right edge). 'last focused, else first enabled'.
+		if (seasonEnabled) return 'season-create';
+		if (gearEnabled) return 'season-manage-gear';
 		return null;
 	});
 
@@ -4676,8 +4696,8 @@
 				// #132/T6 — the refresh discipline is UNIFORM across all three
 				// creation kinds: a series-only create also re-reads the whole
 				// agenda (`loadFullAgenda`), not just the panel's own lists — a
-				// new series can change what `showEventCreate`/series pickers
-				// elsewhere on the page offer. `keepSeasonManage` keeps the panel
+				// new series can change what series pickers elsewhere on the page
+				// offer. `keepSeasonManage` keeps the panel
 				// the series was just made in.
 				loadForSelected({ keepSeasonManage: true });
 				if (panelSeasonId === seasonId) {
@@ -4905,54 +4925,47 @@
 								</button>
 							</div>
 						{/if}
-						<!-- #149 — [⚙] season-manage, [+ Season] and [+ Event] triggers
-						     grouped into one admin toolbar (shared border, consistent
-						     button sizing) so they read as one admin surface instead of
-						     three loose buttons. Each control keeps its OWN pre-existing
-						     rights gate (#132/T2-T4: showSeasonManageGear /
-						     showSeasonCreate+!seasonCreateOpen / showEventCreate+
-						     !eventCreateOpen) — this is a visual grouping only, not a
+						<!-- #149/#213 — [⚙] season-manage and [+ Season] triggers grouped
+						     into one admin toolbar (shared border, consistent button
+						     sizing) so they read as one admin surface. #213 removed the
+						     page-level [+ Event] (event creation lives inside the panel,
+						     season-manage-add-event) and made the gear a TOGGLE: the
+						     same button opens AND closes the panel (aria-expanded +
+						     aria-controls), so the panel's own internal close button is
+						     gone too. Each surviving control keeps its OWN pre-existing
+						     rights gate (showSeasonManageGear / showSeasonCreate+
+						     !seasonCreateOpen) — this is a visual grouping only, not a
 						     rights change. The toolbar itself only mounts when at least
 						     one control would show, so a non-editor never sees an empty
-						     frame. The panels/forms these open (season-manage-panel,
-						     season-create-form, event-create-form) render below,
-						     unchanged, outside the toolbar.
-						     #149 review F2 — `w-fit`, NOT `self-start`: the parent
-						     (`rounded-lg bg-paper p-4`) is a plain BLOCK container, so
-						     `align-self` had nothing to act on and the frame silently
-						     stretched the full card width. `w-fit` (= fit-content) makes
-						     the border hug the buttons as intended, and still caps at the
-						     available width, so `flex-wrap` — not overflow — is what
-						     happens when the three no longer fit on one 375px line. -->
-						{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen) || (showEventCreate && !eventCreateOpen)}
+						     frame. The panel/form these open (season-manage-panel,
+						     season-create-form) render below, unchanged, outside the
+						     toolbar.
+						     #213 SPIKE finding on Gama ruling (2): the DEFAULT state (a
+						     manageable season, its editor, nothing queued behind it)
+						     renders BOTH the gear and [+ Season] at once, so role="toolbar"
+						     + the #156 roving tabindex are NOT degenerate at arity 2 and
+						     are KEPT.
+						     #149 review F2 — `flex`, NOT `w-fit`: the frame must SPAN the
+						     row (not hug its two buttons) for the gear's `ml-auto` to have
+						     space to push against — right-alignment needs a spanning row,
+						     not a fit-content one. `flex-wrap` — not overflow — is what
+						     happens if the row is ever too narrow for both buttons. -->
+						{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)}
 							<div
 								data-testid="agenda-admin-toolbar"
 								role="toolbar"
 								aria-label={m.agenda_admin_toolbar_label()}
 								tabindex="-1"
-								class="mb-3 flex w-fit flex-wrap items-center gap-2 rounded-md border border-ink-4 p-1.5"
+								class="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-ink-4 p-1.5"
 								onkeydown={handleAdminToolbarKeydown}
 							>
-								<!-- #149 review F3 — the gear wears the SAME outline as its two
-								     siblings (`border border-ink text-ink`, same hover
-								     inversion). Inside a shared frame a borderless lighter
-								     glyph next to two outlined pills reads as an inconsistency,
-								     not as a hierarchy; checklist item 4 asks for one uniform
-								     control row, so the gear is a pill too. -->
-								{#if showSeasonManageGear}
-									<button
-										type="button"
-										data-testid="season-manage-gear"
-										bind:this={seasonManageGearEl}
-										aria-label={m.season_manage_gear_label()}
-										tabindex={toolbarActiveTestid === 'season-manage-gear' ? 0 : -1}
-										onfocus={() => (toolbarRoving = 'season-manage-gear')}
-										class="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink text-xs text-ink hover:bg-ink hover:text-paper"
-										onclick={openSeasonManagePanel}
-									>
-										<span aria-hidden="true">⚙</span>
-									</button>
-								{/if}
+								<!-- #213 review F1 — DOM ORDER carries the right-alignment:
+								     `margin-left:auto` on the FIRST flex item absorbs the free
+								     space BEFORE it and packs everything against the right edge,
+								     so the gear must come LAST for [+ Season] to sit left and the
+								     gear alone to sit hard right. The roving tabindex fallback in
+								     `toolbarActiveTestid` follows this same order, so arrow order
+								     matches visual order. -->
 								{#if showSeasonCreate && !seasonCreateOpen}
 									<button
 										type="button"
@@ -4966,24 +4979,40 @@
 										{m.season_create()}
 									</button>
 								{/if}
-								{#if showEventCreate && !eventCreateOpen}
+								<!-- #213 — the gear is now a disclosure TOGGLE, right-aligned
+								     (ml-auto on the LAST member): aria-expanded announces
+								     open/closed, aria-controls names the panel it toggles. It
+								     carries the close refusal itself (Gama ruling (1)) —
+								     disabled while `seasonManageGearDisabled`, i.e. while the
+								     panel is OPEN and a bulk series/conversion run is unfinished
+								     — so the panel cannot be silently discarded mid-run; a
+								     merely in-flight season/event create does NOT disable it,
+								     and neither does a stopped run with the panel already
+								     closed (that would strand the only way back in). It never
+								     unmounts (unlike the old internal ×), so it stays the roving
+								     toolbar's stable member. -->
+								{#if showSeasonManageGear}
 									<button
 										type="button"
-										data-testid="event-create"
-										bind:this={eventCreateButtonEl}
-										disabled={createEntryPointsBlocked}
-										tabindex={toolbarActiveTestid === 'event-create' ? 0 : -1}
-										onfocus={() => (toolbarRoving = 'event-create')}
-										class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-										onclick={() => openEventCreateForm('agenda')}
+										data-testid="season-manage-gear"
+										bind:this={seasonManageGearEl}
+										aria-label={m.season_manage_gear_label()}
+										aria-expanded={seasonManageOpen}
+										aria-controls="season-manage-panel"
+										disabled={seasonManageGearDisabled}
+										tabindex={toolbarActiveTestid === 'season-manage-gear' ? 0 : -1}
+										onfocus={() => (toolbarRoving = 'season-manage-gear')}
+										class="ml-auto flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+										onclick={toggleSeasonManagePanel}
 									>
-										{m.event_create()}
+										<span aria-hidden="true">⚙</span>
 									</button>
 								{/if}
 							</div>
 						{/if}
 						{#if seasonManageOpen}
 							<div
+								id="season-manage-panel"
 								data-testid="season-manage-panel"
 								bind:this={seasonManagePanelEl}
 								role="dialog"
@@ -4992,19 +5021,12 @@
 								class="mb-3 flex flex-col gap-3 border border-ink-5 p-3"
 								onkeydown={onSeasonManagePanelKeydown}
 							>
-								<div class="flex items-center justify-between">
-									<h2 class="font-display text-lg text-ink">{m.season_manage_panel_label()}</h2>
-									<button
-										type="button"
-										data-testid="season-manage-close"
-										aria-label={m.season_manage_close()}
-										disabled={seriesRunUnfinished}
-										class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-										onclick={closeSeasonManagePanel}
-									>
-										&times;
-									</button>
-								</div>
+								<!-- #213 — the internal close × is gone; the gear (above, in
+								     the toolbar) is the sole close control now, carrying the
+								     same refusal guard that button used to. The heading is the
+								     header's only content, so it sits directly in the panel's
+								     flex-col — no justify-between wrapper with one child. -->
+								<h2 class="font-display text-lg text-ink">{m.season_manage_panel_label()}</h2>
 
 								<!-- name -->
 								<div>

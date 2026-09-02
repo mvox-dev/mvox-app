@@ -49,13 +49,13 @@
 //     - error → inline error, form stays OPEN, no refresh.
 //
 //   TESTIDS
-//     event-create                the page-level [+ Event] button on the agenda.
-//                                 Renders IFF a CURRENT season exists AND the
-//                                 viewer is its editor (seasonManageRights —
-//                                 fail-closed, like every other gate). Never
-//                                 inside an agenda row.
-//     season-manage-add-event     T3's button INSIDE the panel — T4 makes it
-//                                 open the SAME form, season pre-filled.
+//     event-create                REMOVED by #213 — the page-level [+ Event]
+//                                 no longer exists; the gear (its gate is the
+//                                 SAME manageable-season formula) opens the
+//                                 panel, and the panel's [+ Event] is the ONLY
+//                                 entry into this form now.
+//     season-manage-add-event     T3's button INSIDE the panel — opens the
+//                                 form, season pre-filled with the panel's.
 //     event-create-form           the inline form (same route — no goto)
 //     event-create-type           #199 — the canonical, localized <select>
 //                                 (same shape as series-create-type); replaced
@@ -66,8 +66,9 @@
 //     event-create-season         season <select>: one option per KNOWN season
 //                                 (agenda `seasons`, value = id, label = name)
 //                                 behind a '' placeholder option. Pre-filled
-//                                 with the panel's season when opened from the
-//                                 panel; '' (nothing chosen) from the agenda.
+//                                 with the panel's season (#213: every open is
+//                                 panel-born now); the viewer may re-pick,
+//                                 including back to '' (nothing chosen).
 //     event-create-series         series <select>: '' = standalone ("no
 //                                 series"), then one option per series of the
 //                                 SELECTED season. DISABLED until a season is
@@ -501,17 +502,6 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Open the form via the page-level agenda [+ Event]. */
-async function openFormFromAgenda(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'event-create')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'event-create') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'event-create-form')).not.toBeNull();
-	});
-}
-
 /** Open the season-manage panel (T3's gear), then its [+ Event]. */
 async function openFormFromPanel(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
@@ -592,14 +582,16 @@ function lastCreateInput(): CreateEventInput {
 
 // ── the entry points: rights-gated agenda button + the panel's [+ Event] ────────
 
-describe('agenda — the [+ Event] entry point (rights gate)', () => {
-	it('season editor + current season: event-create renders at page level (never inside an agenda row); merely rendering writes nothing', async () => {
+describe('agenda — the event-creation entry point (rights gate — #213: the gear + the panel [+ Event])', () => {
+	it('season editor + current season: the GEAR renders (page-level, never inside an agenda row); the page-level event-create is GONE; merely rendering writes nothing', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'event-create')).not.toBeNull();
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
 		});
-		const control = q(container, 'event-create') as HTMLElement;
+		// #213 — event creation moved INSIDE the panel; no standalone button.
+		expect(q(container, 'event-create')).toBeNull();
+		const control = q(container, 'season-manage-gear') as HTMLElement;
 		expect(control.closest('[data-testid^="agenda-row-"]')).toBeNull();
 		expect(control.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
 
@@ -607,14 +599,15 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 		expect(q(container, 'event-create-form')).toBeNull();
 	});
 
-	it('NON-editor: event-create does NOT render — fail-closed, same as every other rights gate', async () => {
+	it('NON-editor: the gear does NOT render — fail-closed, same as every other rights gate', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
 		const container = await renderReady();
 
+		expect(q(container, 'season-manage-gear')).toBeNull();
 		expect(q(container, 'event-create')).toBeNull();
 	});
 
-	it('the only season LAPSED yesterday and nothing is queued behind it: event-create RENDERS — `manageableSeason` falls back to that season, and it is still where a new event belongs', async () => {
+	it('the only season LAPSED yesterday and nothing is queued behind it: the gear RENDERS — `manageableSeason` falls back to that season, and it is still where a new event belongs', async () => {
 		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(true));
 		const container = await renderReady();
 
@@ -622,13 +615,13 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 			expect(q(container, 'agenda-empty')).not.toBeNull();
 		});
 		await waitFor(() => {
-			expect(q(container, 'event-create')).not.toBeNull();
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
 		});
 		// The rights rode along on the season list — no database-entity round-trip.
 		expect(resolveManageRightsMock).not.toHaveBeenCalled();
 	});
 
-	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides event-create', async () => {
+	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the gear', async () => {
 		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(false));
 		const container = await renderReady();
 
@@ -640,35 +633,17 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 		await waitFor(() => {
 			expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
 		});
-		expect(q(container, 'event-create')).toBeNull();
+		expect(q(container, 'season-manage-gear')).toBeNull();
 	});
 
-	it('an upcoming season hides [+ Season] (T2) but NOT [+ Event] — the two gates are independent', async () => {
+	it('an upcoming season hides [+ Season] (T2) but NOT the gear — the two gates are independent', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'event-create')).not.toBeNull();
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
 		});
 		expect(q(container, 'season-create')).toBeNull();
-	});
-
-	it('clicking [+ Event] opens the inline form IN PLACE (no goto): season select is EMPTY (nothing chosen), series select is DISABLED until a season is picked — and nothing is written by opening', async () => {
-		const container = await renderReady();
-		await openFormFromAgenda(container);
-
-		expect(gotoMock).not.toHaveBeenCalled();
-
-		const season = q(container, 'event-create-season') as HTMLSelectElement;
-		expect(season).not.toBeNull();
-		expect(season.tagName).toBe('SELECT');
-		expect(season.value).toBe('');
-
-		const series = q(container, 'event-create-series') as HTMLSelectElement;
-		expect(series).not.toBeNull();
-		expect(series.disabled).toBe(true);
-
-		expect(createEventMock).not.toHaveBeenCalled();
 	});
 
 	it("the PANEL's [+ Event] (T3's season-manage-add-event) opens the SAME form with the panel's season PRE-FILLED and the series options already offered", async () => {
@@ -690,7 +665,7 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 
 	it('cancel closes the form; nothing written', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await fill(container, 'event-create-name', 'Doomed draft');
 
 		await fireEvent.click(q(container, 'event-create-cancel') as HTMLElement);
@@ -706,7 +681,7 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 describe('agenda — the event creation form carries every sketch-C field', () => {
 	it('name (text), datetime (datetime-local), duration + capacity (number), location (text), description (TEXTAREA), a type picker (#199 canonical select) and a native conductor select (#209)', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		const name = q(container, 'event-create-name') as HTMLInputElement;
 		expect(name).not.toBeNull();
@@ -760,7 +735,7 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 	it('the season select offers EVERY known season (value = id, its NAME visible) behind a "" placeholder option', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		const season = q(container, 'event-create-season') as HTMLSelectElement;
 		const options = [...season.querySelectorAll('option')];
@@ -772,7 +747,7 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 	it('choosing a season (agenda-opened) loads THAT season’s series — listEventSeriesForSeason(cfg, <the selected id>, …) — and enables the series select with a "" (no-series) option first', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		await selectValue(container, 'event-create-season', UPCOMING_SEASON_ID);
 
@@ -806,7 +781,7 @@ describe('agenda — the conductor select (#209) is fed from the cached roster',
 		const container = await renderReady();
 		expect(loadRosterMock).not.toHaveBeenCalled();
 
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await waitFor(() => {
 			expect(loadRosterMock).toHaveBeenCalledTimes(1);
 		});
@@ -859,7 +834,7 @@ describe('agenda — the conductor select (#209) is fed from the cached roster',
 		]);
 
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		await waitFor(() => {
 			// Sopran (Grace), Tenor (Ada), Unassigned (Pete). Alphabetical would
@@ -875,7 +850,7 @@ describe('agenda — the conductor select (#209) is fed from the cached roster',
 
 	it('EVERYONE picked: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added (Gama ruling 2)', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		await pickConductor(container, 'p-ada');
 		await pickConductor(container, 'p-grace');
@@ -1039,7 +1014,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		const container = await renderReady();
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
 
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
@@ -1188,9 +1163,13 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		});
 	});
 
-	it('no SEASON chosen (agenda-opened): submit refuses with event-create-error (role="alert"), createEvent is NEVER called, the form stays open — a season-less event is invisible to every agenda read', async () => {
+	it('no SEASON chosen (the viewer re-picks the "" placeholder): submit refuses with event-create-error (role="alert"), createEvent is NEVER called, the form stays open — a season-less event is invisible to every agenda read', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
+		// #213 — every open is panel-born and pre-filled; clearing the select is
+		// how a no-season submit happens now.
+		await selectValue(container, 'event-create-season', '');
+		expect((q(container, 'event-create-series') as HTMLSelectElement).disabled).toBe(true);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Orphan event');
 		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
@@ -1207,7 +1186,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 	it('a FAILED write: event-create-error shows (role="alert"), the form stays OPEN with the work still in it, and nothing refreshes', async () => {
 		createEventMock.mockRejectedValue(new Error('boom'));
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
@@ -1243,7 +1222,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 describe('agenda — event create REFUSES an incomplete form before it writes (review F1)', () => {
 	it('NO datetime: refused with the DATETIME message; the input carries aria-invalid + aria-describedby', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
@@ -1278,7 +1257,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 
 	it('STANDALONE with no name: refused (a standalone event has no series to inherit a name from)', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
@@ -1312,7 +1291,7 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 
 	it('the refusal is not sticky: editing the named field clears it, and the next submit re-decides', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
@@ -1341,7 +1320,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 		expect(status.getAttribute('aria-live')).toBe('polite');
 		expect(status.textContent?.trim()).toBe('');
 
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
@@ -1362,7 +1341,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 	// full string round-trips to exactly what the operator typed.
 	it('#207 rule 7: the success toast renders the event start as "YYYY-MM-DD HH:MM" (ISO date + 24h time, Tallinn wall clock)', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
@@ -1433,7 +1412,7 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 	it('a FAILED write announces nothing — the status slot stays empty', async () => {
 		createEventMock.mockRejectedValue(new Error('boom'));
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await chooseType(container, 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
@@ -1488,7 +1467,7 @@ describe('agenda — every event-create field keeps a VISIBLE label (review F4 +
 
 	it('capacity and description carry placeholders, not an aria-label alone — capacity sits beside a duration box that has one', async () => {
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		expect((q(container, 'event-create-capacity') as HTMLInputElement).placeholder).toBe(
 			'event_create_capacity_placeholder'
@@ -1557,8 +1536,11 @@ describe('agenda — the event-create form drops async replies that no longer be
 			return Promise.resolve(upcomingSeriesFixture());
 		});
 		const container = await renderReady();
-		// Agenda-born: the season starts EMPTY, so no series read has fired yet.
-		await openFormFromAgenda(container);
+		// Panel-born (#213 removed the page-level [+ Event], so every open is): the
+		// season field is PRE-FILLED with `manageableSeasonId` — SEASON_ID, the
+		// running season — and its series read fires at open, so the hanging read is
+		// already in flight before the viewer re-picks below.
+		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-season', SEASON_ID); // …hangs
 		await selectValue(container, 'event-create-season', UPCOMING_SEASON_ID); // …answers
 
@@ -1687,7 +1669,7 @@ describe('agenda — the event-create conductor select tells its empties apart (
 		loadRosterMock.mockReturnValue(new Promise<never>(() => {})); // never settles
 
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		const select = conductorSelect(container);
 		expect(select.disabled).toBe(true);
@@ -1698,7 +1680,7 @@ describe('agenda — the event-create conductor select tells its empties apart (
 		loadRosterMock.mockRejectedValue(new Error('roster boom'));
 
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		await waitFor(() => {
 			expect(promptOption(conductorSelect(container)).textContent?.trim()).toBe(
@@ -1712,7 +1694,7 @@ describe('agenda — the event-create conductor select tells its empties apart (
 		listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
 
 		const container = await renderReady();
-		await openFormFromAgenda(container);
+		await openFormFromPanel(container);
 
 		await waitFor(() => {
 			expect(q(container, 'event-create-conductor-order-note')).not.toBeNull();

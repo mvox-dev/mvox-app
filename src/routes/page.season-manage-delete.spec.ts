@@ -503,7 +503,8 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 			expect(q(container, 'season-manage-series-series-1')).toBeNull();
 		});
 
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		// #213 — the panel has no internal close; the gear toggles it shut.
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
@@ -676,12 +677,13 @@ describe('agenda — #197 delete is a TWO-step confirm, never a single tap', () 
 		expect(q(container, 'season-manage-series-delete-confirm-series-1')).toBeNull();
 	});
 
-	it('closing the panel disarms — reopening does not present a primed Delete where the × was', async () => {
+	it('closing the panel (via the gear, #213) disarms — reopening does not present a primed Delete where the row’s × was', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
 		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		// #213 — the panel has no internal close; the gear toggles it shut.
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});

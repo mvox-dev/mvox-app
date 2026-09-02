@@ -14,16 +14,29 @@
 //
 // Pinned wiring contract (GREEN must implement):
 //
-//   ENTRY POINTS (design sketch A)
-//     season-manage-gear   [⚙] on the season header → season-manage-panel (T3)
-//     event-create         [+ Event] on the agenda → event-create-form (T4)
-//     season-create        [+ Season] on the agenda → season-create-form (T2)
-//     All three are page-level (never inside an agenda row) and rights-gated on
-//     the SAME derivation: `seasonManageRights === 'editor'` (+ T2's own
-//     no-upcoming-season gate on [+ Season], pinned in its own spec and NOT
-//     relaxed here). A non-editor gets NONE of them — absent from the DOM, not
-//     hidden or disabled (fail-closed, #91 discipline). A rights/agenda load
-//     ERROR is not a grant.
+//   ENTRY POINTS (#213 redesign — the toolbar is DOWN TO TWO members)
+//     season-manage-gear   [⚙] right-aligned (ml-auto); a TOGGLE — first click
+//                          opens season-manage-panel, second click closes it
+//                          (the panel's internal season-manage-close button is
+//                          GONE). The gear carries aria-expanded +
+//                          aria-controls and inherits the close refusal: it
+//                          renders DISABLED while a bulk run is unfinished
+//                          (seriesRunUnfinished || eventConvertRunUnfinished —
+//                          Gama ruling (1) on #213, the createEntryPointsBlocked
+//                          precedent), and ONLY then: a merely in-flight
+//                          season/event create does not disable it.
+//     season-create        [+ Season] on the agenda → season-create-form (T2,
+//                          gate UNCHANGED by #213)
+//     event-create         REMOVED at page level by #213 — event creation
+//                          lives inside the panel (season-manage-add-event)
+//     Both survivors are page-level (never inside an agenda row) and
+//     rights-gated as before. A non-editor gets NEITHER — absent from the DOM,
+//     not hidden or disabled (fail-closed, #91 discipline). A rights/agenda
+//     load ERROR is not a grant.
+//     SPIKE finding on Gama ruling (2): the DEFAULT state (a current season
+//     running, nothing queued behind it, viewer its editor) renders BOTH the
+//     gear and [+ Season] at once, so the role="toolbar" + roving-tabindex
+//     frame (#156) is NOT degenerate and is KEPT, at arity 2.
 //
 //   ONE CREATION FORM AT A TIME
 //     season-create-form, event-create-form and series-create-form are
@@ -372,11 +385,14 @@ async function openSeasonForm(container: HTMLElement): Promise<void> {
 	});
 }
 
-async function openEventFormFromAgenda(container: HTMLElement): Promise<void> {
+/** #213 — the page-level [+ Event] is GONE; the ONLY way into the event form
+ *  is the panel's own [+ Event] (season-manage-add-event). */
+async function openEventFormFromPanel(container: HTMLElement): Promise<void> {
+	if (!q(container, 'season-manage-panel')) await openPanel(container);
 	await waitFor(() => {
-		expect(q(container, 'event-create')).not.toBeNull();
+		expect(q(container, 'season-manage-add-event')).not.toBeNull();
 	});
-	await fireEvent.click(q(container, 'event-create') as HTMLElement);
+	await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, 'event-create-form')).not.toBeNull();
 	});
@@ -451,17 +467,19 @@ async function fillValidSeries(container: HTMLElement): Promise<void> {
 
 // ── entry point consistency: one surface, three doors, one gate ─────────────────
 
-describe('agenda admin — the three entry points render together for a season editor', () => {
-	it('[⚙] + [+ Event] + [+ Season] all render, each page-level (never inside an agenda row), and merely rendering writes NOTHING', async () => {
+describe('agenda admin — the entry points render together for a season editor (#213: two, not three)', () => {
+	it('[⚙] + [+ Season] render, each page-level (never inside an agenda row); the page-level [+ Event] is GONE; merely rendering writes NOTHING', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
 			expect(q(container, 'season-manage-gear')).not.toBeNull();
-			expect(q(container, 'event-create')).not.toBeNull();
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
+		// #213 — the standalone [+ Event] button no longer exists for ANYONE;
+		// event creation lives inside the panel (season-manage-add-event).
+		expect(q(container, 'event-create')).toBeNull();
 
-		for (const testid of ['season-manage-gear', 'event-create', 'season-create']) {
+		for (const testid of ['season-manage-gear', 'season-create']) {
 			const control = q(container, testid) as HTMLElement;
 			expect(control.closest('[data-testid^="agenda-row-"]'), testid).toBeNull();
 			expect(control.closest('[data-testid^="agenda-recent-row-"]'), testid).toBeNull();
@@ -476,19 +494,27 @@ describe('agenda admin — the three entry points render together for a season e
 		expect(q(container, 'event-create-form')).toBeNull();
 	});
 
-	it('each entry point opens ITS surface: gear → panel, [+ Event] → event form, [+ Season] → season form — all inline, no navigation, still nothing written', async () => {
+	it('each entry point opens ITS surface: gear → panel (and the gear again CLOSES it — no internal close button any more), [+ Season] → season form — all inline, no navigation, still nothing written', async () => {
 		const container = await renderReady();
 
 		await openPanel(container);
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		// #213 — the panel carries NO internal close button; the gear is the
+		// close control.
+		expect(q(container, 'season-manage-close')).toBeNull();
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
 
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 		await fireEvent.click(q(container, 'event-create-cancel') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'event-create-form')).toBeNull();
+		});
+		// Leave the panel again so the season-form leg starts from the base state.
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
 
 		await openSeasonForm(container);
@@ -504,28 +530,133 @@ describe('agenda admin — the three entry points render together for a season e
 	});
 });
 
-// ── #149 — the three entry points share ONE toolbar frame ──────────────────────
+// ── #213 — the gear is a TOGGLE (disclosure pattern) ────────────────────────────
+//
+// One button opens AND closes the panel. The button never unmounts on open (it
+// is the close control now), announces its state via aria-expanded, and names
+// the surface it controls via aria-controls. Closing through the gear honours
+// the SAME refusal guards closeSeasonManagePanel always had — pinned further
+// down with the mid-run blocks.
+
+describe('agenda admin — #213: the gear toggles the season-manage panel', () => {
+	it('the gear is a native <button type="button"> and announces its state: aria-expanded false while closed, true while open', async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+		});
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+
+		expect(gear.tagName).toBe('BUTTON');
+		expect(gear.getAttribute('type')).toBe('button');
+		expect(gear.getAttribute('aria-expanded')).toBe('false');
+
+		await fireEvent.click(gear);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).not.toBeNull();
+		});
+		expect(gear.getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('aria-controls names the panel: while open, the id it points at IS the season-manage-panel element', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		const controlsId = gear.getAttribute('aria-controls');
+		expect(controlsId, 'the gear must declare aria-controls').toBeTruthy();
+		const target = container.querySelector(`[id="${controlsId}"]`);
+		expect(target, 'aria-controls must resolve to an element').not.toBeNull();
+		expect((target as HTMLElement).getAttribute('data-testid')).toBe('season-manage-panel');
+	});
+
+	it('a second click CLOSES the panel (aria-expanded back to false); the gear survives its own click and keeps focus; nothing was written', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		await fireEvent.click(gear);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+		// The gear does NOT unmount on close (unlike the old ×) — same element,
+		// state flipped back.
+		expect(q(container, 'season-manage-gear')).toBe(gear);
+		expect(gear.getAttribute('aria-expanded')).toBe('false');
+		// Focus ends on the gear — the behavior the old close path already had
+		// (closeSeasonManagePanel refocuses the gear), kept through the toggle.
+		expect(document.activeElement).toBe(gear);
+
+		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
+		expect(createSeasonMock).not.toHaveBeenCalled();
+		expect(createEventSeriesMock).not.toHaveBeenCalled();
+		expect(createEventMock).not.toHaveBeenCalled();
+	});
+
+	it('the gear STAYS rendered while the panel is open — it is the only close control left', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		expect(q(container, 'season-manage-gear')).not.toBeNull();
+		expect(
+			q(container, 'season-manage-close'),
+			'#213 removed the panel-internal close button'
+		).toBeNull();
+	});
+
+	it('Escape on the panel STILL closes it (unchanged by #213) and the gear reports closed again', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(document.activeElement).toBe(q(container, 'season-manage-panel'));
+		});
+
+		await fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Escape' });
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		expect(gear.getAttribute('aria-expanded')).toBe('false');
+		expect(document.activeElement).toBe(gear);
+	});
+
+	it('toggle round-trip: open → close → open again lands a fresh, working panel', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-add-event')).not.toBeNull();
+			expect(q(container, 'season-manage-add-series')).not.toBeNull();
+		});
+	});
+});
+
+// ── #149 — the entry points share ONE toolbar frame ────────────────────────────
 //
 // #132/T6 above pins that each control EXISTS and is page-level (not inside an
-// agenda row) — which passes identically whether the three sit in one toolbar or
-// in three loose divs. #149 is exactly the difference those tests cannot see, so
-// it gets its own pins: one shared frame (parentElement identity), the wrap-not-
-// overflow class contract that keeps it inside 375px (same style as
-// `expectFormFluid`'s class contract — happy-dom computes no layout), no empty
-// frame for a non-editor, and the frame surviving with the siblings that remain
-// while one control's form is open.
+// agenda row) — which passes identically whether the two sit in one toolbar or
+// in two loose divs. #149 is exactly the difference those tests cannot see, so
+// it gets its own pins: one shared frame (parentElement identity), the class
+// contract the layout follows from (happy-dom computes no layout), no empty
+// frame for a non-editor, and the frame surviving with the sibling that remains
+// while one control's form is open. #213 reshapes the frame: exactly TWO
+// members at most ([⚙] + [+ Season]) and the gear is RIGHT-ALIGNED (ml-auto).
 
 const TOOLBAR = 'agenda-admin-toolbar';
 
-describe('agenda admin — #149: the entry points live in one shared admin toolbar', () => {
-	it('[⚙], [+ Season] and [+ Event] are all DIRECT children of the same agenda-admin-toolbar element', async () => {
+describe('agenda admin — #149/#213: the entry points live in one shared admin toolbar', () => {
+	it('[⚙] and [+ Season] are DIRECT children of the same agenda-admin-toolbar element — and they are ALL of its buttons', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, TOOLBAR)).not.toBeNull();
 		});
 		const toolbar = q(container, TOOLBAR) as HTMLElement;
 
-		for (const testid of ['season-manage-gear', 'season-create', 'event-create']) {
+		for (const testid of ['season-manage-gear', 'season-create']) {
 			const control = q(container, testid) as HTMLElement;
 			expect(control, testid).not.toBeNull();
 			expect(
@@ -533,30 +664,44 @@ describe('agenda admin — #149: the entry points live in one shared admin toolb
 				`${testid} must sit INSIDE the shared toolbar frame — not as a loose sibling`
 			).toBe(toolbar);
 		}
+		// #213 — no third button: the page-level [+ Event] is gone.
+		expect(toolbar.querySelectorAll('button')).toHaveLength(2);
 	});
 
-	it('the toolbar wraps instead of overflowing, and its frame hugs its contents with a real width class (375px contract)', async () => {
+	it('the gear is RIGHT-ALIGNED: it carries ml-auto, and the frame does NOT hug its content (w-fit would make ml-auto inert)', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, TOOLBAR)).not.toBeNull();
 		});
-		const classes = Array.from((q(container, TOOLBAR) as HTMLElement).classList);
+		const toolbarClasses = Array.from((q(container, TOOLBAR) as HTMLElement).classList);
+		const gearClasses = Array.from((q(container, 'season-manage-gear') as HTMLElement).classList);
 
-		expect(classes, 'the toolbar must be a flex row').toContain('flex');
+		expect(toolbarClasses, 'the toolbar must be a flex row').toContain('flex');
 		expect(
-			classes,
-			'the toolbar must carry flex-wrap — three ~44px controls must drop to a second line at 375px, never scroll sideways'
-		).toContain('flex-wrap');
-		// F2: the parent (`rounded-lg bg-paper p-4`) is a plain BLOCK container, so
-		// `self-start` is inert there — the hug must come from a width class.
+			gearClasses,
+			'#213 — the gear must be pushed to the right edge of the toolbar row (ml-auto)'
+		).toContain('ml-auto');
+		// A fit-content frame hugs its buttons and leaves ml-auto nothing to push
+		// against — right alignment needs the row to span.
 		expect(
-			classes,
-			'the toolbar frame must hug its buttons via w-fit — align-self does nothing inside a block parent'
-		).toContain('w-fit');
+			toolbarClasses,
+			'w-fit defeats right-alignment: the frame must span the row, not hug the buttons'
+		).not.toContain('w-fit');
+		// #213 review F1 — the class alone is not the contract, and happy-dom
+		// computes no layout to catch the difference. `margin-left:auto` on the
+		// FIRST flex item absorbs the free space BEFORE it, packing BOTH buttons
+		// against the right edge in DOM order — the rightmost control was then
+		// [+ Season], not the gear. The gear must come LAST.
+		const buttons = Array.from(
+			(q(container, TOOLBAR) as HTMLElement).querySelectorAll<HTMLButtonElement>('button')
+		);
 		expect(
-			classes,
-			'self-start is a no-op on a block-parented div — do not reintroduce it as the hug mechanism'
-		).not.toContain('self-start');
+			buttons[buttons.length - 1].getAttribute('data-testid'),
+			'ml-auto only right-aligns the gear if the gear is the LAST member of the row'
+		).toBe('season-manage-gear');
+		expect(buttons[0].getAttribute('data-testid'), '[+ Season] stays on the left').toBe(
+			'season-create'
+		);
 	});
 
 	it('a NON-editor gets no toolbar at all — not an empty frame', async () => {
@@ -570,7 +715,7 @@ describe('agenda admin — #149: the entry points live in one shared admin toolb
 		).toBeNull();
 	});
 
-	it('with the [+ Season] form open, the toolbar survives holding the controls that remain ([⚙] + [+ Event])', async () => {
+	it('with the [+ Season] form open, the toolbar survives holding the control that remains (the gear)', async () => {
 		const container = await renderReady();
 		await openSeasonForm(container);
 
@@ -581,16 +726,14 @@ describe('agenda admin — #149: the entry points live in one shared admin toolb
 		).not.toBeNull();
 		expect(q(container, 'season-create'), 'the open form replaces its own trigger').toBeNull();
 		expect((q(container, 'season-manage-gear') as HTMLElement)?.parentElement).toBe(toolbar);
-		expect((q(container, 'event-create') as HTMLElement)?.parentElement).toBe(toolbar);
 	});
 
-	it('with the [+ Event] form open, the toolbar survives holding [⚙] + [+ Season]', async () => {
+	it('with the panel open and its [+ Event] form up, the toolbar still holds [⚙] + [+ Season]', async () => {
 		const container = await renderReady();
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 
 		const toolbar = q(container, TOOLBAR) as HTMLElement;
 		expect(toolbar).not.toBeNull();
-		expect(q(container, 'event-create'), 'the open form replaces its own trigger').toBeNull();
 		expect((q(container, 'season-manage-gear') as HTMLElement)?.parentElement).toBe(toolbar);
 		expect((q(container, 'season-create') as HTMLElement)?.parentElement).toBe(toolbar);
 	});
@@ -599,13 +742,13 @@ describe('agenda admin — #149: the entry points live in one shared admin toolb
 // ── rights-gate: fail-closed, uniformly ─────────────────────────────────────────
 
 describe('agenda admin — the rights gate fails closed across ALL controls', () => {
-	it('editor: all three entry points present (the affirmative half of the gate)', async () => {
+	it('editor: both entry points present (the affirmative half of the gate) — and the page-level [+ Event] is gone even for an editor', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, 'season-manage-gear')).not.toBeNull();
-			expect(q(container, 'event-create')).not.toBeNull();
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
+		expect(q(container, 'event-create')).toBeNull();
 	});
 
 	it('NON-editor (no _owner/_editor visible to this caller): EVERY admin control is absent from the DOM — not hidden, not disabled', async () => {
@@ -645,11 +788,11 @@ describe('agenda admin — the rights gate fails closed across ALL controls', ()
 // ── state management: only ONE creation form open at a time ─────────────────────
 
 describe('agenda admin — creation forms are mutually exclusive', () => {
-	it('[+ Season] form open, then [+ Event]: the event form opens and the season form CLOSES (nothing written)', async () => {
+	it("[+ Season] form open, then the panel's [+ Event] (#213 — the only event entry point left): the event form opens and the season form CLOSES (nothing written)", async () => {
 		const container = await renderReady();
 		await openSeasonForm(container);
 
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 
 		expect(q(container, 'event-create-form')).not.toBeNull();
 		expect(q(container, 'season-create-form')).toBeNull();
@@ -657,9 +800,9 @@ describe('agenda admin — creation forms are mutually exclusive', () => {
 		expect(createEventMock).not.toHaveBeenCalled();
 	});
 
-	it('[+ Event] form open, then [+ Season]: the season form opens and the event form CLOSES', async () => {
+	it('[+ Event] form open (via the panel), then [+ Season]: the season form opens and the event form CLOSES', async () => {
 		const container = await renderReady();
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 
 		await openSeasonForm(container);
 
@@ -667,11 +810,11 @@ describe('agenda admin — creation forms are mutually exclusive', () => {
 		expect(q(container, 'event-create-form')).toBeNull();
 	});
 
-	it('series form open (in the panel), then the page-level [+ Event]: the event form opens, the series form CLOSES — and the PANEL survives (it is management, not creation)', async () => {
+	it("series form open (in the panel), then the panel's [+ Event]: the event form opens, the series form CLOSES — and the PANEL survives (it is management, not creation)", async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 
 		expect(q(container, 'event-create-form')).not.toBeNull();
 		expect(q(container, 'series-create-form')).toBeNull();
@@ -753,7 +896,7 @@ describe('agenda admin — an in-flight create is never torn down by another ent
 		});
 		expect(q(container, 'series-create-progress')).not.toBeNull();
 
-		const entryPoints = ['season-create', 'event-create', 'season-manage-add-event'] as const;
+		const entryPoints = ['season-create', 'season-manage-add-event'] as const;
 		for (const testid of entryPoints) {
 			const btn = q(container, testid) as HTMLButtonElement | null;
 			expect(btn, `${testid} must still render while the run is in flight`).not.toBeNull();
@@ -786,11 +929,18 @@ describe('agenda admin — an in-flight create is never torn down by another ent
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).toBeNull();
 		});
+		// #213 — with the run finished, the gear is a live toggle again.
+		await waitFor(() => {
+			expect((q(container, 'season-manage-gear') as HTMLButtonElement).disabled).toBe(false);
+		});
 	});
 
-	// The series form is rendered INSIDE the panel, so the panel's own × is a
-	// teardown path too — the same hazard by a different door.
-	it('mid bulk-generation run: the panel’s × is disabled and cannot unmount the series form it hosts', async () => {
+	// The series form is rendered INSIDE the panel, so the panel's close path is
+	// a teardown hazard too — the same hazard by a different door. #213 moved
+	// that door onto the GEAR (the internal × is gone): Gama ruling (1) — the
+	// gear renders DISABLED while the run is unfinished, so the panel stays open
+	// to show progress; an enabled no-op would lie about it.
+	it('mid bulk-generation run: the GEAR is disabled and cannot unmount the series form the panel hosts', async () => {
 		const resolvers: Array<(id: string) => void> = [];
 		createEventMock.mockImplementation(
 			() =>
@@ -807,11 +957,14 @@ describe('agenda admin — an in-flight create is never torn down by another ent
 		await waitFor(() => {
 			expect(resolvers.length).toBe(1);
 		});
-		const close = q(container, 'season-manage-close') as HTMLButtonElement;
-		expect(close.disabled).toBe(true);
-		await fireEvent.click(close);
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		expect(gear.disabled, 'the gear must be VISIBLY refused mid-run, not an enabled no-op').toBe(
+			true
+		);
+		await fireEvent.click(gear);
 
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		expect(gear.getAttribute('aria-expanded')).toBe('true');
 		expect(q(container, 'series-create-form')).not.toBeNull();
 		expect(q(container, 'series-create-progress')).not.toBeNull();
 	});
@@ -837,12 +990,13 @@ describe('agenda admin — an in-flight create is never torn down by another ent
 			expect(q(container, 'series-create-resume')).not.toBeNull();
 		});
 
-		// Re-submit RESUMES; interfere while its first POST is on the wire.
+		// Re-submit RESUMES; interfere while its first POST is on the wire
+		// (#213: through the panel's [+ Event] — the only event entry point).
 		await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
 		await waitFor(() => {
 			expect(resolvers.length).toBe(1);
 		});
-		await fireEvent.click(q(container, 'event-create') as HTMLElement);
+		await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
 
 		expect(q(container, 'series-create-form')).not.toBeNull();
 		expect(q(container, 'series-create-resume')).not.toBeNull();
@@ -898,7 +1052,7 @@ describe('agenda admin — a STOPPED series run still owes work, and the entry p
 		// submit is live again, so "in flight" cannot be what protects the resume.
 		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
 
-		const entryPoints = ['season-create', 'event-create', 'season-manage-add-event'] as const;
+		const entryPoints = ['season-create', 'season-manage-add-event'] as const;
 		for (const testid of entryPoints) {
 			const btn = q(container, testid) as HTMLButtonElement | null;
 			expect(btn, `${testid} must still render after a stopped run`).not.toBeNull();
@@ -920,7 +1074,7 @@ describe('agenda admin — a STOPPED series run still owes work, and the entry p
 		const container = await renderReady();
 		await stopBulkRunPartway(container);
 
-		await fireEvent.click(q(container, 'event-create') as HTMLElement);
+		await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
 		await fireEvent.click(q(container, 'season-create') as HTMLElement);
 
 		// Now let the retry succeed and finish the run from the resume record.
@@ -946,7 +1100,7 @@ describe('agenda admin — a STOPPED series run still owes work, and the entry p
 		});
 
 		await waitFor(() => {
-			for (const testid of ['season-create', 'event-create', 'season-manage-add-event'] as const) {
+			for (const testid of ['season-create', 'season-manage-add-event'] as const) {
 				const btn = q(container, testid) as HTMLButtonElement | null;
 				expect(btn, `${testid} must render again`).not.toBeNull();
 				expect(
@@ -954,25 +1108,29 @@ describe('agenda admin — a STOPPED series run still owes work, and the entry p
 					`${testid} must be live again once the stopped run is dismissed`
 				).toBe(false);
 			}
+			// #213 — and the gear is a live toggle again.
+			expect((q(container, 'season-manage-gear') as HTMLButtonElement).disabled).toBe(false);
 		});
 	});
 
-	// #135 — the panel's own × was narrower than the entry-point guard: it
-	// re-enabled the moment `seriesCreateSubmitting` released (the STOPPED
-	// window this whole describe block is about), so a click there closed the
-	// panel — and with it the resume notice, the ONLY visible reason every
-	// other entry point stayed disabled. Widened to `seriesRunUnfinished`.
-	it('the panel’s × cannot discard the panel while a resume record is outstanding — it is the only surviving explanation for the disabled entry points', async () => {
+	// #135 pinned this on the panel's own ×, which was narrower than the
+	// entry-point guard once. #213 removes the × entirely and the GEAR carries
+	// the refusal now (Gama ruling (1) — createEntryPointsBlocked precedent):
+	// disabled the whole time the run is unfinished, wire or no wire, so the
+	// resume notice — the ONLY visible reason every other entry point is
+	// disabled — cannot be discarded.
+	it('the GEAR cannot discard the panel while a resume record is outstanding — the panel is the only surviving explanation for the disabled entry points', async () => {
 		const container = await renderReady();
 		await stopBulkRunPartway(container);
 
-		const close = q(container, 'season-manage-close') as HTMLButtonElement;
-		expect(close.disabled, 'close must be visibly refused while a resume is outstanding').toBe(
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		expect(gear.disabled, 'the gear must be visibly refused while a resume is outstanding').toBe(
 			true
 		);
-		await fireEvent.click(close);
+		await fireEvent.click(gear);
 
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		expect(gear.getAttribute('aria-expanded')).toBe('true');
 		expect(q(container, 'series-create-resume')).not.toBeNull();
 	});
 });
@@ -1010,6 +1168,12 @@ describe('agenda admin — Cancel/Escape is refused while the form’s own creat
 		await fireEvent.keyDown(q(container, 'season-create-form') as HTMLElement, { key: 'Escape' });
 		expect(q(container, 'season-create-form')).not.toBeNull();
 
+		// #213 — the gear's disabled gate is the RUN formula
+		// (seriesRunUnfinished || eventConvertRunUnfinished), NOT
+		// createEntryPointsBlocked: a merely in-flight season create must not
+		// freeze the panel toggle.
+		expect((q(container, 'season-manage-gear') as HTMLButtonElement).disabled).toBe(false);
+
 		rejectCreate(new Error('boom'));
 		await waitFor(() => {
 			expect(q(container, 'season-create-error')).not.toBeNull();
@@ -1025,7 +1189,7 @@ describe('agenda admin — Cancel/Escape is refused while the form’s own creat
 				})
 		);
 		const container = await renderReady();
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 		await fillValidEvent(container);
 		await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 		await waitFor(() => {
@@ -1114,9 +1278,10 @@ describe('agenda admin — a collective switch leaves no creation form behind', 
 		await openPanel(container);
 		expect(q(container, 'series-create-form')).toBeNull();
 		expect(q(container, 'series-create-resume')).toBeNull();
-		// …and with no resume record outstanding, B's entry points are live.
+		// …and with no resume record outstanding, B's entry points are live
+		// (#213: the panel's [+ Event] is the event entry point now).
 		await waitFor(() => {
-			expect((q(container, 'event-create') as HTMLButtonElement).disabled).toBe(false);
+			expect((q(container, 'season-manage-add-event') as HTMLButtonElement).disabled).toBe(false);
 		});
 	});
 
@@ -1178,8 +1343,58 @@ describe('agenda admin — a collective switch leaves no creation form behind', 
 		expect(q(container, 'series-create-form')).toBeNull();
 		expect(q(container, 'series-create-resume')).toBeNull();
 		await waitFor(() => {
-			expect((q(container, 'event-create') as HTMLButtonElement).disabled).toBe(false);
+			expect((q(container, 'season-manage-add-event') as HTMLButtonElement).disabled).toBe(false);
 		});
+	});
+
+	// #213 review F2 — the gear's `disabled` gate is a CLOSE refusal (Gama ruling
+	// (1)): it protects a panel that hosts the only record of an unfinished run.
+	// Gated on the run flags ALONE it also refused to OPEN — and
+	// `seriesCreateSubmitting` is a GLOBAL flag, not a per-db one, so a run still
+	// finishing in the collective the viewer LEFT disabled the gear in the
+	// collective she is now IN, whose panel hosts nothing. With
+	// `createEntryPointsBlocked` (the same global flag) already holding
+	// [+ Season] down, org-b had no reachable admin control at all and nothing on
+	// screen saying why — the shape #138 review F2 and #135 exist to prevent.
+	it('a switch away mid-run: the gear in the NEW collective still OPENS its panel — the close refusal does not travel across collectives', async () => {
+		setAuthedWithTwoCollectives();
+		const resolvers: Array<(id: string) => void> = [];
+		createEventMock.mockImplementation(
+			() =>
+				new Promise<string>((resolve) => {
+					resolvers.push(resolve);
+				})
+		);
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await openSeriesForm(container);
+		await fillValidSeries(container);
+		await enableMondayGeneration(container);
+		await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
+		await waitFor(() => {
+			expect(resolvers.length).toBe(1);
+		});
+
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-panel')).toBeNull();
+		});
+
+		// org-a's occurrence POST is STILL on the wire — the state that used to
+		// freeze org-b's gear.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+		});
+		expect(
+			(q(container, 'season-manage-gear') as HTMLButtonElement).disabled,
+			'with no panel open there is nothing to discard: the gear must still open one'
+		).toBe(false);
+		await openPanel(container);
+
+		// Let the abandoned run finish its turn so nothing dangles past the test.
+		resolvers[0]('ev-new-1');
 	});
 });
 
@@ -1243,7 +1458,7 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
 		const container = await renderReady();
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
 
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 		await fillValidEvent(container);
 		await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 
@@ -1332,24 +1547,21 @@ function expectTouchTarget(
 }
 
 describe('agenda admin — every admin control is a 44x44px touch target', () => {
-	it('page-level entry points: [⚙] (icon-only: height AND width), [+ Season], [+ Event]', async () => {
+	it('page-level entry points (#213: two left): [⚙] (icon-only: height AND width), [+ Season]', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, 'season-manage-gear')).not.toBeNull();
 			expect(q(container, 'season-create')).not.toBeNull();
-			expect(q(container, 'event-create')).not.toBeNull();
 		});
 
 		expectTouchTarget(container, 'season-manage-gear', { iconOnly: true });
 		expectTouchTarget(container, 'season-create');
-		expectTouchTarget(container, 'event-create');
 	});
 
-	it('panel controls: close × (icon-only), [+ Series], [+ Event]', async () => {
+	it('panel controls (#213: the internal close × is gone): [+ Series], [+ Event]', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		expectTouchTarget(container, 'season-manage-close', { iconOnly: true });
 		expectTouchTarget(container, 'season-manage-add-series');
 		expectTouchTarget(container, 'season-manage-add-event');
 	});
@@ -1364,7 +1576,7 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 
 	it('event form: submit + cancel', async () => {
 		const container = await renderReady();
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 
 		expectTouchTarget(container, 'event-create-submit');
 		expectTouchTarget(container, 'event-create-cancel');
@@ -1420,7 +1632,7 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 
 	it('event form conductor chip × (icon-only)', async () => {
 		const container = await renderReady();
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 		await addConductorChip(q(container, 'event-create-conductors-field') as HTMLElement, 'p-ada');
 		await waitFor(() => {
 			expect(q(container, 'event-create-conductor-remove-p-ada')).not.toBeNull();
@@ -1515,7 +1727,7 @@ describe('agenda admin — creation forms stay inside a 375px viewport (class co
 
 	it('event form: every field fluid (the datetime-local control is the notorious offender), no oversized fixed widths', async () => {
 		const container = await renderReady();
-		await openEventFormFromAgenda(container);
+		await openEventFormFromPanel(container);
 		expectFormFluid(container, 'event-create-form');
 	});
 
@@ -1536,11 +1748,19 @@ describe('agenda admin — creation forms stay inside a 375px viewport (class co
 // ---------------------------------------------------------------------------
 // #156 — roving tabindex on the admin toolbar. WAI-APG TOOLBAR: no member is
 // ever "selected", so the stop is simply last-focused-else-first-ENABLED, and
-// arrows only move focus. The disabled-safety matters here: both create buttons
-// disable while a create is in flight, and a disabled button cannot hold focus —
-// a stop parked on one would strand the whole toolbar from the keyboard.
+// arrows only move focus. The disabled-safety matters here: [+ Season] (and
+// #213's gear, mid-run) disable, and a disabled button cannot hold focus — a
+// stop parked on one would strand the whole toolbar from the keyboard.
+//
+// #213 / Gama ruling (2): the toolbar pattern would be DROPPED if at most one
+// member were ever visible at once. The SPIKE proved the opposite — the
+// DEFAULT state (a current season running, nothing queued behind it, viewer
+// its editor: exactly this suite's beforeEach fixture) renders the gear AND
+// [+ Season] together — so role="toolbar" and the roving tabindex are KEPT,
+// at arity 2. Reported back on the issue per the ruling's escape clause:
+// mvox-dev/mvox-app#213 (issuecomment-5507858508).
 // ---------------------------------------------------------------------------
-describe('agenda admin toolbar — roving tabindex (#156)', () => {
+describe('agenda admin toolbar — roving tabindex (#156, arity 2 after #213)', () => {
 	function toolbarButtons(container: HTMLElement): HTMLButtonElement[] {
 		return Array.from(
 			(q(container, 'agenda-admin-toolbar') as HTMLElement).querySelectorAll<HTMLButtonElement>(
@@ -1558,7 +1778,6 @@ describe('agenda admin toolbar — roving tabindex (#156)', () => {
 			expect(q(container, 'agenda-admin-toolbar')).not.toBeNull();
 			expect(q(container, 'season-manage-gear')).not.toBeNull();
 			expect(q(container, 'season-create')).not.toBeNull();
-			expect(q(container, 'event-create')).not.toBeNull();
 		});
 		return container;
 	}
@@ -1570,10 +1789,10 @@ describe('agenda admin toolbar — roving tabindex (#156)', () => {
 		expect(toolbar.getAttribute('aria-label')).toBeTruthy();
 	});
 
-	it('exactly ONE control is the Tab stop, and it is the first member', async () => {
+	it('exactly ONE control is the Tab stop, and it is the first member (of the two #213 leaves)', async () => {
 		const container = await renderToolbar();
 		const btns = toolbarButtons(container);
-		expect(btns).toHaveLength(3);
+		expect(btns).toHaveLength(2);
 		expect(stops(container)).toEqual([btns[0]]);
 	});
 
@@ -1588,14 +1807,14 @@ describe('agenda admin toolbar — roving tabindex (#156)', () => {
 			expect(stops(container)).toEqual([btns[1]]);
 		});
 
-		await fireEvent.keyDown(btns[2], { key: 'ArrowRight' });
+		await fireEvent.keyDown(btns[1], { key: 'ArrowRight' });
 		expect(document.activeElement).toBe(btns[0]);
 
 		await fireEvent.keyDown(btns[0], { key: 'ArrowLeft' });
-		expect(document.activeElement).toBe(btns[2]);
+		expect(document.activeElement).toBe(btns[1]);
 	});
 
-	it('arrows MOVE ONLY — no form opens from arrow navigation', async () => {
+	it('arrows MOVE ONLY — no form or panel opens from arrow navigation', async () => {
 		const container = await renderToolbar();
 		const btns = toolbarButtons(container);
 		btns[0].focus();
@@ -1627,3 +1846,8 @@ describe('agenda admin toolbar — roving tabindex (#156)', () => {
 		expect(remaining[0].disabled, 'the sole Tab stop must be operable').toBe(false);
 	});
 });
+
+// (*MVOX:Tallis* — #213 RED: single right-aligned cogwheel TOGGLE — aria-expanded
+// + aria-controls, no internal panel close, page-level [+ Event] removed, gear
+// disabled while a bulk run is unfinished, toolbar kept at arity 2 per the SPIKE
+// finding on Gama ruling 2)

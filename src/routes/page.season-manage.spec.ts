@@ -60,7 +60,8 @@
 //     season-manage-add-series    [+ Series] entry point (wired in T5)
 //     season-manage-event-<id>    one row per STANDALONE event: name
 //     season-manage-add-event     [+ Event] entry point (wired in T4)
-//     season-manage-close         dismisses the panel
+//     season-manage-close         REMOVED by #213 — the gear is a TOGGLE now:
+//                                 a second gear click dismisses the panel
 //
 //   BEHAVIOR
 //     - Escape layering: Escape in an OPEN field edit cancels only that edit
@@ -1128,7 +1129,7 @@ describe('agenda — the panel lists the season’s series and standalone events
 			expect(q(container, 'season-manage-series-error')).not.toBeNull();
 		});
 
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
@@ -1206,11 +1207,13 @@ describe('agenda — the panel’s reads respect the page-wide requestId guard',
 // ── close / Escape / persistence ────────────────────────────────────────────────
 
 describe('agenda — closing the panel, and what survives it', () => {
-	it('season-manage-close dismisses the panel; nothing was written by opening + closing', async () => {
+	it('a second GEAR click dismisses the panel (#213 — no internal close button exists); nothing was written by opening + closing', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		// #213 — the panel carries no season-manage-close; the gear toggles.
+		expect(q(container, 'season-manage-close')).toBeNull();
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
@@ -1266,11 +1269,11 @@ describe('agenda — closing the panel, and what survives it', () => {
 		expect(document.activeElement).toBe(q(container, 'season-manage-gear'));
 	});
 
-	it('the close BUTTON hands focus back to the gear too (it unmounts itself — focus cannot be left on it)', async () => {
+	it('closing through the GEAR leaves focus on the gear (#213 — it does not unmount; the old × did)', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
@@ -1315,7 +1318,7 @@ describe('agenda — closing the panel, and what survives it', () => {
 			expect(updateSeasonFieldMock).toHaveBeenCalledTimes(1);
 		});
 
-		await fireEvent.click(q(container, 'season-manage-close') as HTMLElement);
+		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});

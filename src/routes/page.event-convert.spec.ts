@@ -329,11 +329,13 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-async function openEventCreateFromAgenda(container: HTMLElement): Promise<void> {
+/** #213 — the page-level [+ Event] is gone; the panel's [+ Event] is the way in. */
+async function openEventCreateFromPanel(container: HTMLElement): Promise<void> {
+	if (!q(container, 'season-manage-panel')) await openPanel(container);
 	await waitFor(() => {
-		expect(q(container, 'event-create')).not.toBeNull();
+		expect(q(container, 'season-manage-add-event')).not.toBeNull();
 	});
-	await fireEvent.click(q(container, 'event-create') as HTMLElement);
+	await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, 'event-create-form')).not.toBeNull();
 	});
@@ -371,7 +373,7 @@ async function selectValue(container: HTMLElement, testid: string, value: string
 describe('event-creation form — the "recurring wants a series" hint', () => {
 	it('renders INSIDE the form through its localized key while NO series is selected', async () => {
 		const container = await renderReady();
-		await openEventCreateFromAgenda(container);
+		await openEventCreateFromPanel(container);
 
 		const form = q(container, 'event-create-form') as HTMLElement;
 		const hint = form.querySelector('[data-testid="event-create-series-hint"]');
@@ -382,7 +384,7 @@ describe('event-creation form — the "recurring wants a series" hint', () => {
 
 	it('disappears the moment a series is chosen, and returns when the choice goes back to "" (standalone)', async () => {
 		const container = await renderReady();
-		await openEventCreateFromAgenda(container);
+		await openEventCreateFromPanel(container);
 
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		const series = q(container, 'event-create-series') as HTMLSelectElement;
@@ -942,12 +944,24 @@ describe('the convert entry point obeys the panel’s create discipline', () => 
 		// The panel cannot be torn down around the only record of what the run owes.
 		await fireEvent.keyDown(q(container, 'season-manage-panel') as HTMLElement, { key: 'Escape' });
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		// #213 / Gama ruling (1): the GEAR (the only close control left) renders
+		// DISABLED while the conversion run is unfinished — the full
+		// closeSeasonManagePanel guard formula, seriesRunUnfinished ||
+		// eventConvertRunUnfinished, not the narrower one the old × had — and a
+		// click that reaches it anyway cannot discard the panel.
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		expect(gear.disabled, 'the gear must be visibly refused mid-conversion-run').toBe(true);
+		await fireEvent.click(gear);
+		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		expect(q(container, 'event-convert-resume-notice')).not.toBeNull();
 
 		await fireEvent.click(q(container, 'event-convert-cancel') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'event-convert-form')).toBeNull();
 		});
 		expect((q(container, 'season-manage-add-event') as HTMLButtonElement).disabled).toBe(false);
+		// #213 — the gear is a live toggle again once nothing is owed.
+		expect((q(container, 'season-manage-gear') as HTMLButtonElement).disabled).toBe(false);
 	});
 });
 
