@@ -3340,6 +3340,15 @@
 		closeSeasonCreateForm();
 		closeEventCreateForm();
 		closeSeriesCreateForm();
+		// #212 — one action context at a time: an armed delete (event row OR
+		// series row — the two share this one flag) dies with every other row's
+		// buttons the moment the form opens. A direct reset, not
+		// `disarmSeasonManageDelete`: that helper also hands focus back to the
+		// `×` it restores, which is wrong here — focus is about to move INTO
+		// the conversion dialog (the `$effect` below), never back to a control
+		// this open is about to unmount.
+		seasonManageDeleteArmed = null;
+		seasonManageArmedSeriesCount = null;
 		eventConvertOpenId = event.id;
 		eventConvertIntervalDays = '7';
 		eventConvertDuration = '';
@@ -5681,53 +5690,59 @@
 												     click re-read (`seasonManageArmedSeriesCount`), not the list's
 												     client-side tally; while the read is in flight (or if it fails)
 												     the confirm quotes no number rather than a number the cascade
-												     never checks. -->
-												{#if seasonManageDeleteArmed === series.id}
-													<button
-														type="button"
-														data-testid="season-manage-series-delete-confirm-{series.id}"
-														aria-label={seasonManageArmedSeriesCount !== null &&
-														seasonManageArmedSeriesCount > 0
-															? m.season_manage_series_delete_confirm({
-																	name: series.name,
-																	count: seasonManageArmedSeriesCount
-																})
-															: m.season_manage_delete_confirm({ name: series.name })}
-														disabled={seasonManageDeletePendingId !== null}
-														aria-busy={seasonManageDeletePendingId === series.id}
-														class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-														onclick={() => onSeasonManageSeriesDelete(series)}
-													>
-														{seasonManageArmedSeriesCount !== null &&
-														seasonManageArmedSeriesCount > 0
-															? m.season_manage_series_delete_confirm_short({
-																	count: seasonManageArmedSeriesCount
-																})
-															: m.season_manage_delete_confirm_short()}
-													</button>
-													<button
-														type="button"
-														data-testid="season-manage-series-delete-cancel-{series.id}"
-														aria-label={m.season_manage_delete_cancel({ name: series.name })}
-														disabled={seasonManageDeletePendingId !== null}
-														class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-														onclick={() =>
-															void disarmSeasonManageDelete(
-																`season-manage-series-delete-${series.id}`
-															)}
-													>
-														{m.season_manage_delete_cancel_short()}
-													</button>
-												{:else}
-													<button
-														type="button"
-														data-testid="season-manage-series-delete-{series.id}"
-														aria-label={m.season_manage_series_delete({ name: series.name })}
-														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-														onclick={() => void armSeasonManageSeriesDelete(series)}
-													>
-														&times;
-													</button>
+												     never checks.
+												     #212 — one action context at a time: the open convert form
+												     unmounts every row's delete control (armed or not), the same
+												     `{#if !seriesCreateOpen}`/`{#if !eventCreateOpen}`
+												     mutual-exclusion precedent the panel's opener buttons use. -->
+												{#if eventConvertOpenId === null}
+													{#if seasonManageDeleteArmed === series.id}
+														<button
+															type="button"
+															data-testid="season-manage-series-delete-confirm-{series.id}"
+															aria-label={seasonManageArmedSeriesCount !== null &&
+															seasonManageArmedSeriesCount > 0
+																? m.season_manage_series_delete_confirm({
+																		name: series.name,
+																		count: seasonManageArmedSeriesCount
+																	})
+																: m.season_manage_delete_confirm({ name: series.name })}
+															disabled={seasonManageDeletePendingId !== null}
+															aria-busy={seasonManageDeletePendingId === series.id}
+															class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+															onclick={() => onSeasonManageSeriesDelete(series)}
+														>
+															{seasonManageArmedSeriesCount !== null &&
+															seasonManageArmedSeriesCount > 0
+																? m.season_manage_series_delete_confirm_short({
+																		count: seasonManageArmedSeriesCount
+																	})
+																: m.season_manage_delete_confirm_short()}
+														</button>
+														<button
+															type="button"
+															data-testid="season-manage-series-delete-cancel-{series.id}"
+															aria-label={m.season_manage_delete_cancel({ name: series.name })}
+															disabled={seasonManageDeletePendingId !== null}
+															class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+															onclick={() =>
+																void disarmSeasonManageDelete(
+																	`season-manage-series-delete-${series.id}`
+																)}
+														>
+															{m.season_manage_delete_cancel_short()}
+														</button>
+													{:else}
+														<button
+															type="button"
+															data-testid="season-manage-series-delete-{series.id}"
+															aria-label={m.season_manage_series_delete({ name: series.name })}
+															class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
+															onclick={() => void armSeasonManageSeriesDelete(series)}
+														>
+															&times;
+														</button>
+													{/if}
 												{/if}
 											</div>
 										</div>
@@ -5789,70 +5804,77 @@
 											<span>{event.name}</span>
 											<!-- #197 review F2 — the same two-step confirm the series rows
 											     carry: an event delete is irreversible and there is no undo
-											     anywhere in the app. -->
-											<div class="flex items-center gap-1">
-												<!-- #196 — the standalone → series conversion entry point.
-												     Icon-only like the `×` delete control beside it; the
-												     accessible name (with the event's own name) rides
-												     `aria-label`, not visible text (the delete-{event.id}
-												     button's own established shape).
-												     #196 review F4 — `disabled` on `createEntryPointsBlocked`
-												     like `season-manage-add-series`/`-add-event`: a creation
-												     entry point that is off-limits must LOOK off-limits, not
-												     be a silent no-op click. -->
-												<button
-													type="button"
-													data-testid="season-manage-event-convert-{event.id}"
-													aria-label={m.season_manage_event_convert({ name: event.name })}
-													disabled={createEntryPointsBlocked}
-													class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-													onclick={() => openEventConvertForm(event)}
-												>
-													&#8635;
-												</button>
-												{#if seasonManageDeleteArmed === event.id}
+											     anywhere in the app.
+											     #212 — one action context at a time: while ANY row's convert
+											     form is open the panel is a single action context, so every
+											     row's ⟳/×/confirm/cancel (event rows AND series rows) unmounts,
+											     the same `{#if !seriesCreateOpen}`/`{#if !eventCreateOpen}`
+											     mutual-exclusion precedent the panel's own opener buttons use. -->
+											{#if eventConvertOpenId === null}
+												<div class="flex items-center gap-1">
+													<!-- #196 — the standalone → series conversion entry point.
+													     Icon-only like the `×` delete control beside it; the
+													     accessible name (with the event's own name) rides
+													     `aria-label`, not visible text (the delete-{event.id}
+													     button's own established shape).
+													     #196 review F4 — `disabled` on `createEntryPointsBlocked`
+													     like `season-manage-add-series`/`-add-event`: a creation
+													     entry point that is off-limits must LOOK off-limits, not
+													     be a silent no-op click. -->
 													<button
 														type="button"
-														data-testid="season-manage-event-delete-confirm-{event.id}"
-														aria-label={m.season_manage_event_delete_confirm({
-															name: event.name
-														})}
-														disabled={seasonManageDeletePendingId !== null}
-														aria-busy={seasonManageDeletePendingId === event.id}
-														class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-														onclick={() => onSeasonManageEventDelete(event)}
+														data-testid="season-manage-event-convert-{event.id}"
+														aria-label={m.season_manage_event_convert({ name: event.name })}
+														disabled={createEntryPointsBlocked}
+														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
+														onclick={() => openEventConvertForm(event)}
 													>
-														{m.season_manage_delete_confirm_short()}
+														&#8635;
 													</button>
-													<button
-														type="button"
-														data-testid="season-manage-event-delete-cancel-{event.id}"
-														aria-label={m.season_manage_delete_cancel({ name: event.name })}
-														disabled={seasonManageDeletePendingId !== null}
-														class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-														onclick={() =>
-															void disarmSeasonManageDelete(
-																`season-manage-event-delete-${event.id}`
-															)}
-													>
-														{m.season_manage_delete_cancel_short()}
-													</button>
-												{:else}
-													<button
-														type="button"
-														data-testid="season-manage-event-delete-{event.id}"
-														aria-label={m.season_manage_event_delete({ name: event.name })}
-														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-														onclick={() =>
-															void armSeasonManageDelete(
-																event.id,
-																`season-manage-event-delete-confirm-${event.id}`
-															)}
-													>
-														&times;
-													</button>
-												{/if}
-											</div>
+													{#if seasonManageDeleteArmed === event.id}
+														<button
+															type="button"
+															data-testid="season-manage-event-delete-confirm-{event.id}"
+															aria-label={m.season_manage_event_delete_confirm({
+																name: event.name
+															})}
+															disabled={seasonManageDeletePendingId !== null}
+															aria-busy={seasonManageDeletePendingId === event.id}
+															class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+															onclick={() => onSeasonManageEventDelete(event)}
+														>
+															{m.season_manage_delete_confirm_short()}
+														</button>
+														<button
+															type="button"
+															data-testid="season-manage-event-delete-cancel-{event.id}"
+															aria-label={m.season_manage_delete_cancel({ name: event.name })}
+															disabled={seasonManageDeletePendingId !== null}
+															class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+															onclick={() =>
+																void disarmSeasonManageDelete(
+																	`season-manage-event-delete-${event.id}`
+																)}
+														>
+															{m.season_manage_delete_cancel_short()}
+														</button>
+													{:else}
+														<button
+															type="button"
+															data-testid="season-manage-event-delete-{event.id}"
+															aria-label={m.season_manage_event_delete({ name: event.name })}
+															class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
+															onclick={() =>
+																void armSeasonManageDelete(
+																	event.id,
+																	`season-manage-event-delete-confirm-${event.id}`
+																)}
+														>
+															&times;
+														</button>
+													{/if}
+												</div>
+											{/if}
 										</div>
 										{#if eventConvertOpenId === event.id}
 											<!-- #196 review F3 — the full dialog contract its four siblings on
@@ -5918,6 +5940,21 @@
 														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 													/>
 												</label>
+												<!-- #212 — the event's OWN date, derived (never a new $state) from
+												     `tallinnWallClockParts(event.startDatetime).date`: plain ISO
+												     TEXT, not an input, so the end-date picker below has visible
+												     context for what it cannot precede. -->
+												<p
+													data-testid="event-convert-start-date"
+													class="flex w-full flex-col gap-0.5"
+												>
+													<span class="text-xs text-ink-2">
+														{m.event_convert_start_date_label()}
+													</span>
+													<span class="text-ink">
+														{tallinnWallClockParts(event.startDatetime).date}
+													</span>
+												</p>
 												<label class="flex w-full flex-col gap-0.5">
 													<span class="text-xs text-ink-2">
 														{m.event_convert_end_date_label()}

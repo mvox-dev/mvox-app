@@ -889,6 +889,94 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 	});
 });
 
+// ── #212: the convert form owns the panel — any armed delete is DISARMED ────────
+//
+// Gama's ruling on #212 (last comment): while the event→series conversion form
+// is open the panel is ONE action context — every row's ⟳ and × (event rows
+// AND series rows) is gone and any armed delete confirmation is disarmed;
+// closing the form brings every row's buttons back in their DISARMED posture.
+// The "arming a SECOND row disarms the first" shape above, extended to the
+// convert form: only one destructive/creative intent is ever live.
+
+describe('agenda — #212 opening the convert form disarms any armed delete', () => {
+	it('an armed EVENT row is disarmed by opening convert on ANOTHER row — no confirm survives the form, and the × comes back disarmed after it closes', async () => {
+		eventRows = [
+			...eventRows,
+			{ id: 'ev-10', name: 'Autumn concert', startDatetime: '2027-09-12T15:00:00.000Z' }
+		];
+		const container = await renderReady();
+		await openPanelWithRows(container);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-event-ev-10')).not.toBeNull();
+		});
+
+		// Arm delete on row B (ev-10).
+		await fireEvent.click(q(container, 'season-manage-event-delete-ev-10') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-event-delete-confirm-ev-10')).not.toBeNull();
+		});
+
+		// Open convert on row A (ev-9) — the armed confirm dies with every other
+		// row action: NO ⟳/×/confirm/cancel remains on ANY row while the form
+		// is open (prefix matching catches the confirm/cancel testids too).
+		await fireEvent.click(q(container, 'season-manage-event-convert-ev-9') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).not.toBeNull();
+		});
+		expect(
+			container.querySelectorAll('[data-testid^="season-manage-event-delete-"]').length
+		).toBe(0);
+		expect(
+			container.querySelectorAll('[data-testid^="season-manage-event-convert-"]').length
+		).toBe(0);
+		expect(
+			container.querySelectorAll('[data-testid^="season-manage-series-delete-"]').length
+		).toBe(0);
+
+		// Close the form: row B comes back DISARMED — the plain ×, never a
+		// primed confirm the operator did not just arm.
+		await fireEvent.click(q(container, 'event-convert-cancel') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-event-delete-ev-10')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-event-delete-confirm-ev-10')).toBeNull();
+		expect(q(container, 'season-manage-event-delete-cancel-ev-10')).toBeNull();
+		expect(deleteEventMock).not.toHaveBeenCalled();
+	});
+
+	it('an armed SERIES row is disarmed the same way — opening convert on an event row clears it', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-delete-confirm-series-1')).not.toBeNull();
+		});
+
+		await fireEvent.click(q(container, 'season-manage-event-convert-ev-9') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).not.toBeNull();
+		});
+		expect(
+			container.querySelectorAll('[data-testid^="season-manage-series-delete-"]').length
+		).toBe(0);
+
+		await fireEvent.click(q(container, 'event-convert-cancel') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-delete-series-1')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-series-delete-confirm-series-1')).toBeNull();
+		expect(q(container, 'season-manage-series-delete-cancel-series-1')).toBeNull();
+		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
+	});
+});
+
 // (*MVOX:Tallis* — #197 RED: delete buttons on series/standalone rows in the
 // season-manage panel — rights-gated rendering, delete-call wiring, row removal,
 // loud failure)
@@ -896,3 +984,5 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 // post-delete refresh, per-list error placement + status announcement)
 // (*MVOX:Palestrina* — #197 review 2nd pass F1/F2: live confirm count,
 // cascade-reported deletion count, event-cascade copy)
+// (*MVOX:Tallis* — #212 RED: convert form disarms any armed delete — one action
+// context at a time)

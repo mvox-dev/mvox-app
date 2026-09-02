@@ -933,7 +933,10 @@ describe('the convert entry point obeys the panel’s create discipline', () => 
 			expect(q(container, 'event-convert-resume-notice')).not.toBeNull();
 		});
 
-		expect((q(container, 'season-manage-event-convert-ev-9') as HTMLButtonElement).disabled).toBe(true);
+		// #212 — while the conversion form is open the panel is ONE action
+		// context: every row ⟳/× is unmounted entirely (see the #212 block
+		// below), so "visibly blocked" for THIS entry point now means GONE.
+		expect(q(container, 'season-manage-event-convert-ev-9')).toBeNull();
 		expect((q(container, 'season-manage-add-event') as HTMLButtonElement).disabled).toBe(true);
 		expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(true);
 		// The panel cannot be torn down around the only record of what the run owes.
@@ -945,6 +948,125 @@ describe('the convert entry point obeys the panel’s create discipline', () => 
 			expect(q(container, 'event-convert-form')).toBeNull();
 		});
 		expect((q(container, 'season-manage-add-event') as HTMLButtonElement).disabled).toBe(false);
+	});
+});
+
+// ── #212 — the form SHOWS the series' fixed start, and OWNS the panel while open ─
+//
+// Gama's ruling on #212 (last comment):
+//   (1) the form carries the event's own date — labelled, rendered as plain
+//       YYYY-MM-DD TEXT (never an input: the start is derived from the event,
+//       not operator-editable), above the end-date picker; and
+//   (2) while the form is open the panel is a SINGLE action context: every
+//       row's ⟳ and × (event rows AND series rows) is gone, any armed delete
+//       confirmation is disarmed, and closing or submitting the form brings
+//       every row's buttons back.
+//
+//   TESTIDS
+//     event-convert-start-date   a <p> INSIDE event-convert-form: the
+//                                event_convert_start_date_label key + the
+//                                Tallinn wall-clock ISO date of the event —
+//                                derived in the template, no new state.
+
+describe('#212 — the convert form shows the series’ fixed start (the event’s own date)', () => {
+	it('renders event-convert-start-date as labelled TEXT — the label key + the Tallinn wall-clock ISO date — above the end-date picker, and it is NOT an input', async () => {
+		// 2026-03-14 is EET (UTC+2, before the late-March DST switch): the UTC
+		// instant 16:00Z is the 18:00 Tallinn wall clock the operator knows the
+		// event by. The date shown must be the TALLINN date, ISO-formatted.
+		listEventsForSeasonMock.mockResolvedValue([
+			{ id: 'ev-9', name: 'Winter concert', startDatetime: '2026-03-14T16:00:00.000Z' }
+		]);
+		const container = await renderReady();
+		await openConvertForm(container);
+
+		const start = q(container, 'event-convert-start-date');
+		expect(start).not.toBeNull();
+		// Plain text in a <p> — the start is derived from the event and not the
+		// operator's to edit, so it must never render as a form control.
+		expect((start as HTMLElement).tagName).toBe('P');
+		expect((start as HTMLElement).querySelector('input, select, textarea')).toBeNull();
+		// FULL textContent: the localized label (the paraglide mock echoes keys)
+		// plus the ISO date — nothing else, no hardcoded copy.
+		expect((start as HTMLElement).textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			'event_convert_start_date_label 2026-03-14'
+		);
+		// It sits INSIDE the form, ABOVE the end-date picker it gives meaning to.
+		const form = q(container, 'event-convert-form') as HTMLElement;
+		expect(form.contains(start)).toBe(true);
+		const endDate = q(container, 'event-convert-end-date') as HTMLElement;
+		expect(
+			(start as HTMLElement).compareDocumentPosition(endDate) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+});
+
+describe('#212 — one action context: the open form takes every row’s ⟳/× off the table', () => {
+	/** Count every element whose testid starts with `prefix` — the armed
+	 *  confirm/cancel testids share the plain ×'s prefix, so a 0 here means NO
+	 *  delete affordance in ANY posture. */
+	function countByPrefix(container: HTMLElement, prefix: string): number {
+		return container.querySelectorAll(`[data-testid^="${prefix}"]`).length;
+	}
+
+	it('opening the convert form on one row hides EVERY row’s action buttons — event rows and series rows alike — and cancel brings every one back', async () => {
+		listEventsForSeasonMock.mockResolvedValue([
+			{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' },
+			{ id: 'ev-10', name: 'Autumn concert', startDatetime: '2027-09-12T15:00:00.000Z' }
+		]);
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-event-ev-10')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
+		});
+
+		// Baseline: two event rows (⟳ + × each), one series row (×).
+		expect(countByPrefix(container, 'season-manage-event-convert-')).toBe(2);
+		expect(countByPrefix(container, 'season-manage-event-delete-')).toBe(2);
+		expect(countByPrefix(container, 'season-manage-series-delete-')).toBe(1);
+
+		await fireEvent.click(q(container, 'season-manage-event-convert-ev-9') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).not.toBeNull();
+		});
+
+		// ONE action context: no ⟳, no ×, no confirm/cancel — on ANY row.
+		expect(countByPrefix(container, 'season-manage-event-convert-')).toBe(0);
+		expect(countByPrefix(container, 'season-manage-event-delete-')).toBe(0);
+		expect(countByPrefix(container, 'season-manage-series-delete-')).toBe(0);
+
+		await fireEvent.click(q(container, 'event-convert-cancel') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).toBeNull();
+		});
+		// Every button back, exactly as many as before.
+		await waitFor(() => {
+			expect(countByPrefix(container, 'season-manage-event-convert-')).toBe(2);
+		});
+		expect(countByPrefix(container, 'season-manage-event-delete-')).toBe(2);
+		expect(countByPrefix(container, 'season-manage-series-delete-')).toBe(1);
+	});
+
+	it('a SUBMITTED form restores the buttons too — the run finishes, the form closes, the listed rows get their actions back', async () => {
+		const container = await renderReady();
+		await openConvertForm(container);
+
+		await fill(container, 'event-convert-duration', '90');
+		await fill(container, 'event-convert-end-date', '2027-06-30');
+		await fireEvent.click(q(container, 'event-convert-submit') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).toBeNull();
+		});
+
+		// The panel's lists re-read after success; the (static) fixture still
+		// lists ev-9 and series-1, so their actions must be rendered again.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-event-convert-ev-9')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-event-delete-ev-9')).not.toBeNull();
+		expect(q(container, 'season-manage-series-delete-series-1')).not.toBeNull();
 	});
 });
 
@@ -994,4 +1116,28 @@ describe('locale parity — every #196 key present and non-empty in en/et/lv/uk'
 	});
 });
 
-// (*MVOX:Tallis* — #196 RED: conversion page wiring + standalone hint + i18n keys)
+// ── i18n — the #212 start-date label, present in ALL FOUR locales ───────────────
+
+describe('#212 locale parity — event_convert_start_date_label present and non-empty in en/et/lv/uk', () => {
+	function messages(locale: string): MessageFile {
+		return JSON.parse(
+			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as MessageFile;
+	}
+
+	it.each(['en', 'et', 'lv', 'uk'] as const)('%s carries the key, non-empty', (locale) => {
+		expect(
+			isMessageEmpty(messages(locale)['event_convert_start_date_label']),
+			`messages/${locale}.json: event_convert_start_date_label`
+		).toBe(false);
+	});
+
+	// Gama named the en/et copy in the #212 ruling; lv/uk stay Comenius's call.
+	it('en reads "Starts", et reads "Algus" — the copy the #212 ruling pinned', () => {
+		expect(messages('en')['event_convert_start_date_label']).toBe('Starts');
+		expect(messages('et')['event_convert_start_date_label']).toBe('Algus');
+	});
+});
+
+// (*MVOX:Tallis* — #196 RED: conversion page wiring + standalone hint + i18n keys;
+//  #212 RED: start-date display + single-action-context mutual exclusion)

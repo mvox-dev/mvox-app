@@ -435,6 +435,7 @@
 	"event_convert_form_label": "Convert to series",
 	"event_convert_interval_label": "Repeat every (days)",
 	"event_convert_duration_label": "Duration (minutes)",
+	"event_convert_start_date_label": "Starts",
 	"event_convert_end_date_label": "Series ends",
 	"event_convert_submit": "Convert",
 	"event_convert_cancel": "Cancel",

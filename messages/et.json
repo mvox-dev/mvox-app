@@ -435,6 +435,7 @@
 	"event_convert_form_label": "Muuda seeriaks",
 	"event_convert_interval_label": "Kordub iga (päeva)",
 	"event_convert_duration_label": "Kestus (minutites)",
+	"event_convert_start_date_label": "Algus",
 	"event_convert_end_date_label": "Seeria lõpeb",
 	"event_convert_submit": "Muuda",
 	"event_convert_cancel": "Loobu",

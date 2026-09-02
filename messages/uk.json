@@ -437,6 +437,7 @@
 	"event_convert_form_label": "Перетворити на серію",
 	"event_convert_interval_label": "Повторюється кожні (днів)",
 	"event_convert_duration_label": "Тривалість (хвилин)",
+	"event_convert_start_date_label": "Початок",
 	"event_convert_end_date_label": "Серія завершується",
 	"event_convert_submit": "Перетворити",
 	"event_convert_cancel": "Скасувати",
