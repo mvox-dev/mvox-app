@@ -64,7 +64,10 @@
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
-	import Autocomplete from '$lib/components/Autocomplete.svelte';
+	// #209 (PO standing rule 1) — the three conductor pickers are NATIVE
+	// <select> elements, fed in ROSTER ORDER (Gama ruling 3) by the SAME
+	// `rosterOrder` helper the roster page's own grouping runs through.
+	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
 	import { createEvent, createEventSeries, createSeason } from '$lib/entity/entityCreate';
@@ -272,10 +275,33 @@
 	const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 	let rosterCache = $state<{ db: string; roster: RosterRow[]; fetchedAt: number } | null>(null);
 	// #132/T3 — the season-manage panel's ONE source of member names (conductor
-	// chips + the conductor Autocomplete's option list). Mirrored off every
-	// `getRoster` resolution (cache hit or fresh fetch) rather than fetched
-	// separately, so the panel never pays its own 1+N roster fan-out.
+	// chips + the conductor picker's option list, #209 a native <select>).
+	// Mirrored off every `getRoster` resolution (cache hit or fresh fetch)
+	// rather than fetched separately, so the panel never pays its own 1+N
+	// roster fan-out.
 	let rosterRows = $state<RosterRow[]>([]);
+	/**
+	 * #209 review F1 — an EMPTY option list is not ONE state but four: the read
+	 * has not finished, the read FAILED, this collective has no members at all,
+	 * and "everyone eligible is already picked". Only the last of those may say
+	 * `picker_everyone_added`; the other three said it too when the exhausted
+	 * state was keyed on `options.length === 0` alone, so a cold-cache form open
+	 * (a 1+N fan-out long) and — permanently — a failed roster read both claimed
+	 * every member had already been added. These two flags, owned by the two
+	 * read funnels below, are what `pickerPromptText` tells them apart with.
+	 *
+	 * In-flight is a COUNT, not a boolean: two forms can warm the same cache at
+	 * once (agenda + panel), and the first settle must not clear a read that is
+	 * still running.
+	 */
+	let rosterReadsInFlight = $state(0);
+	let rosterReadFailed = $state(false);
+	/** The SECTION read behind roster ORDER failed. The picker stays usable —
+	 *  `rosterOrder` degrades to the roster's own name order — but says so
+	 *  rather than presenting a silently different order as the roster's
+	 *  (#209 review F2: one posture, both surfaces). */
+	let sectionsReadFailed = $state(false);
+	const rosterPickerLoading = $derived(rosterReadsInFlight > 0);
 
 	/**
 	 * The ONE way this page reads the roster: cache-first, keyed by the db the
@@ -294,15 +320,90 @@
 			Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
 		if (cacheValid) {
 			rosterRows = rosterCache!.roster;
+			rosterReadFailed = false;
 			return Promise.resolve(rosterCache!.roster);
 		}
-		return loadRoster(cfg).then((roster) => {
-			// Keyed by the db the fetch was FOR — a collective switch mid-flight
-			// leaves a cache entry the (now different) selected db never matches.
-			rosterCache = { db: cfg.db, roster, fetchedAt: Date.now() };
-			rosterRows = roster;
-			return roster;
-		});
+		rosterReadsInFlight += 1;
+		rosterReadFailed = false;
+		return loadRoster(cfg)
+			.then((roster) => {
+				// Keyed by the db the fetch was FOR — a collective switch mid-flight
+				// leaves a cache entry the (now different) selected db never matches.
+				rosterCache = { db: cfg.db, roster, fetchedAt: Date.now() };
+				rosterRows = roster;
+				return roster;
+			})
+			.catch((e: unknown) => {
+				// Re-thrown: every caller keeps its own `.catch` (and the panel its
+				// `.finally`). The flag exists so the PICKER can say "unavailable"
+				// instead of "everyone is already added" (#209 review F1).
+				rosterReadFailed = true;
+				throw e;
+			})
+			.finally(() => {
+				rosterReadsInFlight -= 1;
+			});
+	}
+
+	// #209 — the section tree behind ROSTER ORDER (Gama ruling 3), cached the
+	// same shape as `getRoster` above and shared by all three conductor pickers
+	// (season-manage panel, season-create form, event-create form).
+	let sectionsCache = $state<{ db: string; sections: SectionNode[]; fetchedAt: number } | null>(
+		null
+	);
+	let rosterSections = $state<SectionNode[]>([]);
+
+	function getSections(cfg: { db: string; token: string }): Promise<SectionNode[]> {
+		const cacheValid =
+			sectionsCache &&
+			sectionsCache.db === cfg.db &&
+			Date.now() - sectionsCache.fetchedAt < ROSTER_CACHE_TTL_MS;
+		if (cacheValid) {
+			rosterSections = sectionsCache!.sections;
+			sectionsReadFailed = false;
+			return Promise.resolve(sectionsCache!.sections);
+		}
+		rosterReadsInFlight += 1;
+		sectionsReadFailed = false;
+		return listSections(cfg)
+			.then((sections) => {
+				sectionsCache = { db: cfg.db, sections, fetchedAt: Date.now() };
+				rosterSections = sections;
+				return sections;
+			})
+			.catch((e: unknown) => {
+				sectionsReadFailed = true;
+				throw e;
+			})
+			.finally(() => {
+				rosterReadsInFlight -= 1;
+			});
+	}
+
+	/** #209 — every roster row NOT excluded, in ROSTER ORDER (Gama ruling 3):
+	 *  section (this collective's tree order), then position within section,
+	 *  Unassigned last, multi-section people deduped to their first position.
+	 *  Built off the SAME `rosterRows`/`rosterSections` every picker site
+	 *  shares. */
+	function rosterPickerOptions(
+		excludeIds: readonly string[]
+	): Array<{ id: string; label: string }> {
+		return rosterOrder(rosterRows, rosterSections)
+			.filter((row) => !excludeIds.includes(row.personId))
+			.map((row) => ({ id: row.personId, label: row.name }));
+	}
+
+	/** #209 review F1 — the prompt option's text for a person picker. With
+	 *  people to offer it is the site's own add-prompt; with NONE it must say
+	 *  WHICH empty this is. `picker_everyone_added` is reserved for the one
+	 *  case that has actually been established: the roster resolved, it had
+	 *  rows, and every one of them is already picked. */
+	function pickerPromptText(optionCount: number, addPrompt: string): string {
+		if (optionCount > 0) return addPrompt;
+		if (rosterReadFailed) return m.picker_roster_unavailable();
+		if (rosterPickerLoading) return m.picker_roster_loading();
+		if (rosterRows.length === 0) return m.picker_no_members();
+		return m.picker_everyone_added();
 	}
 
 	// Load the selected collective's upcoming agenda; reload on every collective
@@ -358,6 +459,13 @@
 			closeAttendancePanel();
 			rosterCache = null;
 			rosterRows = [];
+			sectionsCache = null;
+			rosterSections = [];
+			// #209 review F1/F2 — the readiness flags belong to the collective whose
+			// roster they describe: a failure in the PREVIOUS one must not caption
+			// the next one's picker.
+			rosterReadFailed = false;
+			sectionsReadFailed = false;
 			// #196 review F2 — a genuine collective switch (deselection) DOES drop an
 			// unfinished conversion run: its resume record names ids in a db that is no
 			// longer selected. `EventConvertResume` documents exactly this.
@@ -404,6 +512,13 @@
 			// "unknown member" for a refresh that changed no collective.
 			rosterCache = null;
 			rosterRows = [];
+			sectionsCache = null;
+			rosterSections = [];
+			// #209 review F1/F2 — the readiness flags belong to the collective whose
+			// roster they describe: a failure in the PREVIOUS one must not caption
+			// the next one's picker.
+			rosterReadFailed = false;
+			sectionsReadFailed = false;
 			// #196 review F2 — see the deselection branch: a switch to a DIFFERENT
 			// collective drops the run record with the rest of the panel. Retries of the
 			// SAME collective never reach here — `retryAgenda` keeps the panel while a
@@ -1694,9 +1809,9 @@
 	let seasonCreateName = $state('');
 	let seasonCreateStartDate = $state('');
 	let seasonCreateEndDate = $state('');
-	// Chosen conductors, in pick order — the Autocomplete clears itself after
-	// each pick (multi-add readiness), so THIS is what renders the chips and
-	// what `conductorRefs` is built from on submit.
+	// Chosen conductors, in pick order — the native <select> (#209) resets to
+	// its prompt after each pick (multi-add readiness), so THIS is what
+	// renders the chips and what `conductorRefs` is built from on submit.
 	let seasonCreateConductors = $state<Array<{ id: string; name: string }>>([]);
 	let seasonCreateError = $state<(() => string) | null>(null);
 	/**
@@ -1718,9 +1833,13 @@
 	// render, so only a CHANGE to its text is announced.
 	let seasonCreateStatus = $state('');
 	let seasonCreateNameInput = $state<HTMLInputElement | null>(null);
-	// The conductor autocomplete's source — loaded ONCE when the form opens
-	// (never per-keystroke; the Autocomplete itself filters client-side).
-	let seasonConductorOptions = $state<Array<{ id: string; label: string }>>([]);
+	// #209 — the conductor native-select's source: roster people not already
+	// chips, in ROSTER ORDER. `getRoster`/`getSections` (fired once when the
+	// form opens — no per-keystroke fetch, there is nothing to type) warm the
+	// shared cache this reads.
+	const seasonConductorOptions = $derived(
+		rosterPickerOptions(seasonCreateConductors.map((c) => c.id))
+	);
 
 	const hasUpcomingSeason = $derived.by(() => {
 		const todayIso = new Date().toISOString().slice(0, 10);
@@ -1754,17 +1873,18 @@
 
 		const current = selected;
 		if (!current) return;
-		seasonConductorOptions = [];
 		// F1 — through the shared cache, not a fresh 1+N fan-out per form open.
-		getRoster({ db: current.db, token: getToken() ?? '' })
-			.then((rows) => {
-				seasonConductorOptions = rows.map((row) => ({ id: row.personId, label: row.name }));
-			})
-			.catch((e) => {
-				// Supplementary — the conductor field is simply option-less on a
-				// failed read; the name/dates path (the point of the form) stays live.
-				console.error('agenda: loading the roster for the conductor autocomplete failed', e);
-			});
+		// #209 — options are now a $derived off the shared rosterRows/rosterSections
+		// (below), so this fetch only needs to WARM the cache; the render reads it.
+		const cfg = { db: current.db, token: getToken() ?? '' };
+		getRoster(cfg).catch((e) => {
+			// Supplementary — the conductor field is simply option-less on a
+			// failed read; the name/dates path (the point of the form) stays live.
+			console.error('agenda: loading the roster for the conductor picker failed', e);
+		});
+		getSections(cfg).catch((e) => {
+			console.error('agenda: loading the section tree for the conductor picker failed', e);
+		});
 	}
 
 	function closeSeasonCreateForm(): void {
@@ -1796,12 +1916,13 @@
 	// Escape ANYWHERE in the form dismisses it without writing — bound on the
 	// form's own root so it catches the bubbled keydown from any control inside.
 	//
-	// #132/T2 review F2 — LAYERED with the conductor Autocomplete, not racing it:
-	// while its dropdown is OPEN the Autocomplete consumes Escape (stopPropagation)
-	// and only dismisses its own popup, so one keystroke can no longer close the
-	// dropdown AND throw away the half-filled form around it. With the dropdown
-	// closed the event reaches here, and the form dismisses — the WAI-APG
-	// two-Escapes-to-leave behaviour.
+	// #209 — the conductor field used to be the #132/T2 Autocomplete, which
+	// LAYERED Escape (its own open dropdown consumed the first keystroke via
+	// stopPropagation, so it took two Escapes to leave with the dropdown open).
+	// A native <select> owns its popup itself — the browser closes it before
+	// the page ever sees the key — so that layering retired with the
+	// component: one Escape, from any field including this one, dismisses the
+	// form.
 	function onSeasonFormKeydown(event: KeyboardEvent): void {
 		if (event.key === 'Escape') dismissSeasonCreateForm();
 	}
@@ -1832,8 +1953,9 @@
 	}
 
 	function onSeasonConductorSelect(selection: { id: string | null; label: string }): void {
-		// No `allowFreeText` on this Autocomplete — id is always non-null here in
-		// practice, but stay fail-closed rather than trust that wiring silently.
+		// #209 — the native <select>'s change handler already guards the ''
+		// prompt value, so `id` is always non-null here in practice, but stay
+		// fail-closed rather than trust that wiring silently.
 		if (!selection.id) return;
 		if (seasonCreateConductors.some((c) => c.id === selection.id)) return; // no duplicate chips
 		seasonCreateConductors = [...seasonCreateConductors, { id: selection.id, name: selection.label }];
@@ -2123,12 +2245,10 @@
 			: m.season_manage_conductor_unknown();
 	}
 
-	/** The conductor Autocomplete's source: roster members not ALREADY a
-	 *  conductor of this season. */
+	/** #209 — the conductor native-select's source: roster members not ALREADY
+	 *  a conductor of this season, in ROSTER ORDER (Gama ruling 3). */
 	const seasonManageConductorOptions = $derived(
-		rosterRows
-			.filter((row) => !seasonManageConductorIds.includes(row.personId))
-			.map((row) => ({ id: row.personId, label: row.name }))
+		rosterPickerOptions(seasonManageConductorIds)
 	);
 
 	/** Season bounds are date-ONLY (`yyyy-mm-dd`) and NUMERIC/TABULAR text — #207
@@ -2240,7 +2360,7 @@
 		seasonManageEventsError = false;
 		// #132/T2 review F1's cache-first `getRoster` — same lazy-on-open posture
 		// as the season-CREATE form (never a roster read on the plain agenda
-		// visit): the conductor chips/Autocomplete are the FIRST thing in this
+		// visit): the conductor chips/native select are the FIRST thing in this
 		// panel to need names, so the fetch fires here, not earlier.
 		seasonManageRosterLoading = true;
 		getRoster(cfg)
@@ -2253,6 +2373,10 @@
 				// the moment the read is done (#132/T3 review F4).
 				seasonManageRosterLoading = false;
 			});
+		// #209 — the section tree behind the conductor picker's ROSTER ORDER.
+		getSections(cfg).catch((e) => {
+			console.error('agenda: loading the section tree for season management failed', e);
+		});
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((list) => {
 				if (thisRequest !== requestId) return;
@@ -2338,8 +2462,9 @@
 
 	/** Escape on the PANEL ITSELF dismisses it. Layered under a field edit's
 	 *  own Escape handler (`handleSeasonFieldKeydown`), which stops propagation
-	 *  while an edit is open — the WAI-APG two-Escapes-to-leave shape, same as
-	 *  the conductor Autocomplete vs. the season-CREATE form (#132/T2 review F2). */
+	 *  while an edit is open — the WAI-APG two-Escapes-to-leave shape. (#209
+	 *  retired the same shape's OTHER instance, the conductor field's — a
+	 *  native <select> owns its own popup, so that layer no longer exists.) */
 	function onSeasonManagePanelKeydown(event: KeyboardEvent): void {
 		if (event.key === 'Escape') closeSeasonManagePanel();
 	}
@@ -2744,7 +2869,11 @@
 		const cfg = { db: current.db, token: getToken() ?? '' };
 		// Lazy, form-open-only reads — never on the plain agenda visit.
 		getRoster(cfg).catch((e) => {
-			console.error('agenda: loading the roster for the event conductor autocomplete failed', e);
+			console.error('agenda: loading the roster for the event conductor picker failed', e);
+		});
+		// #209 — the section tree behind the conductor picker's ROSTER ORDER.
+		getSections(cfg).catch((e) => {
+			console.error('agenda: loading the section tree for the event conductor picker failed', e);
 		});
 		if (prefillSeasonId) loadEventCreateSeriesOptions(cfg, prefillSeasonId);
 	}
@@ -2863,14 +2992,13 @@
 		eventCreateConductors = eventCreateConductors.filter((c) => c.id !== id);
 	}
 
-	/** The conductor Autocomplete's source: roster members not already picked.
-	 *  Off the SAME cached `rosterRows` the season-manage panel populates —
-	 *  `getRoster` above is the one cache, so opening this form after the panel
-	 *  (or vice versa) never pays a second 1+N fan-out. */
+	/** #209 — the conductor native-select's source: roster members not already
+	 *  picked, in ROSTER ORDER (Gama ruling 3). Off the SAME cached
+	 *  `rosterRows`/`rosterSections` the season-manage panel populates —
+	 *  `getRoster`/`getSections` above are the one cache each, so opening this
+	 *  form after the panel (or vice versa) never pays a second fan-out. */
 	const eventCreateConductorOptions = $derived(
-		rosterRows
-			.filter((row) => !eventCreateConductors.some((c) => c.id === row.personId))
-			.map((row) => ({ id: row.personId, label: row.name }))
+		rosterPickerOptions(eventCreateConductors.map((c) => c.id))
 	);
 
 	/** '' (blank) → not sent; a non-blank, non-finite typed value (a bare '-'
@@ -5001,13 +5129,48 @@
 										</ul>
 									{/if}
 									<div class="mt-1.5">
-										<Autocomplete
-											items={seasonManageConductorOptions}
-											onSelect={onSeasonManageConductorSelect}
-											placeholder={m.season_conductor_placeholder()}
-											label={m.season_conductor_label()}
-											emptyLabel={m.season_conductor_no_matches()}
-										/>
+										<!-- #209 (PO standing rule 1) — native <select>. Prompt option
+										     (value '') is `disabled selected hidden` (Gama ruling 1);
+										     everyone-added stays MOUNTED-but-disabled with the shared
+										     exhausted-state prompt (Gama ruling 2), never hidden. -->
+										<select
+											data-testid="season-manage-conductor-select"
+											aria-label={m.season_conductor_label()}
+											disabled={seasonManageConductorOptions.length === 0}
+											value=""
+											onchange={(e) => {
+												const target = e.currentTarget as HTMLSelectElement;
+												const personId = target.value;
+												target.value = '';
+												if (!personId) return;
+												const label =
+													seasonManageConductorOptions.find((o) => o.id === personId)
+														?.label ?? '';
+												onSeasonManageConductorSelect({ id: personId, label });
+											}}
+											class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+										>
+											<option value="" disabled selected hidden>
+												{pickerPromptText(
+													seasonManageConductorOptions.length,
+													m.season_conductor_placeholder()
+												)}
+											</option>
+											{#each seasonManageConductorOptions as option (option.id)}
+												<option value={option.id}>{option.label}</option>
+											{/each}
+										</select>
+										<!-- #209 review F2 — the SECTION read behind roster order failed: the
+										     picker still works off the roster's own name order, and says so
+										     rather than passing a different order off as the roster's. -->
+										{#if sectionsReadFailed}
+											<p
+												data-testid="season-manage-conductor-order-note"
+												class="text-xs text-ink-2"
+											>
+												{m.picker_order_fallback()}
+											</p>
+										{/if}
 									</div>
 									{#if seasonManageConductorError}
 										<p
@@ -5835,13 +5998,44 @@
 											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 										/>
 									</div>
-									<Autocomplete
-										items={seasonConductorOptions}
-										onSelect={onSeasonConductorSelect}
-										placeholder={m.season_conductor_placeholder()}
-										label={m.season_conductor_label()}
-										emptyLabel={m.season_conductor_no_matches()}
-									/>
+									<!-- #209 (PO standing rule 1) — native <select>. Prompt option
+									     (value '') is `disabled selected hidden` (Gama ruling 1);
+									     everyone-picked stays MOUNTED-but-disabled with the shared
+									     exhausted-state prompt (Gama ruling 2), never hidden. -->
+									<select
+										data-testid="season-create-conductor-select"
+										aria-label={m.season_conductor_label()}
+										disabled={seasonConductorOptions.length === 0}
+										value=""
+										onchange={(e) => {
+											const target = e.currentTarget as HTMLSelectElement;
+											const personId = target.value;
+											target.value = '';
+											if (!personId) return;
+											const label =
+												seasonConductorOptions.find((o) => o.id === personId)?.label ?? '';
+											onSeasonConductorSelect({ id: personId, label });
+										}}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+									>
+										<option value="" disabled selected hidden>
+											{pickerPromptText(
+												seasonConductorOptions.length,
+												m.season_conductor_placeholder()
+											)}
+										</option>
+										{#each seasonConductorOptions as option (option.id)}
+											<option value={option.id}>{option.label}</option>
+										{/each}
+									</select>
+									<!-- #209 review F2 — the SECTION read behind roster order failed: the
+									     picker still works off the roster's own name order, and says so
+									     rather than passing a different order off as the roster's. -->
+									{#if sectionsReadFailed}
+										<p data-testid="season-create-conductor-order-note" class="text-xs text-ink-2">
+											{m.picker_order_fallback()}
+										</p>
+									{/if}
 									{#if seasonCreateConductors.length > 0}
 										<ul class="flex flex-wrap gap-1.5">
 											{#each seasonCreateConductors as conductor (conductor.id)}
@@ -6128,13 +6322,45 @@
 								{/if}
 								
 								<div data-testid="event-create-conductors-field">
-									<Autocomplete
-										items={eventCreateConductorOptions}
-										onSelect={handleEventCreateConductorSelect}
-										placeholder={m.event_create_conductor_placeholder()}
-										label={m.event_create_conductor_label()}
-										emptyLabel={m.event_create_conductor_no_matches()}
-									/>
+									<!-- #209 (PO standing rule 1) — native <select>. Prompt option
+									     (value '') is `disabled selected hidden` (Gama ruling 1);
+									     everyone-picked stays MOUNTED-but-disabled with the shared
+									     exhausted-state prompt (Gama ruling 2), never hidden. -->
+									<select
+										data-testid="event-create-conductor-select"
+										aria-label={m.event_create_conductor_label()}
+										disabled={eventCreateConductorOptions.length === 0}
+										value=""
+										onchange={(e) => {
+											const target = e.currentTarget as HTMLSelectElement;
+											const personId = target.value;
+											target.value = '';
+											if (!personId) return;
+											const label =
+												eventCreateConductorOptions.find((o) => o.id === personId)?.label ??
+												'';
+											handleEventCreateConductorSelect({ id: personId, label });
+										}}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+									>
+										<option value="" disabled selected hidden>
+											{pickerPromptText(
+												eventCreateConductorOptions.length,
+												m.event_create_conductor_placeholder()
+											)}
+										</option>
+										{#each eventCreateConductorOptions as option (option.id)}
+											<option value={option.id}>{option.label}</option>
+										{/each}
+									</select>
+									<!-- #209 review F2 — the SECTION read behind roster order failed: the
+									     picker still works off the roster's own name order, and says so
+									     rather than passing a different order off as the roster's. -->
+									{#if sectionsReadFailed}
+										<p data-testid="event-create-conductor-order-note" class="text-xs text-ink-2">
+											{m.picker_order_fallback()}
+										</p>
+									{/if}
 								</div>
 								{#if eventCreateConductors.length > 0}
 									<ul class="flex flex-wrap gap-1.5">

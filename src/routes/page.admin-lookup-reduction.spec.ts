@@ -41,6 +41,11 @@ const h = vi.hoisted(() => ({
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	// #209 — the section tree behind ROSTER ORDER; this file has no opinion on
+	// picker ordering, so [] (every person Unassigned) keeps it out of the way
+	// (mocked at the sectionData boundary, not routed through entuFetchMock's
+	// strict #173 router).
+	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 	resolveCollectiveNameMarkerMock: vi.fn(),
@@ -74,6 +79,10 @@ vi.mock('$lib/entu/request', async (importOriginal) => {
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: h.listSectionsMock
+}));
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -151,6 +160,7 @@ beforeEach(() => {
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
 	h.createInviteMock.mockResolvedValue({
 		personId: 'p-new',

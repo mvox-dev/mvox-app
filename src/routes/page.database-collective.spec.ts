@@ -30,6 +30,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const {
 	loadFullAgendaMock,
 	loadRosterMock,
+	listSectionsMock,
 	createSeasonMock,
 	resolveDatabaseEntityIdMock,
 	entuFetchMock,
@@ -41,6 +42,10 @@ const {
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	// #209 — the section tree behind ROSTER ORDER; this file has no opinion on
+	// picker ordering (mocked at the sectionData boundary so it doesn't fall
+	// through the disabled `entuFetch` wire below).
+	listSectionsMock: vi.fn(),
 	createSeasonMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
@@ -74,6 +79,10 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: listSectionsMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
@@ -180,6 +189,7 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
+	listSectionsMock.mockResolvedValue([]);
 	createSeasonMock.mockResolvedValue('season-new-1');
 	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
 	entuFetchMock.mockRejectedValue(

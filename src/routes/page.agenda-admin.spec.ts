@@ -2,7 +2,7 @@
 //
 // #132/T6 RED — agenda admin controls: the wiring + consistency pass, on the
 // ACTUAL agenda route (integration: real +page.svelte, real AgendaList, real
-// Autocomplete, real manageRightsFrom; only the data seams are mocked — same
+// manageRightsFrom; only the data seams are mocked — same
 // harness family as page.season-create.spec.ts / page.event-create.spec.ts /
 // page.series-create.spec.ts).
 //
@@ -49,10 +49,9 @@
 //       narrow to reach 44px on its own.
 //       SCOPE, decided in #136 (fix shape option 2) and pinned here so the next
 //       reader does not read the gap as an oversight: the contract covers every
-//       admin BUTTON — INCLUDING the ones a SHARED component renders on the admin
-//       surface's behalf, i.e. Autocomplete's `role="option"` rows (a tap there
-//       COMMITS a pick, and +page.svelte is that component's only consumer, so
-//       every option row on screen is an admin control) — plus the one
+//       admin BUTTON (#209 retired the Autocomplete and its `role="option"`
+//       rows — every person picker is a native <select> now, whose option
+//       touch targets are the platform's concern) — plus the one
 //       CHECKBOX ROW (a checkbox's own 13px box is not sizable by a height
 //       utility, so the floor rides on the <label> wrapping it — that label IS
 //       the click target). Text inputs, selects and
@@ -80,6 +79,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const {
 	loadFullAgendaMock,
 	loadRosterMock,
+	listSectionsMock,
 	createSeasonMock,
 	createEventSeriesMock,
 	createEventMock,
@@ -98,6 +98,7 @@ const {
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	listSectionsMock: vi.fn(),
 	createSeasonMock: vi.fn(),
 	createEventSeriesMock: vi.fn(),
 	createEventMock: vi.fn(),
@@ -143,6 +144,12 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #209 — the section tree behind roster-ordered person selects; only the
+// NETWORK read is stubbed (groupBySection stays real).
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: listSectionsMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // $env/dynamic/public is unavailable outside a SvelteKit request context under
 // happy-dom; stubbing the base url keeps every real module in play.
@@ -279,6 +286,7 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
+	listSectionsMock.mockResolvedValue([]);
 	createSeasonMock.mockResolvedValue('season-new-1');
 	createEventSeriesMock.mockResolvedValue('series-new-1');
 	createEventMock.mockResolvedValue('ev-new-1');
@@ -300,6 +308,7 @@ afterEach(() => {
 	cleanup();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
+	listSectionsMock.mockReset();
 	createSeasonMock.mockReset();
 	createEventSeriesMock.mockReset();
 	createEventMock.mockReset();
@@ -403,39 +412,15 @@ async function selectValue(container: HTMLElement, testid: string, value: string
 	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
-/** Pick a roster person in the Autocomplete inside `scope` (a form, or the
- *  conductor FIELD when the form holds more than one combobox). */
-async function addConductorChip(
-	scope: HTMLElement,
-	personId: string,
-	query: string
-): Promise<void> {
-	const input = scope.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-	expect(input, 'the scope must contain an autocomplete').not.toBeNull();
-	await fireEvent.input(input, { target: { value: query } });
-	const optionSelector = `[data-testid="autocomplete-option-${personId}"]`;
-	await waitFor(() => {
-		expect(scope.querySelector(optionSelector)).not.toBeNull();
-	});
-	await fireEvent.click(scope.querySelector(optionSelector) as HTMLElement);
-}
-
-/** Type into the Autocomplete inside `scope` and STOP — the dropdown stays open
- *  (a commit would unmount it), so its option rows can be inspected. Returns the
- *  awaited option element for `optionId`. */
-async function openAutocompleteOptions(
-	scope: HTMLElement,
-	query: string,
-	optionId: string
-): Promise<HTMLElement> {
-	const input = scope.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-	expect(input, 'the scope must contain an autocomplete').not.toBeNull();
-	await fireEvent.input(input, { target: { value: query } });
-	const optionSelector = `[data-testid="autocomplete-option-${optionId}"]`;
-	await waitFor(() => {
-		expect(scope.querySelector(optionSelector)).not.toBeNull();
-	});
-	return scope.querySelector(optionSelector) as HTMLElement;
+/** #209 — pick a roster person in the NATIVE conductor <select> inside `scope`
+ *  (a form, or the conductor FIELD). Changing the select to the person id adds
+ *  the chip and the select resets to its prompt. */
+async function addConductorChip(scope: HTMLElement, personId: string): Promise<void> {
+	const select = scope.querySelector(
+		'select[data-testid$="-conductor-select"]'
+	) as HTMLSelectElement;
+	expect(select, 'the scope must contain a native conductor select').not.toBeNull();
+	await fireEvent.change(select, { target: { value: personId } });
 }
 
 /** Minimal VALID season-create fill. */
@@ -1425,7 +1410,7 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 	it('season form conductor chip × (icon-only)', async () => {
 		const container = await renderReady();
 		await openSeasonForm(container);
-		await addConductorChip(q(container, 'season-create-form') as HTMLElement, 'p-ada', 'ada');
+		await addConductorChip(q(container, 'season-create-form') as HTMLElement, 'p-ada');
 		await waitFor(() => {
 			expect(q(container, 'season-create-conductor-remove-p-ada')).not.toBeNull();
 		});
@@ -1436,11 +1421,7 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 	it('event form conductor chip × (icon-only)', async () => {
 		const container = await renderReady();
 		await openEventFormFromAgenda(container);
-		await addConductorChip(
-			q(container, 'event-create-conductors-field') as HTMLElement,
-			'p-ada',
-			'ada'
-		);
+		await addConductorChip(q(container, 'event-create-conductors-field') as HTMLElement, 'p-ada');
 		await waitFor(() => {
 			expect(q(container, 'event-create-conductor-remove-p-ada')).not.toBeNull();
 		});
@@ -1476,50 +1457,12 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 		expectTouchTarget(container, 'series-create-generate', { onWrappingLabel: true });
 	});
 
-	// #136 review — the option rows of the shared Autocomplete. They are BUTTONS
-	// and they are tap-to-act (a tap commits the pick), so the SCOPE note's
-	// text-input exemption does NOT reach them: a mistap here adds the wrong
-	// conductor / sets the wrong event type, which is exactly the undo cost WCAG
-	// 2.5.5 is about. They were missed by the first #136 sweep only because they
-	// are rendered by Autocomplete.svelte rather than by +page.svelte — and the
-	// page is that component's ONLY consumer, so the floor costs nothing outside
-	// this admin surface. Not icon-only: a person/type label carries the width.
-	it('season form conductor autocomplete: each option row is a 44px-tall button', async () => {
-		const container = await renderReady();
-		await openSeasonForm(container);
-
-		await openAutocompleteOptions(q(container, 'season-create-form') as HTMLElement, 'ada', 'p-ada');
-		expectTouchTarget(container, 'autocomplete-option-p-ada');
-	});
-
-	// #199 dropped the type field's Autocomplete rows — `event-create-type` is
-	// now a native <select>, whose <option> touch targets are the platform's
-	// concern, not this app's CSS floor (same posture as every other native
-	// select on this page — event-create-season, series-create-repeat — none
-	// of which are touch-target-tested here either).
-	it('event form conductor autocomplete: each option row is a 44px-tall button', async () => {
-		const container = await renderReady();
-		await openEventFormFromAgenda(container);
-
-		await openAutocompleteOptions(
-			q(container, 'event-create-conductors-field') as HTMLElement,
-			'ada',
-			'p-ada'
-		);
-		expectTouchTarget(container, 'autocomplete-option-p-ada');
-	});
-
-	it('season-manage panel conductor autocomplete: each option row is a 44px-tall button', async () => {
-		const container = await renderReady();
-		await openPanel(container);
-
-		await openAutocompleteOptions(
-			q(container, 'season-manage-panel') as HTMLElement,
-			'ada',
-			'p-ada'
-		);
-		expectTouchTarget(container, 'autocomplete-option-p-ada');
-	});
+	// #209 — the Autocomplete option-row touch-target cases that lived here are
+	// GONE with the component: all five person pickers are native <select>
+	// elements now (PO standing rule 1), and a native select's option touch
+	// targets are the platform's concern, not this app's CSS floor — the same
+	// posture #199 took for event-create-type and every other native select on
+	// this page (event-create-season, series-create-repeat).
 });
 
 // ── mobile (375px): no horizontal overflow — the fluid-width contract ───────────

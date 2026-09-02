@@ -44,7 +44,11 @@
 		removeLibrarian,
 		type RolePerson
 	} from '$lib/admin/roleManagement';
-	import Autocomplete from '$lib/components/Autocomplete.svelte';
+	// #209 (PO standing rule 1) — the add-admin/add-librarian pickers are NATIVE
+	// <select> elements, fed in ROSTER ORDER (Gama ruling 3) by the SAME
+	// `rosterOrder` helper the roster page's own grouping runs through
+	// (`listSections` + `groupBySection`), not a re-derived ordering.
+	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	// #140/S3 — the invite functionality merges into this page as a distinct
 	// section, sharing the SAME live component the standalone /admin/invite
 	// route still renders (backward compat) — see
@@ -75,6 +79,19 @@
 	let canManageAdmins = $state(false);
 	let canManageLibrarians = $state(false);
 	let roster = $state<RosterRow[]>([]);
+	// #209 — the section tree behind ROSTER ORDER; [] (no sections) degrades
+	// `rosterOrder` to the roster's own (name) order.
+	let sections = $state<SectionNode[]>([]);
+	/** #209 review F2 — the section read is a picker ORDERING input, not a role
+	 *  input: `listSections` throws on any non-2xx AND on data conditions of its
+	 *  own (an unplaceable parent, a parent cycle), none of which say anything
+	 *  about who may administer this collective. It is read OUTSIDE the load's
+	 *  blocking `Promise.all` for exactly that reason — a failure annotates the
+	 *  two selects (name order instead of roster order) and leaves the rest of
+	 *  this page, including the read-only tier that renders no select at all,
+	 *  untouched. Same posture the agenda's pickers take (+page.svelte's
+	 *  `sectionsReadFailed`). */
+	let sectionsError = $state(false);
 	let actionError = $state(false);
 
 	// #165 — the editable collective NAME (the `mvox_collective` marker's own
@@ -91,16 +108,27 @@
 
 	const adminOwnerCount = $derived(admins.filter((p) => p.role === 'owner').length);
 
+	// #209 — ROSTER ORDER (Gama ruling 3), not the roster's own array order.
 	const adminOptions = $derived(
-		roster
+		rosterOrder(roster, sections)
 			.filter((r) => !admins.some((a) => a.id === r.personId))
 			.map((r) => ({ id: r.personId, label: r.name }))
 	);
 	const librarianOptions = $derived(
-		roster
+		rosterOrder(roster, sections)
 			.filter((r) => !librarians.some((l) => l.id === r.personId))
 			.map((r) => ({ id: r.personId, label: r.name }))
 	);
+
+	/** #209 review F1 — with nobody left to offer, say WHICH empty this is. The
+	 *  roster here is read INSIDE the load's blocking `Promise.all`, so by the
+	 *  time a select renders it has resolved (a failed read is the page's own
+	 *  load-error, never a picker state): the only two empties left are "this
+	 *  collective has no members" and "everyone is already granted". */
+	function pickerPromptText(optionCount: number, addPrompt: string): string {
+		if (optionCount > 0) return addPrompt;
+		return roster.length === 0 ? m.picker_no_members() : m.picker_everyone_added();
+	}
 
 	function isLastOwner(person: RolePerson): boolean {
 		return person.role === 'owner' && adminOwnerCount === 1;
@@ -216,6 +244,27 @@
 			status = 'load-error';
 			return;
 		}
+
+		// #209 review F2 — the section tree behind ROSTER ORDER (Gama ruling 3),
+		// read ALONGSIDE the blocking resolutions below but never as one of them:
+		// a section-tree failure costs the two selects their roster order (they
+		// fall back to the roster's own name order, with `picker_order_fallback`
+		// saying so), not the whole role surface.
+		sections = [];
+		sectionsError = false;
+		listSections(c)
+			.then((tree) => {
+				if (thisLoad !== loadSeq) return; // superseded by a newer selection
+				sections = tree;
+			})
+			.catch((e) => {
+				if (thisLoad !== loadSeq) return;
+				console.error(
+					'admin roles: section tree read failed — the person selects fall back to name order',
+					e
+				);
+				sectionsError = true;
+			});
 
 		try {
 			const [libResult, rosterRows, resolvedNameMarker] = await Promise.all([
@@ -595,13 +644,40 @@
 					{#if adminOwnerCount === 1}
 						<p class="text-xs text-ink-2">{m.admin_roles_last_owner_hint()}</p>
 					{/if}
-					<Autocomplete
-						items={adminOptions}
-						onSelect={onPickAdmin}
-						placeholder={m.admin_roles_add_admin_placeholder()}
-						label={m.admin_roles_add_admin_label()}
-						emptyLabel={m.admin_roles_empty()}
-					/>
+					<!-- #209 (PO standing rule 1) — native <select>, no custom widget.
+					     Prompt option (value '') is `disabled selected hidden` (Gama
+					     ruling 1) so it can never be committed. Everyone-added stays
+					     MOUNTED-but-disabled with the shared exhausted-state prompt
+					     (Gama ruling 2), never hidden. -->
+					<select
+						data-testid="admin-add-admin-select"
+						aria-label={m.admin_roles_add_admin_label()}
+						disabled={adminOptions.length === 0}
+						value=""
+						onchange={(e) => {
+							const target = e.currentTarget as HTMLSelectElement;
+							const personId = target.value;
+							target.value = '';
+							if (!personId) return;
+							const label = adminOptions.find((o) => o.id === personId)?.label ?? '';
+							void onPickAdmin({ id: personId, label });
+						}}
+						class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+					>
+						<option value="" disabled selected hidden>
+							{pickerPromptText(adminOptions.length, m.admin_roles_add_admin_placeholder())}
+						</option>
+						{#each adminOptions as option (option.id)}
+							<option value={option.id}>{option.label}</option>
+						{/each}
+					</select>
+					<!-- #209 review F2 — the section read failed: the select still works
+					     off the roster's own name order, and says so. -->
+					{#if sectionsError}
+						<p data-testid="admin-add-admin-order-note" class="text-xs text-ink-2">
+							{m.picker_order_fallback()}
+						</p>
+					{/if}
 				{:else}
 					<p data-testid="admin-roles-admins-read-only" class="text-xs text-ink-2">
 						{m.admin_roles_read_only()}
@@ -654,13 +730,39 @@
 								{m.admin_roles_remove_self_hint()}
 							</p>
 						{/if}
-						<Autocomplete
-							items={librarianOptions}
-							onSelect={onPickLibrarian}
-							placeholder={m.admin_roles_add_librarian_placeholder()}
-							label={m.admin_roles_add_librarian_label()}
-							emptyLabel={m.admin_roles_empty()}
-						/>
+						<!-- #209 — same native-select pattern as the admin picker above. -->
+						<select
+							data-testid="admin-add-librarian-select"
+							aria-label={m.admin_roles_add_librarian_label()}
+							disabled={librarianOptions.length === 0}
+							value=""
+							onchange={(e) => {
+								const target = e.currentTarget as HTMLSelectElement;
+								const personId = target.value;
+								target.value = '';
+								if (!personId) return;
+								const label = librarianOptions.find((o) => o.id === personId)?.label ?? '';
+								void onPickLibrarian({ id: personId, label });
+							}}
+							class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+						>
+							<option value="" disabled selected hidden>
+								{pickerPromptText(
+									librarianOptions.length,
+									m.admin_roles_add_librarian_placeholder()
+								)}
+							</option>
+							{#each librarianOptions as option (option.id)}
+								<option value={option.id}>{option.label}</option>
+							{/each}
+						</select>
+						<!-- #209 review F2 — the section read failed: the select still works
+						     off the roster's own name order, and says so. -->
+						{#if sectionsError}
+							<p data-testid="admin-add-librarian-order-note" class="text-xs text-ink-2">
+								{m.picker_order_fallback()}
+							</p>
+						{/if}
 					{:else}
 						<p data-testid="admin-roles-librarians-read-only" class="text-xs text-ink-2">
 							{m.admin_roles_read_only()}

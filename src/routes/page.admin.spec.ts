@@ -14,10 +14,16 @@
 //       `resolveLibrarian`'s result (the existing library-entity resolution;
 //       no new lookup invented). libraryId null → no-library state, list
 //       fetch skipped
-// - adding: one REUSED Autocomplete (#132 T2) per section, fed from the roster
-//   (loadRoster) — people already holding the section's role are EXCLUDED from
-//   the options; free text NEVER grants (allowFreeText stays off); a pick calls
-//   addAdmin/addLibrarian and the list refetches
+// - adding: one NATIVE <select> per section (#209, PO standing rule 1 — the
+//   Autocomplete combobox is retired), fed from the roster (loadRoster) in
+//   ROSTER ORDER (section, then position within section — Gama ruling 3, the
+//   same order the roster page shows via listSections + groupBySection) —
+//   people already holding the section's role are EXCLUDED from the options;
+//   the first option is a `disabled selected hidden` prompt (value '');
+//   changing the select to a person id calls addAdmin/addLibrarian, the list
+//   refetches, and the select resets to the prompt; when NOBODY is left to
+//   add the select stays MOUNTED but disabled, its prompt text swapped to
+//   `picker_everyone_added` (Gama ruling 2 — never hidden, never inert-enabled)
 // - removing: a remove button per entry → removeAdmin/removeLibrarian + refetch;
 //   the LAST 'owner' entry's button is DISABLED (lockout prevention, UI leg —
 //   the data layer's RoleLockoutError is the enforcement leg); a LIBRARY owner's
@@ -29,7 +35,7 @@
 //   entity, inherited included) decides whether the WRITE controls exist at all.
 //   `resolveAdmin` says 'admin' for a mere org `_editor`, but entu-api 403s
 //   every rights write from a non-owner — so an org editor sees the lists
-//   read-only: no Autocomplete, every Remove disabled, a localized explanation
+//   read-only: no person select, every Remove disabled, a localized explanation
 // - navigation: NAV_ENTRIES carries an admin-only /admin entry
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
@@ -45,14 +51,21 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_roles_admins_title: () => 'Administrators',
 		admin_roles_librarians_title: () => 'Librarians',
 		admin_roles_add_admin_label: () => 'Add an administrator',
-		admin_roles_add_admin_placeholder: () => 'Search people…',
+		// #209 Gama ruling 1 — the EXISTING keys, reworded to add-prompts (a
+		// native select's first option is a prompt, not a search hint).
+		admin_roles_add_admin_placeholder: () => 'Add administrator…',
 		admin_roles_add_librarian_label: () => 'Add a librarian',
-		admin_roles_add_librarian_placeholder: () => 'Search people…',
+		admin_roles_add_librarian_placeholder: () => 'Add librarian…',
+		// #209 Gama ruling 2 — ONE shared key for the exhausted-options state.
+		picker_everyone_added: () => 'Everyone is already added',
+		// #209 review F1/F2 — the OTHER empties (an empty roster) and the
+		// degraded-order note, so neither can be rendered as "everyone added".
+		picker_no_members: () => 'No members to add',
+		picker_order_fallback: () => 'Sorted by name — section order unavailable',
 		admin_roles_remove: (p: { name: string }) => `Remove ${p.name}`,
 		admin_roles_last_owner_hint: () => 'The last owner cannot be removed.',
 		admin_roles_no_library: () => 'No library entity is visible in this collective.',
 		admin_roles_action_error: () => 'Role change failed.',
-		admin_roles_empty: () => 'No matching people.',
 		admin_roles_read_only: () => 'Only an owner of this collective can change these roles.',
 		admin_roles_remove_self_hint: () => 'Cannot remove your own rights.',
 		// Deliberately NOT the English words: the row badge must render the
@@ -138,6 +151,10 @@ const h = vi.hoisted(() => {
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
+		// #209 — the section tree behind ROSTER ORDER (Gama ruling 3): the same
+		// listSections read the roster page orders by. [] = every person
+		// Unassigned, so roster order degrades to the roster's own (name) order.
+		listSectionsMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
@@ -173,6 +190,13 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
+}));
+// #209 — only the NETWORK read is stubbed; groupBySection (the pure roster-order
+// helper the roster page already uses) stays real so the pickers' option order
+// is computed by the same code path the roster page renders with.
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: h.listSectionsMock
 }));
 // #165 — scaffolding only (see the hoisted mock's comment above).
 vi.mock('$lib/collectives/collectiveName', () => ({
@@ -239,7 +263,7 @@ function listing(persons: RolePerson[], canManage = true) {
 	return { persons, canManage };
 }
 
-// The person source for BOTH autocompletes: the roster (personId + name).
+// The person source for BOTH person selects (#209): the roster (personId + name).
 const ROSTER = [
 	{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
 	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' },
@@ -265,6 +289,7 @@ function loadOk() {
 	h.listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
 	h.listLibrariansMock.mockResolvedValue(listing([CILLA]));
 	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.listSectionsMock.mockResolvedValue([]);
 	h.addAdminMock.mockResolvedValue(undefined);
 	h.addLibrarianMock.mockResolvedValue(undefined);
 	h.removeAdminMock.mockResolvedValue(undefined);
@@ -300,16 +325,34 @@ async function renderReady() {
 	return rendered;
 }
 
-/** Open a section's (reused #132 Autocomplete) combobox and pick an option. */
-async function openCombobox(sectionEl: HTMLElement): Promise<HTMLInputElement> {
-	const input = q<HTMLInputElement>(sectionEl, 'autocomplete-input');
-	expect(input, 'expected the section to hold a reused Autocomplete combobox').not.toBeNull();
-	expect(input!.getAttribute('role')).toBe('combobox');
-	await fireEvent.keyDown(input!, { key: 'ArrowDown' });
-	await waitFor(() => {
-		expect(q(sectionEl, 'autocomplete-listbox')).not.toBeNull();
-	});
-	return input!;
+/** #209 — the section's NATIVE person <select> (rule 1: no custom widget),
+ *  asserted present and a real <select>. */
+function personSelect(sectionEl: HTMLElement, testid: string): HTMLSelectElement {
+	const select = q<HTMLSelectElement>(sectionEl, testid);
+	expect(select, `expected the section to hold a native [data-testid="${testid}"]`).not.toBeNull();
+	expect(select!.tagName).toBe('SELECT');
+	return select!;
+}
+
+/** Every option's value, in DOM order — index 0 is the '' prompt. */
+function optionValues(select: HTMLSelectElement): string[] {
+	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+}
+
+/** The prompt option (first, value ''), pinned `disabled selected hidden` so it
+ *  can never be committed as a value (Gama ruling 1). */
+function promptOption(select: HTMLSelectElement): HTMLOptionElement {
+	const prompt = select.querySelector('option') as HTMLOptionElement;
+	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
+	expect(prompt.value).toBe('');
+	expect(prompt.disabled).toBe(true);
+	expect(prompt.hidden).toBe(true);
+	return prompt;
+}
+
+/** Pick a person the way a native select is driven: change to their id. */
+async function pickPerson(select: HTMLSelectElement, personId: string): Promise<void> {
+	await fireEvent.change(select, { target: { value: personId } });
 }
 
 beforeEach(() => {
@@ -324,6 +367,7 @@ beforeEach(() => {
 		h.resolveLibrarianMock,
 		h.resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
+		h.listSectionsMock,
 		h.resolveParentMock,
 		h.resolveInviteParentMock,
 		h.createInviteMock,
@@ -524,10 +568,39 @@ describe('/admin — role lists', () => {
 	});
 });
 
-// ── adding via the reused Autocomplete ──────────────────────────────────────────
+// ── adding via the native person <select> (#209, PO standing rule 1) ────────────
 
-describe('/admin — adding people (reused #132 Autocomplete, roster-fed)', () => {
-	it('the admin combobox lists roster people MINUS current admins; a pick calls addAdmin(cfg, dbEntityId, personId) and the list refetches with the new entry', async () => {
+describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
+	it('the admin select is a NATIVE <select data-testid="admin-add-admin-select"> named by admin_roles_add_admin_label, prompt option first (value "", disabled selected hidden, the reworded add-prompt), then roster people MINUS current admins — value = person id, text = display name', async () => {
+		selectPolyphony();
+		loadOk();
+
+		const { container } = await renderReady();
+		expect(h.loadRosterMock).toHaveBeenCalledWith(expect.objectContaining(CFG));
+
+		const admins = section(container, 'admin-roles-admins');
+		const select = personSelect(admins, 'admin-add-admin-select');
+
+		// Accessible name from the EXISTING label key (Gama ruling 1 — no new keys).
+		expect(select.getAttribute('aria-label')).toBe('Add an administrator');
+
+		// The prompt is the reworded add-prompt, never committable, and selected
+		// at rest (the select's value is '').
+		const prompt = promptOption(select);
+		expect(prompt.textContent?.trim()).toBe('Add administrator…');
+		expect(select.value).toBe('');
+
+		// FULL option array (partial assertions hide bugs): already-admins Anna
+		// and Bela are NOT offered again; Cilla (a librarian, not an admin) and
+		// Dora are — in roster order (no sections here → the roster's own order).
+		expect(optionValues(select)).toEqual(['', 'p-cilla', 'p-dora']);
+		const texts = Array.from(select.querySelectorAll('option')).map((o) =>
+			o.textContent?.trim()
+		);
+		expect(texts).toEqual(['Add administrator…', 'Cilla Cane', 'Dora Duncan']);
+	});
+
+	it('changing the admin select to a person id calls addAdmin(cfg, dbEntityId, personId), the list refetches with the new entry, and the select RESETS to the prompt', async () => {
 		selectPolyphony();
 		loadOk();
 		h.listAdminsMock
@@ -536,20 +609,10 @@ describe('/admin — adding people (reused #132 Autocomplete, roster-fed)', () =
 			.mockResolvedValueOnce(listing([ANNA, BELA, DORA_ADMIN]));
 
 		const { container } = await renderReady();
-		expect(h.loadRosterMock).toHaveBeenCalledWith(expect.objectContaining(CFG));
-
 		const admins = section(container, 'admin-roles-admins');
-		await openCombobox(admins);
+		const select = personSelect(admins, 'admin-add-admin-select');
 
-		// Already-admins are NOT offered again; everyone else is (Cilla is a
-		// librarian but not an admin — she belongs in THIS list's options).
-		expect(q(admins, 'autocomplete-option-p-anna')).toBeNull();
-		expect(q(admins, 'autocomplete-option-p-bela')).toBeNull();
-		expect(q(admins, 'autocomplete-option-p-cilla')).not.toBeNull();
-		const dora = q<HTMLButtonElement>(admins, 'autocomplete-option-p-dora');
-		expect(dora).not.toBeNull();
-
-		await fireEvent.click(dora!);
+		await pickPerson(select, 'p-dora');
 
 		await waitFor(() => {
 			expect(h.addAdminMock).toHaveBeenCalledWith(
@@ -563,39 +626,42 @@ describe('/admin — adding people (reused #132 Autocomplete, roster-fed)', () =
 			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
 			expect(q(container, 'admin-entry-p-dora')).not.toBeNull();
 		});
+		// …and the select is back at the prompt, ready for the next add.
+		await waitFor(() => {
+			expect(personSelect(admins, 'admin-add-admin-select').value).toBe('');
+		});
 	});
 
-	it('free text never grants: typing a non-roster name and pressing Enter calls NO add function', async () => {
+	it('re-selecting the prompt ("") grants nothing — only a person id is a pick', async () => {
 		selectPolyphony();
 		loadOk();
 
 		const { container } = await renderReady();
 		const admins = section(container, 'admin-roles-admins');
-		const input = await openCombobox(admins);
+		const select = personSelect(admins, 'admin-add-admin-select');
 
-		await fireEvent.input(input, { target: { value: 'Nobody Anyone Knows' } });
-		await fireEvent.keyDown(input, { key: 'Enter' });
+		await fireEvent.change(select, { target: { value: '' } });
 
 		expect(h.addAdminMock).not.toHaveBeenCalled();
 		expect(h.addLibrarianMock).not.toHaveBeenCalled();
 	});
 
-	it('the librarian combobox excludes current librarians and a pick calls addLibrarian(cfg, libraryId, personId)', async () => {
+	it('the librarian select (admin-add-librarian-select) excludes current librarians and a pick calls addLibrarian(cfg, libraryId, personId) and resets to the prompt', async () => {
 		selectPolyphony();
 		loadOk();
 
 		const { container } = await renderReady();
 		const librarians = section(container, 'admin-roles-librarians');
-		await openCombobox(librarians);
+		const select = personSelect(librarians, 'admin-add-librarian-select');
+
+		expect(select.getAttribute('aria-label')).toBe('Add a librarian');
+		expect(promptOption(select).textContent?.trim()).toBe('Add librarian…');
 
 		// Cilla already IS a librarian → excluded HERE (though offered in the
-		// admin list); Anna is an admin but not a librarian → offered here.
-		expect(q(librarians, 'autocomplete-option-p-cilla')).toBeNull();
-		expect(q(librarians, 'autocomplete-option-p-anna')).not.toBeNull();
+		// admin list); Anna and Bela are admins but not librarians → offered.
+		expect(optionValues(select)).toEqual(['', 'p-anna', 'p-bela', 'p-dora']);
 
-		const dora = q<HTMLButtonElement>(librarians, 'autocomplete-option-p-dora');
-		expect(dora).not.toBeNull();
-		await fireEvent.click(dora!);
+		await pickPerson(select, 'p-dora');
 
 		await waitFor(() => {
 			expect(h.addLibrarianMock).toHaveBeenCalledWith(
@@ -604,6 +670,110 @@ describe('/admin — adding people (reused #132 Autocomplete, roster-fed)', () =
 				'p-dora'
 			);
 		});
+		await waitFor(() => {
+			expect(personSelect(librarians, 'admin-add-librarian-select').value).toBe('');
+		});
+	});
+
+	it('option order is ROSTER order — section (listSections tree order), then position within section — NOT alphabetical (Gama ruling 3)', async () => {
+		selectPolyphony();
+		loadOk();
+		// Nobody granted yet → every roster person is an option; the ORDER is
+		// what this test pins.
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
+		// loadRoster answers NAME order (its own contract). Sections put Cilla +
+		// Dora in Sopran (first) and Anna in Tenor (second); Bela is unassigned
+		// → LAST (the roster page's Unassigned group).
+		h.loadRosterMock.mockReset().mockResolvedValue([
+			{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: ['sec-t'] },
+			{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '', sectionIds: [] },
+			{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '', sectionIds: ['sec-s'] },
+			{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '', sectionIds: ['sec-s'] }
+		]);
+		h.listSectionsMock.mockReset().mockResolvedValue([
+			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
+			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		]);
+
+		const { container } = await renderReady();
+		const admins = section(container, 'admin-roles-admins');
+		const select = personSelect(admins, 'admin-add-admin-select');
+
+		// Sopran (Cilla, Dora — by position within the section), Tenor (Anna),
+		// then the Unassigned tail (Bela). Alphabetical would put Anna first.
+		expect(optionValues(select)).toEqual(['', 'p-cilla', 'p-dora', 'p-anna', 'p-bela']);
+	});
+
+	it('EVERYONE already granted: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added — never hidden, never an inert enabled select (Gama ruling 2)', async () => {
+		selectPolyphony();
+		loadOk();
+		// All four roster people are already admins…
+		h.listAdminsMock
+			.mockReset()
+			.mockResolvedValue(listing([ANNA, BELA, CILLA, DORA_ADMIN]));
+
+		const { container } = await renderReady();
+		const admins = section(container, 'admin-roles-admins');
+		const select = personSelect(admins, 'admin-add-admin-select');
+
+		expect(select.disabled).toBe(true);
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('Everyone is already added');
+
+		// …while the librarian select (Cilla alone granted) stays live with its
+		// normal prompt — the state is PER select, not page-wide.
+		const librarians = section(container, 'admin-roles-librarians');
+		const libSelect = personSelect(librarians, 'admin-add-librarian-select');
+		expect(libSelect.disabled).toBe(false);
+		expect(promptOption(libSelect).textContent?.trim()).toBe('Add librarian…');
+	});
+});
+
+// ── the section read is an ORDERING input, not a role input (#209 review F2) ────
+
+describe('/admin — a failed section read costs the pickers their order, not the page', () => {
+	it('listSections rejects: the page still reaches READY (lists, remove buttons, invite section intact), both selects still offer the whole roster in name order, and each says its order degraded', async () => {
+		selectPolyphony();
+		loadOk();
+		// `listSections` throws on any non-2xx AND on its own data conditions (an
+		// unplaceable parent, a parent cycle) — none of which say anything about
+		// who may administer this collective.
+		h.listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
+
+		const { container } = await renderReady();
+
+		// The role surface is untouched: rows, remove buttons, no load-error.
+		expect(q(container, 'admin-roles-load-error')).toBeNull();
+		expect(q(container, 'admin-entry-p-anna')).not.toBeNull();
+		expect(q<HTMLButtonElement>(container, 'admin-remove-p-bela')).not.toBeNull();
+
+		const admins = section(container, 'admin-roles-admins');
+		const select = personSelect(admins, 'admin-add-admin-select');
+		expect(select.disabled).toBe(false);
+		// The roster's OWN (name) order — Cilla, Dora are the two not yet admins.
+		expect(optionValues(select)).toEqual(['', 'p-cilla', 'p-dora']);
+		expect(promptOption(select).textContent?.trim()).toBe('Add administrator…');
+		await waitFor(() => {
+			expect(q(container, 'admin-add-admin-order-note')?.textContent).toContain(
+				'section order unavailable'
+			);
+		});
+		expect(q(container, 'admin-add-librarian-order-note')).not.toBeNull();
+	});
+
+	it('an EMPTY roster is not "everyone is already added": the prompt says there is nobody to add', async () => {
+		selectPolyphony();
+		loadOk();
+		h.loadRosterMock.mockReset().mockResolvedValue([]);
+		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
+
+		const { container } = await renderReady();
+		const admins = section(container, 'admin-roles-admins');
+		const select = personSelect(admins, 'admin-add-admin-select');
+
+		expect(select.disabled).toBe(true);
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('No members to add');
 	});
 });
 
@@ -961,11 +1131,12 @@ describe('/admin — write gate (canManage)', () => {
 		expect(q(container, 'admin-entry-p-bela')).not.toBeNull();
 		expect(q(container, 'librarian-entry-p-cilla')).not.toBeNull();
 
-		// Zero enabled write controls anywhere on the page.
+		// Zero enabled write controls anywhere on the page — the person selects
+		// are not rendered at all for a read-only tier (same gating as before).
 		const admins = section(container, 'admin-roles-admins');
 		const librarians = section(container, 'admin-roles-librarians');
-		expect(q(admins, 'autocomplete-input')).toBeNull();
-		expect(q(librarians, 'autocomplete-input')).toBeNull();
+		expect(q(admins, 'admin-add-admin-select')).toBeNull();
+		expect(q(librarians, 'admin-add-librarian-select')).toBeNull();
 		const removeButtons = Array.from(
 			container.querySelectorAll<HTMLButtonElement>('button[data-testid*="-remove-"]')
 		);
@@ -990,13 +1161,15 @@ describe('/admin — write gate (canManage)', () => {
 		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
 	});
 
-	it('canManage true keeps the write controls: both comboboxes render (the gate is not "always off")', async () => {
+	it('canManage true keeps the write controls: both person selects render (the gate is not "always off")', async () => {
 		selectPolyphony();
 		loadOk();
 
 		const { container } = await renderReady();
-		expect(q(section(container, 'admin-roles-admins'), 'autocomplete-input')).not.toBeNull();
-		expect(q(section(container, 'admin-roles-librarians'), 'autocomplete-input')).not.toBeNull();
+		expect(q(section(container, 'admin-roles-admins'), 'admin-add-admin-select')).not.toBeNull();
+		expect(
+			q(section(container, 'admin-roles-librarians'), 'admin-add-librarian-select')
+		).not.toBeNull();
 		expect(q(container, 'admin-roles-admins-read-only')).toBeNull();
 		expect(q(container, 'admin-roles-librarians-read-only')).toBeNull();
 	});
@@ -1068,6 +1241,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 			})
 		);
 		h.loadRosterMock.mockResolvedValue(ROSTER);
+		h.listSectionsMock.mockResolvedValue([]);
 		h.listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
 			Promise.resolve(
 				dbEntityId === 'org-alpha'
@@ -1102,7 +1276,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		// beta's canManage:false must survive too — alpha's true would hand a
 		// non-owner write controls that entu-api 403s.
 		expect(q(container, 'admin-roles-admins-read-only')).not.toBeNull();
-		expect(q(section(container, 'admin-roles-admins'), 'autocomplete-input')).toBeNull();
+		expect(q(section(container, 'admin-roles-admins'), 'admin-add-admin-select')).toBeNull();
 		// The stale load never got to read alpha's org through beta's cfg.
 		// Asserted on the RECORDED org-id argument rather than a matcher tuple:
 		// `not.toHaveBeenCalledWith(...)` passes vacuously the moment the arity

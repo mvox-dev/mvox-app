@@ -246,7 +246,35 @@ export function groupBySection(members: RosterRow[], sections: SectionNode[]): S
 	return groups;
 }
 
+/**
+ * #209 — the ROSTER ORDER a native person <select> lists its options in (Gama
+ * ruling 3): section (this tree's own order), then position within section,
+ * Unassigned last — the SAME order the roster page renders via `groupBySection`.
+ * Built ON TOP of `groupBySection` (never re-walks the section tree itself), so
+ * every picker site shares the one ordering implementation the roster page
+ * already uses.
+ *
+ * `groupBySection` pushes a multi-section member into EVERY one of her groups
+ * (by design — the roster page shows her in each section she belongs to); a
+ * person-PICKER needs her exactly once, so this flattens the groups in order
+ * and keeps only each row's FIRST appearance (her earliest roster position).
+ */
+export function rosterOrder(rows: RosterRow[], sections: SectionNode[]): RosterRow[] {
+	const groups = groupBySection(rows, sections);
+	const seen = new Set<string>();
+	const ordered: RosterRow[] = [];
+	for (const group of groups) {
+		for (const member of group.members) {
+			if (seen.has(member.personId)) continue;
+			seen.add(member.personId);
+			ordered.push(member);
+		}
+	}
+	return ordered;
+}
+
 // (*MVOX:Tallis* — RED stubs + interface, TS.1/#95)
 // (*MVOX:Palestrina* — GREEN implementation, TS.1/#95)
 // (*MVOX:Palestrina* — F1 code-review fix: multi-section members, TS.1/#95)
 // (*MVOX:Palestrina* — TU.1/#109 review: SectionNode carries its owning org id)
+// (*MVOX:Palestrina* — #209 GREEN: rosterOrder, shared by every native person select)

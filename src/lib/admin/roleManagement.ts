@@ -208,8 +208,9 @@ function toRolePersons(ownOwners: RightsValue[], ownEditors: RightsValue[]): Rol
  * (the person entity id), never `string` (display name): Entu's aggregated
  * read only backfills `string` once its own indexing catches up, so
  * `toRolePersons`' fallback (`name: v.reference`) shows the raw entity id
- * until then. The roster (already loaded for the Autocomplete person search)
- * is a ready-made id→name lookup — every row whose `name` still equals its
+ * until then. The roster (already loaded for the person-picker native
+ * <select>, #209) is a ready-made id→name lookup — every row whose `name`
+ * still equals its
  * `id` (i.e. never resolved a display name off the rights value itself) gets
  * a second chance against it. A person absent from the roster (e.g. no
  * longer an active member) keeps the id fallback — never a blank row.

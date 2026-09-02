@@ -72,6 +72,9 @@ const h = vi.hoisted(() => ({
 	resolveLibrarianMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	// #209 — the section tree behind ROSTER ORDER; this file has no opinion on
+	// picker ordering, so [] (every person Unassigned) keeps it out of the way.
+	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	resolveInviteParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
@@ -98,6 +101,12 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
+}));
+// #209 — only the NETWORK read is stubbed; groupBySection/rosterOrder (pure)
+// stay real.
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: h.listSectionsMock
 }));
 vi.mock('$lib/invite/inviteData', () => ({
 	resolvePersonParentId: h.resolveParentMock,
@@ -152,6 +161,7 @@ function loadOk() {
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ ...MARKER });

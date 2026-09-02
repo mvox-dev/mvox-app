@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // #132/T4 RED — EVENT creation on the ACTUAL agenda route (integration: real
-// +page.svelte, real AgendaList, real Autocomplete, real manageRightsFrom; only
+// +page.svelte, real AgendaList, real manageRightsFrom; only
 // the data seams are mocked — same harness family as page.season-create.spec.ts
 // and page.season-manage.spec.ts).
 //
@@ -85,7 +85,8 @@
 //     event-create-duration       number input (minutes)
 //     event-create-location       text input
 //     event-create-description    TEXTAREA (multiline)
-//     event-create-conductors-field  wrapper around the conductor Autocomplete
+//     event-create-conductors-field  wrapper around the conductor <select>
+//     event-create-conductor-select  the NATIVE conductor <select> (#209)
 //     event-create-conductor-<personId>  one chip per picked conductor, showing
 //                                 the person's NAME (ids are never UI)
 //     event-create-capacity       number input, optional
@@ -157,6 +158,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const {
 	loadFullAgendaMock,
 	loadRosterMock,
+	listSectionsMock,
 	createEventMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
@@ -173,6 +175,7 @@ const {
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	listSectionsMock: vi.fn(),
 	createEventMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
@@ -213,6 +216,13 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #209 — only the NETWORK read is stubbed; groupBySection (the pure roster-order
+// helper the roster page uses) stays real, so option order is computed by the
+// same code path the roster page renders with.
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: listSectionsMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // $env/dynamic/public is unavailable outside a SvelteKit request context under
 // happy-dom; stubbing the base url keeps every real module in play.
@@ -438,6 +448,8 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
+	// [] = no sections → roster order degrades to the roster's own order.
+	listSectionsMock.mockResolvedValue([]);
 	createEventMock.mockResolvedValue('ev-new-1');
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
@@ -455,6 +467,7 @@ afterEach(() => {
 	cleanup();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
+	listSectionsMock.mockReset();
 	createEventMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
@@ -538,21 +551,32 @@ async function chooseType(container: HTMLElement, type: string): Promise<void> {
 	await selectValue(container, 'event-create-type', type);
 }
 
-/** Pick a conductor through the form's conductor Autocomplete. */
-async function pickConductor(
-	container: HTMLElement,
-	filter: string,
-	personId: string
-): Promise<void> {
+/** #209 — the form's NATIVE conductor <select> (rule 1), asserted present. */
+function conductorSelect(container: HTMLElement): HTMLSelectElement {
 	const field = q(container, 'event-create-conductors-field') as HTMLElement;
 	expect(field).not.toBeNull();
-	const input = field.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-	expect(input).not.toBeNull();
-	await fireEvent.input(input, { target: { value: filter } });
-	await waitFor(() => {
-		expect(q(container, `autocomplete-option-${personId}`)).not.toBeNull();
-	});
-	await fireEvent.click(q(container, `autocomplete-option-${personId}`) as HTMLElement);
+	const select = field.querySelector(
+		'[data-testid="event-create-conductor-select"]'
+	) as HTMLSelectElement;
+	expect(select, 'expected the native event-create-conductor-select').not.toBeNull();
+	expect(select.tagName).toBe('SELECT');
+	return select;
+}
+
+/** The prompt option (first, value ''), pinned `disabled selected hidden` so it
+ *  can never be committed as a value (Gama ruling 1). */
+function promptOption(select: HTMLSelectElement): HTMLOptionElement {
+	const prompt = select.querySelector('option') as HTMLOptionElement;
+	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
+	expect(prompt.value).toBe('');
+	expect(prompt.disabled).toBe(true);
+	expect(prompt.hidden).toBe(true);
+	return prompt;
+}
+
+/** Pick a conductor the way a native select is driven: change to the id. */
+async function pickConductor(container: HTMLElement, personId: string): Promise<void> {
+	await fireEvent.change(conductorSelect(container), { target: { value: personId } });
 }
 
 async function submit(container: HTMLElement): Promise<void> {
@@ -680,7 +704,7 @@ describe('agenda — the [+ Event] entry point (rights gate)', () => {
 // ── the form's fields (design sketch C) ─────────────────────────────────────────
 
 describe('agenda — the event creation form carries every sketch-C field', () => {
-	it('name (text), datetime (datetime-local), duration + capacity (number), location (text), description (TEXTAREA), a type picker (#199 canonical select) and a conductor Autocomplete', async () => {
+	it('name (text), datetime (datetime-local), duration + capacity (number), location (text), description (TEXTAREA), a type picker (#199 canonical select) and a native conductor select (#209)', async () => {
 		const container = await renderReady();
 		await openFormFromAgenda(container);
 
@@ -723,8 +747,14 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 		expect(description.tagName).toBe('TEXTAREA');
 
 		expect(typeSelect(container).tagName).toBe('SELECT');
-		const conductors = q(container, 'event-create-conductors-field') as HTMLElement;
-		expect(conductors.querySelector('[data-testid="autocomplete-input"]')).not.toBeNull();
+		// #209 — the conductor picker is a NATIVE select (rule 1), named by the
+		// existing label key, resting on its non-committable prompt option.
+		const conductors = conductorSelect(container);
+		expect(conductors.getAttribute('aria-label')).toBe('event_create_conductor_label');
+		expect(promptOption(conductors).textContent?.trim()).toBe(
+			'event_create_conductor_placeholder'
+		);
+		expect(conductors.value).toBe('');
 	});
 
 	it('the season select offers EVERY known season (value = id, its NAME visible) behind a "" placeholder option', async () => {
@@ -769,10 +799,10 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 // page.event-type-picker.spec.ts (exactly the 8 canonical options, localized
 // labels, canonical-key writes).
 
-// ── conductors: the T2 Autocomplete, through the page's cached roster ───────────
+// ── conductors: the native <select> (#209), through the page's cached roster ────
 
-describe('agenda — the conductor autocomplete reuses T2’s component and the cached roster', () => {
-	it('the roster loads at most ONCE (through getRoster), only when the form opens; a picked conductor renders as a NAMED chip', async () => {
+describe('agenda — the conductor select (#209) is fed from the cached roster', () => {
+	it('the roster loads at most ONCE (through getRoster), only when the form opens; the select offers every roster person; a picked conductor renders as a NAMED chip and the select resets to the prompt', async () => {
 		const container = await renderReady();
 		expect(loadRosterMock).not.toHaveBeenCalled();
 
@@ -781,14 +811,95 @@ describe('agenda — the conductor autocomplete reuses T2’s component and the 
 			expect(loadRosterMock).toHaveBeenCalledTimes(1);
 		});
 
-		await pickConductor(container, 'ada', 'p-ada');
+		// FULL option array (value = person id, text = display name) behind the
+		// prompt — nobody picked yet, no sections → roster's own order.
+		const select = conductorSelect(container);
+		await waitFor(() => {
+			expect(optionValues(select)).toEqual(['', 'p-ada', 'p-grace', 'person-p']);
+		});
+		const texts = Array.from(select.querySelectorAll('option')).map((o) =>
+			o.textContent?.trim()
+		);
+		expect(texts).toEqual([
+			'event_create_conductor_placeholder',
+			'Ada Lovelace',
+			'Grace Hopper',
+			'Pete Wilson'
+		]);
+
+		await pickConductor(container, 'p-ada');
 
 		await waitFor(() => {
 			expect(q(container, 'event-create-conductor-p-ada')).not.toBeNull();
 		});
 		expect(q(container, 'event-create-conductor-p-ada')?.textContent).toContain('Ada Lovelace');
-		// Client-side filtering — still exactly one roster read.
+
+		// Chip pattern stays (Gama ruling 3): select back at the prompt, the
+		// picked person no longer offered.
+		await waitFor(() => {
+			expect(conductorSelect(container).value).toBe('');
+		});
+		expect(optionValues(conductorSelect(container))).toEqual(['', 'p-grace', 'person-p']);
+
+		// One roster read — the select is fed, not searched.
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('option order is ROSTER order — section (listSections tree order), then position within section, Unassigned last — NOT alphabetical (Gama ruling 3)', async () => {
+		// loadRoster answers NAME order (Ada, Grace, Pete). Grace sings Sopran
+		// (first), Ada Tenor (second), Pete is unassigned → LAST.
+		loadRosterMock.mockResolvedValue([
+			{ ...fixtureRows()[0], sectionIds: ['sec-t'] }, // Ada → Tenor
+			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran
+			{ ...fixtureRows()[2], sectionIds: [] } // Pete → Unassigned
+		]);
+		listSectionsMock.mockResolvedValue([
+			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
+			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		]);
+
+		const container = await renderReady();
+		await openFormFromAgenda(container);
+
+		await waitFor(() => {
+			// Sopran (Grace), Tenor (Ada), Unassigned (Pete). Alphabetical would
+			// put Ada first.
+			expect(optionValues(conductorSelect(container))).toEqual([
+				'',
+				'p-grace',
+				'p-ada',
+				'person-p'
+			]);
+		});
+	});
+
+	it('EVERYONE picked: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added (Gama ruling 2)', async () => {
+		const container = await renderReady();
+		await openFormFromAgenda(container);
+
+		await pickConductor(container, 'p-ada');
+		await pickConductor(container, 'p-grace');
+		await pickConductor(container, 'person-p');
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-conductor-person-p')).not.toBeNull();
+		});
+		const select = conductorSelect(container);
+		await waitFor(() => {
+			expect(select.disabled).toBe(true);
+		});
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('picker_everyone_added');
+
+		// Removing a chip revives the select — the state is derived, not sticky.
+		await fireEvent.click(q(container, 'event-create-conductor-remove-p-ada') as HTMLElement);
+		await waitFor(() => {
+			expect(conductorSelect(container).disabled).toBe(false);
+		});
+		expect(optionValues(conductorSelect(container))).toEqual(['', 'p-ada']);
+		expect(promptOption(conductorSelect(container)).textContent?.trim()).toBe(
+			'event_create_conductor_placeholder'
+		);
 	});
 });
 
@@ -938,7 +1049,7 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await fill(container, 'event-create-duration', '120');
 		await fill(container, 'event-create-location', 'Estonia Hall');
 		await fill(container, 'event-create-description', 'Doors at 18:30');
-		await pickConductor(container, 'ada', 'p-ada');
+		await pickConductor(container, 'p-ada');
 		await fill(container, 'event-create-capacity', '300');
 		await submit(container);
 
@@ -1566,6 +1677,49 @@ describe('#208 — locale coverage for the "From series" secondary line', () => 
 			expect(msg, `${locale}.json is missing agenda_duration_min`).toBeDefined();
 			expect(msg, `${locale}.json agenda_duration_min lacks {minutes}`).toContain('{minutes}');
 		}
+	});
+});
+
+// ── the picker's EMPTY states (#209 review F1) ─────────────────────────────────
+
+describe('agenda — the event-create conductor select tells its empties apart (#209 review F1)', () => {
+	it('roster read STILL IN FLIGHT: disabled with the LOADING prompt, never picker_everyone_added', async () => {
+		loadRosterMock.mockReturnValue(new Promise<never>(() => {})); // never settles
+
+		const container = await renderReady();
+		await openFormFromAgenda(container);
+
+		const select = conductorSelect(container);
+		expect(select.disabled).toBe(true);
+		expect(promptOption(select).textContent?.trim()).toBe('picker_roster_loading');
+	});
+
+	it('roster read FAILED: the prompt says the member list is UNAVAILABLE, permanently visible rather than reading as "everyone is already added"', async () => {
+		loadRosterMock.mockRejectedValue(new Error('roster boom'));
+
+		const container = await renderReady();
+		await openFormFromAgenda(container);
+
+		await waitFor(() => {
+			expect(promptOption(conductorSelect(container)).textContent?.trim()).toBe(
+				'picker_roster_unavailable'
+			);
+		});
+		expect(conductorSelect(container).disabled).toBe(true);
+	});
+
+	it('SECTION read failed: the select stays usable in the roster’s own name order and says so', async () => {
+		listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
+
+		const container = await renderReady();
+		await openFormFromAgenda(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-conductor-order-note')).not.toBeNull();
+		});
+		const select = conductorSelect(container);
+		expect(select.disabled).toBe(false);
+		expect(promptOption(select).textContent?.trim()).toBe('event_create_conductor_placeholder');
 	});
 });
 

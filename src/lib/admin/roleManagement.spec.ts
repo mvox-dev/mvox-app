@@ -297,8 +297,8 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 
 	// #146 — a freshly POSTed rights value carries only `reference` (no
 	// `string`), so the row falls back to the raw entity id. The roster
-	// (already loaded for the Autocomplete person search) is passed through
-	// as a second-chance id→name lookup.
+	// (already loaded for the person-picker native <select>, #209) is passed
+	// through as a second-chance id→name lookup.
 	it('#146: a display-name-less row (id fallback) is resolved against a passed roster, by personId', async () => {
 		const fetchImpl = vi
 			.fn()

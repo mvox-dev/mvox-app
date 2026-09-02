@@ -45,7 +45,17 @@
 //     season-manage-conductor-<personId>  one chip per conductor, showing the
 //                                 person's NAME (ids are not UI), containing its
 //                                 own remove button
-//     autocomplete-input          T2's Autocomplete, INSIDE the panel — conductor add
+//     season-manage-conductor-select  the NATIVE conductor <select> INSIDE the
+//                                 panel (#209, PO standing rule 1): aria-label =
+//                                 season_conductor_label; prompt option first
+//                                 (value '', disabled selected hidden, text =
+//                                 the reworded season_conductor_placeholder);
+//                                 one option per roster person NOT already a
+//                                 conductor (value = person id, text = name) in
+//                                 roster order; a change adds the conductor and
+//                                 the select resets to the prompt; everyone
+//                                 added → mounted + disabled + prompt text
+//                                 picker_everyone_added (Gama ruling 2)
 //     season-manage-series-<id>   one row per event series: name + event count
 //     season-manage-add-series    [+ Series] entry point (wired in T5)
 //     season-manage-event-<id>    one row per STANDALONE event: name
@@ -79,6 +89,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const {
 	loadFullAgendaMock,
 	loadRosterMock,
+	listSectionsMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	discoverMock,
@@ -93,6 +104,7 @@ const {
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	listSectionsMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	discoverMock: vi.fn(),
@@ -129,6 +141,13 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #209 — only the NETWORK read is stubbed; groupBySection (the pure roster-order
+// helper the roster page uses) stays real, so option order is computed by the
+// same code path the roster page renders with.
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: listSectionsMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // $env/dynamic/public is unavailable outside a SvelteKit request context under
 // happy-dom; stubbing the base url keeps every real module in play.
@@ -336,6 +355,8 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
+	// [] = no sections → roster order degrades to the roster's own order.
+	listSectionsMock.mockResolvedValue([]);
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -351,6 +372,7 @@ afterEach(() => {
 	cleanup();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
+	listSectionsMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
 	discoverMock.mockReset();
@@ -401,6 +423,37 @@ async function editField(container: HTMLElement, field: string, value: string): 
 	const input = q(container, `season-edit-input-${field}`) as HTMLInputElement;
 	await fireEvent.input(input, { target: { value } });
 	await fireEvent.keyDown(input, { key: 'Enter' });
+}
+
+/** #209 — the panel's NATIVE conductor <select> (rule 1), asserted present. */
+function conductorSelect(panel: HTMLElement): HTMLSelectElement {
+	const select = panel.querySelector(
+		'[data-testid="season-manage-conductor-select"]'
+	) as HTMLSelectElement;
+	expect(select, 'expected the native season-manage-conductor-select').not.toBeNull();
+	expect(select.tagName).toBe('SELECT');
+	return select;
+}
+
+/** Every option's value, in DOM order — index 0 is the '' prompt. */
+function optionValues(select: HTMLSelectElement): string[] {
+	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+}
+
+/** The prompt option (first, value ''), pinned `disabled selected hidden` so it
+ *  can never be committed as a value (Gama ruling 1). */
+function promptOption(select: HTMLSelectElement): HTMLOptionElement {
+	const prompt = select.querySelector('option') as HTMLOptionElement;
+	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
+	expect(prompt.value).toBe('');
+	expect(prompt.disabled).toBe(true);
+	expect(prompt.hidden).toBe(true);
+	return prompt;
+}
+
+/** Pick a conductor the way a native select is driven: change to the id. */
+async function pickConductor(panel: HTMLElement, personId: string): Promise<void> {
+	await fireEvent.change(conductorSelect(panel), { target: { value: personId } });
 }
 
 // ── the entry point: gear on the season header, rights-gated ────────────────────
@@ -736,7 +789,7 @@ describe('agenda — season fields edit inline (event/[id] per-field pattern)', 
 	});
 });
 
-// ── conductors: chips + autocomplete add / targeted remove ──────────────────────
+// ── conductors: chips + native-select add (#209) / targeted remove ──────────────
 
 describe('agenda — season conductors are editable in the panel', () => {
 	it('the current conductor renders as a chip showing the person’s NAME (from the cached roster), not a raw entity id', async () => {
@@ -790,17 +843,51 @@ describe('agenda — season conductors are editable in the panel', () => {
 		);
 	});
 
-	it('adding via the panel’s Autocomplete calls addSeasonConductor(cfg, seasonId, <personId>) and the new chip appears', async () => {
+	it('the panel holds a NATIVE conductor <select> (#209): named by season_conductor_label, prompt option (value "", disabled selected hidden, the reworded placeholder), then every roster person NOT already a conductor, in roster order', async () => {
 		const container = await renderReady();
 		const panel = await openPanel(container);
 
-		const input = panel.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-		expect(input).not.toBeNull();
-		await fireEvent.input(input, { target: { value: 'ada' } });
+		const select = conductorSelect(panel);
+		expect(select.getAttribute('aria-label')).toBe('season_conductor_label');
+		expect(promptOption(select).textContent?.trim()).toBe('season_conductor_placeholder');
+		expect(select.value).toBe('');
+
+		// FULL option array — Grace already conducts this season, so she is NOT
+		// offered again; Ada and Pete are (no sections → roster's own order).
+		expect(optionValues(select)).toEqual(['', 'p-ada', 'person-p']);
+		const texts = Array.from(select.querySelectorAll('option')).map((o) =>
+			o.textContent?.trim()
+		);
+		expect(texts).toEqual(['season_conductor_placeholder', 'Ada Lovelace', 'Pete Wilson']);
+	});
+
+	it('option order is ROSTER order — section, then position within section — not alphabetical (Gama ruling 3)', async () => {
+		// loadRoster answers NAME order (Ada, Grace, Pete). Pete sings Sopran
+		// (first section), Ada Tenor (second); Grace already conducts (excluded).
+		loadRosterMock.mockResolvedValue([
+			{ ...fixtureRows()[0], sectionIds: ['sec-t'] }, // Ada → Tenor
+			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran (excluded anyway)
+			{ ...fixtureRows()[2], sectionIds: ['sec-s'] } // Pete → Sopran
+		]);
+		listSectionsMock.mockResolvedValue([
+			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
+			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		]);
+
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
 		await waitFor(() => {
-			expect(q(container, 'autocomplete-option-p-ada')).not.toBeNull();
+			// Sopran (Pete), then Tenor (Ada). Alphabetical would put Ada first.
+			expect(optionValues(conductorSelect(panel))).toEqual(['', 'person-p', 'p-ada']);
 		});
-		await fireEvent.click(q(container, 'autocomplete-option-p-ada') as HTMLElement);
+	});
+
+	it('adding via the panel’s select (change to a person id) calls addSeasonConductor(cfg, seasonId, <personId>), the new chip appears, and the select RESETS to the prompt', async () => {
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		await pickConductor(panel, 'p-ada');
 
 		await waitFor(() => {
 			expect(addSeasonConductorMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'p-ada');
@@ -809,6 +896,44 @@ describe('agenda — season conductors are editable in the panel', () => {
 			expect(q(container, 'season-manage-conductor-p-ada')).not.toBeNull();
 		});
 		expect(q(container, 'season-manage-conductor-p-ada')?.textContent).toContain('Ada Lovelace');
+
+		// Chip pattern stays: back to the prompt, Ada no longer offered.
+		const select = conductorSelect(panel);
+		await waitFor(() => {
+			expect(select.value).toBe('');
+		});
+		expect(optionValues(select)).toEqual(['', 'person-p']);
+	});
+
+	it('EVERY roster person already conducts: the select stays MOUNTED but disabled with prompt text picker_everyone_added (Gama ruling 2)', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			fullAgendaResult({
+				seasonId: SEASON_ID,
+				seasonConductors: ['p-ada', 'p-grace', 'person-p'],
+				seasonEditors: ['person-p'],
+				seasons: [
+					{
+						id: SEASON_ID,
+						name: 'Season 2026',
+						startDate: SEASON_START,
+						endDate: SEASON_END,
+						conductors: ['p-ada', 'p-grace', 'person-p'],
+						owners: [],
+						editors: ['person-p']
+					}
+				]
+			})
+		);
+
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		const select = conductorSelect(panel);
+		await waitFor(() => {
+			expect(select.disabled).toBe(true);
+		});
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('picker_everyone_added');
 	});
 
 	it('the chip’s remove button calls removeSeasonConductor(cfg, seasonId, <personId>) and the chip leaves', async () => {
@@ -839,12 +964,7 @@ describe('agenda — season conductors are editable in the panel', () => {
 		const container = await renderReady();
 		const panel = await openPanel(container);
 
-		const input = panel.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-		await fireEvent.input(input, { target: { value: 'ada' } });
-		await waitFor(() => {
-			expect(q(container, 'autocomplete-option-p-ada')).not.toBeNull();
-		});
-		await fireEvent.click(q(container, 'autocomplete-option-p-ada') as HTMLElement);
+		await pickConductor(panel, 'p-ada');
 
 		await waitFor(() => {
 			expect(q(container, 'season-manage-conductor-error')).not.toBeNull();
@@ -1206,6 +1326,56 @@ describe('agenda — closing the panel, and what survives it', () => {
 		});
 		expect(updateSeasonFieldMock).toHaveBeenCalledTimes(1);
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
+	});
+});
+
+// ── the picker's EMPTY states (#209 review F1) ─────────────────────────────────
+//
+// The panel's conductor CHIPS were already careful here (name-not-here-YET vs
+// name-will-NEVER-arrive, #132/T3 review F4). The select was not: it claimed
+// everyone had been added while the roster was still loading, and kept claiming
+// it after a failed read.
+
+describe('agenda — the season-manage conductor select tells its empties apart (#209 review F1)', () => {
+	it('roster read STILL IN FLIGHT: disabled with the LOADING prompt, never picker_everyone_added', async () => {
+		loadRosterMock.mockReturnValue(new Promise<never>(() => {})); // never settles
+
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		const select = conductorSelect(panel);
+		expect(select.disabled).toBe(true);
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('picker_roster_loading');
+	});
+
+	it('roster read FAILED: the prompt says the member list is UNAVAILABLE — the same failure the chips already report as "unknown", never "everyone is already added"', async () => {
+		loadRosterMock.mockRejectedValue(new Error('roster boom'));
+
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		await waitFor(() => {
+			expect(promptOption(conductorSelect(panel)).textContent?.trim()).toBe(
+				'picker_roster_unavailable'
+			);
+		});
+		expect(conductorSelect(panel).disabled).toBe(true);
+	});
+
+	it('SECTION read failed: the select stays usable in the roster’s own name order and says so', async () => {
+		listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
+
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-conductor-order-note')).not.toBeNull();
+		});
+		const select = conductorSelect(panel);
+		expect(select.disabled).toBe(false);
+		expect(optionValues(select)).toEqual(['', 'p-ada', 'person-p']);
+		expect(promptOption(select).textContent?.trim()).toBe('season_conductor_placeholder');
 	});
 });
 

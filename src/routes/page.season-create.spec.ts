@@ -30,9 +30,13 @@
 //       the UI layer: the create body is entirely T1's business, and T1 pins
 //       `_type` + `_parent` + domain props ONLY (rights trusted to Entu's
 //       inheritance chain from the org — the #132 design decision).
-//     - conductor options come from `loadRoster` (id = personId, label = name),
-//       loaded ONCE when the form opens and filtered CLIENT-SIDE by the
-//       Autocomplete (review checklist #11 — no per-keystroke fetch).
+//     - conductor options come from `loadRoster` (option value = personId,
+//       option text = name), loaded ONCE when the form opens (no per-keystroke
+//       fetch — there are no keystrokes: #209 replaced the Autocomplete with a
+//       NATIVE <select>, PO standing rule 1). Options are in ROSTER ORDER —
+//       section (listSections tree order), then position within section, the
+//       same order the roster page shows (Gama ruling 3) — excluding people
+//       already picked as chips.
 //     - success → the form closes AND the agenda refreshes (loadFullAgenda is
 //       re-invoked, so the new season's emptiness/state is real, not guessed).
 //
@@ -44,21 +48,27 @@
 //     season-create-name          name text input, AUTO-FOCUSED on open
 //     season-create-start         start date input, type="date"
 //     season-create-end           end date input, type="date"
-//     autocomplete-input          the conductor Autocomplete's input (the
-//                                 component's own testid — one instance in form)
-//     autocomplete-option-<pid>   its options: the collective's persons
+//     season-create-conductor-select  the NATIVE conductor <select> (#209):
+//                                 aria-label = season_conductor_label; first
+//                                 option is the prompt (value '', disabled
+//                                 selected hidden, text = the reworded
+//                                 season_conductor_placeholder); one option per
+//                                 eligible person (value = person id, text =
+//                                 display name) in roster order. When everyone
+//                                 is picked it stays MOUNTED but disabled with
+//                                 prompt text picker_everyone_added (ruling 2).
 //     season-create-conductor-<pid>  one chip per CHOSEN conductor, showing the
 //                                 person's name (the parent renders picks — the
-//                                 Autocomplete clears itself for the next entry)
+//                                 select resets to the prompt after each pick)
 //     season-create-submit        fires the createSeason write
 //     season-create-cancel        closes the form; nothing written
 //     season-create-error         inline validation error, role="alert"
 //                                 (name required; end date >= start date)
 //
 //   BEHAVIOR
-//     - Escape ANYWHERE in the form (fired here on the name input, so the
-//       Autocomplete's own Escape-closes-dropdown layer is not in play)
-//       dismisses the form without creating.
+//     - Escape ANYWHERE in the form dismisses it without creating — including
+//       with the conductor select focused (a native select needs no dropdown
+//       Escape layering; the browser owns its popup).
 //     - validation runs BEFORE the write: a blank name or an inverted date
 //       range shows season-create-error and createSeason is NEVER called
 //       (defense in depth — T1 validates too, but a thrown-and-caught write is
@@ -74,6 +84,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const {
 	loadFullAgendaMock,
 	loadRosterMock,
+	listSectionsMock,
 	createSeasonMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
@@ -84,6 +95,7 @@ const {
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	listSectionsMock: vi.fn(),
 	createSeasonMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
@@ -113,6 +125,13 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #209 — only the NETWORK read is stubbed; groupBySection (the pure roster-order
+// helper the roster page uses) stays real, so option order is computed by the
+// same code path the roster page renders with.
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: listSectionsMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // $env/dynamic/public is unavailable outside a SvelteKit request context under
 // happy-dom; stubbing the base url keeps every real module in play.
@@ -209,7 +228,7 @@ function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } =
 	});
 }
 
-/** The collective's persons — the conductor autocomplete's source. The VIEWER
+/** The collective's persons — the conductor select's source. The VIEWER
  *  (authenticated personId 'person-p') is Pete. */
 function fixtureRows(): RosterRow[] {
 	return [
@@ -259,6 +278,9 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(fixtureRows());
+	// [] = no sections → every person is Unassigned and roster order degrades
+	// to the roster's own (name) order.
+	listSectionsMock.mockResolvedValue([]);
 	createSeasonMock.mockResolvedValue('season-new-1');
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
@@ -270,6 +292,7 @@ afterEach(() => {
 	cleanup();
 	loadFullAgendaMock.mockReset();
 	loadRosterMock.mockReset();
+	listSectionsMock.mockReset();
 	createSeasonMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 	resolveManageRightsMock.mockReset();
@@ -311,20 +334,36 @@ async function fill(container: HTMLElement, testid: string, value: string): Prom
 	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
 }
 
-/** Pick a conductor through the REAL Autocomplete: type a filter, click the option. */
-async function pickConductor(
-	container: HTMLElement,
-	filter: string,
-	personId: string
-): Promise<void> {
+/** #209 — the form's NATIVE conductor <select> (rule 1), asserted present. */
+function conductorSelect(container: HTMLElement): HTMLSelectElement {
 	const form = q(container, 'season-create-form') as HTMLElement;
-	const input = form.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-	expect(input).not.toBeNull();
-	await fireEvent.input(input, { target: { value: filter } });
-	await waitFor(() => {
-		expect(q(container, `autocomplete-option-${personId}`)).not.toBeNull();
-	});
-	await fireEvent.click(q(container, `autocomplete-option-${personId}`) as HTMLElement);
+	const select = form.querySelector(
+		'[data-testid="season-create-conductor-select"]'
+	) as HTMLSelectElement;
+	expect(select, 'expected the native season-create-conductor-select').not.toBeNull();
+	expect(select.tagName).toBe('SELECT');
+	return select;
+}
+
+/** Every option's value, in DOM order — index 0 is the '' prompt. */
+function optionValues(select: HTMLSelectElement): string[] {
+	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+}
+
+/** The prompt option (first, value ''), pinned `disabled selected hidden` so it
+ *  can never be committed as a value (Gama ruling 1). */
+function promptOption(select: HTMLSelectElement): HTMLOptionElement {
+	const prompt = select.querySelector('option') as HTMLOptionElement;
+	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
+	expect(prompt.value).toBe('');
+	expect(prompt.disabled).toBe(true);
+	expect(prompt.hidden).toBe(true);
+	return prompt;
+}
+
+/** Pick a conductor the way a native select is driven: change to the id. */
+async function pickConductor(container: HTMLElement, personId: string): Promise<void> {
+	await fireEvent.change(conductorSelect(container), { target: { value: personId } });
 }
 
 async function submit(container: HTMLElement): Promise<void> {
@@ -367,7 +406,7 @@ describe('agenda — the [+ Season] entry point (rights + upcoming-season gate)'
 // ── opening the inline form ─────────────────────────────────────────────────────
 
 describe('agenda — clicking [+ Season] opens the INLINE creation form', () => {
-	it('the form appears IN PLACE (no route change): name auto-focused, start/end are type="date", the conductor Autocomplete is inside the form — nothing written by opening', async () => {
+	it('the form appears IN PLACE (no route change): name auto-focused, start/end are type="date", the NATIVE conductor select (#209) is inside the form — nothing written by opening', async () => {
 		const container = await renderReady();
 		await openForm(container);
 
@@ -387,8 +426,12 @@ describe('agenda — clicking [+ Season] opens the INLINE creation form', () => 
 		expect(start.type).toBe('date');
 		expect(end.type).toBe('date');
 
-		const form = q(container, 'season-create-form') as HTMLElement;
-		expect(form.querySelector('[data-testid="autocomplete-input"]')).not.toBeNull();
+		// #209 — the conductor picker is a NATIVE select (rule 1), named by the
+		// existing label key, resting on its non-committable prompt option.
+		const select = conductorSelect(container);
+		expect(select.getAttribute('aria-label')).toBe('season_conductor_label');
+		expect(promptOption(select).textContent?.trim()).toBe('season_conductor_placeholder');
+		expect(select.value).toBe('');
 
 		expect(createSeasonMock).not.toHaveBeenCalled();
 	});
@@ -418,10 +461,10 @@ describe('agenda — clicking [+ Season] opens the INLINE creation form', () => 
 	});
 });
 
-// ── the conductor autocomplete searches collective persons ──────────────────────
+// ── the conductor select lists collective persons (#209) ────────────────────────
 
-describe('agenda — the conductor autocomplete searches the collective’s persons', () => {
-	it("persons come from loadRoster, loaded ONCE on form open and filtered CLIENT-SIDE: typing 'ada' offers only Ada Lovelace, and no second roster fetch fires per keystroke", async () => {
+describe('agenda — the conductor select lists the collective’s persons', () => {
+	it('persons come from loadRoster, loaded ONCE on form open: the select offers every roster person (value = person id, text = display name) behind the prompt — no per-keystroke fetch, there is nothing to type', async () => {
 		const container = await renderReady();
 		// The agenda visit itself must not pay the roster read — only the form does.
 		expect(loadRosterMock).not.toHaveBeenCalled();
@@ -431,18 +474,24 @@ describe('agenda — the conductor autocomplete searches the collective’s pers
 			expect(loadRosterMock).toHaveBeenCalledTimes(1);
 		});
 
-		const form = q(container, 'season-create-form') as HTMLElement;
-		const input = form.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-		await fireEvent.input(input, { target: { value: 'ada' } });
-
+		const select = conductorSelect(container);
 		await waitFor(() => {
-			expect(q(container, 'autocomplete-option-p-ada')).not.toBeNull();
+			// FULL option array (partial assertions hide bugs) — every roster
+			// person, nobody picked yet, prompt first. No sections in this
+			// fixture → roster order is the roster's own order.
+			expect(optionValues(select)).toEqual(['', 'p-ada', 'p-grace', 'person-p']);
 		});
-		expect(q(container, 'autocomplete-option-p-ada')?.textContent).toContain('Ada Lovelace');
-		expect(q(container, 'autocomplete-option-p-grace')).toBeNull();
-		expect(q(container, 'autocomplete-option-person-p')).toBeNull();
+		const texts = Array.from(select.querySelectorAll('option')).map((o) =>
+			o.textContent?.trim()
+		);
+		expect(texts).toEqual([
+			'season_conductor_placeholder',
+			'Ada Lovelace',
+			'Grace Hopper',
+			'Pete Wilson'
+		]);
 
-		// Client-side filtering — still exactly one roster read.
+		// Exactly one roster read — the select is fed, not searched.
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -465,25 +514,119 @@ describe('agenda — the conductor autocomplete searches the collective’s pers
 		await openForm(container);
 
 		// The options are still there — served from the cache, not re-read.
-		const form = q(container, 'season-create-form') as HTMLElement;
-		const input = form.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-		await fireEvent.input(input, { target: { value: 'ada' } });
 		await waitFor(() => {
-			expect(q(container, 'autocomplete-option-p-ada')).not.toBeNull();
+			expect(optionValues(conductorSelect(container))).toEqual([
+				'',
+				'p-ada',
+				'p-grace',
+				'person-p'
+			]);
 		});
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('a picked conductor renders as a chip (season-create-conductor-<personId>) showing the person’s name', async () => {
+	it('a picked conductor renders as a chip (season-create-conductor-<personId>) showing the person’s name; the select RESETS to the prompt and stops offering the picked person', async () => {
 		const container = await renderReady();
 		await openForm(container);
 
-		await pickConductor(container, 'ada', 'p-ada');
+		await pickConductor(container, 'p-ada');
 
 		await waitFor(() => {
 			expect(q(container, 'season-create-conductor-p-ada')).not.toBeNull();
 		});
 		expect(q(container, 'season-create-conductor-p-ada')?.textContent).toContain('Ada Lovelace');
+
+		// The chip pattern stays (Gama ruling 3): the pick lands as a chip, the
+		// select goes back to the prompt, and the picked person leaves the list.
+		const select = conductorSelect(container);
+		await waitFor(() => {
+			expect(select.value).toBe('');
+		});
+		expect(optionValues(select)).toEqual(['', 'p-grace', 'person-p']);
+	});
+
+	it('option order is ROSTER order — section (listSections tree order), then position within section, Unassigned last — NOT alphabetical (Gama ruling 3)', async () => {
+		// loadRoster answers NAME order (its own contract): Ada, Grace, Pete.
+		// Sections put Grace in Sopran (first) and Ada in Tenor (second); Pete
+		// is unassigned → LAST (the roster page's Unassigned group).
+		loadRosterMock.mockResolvedValue([
+			{ ...fixtureRows()[0], sectionIds: ['sec-t'] }, // Ada → Tenor
+			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran
+			{ ...fixtureRows()[2], sectionIds: [] } // Pete → Unassigned
+		]);
+		listSectionsMock.mockResolvedValue([
+			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
+			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		]);
+
+		const container = await renderReady();
+		await openForm(container);
+
+		await waitFor(() => {
+			// Sopran (Grace), Tenor (Ada), Unassigned (Pete). Alphabetical would
+			// put Ada first.
+			expect(optionValues(conductorSelect(container))).toEqual([
+				'',
+				'p-grace',
+				'p-ada',
+				'person-p'
+			]);
+		});
+	});
+
+	it('a MULTI-SECTION person (roster page renders her in every group) is offered exactly ONCE, at her first roster position — option values must stay unique', async () => {
+		loadRosterMock.mockResolvedValue([
+			{ ...fixtureRows()[0], sectionIds: ['sec-s', 'sec-t'] }, // Ada → both
+			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran
+			{ ...fixtureRows()[2], sectionIds: ['sec-t'] } // Pete → Tenor
+		]);
+		listSectionsMock.mockResolvedValue([
+			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
+			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		]);
+
+		const container = await renderReady();
+		await openForm(container);
+
+		await waitFor(() => {
+			// Sopran (Ada, Grace), Tenor (Ada again — deduped, Pete). Ada appears
+			// once, at her FIRST roster position.
+			expect(optionValues(conductorSelect(container))).toEqual([
+				'',
+				'p-ada',
+				'p-grace',
+				'person-p'
+			]);
+		});
+	});
+
+	it('EVERYONE picked: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added (Gama ruling 2 — never hidden, never inert-enabled)', async () => {
+		const container = await renderReady();
+		await openForm(container);
+
+		await pickConductor(container, 'p-ada');
+		await pickConductor(container, 'p-grace');
+		await pickConductor(container, 'person-p');
+
+		await waitFor(() => {
+			expect(q(container, 'season-create-conductor-person-p')).not.toBeNull();
+		});
+		const select = conductorSelect(container);
+		await waitFor(() => {
+			expect(select.disabled).toBe(true);
+		});
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('picker_everyone_added');
+
+		// Removing a chip revives the select — the state is derived, not sticky.
+		await fireEvent.click(q(container, 'season-create-conductor-remove-p-ada') as HTMLElement);
+		await waitFor(() => {
+			expect(conductorSelect(container).disabled).toBe(false);
+		});
+		expect(optionValues(conductorSelect(container))).toEqual(['', 'p-ada']);
+		expect(promptOption(conductorSelect(container)).textContent?.trim()).toBe(
+			'season_conductor_placeholder'
+		);
 	});
 });
 
@@ -498,7 +641,7 @@ describe('agenda — submit calls createSeason and refreshes', () => {
 		await fill(container, 'season-create-name', 'Autumn 2026');
 		await fill(container, 'season-create-start', '2026-09-01');
 		await fill(container, 'season-create-end', '2026-12-20');
-		await pickConductor(container, 'ada', 'p-ada');
+		await pickConductor(container, 'p-ada');
 		await submit(container);
 
 		await waitFor(() => {
@@ -724,44 +867,23 @@ describe('agenda — the submit is guarded against double-firing', () => {
 	});
 });
 
-// ── review F2 — Escape inside the open dropdown must not eat the form ───────────
+// ── Escape with the conductor select focused (#209 — the dropdown layer is gone) ─
 
-describe('agenda — Escape is layered between the conductor dropdown and the form', () => {
-	it('the FIRST Escape (dropdown open) closes only the dropdown: the form and everything typed into it survive', async () => {
+describe('agenda — Escape on the form with the conductor select focused', () => {
+	// #132/T2 review F2 pinned a two-Escapes-to-leave layering between the
+	// Autocomplete's open dropdown and the form. A NATIVE select owns its popup
+	// (the browser closes it before the page ever sees the key), so the
+	// stopPropagation layer is retired with the component — one Escape at the
+	// focused select simply dismisses the form, like from any other field.
+	it('Escape fired at the FOCUSED conductor select dismisses the form without creating; typed work is discarded like any other Escape dismissal', async () => {
 		const container = await renderReady();
 		await openForm(container);
 		await fill(container, 'season-create-name', 'Autumn 2026');
 		await fill(container, 'season-create-start', '2026-09-01');
 
-		const form = q(container, 'season-create-form') as HTMLElement;
-		const acInput = form.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-		await fireEvent.input(acInput, { target: { value: 'ada' } });
-		await waitFor(() => {
-			expect(q(container, 'autocomplete-option-p-ada')).not.toBeNull();
-		});
-
-		await fireEvent.keyDown(acInput, { key: 'Escape' });
-
-		await waitFor(() => {
-			expect(q(container, 'autocomplete-listbox')).toBeNull();
-		});
-		// The form is still here, with the work already done still in it.
-		expect(q(container, 'season-create-form')).not.toBeNull();
-		expect((q(container, 'season-create-name') as HTMLInputElement).value).toBe('Autumn 2026');
-		expect((q(container, 'season-create-start') as HTMLInputElement).value).toBe('2026-09-01');
-		expect(createSeasonMock).not.toHaveBeenCalled();
-	});
-
-	it('a SECOND Escape (dropdown already closed) dismisses the form, as it always did', async () => {
-		const container = await renderReady();
-		await openForm(container);
-		await fill(container, 'season-create-name', 'Autumn 2026');
-
-		const form = q(container, 'season-create-form') as HTMLElement;
-		const acInput = form.querySelector('[data-testid="autocomplete-input"]') as HTMLElement;
-		await fireEvent.input(acInput, { target: { value: 'ada' } });
-		await fireEvent.keyDown(acInput, { key: 'Escape' }); // consumed by the dropdown
-		await fireEvent.keyDown(acInput, { key: 'Escape' }); // this one is the form's
+		const select = conductorSelect(container);
+		select.focus();
+		await fireEvent.keyDown(select, { key: 'Escape' });
 
 		await waitFor(() => {
 			expect(q(container, 'season-create-form')).toBeNull();
@@ -880,5 +1002,70 @@ describe('agenda — validation messages are honest and transient', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #132/T2 RED: [+ Season] entry point + inline form + conductor autocomplete)
+// ── the picker's EMPTY states (#209 review F1) ─────────────────────────────────
+//
+// An empty option list is FOUR different states. Only ONE of them is "everyone
+// is already added"; keying the exhausted prompt on `options.length === 0`
+// alone made a cold-cache open (a 1+N roster fan-out long) and a FAILED roster
+// read say it too — the latter permanently, with zero conductors picked.
+
+describe('agenda — the season-create conductor select tells its empties apart (#209 review F1)', () => {
+	it('roster read STILL IN FLIGHT: disabled with the LOADING prompt, never picker_everyone_added', async () => {
+		loadRosterMock.mockReturnValue(new Promise<never>(() => {})); // never settles
+
+		const container = await renderReady();
+		await openForm(container);
+
+		const select = conductorSelect(container);
+		expect(select.disabled).toBe(true);
+		expect(optionValues(select)).toEqual(['']);
+		expect(promptOption(select).textContent?.trim()).toBe('picker_roster_loading');
+	});
+
+	it('roster read FAILED: the prompt says the member list is UNAVAILABLE — the failure stays visible instead of reading as "everyone is already added"', async () => {
+		loadRosterMock.mockRejectedValue(new Error('roster boom'));
+
+		const container = await renderReady();
+		await openForm(container);
+
+		await waitFor(() => {
+			expect(promptOption(conductorSelect(container)).textContent?.trim()).toBe(
+				'picker_roster_unavailable'
+			);
+		});
+		expect(conductorSelect(container).disabled).toBe(true);
+		expect(optionValues(conductorSelect(container))).toEqual(['']);
+	});
+
+	it('roster resolved EMPTY (this collective has no members): the prompt says there is nobody to add', async () => {
+		loadRosterMock.mockResolvedValue([]);
+
+		const container = await renderReady();
+		await openForm(container);
+
+		await waitFor(() => {
+			expect(promptOption(conductorSelect(container)).textContent?.trim()).toBe(
+				'picker_no_members'
+			);
+		});
+	});
+
+	it('SECTION read failed: an ORDERING failure, not an empty picker — the select stays usable in the roster’s own name order and says so', async () => {
+		listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
+
+		const container = await renderReady();
+		await openForm(container);
+
+		await waitFor(() => {
+			expect(q(container, 'season-create-conductor-order-note')).not.toBeNull();
+		});
+		const select = conductorSelect(container);
+		expect(select.disabled).toBe(false);
+		expect(optionValues(select)).toEqual(['', 'p-ada', 'p-grace', 'person-p']);
+		expect(promptOption(select).textContent?.trim()).toBe('season_conductor_placeholder');
+	});
+});
+
+// (*MVOX:Tallis* — #132/T2 RED: [+ Season] entry point + inline form + conductor picker)
+// (*MVOX:Tallis* — #209 RED: conductor picker is a native <select>, PO standing rule 1)
 // (*MVOX:Palestrina* — #132/T2 review fixes F1–F7)

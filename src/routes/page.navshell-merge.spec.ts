@@ -98,6 +98,10 @@ const h = vi.hoisted(() => {
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
+		// #209 — the section tree behind ROSTER ORDER; this file has no opinion
+		// on picker ordering, so [] (every person Unassigned) keeps it out of
+		// the way.
+		listSectionsMock: vi.fn(),
 		// invite (#31/T4.5)
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
@@ -130,6 +134,10 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
+}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: h.listSectionsMock
 }));
 // #165 scaffolding (see the hoisted mock's comment above).
 vi.mock('$lib/collectives/collectiveName', () => ({
@@ -214,6 +222,7 @@ function loadOk() {
 	h.loadRosterMock.mockResolvedValue([
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }
 	]);
+	h.listSectionsMock.mockResolvedValue([]);
 	// invite prerequisites ready
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
@@ -235,6 +244,7 @@ beforeEach(() => {
 		h.resolveLibrarianMock,
 		h.resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
+		h.listSectionsMock,
 		h.resolveParentMock,
 		h.resolveInviteParentMock,
 		h.createInviteMock,

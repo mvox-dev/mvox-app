@@ -32,6 +32,10 @@ const h = vi.hoisted(() => ({
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
+	// #209 — the section tree behind ROSTER ORDER; this file has no opinion on
+	// picker ordering (mocked at the sectionData boundary so it doesn't fall
+	// through the disabled `entuFetch` wire below).
+	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 	// #165 — the page's `load()` now also resolves the collective-name marker.
@@ -72,6 +76,10 @@ vi.mock('$lib/entu/request', async (importOriginal) => {
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
+	listSections: h.listSectionsMock
+}));
 // #165 scaffolding (see the hoisted mock's comment above).
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
@@ -135,6 +143,7 @@ beforeEach(() => {
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
 	h.createInviteMock.mockResolvedValue({
 		personId: 'p-new',
