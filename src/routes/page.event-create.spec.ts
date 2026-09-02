@@ -1711,3 +1711,90 @@ describe('agenda — the event-create conductor select tells its empties apart (
 // panel survival, visible labels)
 // (*MVOX:Tallis* — #208 RED: descriptive placeholders always; inherited series
 // values as "From series" secondary lines; submit path + announcement guards)
+
+// ── #220 — the AM/PM preference on the event-created toast (display ONLY) ────
+//
+// "Am/pm preference applies globally" (Mihkel): the success toast's `when`
+// composes the untouched ISO date half (#207 rule 7, as shipped) with the
+// TIME half rendered through the ONE shared formatter — in ampm mode
+// '2027-04-18 7:00 PM'. The WIRE stays byte-identical: createEvent still
+// receives the same UTC instant regardless of the display preference. Store
+// set BEFORE render, reset in finally (page.series-create.spec.ts pattern).
+
+/** Drive the datetime composite in AM/PM mode — fillDateTime assumes 24h
+ *  options ('19' is not among the 12h hour options), so the parts are set the
+ *  way a viewer in ampm mode sets them: 12h hour + minute + AM/PM select. */
+async function fillDateTimeAmpm(
+	container: HTMLElement,
+	prefix: string,
+	date: string,
+	hour12: string,
+	minute: string,
+	ampm: 'AM' | 'PM'
+): Promise<void> {
+	await fireEvent.input(q(container, `${prefix}-date`) as HTMLElement, { target: { value: date } });
+	await fireEvent.change(q(container, `${prefix}-hour`) as HTMLElement, {
+		target: { value: hour12 }
+	});
+	await fireEvent.change(q(container, `${prefix}-minute`) as HTMLElement, {
+		target: { value: minute }
+	});
+	await fireEvent.change(q(container, `${prefix}-ampm`) as HTMLElement, { target: { value: ampm } });
+}
+
+describe('#220 — AM/PM preference on the event-created toast (and NOT on the wire)', () => {
+	it("'ampm': the toast renders 'event_created Spring concert @ 2027-04-18 7:00 PM' — ISO date half untouched (rule 7), time half through the shared formatter", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const container = await renderReady();
+			await openFormFromPanel(container);
+			await selectValue(container, 'event-create-season', SEASON_ID);
+			await chooseType(container, 'concert');
+			await fill(container, 'event-create-name', 'Spring concert');
+			// 7:00 PM Tallinn on 18 Apr 2027 — the same instant the 24h toast spec
+			// pins as '2027-04-18 19:00'.
+			await fillDateTimeAmpm(container, 'event-create-datetime', '2027-04-18', '7', '00', 'PM');
+			await submit(container);
+
+			await waitFor(() => {
+				expect(q(container, 'event-create-status')?.textContent?.trim()).toBe(
+					'event_created Spring concert @ 2027-04-18 7:00 PM'
+				);
+			});
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+
+	it("'ampm' wire guard: createEvent STILL receives the untouched UTC instant — the preference is display-only, stored/submitted values never change", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const container = await renderReady();
+			await openFormFromPanel(container);
+			await selectValue(container, 'event-create-season', SEASON_ID);
+			await chooseType(container, 'concert');
+			await fill(container, 'event-create-name', 'Spring concert');
+			await fillDateTimeAmpm(container, 'event-create-datetime', '2027-04-18', '7', '00', 'PM');
+			await submit(container);
+
+			await waitFor(() => {
+				expect(createEventMock).toHaveBeenCalledTimes(1);
+			});
+			// FULL param shape (partial assertions hide bugs): 7:00 PM Tallinn
+			// (EEST, UTC+3) = 16:00Z — byte-identical to the 24h submit spec above.
+			expect(createEventMock).toHaveBeenCalledWith(CFG, {
+				name: 'Spring concert',
+				dbEntityId: ORG_EFK,
+				extraParentIds: [SEASON_ID],
+				eventType: 'concert',
+				startDatetime: '2027-04-18T16:00:00.000Z'
+			});
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #220 RED: ampm toast rendering + display-only wire guard)

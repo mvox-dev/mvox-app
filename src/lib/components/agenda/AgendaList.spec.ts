@@ -612,6 +612,73 @@ describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved
 	});
 });
 
+// ── #220 — the AM/PM preference reaches BOTH agenda clock-time surfaces ──────
+//
+// "Am/pm preference applies globally" (Mihkel): the #207 timeFormatStore must
+// drive the upcoming row's `row-time` AND the recent row's time cell through
+// the ONE shared formatter ($lib/preferences/timeFormat formatTime — see
+// timeFormat.spec.ts for its table and timeFormat.no-hardcoded-render.spec.ts
+// for the structural rule). Reactivity rides the existing writable-store
+// subscription pattern TimeSelect already uses — the store is set BEFORE
+// render and reset in `finally` (page.series-create.spec.ts pattern). Rule 7
+// stays as shipped: DATES are untouched in ampm mode — the day-group header
+// keeps weekday + month name, the recent row's date cell keeps ISO.
+describe('#220 — AM/PM preference on agenda times', () => {
+	it("'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — dates untouched (rule 7)", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')]; // 12:00 Tallinn (noon → PM, not 0)
+			const recent = [item('p1', '2026-06-15T06:30:00.000Z')]; // 09:30 Tallinn → leading zero dropped
+			const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
+
+			const rowTime = container.querySelector(
+				'[data-testid="agenda-row-r1"] [data-testid="row-time"]'
+			);
+			expect(rowTime?.textContent?.trim()).toBe('12:00 PM');
+
+			// The recent row's time cell (the span between date and duration in the
+			// aria-hidden link column) — selected by CONTENT since it carries no
+			// testid of its own: exactly one span must say '9:30 AM', none '09:30'.
+			const recentRow = container.querySelector('[data-testid="agenda-recent-row-p1"]');
+			expect(recentRow).not.toBeNull();
+			const spanTexts = [...recentRow!.querySelectorAll('span')].map((s) =>
+				s.textContent?.trim()
+			);
+			expect(spanTexts).toContain('9:30 AM');
+			expect(spanTexts).not.toContain('09:30');
+
+			// Rule 7 guards — ampm mode changes CLOCK TIMES only:
+			expect(
+				recentRow!.querySelector('[data-testid="recent-row-date"]')?.textContent?.trim()
+			).toBe('2026-06-15');
+			const headerText =
+				container.querySelector('[data-testid="agenda-date-header"]')?.textContent ?? '';
+			expect(headerText).toMatch(/Monday/i);
+			expect(headerText).toMatch(/June/i);
+			expect(headerText).not.toMatch(/\b(AM|PM)\b/);
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+
+	it("'24h' (the unset default): the SAME fixtures render exactly today's strings — byte-identical, no AM/PM anywhere", () => {
+		// No store touch: the default must render what shipped before #220.
+		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')];
+		const recent = [item('p1', '2026-06-15T06:30:00.000Z')];
+		const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
+		expect(
+			container
+				.querySelector('[data-testid="agenda-row-r1"] [data-testid="row-time"]')
+				?.textContent?.trim()
+		).toBe('12:00');
+		const recentRow = container.querySelector('[data-testid="agenda-recent-row-p1"]');
+		const spanTexts = [...recentRow!.querySelectorAll('span')].map((s) => s.textContent?.trim());
+		expect(spanTexts).toContain('09:30');
+		expect(container.textContent).not.toMatch(/\b(AM|PM)\b/);
+	});
+});
+
 // (*MVOX:Byrd*)
 // (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)
 // (*MVOX:Tallis* — #101 TE.1 event-detail row links RED)

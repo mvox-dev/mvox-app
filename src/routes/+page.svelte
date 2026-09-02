@@ -1,6 +1,10 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { authStore } from '$lib/auth/session';
+	// #220 — the AM/PM preference reaches every displayed clock time through
+	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
+	// that no other file may keep its own 24h-rendering Intl formatter).
+	import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
@@ -2830,24 +2834,20 @@
 	/** The created event's start, Tallinn wall clock, for the success
 	 *  announcement — #207 rule 7 (PO standing rule, Gama's 2026-09-02
 	 *  rulings): the date part is NUMERIC/TABULAR text, so it renders as the
-	 *  ISO calendar date `YYYY-MM-DD` (en-CA gives ISO date format); the time
-	 *  part stays 24h `HH:MM` (rule 5, already landed). Composed as two
-	 *  formatters — a single combined Intl format would insert a locale comma
-	 *  between date and time instead of the required plain space. */
+	 *  ISO calendar date `YYYY-MM-DD` (en-CA gives ISO date format) and is
+	 *  UNTOUCHED by #220; the time part now flows through the ONE shared
+	 *  formatter ($lib/preferences/timeFormat), 24h unless the viewer set
+	 *  AM/PM. Composed as two formatters — a single combined Intl format
+	 *  would insert a locale comma between date and time instead of the
+	 *  required plain space. */
 	const eventCreateStatusDateFmt = new Intl.DateTimeFormat('en-CA', {
 		timeZone: EVENT_CREATE_TZ,
 		year: 'numeric',
 		month: '2-digit',
 		day: '2-digit'
 	});
-	const eventCreateStatusTimeFmt = new Intl.DateTimeFormat('en-GB', {
-		timeZone: EVENT_CREATE_TZ,
-		hour: '2-digit',
-		minute: '2-digit',
-		hourCycle: 'h23'
-	});
 	function eventCreateStatusFmt(at: Date): string {
-		return `${eventCreateStatusDateFmt.format(at)} ${eventCreateStatusTimeFmt.format(at)}`;
+		return `${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
 	}
 
 	let eventCreateOpen = $state(false);

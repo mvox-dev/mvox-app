@@ -2237,3 +2237,78 @@ describe('/event/[id] — type badge color scheme (#211)', () => {
 });
 
 // (*MVOX:Tallis* — #211 RED: event-detail badge joins the type color scheme)
+
+// ── #220 — the AM/PM preference on the event-detail time line ────────────────
+//
+// "Am/pm preference applies globally" (Mihkel): the header's timeRange must
+// flow through the ONE shared formatter ($lib/preferences/timeFormat
+// formatTime — each END formatted separately, joined with the EXISTING en
+// dash). Team-lead default (Gama informed 2026-09-02 12:15): in AM/PM mode a
+// range renders BOTH ends explicit — '7:00 PM–8:30 PM'. Rule 7 stays as
+// shipped: the narrative date header is untouched. Store set BEFORE render,
+// reset in finally (page.series-create.spec.ts pattern).
+describe('/event/[id] — #220 AM/PM preference on the time line', () => {
+	it("'ampm': the range renders BOTH ends explicit — '7:00 PM–8:30 PM' — and the narrative date stays untouched (rule 7)", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const { container } = renderEventPage();
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="event-detail-time"]')).not.toBeNull();
+			});
+			// EVERY rendering of the time line (member <p> or editor button — both
+			// carry the same testid) must obey the preference.
+			const timeLines = [...container.querySelectorAll('[data-testid="event-detail-time"]')];
+			expect(timeLines.length).toBeGreaterThan(0);
+			for (const el of timeLines) {
+				const text = el.textContent ?? '';
+				// 2026-09-01T16:00Z = 19:00 Tallinn; +90 min → 20:30. Both ends
+				// explicit, existing en dash, no 24h remnant.
+				expect(text).toContain('7:00 PM–8:30 PM');
+				expect(text).not.toContain('19:00');
+				expect(text).not.toContain('20:30');
+			}
+			const date = container.querySelector('[data-testid="event-detail-date"]')!.textContent ?? '';
+			expect(date).toMatch(/Tuesday/i);
+			expect(date).toMatch(/September/i);
+			expect(date).not.toMatch(/\b(AM|PM)\b/);
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+
+	it("'ampm', unknown duration: the line collapses to the START alone — '7:00 PM', no dash, no invented end", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const { container } = renderEventPage({
+				event: eventEntity({ duration_minutes: [] }),
+				series: seriesEntity({ duration_minutes: undefined })
+			});
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="event-detail-time"]')).not.toBeNull();
+			});
+			const time =
+				container.querySelector('[data-testid="event-detail-time"]')!.textContent ?? '';
+			expect(time).toContain('7:00 PM');
+			expect(time).not.toContain('–');
+			expect(time).not.toContain('19:00');
+			expect(time.match(/7:00 PM/g)).toHaveLength(1);
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+
+	it("'24h' (the unset default): byte-identical to today — '19:00' and '20:30', no AM/PM suffix anywhere in the line", async () => {
+		const { container } = renderEventPage();
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-time"]')).not.toBeNull();
+		});
+		const time = container.querySelector('[data-testid="event-detail-time"]')!.textContent ?? '';
+		expect(time).toContain('19:00');
+		expect(time).toContain('20:30');
+		expect(time).not.toMatch(/\b(AM|PM)\b/);
+	});
+});
+
+// (*MVOX:Tallis* — #220 RED: AM/PM preference reaches the event-detail time line via the shared formatTime)

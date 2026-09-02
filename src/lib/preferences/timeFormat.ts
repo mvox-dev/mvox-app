@@ -33,4 +33,46 @@ export function setTimeFormat(value: TimeFormat): void {
 	if (typeof localStorage !== 'undefined') localStorage.setItem(TIME_FORMAT_KEY, value);
 }
 
+// #220 — the one shared display formatter every clock-time-rendering surface
+// routes through, so the AM/PM preference can reach every one of them (and
+// timeFormat.no-hardcoded-render.spec.ts can pin that nothing else renders a
+// 24h clock time on its own). Not display sites' 24h-rendering Intl formatter
+// itself — that lives HERE, once — but the shared conversion those formatters'
+// output flows through.
+
+/** The Europe/Tallinn 24h wall-clock 'HH:MM' of an instant — the exact
+ *  Intl output the three display sites produced before #220 (en-GB,
+ *  hour/minute '2-digit', hour12: false, timeZone Europe/Tallinn). Display
+ *  sites call `formatTime(tallinnHHMM(date), $timeFormatStore)`. */
+const tallinnHHMMFmt = new Intl.DateTimeFormat('en-GB', {
+	timeZone: 'Europe/Tallinn',
+	hour: '2-digit',
+	minute: '2-digit',
+	hour12: false
+});
+
+export function tallinnHHMM(date: Date): string {
+	return tallinnHHMMFmt.format(date);
+}
+
+/** Render an 'HH:MM' string per the viewer's time-format preference.
+ *  '24h' → byte-identical passthrough (unset preference = today's output).
+ *  'ampm' → `${h % 12 || 12}:${mm} ${h < 12 ? 'AM' : 'PM'}`, minute string
+ *  passed through verbatim, never re-derived. Malformed input (anything not
+ *  'HH:MM') is returned unchanged in BOTH modes — fail loudly is for writes;
+ *  a display formatter must never turn junk data into a crash or invented
+ *  time text. */
+export function formatTime(hhmm: string, mode: TimeFormat): string {
+	if (mode === '24h') return hhmm;
+	const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+	if (!match) return hhmm;
+	const h = Number(match[1]);
+	const minute = match[2];
+	if (h > 23) return hhmm;
+	const hour12 = h % 12 || 12;
+	const meridiem = h < 12 ? 'AM' : 'PM';
+	return `${hour12}:${minute} ${meridiem}`;
+}
+
 // (*MVOX:Palestrina* — #207 GREEN part 1: 24h default + AM/PM preference store)
+// (*MVOX:Palestrina* — #220 GREEN: tallinnHHMM + formatTime, the one shared display formatter)

@@ -3,6 +3,10 @@
 	import type { Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
+	// #220 — the AM/PM preference reaches every displayed clock time through
+	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
+	// that no other file may keep its own 24h-rendering Intl formatter).
+	import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat';
 	// #194/#202 — the SHARED type-label map (same one the event detail page
 	// uses, #101 F3 taught us what an unlocalized type string costs).
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
@@ -194,14 +198,6 @@
 		month: 'long'
 	});
 
-	// Time-of-day HH:MM (24h, Tallinn)
-	const timeFmt = new Intl.DateTimeFormat('en-GB', {
-		timeZone: TZ,
-		hour: '2-digit',
-		minute: '2-digit',
-		hour12: false
-	});
-
 	// ISO date for recent rows (e.g. "2026-06-15") — #207 rule 7 (PO standing
 	// rule, Gama's 2026-09-02 rulings): row-level dates are tabular/numeric, so
 	// they render as the Tallinn ISO calendar day (en-CA gives ISO date format).
@@ -350,7 +346,7 @@
 				     second tab stop announcing the same destination. -->
 				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{shortDateFmt.format(new Date(item.startDatetime))}</span>
-					<span class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
+					<span class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 				</a>
 				<div class="flex min-w-0 flex-col gap-1">
@@ -475,7 +471,7 @@
 						     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
 						     second tab stop announcing the same destination. -->
 						<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-							<span data-testid="row-time" class="text-sm text-ink">{timeFmt.format(new Date(item.startDatetime))}</span>
+							<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
 							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 						</a>
 						<div class="flex min-w-0 flex-col gap-1">

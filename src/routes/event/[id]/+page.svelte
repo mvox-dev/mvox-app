@@ -19,6 +19,10 @@
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
+	// #220 — the AM/PM preference reaches every displayed clock time through
+	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
+	// that no other file may keep its own 24h-rendering Intl formatter).
+	import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat';
 	// #194/#202 — the type-label map is SHARED with the agenda's per-row badge
 	// (was inline here only, #101 review F3; a second inline copy is exactly
 	// the drift class the WorkRow/AttendanceBadge cleanups already paid for).
@@ -600,15 +604,11 @@
 		});
 	});
 
-	// Tallinn IANA timezone — same TZ + HH:MM formatter as AgendaList.svelte
-	// (verbatim T5 build spec convention; do not diverge from it here).
+	// Tallinn IANA timezone — same TZ as AgendaList.svelte (verbatim T5 build
+	// spec convention; do not diverge from it here). The HH:MM-rendering
+	// formatter itself now lives in $lib/preferences/timeFormat (#220
+	// tallinnHHMM) — the one place the app renders a 24h clock time.
 	const TZ = 'Europe/Tallinn';
-	const timeFmt = new Intl.DateTimeFormat('en-GB', {
-		timeZone: TZ,
-		hour: '2-digit',
-		minute: '2-digit',
-		hour12: false
-	});
 	// #101 review fix (F4) — the agenda supplies each event's DATE via its day-group
 	// headers, which this page does not inherit: a bookmarked /event/<id> showed a
 	// time with no day at all. Same formatter options as AgendaList.svelte's
@@ -676,8 +676,14 @@
 	 * time ALONE, never the degenerate "19:00–19:00" range.
 	 */
 	function timeRange(start: Date, minutes: number): string {
-		if (minutes <= 0) return timeFmt.format(start);
-		return `${timeFmt.format(start)}–${timeFmt.format(new Date(start.getTime() + minutes * 60_000))}`;
+		// #220 — both ends explicit in AM/PM mode ('7:00 PM–8:30 PM'), reading
+		// $timeFormatStore live so a preference change while this page is open
+		// re-renders the time line (same reactive-read pattern TimeSelect uses).
+		const mode = $timeFormatStore;
+		const startStr = formatTime(tallinnHHMM(start), mode);
+		if (minutes <= 0) return startStr;
+		const endStr = formatTime(tallinnHHMM(new Date(start.getTime() + minutes * 60_000)), mode);
+		return `${startStr}–${endStr}`;
 	}
 
 	// #194/#202 — the label map + fallback moved to $lib/events/eventTypeLabels
