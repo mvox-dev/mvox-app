@@ -10,9 +10,10 @@
 // points — a page-level [+ Event] on the agenda and the panel's existing
 // season-manage-add-event — into ONE inline creation form (design sketch C):
 // event type (a canonical localized picker since #199), season/series pickers, the
-// domain fields, and a series-inheritance PREVIEW (inherited values render as
-// placeholders, never as values, so what the form shows is exactly what the
-// read-side merge will show).
+// domain fields, and a series-inheritance PREVIEW (#208: descriptive
+// placeholders stay put; inherited values render as a muted "From series:"
+// secondary line under each field — never as values, so what the form sends is
+// exactly what the read-side merge will supply).
 //
 // Pinned wiring contract (GREEN must implement):
 //
@@ -37,8 +38,8 @@
 //     - series options for the selected season come from
 //       `listEventSeriesForSeason(cfg, seasonId)` (T3, $lib/seasons/seasonManage).
 //     - series defaults for the inheritance preview come from
-//       `getSeriesDefaults(cfg, seriesId)` ($lib/seasons/seasonManage — NEW
-//       export): `{ name, durationMinutes, defaultLocation }`.
+//       `getSeriesDefaults(cfg, seriesId)` ($lib/seasons/seasonManage):
+//       `{ name, durationMinutes, defaultLocation, defaultDescription }`.
 //     - conductor options come through the page's cached `getRoster` path
 //       (loadRoster at most ONCE — pinned in page.season-create.spec.ts, held
 //       to here).
@@ -92,34 +93,63 @@
 //     event-create-cancel         closes the form; nothing written
 //     event-create-error          inline error, role="alert" (submit failure OR
 //                                 the no-season validation refusal)
+//     event-create-<field>-inherited  #208 — for <field> in name / duration /
+//                                 location / description: ONE line of small
+//                                 muted PLAIN TEXT directly under the field,
+//                                 rendering m.event_create_inherited_from_series
+//                                 ({ value }). Present IFF a series is selected
+//                                 AND getSeriesDefaults provides a value for
+//                                 that field. Not a widget, not a control.
 //
-//   SERIES INHERITANCE (the preview)
-//     - selecting a series calls getSeriesDefaults ONCE for it and shows the
-//       inherited values as PLACEHOLDERS on name / duration / location — the
-//       inputs' VALUES stay '' (an own '' would shadow the series default in
+//   SERIES INHERITANCE (the preview — #208 Gama ruling: secondary label,
+//   create form ONLY; supersedes the #132/T4 values-in-placeholders preview)
+//     - the four inputs (name / duration / location / description) keep their
+//       DESCRIPTIVE placeholders (m.event_create_<field>_placeholder()) at all
+//       times — selecting a series never writes into a placeholder and never
+//       writes into a .value (an own '' would shadow the series default in
 //       the read-side ?? merge; T1 drops blanks, and the form must not turn an
 //       inherited default into a frozen own value).
-//     - typing overrides (the value wins); CLEARING an override restores the
-//       placeholder and the field goes back to inherited (not sent).
-//     - deselecting the series drops the inherited placeholders.
+//     - selecting a series calls getSeriesDefaults ONCE for it and shows each
+//       provided value on the field's event-create-<field>-inherited line
+//       (duration formatted through the existing agenda_duration_min unit
+//       key). Fields the series carries no value for get NO line.
+//     - typing an override keeps the line visible (the viewer sees what they
+//       are replacing); CLEARING the override keeps it too — the field is
+//       simply back to inherited (not sent).
+//     - deselecting the series removes every inherited line.
 //     - submit sends ONLY explicitly-typed fields: an untouched inherited
 //       field arrives at createEvent blank/absent, NEVER as a copy of the
 //       series default (pinned by inspecting the createEvent call's input).
+//       UNCHANGED by #208 — as is the success announcement's precedence
+//       (own name || series name || type).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
-// Exception: `event_created` ECHOES its params — #207 rule 7 pins the success
-// toast's `when` string (the date part must be ISO), so the value the page
-// hands the message has to survive into the rendered text.
+// Exceptions ECHO their params, so the value the page hands the message has to
+// survive into the rendered text:
+//   - `event_created` — #207 rule 7 pins the success toast's `when` string
+//     (the date part must be ISO).
+//   - `event_create_inherited_from_series` — #208 pins the "From series:"
+//     secondary line's payload AND which key renders it (key + value echo).
+//   - `agenda_duration_min` — the sibling-spec convention (`${minutes} min`);
+//     #208 pins that the inherited-duration line goes through this existing
+//     unit key, not a bare number.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
 		{
-			get: (_target, key) =>
-				String(key) === 'event_created'
-					? (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`
-					: () => String(key)
+			get: (_target, key) => {
+				const k = String(key);
+				if (k === 'event_created')
+					return (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`;
+				if (k === 'event_create_inherited_from_series')
+					return (p: { value: string }) => `event_create_inherited_from_series ${p.value}`;
+				if (k === 'agenda_duration_min') return (p: { minutes: number }) => `${p.minutes} min`;
+				return () => k;
+			}
 		}
 	)
 }));
@@ -762,9 +792,9 @@ describe('agenda — the conductor autocomplete reuses T2’s component and the 
 	});
 });
 
-// ── series inheritance: placeholders, never values ──────────────────────────────
+// ── series inheritance: descriptive placeholders + "From series" lines (#208) ──
 
-describe('agenda — selecting a series previews the inherited fields as PLACEHOLDERS', () => {
+describe('agenda — selecting a series keeps DESCRIPTIVE placeholders and shows the inherited values as "From series" secondary lines (#208)', () => {
 	async function openWithSeries1(container: HTMLElement): Promise<void> {
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
@@ -773,65 +803,121 @@ describe('agenda — selecting a series previews the inherited fields as PLACEHO
 		});
 	}
 
-	it('name / duration / location show the series defaults as placeholders — the VALUES stay empty (an own value would freeze the inheritance)', async () => {
+	/** The trimmed text of one event-create-<field>-inherited line (null = absent). */
+	function inherited(container: HTMLElement, field: string): string | null {
+		const el = q(container, `event-create-${field}-inherited`);
+		return el ? (el.textContent ?? '').trim() : null;
+	}
+
+	it('all four placeholders stay the DESCRIPTIVE keys, the VALUES stay empty, and each inherited value renders on its own muted line (exact strings)', async () => {
 		const container = await renderReady();
 		await openWithSeries1(container);
 
+		// The secondary lines carry the series defaults — full-string pins, so a
+		// wrong key, a missing wrapper or a bare unformatted duration all fail.
+		await waitFor(() => {
+			expect(inherited(container, 'name')).toEqual(
+				'event_create_inherited_from_series Monday rehearsals'
+			);
+		});
+		expect(inherited(container, 'duration')).toEqual('event_create_inherited_from_series 90 min');
+		expect(inherited(container, 'location')).toEqual(
+			'event_create_inherited_from_series Main hall'
+		);
+		expect(inherited(container, 'description')).toEqual(
+			'event_create_inherited_from_series Bring the black folder'
+		);
+
+		// …while the inputs themselves are untouched by the selection: the
+		// descriptive placeholders never leave, and no value is written.
 		const name = q(container, 'event-create-name') as HTMLInputElement;
 		const duration = q(container, 'event-create-duration') as HTMLInputElement;
 		const location = q(container, 'event-create-location') as HTMLInputElement;
-
-		await waitFor(() => {
-			expect(name.placeholder).toContain('Monday rehearsals');
-		});
-		expect(duration.placeholder).toContain('90');
-		expect(location.placeholder).toContain('Main hall');
-
+		const description = q(container, 'event-create-description') as HTMLTextAreaElement;
+		expect(name.placeholder).toBe('event_create_name_placeholder');
+		expect(duration.placeholder).toBe('event_create_duration_placeholder');
+		expect(location.placeholder).toBe('event_create_location_placeholder');
+		expect(description.placeholder).toBe('event_create_description_placeholder');
 		expect(name.value).toBe('');
 		expect(duration.value).toBe('');
 		expect(location.value).toBe('');
+		expect(description.value).toBe('');
+
+		// The line is PLAIN TEXT, not a widget (PO native-controls rule): nothing
+		// interactive hides inside it.
+		for (const field of ['name', 'duration', 'location', 'description']) {
+			const line = q(container, `event-create-${field}-inherited`) as HTMLElement;
+			expect(line.querySelector('input, select, textarea, button, a'), field).toBeNull();
+		}
 	});
 
-	it('typing OVERRIDES an inherited field; CLEARING the override restores the placeholder (the field goes back to inherited)', async () => {
+	it('typing an OVERRIDE keeps the inherited line visible (the viewer sees what they are replacing); CLEARING it keeps the line too', async () => {
 		const container = await renderReady();
 		await openWithSeries1(container);
 
 		const name = q(container, 'event-create-name') as HTMLInputElement;
 		await waitFor(() => {
-			expect(name.placeholder).toContain('Monday rehearsals');
+			expect(inherited(container, 'name')).toEqual(
+				'event_create_inherited_from_series Monday rehearsals'
+			);
 		});
 
 		await fill(container, 'event-create-name', 'Extra rehearsal');
 		expect(name.value).toBe('Extra rehearsal');
+		expect(inherited(container, 'name')).toEqual(
+			'event_create_inherited_from_series Monday rehearsals'
+		);
+		// The placeholder is not the preview any more — it never budges either way.
+		expect(name.placeholder).toBe('event_create_name_placeholder');
 
 		await fill(container, 'event-create-name', '');
 		expect(name.value).toBe('');
-		// The placeholder never left — the inherited default is offered again.
-		expect(name.placeholder).toContain('Monday rehearsals');
+		// The line never left — the inherited default is still on offer.
+		expect(inherited(container, 'name')).toEqual(
+			'event_create_inherited_from_series Monday rehearsals'
+		);
+		expect(name.placeholder).toBe('event_create_name_placeholder');
 	});
 
-	it('DESELECTING the series (back to "no series") drops the inherited placeholders', async () => {
+	it('DESELECTING the series (back to "no series") removes ALL FOUR inherited lines', async () => {
 		const container = await renderReady();
 		await openWithSeries1(container);
 
-		const name = q(container, 'event-create-name') as HTMLInputElement;
 		await waitFor(() => {
-			expect(name.placeholder).toContain('Monday rehearsals');
+			expect(inherited(container, 'name')).toEqual(
+				'event_create_inherited_from_series Monday rehearsals'
+			);
 		});
 
 		await selectValue(container, 'event-create-series', '');
 
 		await waitFor(() => {
-			expect((q(container, 'event-create-name') as HTMLInputElement).placeholder).not.toContain(
-				'Monday rehearsals'
+			expect(inherited(container, 'name')).toBeNull();
+		});
+		expect(inherited(container, 'duration')).toBeNull();
+		expect(inherited(container, 'location')).toBeNull();
+		expect(inherited(container, 'description')).toBeNull();
+	});
+
+	it('a series providing ONLY name + duration renders exactly those two lines — no location/description line for values the series does not carry', async () => {
+		getSeriesDefaultsMock.mockResolvedValue({
+			name: 'Ad-hoc sectionals',
+			durationMinutes: 45,
+			defaultLocation: '',
+			defaultDescription: ''
+		});
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-series', 'series-2');
+
+		await waitFor(() => {
+			expect(inherited(container, 'name')).toEqual(
+				'event_create_inherited_from_series Ad-hoc sectionals'
 			);
 		});
-		expect(
-			(q(container, 'event-create-duration') as HTMLInputElement).placeholder
-		).not.toContain('90');
-		expect(
-			(q(container, 'event-create-location') as HTMLInputElement).placeholder
-		).not.toContain('Main hall');
+		expect(inherited(container, 'duration')).toEqual('event_create_inherited_from_series 45 min');
+		expect(inherited(container, 'location')).toBeNull();
+		expect(inherited(container, 'description')).toBeNull();
 	});
 });
 
@@ -896,23 +982,21 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await waitFor(() => {
 			expect(createEventMock).toHaveBeenCalledTimes(1);
 		});
-		const input = lastCreateInput();
-		expect(input.dbEntityId).toBe(ORG_EFK);
-		expect(input.seriesId).toBe('series-1');
-		expect(input.extraParentIds).toEqual([SEASON_ID]);
-		expect(input.eventType).toBe('rehearsal');
-		expect(input.startDatetime).toBe('2026-09-07T15:30:00.000Z');
-		// The inherited trio arrives BLANK/ABSENT — never a frozen copy of the
-		// series defaults ('' is fine: T1 drops blanks; a copied value is the bug).
-		expect(input.name ?? '').toBe('');
-		expect(input.durationMinutes ?? undefined).toBeUndefined();
-		expect(input.location ?? '').toBe('');
-		expect(input.description ?? '').toBe('');
-		expect(input.conductorRefs ?? []).toEqual([]);
-		expect(input.capacity ?? undefined).toBeUndefined();
+		// FULL argument shape (#208 hardened: toEqual, not field-by-field ?? reads
+		// — an extra frozen-copy key would have slipped past the old asserts).
+		// NO name / durationMinutes / location / description keys AT ALL: the
+		// untouched inherited quartet is absent, never a copy of the series
+		// defaults. The "From series" lines are presentation only.
+		expect(lastCreateInput()).toEqual({
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'rehearsal',
+			startDatetime: '2026-09-07T15:30:00.000Z',
+			seriesId: 'series-1'
+		});
 	});
 
-	it('SERIES occurrence with OVERRIDES: the typed name + duration are sent, the untouched location still is not', async () => {
+	it('SERIES occurrence with OVERRIDES: the typed name + duration are sent, the untouched location/description still are not (full shape)', async () => {
 		const container = await renderReady();
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
@@ -925,10 +1009,37 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await waitFor(() => {
 			expect(createEventMock).toHaveBeenCalledTimes(1);
 		});
-		const input = lastCreateInput();
-		expect(input.name).toBe('Extra rehearsal');
-		expect(input.durationMinutes).toBe(45);
-		expect(input.location ?? '').toBe('');
+		expect(lastCreateInput()).toEqual({
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'rehearsal',
+			startDatetime: '2026-09-07T15:30:00.000Z',
+			seriesId: 'series-1',
+			name: 'Extra rehearsal',
+			durationMinutes: 45
+		});
+	});
+
+	it('SERIES occurrence, ONLY the name overridden: exactly that one extra key rides along', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-series', 'series-1');
+		await chooseType(container, 'rehearsal');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
+		await fill(container, 'event-create-name', 'Extra rehearsal');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		expect(lastCreateInput()).toEqual({
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'rehearsal',
+			startDatetime: '2026-09-07T15:30:00.000Z',
+			seriesId: 'series-1',
+			name: 'Extra rehearsal'
+		});
 	});
 
 	it('a PANEL-born create refreshes the panel lists too: after success the season’s series + standalone lists re-read (the new occurrence must land in the counts), the panel is STILL OPEN to receive them, and the agenda refreshes', async () => {
@@ -1154,6 +1265,60 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 		});
 	});
 
+	// #208 guards — the announcement's naming precedence is UNTOUCHED by the
+	// secondary-label change: own (typed) name || series name || type value.
+	it('#208 guard: an untouched SERIES occurrence is announced under the SERIES name (no own name typed)', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-series', 'series-1');
+		await chooseType(container, 'rehearsal');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-status')?.textContent?.trim()).toBe(
+				'event_created Monday rehearsals @ 2026-09-07 18:30'
+			);
+		});
+	});
+
+	it('#208 guard: an OWN typed name beats the series name in the announcement', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-series', 'series-1');
+		await chooseType(container, 'rehearsal');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
+		await fill(container, 'event-create-name', 'Extra rehearsal');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-status')?.textContent?.trim()).toBe(
+				'event_created Extra rehearsal @ 2026-09-07 18:30'
+			);
+		});
+	});
+
+	it('#208 guard: a series with NO name of its own falls back to the TYPE value in the announcement', async () => {
+		getSeriesDefaultsMock.mockResolvedValue({
+			name: '',
+			durationMinutes: 45,
+			defaultLocation: '',
+			defaultDescription: ''
+		});
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-series', 'series-2');
+		await chooseType(container, 'rehearsal');
+		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-status')?.textContent?.trim()).toBe(
+				'event_created rehearsal @ 2026-09-07 18:30'
+			);
+		});
+	});
+
 	it('a FAILED write announces nothing — the status slot stays empty', async () => {
 		createEventMock.mockRejectedValue(new Error('boom'));
 		const container = await renderReady();
@@ -1172,9 +1337,10 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 });
 
 describe('agenda — every event-create field keeps a VISIBLE label (review F4 + F5)', () => {
-	it('a series with NO default_location keeps the static Location hint — an inherited blank is not a placeholder', async () => {
-		// `default_location` is optional on event_series; getSeriesDefaults reports
-		// an absent property as ''.
+	it('#208: a series providing ONLY a name — every placeholder stays the static descriptive hint, and only the NAME gets a "From series" line', async () => {
+		// `default_location` / `duration_minutes` / `default_description` are
+		// optional on event_series; getSeriesDefaults reports an absent string
+		// property as '' and an absent duration as null.
 		getSeriesDefaultsMock.mockResolvedValue({
 			name: 'Ad-hoc sectionals',
 			durationMinutes: null,
@@ -1186,10 +1352,14 @@ describe('agenda — every event-create field keeps a VISIBLE label (review F4 +
 		await selectValue(container, 'event-create-series', 'series-2');
 
 		await waitFor(() => {
-			expect((q(container, 'event-create-name') as HTMLInputElement).placeholder).toBe(
-				'Ad-hoc sectionals'
+			expect(q(container, 'event-create-name-inherited')?.textContent?.trim()).toBe(
+				'event_create_inherited_from_series Ad-hoc sectionals'
 			);
 		});
+		// The descriptive hints never leave — #208's whole point.
+		expect((q(container, 'event-create-name') as HTMLInputElement).placeholder).toBe(
+			'event_create_name_placeholder'
+		);
 		expect((q(container, 'event-create-location') as HTMLInputElement).placeholder).toBe(
 			'event_create_location_placeholder'
 		);
@@ -1199,6 +1369,10 @@ describe('agenda — every event-create field keeps a VISIBLE label (review F4 +
 		expect((q(container, 'event-create-description') as HTMLTextAreaElement).placeholder).toBe(
 			'event_create_description_placeholder'
 		);
+		// A blank inherited value is NO line, not an empty line.
+		expect(q(container, 'event-create-duration-inherited')).toBeNull();
+		expect(q(container, 'event-create-location-inherited')).toBeNull();
+		expect(q(container, 'event-create-description-inherited')).toBeNull();
 	});
 
 	it('capacity and description carry placeholders, not an aria-label alone — capacity sits beside a duration box that has one', async () => {
@@ -1322,20 +1496,30 @@ describe('agenda — the event-create form drops async replies that no longer be
 		expect((q(container, 'event-create-location') as HTMLInputElement).placeholder).toBe(
 			'event_create_location_placeholder'
 		);
+		// …and no "From series" line either (#208): the dead form's late defaults
+		// must not seed the fresh form's secondary labels any more than its
+		// placeholders.
+		expect(q(container, 'event-create-name-inherited')).toBeNull();
+		expect(q(container, 'event-create-duration-inherited')).toBeNull();
+		expect(q(container, 'event-create-location-inherited')).toBeNull();
+		expect(q(container, 'event-create-description-inherited')).toBeNull();
 	});
 });
 
-describe('agenda — the inheritance preview covers DESCRIPTION too (2nd-pass F4)', () => {
-	it('a series carrying a default_description previews it as the description placeholder', async () => {
+describe('agenda — the inheritance preview covers DESCRIPTION too (2nd-pass F4, #208 secondary line)', () => {
+	it('a series carrying a default_description shows it on the description "From series" line — the placeholder stays descriptive', async () => {
 		const container = await renderReady();
 		await openFormFromPanel(container);
 		await selectValue(container, 'event-create-series', 'series-1');
 
 		await waitFor(() => {
-			expect((q(container, 'event-create-description') as HTMLTextAreaElement).placeholder).toBe(
-				'Bring the black folder'
+			expect(q(container, 'event-create-description-inherited')?.textContent?.trim()).toBe(
+				'event_create_inherited_from_series Bring the black folder'
 			);
 		});
+		expect((q(container, 'event-create-description') as HTMLTextAreaElement).placeholder).toBe(
+			'event_create_description_placeholder'
+		);
 		// …and a blank description still WRITES as absent — the preview says what
 		// the read side will supply, it does not freeze a copy into the event.
 		await chooseType(container, 'concert');
@@ -1349,7 +1533,45 @@ describe('agenda — the inheritance preview covers DESCRIPTION too (2nd-pass F4
 	});
 });
 
+// ── #208: the new key exists in ALL FOUR locales (same guard family as the
+//    attendance/repertoire a11y specs — the mock above hides a missing key at
+//    render time, so the message FILES are pinned directly) ────────────────────
+
+describe('#208 — locale coverage for the "From series" secondary line', () => {
+	function messages(locale: string): Record<string, string> {
+		return JSON.parse(
+			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as Record<string, string>;
+	}
+
+	it('event_create_inherited_from_series exists in en/et/lv/uk, is non-empty, and carries the {value} slot', () => {
+		for (const locale of ['en', 'et', 'lv', 'uk']) {
+			const msg = messages(locale)['event_create_inherited_from_series'];
+			expect(msg, `${locale}.json is missing event_create_inherited_from_series`).toBeDefined();
+			expect(msg, `${locale}.json event_create_inherited_from_series is empty`).toMatch(/\S/);
+			expect(msg, `${locale}.json event_create_inherited_from_series lacks {value}`).toContain(
+				'{value}'
+			);
+		}
+	});
+
+	it('the en/et copy is the ruled wording (Gama, #208): "From series: {value}" / "Seeriast: {value}"', () => {
+		expect(messages('en')['event_create_inherited_from_series']).toBe('From series: {value}');
+		expect(messages('et')['event_create_inherited_from_series']).toBe('Seeriast: {value}');
+	});
+
+	it('guard: agenda_duration_min (the inherited-duration unit) already exists in all four locales with {minutes}', () => {
+		for (const locale of ['en', 'et', 'lv', 'uk']) {
+			const msg = messages(locale)['agenda_duration_min'];
+			expect(msg, `${locale}.json is missing agenda_duration_min`).toBeDefined();
+			expect(msg, `${locale}.json agenda_duration_min lacks {minutes}`).toContain('{minutes}');
+		}
+	});
+});
+
 // (*MVOX:Tallis* — #132/T4 RED: [+ Event] — two entry points, one inline form,
 // prior-type autocomplete, series-inheritance placeholder preview, createEvent wiring)
 // (*MVOX:Palestrina* — #132/T4 review: validation ladder, announced result,
 // panel survival, visible labels)
+// (*MVOX:Tallis* — #208 RED: descriptive placeholders always; inherited series
+// values as "From series" secondary lines; submit path + announcement guards)

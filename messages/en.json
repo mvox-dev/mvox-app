@@ -405,6 +405,7 @@
 	"event_create_series_hint": "Repeating? Pick or create a series above — or convert this event to one later from the season panel.",
 	"event_create_name_label": "Event name",
 	"event_create_name_placeholder": "Event name",
+	"event_create_inherited_from_series": "From series: {value}",
 	"event_create_datetime_label": "Date & time",
 	"event_create_duration_label": "Duration (minutes)",
 	"event_create_duration_placeholder": "Duration (minutes)",

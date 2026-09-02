@@ -2596,10 +2596,10 @@
 	let eventCreateSeriesId = $state('');
 	let eventCreateSeriesOptions = $state<SeriesListItem[]>([]);
 	// The selected series' inherited name/duration/location/description —
-	// rendered as PLACEHOLDERS only, never copied into a value (the #132/T4
-	// preview contract: what this shows is exactly what the read-side merge
-	// (`listEvents`, `loadEventDetail`) would show for an untouched
-	// occurrence).
+	// rendered as a muted "From series: …" secondary LINE under each field
+	// (#208 Gama ruling), never copied into a value or a placeholder: what
+	// this shows is exactly what the read-side merge (`listEvents`,
+	// `loadEventDetail`) would show for an untouched occurrence.
 	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
 	// #199 — the canonical, localized <select> (CANONICAL_EVENT_TYPES); replaces
 	// the free-text Autocomplete built over prior `listEventTypes` values.
@@ -5988,11 +5988,13 @@
 									</p>
 								{/if}
 
-								<!-- #132/T4 review F4 — the inherited default is a PLACEHOLDER, and
-								     a blank one is not a placeholder at all: `default_location` is
-								     optional on event_series, and `getSeriesDefaults` reports an
-								     absent property as ''. `||` (not the ternary) keeps the static
-								     hint whenever the series has nothing to lend. -->
+								<!-- #208 (Gama ruling) — the placeholder stays the STATIC descriptive
+								     hint at all times; a series selection never writes into it (and
+								     never into .value — an own '' would shadow the inherited default
+								     in the read-side ?? merge). The inherited value, when the series
+								     provides one, renders instead as a muted "From series: …" line
+								     directly under the field (event-create-name-inherited below) —
+								     presentation only, so what gets sent on submit is unaffected. -->
 								<input
 									type="text"
 									data-testid="event-create-name"
@@ -6000,8 +6002,7 @@
 									aria-label={m.event_create_name_label()}
 									aria-invalid={eventCreateInvalid('name')}
 									aria-describedby={eventCreateDescribedBy('name')}
-									placeholder={eventCreateSeriesDefaults?.name ||
-										m.event_create_name_placeholder()}
+									placeholder={m.event_create_name_placeholder()}
 									value={eventCreateName}
 									oninput={(e) => {
 										eventCreateName = (e.currentTarget as HTMLInputElement).value;
@@ -6009,6 +6010,11 @@
 									}}
 									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
+								{#if eventCreateSeriesDefaults?.name}
+									<p data-testid="event-create-name-inherited" class="text-xs text-ink-2">
+										{m.event_create_inherited_from_series({ value: eventCreateSeriesDefaults.name })}
+									</p>
+								{/if}
 
 								<!-- #207 rule 5 — a composite: the native date input stays (Gama
 								     ruling — native date pickers are kept), paired with the
@@ -6055,10 +6061,7 @@
 										type="number"
 										data-testid="event-create-duration"
 										aria-label={m.event_create_duration_label()}
-										placeholder={eventCreateSeriesDefaults &&
-										eventCreateSeriesDefaults.durationMinutes !== null
-											? String(eventCreateSeriesDefaults.durationMinutes)
-											: m.event_create_duration_placeholder()}
+										placeholder={m.event_create_duration_placeholder()}
 										value={eventCreateDuration}
 										oninput={(e) =>
 											(eventCreateDuration = (e.currentTarget as HTMLInputElement).value)}
@@ -6079,29 +6082,50 @@
 										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 									/>
 								</div>
-								
+								{#if eventCreateSeriesDefaults && eventCreateSeriesDefaults.durationMinutes !== null}
+									<p data-testid="event-create-duration-inherited" class="text-xs text-ink-2">
+										{m.event_create_inherited_from_series({
+											value: m.agenda_duration_min({
+												minutes: eventCreateSeriesDefaults.durationMinutes
+											})
+										})}
+									</p>
+								{/if}
+
 								<input
 									type="text"
 									data-testid="event-create-location"
 									aria-label={m.event_create_location_label()}
-									placeholder={eventCreateSeriesDefaults?.defaultLocation ||
-										m.event_create_location_placeholder()}
+									placeholder={m.event_create_location_placeholder()}
 									value={eventCreateLocation}
 									oninput={(e) =>
 										(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
 									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								/>
-								
+								{#if eventCreateSeriesDefaults?.defaultLocation}
+									<p data-testid="event-create-location-inherited" class="text-xs text-ink-2">
+										{m.event_create_inherited_from_series({
+											value: eventCreateSeriesDefaults.defaultLocation
+										})}
+									</p>
+								{/if}
+
 								<textarea
 									data-testid="event-create-description"
 									aria-label={m.event_create_description_label()}
-									placeholder={eventCreateSeriesDefaults?.defaultDescription ||
-										m.event_create_description_placeholder()}
+									placeholder={m.event_create_description_placeholder()}
 									value={eventCreateDescription}
 									oninput={(e) =>
 										(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
 									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 								></textarea>
+								{#if eventCreateSeriesDefaults?.defaultDescription}
+									<p data-testid="event-create-description-inherited" class="text-xs text-ink-2">
+										{m.event_create_inherited_from_series({
+											value: eventCreateSeriesDefaults.defaultDescription
+										})}
+									</p>
+								{/if}
 								
 								<div data-testid="event-create-conductors-field">
 									<Autocomplete

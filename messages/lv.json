@@ -406,6 +406,7 @@
 	"event_create_series_hint": "Atkārtojas? Izvēlieties vai izveidojiet sēriju augstāk — vai pārvērtiet šo notikumu par sēriju vēlāk sezonas panelī.",
 	"event_create_name_label": "Notikuma nosaukums",
 	"event_create_name_placeholder": "Notikuma nosaukums",
+	"event_create_inherited_from_series": "No sērijas: {value}",
 	"event_create_datetime_label": "Datums un laiks",
 	"event_create_duration_label": "Ilgums (minūtēs)",
 	"event_create_duration_placeholder": "Ilgums (minūtēs)",

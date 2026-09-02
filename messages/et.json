@@ -405,6 +405,7 @@
 	"event_create_series_hint": "Kordub? Vali või loo seeria ülal — või muuda see sündmus hiljem seeriaks hooaja paneelilt.",
 	"event_create_name_label": "Sündmuse nimi",
 	"event_create_name_placeholder": "Sündmuse nimi",
+	"event_create_inherited_from_series": "Seeriast: {value}",
 	"event_create_datetime_label": "Kuupäev ja kellaaeg",
 	"event_create_duration_label": "Kestus (minutites)",
 	"event_create_duration_placeholder": "Kestus (minutites)",
