@@ -24,9 +24,11 @@ mvox-app main @ `44389f9`. #206 merged `1ccd497` + closed; between-chains batch 
 
 **RUN 3 MERGED 10:30** — `wf_65373ee9-a3f`, 29 agents: #208 `63033d4` (GREEN r1), #209 `5788866` (Y→G), #211 `e53b8e9` (Y→G; 12 `--color-type-*` tokens), #214 `b598a61` (Y→G). All CLOSED. Gama informed with live gates.
 
-**RUN 4 LAUNCHING 10:55** — four tasks #212 → #213 → #215 → #217(+216), args `teams/mvox-dev/memory/pipeline-args/args-212-213-215-217.json` (all SPIKE re-anchored). #218 research DONE → `research/research-218.json`; runs SEPARATELY after run 4 once Gama rules the google label (CTA "Continue with Google" vs bare "Google"; recommended bare noun, 6 `auth_provider_*` keys as message-function refs, 5 `login_*` keys; PROVIDER_LABELS + providerLabel deleted; signed-in-as banner + 3 mocked specs need the new keys).
+**RUN 4 → #212 MERGED `91b3905`, #213 MERGED `6cd7a72` 13:30** (halted at #213 YELLOW x3 fix cap; fix-213 agent 9f9059e + Bentham round-4 GREEN → manual squash-merge, gate in commit body; role=toolbar KEPT per SPIKE two-member state, reported on issue). **RUN 5 LAUNCHED 13:35**: #215 → #217(+216), args `pipeline-args/args-215-217.json`. Then #218 (`args-218.json`, Google=bare noun ruled) → #220 (`args-220.json`, defaults accepted by Gama 12:10), each its own run.
 
-**QUEUE ORDER:** #212 → #213 → #215 → #216+#217 → #218 (adjust per research sizes/deps).
+**#220 INTAKE (12:00):** NEW from Gama (Mihkel: "Am/pm preference applies globally"). task+ready; LAST comment = RELEASED, sequence directly after #218. Scope: one shared formatTime(hhmm, prefs) next to the #207 preference read; every app-rendered time text follows mvox.time_format (24h unset default; ampm → "7:00 PM"); stored/submitted values unchanged; dates untouched; no "follow device" option. Done-when includes a grep-style guard: no hardcoded HH:MM rendering outside the formatter. Research DONE 12:09 → `research/research-220.json` (only 3 time-text sites: AgendaList row-time, event detail timeRange, event_created toast; others in done-when render no time). Args READY `scratchpad/args-220.json` (tallinnHHMM + formatTime in timeFormat.ts, both-ends-explicit ranges, lint spec). Gama informed of defaults 12:15. Gama acked 12:00. Native date pickers stay as shipped (Mihkel).
+
+**QUEUE ORDER:** run 4 (#212 → #213 → #215 → #217+216) → #218 → #220 (adjust per research sizes/deps).
 
 **NEXT:** research-207 result → author tdd-slice-pipeline args → launch pipeline. Then per rulings: #208, #209, #211→#214, #212, #213, #215, #216+#217, #218.
 

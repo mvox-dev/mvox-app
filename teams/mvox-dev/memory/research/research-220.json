@@ -1,0 +1,296 @@
+[
+ {
+  "subChange": "Pre-RED research for #220 (time-display-inventory): exhaustive inventory, on `main`, of every site that renders a clock TIME as text, versus sites that only compute/carry time as wire data or are date-only (rule 7, must not change). Repo guard passed (`origin` = `mvox-dev/mvox-app.git`); working tree is on `feat/213-cogwheel-toggle-toolbar` with a TDD pipeline running, so this was done read-only via `git archive main` exported to scratchpad (`/tmp/.../scratchpad/main-checkout/`) \u2014 no git state or working-tree files touched.",
+  "scope": "IN SCOPE \u2014 three text-rendering sites need to move onto a shared `formatTime(hhmm, prefs)` next to the #207 preference read (`$lib/preferences/timeFormat.ts`'s `timeFormatStore`), all currently hardcoded to 24h regardless of the viewer's AM/PM preference:\n\n1. **`src/lib/components/agenda/AgendaList.svelte:198-203`** \u2014 `timeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Tallinn', hour: '2-digit', minute: '2-digit', hour12: false })`. Rendered at **line 353** (`recent-row` time span, right after `shortDateFmt`) and **line 478** (`data-testid=\"row-time\"`, main day-group rows). Both `timeFmt.format(new Date(item.startDatetime))`.\n2. **`src/routes/event/[id]/+page.svelte:606-611`** \u2014 identical `timeFmt` (`en-GB`, `hour12: false`, TZ Tallinn; comment explicitly says \"same TZ + HH:MM formatter as AgendaList.svelte \u2014 verbatim T5 build spec convention\"). Feeds `timeRange()` (**lines 675-681**, single time or `start\u2013end` range) rendered at **lines 1848 and 1859** (`data-testid=\"event-detail-time\"`, header + body variants).\n3. **`src/routes/+page.svelte:2784-2792`** \u2014 `eventCreateStatusTimeFmt` (`en-GB`, `hourCycle: 'h23'`, TZ Tallinn) composed with `eventCreateStatusDateFmt` inside `eventCreateStatusFmt(at)` \u2192 `\"${date} ${time}\"`. Consumed at **line 3850** as `when: eventCreateStatusFmt(new Date(startDatetime))`, interpolated into the Paraglide message `event_created` = `\"{name} created for {when}.\"` (`messages/en.json:433`) \u2014 the event-creation success toast. Only the TIME half of `when` is in scope; the date half must stay ISO (rule 7).\n\nNo other rendered-time-as-text sites exist on `main`. `TimeSelect.svelte` (the #207 input composite) already reads `timeFormatStore` itself for its own hour/minute/AM-PM `<select>`s \u2014 it is an editable control, not a display, and is already preference-aware; no change needed there.",
+  "citations": [
+   {
+    "file": "src/lib/components/agenda/AgendaList.svelte",
+    "line": "198-203, 353, 478",
+    "status": "verified",
+    "current": "timeFmt = Intl.DateTimeFormat('en-GB', {timeZone:'Europe/Tallinn', hour:'2-digit', minute:'2-digit', hour12:false}); used at 353 (recent-row) and 478 (row-time)"
+   },
+   {
+    "file": "src/routes/event/[id]/+page.svelte",
+    "line": "606-611, 675-681, 1848, 1859",
+    "status": "verified",
+    "current": "timeFmt identical shape; feeds timeRange() rendered at event-detail-time spans (header + body)"
+   },
+   {
+    "file": "src/routes/+page.svelte",
+    "line": "2784-2792, 3850",
+    "status": "verified",
+    "current": "eventCreateStatusTimeFmt (en-GB, hourCycle:h23) composed into eventCreateStatusFmt(at); passed as `when` into m.event_created at 3850"
+   },
+   {
+    "file": "messages/en.json",
+    "line": "433",
+    "status": "verified",
+    "current": "\"event_created\": \"{name} created for {when}.\""
+   },
+   {
+    "file": "src/lib/preferences/timeFormat.ts",
+    "line": "1-33",
+    "status": "verified",
+    "current": "#207 GREEN part 1 store: TimeFormat = '24h'|'ampm', TIME_FORMAT_KEY='mvox.time_format', readStoredTimeFormat/timeFormatStore/setTimeFormat \u2014 no formatTime() helper exists yet, confirming #220 is net-new"
+   },
+   {
+    "file": "src/lib/components/TimeSelect.svelte",
+    "line": "1-40, 104, 154",
+    "status": "verified",
+    "current": "input composite already reads $timeFormatStore for its own hour/minute/ampm selects; out of scope (editable control, already preference-aware)"
+   },
+   {
+    "file": "src/routes/+page.svelte",
+    "line": "2718-2739, 2745-2756, 3309-3323, 3529",
+    "status": "verified",
+    "current": "eventCreateTallinnOffsetMinutes / tallinnLocalToUtcIso / tallinnWallClockParts(.time) \u2014 all wire-value helpers (offset calc, local-to-UTC ISO, series startTime/startDate for createSeries payload), not rendered text; out of scope"
+   },
+   {
+    "file": "src/routes/event/[id]/+page.svelte",
+    "line": "1387-1408, 1413-1427",
+    "status": "verified",
+    "current": "tallinnOffsetMinutes / toTallinnLocalInputValue \u2014 wire helpers seeding the datetime-local input's value, not display text; out of scope"
+   },
+   {
+    "file": "src/lib/events/recurrence.ts",
+    "line": "71-85",
+    "status": "verified",
+    "current": "generateEventDates padStart date-string + getHours/getMinutes \u2014 series occurrence generation (timeOfDay), data not display; out of scope per task instructions"
+   },
+   {
+    "file": "teams/mvox-dev/memory/architecture-decisions.md",
+    "line": "807-819, 844",
+    "status": "verified",
+    "current": "Rule 5 = time/datetime-local INPUT rendering (native controls, 24h-by-default with AM/PM opt-in already required \u2014 TimeSelect satisfies it); Rule 7 = date displays render YYYY-MM-DD, ISO only, wire value unaffected \u2014 distinct family from #220's TEXT-rendering scope"
+   }
+  ],
+  "uncitedSurfaces": "None believed to exist \u2014 grep coverage was exhaustive across `Intl.DateTimeFormat`, `hourCycle`/`hour12`, `toLocaleTimeString` (zero hits), `padStart`, `slice(11,...)` (zero hits), `tallinnWallClockParts`/`.time` property access, and every Paraglide message with a `{date}`/`{time}`/`{start}`/`{at}`-shaped placeholder across all four locale files' keys (checked against `en.json`, key set is locale-invariant). Also swept `src/lib/rsvp/`, `src/lib/attendance/`, `src/lib/components/attendance/`, and `RsvpControl.svelte` (attendance/RSVP/notification-adjacent surfaces named in the task) \u2014 none contain time formatting. Library and repertoire/program surfaces render dates only (lending `since {date}`), never a clock time. Season-panel series/event rows show name + event-count only, no time.",
+  "implementationNotes": "Rule-7 DATE formatters that sit right next to the in-scope time formatters and must NOT change: `eventCreateStatusDateFmt` (paired 1:1 with `eventCreateStatusTimeFmt` inside `eventCreateStatusFmt`, +page.svelte:2778-2783), `seasonDateFmt` (+page.svelte:2338-2343), `_dateFmt` (library/+page.svelte:55-60), `expiryDateFmt` (invite/[token]/+page.svelte:35-39), `inviteExpiryDateFmt` (InviteSurface.svelte:108-112), `groupKeyFmt`/`shortDateFmt` (AgendaList.svelte:182-187, 210-215). Two more date formatters are pre-existing LOCALE-rendered (not ISO) and explicitly marked \"preserved verbatim, do not touch\": `headerFmt` (AgendaList.svelte:190-195, \"Monday, 15 June\") and `dateFmt` (event/[id]/+page.svelte:616-620) \u2014 these look like they'd trip rule 7 on a naive read but the team has already carved them out; #220 should leave them exactly as-is regardless.\n\nSuggested formatTime(hhmm, prefs) placement: co-locate in `src/lib/preferences/timeFormat.ts` next to `timeFormatStore`/`readStoredTimeFormat`, taking a 24h `HH:MM` string (or the two Date objects the three call sites already have) and the current `TimeFormat` value, returning either `\"HH:MM\"` (unset/24h) or `\"H:MM AM/PM\"` (ampm mode, spec's own example is \"7:00 PM\" \u2014 no leading zero on the hour, space before AM/PM). All three sites already build their 24h string via an `Intl.DateTimeFormat` `.format()` call against a `Date` in the Tallinn TZ; the shared helper's cleanest seam is likely to accept the already-formatted 24h `HH:MM` (each site keeps its own TZ-aware Intl formatter to produce that) and re-render per preference, OR to accept the Date + TZ directly and do both passes internally \u2014 worth a quick brainstorm/RED-writer decision since the three call shapes differ slightly (AgendaList: bare Date; event detail: a computed range via `timeRange()`; +page.svelte: a composed date+time toast string built by string-concatenating two separate formatters).",
+  "blastRadius": "Three files change: `src/lib/components/agenda/AgendaList.svelte` (2 render call sites), `src/routes/event/[id]/+page.svelte` (`timeRange()` + its 2 render sites), `src/routes/+page.svelte` (`eventCreateStatusFmt`'s time half, 1 render site via the `event_created` toast). Plus one new/extended module: `src/lib/preferences/timeFormat.ts` gains the shared `formatTime` export. No wire-format, storage, or ISO-timestamp changes anywhere \u2014 every in-scope site is a pure display transform downstream of an already-correct 24h Intl format. No Entu payload, no `startDatetime`/`timeOfDay` value, no date-only formatter is touched.",
+  "crossCuttingAxes": "Locale/i18n: the three sites currently pin `'en-GB'`/`hourCycle:'h23'` specifically to force 24h REGARDLESS of browser locale (that's rule 5's whole point for inputs, and these display sites copied the convention) \u2014 the new `formatTime` must keep that same locale-independence in both modes (AM/PM output should not vary by browser locale either, per the spec's fixed \"7:00 PM\" example) rather than reintroducing a `toLocaleTimeString`-style leak. Timezone: all three sites are Tallinn-wall-clock; the shared helper takes an already-Tallinn-resolved value/string, it does not itself need TZ awareness. Reactivity: AgendaList and event/[id] currently build their formatters as page-load-time `const`s (not `$derived`) \u2014 since the preference can change live (profile page), the call sites (or the formatters themselves) need to become reactive to `$timeFormatStore`, same pattern `TimeSelect.svelte` already uses (`const mode = $derived($timeFormatStore)`).",
+  "standingRuleHits": "Rule 5 (native time/datetime-local INPUT controls, 24h default + AM/PM opt-in) \u2014 already fully satisfied, not this issue's concern; flagged only so the RED writer doesn't conflate #220 with a rule-5 gap. Rule 7 (ISO date display) \u2014 explicitly must NOT be touched by #220; all six date-only formatters plus the two \"preserved verbatim\" locale-date formatters are enumerated above so GREEN doesn't accidentally sweep them in. Bentham's review triggers `[TRIGGER-24H-TIME]`/`[TRIGGER-ISO-DATE]` in architecture-decisions.md:844,846 are the two guardrails this slice sits between.",
+  "openQuestions": "(1) Exact `formatTime` call shape/signature \u2014 Date-in vs already-formatted-HH:MM-string-in \u2014 given the three sites' differing surrounding formatter compositions (see implementationNotes); best resolved by the RED writer or a quick brainstorm rather than pre-decided here. (2) Reactivity fix: should `AgendaList`'s and event-detail's formatter `const`s become `$derived` on `$timeFormatStore`, or should only the final rendered string be wrapped \u2014 a live profile-preference-change-while-viewing-the-agenda scenario needs one of these; not explicitly speced in #220's body as read but implied by \"AM/PM mode renders e.g. 7:00 PM\" needing to reflect the live preference. (3) The `event_created` toast's `when` string mixes date+time with a hardcoded space separator (`\"${date} ${time}\"`) \u2014 once the time half varies in length/shape (AM/PM adds \"PM\"), confirm no snapshot/spec asserts an exact character count for that toast string beyond the value itself.",
+  "sizeEstimate": "small",
+  "dependencies": "Depends on #207 (shipped: `$lib/preferences/timeFormat.ts` store + `TimeSelect.svelte`, commits `32845d6`/`8e6d014`) for the preference infrastructure this issue hooks into \u2014 already present and read-verified. Per the issue body, #220 is RELEASED/ready after #218 (not independently verified here \u2014 out of this research's grep scope, take issue-body claim as given). No dependency on #208/#209/#211/#214 (verified via `git log --grep`: person-picker/badge-color/filter-chip work, unrelated to time display)."
+ },
+ {
+  "blastRadius": "Direct: 3 files gain a new import + wrap their existing time-formatting call sites (AgendaList.svelte, event/[id]/+page.svelte, +page.svelte's eventCreateStatusFmt). 1 new/extended file: src/lib/preferences/timeFormat.ts (add formatTime, no change to existing exports/behavior). No change to TimeSelect.svelte (already correct), no schema change, no wire-format change. Test blast radius: AgendaList.spec.ts, event/[id]/page.spec.ts (page.spec.ts) and a new spec for +page.svelte's create-status text gain new assertions/cases for both modes; existing 24h-mode assertions in those specs must keep passing unchanged (24h output is byte-identical to today).",
+  "citations": [
+   {
+    "file": "src/lib/preferences/timeFormat.ts",
+    "line": "1-33",
+    "status": "verified",
+    "current": "Exports TimeFormat type, TIME_FORMAT_KEY, readStoredTimeFormat(), timeFormatStore (plain Svelte writable, NOT a rune), setTimeFormat(). No formatTime() yet."
+   },
+   {
+    "file": "src/lib/components/TimeSelect.svelte",
+    "line": "1-46,104,213-214,232",
+    "status": "verified",
+    "current": "const mode = $derived($timeFormatStore) \u2014 the established Svelte-5 reactive-read pattern. to12()/to24() do the hour-only 12<->24 math; AM/PM <option> values are the literal uppercase strings 'AM'/'PM' (not Paraglide keys) at lines ~213 and ~232."
+   },
+   {
+    "file": "messages/en.json",
+    "line": "146-153",
+    "status": "verified",
+    "current": "profile_time_format_ampm and time_select_ampm_label both render literal \"AM/PM\" as the label text (the toggle name), not the AM/PM value tokens themselves."
+   },
+   {
+    "file": "messages/et.json",
+    "line": "146-153",
+    "status": "verified",
+    "current": "Estonian also uses literal \"AM/PM\" (no e.l./p.l. adopted) \u2014 same in lv.json and uk.json. Confirms no new Paraglide keys are needed for the AM/PM value strings; house convention already keeps them untranslated."
+   },
+   {
+    "file": "src/lib/components/agenda/AgendaList.svelte",
+    "line": "198-203,353,478",
+    "status": "verified",
+    "current": "timeFmt = new Intl.DateTimeFormat('en-GB', {timeZone:'Europe/Tallinn', hour:'2-digit', minute:'2-digit', hour12:false}); .format(new Date(item.startDatetime)) rendered directly into data-testid=\"row-time\" at two call sites (compact row + day-group row)."
+   },
+   {
+    "file": "src/routes/event/[id]/+page.svelte",
+    "line": "606-611,677-681,1844-1846,1853-1858",
+    "status": "verified",
+    "current": "Same-shaped timeFmt (en-GB, hour12:false, Tallinn tz); timeRange(start,minutes) composes either a single time or \"HH:MM\u2013HH:MM\" and is interpolated into data-testid=\"event-detail-time\" (both the editable-button and read-only branches)."
+   },
+   {
+    "file": "src/routes/+page.svelte",
+    "line": "2719-2736,2778-2792,3309-3320",
+    "status": "verified",
+    "current": "Three Intl.DateTimeFormat(hour:'2-digit') sites here: eventCreateTallinnOffsetMinutes (formatToParts, internal DST-offset math \u2014 not display), eventCreateStatusDateFmt/eventCreateStatusTimeFmt composed by eventCreateStatusFmt(at) into a create-success status text (IS display), and tallinnWallClockParts (formatToParts, feeds a submitted startTime + a displayed ISO date only \u2014 .time itself is never rendered as text)."
+   },
+   {
+    "file": "src/routes/event/[id]/+page.svelte",
+    "line": "1383-1423",
+    "status": "verified",
+    "current": "tallinnOffsetMinutes and toTallinnLocalInputValue \u2014 both formatToParts-based, feed the datetime-local input's seed value, never rendered as display text. Out of scope (submitted-value path, rule: stored/submitted values unchanged)."
+   },
+   {
+    "file": "src/lib/components/admin/InviteSurface.svelte",
+    "line": "104-113",
+    "status": "verified",
+    "current": "Only a date formatter (inviteExpiryDateFmt, en-CA, no hour/minute) \u2014 no clock-time text exists on the invite surface today."
+   },
+   {
+    "file": "src/routes/invite/[token]/+page.svelte",
+    "line": "33-39",
+    "status": "verified",
+    "current": "Same \u2014 only a date formatter, no time text."
+   },
+   {
+    "file": "src/routes/library/+page.svelte",
+    "line": "52-59",
+    "status": "verified",
+    "current": "Only a UTC date formatter (_dateFmt) for lending due-dates \u2014 no clock-time text."
+   },
+   {
+    "file": "src/routes/+page.svelte",
+    "line": "5664-5674,5799-5806",
+    "status": "verified",
+    "current": "Season-panel series rows (season-manage-series-{id}) and standalone-event rows (season-manage-event-{id}) currently render only series.name/event.name + event count \u2014 no time text is rendered on either row today, contrary to the issue body's phrase \"series rows in the season panel\"."
+   },
+   {
+    "file": "src/routes/page.profile-time-format.spec.ts",
+    "line": "1-56",
+    "status": "verified",
+    "current": "Confirms the happy-dom + @testing-library/svelte pattern: `@vitest-environment happy-dom`, localStorage.setItem(TIME_FORMAT_KEY,'ampm') before render(), get(timeFormatStore) from svelte/store for store-level assertions."
+   },
+   {
+    "file": "src/lib/components/agenda/AgendaList.spec.ts",
+    "line": "102",
+    "status": "verified",
+    "current": "Existing pattern for asserting rendered time text: container.querySelector('[data-testid=\"row-time\"]').textContent \u2014 directly reusable for a 24h-vs-ampm textContent assertion."
+   },
+   {
+    "file": "src/routes/event/[id]/page.spec.ts",
+    "line": "419,591,671",
+    "status": "verified",
+    "current": "Same textContent-on-testid pattern already used for event-detail-time; reusable for the two new mode assertions the issue's Done-when list requires."
+   }
+  ],
+  "uncitedSurfaces": "None of the issue's example surfaces are unverified \u2014 every one named in the issue body (agenda rows, event detail, season panel series rows, lending, invite) was checked directly against main. Two of those named surfaces (season-panel series/event rows, lending, invite) turned out to have NO existing clock-time text at all \u2014 see standingRuleHits/openQuestions.",
+  "implementationNotes": "Exhaustive re-inventory (supersedes research-207.json's list, which predates #207 GREEN landing and missed two sites): exactly THREE display call sites print a clock-time string in the whole app on main:\n1. AgendaList.svelte `timeFmt` -> `row-time` (2 usages: compact + day-group rows)\n2. event/[id]/+page.svelte `timeFmt` via `timeRange()` -> `event-detail-time` (both editable-button and read-only branches; also composes a start\u2013end RANGE)\n3. +page.svelte `eventCreateStatusTimeFmt` via `eventCreateStatusFmt(at)` -> the event-creation success status announcement\n\nAll three currently build their string via `new Intl.DateTimeFormat('en-GB'|'en-CA', {timeZone:'Europe/Tallinn', hour:'2-digit', minute:'2-digit', hour12:false or hourCycle:'h23'}).format(date)` \u2014 i.e. they already produce a 24h zero-padded 'HH:MM' STRING from a Date+timeZone, they just don't currently branch on the preference. This means the issue's `formatTime(hhmm: string, mode)` signature (string in, string out) is directly sufficient for all three \u2014 no separate Date-input formatter variant is needed. The recommended shape: keep each site's existing Intl formatter untouched (it stays the source of TRUTH for the Tallinn wall-clock HH:MM, tz-DST-correctness preserved verbatim per the \"PRESERVED VERBATIM\" / \"do not diverge\" comments guarding these blocks), and wrap its output: `formatTime(timeFmt.format(date), $timeFormatStore)`. This is a minimal, surgical change that never touches the TZ-sensitive formatter construction the code comments explicitly protect.\n\nProposed `formatTime` placement: `src/lib/preferences/timeFormat.ts`, next to `sanitize`/`readStoredTimeFormat`, following the file's existing doc-comment density:\n```ts\nexport function formatTime(hhmm: string, mode: TimeFormat): string {\n  if (mode === '24h') return hhmm;\n  const [hStr, minute] = hhmm.split(':');\n  const h = Number(hStr);\n  const hour12 = h % 12 || 12;\n  const meridiem = h < 12 ? 'AM' : 'PM';\n  return `${hour12}:${minute} ${meridiem}`;\n}\n```\nOutput spec verified against the issue body's example and TimeSelect's own to12(): '19:00'->'7:00 PM', '00:00'->'12:00 AM' (h%12||12 = 12), '12:00'->'12:00 PM', '07:05'->'7:05 AM' (no leading zero on hour, minute keeps its zero-pad from the source string \u2014 never re-derive it). 24h branch returns the input completely unchanged \u2014 byte-identical to today's output, satisfying \"In 24h mode... nothing changes from today.\"\n\nReactivity: NO new rune/store machinery needed. `timeFormatStore` is a plain Svelte `writable`; TimeSelect.svelte already proves the working pattern for Svelte 5 \u2014 `const mode = $derived($timeFormatStore)` \u2014 auto-subscription inside `$derived` (or read directly as `$timeFormatStore` in a template expression / a function called during render) re-runs on every store change. AgendaList.svelte and event/[id]/+page.svelte currently do NOT import timeFormatStore at all; GREEN adds the import and either a `const timeMode = $derived($timeFormatStore)` (mirroring TimeSelect) or an inline `$timeFormatStore` read at each of the ~4 call sites. +page.svelte's `eventCreateStatusFmt` is a plain function invoked once at creation-success time (not itself reactively re-rendered on a later preference change) \u2014 reading `$timeFormatStore` inside it at call time is correct and sufficient; it does not need `$derived` since it's an event-triggered one-shot format, not a live-updating display.\n\nRange formatting OPEN QUESTION (event-detail-time's `timeRange`): today \"19:00\u201320:30\". In ampm mode, is the correct rendering \"7:00\u20138:30 PM\" (single trailing meridiem, common typographic convention when both times share AM or PM) or \"7:00 PM\u20138:30 PM\" (both explicit, needed when the range crosses noon/midnight, e.g. 11:30 AM\u201312:30 PM)? The issue body's own example only covers a single time (\"7:00 PM\"), not a range \u2014 this needs a decision before RED can write the event-detail-time ampm-mode assertion. Recommend: always show both meridiems explicitly (`${formatTime(start,mode)}\u2013${formatTime(end,mode)}`) \u2014 simplest, always correct including cross-meridiem ranges, and TimeSelect sets no precedent against it since it never renders ranges.\n\nAM/PM value strings: confirmed no Paraglide keys are needed. `messages/{en,et,lv,uk}.json` already show the house convention keeps \"AM/PM\" as a literal, untranslated label even in the profile_time_format_ampm/time_select_ampm_label keys across all four locales (Estonian did NOT adopt e.l./p.l.). TimeSelect's own `<option>` values are the literal uppercase strings 'AM'/'PM' hardcoded in the component, not routed through `m.xxx()`. formatTime should follow the identical convention: hardcode 'AM'/'PM' uppercase literals, no i18n indirection, no new message keys in any of the four locale files.\n\nhappy-dom testability: fully assertable with the established pattern (see page.profile-time-format.spec.ts and AgendaList.spec.ts/event/[id]/page.spec.ts): `@vitest-environment happy-dom`, `localStorage.setItem(TIME_FORMAT_KEY, 'ampm')` BEFORE `render()`, then `container.querySelector('[data-testid=\"row-time\"|\"event-detail-time\"]').textContent`. formatTime itself is also a trivial pure-function unit-test target (no DOM needed) for the exact-output-spec cases (19:00, 00:00, 12:00, 07:05, minute zero-pad preserved). The \"no stored-value change\" Done-when item is verifiable via the existing submit-path specs (event create/edit) asserting the wire payload's HH:MM is untouched regardless of display mode \u2014 none of those specs read `timeFmt`/`formatTime` output, only the submitted value, so they should require zero changes.",
+  "crossCuttingAxes": "Single cross-cutting concern: exactly one new pure function (`formatTime`) consumed from 3 otherwise-unrelated files (agenda list, event detail, season-panel create-status), all Svelte components, all reading the same store. No cross-cutting i18n change (see AM/PM literal finding above \u2014 a real simplification vs. what a naive implementer might assume). No cross-cutting schema/API change \u2014 this is 100% a display-layer change, stored/submitted values never touch formatTime.",
+  "standingRuleHits": "Rule 5 (24h default) and rule 7 (dates untouched, ISO/narrative split) are both directly implicated and BOTH already correctly respected by the 3 sites found \u2014 none of them touch date formatting, and all default their Intl formatter to `hour12:false`/`hourCycle:'h23'` today, so 24h-mode output is provably unchanged by construction once wrapped. \"Fail loudly over fallbacks\" (project memory) is worth flagging for GREEN's design: formatTime's contract should assume a well-formed 'HH:MM' input (all 3 call sites only ever feed it their own Intl-formatter output, which is always well-formed) rather than silently degrading on garbage input \u2014 recommend NOT adding a silent sanitize-to-'00:00' fallback the way readStoredTimeFormat sanitizes localStorage; let a malformed input throw/produce visibly-wrong output rather than mask a caller bug, consistent with the fail-loudly standing rule. Discrepancy worth surfacing to Gama/PO before RED: the issue body names \\\"season panel series rows\\\" and \\\"lending and invite surfaces\\\" as places that need AM/PM treatment, but as of main none of those three render any clock-time text at all (season panel rows show only name+count, lending/invite show only dates). This isn't a blocker \u2014 the 3 sites that DO exist are unambiguous and match the issue's core deliverable \u2014 but the Done-when checklist item \\\"agenda rows, event detail, season panel series rows, lending and invite time texts all read 12h\\\" cannot be literally satisfied for season-panel/lending/invite since there is nothing there to convert; recommend the RED spec scope Done-when to the 3 real sites and note the other three as \\\"not applicable \u2014 no time text rendered\\\" rather than silently dropping them or inventing time text that doesn't currently exist.",
+  "openQuestions": "1. Range rendering in ampm mode for event-detail-time's timeRange (single trailing meridiem vs. both explicit) \u2014 recommend both-explicit, needs a quick PO/Gama nod or team-lead call since it's a judgment call the issue text doesn't cover.\n2. The issue's Done-when list names season-panel series rows, lending, and invite as surfaces needing AM/PM \u2014 none currently render time text (verified above). Confirm with Gama whether to (a) scope those Done-when items out as not-applicable, or (b) treat this as revealing a separate, unrelated gap (those surfaces SHOULD show times but don't yet) that's out of #220's scope.\n3. Whether `formatTime` should live as a truly pure function taking `mode: TimeFormat` directly (my recommendation, simplest) vs. the issue's literal `formatTime(hhmm, prefs)` signature where `prefs` might mean reading the store internally (tighter coupling, harder to unit-test in isolation) \u2014 recommend the pure-function-plus-explicit-mode-argument shape and have each call site pass `$timeFormatStore` explicitly, mirroring how TimeSelect already isolates its own pure to12/to24 helpers from the store read.",
+  "sizeEstimate": "small",
+  "dependencies": "Sequenced directly after #218 per Gama's RELEASED comment (no code dependency found \u2014 #218 is sign-in-surface localization, unrelated files; this is a pure sequencing/queue-position rule, not a technical blocker). Technical dependency: #207 (32845d6) already shipped and is the sole prerequisite \u2014 `timeFormatStore`/`TimeFormat`/`TIME_FORMAT_KEY` all already exist on main exactly as needed, nothing further to land first.",
+  "subChange": "B",
+  "scope": "mvox-app issue #220 pre-RED research: (1) exhaustive re-audit of every clock-time-rendering surface in the app (sub-change A refresh) and (2) design of the shared formatTime(hhmm, mode) formatter plus its Svelte-5 reactive consumption pattern, output spec, i18n treatment, and Date-vs-string call-site classification (sub-change B)."
+ },
+ {
+  "subChange": "Pre-RED sweep for #220 (AM/PM preference applied to DISPLAYED times, not just pickers). Confirmed repo is mvox-app.git; branch feat/213-cogwheel-toggle-toolbar has no commits yet (HEAD==main) and only uncommitted spec-file edits (RED phase of run 4) \u2014 read main via `git archive main` into scratchpad, never touched the working tree.\n\nRedoing the research-207.json inventory exhaustively found it stale in one respect: `tallinnWallClockParts` (+page.svelte) is NOT a display site \u2014 its `.time` output only feeds the event\u2192series conversion's SUBMITTED `startTime` (line 3529), never rendered as text; only its `.date` half is shown (line 5955), and dates are out of #220's scope. So the real display-site count is 3, not 4:\n1. `eventCreateStatusFmt` / `eventCreateStatusTimeFmt` \u2014 src/routes/+page.svelte:2778-2792 \u2014 success-toast \"YYYY-MM-DD HH:MM\" combined string.\n2. `timeFmt` \u2192 `timeRange()` \u2014 src/routes/event/[id]/+page.svelte:606-611,678-681 \u2014 \"19:00\u201320:30\" header line.\n3. `timeFmt` \u2014 src/lib/components/agenda/AgendaList.svelte:198-203,353,478 \u2014 per-row time text (recent + grouped rows).\n\nAll three share the identical formatter shape: `new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Tallinn', hour: '2-digit', minute: '2-digit', hour12: false })` (or the equivalent `hourCycle: 'h23'` en-US formToParts variant in eventCreateStatusFmt). No `formatTime` export exists anywhere yet in main \u2014 #220 is greenfield for the display formatter; only the preference store (`src/lib/preferences/timeFormat.ts`, #207) exists today.",
+  "scope": "In scope for #220 GREEN: add one shared `formatTime(hhmm: string, prefs: TimeFormat): string` (or equivalent signature taking a Date/instant \u2014 the three call sites currently format a `Date`, not a bare 'HH:MM' string, so the function needs to either accept the already-formatted 24h 'HH:MM' produced by the existing Intl formatter, or take the Date+TZ itself and do both the 24h Intl call AND the ampm conversion internally) in `src/lib/preferences/timeFormat.ts`, next to `timeFormatStore`. Reuse the exact `to12()` conversion already shipped and spec-covered in `TimeSelect.svelte:46-51` (h%12, 0\u219212, AM/PM literal, unlocalized) rather than re-deriving it \u2014 TimeSelect's spec (`'19:05'\u21927:05 PM`, `'00:30'\u219212:30 AM`) is the reference contract for the ampm-mode string shape. Wire the three call sites above to route through it instead of their private Intl formatters when the mode is 'ampm'; the 24h path must stay byte-identical to today's output.\n\nOut of scope (verified, not to be touched): TimeSelect.svelte's own AM/PM rendering (already correct, already reviewed under rule 5's [TRIGGER-24H-TIME]); every date-only display (rule 7, ISO YYYY-MM-DD, untouched); every stored/submitted 'HH:MM' wire value (recurrence.ts, eventConvert.ts, entityCreate.ts, seasonManage.ts \u2014 none of these format for display, they only carry/build the canonical 24h string).",
+  "citations": [
+   {
+    "file": "src/lib/preferences/timeFormat.ts",
+    "line": "1-34",
+    "status": "verified",
+    "current": "TimeFormat store only \u2014 TIME_FORMAT_KEY='mvox.time_format', readStoredTimeFormat/setTimeFormat/timeFormatStore. No formatTime export exists."
+   },
+   {
+    "file": "src/lib/preferences/timeFormat.spec.ts",
+    "line": "1-112",
+    "status": "verified",
+    "current": "Covers only the preference store (defaults/sanitize/round-trip/SSR). Zero coverage of any display formatter \u2014 #220 adds a new describe block here."
+   },
+   {
+    "file": "src/lib/components/TimeSelect.svelte",
+    "line": "46-51,104",
+    "status": "verified",
+    "current": "to12(h24) -> {hour12, ampm}; mode = $derived($timeFormatStore). Reference conversion #220's formatTime should reuse verbatim."
+   },
+   {
+    "file": "src/lib/components/TimeSelect.spec.ts",
+    "line": "153-212",
+    "status": "verified",
+    "current": "\"displays the 24h value in 12h terms: '12:30'\u219212:30 PM, '00:30'\u219212:30 AM, '19:05'\u21927:05 PM\" \u2014 the exact string-shape contract formatTime must match."
+   },
+   {
+    "file": "src/routes/+page.svelte",
+    "line": "2778-2792",
+    "status": "verified",
+    "current": "eventCreateStatusDateFmt + eventCreateStatusTimeFmt (hourCycle:'h23'), eventCreateStatusFmt(at) => `${date} ${time}`. Display site #1 (toast)."
+   },
+   {
+    "file": "src/routes/page.event-create.spec.ts",
+    "line": "1363-1377",
+    "status": "drifted",
+    "current": "toBe('event_created Spring concert @ 2027-04-18 19:00') \u2014 exact toast text. QUEUE COLLISION: this line sits inside diff hunk `@@ -1240,263 +1398,324 @@` currently being rewritten by run 4's uncommitted RED changes (page.event-create.spec.ts is in the branch's dirty diff right now) \u2014 re-verify the line number at branch time, content is confirmed present on main."
+   },
+   {
+    "file": "src/routes/+page.svelte",
+    "line": "3309-3323,3529,5955",
+    "status": "verified",
+    "current": "tallinnWallClockParts \u2014 CORRECTS the stale research-207.json listing: its .time half feeds a SUBMITTED value (event\u2192series conversion startTime, line 3529), never display text; only .date is rendered (line 5955), which is out of #220 scope (dates untouched). Not a formatTime call site."
+   },
+   {
+    "file": "src/routes/event/[id]/+page.svelte",
+    "line": "603-611,672-681",
+    "status": "verified",
+    "current": "timeFmt (hour12:false) + timeRange(start,minutes) => \"19:00\" or \"19:00\u201320:30\". Display site #2."
+   },
+   {
+    "file": "src/routes/event/[id]/page.spec.ts",
+    "line": "421-422,592,594,672-673",
+    "status": "verified",
+    "current": "expect(time).toContain('19:00'); toContain('20:30'); time.match(/19:00/g).toHaveLength(1). All stay green unmodified in 24h default; each needs an ampm-mode sibling asserting e.g. '7:00 PM'/'8:30 PM'."
+   },
+   {
+    "file": "src/routes/event/[id]/page.event-editing.spec.ts",
+    "line": "735-758",
+    "status": "verified",
+    "current": "Same timeRange() display, post-edit re-render: toContain('20:00'); toContain('21:30')."
+   },
+   {
+    "file": "src/lib/components/agenda/AgendaList.svelte",
+    "line": "197-203,353,478",
+    "status": "verified",
+    "current": "timeFmt (hour12:false), used at line 353 (recent row, no data-testid on the span) and line 478 (data-testid=\"row-time\"). Display site #3."
+   },
+   {
+    "file": "src/lib/components/agenda/AgendaList.spec.ts",
+    "line": "102-104",
+    "status": "verified",
+    "current": "row-time query, expect(...).toBe('12:00'). Stays green in 24h default; needs an ampm sibling."
+   },
+   {
+    "file": "src/routes/profile/+page.svelte",
+    "line": "765,775,794-816",
+    "status": "verified",
+    "current": "Script ends line 765; time-format <select> is markup at 802-816, explicitly commented 'not gated on status/collective selection' \u2014 confirms no rights-tier gate. #218 touches script-section provider-label logic (lines <765) for a DIFFERENT feature; any line delta there shifts every markup line number below, including 802-816 \u2014 re-verify at branch time even though there is no content overlap."
+   },
+   {
+    "file": "src/routes/page.series-create.spec.ts",
+    "line": "744-798",
+    "status": "verified",
+    "current": "Reusable pattern: dynamic import of timeFormatStore, .set('ampm'), try/finally .set('24h') reset, asserts wire stays 24h ('19:05') while the ampm-mode UI renders 12h selects. Best template for #220's own AM/PM-mode display specs."
+   },
+   {
+    "file": "src/lib/components/TimeSelect.spec.ts",
+    "line": "70-79",
+    "status": "verified",
+    "current": "beforeEach/afterEach: localStorage.clear() + timeFormatStore.set('24h') \u2014 the other reusable reset pattern for suite-level (not single-test) AM/PM coverage."
+   },
+   {
+    "file": "src/typography-scale.spec.ts",
+    "line": "14-24",
+    "status": "verified",
+    "current": "House pattern for a source-read/lint-style spec: readdirSync(SRC_ROOT,{recursive:true,withFileTypes:true}) + readFileSync, no glob dependency (none is installed in package.json). Template for the proposed 'no hardcoded HH:MM rendering outside the formatter' spec."
+   },
+   {
+    "file": "teams/mvox-dev/memory/architecture-decisions.md",
+    "line": "801-846",
+    "status": "verified",
+    "current": "Rule 5 (24h default, AM/PM opt-in, display-only, [TRIGGER-24H-TIME]) and rule 7 (YYYY-MM-DD dates, [TRIGGER-ISO-DATE]) text, plus Bentham's review-enforcement bullets \u2014 directly relevant standing rules for #220's review."
+   }
+  ],
+  "uncitedSurfaces": "Deliberately not treated as #220 display sites (verified, excluded with reason):\n- `src/lib/components/TimeSelect.svelte` \u2014 the live-editing composite; already ampm-aware, already reviewed under rule 5, not \"a rendered timestamp.\"\n- `src/lib/events/recurrence.ts`, `src/lib/events/eventConvert.ts`, `src/lib/entity/entityCreate.ts`, `src/lib/seasons/seasonManage.ts` \u2014 data-layer builders that carry/construct canonical 24h 'HH:MM' strings for the wire (payloads, generated occurrence dates); no rendering, no formatTime call needed. These are exactly the files the proposed lint spec's allowlist must name.\n- `src/lib/testing/timeControls.ts` \u2014 test helper (fillTime/fillDateTime), not production code.\n- Every `fillDateTime`/`fillTime` call across page.event-create.spec.ts, page.series-create.spec.ts, page.event-type-picker.spec.ts, page.agenda-admin.spec.ts, page.event-convert.spec.ts, page.event-create-after-season.spec.ts, event/[id]/page.event-editing.spec.ts, recurrence.spec.ts, eventConvert.spec.ts, entityCreate.spec.ts \u2014 these are INPUT fixtures (always canonical 24h regardless of display mode per TimeSelect's own contract), not display assertions, so #220 does not need ampm siblings for them.\n- `src/routes/+page.svelte:5159`, `:5965`, `event/[id]/+page.svelte:1753` \u2014 the architecture-decisions.md rule-5 \"surfaces\" list cites raw `type=\"time\"`/`type=\"datetime-local\"` inputs; these predate TimeSelect and the doc itself flags no verification since #207 landed the composite. Not re-verified here (out of #220's display-only scope) but worth a note to Bentham that this doc section may itself be stale, mirroring the rule-6/#210 trap already recorded in the same file.",
+  "implementationNotes": "Proposed lint-style \"no hardcoded HH:MM rendering outside the formatter\" spec, modeled on typography-scale.spec.ts's readdirSync+readFileSync pattern (no new dependency):\n\n```ts\n// src/lib/preferences/timeFormat.no-hardcoded-render.spec.ts\nimport { readFileSync, readdirSync } from 'node:fs';\nimport { join, resolve, relative } from 'node:path';\nimport { describe, expect, it } from 'vitest';\n\nconst SRC_ROOT = resolve(__dirname, '..', '..'); // src/\n\n// A 24h clock-rendering Intl.DateTimeFormat: hour:'2-digit' plus either\n// hour12:false or hourCycle:'h23', within ~120 chars of each other.\nconst HARDCODED_TIME_RENDER =\n  /hour:\\s*['\"]2-digit['\"][\\s\\S]{0,150}?(hour12\\s*:\\s*false|hourCycle\\s*:\\s*['\"]h23['\"])/;\n\n// Files legitimately allowed to format/hold 24h HH:MM without going through\n// formatTime(): the formatter's own home, the input composite (rule 5's\n// sanctioned exception, already reviewed), and data-layer builders that only\n// ever construct wire payloads / generated dates, never display text.\nconst ALLOWLIST = new Set([\n  'lib/preferences/timeFormat.ts',\n  'components/TimeSelect.svelte',\n  'lib/events/recurrence.ts',\n  'lib/events/eventConvert.ts',\n  'lib/entity/entityCreate.ts',\n  'lib/seasons/seasonManage.ts',\n  'lib/testing/timeControls.ts'\n]);\n\nfunction sourceFiles(): string[] {\n  return readdirSync(SRC_ROOT, { recursive: true, withFileTypes: true })\n    .filter((d) => d.isFile() && /\\.(svelte|ts)$/.test(d.name) && !d.name.endsWith('.spec.ts'))\n    .map((d) => relative(SRC_ROOT, join(d.parentPath, d.name)));\n}\n\nit('no source file outside the allowlist hardcodes a 24h time-rendering formatter', () => {\n  const offenders = sourceFiles().filter(\n    (f) => !ALLOWLIST.has(f) && HARDCODED_TIME_RENDER.test(readFileSync(join(SRC_ROOT, f), 'utf-8'))\n  );\n  expect(offenders).toEqual([]);\n});\n```\nThis asserts the DONE-WHEN directly: after GREEN, +page.svelte, event/[id]/+page.svelte and AgendaList.svelte must have deleted their private `hour12:false`/`hourCycle:'h23'` formatters in favor of calling `formatTime`, and the regex catches any future regression the same way.\n\nNew AM/PM-mode display specs (one per site) should follow the page.series-create.spec.ts try/finally pattern (dynamic-or-static import of `timeFormatStore`, `.set('ampm')`, assert, `finally { .set('24h') }`) or the TimeSelect.spec.ts suite-level beforeEach/afterEach reset \u2014 both already proven in the codebase, no new pattern needed. Expected new assertions per site: toast \"2027-04-18 7:00 PM\"; event-detail \"7:00 PM\u20138:30 PM\"; agenda row-time \"12:00 PM\" (noon \u2014 a good disambiguating fixture) or similar.",
+  "blastRadius": "Production: 3 files change (`src/routes/+page.svelte`, `src/routes/event/[id]/+page.svelte`, `src/lib/components/agenda/AgendaList.svelte`) plus the new export in `src/lib/preferences/timeFormat.ts`. Spec: 1 new describe block in `timeFormat.spec.ts`, plus ampm-mode sibling `it`s added to `page.event-create.spec.ts` (~1373), `event/[id]/page.spec.ts` (~421,592,672), `event/[id]/page.event-editing.spec.ts` (~756), `AgendaList.spec.ts` (~104), and one new lint spec file. No schema, no Entu wire-shape, no rights-model change \u2014 purely a display-formatting retrofit, same shape as #207/#209/#211/#214.\n\nQueue collisions (verified against live branch state, not speculative):\n- `src/routes/page.event-create.spec.ts` is under active uncommitted rewrite by run 4 (#213/215/217) RIGHT NOW \u2014 the hunk `@@ -1240,263 +1398,324 @@` covers the exact toast-assertion line (1373) cited above. Re-diff at branch time before touching it.\n- `src/routes/+page.svelte` itself has NOT yet been touched on this branch (HEAD==main, no commits; only spec files are dirty) \u2014 run 4's GREEN phase (cogwheel toolbar #213, series-preview #215, season-delete #217) will land source edits to this same 6000+-line file before #220 can. Since #220's two call sites (`eventCreateStatusFmt` ~2778-2792, and the untouched-but-noted `tallinnWallClockParts` ~3309) sit mid-file, any insertion above them (plausible for a season-toolbar redesign, which lives in the season-management region) shifts these line numbers \u2014 re-anchor by function name, not line number, when #220 actually starts.\n- `src/routes/profile/+page.svelte` \u2014 no content overlap with #218 (auth-provider i18n, lines <765 in script), but #218 IS scheduled directly before #220 (Gama: \"Sequence: directly after #218\" for #220) and touches the same file's script section, so the markup-side time-format block (802-816) will already have shifted by the time #220 starts \u2014 treat this as expected, not a collision to avoid.\n- `src/routes/season-manage*.spec.ts`, `page.agenda-admin.spec.ts`, `page.event-convert.spec.ts`, `page.event-create-after-season.spec.ts` are also dirty on this branch but contain no display-time assertions (only fillDateTime/fillTime input fixtures and season CRUD) \u2014 no #220 overlap.",
+  "crossCuttingAxes": "Multi-collective: CONFIRMED no db-scoped read needed \u2014 `TIME_FORMAT_KEY = 'mvox.time_format'` is one global localStorage key (verified in source), explicitly commented \"per-device (Gama ruling 2026-09-02),\" with no collective-id namespacing anywhere in `timeFormat.ts`. A viewer's AM/PM choice is the same across every collective they belong to.\n\nLocales: CONFIRMED no new locale strings expected beyond #207's existing `profile_time_format_*` keys. TimeSelect.svelte's AM/PM option labels are hardcoded literal `'AM'`/`'PM'` (not run through `m.*`) \u2014 i.e. #207 already made the call to leave the AM/PM tokens themselves unlocalized (same treatment as the eID product names per #218's notes), so formatTime should reuse those same literals rather than introduce new message keys.\n\nRights tiers: CONFIRMED no gate. The time-format `<select>` on the profile page carries an explicit source comment: \"app chrome, like the language selector above, not gated on `status` / collective selection\" (profile/+page.svelte:794-798, read directly). The three display sites (toast, event-detail header, agenda rows) take no role/rights parameter in their current signatures \u2014 every viewer who can see the time text already sees whatever `timeFmt.format()` produces, so a read-only member sees AM/PM identically to an owner. No gate to add or verify further.\n\nSSR: CONFIRMED `timeFormat.ts` never touches `window`; it guards `typeof localStorage === 'undefined'` on every access (readStoredTimeFormat, setTimeFormat), so first server render always evaluates to '24h' \u2014 matches the codebase's SSR-safety spec block (\"timeFormat preference \u2014 SSR safety (#207)\"). [speculative] Whether this produces a VISIBLE flash on hydration for a viewer with 'ampm' set: since the store is a module-level `writable(readStoredTimeFormat())` evaluated once per JS realm, the server realm sees no localStorage (\u2192'24h' HTML) while the browser realm's module evaluation happens synchronously during hydration and reads the real preference immediately \u2014 Svelte's hydration then patches the DOM to the client value with no explicit mismatch warning (unlike React), so there is likely a brief first-paint flash of 24h text before hydration completes, identical in kind to whatever flash TimeSelect's own `mode` derivation already exhibits today. This is inferred from the code and Svelte's hydration model, not observed live \u2014 no existing test in the repo (`grep hydrat` across spec files) covers this for either TimeSelect or the display sites, so it is untested behavior today and #220 would inherit it unchanged rather than introduce it.",
+  "standingRuleHits": "Rule 5 (`teams/mvox-dev/memory/architecture-decisions.md:801-812`, `[TRIGGER-24H-TIME]`) is the direct governing rule: \"24h by default; AM/PM only when explicitly set on the user's profile... display-only requirement: a change that alters stored or submitted values is out of scope and wrong\" \u2014 #220's own spec text (\"stored/submitted values unchanged\") is this rule restated. Rule 7 (`:812-816`, `[TRIGGER-ISO-DATE]`) confirms dates stay untouched, consistent with excluding `tallinnWallClockParts`'s `.date` output and every `shortDateFmt`/`dateFmt`/`groupKeyFmt` from this slice. Bentham's review-enforcement bullet for rule 5 explicitly instructs checking \"the AM/PM profile-preference path actually exists\" for any custom time control \u2014 the three display sites currently have NO such path (that's exactly what #220 closes), so Bentham's review should flag their pre-#220 state as the rule-5 gap the issue names, and confirm post-fix that the new formatTime calls route through `$timeFormatStore` rather than a fresh hardcoded formatter.",
+  "openQuestions": "1. Exact `formatTime` signature: the three call sites currently hold a `Date` (or an ISO instant) and a Tallinn-zoned Intl formatter, not a bare 'HH:MM' string \u2014 GREEN needs to decide whether `formatTime(hhmm, prefs)` takes the already-24h-formatted string (cheapest: keep each site's own `Intl.DateTimeFormat` for TZ conversion, pipe its `'HH:MM'` output through a small ampm-mode string transform) or whether it takes `(date: Date, tz: string, prefs: TimeFormat)` and owns the Intl call itself (more consolidation, more churn across 3 files). The task's own phrasing (\"next to the #207 preference read\") suggests the former, lighter-touch shape \u2014 worth a one-line confirmation before RED locks the contract.\n2. Hydration flash (see SSR axis above) is inferred, not observed \u2014 if the team wants a guarantee here, a live/Playwright check of a viewer with 'ampm' set loading a cold page would be a follow-up outside #220's stated done-when.\n3. Whether Bentham/Gama want the architecture-decisions.md rule-5 \"surfaces\" list (line 812, citing pre-TimeSelect raw `type=\"time\"`/`type=\"datetime-local\"` line numbers) corrected in the same PR \u2014 it appears stale in the same way the file's own rule-6/#210 correction describes, but fixing it is documentation hygiene, not #220's scope.\n4. Confirm with Bentham/Gama that reusing bare literal `'AM'`/`'PM'` (no Paraglide keys) in `formatTime`'s output is the intended continuation of #207's TimeSelect precedent rather than an oversight now worth revisiting for et/lv/uk \u2014 flagged here rather than assumed, since #220's own body only says \"no other new strings expected,\" which is consistent with either reading.",
+  "sizeEstimate": "small",
+  "dependencies": "Sequenced directly after #218 per Gama's ruling on #220 (read via `gh issue view 220 --comments`). #218 (auth/login + invite + profile provider-label i18n) is itself sequenced \"after the current pipeline (#207-#217)\" per its own body \u2014 so the effective order is: run 4 (#212 done, #213/#215/#217 in progress) \u2192 #218 \u2192 #220. No blocking dependency the other direction: #220 does not gate anything currently queued. Schema: none (v4E untouched, no entu/research PR needed \u2014 pure display formatting, same class as #207/#209/#211/#214). Data layer: none (seasonManage.ts, eventConvert.ts, recurrence.ts, entityCreate.ts confirmed unaffected)."
+ }
+]
