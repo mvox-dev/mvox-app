@@ -29,8 +29,16 @@
 	const token = $derived(page.params.token ?? '');
 	const outcome = $derived(page.url.searchParams.get('outcome'));
 	const parsed = $derived(parseInviteToken(token, Date.now()));
+	// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — numeric date
+	// text renders as the ISO calendar date, `YYYY-MM-DD` (en-CA gives ISO date
+	// format), never a browser-locale rendering.
+	const expiryDateFmt = new Intl.DateTimeFormat('en-CA', {
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	});
 	const expiryDate = $derived(
-		parsed.status === 'invalid' ? '' : new Date(parsed.expMs).toLocaleDateString()
+		parsed.status === 'invalid' ? '' : expiryDateFmt.format(new Date(parsed.expMs))
 	);
 	/** Fresh-start href: the same landing without ?outcome — a new CTA click mints a fresh single-use session key. */
 	const retryHref = $derived(`/invite/${encodeURIComponent(token)}`);

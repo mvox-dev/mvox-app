@@ -850,13 +850,14 @@ describe('#76 — inline checkout on browse tree', () => {
 		});
 		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
 		// member-a already holds copy-2 of edition-1 → disabled, with the
-		// lending date visible in the option text. (#76 correction 9: assert the
-		// year, not the raw ISO string — the date is rendered localized.)
+		// lending date visible in the option text. #207 rule 7 (supersedes #76
+		// correction 9): lending dates are tabular date text and render as the
+		// ISO calendar date itself — assert the exact string the mock echoes.
 		await waitFor(() => {
 			const optA = select.querySelector('option[value="member-a"]') as HTMLOptionElement | null;
 			expect(optA).not.toBeNull();
 			expect(optA!.disabled).toBe(true);
-			expect(optA!.textContent).toContain('2026');
+			expect(optA!.textContent).toContain('Lent since 2026-07-01');
 		});
 	});
 
@@ -1296,11 +1297,11 @@ describe('#74 — bulk checkout refinements', () => {
 		});
 
 		// member-a already has active lending -> date label, NOT a checkbox.
-		// (#76 correction 9: assert the year, not the raw ISO string — the date
-		// is rendered localized.)
+		// #207 rule 7 (supersedes #76 correction 9): lending dates are tabular
+		// date text — the exact ISO calendar date, not a localized rendering.
 		const alreadyLent = container.querySelector('[data-testid="bulk-checkout-already-lent-member-a"]');
 		expect(alreadyLent).not.toBeNull();
-		expect(alreadyLent?.textContent).toContain('2026');
+		expect(alreadyLent?.textContent).toContain('Lent since 2026-07-01');
 
 		// member-b has no active lending -> checkbox, no already-lent label
 		expect(container.querySelector('[data-testid="bulk-checkout-already-lent-member-b"]')).toBeNull();
@@ -1582,11 +1583,12 @@ describe('#76 — consolidated corrections', () => {
 // #76 — correction 9: lending dates are rendered localized (Intl.DateTimeFormat
 // with the current locale), never as raw ISO timestamps. Live Entu date
 // properties arrive as full ISO strings like "2026-07-01T00:00:00.000Z"; the
-// UI must format them for humans. The exact format is locale-dependent, so
-// these tests assert the ABSENCE of the raw ISO time pattern plus the year as
-// a human-readable anchor — not an exact format string.
+// UI must format them for humans. #207 rule 7 (supersedes correction 9's
+// locale-dependent rendering): lending dates are tabular date text, so the
+// human form is the ISO calendar DATE itself — `YYYY-MM-DD`, exact — while the
+// raw timestamp's TIME component must still never leak.
 // ---------------------------------------------------------------------------
-describe('#76 — correction 9: localized lending dates', () => {
+describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO calendar date, never a raw timestamp', () => {
 	// Matches the time component of a raw ISO timestamp, e.g. "T00:00:00".
 	const RAW_ISO_TIME = /T\d{2}:\d{2}/;
 
@@ -1613,8 +1615,9 @@ describe('#76 — correction 9: localized lending dates', () => {
 		const row = container.querySelector('[data-testid="library-copy-copy-2"]');
 		// The raw ISO time component must never leak into the UI...
 		expect(row?.textContent).not.toMatch(RAW_ISO_TIME);
-		// ...but the date is still present in some human-readable form.
-		expect(row?.textContent).toContain('2026');
+		// ...and the date is the exact ISO calendar day (#207 rule 7; the mock
+		// echoes `since ${date}`).
+		expect(row?.textContent).toContain('since 2026-07-01');
 	});
 
 	it('my-loans shows localized assignedAt/assignedUntil dates, never raw ISO', async () => {
@@ -1645,10 +1648,9 @@ describe('#76 — correction 9: localized lending dates', () => {
 		const item = container.querySelector('[data-testid="my-loans-item-lend-mine"]');
 		// Never a raw ISO timestamp anywhere in the loan row.
 		expect(item?.textContent).not.toMatch(RAW_ISO_TIME);
-		// Both lending dates present in human-readable form (year anchors —
-		// exact format is locale-dependent).
-		expect(item?.textContent).toContain('2026'); // assignedAt
-		expect(item?.textContent).toContain('2099'); // assignedUntil
+		// Both lending dates are the exact ISO calendar days (#207 rule 7).
+		expect(item?.textContent).toContain('2026-07-01'); // assignedAt
+		expect(item?.textContent).toContain('2099-01-01'); // assignedUntil
 	});
 
 	it('bulk checkout member picker "already lent" date is localized, never raw ISO', async () => {
@@ -1685,7 +1687,8 @@ describe('#76 — correction 9: localized lending dates', () => {
 		});
 		const alreadyLent = container.querySelector('[data-testid="bulk-checkout-already-lent-member-a"]');
 		expect(alreadyLent?.textContent).not.toMatch(RAW_ISO_TIME);
-		expect(alreadyLent?.textContent).toContain('2026');
+		// #207 rule 7 — exact ISO calendar day (mock echoes `Lent since ${date}`).
+		expect(alreadyLent?.textContent).toContain('Lent since 2026-07-01');
 	});
 
 	it('inline checkout picker disabled-member lending date is localized, never raw ISO', async () => {
@@ -1730,7 +1733,8 @@ describe('#76 — correction 9: localized lending dates', () => {
 		const optA = select.querySelector('option[value="member-a"]') as HTMLOptionElement;
 		expect(optA.disabled).toBe(true);
 		expect(optA.textContent).not.toMatch(RAW_ISO_TIME);
-		expect(optA.textContent).toContain('2026');
+		// #207 rule 7 — exact ISO calendar day (mock echoes `Lent since ${date}`).
+		expect(optA.textContent).toContain('Lent since 2026-07-01');
 	});
 });
 

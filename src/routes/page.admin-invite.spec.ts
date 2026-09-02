@@ -361,6 +361,44 @@ describe('/admin/invite — done (show-once link)', () => {
 			expect(sessionStorage.getItem(key)).not.toContain(MINTED_TOKEN);
 		}
 	});
+
+	// #207 rule 7 (PO standing rule, Gama 2026-09-02) — the shown expiry is
+	// numeric date text: ISO `YYYY-MM-DD`, never a browser-locale rendering.
+	// The message mock echoes `admin_invite_show_once`'s `date` param, so this
+	// pins the string the surface derives from the minted token's own exp.
+	it('#207 rule 7: the show-once expiry date renders as ISO YYYY-MM-DD', async () => {
+		selectPolyphony();
+		loadOk();
+		h.createInviteMock.mockResolvedValue({
+			personId: 'p1',
+			memberId: 'm1',
+			inviteToken: MINTED_TOKEN
+		});
+
+		const { container } = render(Page);
+		await waitFor(() => {
+			const submit = container.querySelector(
+				'[data-testid="invite-admin-submit"]'
+			) as HTMLButtonElement | null;
+			expect(submit && !submit.disabled).toBe(true);
+		});
+		await submitForm(container);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
+		});
+
+		// Oracle mirrors the required production mechanism (en-CA Intl → ISO)
+		// over MINTED_TOKEN's exp instant (4_102_444_800s) in the local zone.
+		const isoExpiry = new Intl.DateTimeFormat('en-CA', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit'
+		}).format(new Date(4_102_444_800_000));
+		expect(isoExpiry).toMatch(/^\d{4}-\d{2}-\d{2}$/); // oracle self-check
+		const warning = container.querySelector('[data-testid="invite-bearer-warning"]');
+		expect(warning?.textContent).toContain(`Shown only once. Expires on ${isoExpiry}.`);
+	});
 });
 
 describe('/admin/invite — create-error', () => {

@@ -34,7 +34,6 @@
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 	import { createWork } from '$lib/entity/entityCreate';
-	import { getLocale } from '$lib/paraglide/runtime';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
 	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
@@ -46,22 +45,21 @@
 
 	const selected = $derived($selectedCollectiveStore);
 
-	// #76 correction 9 — localize lending dates. Entu delivers full ISO
-	// timestamps (e.g. "2026-07-01T00:00:00.000Z"); render them for humans via
-	// Intl.DateTimeFormat rather than leaking the raw ISO string into the UI.
-	// Uses the active Paraglide locale (not browser default) and forces UTC
-	// timezone so date-only values never shift to the previous day in negative
-	// offsets. Formatter is cached per locale to avoid re-creating it on every
-	// call inside render loops.
-	let _dateFmtLocale: string | undefined;
-	let _dateFmt: Intl.DateTimeFormat | undefined;
+	// #76 correction 9, superseded by #207 rule 7 (PO standing rule, Gama's
+	// 2026-09-02 rulings) — lending dates are NUMERIC/TABULAR text, so they
+	// render as the ISO calendar date itself, `YYYY-MM-DD` (en-CA gives ISO
+	// date format), rather than a locale-dependent rendering. Entu delivers
+	// full ISO timestamps (e.g. "2026-07-01T00:00:00.000Z"); this still keeps
+	// the raw timestamp's TIME component out of the UI. Forces UTC timezone so
+	// date-only values never shift to the previous day in negative offsets.
+	const _dateFmt = new Intl.DateTimeFormat('en-CA', {
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		timeZone: 'UTC'
+	});
 	function formatDate(isoDate: string): string {
 		if (!isoDate) return '';
-		const locale = getLocale();
-		if (!_dateFmt || locale !== _dateFmtLocale) {
-			_dateFmtLocale = locale;
-			_dateFmt = new Intl.DateTimeFormat(locale, { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' });
-		}
 		return _dateFmt.format(new Date(isoDate));
 	}
 

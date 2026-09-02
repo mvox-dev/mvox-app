@@ -109,8 +109,19 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
+// Exception: `event_created` ECHOES its params — #207 rule 7 pins the success
+// toast's `when` string (the date part must be ISO), so the value the page
+// hands the message has to survive into the rendered text.
 vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({}, { get: (_target, key) => () => String(key) })
+	m: new Proxy(
+		{},
+		{
+			get: (_target, key) =>
+				String(key) === 'event_created'
+					? (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`
+					: () => String(key)
+		}
+	)
 }));
 
 const {
@@ -1116,7 +1127,30 @@ describe('agenda — a successful event create SAYS SO (review F3)', () => {
 		await submit(container);
 
 		await waitFor(() => {
-			expect(q(container, 'event-create-status')?.textContent?.trim()).toBe('event_created');
+			// The mock echoes params (see the messages mock above), so the status is
+			// the key PLUS the name/when args — presence of the key is this test's pin.
+			expect(q(container, 'event-create-status')?.textContent?.trim()).toContain('event_created');
+		});
+	});
+
+	// #207 rule 7 — the toast's `when` is numeric date text: ISO `YYYY-MM-DD`,
+	// with the time part staying 24h `HH:MM` (rule 5, already landed). The
+	// fixture is typed as Tallinn wall-clock (2027-04-18 19:00 EEST) and the
+	// toast formats the resulting UTC instant BACK in Europe/Tallinn, so the
+	// full string round-trips to exactly what the operator typed.
+	it('#207 rule 7: the success toast renders the event start as "YYYY-MM-DD HH:MM" (ISO date + 24h time, Tallinn wall clock)', async () => {
+		const container = await renderReady();
+		await openFormFromAgenda(container);
+		await selectValue(container, 'event-create-season', SEASON_ID);
+		await chooseType(container, 'concert');
+		await fill(container, 'event-create-name', 'Spring concert');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-status')?.textContent?.trim()).toBe(
+				'event_created Spring concert @ 2027-04-18 19:00'
+			);
 		});
 	});
 

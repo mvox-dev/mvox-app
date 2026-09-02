@@ -74,6 +74,24 @@ describe('/invite/[token] — ready (valid token)', () => {
 			);
 		}
 	});
+
+	// #207 rule 7 (PO standing rule, Gama 2026-09-02) — the expiry is numeric
+	// date text on a public, unauthenticated page: it renders as the ISO
+	// calendar date `YYYY-MM-DD`, never a browser-locale rendering. The message
+	// mock above echoes its `date` param, so this pins the string the page
+	// actually derives from the token's own exp.
+	it('#207 rule 7: the expiry date renders as ISO YYYY-MM-DD', () => {
+		const { container } = renderAt(TOKEN);
+		// The oracle mirrors the required production mechanism (en-CA Intl → ISO)
+		// over the token's exp instant in the runner's local zone.
+		const isoExpiry = new Intl.DateTimeFormat('en-CA', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit'
+		}).format(new Date(4_102_444_800_000));
+		expect(isoExpiry).toMatch(/^\d{4}-\d{2}-\d{2}$/); // oracle self-check
+		expect(container.textContent).toContain(`Valid until ${isoExpiry}.`);
+	});
 });
 
 describe('/invite/[token] — invalid token', () => {

@@ -563,6 +563,55 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 	});
 });
 
+// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — the boundary:
+// row-level dates are TABULAR and render as the Tallinn ISO calendar day
+// (`YYYY-MM-DD`); the day-group HEADER is NARRATIVE and keeps weekday + month
+// name (Gama ruling 2, amended by boundary call (a): "day-group header and
+// event-detail header keep weekday + month name; every row-level date is
+// YYYY-MM-DD"). Both halves pinned in ONE spec so neither can drift alone.
+describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved', () => {
+	it('recent-row date cell renders the Tallinn ISO calendar day, while the day-group header for the same date keeps weekday + month name', () => {
+		// 2026-06-15 is a Monday. Same Tallinn calendar day for both fixtures:
+		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')]; // 12:00 Tallinn, Mon 15 June
+		const recent = [item('p1', '2026-06-15T16:00:00.000Z')]; // 19:00 Tallinn, same day
+		const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
+
+		// Tabular half — the recent row's date cell is exactly the ISO day.
+		const cell = container.querySelector(
+			'[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]'
+		);
+		expect(cell).not.toBeNull();
+		expect(cell?.textContent?.trim()).toBe('2026-06-15');
+
+		// Narrative half — the header STAYS weekday + month name, no raw ISO.
+		const header = container.querySelector('[data-testid="agenda-date-header"]');
+		const headerText = header?.textContent ?? '';
+		expect(headerText).toMatch(/Monday/i);
+		expect(headerText).toMatch(/June/i);
+		expect(headerText).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+	});
+
+	// #207 rule 7, DST edge — the ISO day shown must be the TALLINN calendar
+	// day, not the UTC one. Both instants below sit on the far side of a UTC
+	// midnight from their Tallinn day, on the two 2026 transition days
+	// (spring-forward 2026-03-29, fall-back 2026-10-25): a formatter that
+	// drops the Europe/Tallinn zone renders the previous day's date.
+	it('DST edges: recent rows near the Tallinn transitions render the Tallinn ISO calendar day, not the UTC one', () => {
+		const recent = [
+			item('spring', '2026-03-28T23:30:00.000Z'), // 01:30 EET, Sun 2026-03-29 (DST starts 03:00)
+			item('fall', '2026-10-24T22:30:00.000Z') // 01:30 EEST, Sun 2026-10-25 (DST ends 04:00)
+		];
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+
+		const dateOf = (id: string) =>
+			container
+				.querySelector(`[data-testid="agenda-recent-row-${id}"] [data-testid="recent-row-date"]`)
+				?.textContent?.trim();
+		expect(dateOf('spring')).toBe('2026-03-29');
+		expect(dateOf('fall')).toBe('2026-10-25');
+	});
+});
+
 // (*MVOX:Byrd*)
 // (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)
 // (*MVOX:Tallis* — #101 TE.1 event-detail row links RED)

@@ -102,6 +102,15 @@
 	let resolvedForDb = $state(initialPresetDb && initialPresetDbEntityId ? initialPresetDb : '');
 
 	// Done-panel state — the token-carrying link exists ONLY here (component state).
+	// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — numeric date
+	// text renders as the ISO calendar date, `YYYY-MM-DD` (en-CA gives ISO date
+	// format), never a browser-locale rendering.
+	const inviteExpiryDateFmt = new Intl.DateTimeFormat('en-CA', {
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	});
+
 	let inviteLink = $state('');
 	let inviteExpiryDate = $state('');
 	let copied = $state(false);
@@ -227,7 +236,8 @@
 			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
 			// The shown expiry is the minted token's OWN exp — never an assumed +7d.
 			const parsed = parseInviteToken(result.inviteToken, Date.now());
-			inviteExpiryDate = parsed.status === 'invalid' ? '' : new Date(parsed.expMs).toLocaleDateString();
+			inviteExpiryDate =
+				parsed.status === 'invalid' ? '' : inviteExpiryDateFmt.format(new Date(parsed.expMs));
 			copied = false;
 			copyFailed = false;
 			status = 'done';

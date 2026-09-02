@@ -663,6 +663,10 @@ describe('/event/[id] — the date', () => {
 		expect(date).toMatch(/Tuesday/i);
 		expect(date).toMatch(/September/i);
 		expect(date).toContain('1');
+		// #207 rule 7, Gama ruling 2 — this header is a NARRATIVE date (weekday +
+		// month name), explicitly EXEMPT from the YYYY-MM-DD rule: it must never
+		// collapse to a bare ISO string.
+		expect(date.trim()).not.toMatch(/^\d{4}-\d{2}-\d{2}$/);
 		// …and it lives inside the time line, which still carries both ends.
 		const time = container.querySelector('[data-testid="event-detail-time"]')!.textContent ?? '';
 		expect(time).toContain('19:00');

@@ -184,12 +184,16 @@
 		hour12: false
 	});
 
-	// Short date for recent rows (e.g. "14 Jun") — recent rows lack day-group
-	// headers, so each row needs its own date label to be distinguishable.
-	const shortDateFmt = new Intl.DateTimeFormat(undefined, {
+	// ISO date for recent rows (e.g. "2026-06-15") — #207 rule 7 (PO standing
+	// rule, Gama's 2026-09-02 rulings): row-level dates are tabular/numeric, so
+	// they render as the Tallinn ISO calendar day (en-CA gives ISO date format).
+	// Recent rows lack day-group headers, so each row still needs its own date
+	// label to be distinguishable.
+	const shortDateFmt = new Intl.DateTimeFormat('en-CA', {
 		timeZone: TZ,
-		day: 'numeric',
-		month: 'short'
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
 	});
 
 	/**

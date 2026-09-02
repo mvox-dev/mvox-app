@@ -2131,16 +2131,16 @@
 			.map((row) => ({ id: row.personId, label: row.name }))
 	);
 
-	/** Season bounds are date-ONLY (`yyyy-mm-dd`), so they format in UTC — the
-	 *  same guard `library/+page.svelte`'s `formatDate` uses to keep a date-only
-	 *  value from sliding to the previous day in a negative offset. Options and
-	 *  the implicit-locale shape match `event/[id]/+page.svelte`'s `dateFmt`;
-	 *  a raw ISO string never reaches the UI (#132/T3 review F3). */
-	const seasonDateFmt = new Intl.DateTimeFormat(undefined, {
+	/** Season bounds are date-ONLY (`yyyy-mm-dd`) and NUMERIC/TABULAR text — #207
+	 *  rule 7 (PO standing rule, Gama's 2026-09-02 rulings): they render as the
+	 *  ISO calendar date itself, `YYYY-MM-DD` (en-CA gives ISO date format). Still
+	 *  UTC-anchored — the same guard that keeps a date-only value from sliding to
+	 *  the previous day in a negative offset, now the identity for an ISO input. */
+	const seasonDateFmt = new Intl.DateTimeFormat('en-CA', {
 		timeZone: 'UTC',
 		year: 'numeric',
-		month: 'short',
-		day: 'numeric'
+		month: '2-digit',
+		day: '2-digit'
 	});
 
 	/** The displayable form of a season bound, or '' when the bound is unset —
@@ -2564,18 +2564,28 @@
 	 *  form-wide failure (no org, a failed write) that names no single box. */
 	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | null;
 
-	/** The created event's start, in the viewer's locale AND Tallinn wall clock —
-	 *  for the success announcement. A raw ISO string never reaches the UI
-	 *  (#132/T3 review F3). */
-	const eventCreateStatusFmt = new Intl.DateTimeFormat(undefined, {
+	/** The created event's start, Tallinn wall clock, for the success
+	 *  announcement — #207 rule 7 (PO standing rule, Gama's 2026-09-02
+	 *  rulings): the date part is NUMERIC/TABULAR text, so it renders as the
+	 *  ISO calendar date `YYYY-MM-DD` (en-CA gives ISO date format); the time
+	 *  part stays 24h `HH:MM` (rule 5, already landed). Composed as two
+	 *  formatters — a single combined Intl format would insert a locale comma
+	 *  between date and time instead of the required plain space. */
+	const eventCreateStatusDateFmt = new Intl.DateTimeFormat('en-CA', {
 		timeZone: EVENT_CREATE_TZ,
 		year: 'numeric',
-		month: 'short',
-		day: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	});
+	const eventCreateStatusTimeFmt = new Intl.DateTimeFormat('en-GB', {
+		timeZone: EVENT_CREATE_TZ,
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23'
 	});
+	function eventCreateStatusFmt(at: Date): string {
+		return `${eventCreateStatusDateFmt.format(at)} ${eventCreateStatusTimeFmt.format(at)}`;
+	}
 
 	let eventCreateOpen = $state(false);
 	// Which entry point opened the form — the ONLY thing that decides whether a
@@ -3621,7 +3631,7 @@
 			// inherited series name (or, failing that, the type) names it.
 			eventCreateStatus = m.event_created({
 				name: trimmedName || eventCreateSeriesDefaults?.name || typeValue,
-				when: eventCreateStatusFmt.format(new Date(startDatetime))
+				when: eventCreateStatusFmt(new Date(startDatetime))
 			});
 			closeEventCreateForm();
 			// The write just changed the world this page reads — refresh for real

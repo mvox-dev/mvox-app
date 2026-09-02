@@ -187,14 +187,20 @@ function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-/** How a season bound must READ in the panel (#132/T3 review F3): a localized
- *  date, never the raw ISO string. Mirrors the page's `seasonDateFmt` — UTC, so
- *  a date-only value never slides a day back in a negative offset. */
-const DISPLAY_FMT = new Intl.DateTimeFormat(undefined, {
+/** How a season bound must READ in the panel — #207 rule 7 (PO standing rule,
+ *  Gama's 2026-09-02 rulings): season bounds are NUMERIC/TABULAR date text, so
+ *  they render as the ISO calendar date itself, `YYYY-MM-DD`. The oracle is the
+ *  en-CA Intl trick the codebase already proved for ISO output (AgendaList's
+ *  `groupKeyFmt`) — UTC-anchored, so a date-only value never slides a day back
+ *  in a negative offset (the same guard the old localized formatter carried;
+ *  #132/T3 review F3's "no raw ISO" ruling is superseded by rule 7 for
+ *  numeric/tabular contexts). For a date-only ISO input this is the IDENTITY:
+ *  displayDate(iso) === iso — asserted below so the oracle can't drift. */
+const DISPLAY_FMT = new Intl.DateTimeFormat('en-CA', {
 	timeZone: 'UTC',
 	year: 'numeric',
-	month: 'short',
-	day: 'numeric'
+	month: '2-digit',
+	day: '2-digit'
 });
 function displayDate(iso: string): string {
 	return DISPLAY_FMT.format(new Date(iso));
@@ -566,27 +572,50 @@ describe('agenda — season fields edit inline (event/[id] per-field pattern)', 
 		});
 	});
 
-	// #132/T3 review F3 — the two bounds used to render as bare ISO strings side
-	// by side, with the only labels riding on the pencils' aria-label. Nobody —
-	// sighted or screen-reader — could tell which was which, and an unset bound
-	// was a lone, unexplained ✎.
-	it('the dates render LOCALIZED (never the raw ISO string) and each carries its own VISIBLE label', async () => {
+	// #207 rule 7 (INVERTS #132/T3 review F3's "never the raw ISO string" for
+	// this panel): season bounds are numeric/tabular date text, so the panel
+	// shows exactly the ISO calendar date, `YYYY-MM-DD` — which for a date-only
+	// bound IS the stored string. The F3 gains that survive: each bound still
+	// carries its own VISIBLE text label (the label, not the format, is what
+	// tells start from end), and an unset bound still says so in words.
+	it('the dates render as ISO YYYY-MM-DD (#207 rule 7) and each carries its own VISIBLE label', async () => {
 		const container = await renderReady();
 		const panel = await openPanel(container);
 
 		await waitFor(() => {
 			expect(q(container, 'season-manage-start_date')).not.toBeNull();
 		});
-		expect(q(container, 'season-manage-start_date')?.textContent).toContain(
-			displayDate(SEASON_START)
-		);
-		expect(q(container, 'season-manage-end_date')?.textContent).toContain(displayDate(SEASON_END));
-		// No raw ISO anywhere in the panel's rendered text.
-		expect(panel.textContent).not.toContain(SEASON_START);
-		expect(panel.textContent).not.toContain(SEASON_END);
+		// Oracle self-check: for a date-only value the ISO rendering IS the value.
+		expect(displayDate(SEASON_START)).toBe(SEASON_START);
+		expect(displayDate(SEASON_END)).toBe(SEASON_END);
+		// The panel shows exactly the YYYY-MM-DD strings — nothing localized.
+		expect(q(container, 'season-manage-start_date')?.textContent?.trim()).toBe(SEASON_START);
+		expect(q(container, 'season-manage-end_date')?.textContent?.trim()).toBe(SEASON_END);
 		// …and the labels are TEXT in the panel, not just aria on the pencils.
 		expect(panel.textContent).toContain('season_manage_start_date_label');
 		expect(panel.textContent).toContain('season_manage_end_date_label');
+	});
+
+	// #207 rule 7, DST edge — Europe/Tallinn switches to EEST on 2026-03-29 and
+	// back on 2026-10-25. A season bound ON a transition day must still render
+	// as that exact ISO calendar day: the formatter is UTC-anchored over a
+	// date-only value, so no timezone/DST arithmetic may shift it (the same
+	// slide-a-day trap the old localized formatter guarded against, now pinned
+	// with the transition days themselves).
+	it('DST edge: bounds ON the Tallinn spring-forward/fall-back days render as those exact ISO days', async () => {
+		const season = currentSeason(true);
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
+			...agendaResult(),
+			seasons: [{ ...season, startDate: '2026-03-29', endDate: '2026-10-25' }]
+		}));
+		const container = await renderReady();
+		await openPanel(container);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-start_date')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-start_date')?.textContent?.trim()).toBe('2026-03-29');
+		expect(q(container, 'season-manage-end_date')?.textContent?.trim()).toBe('2026-10-25');
 	});
 
 	it('a season with NO dates set says so — never a bare pencil, and never "Invalid Date"', async () => {
