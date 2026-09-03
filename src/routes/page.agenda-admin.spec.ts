@@ -81,8 +81,10 @@
 //       form wider than the ~343px a 375px viewport leaves inside the page
 //       padding. And NO element in any form subtree carries a fixed pixel
 //       width class of 344px or more.
-import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, createEvent, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
@@ -360,7 +362,9 @@ async function renderReady(): Promise<HTMLElement> {
 /** Every admin control/surface this pass is about — the fail-closed sweeps
  *  assert ALL of them absent, so a new leak cannot slip past one-by-one checks. */
 const ADMIN_TESTIDS = [
+	'agenda-admin-card', // #222 — the ONE bordered card wrapping header row + panel
 	'season-manage-gear',
+	'season-manage-label', // #222 — visible 'Manage season' text beside the gear
 	'season-manage-panel',
 	'season-create',
 	'season-create-form',
@@ -736,6 +740,288 @@ describe('agenda admin — #149/#213: the entry points live in one shared admin 
 		expect(toolbar).not.toBeNull();
 		expect((q(container, 'season-manage-gear') as HTMLElement)?.parentElement).toBe(toolbar);
 		expect((q(container, 'season-create') as HTMLElement)?.parentElement).toBe(toolbar);
+	});
+});
+
+// ── #222 — ONE CARD: the panel opens INSIDE the admin toolbar's frame ──────────
+//
+// Mihkel live-gate feedback: the season-manage panel used to render as a SECOND
+// stacked bordered frame below the toolbar, and the collapsed toolbar never
+// named what the gear opens. #222 merges the two into ONE card:
+//
+//   agenda-admin-card        NEW outer wrapper — carries THE single border
+//                            frame (the border/rounded classes that used to
+//                            sit on the toolbar element).
+//     agenda-admin-toolbar   the header row — KEEPS role="toolbar" + the #156
+//                            roving tabindex scoped to its 2 buttons, but
+//                            draws NO border of its own any more.
+//     season-manage-panel    when open: the header row's SIBLING inside the
+//                            card — NEVER a DOM descendant of the
+//                            role="toolbar" element. Keeps id="season-manage-
+//                            panel" / role="dialog" / testid (the gear's
+//                            aria-controls still resolves, #213 untouched);
+//                            loses its own border classes (no second frame).
+//
+// WHY the panel must NOT nest inside the role="toolbar" element (the naive
+// merge): handleAdminToolbarKeydown roves over
+// `toolbar.querySelectorAll('button:not([disabled])')` — a FULL-SUBTREE query,
+// not direct children. Nesting the open panel there would pull every panel
+// button (add-event, add-series, delete confirms, field pencils…) into
+// arrow-key roving, and ARIA forbids role="dialog" content inside
+// role="toolbar" anyway. The arity-2 test above only runs panel-CLOSED, so it
+// cannot see that regression — the panel-OPEN pins below are what make the
+// safe structure load-bearing.
+
+const CARD = 'agenda-admin-card';
+
+describe('agenda admin — #222: one card — the panel opens inside the toolbar frame', () => {
+	it('the card carries THE single border frame; the toolbar header row inside it draws none', async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, CARD)).not.toBeNull();
+		});
+		const card = q(container, CARD) as HTMLElement;
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+
+		expect(toolbar, 'the header row keeps its testid').not.toBeNull();
+		expect(card.contains(toolbar), 'the header row lives inside the card').toBe(true);
+
+		const cardClasses = Array.from(card.classList);
+		expect(cardClasses, 'the card is the bordered frame now').toContain('border');
+		expect(cardClasses, 'the frame keeps the rounded look').toContain('rounded-md');
+		expect(
+			Array.from(toolbar.classList),
+			'no border-in-border: the header row must NOT draw its own frame'
+		).not.toContain('border');
+	});
+
+	it("panel OPEN: season-manage-panel renders inside the card as the header row's SIBLING — never a descendant of role=\"toolbar\" — and draws no second frame", async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		const card = q(container, CARD) as HTMLElement;
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+		const panel = q(container, 'season-manage-panel') as HTMLElement;
+		expect(card).not.toBeNull();
+		expect(toolbar).not.toBeNull();
+		expect(panel).not.toBeNull();
+
+		expect(card.contains(panel), 'ONE card: the open panel expands INSIDE the frame').toBe(true);
+		expect(
+			toolbar.contains(panel),
+			'the panel must NEVER nest inside the role="toolbar" element (roving + ARIA)'
+		).toBe(false);
+		expect(panel.parentElement, 'panel and header row are SIBLINGS in the card').toBe(card);
+		expect(toolbar.parentElement, 'the header row is a direct child of the card').toBe(card);
+
+		expect(
+			Array.from(panel.classList),
+			'no second stacked frame: the panel draws no border of its own'
+		).not.toContain('border');
+	});
+
+	it("panel OPEN: the role=\"toolbar\" element still holds EXACTLY its 2 header buttons — the panel's many buttons never join the roving pool", async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		const card = q(container, CARD) as HTMLElement;
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+		// Non-vacuous: the card as a whole now holds MANY buttons (the panel's)…
+		expect(card.querySelectorAll('button').length).toBeGreaterThan(2);
+		// …but the roving query's root still sees exactly the 2 header members,
+		// in the #213 order ([+ Season] left, gear last for ml-auto).
+		const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button'));
+		expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual([
+			'season-create',
+			'season-manage-gear'
+		]);
+	});
+
+	it('panel OPEN: arrow keys on a panel-internal button do NOT rove focus into the header row', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-add-event')).not.toBeNull();
+		});
+
+		const addEvent = q(container, 'season-manage-add-event') as HTMLButtonElement;
+		addEvent.focus();
+		expect(document.activeElement).toBe(addEvent);
+
+		await fireEvent.keyDown(addEvent, { key: 'ArrowRight' });
+		expect(
+			document.activeElement,
+			'ArrowRight inside the panel must not jump focus to a header control'
+		).toBe(addEvent);
+		expect(document.activeElement).not.toBe(q(container, 'season-manage-gear'));
+		expect(document.activeElement).not.toBe(q(container, 'season-create'));
+
+		await fireEvent.keyDown(addEvent, { key: 'ArrowLeft' });
+		expect(
+			document.activeElement,
+			'ArrowLeft inside the panel must not jump focus to a header control'
+		).toBe(addEvent);
+	});
+
+	// #222 review F1 — the one-card merge put the panel's `{#if seasonManageOpen}`
+	// INSIDE the card's rights conditional. That conditional is the whole reason
+	// this pin exists: `loadForSelected()` calls `resetManagement()` SYNCHRONOUSLY,
+	// which blanks `manageableSeasonRights` AND `seasonCreateRights` to
+	// 'not-editor' for the entire duration of the async `loadFullAgenda()`
+	// round-trip. Both disjuncts of the card gate therefore go false mid-refresh,
+	// and a card that mounts only on rights would take the open panel down with it
+	// and re-mount it on the other side — exactly the teardown that every
+	// `keepSeasonManage: true` caller exists to prevent (series-only create, event
+	// create from the panel, event-convert occurrence failure, the season-manage
+	// delete flows). $state survives a remount; the DOM does not — focus drops to
+	// <body>, the panel's focus $effect re-fires and steals it back to the dialog,
+	// scroll position and caret state are lost, and it routes clean around
+	// `closeSeasonManagePanel`'s deliberate mid-run refusal (`seriesRunUnfinished
+	// || eventConvertRunUnfinished`, #196 review F1/F3) — the conversion form and
+	// the stopped-run 'N of M' notice live inside the panel.
+	//
+	// The existing survives-the-refresh pin (`every successful create refreshes
+	// the agenda` → series-only create) cannot see this: its `loadFullAgenda` mock
+	// resolves in the same microtask, so the rights-blank window never flushes to
+	// the DOM. Holding the refresh OPEN is what makes the window observable.
+	it('panel OPEN: the card survives the mid-refresh rights blank — a keepSeasonManage reload never unmounts the open panel while loadFullAgenda is in flight', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidSeries(container);
+
+		// Hold the post-create refresh open: while this promise is pending,
+		// resetManagement() has already blanked BOTH rights signals.
+		let releaseAgenda!: () => void;
+		loadFullAgendaMock.mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					releaseAgenda = () => resolve(agendaResult());
+				})
+		);
+
+		await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
+		await waitFor(() => {
+			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+		});
+		await waitFor(() => {
+			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
+		});
+
+		// The rights-blank window, mid-flight — the gear is legitimately gone here
+		// (it was gone pre-#222 too), but the PANEL must still be mounted.
+		expect(
+			q(container, 'season-manage-gear'),
+			'non-vacuous: the rights blank really is in effect — the gear is gone'
+		).toBeNull();
+		const panel = q(container, 'season-manage-panel');
+		expect(
+			panel,
+			'the open panel must NOT be torn down by the transient rights blank of its own refresh'
+		).not.toBeNull();
+
+		releaseAgenda();
+
+		// …and it is the SAME node on the other side: never unmounted, never
+		// remounted, so focus / scroll / caret inside it are undisturbed.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+		});
+		expect(
+			q(container, 'season-manage-panel'),
+			'the panel node survived the whole refresh — not a teardown + remount'
+		).toBe(panel);
+	});
+});
+
+// ── #222 — the collapsed header NAMES the card: visible 'Manage season' ────────
+//
+// Until the app manages more than one season (YAGNI), the collapsed header row
+// shows the 'Manage season' text beside the gear — reusing the EXISTING
+// season_manage_gear_label copy, no new key. The gear's accessible name then
+// COMES FROM that visible element (aria-labelledby), so the copy is authored
+// exactly once — no aria-label duplicate to drift per locale.
+
+describe("agenda admin — #222: visible 'Manage season' in the collapsed header", () => {
+	it('season-manage-label renders the season_manage_gear_label copy as visible PLAIN TEXT in the header row — not a button, not sr-only, not aria-hidden', async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, 'season-manage-label')).not.toBeNull();
+		});
+		const label = q(container, 'season-manage-label') as HTMLElement;
+		const toolbar = q(container, TOOLBAR) as HTMLElement;
+
+		expect(label.parentElement, 'the label sits IN the header row').toBe(toolbar);
+		expect(label.tagName, 'plain text, not another control').not.toBe('BUTTON');
+		// The message mock renders keys verbatim — this pins WHICH key feeds the
+		// label (the existing gear copy, no new key). The real four-locale copy
+		// ('Manage season' / 'Halda hooaega' / …) is pinned by the i18n test below.
+		expect(label.textContent?.trim()).toBe('season_manage_gear_label');
+		expect(Array.from(label.classList), 'VISIBLE text — not sr-only').not.toContain('sr-only');
+		expect(label.getAttribute('aria-hidden'), 'VISIBLE to AT too').toBeNull();
+	});
+
+	it("the gear's accessible name COMES FROM the visible label — aria-labelledby → season-manage-label, no duplicated aria-label — and still resolves with the panel open", async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, 'season-manage-gear')).not.toBeNull();
+		});
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		const label = q(container, 'season-manage-label') as HTMLElement;
+		expect(label, 'the visible label must exist for the gear to point at').not.toBeNull();
+
+		expect(label.id, 'the label needs an id to be pointed at').toBeTruthy();
+		expect(gear.getAttribute('aria-labelledby')).toBe(label.id);
+		expect(
+			gear.hasAttribute('aria-label'),
+			'ONE authored copy: aria-labelledby replaces the aria-label, no duplicate'
+		).toBe(false);
+		// The real accname algorithm (testing-library runs it) resolves the gear
+		// BY the label's text — a dangling id or empty label cannot pass this.
+		expect(within(container).getByRole('button', { name: 'season_manage_gear_label' })).toBe(gear);
+
+		// The label is gated WITH the gear (same {#if showSeasonManageGear}), so
+		// the name cannot dangle while the panel is open either.
+		await openPanel(container);
+		expect(q(container, 'season-manage-label'), 'label stays mounted while open').not.toBeNull();
+		expect(
+			(q(container, 'season-manage-gear') as HTMLElement).getAttribute('aria-labelledby')
+		).toBe(label.id);
+	});
+
+	it("create-rights-only (no manageable season): the header shows [+ Season] but NO 'Manage season' label and NO gear", async () => {
+		// showSeasonCreate and showSeasonManageGear are INDEPENDENT gates: a fresh
+		// collective can have create rights with nothing to manage. The label must
+		// ride the GEAR's gate, not the card's outer OR-conditional — 'Manage
+		// season' beside a control that does not exist is a lie.
+		loadFullAgendaMock.mockResolvedValue(noSeasonsResult());
+		resolveManageRightsMock.mockResolvedValue('editor');
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
+		expect(q(container, CARD), 'the card still mounts for its one control').not.toBeNull();
+		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-manage-label')).toBeNull();
+	});
+});
+
+// ── #222 — i18n: the reused visible-label copy, exact, all four locales ────────
+
+describe('agenda admin — #222: season_manage_gear_label copy exists in all four locales (reused key, no new copy)', () => {
+	it('the exact agreed copy per locale', () => {
+		const expected = {
+			en: 'Manage season',
+			et: 'Halda hooaega',
+			lv: 'Pārvaldīt sezonu',
+			uk: 'Керувати сезоном'
+		} as const;
+		for (const [locale, copy] of Object.entries(expected)) {
+			const msgs = JSON.parse(
+				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
+			) as Record<string, string>;
+			expect(msgs.season_manage_gear_label, `${locale}.json season_manage_gear_label`).toBe(copy);
+		}
 	});
 });
 

@@ -469,7 +469,18 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		const gear = q(container, 'season-manage-gear') as HTMLElement;
 		expect(gear.tagName).toBe('BUTTON');
 		// Icon-only affordance MUST carry a name a screen reader can announce.
-		expect(gear.getAttribute('aria-label')).toBeTruthy();
+		// #222 — the name is COMPUTED from the visible 'Manage season' text
+		// (season-manage-label) via aria-labelledby, not authored twice as a
+		// separate aria-label: one copy per locale, visible and announced alike.
+		const labelledby = gear.getAttribute('aria-labelledby');
+		expect(labelledby, 'the gear must take its name from the visible label').toBeTruthy();
+		const labelEl = container.querySelector(`[id="${labelledby}"]`) as HTMLElement;
+		expect(labelEl, 'aria-labelledby must resolve to an element').not.toBeNull();
+		expect(labelEl.getAttribute('data-testid')).toBe('season-manage-label');
+		// The message mock renders keys verbatim — the computed name IS the
+		// season_manage_gear_label copy ('Manage season' in en).
+		expect(labelEl.textContent?.trim()).toBe('season_manage_gear_label');
+		expect(gear.hasAttribute('aria-label'), 'no duplicated aria-label authoring').toBe(false);
 		expect(gear.closest('[data-testid^="agenda-row-"]')).toBeNull();
 		expect(gear.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
 
@@ -1225,9 +1236,11 @@ describe('agenda — closing the panel, and what survives it', () => {
 	// #132/T3 review F1 — the Escape assertions below dispatch at
 	// `document.activeElement`, NEVER at the panel element: firing the key at the
 	// panel proves only that the handler is bound, not that a real keypress can
-	// ever reach it. The panel is a SIBLING of the gear's wrapper, so unless the
-	// open ACTUALLY moves focus into the dialog, a browser Escape dispatches at
-	// the gear (or <body>) and never enters the panel's subtree.
+	// ever reach it. #222 containment model: the panel renders inside the shared
+	// agenda-admin-card as a SIBLING of the role="toolbar" header row that holds
+	// the gear — never inside the toolbar element itself — so unless the open
+	// ACTUALLY moves focus into the dialog, a browser Escape dispatches at the
+	// gear (or <body>) and never enters the panel's subtree.
 	function pressEscapeAtFocus(): Promise<boolean> {
 		return fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
 	}

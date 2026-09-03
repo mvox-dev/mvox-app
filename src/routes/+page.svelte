@@ -2588,11 +2588,12 @@
 	}
 
 	/** Focus moves INTO the dialog the moment it opens (#132/T3 review F1). Without
-	 *  this the panel's own Escape handler is unreachable in a real browser: the
-	 *  panel is a SIBLING of the gear's wrapper, so a keypress at the still-focused
-	 *  gear never enters the panel's subtree and never bubbles to `onkeydown`. It
-	 *  is also what `role="dialog"` promises a screen-reader user. Same shape as
-	 *  the season-CREATE form's focus effect above; both deps are stable while the
+	 *  this the panel's own Escape handler is unreachable in a real browser: #222
+	 *  renders the panel as a SIBLING of the toolbar header row inside the shared
+	 *  agenda-admin-card, so a keypress at the still-focused gear never enters the
+	 *  panel's subtree and never bubbles to `onkeydown`. It is also what
+	 *  `role="dialog"` promises a screen-reader user. Same shape as the
+	 *  season-CREATE form's focus effect above; both deps are stable while the
 	 *  panel is open, so this runs once per open and never steals focus back. */
 	$effect(() => {
 		if (seasonManageOpen && seasonManagePanelEl) seasonManagePanelEl.focus();
@@ -5170,40 +5171,79 @@
 								</button>
 							</div>
 						{/if}
-						<!-- #149/#213 — [⚙] season-manage and [+ Season] triggers grouped
-						     into one admin toolbar (shared border, consistent button
-						     sizing) so they read as one admin surface. #213 removed the
-						     page-level [+ Event] (event creation lives inside the panel,
-						     season-manage-add-event) and made the gear a TOGGLE: the
-						     same button opens AND closes the panel (aria-expanded +
+						<!-- #149/#213/#222 — [⚙] season-manage and [+ Season] triggers,
+						     plus the panel the gear opens, now share ONE card
+						     (agenda-admin-card): the card carries the single bordered
+						     frame; the role="toolbar" header row inside it holds the two
+						     triggers and draws no border of its own; the season-manage
+						     panel, when open, renders as the header row's SIBLING inside
+						     the same card (never a descendant of the toolbar element —
+						     handleAdminToolbarKeydown roves a FULL-SUBTREE button query,
+						     so nesting the panel there would pull every panel button into
+						     arrow-key roving, and role="dialog" content inside
+						     role="toolbar" is invalid ARIA nesting besides). #213 removed
+						     the page-level [+ Event] (event creation lives inside the
+						     panel, season-manage-add-event) and made the gear a TOGGLE:
+						     the same button opens AND closes the panel (aria-expanded +
 						     aria-controls), so the panel's own internal close button is
 						     gone too. Each surviving control keeps its OWN pre-existing
 						     rights gate (showSeasonManageGear / showSeasonCreate+
 						     !seasonCreateOpen) — this is a visual grouping only, not a
-						     rights change. The toolbar itself only mounts when at least
-						     one control would show, so a non-editor never sees an empty
-						     frame. The panel/form these open (season-manage-panel,
-						     season-create-form) render below, unchanged, outside the
-						     toolbar.
+						     rights change. The card itself only mounts when at least one
+						     control would show, so a non-editor never sees an empty
+						     frame. The season-create-form this opens renders below,
+						     unchanged, outside the card.
 						     #213 SPIKE finding on Gama ruling (2): the DEFAULT state (a
 						     manageable season, its editor, nothing queued behind it)
 						     renders BOTH the gear and [+ Season] at once, so role="toolbar"
 						     + the #156 roving tabindex are NOT degenerate at arity 2 and
 						     are KEPT.
-						     #149 review F2 — `flex`, NOT `w-fit`: the frame must SPAN the
-						     row (not hug its two buttons) for the gear's `ml-auto` to have
-						     space to push against — right-alignment needs a spanning row,
-						     not a fit-content one. `flex-wrap` — not overflow — is what
-						     happens if the row is ever too narrow for both buttons. -->
-						{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)}
+						     #149 review F2 — `flex`, NOT `w-fit`: the header row must SPAN
+						     the width (not hug its two buttons) for the gear's `ml-auto` to
+						     have space to push against — right-alignment needs a spanning
+						     row, not a fit-content one. `flex-wrap` — not overflow — is what
+						     happens if the row is ever too narrow for both buttons.
+						     #222 — the visible 'Manage season' label sits inside the SAME
+						     `{#if showSeasonManageGear}` gate as the gear (not the outer
+						     OR-conditional), so it never names a control that does not
+						     exist for a create-rights-only caller. It renders right after
+						     the gear (not before) so the gear's own `ml-auto` — required
+						     to stay on the button itself, #149's right-alignment pin —
+						     pushes the icon+label pair together to the row's right edge;
+						     giving the label its own `ml-auto` too would split the free
+						     space between them instead of grouping them.
+						     #222 review F1 — `|| seasonManageOpen` is LOAD-BEARING, not
+						     belt-and-braces. Pre-#222 the panel had its own top-level
+						     `{#if seasonManageOpen}` and so outlived the toolbar; folding it
+						     into the card put its lifetime under the card's RIGHTS gate, and
+						     `loadForSelected()` calls `resetManagement()` synchronously —
+						     blanking `manageableSeasonRights` AND `seasonCreateRights` to
+						     'not-editor' for the whole `loadFullAgenda()` round-trip. Both
+						     disjuncts go false mid-refresh, so a rights-only gate would
+						     unmount the open panel and remount it on the other side: exactly
+						     what every `loadForSelected({ keepSeasonManage: true })` caller
+						     exists to prevent, and a clean route around
+						     `closeSeasonManagePanel`'s mid-run refusal (`seriesRunUnfinished
+						     || eventConvertRunUnfinished`, #196 review F1/F3) — the
+						     conversion form and the stopped-run 'N of M' notice live in
+						     there. `$state` survives a remount; DOM focus, scroll and caret
+						     do not. Adding the open panel as its own disjunct restores
+						     main's panel lifetime exactly and introduces no new flash: the
+						     GEAR still vanishes during that window (it did pre-#222 too),
+						     only the frame around the already-open panel now persists. -->
+						{#if showSeasonManageGear || seasonManageOpen || (showSeasonCreate && !seasonCreateOpen)}
 							<div
-								data-testid="agenda-admin-toolbar"
-								role="toolbar"
-								aria-label={m.agenda_admin_toolbar_label()}
-								tabindex="-1"
-								class="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-ink-4 p-1.5"
-								onkeydown={handleAdminToolbarKeydown}
+								data-testid="agenda-admin-card"
+								class="mb-3 rounded-md border border-ink-4 p-1.5"
 							>
+								<div
+									data-testid="agenda-admin-toolbar"
+									role="toolbar"
+									aria-label={m.agenda_admin_toolbar_label()}
+									tabindex="-1"
+									class="flex flex-wrap items-center gap-2"
+									onkeydown={handleAdminToolbarKeydown}
+								>
 								<!-- #213 review F1 — DOM ORDER carries the right-alignment:
 								     `margin-left:auto` on the FIRST flex item absorbs the free
 								     space BEFORE it and packs everything against the right edge,
@@ -5241,7 +5281,7 @@
 										type="button"
 										data-testid="season-manage-gear"
 										bind:this={seasonManageGearEl}
-										aria-label={m.season_manage_gear_label()}
+										aria-labelledby="season-manage-label"
 										aria-expanded={seasonManageOpen}
 										aria-controls="season-manage-panel"
 										disabled={seasonManageGearDisabled}
@@ -5252,21 +5292,27 @@
 									>
 										<span aria-hidden="true">⚙</span>
 									</button>
+									<!-- #222 — visible collapsed-header name for the card, reusing
+									     the gear's existing copy so it is authored once: the gear's
+									     accessible name is COMPUTED from this element via
+									     aria-labelledby above (no separately-authored aria-label). -->
+									<span id="season-manage-label" data-testid="season-manage-label" class="text-xs text-ink">
+										{m.season_manage_gear_label()}
+									</span>
 								{/if}
 							</div>
-						{/if}
-						{#if seasonManageOpen}
-							<div
-								id="season-manage-panel"
-								data-testid="season-manage-panel"
-								bind:this={seasonManagePanelEl}
-								role="dialog"
-								aria-label={m.season_manage_panel_label()}
-								tabindex="-1"
-								class="mb-3 flex flex-col gap-3 border border-ink-5 p-3"
-								onkeydown={onSeasonManagePanelKeydown}
-							>
-								<!-- #213 — the internal close × is gone; the gear (above, in
+							{#if seasonManageOpen}
+								<div
+									id="season-manage-panel"
+									data-testid="season-manage-panel"
+									bind:this={seasonManagePanelEl}
+									role="dialog"
+									aria-label={m.season_manage_panel_label()}
+									tabindex="-1"
+									class="mt-3 flex flex-col gap-3 p-3"
+									onkeydown={onSeasonManagePanelKeydown}
+								>
+									<!-- #213 — the internal close × is gone; the gear (above, in
 								     the toolbar) is the sole close control now, carrying the
 								     same refusal guard that button used to.
 								     #217 — the season's OWN delete now shares this header row:
@@ -6358,7 +6404,9 @@
 									{/if}
 								</div>
 							</div>
-						{/if}
+							{/if}
+						</div>
+					{/if}
 						<!-- #197 review F5 — the delete RESULT, same contract as
 						     `roster-section-remove-status` (WCAG 4.1.3): mounted from the
 						     page's first render (a live region announces only CHANGES to its
