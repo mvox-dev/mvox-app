@@ -1,0 +1,180 @@
+{
+  "summary": "Pre-RED verification for #235 — InviteSurface alignment on /admin",
+  "agentCount": 2,
+  "logs": [],
+  "result": {
+    "verify": {
+      "claims": [
+        {
+          "claim": "Repo guard: ~/workspace-app origin is mvox-app.git",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+        },
+        {
+          "claim": "Working tree state: on branch feat/222-season-manage-card (a pipeline branch), not main; uncommitted changes present but unrelated to InviteSurface (src/routes/+page.svelte, page.agenda-admin.spec.ts — #222 season-card work) plus untracked probe/pipeline-arg files",
+          "verdict": "CONFIRMED",
+          "evidence": "git status: 'On branch feat/222-season-manage-card'; modified: src/routes/+page.svelte, src/routes/page.agenda-admin.spec.ts; HEAD at 70c78b5 'feat(#222): season management as one card'. This work is read-only/unrelated to issue #235."
+        },
+        {
+          "claim": "InviteSurface.svelte:285 root is `<div class=\"mx-auto flex w-full max-w-md flex-col gap-4\">`",
+          "verdict": "CONFIRMED",
+          "evidence": "src/lib/components/admin/InviteSurface.svelte:285"
+        },
+        {
+          "claim": "Standalone /admin/invite route wraps InviteSurface in `<main class=\"min-h-screen bg-paper px-6 py-10 text-ink\">` with no additional width constraint — full-bleed main, so InviteSurface's own mx-auto max-w-md is the sole centering/width mechanism there",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/admin/invite/+page.svelte:15-17 — `<main class=\"min-h-screen bg-paper px-6 py-10 text-ink\"><InviteSurface /></main>`, no props passed (uncontrolled/default mode, heading defaults to 'h1')."
+        },
+        {
+          "claim": "/admin embed: outer column wrapper is `<div class=\"mx-auto flex w-full max-w-2xl flex-col gap-6\">` at line 501; InviteSurface is mounted at lines 783-788 inside `<section data-testid=\"admin-invite-section\" class=\"flex flex-col gap-3\">` (line 777), passing presetDb/presetDbEntityId/presetDbName/heading=\"h2\" (controlled mode) — matches issue's cited 501-502 and 777-790 exactly",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/admin/+page.svelte:500-502 (main+outer div, max-w-2xl), :777 (section open), :783-788 (<InviteSurface presetDb={cfg?.db ?? ''} presetDbEntityId={dbEntityId ?? ''} presetDbName={selected?.name ?? ''} heading=\"h2\" />), :789-790 (section/if close). Line numbers match the issue's citation verbatim, no drift."
+        },
+        {
+          "claim": "Bug mechanism: InviteSurface's own root div re-applies `mx-auto max-w-md` INSIDE the admin page's already-centered `max-w-2xl` column, producing a nested/double-centered, narrower (448px vs 672px) block whose left edge doesn't align with the admin-roles-admins/admin-roles-librarians sections above it (which are plain `flex flex-col gap-3`, full column width, no mx-auto/max-w)",
+          "verdict": "CONFIRMED",
+          "evidence": "InviteSurface.svelte:285 vs admin/+page.svelte:501 (outer max-w-2xl) and :605/:688 (sibling sections `class=\"flex flex-col gap-3\"`, no width constraint of their own — they simply fill the max-w-2xl column). The invite section is the only one under that column that constrains its own width again."
+        },
+        {
+          "claim": "No other InviteSurface mount site exists besides the two above",
+          "verdict": "CONFIRMED",
+          "evidence": "grep -rn \"InviteSurface\" src across .svelte/.ts: only src/routes/admin/+page.svelte:56/783 (import+mount) and src/routes/admin/invite/+page.svelte:12/16 (import+mount); all other hits are spec-file comments/mocks referencing it, not additional mounts."
+        },
+        {
+          "claim": "InviteSurface already takes a context-dependent presentation prop — `heading: 'h1' | 'h2'` — used exactly to vary root/heading markup by mount site (standalone gets h1/text-2xl, embedded gets h2/text-lg); the same pattern extends naturally to a layout/variant prop for the root div's width/centering classes, which is the cleanest mechanism (vs. moving the mx-auto/max-w-md wrapper out to each call site, which would require touching both route files and lose the component's current pixel-identical-by-default standalone behavior for any future/forgotten mount)",
+          "verdict": "CONFIRMED",
+          "evidence": "InviteSurface.svelte:47-59 (heading prop, comment explicitly ties it to 'the standalone route needs the page-level <h1>; embedded under /admin's own <h1> it must be an <h2>') and :290-295 (svelte:element gated by heading). Recommending a sibling prop (e.g. `embedded`/`layout`) gating the line-285 div's `mx-auto max-w-md` off in embedded mode is a design inference built directly on this existing, already-approved mechanism — not itself read from any file, so the recommendation clause is speculative even though every supporting fact is verified."
+        },
+        {
+          "claim": "Standalone-route pixel-identity constraint: default value of the new prop must reproduce today's exact root classes (`mx-auto flex w-full max-w-md flex-col gap-4`) unchanged, since /admin/invite/+page.svelte:16 passes no width-related prop today and issue #235 requires /admin/invite to stay pixel-identical",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/admin/invite/+page.svelte:16 `<InviteSurface />` — zero props for width/layout today, so an added prop must default to the current standalone classes to avoid a behavior change there."
+        },
+        {
+          "claim": "No existing spec pins InviteSurface's root classes or either mount site's layout — searched for class-contract/375px-fluid/touch-target blocks and mx-auto/max-w assertions across page.admin-invite.spec.ts, page.admin.spec.ts, page.admin-invite-session-expired.spec.ts, page.navshell-merge.spec.ts, page.admin-database.spec.ts",
+          "verdict": "CONFIRMED",
+          "evidence": "grep for 'mx-auto|max-w-md|max-w-2xl|class=|toHaveClass' across those 5 spec files: zero hits. The only files in the repo with '375'/'class-contract'/'touch-target' terms are page.agenda-admin.spec.ts (agenda-admin creation forms, grep for 'invite' in it: zero hits — unrelated feature) and page.library-create-work.spec.ts (unrelated). So a fix (prop + class change) needs NEW specs asserting the root-class contract for both mount modes; none currently constrain or would break."
+        }
+      ],
+      "risks": [
+        "Recommendation to add a variant/embedded prop (rather than class-gating via a passed-in class override, or moving the wrapper out to each route) is a design judgment, not a verified fact — reasonable implementers could instead pass an override `class` prop or restructure via a slot; flagged as such above.",
+        "Did not run the test suite or dev server to visually confirm the double-centering renders as described (e.g. via Playwright/screenshot) — the finding rests on static class/DOM analysis of max-w-2xl outer column vs max-w-md inner div, which is a standard Tailwind nested-centering effect but wasn't rendered live in this pass.",
+        "Did not exhaustively grep the whole repo for every *.spec.ts (only the specs named in the issue plus a repo-wide keyword grep for max-w/mx-auto/375/class-contract/touch-target) — a spec outside that keyword net that snapshots full-page HTML (e.g. a snapshot test) could still incidentally pin these classes without matching the grep terms; none were found by filename pattern (page.admin*, page.navshell-merge) which should cover all admin/invite specs, but this isn't a 100%-exhaustive guarantee.",
+        "Did not check src/routes/page.admin-collective-name.spec.ts, page.admin-lookup-reduction.spec.ts, page.admin-self-note-inline.spec.ts individually for stray class assertions (only covered by the repo-wide grep, not per-file confirmation) — low risk given the grep returned zero total hits, but noting for completeness."
+      ],
+      "notes": "Repo confirmed (mvox-app.git). Tree is on feat/222-season-manage-card (a pipeline branch, HEAD 70c78b5) with unrelated uncommitted #222 season-card changes plus untracked #224/#233 pipeline artifacts — none of this touches InviteSurface or /admin, so issue #235 work can proceed on this branch or a fresh one without conflict; flagging for the team-lead to decide branch strategy since this task was read-only.\n\nSummary of findings for issue #235:\n1. Root cause confirmed: InviteSurface.svelte:285 (`mx-auto flex w-full max-w-md flex-col gap-4`) nests inside admin/+page.svelte's own `mx-auto max-w-2xl` column (line 501), producing a double-centered narrower block that doesn't left-align with the admin-roles-admins/librarians sections above it (which are unconstrained `flex flex-col gap-3`, filling the parent column).\n2. Only two mount sites exist: src/routes/admin/invite/+page.svelte:16 (bare `<InviteSurface />`, uncontrolled mode, needs today's max-w-md/mx-auto/h1 preserved exactly) and src/routes/admin/+page.svelte:783-788 (controlled mode, presetDb/presetDbEntityId/presetDbName/heading=\\\"h2\\\", inside the max-w-2xl column) — issue's cited line numbers (501-502, 777-790) match the current file exactly, no drift.\n3. Mechanism recommendation: InviteSurface already carries a mount-context presentation prop (`heading: 'h1'|'h2'`, InviteSurface.svelte:47-59) used for exactly this kind of standalone-vs-embedded differentiation. Extending that same pattern — a new prop (e.g. `embedded`/`layout`) gating the root div's `mx-auto max-w-md` off when embedded, defaulting to today's classes so the standalone route needs zero changes and stays pixel-identical — is the cleanest fit, consistent with the existing convention, over moving the width wrapper out to each call site (which would touch both routes and remove the component's self-contained default-safe behavior).\n4. No existing spec pins these classes (searched page.admin-invite.spec.ts, page.admin.spec.ts, page.admin-invite-session-expired.spec.ts, page.navshell-merge.spec.ts, page.admin-database.spec.ts, plus repo-wide grep for max-w/mx-auto/toHaveClass) — a class-contract fix needs new RED specs for both mount modes (standalone keeps max-w-md/mx-auto; embedded drops them to match sibling section width), and should also assert touch-target/375px-fluid behavior is unaffected by the class change per house convention (page.agenda-admin.spec.ts shows the project's existing pattern for such blocks, though that file itself is unrelated to invite).\n\nNo code changes made — this was a read-only investigation per the task's FIRST ACTION guard and issue's phrasing (\\\"Verify: ...\\\")."
+    },
+    "sweep": {
+      "claims": [
+        {
+          "claim": "Repo remote is mvox-app.git (gate passes)",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+        },
+        {
+          "claim": "Tree sits on feat/222-season-manage-card with uncommitted #222 work and untracked #224-232 research files, not on main",
+          "verdict": "CONFIRMED",
+          "evidence": "git branch --show-current -> feat/222-season-manage-card; git status shows modified +page.svelte/page.agenda-admin.spec.ts and untracked args-224-232.json/research-224-232.json/probe-233...ts"
+        },
+        {
+          "claim": "InviteSurface.svelte's root div (mx-auto max-w-md) double-centers inside admin/+page.svelte's own mx-auto max-w-2xl column, causing the mis-indent",
+          "verdict": "CONFIRMED",
+          "evidence": "InviteSurface.svelte:285 class=\"mx-auto flex w-full max-w-md flex-col gap-4\"; admin/+page.svelte:501 outer column class=\"mx-auto flex w-full max-w-2xl flex-col gap-6\", invite section mounted :777-790"
+        },
+        {
+          "claim": "Only two InviteSurface consumers exist repo-wide (embedded admin page, standalone admin/invite route); two spec files reference it by name only",
+          "verdict": "CONFIRMED",
+          "evidence": "grep -rln InviteSurface (svelte/ts/md, repo-wide) -> admin/+page.svelte, admin/invite/+page.svelte, page.admin.spec.ts, page.admin-database.spec.ts; no other hits"
+        },
+        {
+          "claim": "No spec pins the root div's mx-auto/max-w-md classes",
+          "verdict": "CONFIRMED",
+          "evidence": "grep -n 'class|mx-auto|max-w' on page.admin-invite.spec.ts and page.admin-invite-session-expired.spec.ts -> no class-string hits"
+        },
+        {
+          "claim": "#232's InviteSurface scope (Status union + generation guard + loadPrerequisites) is a distinct line-region from #235's target (root template div), so adjacency/conflict risk is low",
+          "verdict": "CONFIRMED",
+          "evidence": "Status type InviteSurface.svelte:67-76; loadPrerequisites+effects :131-221; #235 target root div :285 (plus admin/invite/+page.svelte:16) - non-overlapping regions"
+        },
+        {
+          "claim": "Locale axis is n/a for #235 - no message strings change",
+          "verdict": "CONFIRMED",
+          "evidence": "Fix is class/structural only on InviteSurface.svelte:285 and admin/invite/+page.svelte:16; no m.admin_invite_* call sites in touched region"
+        },
+        {
+          "claim": "Recommended mechanism: move mx-auto max-w-md from InviteSurface's own root div to a wrapper div in the standalone admin/invite/+page.svelte route",
+          "verdict": "UNVERIFIABLE",
+          "evidence": "Design recommendation (mechanism engineer's call per issue #235 point 3), not a checkable fact - based on: standalone route currently has no wrapper (admin/invite/+page.svelte:15-17 is bare <main><InviteSurface/></main>), so classes can move outward with zero new props and zero script-block changes"
+        },
+        {
+          "claim": "#235 should be slotted before #232 in the R1 run, no reason against",
+          "verdict": "CONFIRMED",
+          "evidence": "#232 issue text explicitly states 'Ordering: behind #222 and LAST of the epic'; #235 touches a non-overlapping, low-risk region confirmed above - consistent with running #235 earlier in the same R1 batch"
+        }
+      ],
+      "risks": [
+        "This was a read-only sweep/analysis per the task's explicit instruction (repo guard READ-ONLY) - no code was changed and no pipeline was launched; if the parent agent expected implementation, that did not happen here.",
+        "The mechanism recommendation (move classes to the standalone route wrapper) is the analyst's judgment call, offered as the lower-risk of the two options the issue names (variant prop vs. wrapper move) - not independently validated by running the app or a visual diff.",
+        "Team is mid-pipeline on #222 (uncommitted changes on feat/222-season-manage-card) and has untracked research/pipeline-args already staged for a separate #224-232 batch that does not include #235 - sequencing #235 into an active pipeline queue needs coordination with whatever is driving the #222/#224-232 work to avoid branch/queue collisions.",
+        "Did not run the test suite or dev server to visually confirm the indentation defect or a fix - conclusion rests on static markup/class analysis only."
+      ],
+      "notes": "Sweep for mvox-app#235 completed as read-only analysis. Key file:line evidence: InviteSurface.svelte:285 (root div classes), admin/+page.svelte:501 and :777-790 (embedding context), admin/invite/+page.svelte:15-17 (standalone wrapper, currently bare). Only two consumers exist; no spec pins the classes; #232's touch region (Status union + effects, lines 67-221) is distinct from #235's (template root div, line 285), so adjacency risk is low. Recommend the wrapper-move mechanism and packing #235 into the R1 run just before #232, matching #232's own stated 'LAST of the epic' ordering. No code changes made; tree left exactly as found (feat/222-season-manage-card, uncommitted #222 work untouched)."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "aa804b49cf5cbd54e",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788467218951,
+      "queuedAt": 1788467217355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo confirmed (mvox-app.git). Tree is on feat/222-season-m…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. Tree may sit on a pipeline branch — state observed commit/branch. Terse evidence: file:line + fact.\nIssue mvox-app#235 (gh issue view 235): InviteSurface root 'mx-auto flex w-full max-w-md flex-col gap-4' centers wrongly when embedded in /admin's max-w-2xl column. Verify: 1. I…",
+      "lastProgressAt": 1788467324444,
+      "tokens": 56057,
+      "toolCalls": 14,
+      "durationMs": 105492,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: ~/workspace-app origin is mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Working tree state: on branch feat/222-season-manage-card (a pipeline branch), not main; uncommitted changes present but unrelated to InviteSurface (src/routes/+page.svelte, page.agenda-admin.spec.ts — #222 seas…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "sweep",
+      "phaseIndex": 2,
+      "phaseTitle": "Sweep",
+      "agentId": "a6f150dc0113cd3b5",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788467219020,
+      "queuedAt": 1788467217355,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Sweep for mvox-app#235 completed as read-only analysis. Key…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. Tree may sit on a pipeline branch — state observed commit/branch. Terse evidence: file:line + fact.\nIssue mvox-app#235 sweep. Change: stop InviteSurface centering itself when embedded on /admin (mechanism eng call — variant prop / classes moved to standalone route wrapper). Ch…",
+      "lastProgressAt": 1788467334435,
+      "tokens": 53159,
+      "toolCalls": 14,
+      "durationMs": 115414,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo remote is mvox-app.git (gate passes)\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Tree sits on feat/222-season-manage-card with uncommitted #222 work and untracked #224-232 research files, not on main\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git branch --show-current -> feat/222-season-manage-card; git stat…"
+    }
+  ],
+  "totalTokens": 109216,
+  "totalToolCalls": 28
+}

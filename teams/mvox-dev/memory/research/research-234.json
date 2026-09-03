@@ -1,0 +1,321 @@
+{
+  "summary": "Pre-RED verification for #234 — season repertoire section in season-manage panel",
+  "agentCount": 3,
+  "logs": [],
+  "result": {
+    "verify": [
+      {
+        "key": "repertoire",
+        "claims": [
+          {
+            "claim": "Repo guard: cwd ~/workspace-app has origin mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; branch feat/222-season-manage-card at 70c78b5 'feat(#222): season management as one card — panel inside the toolbar frame, visible label when collapsed'"
+          },
+          {
+            "claim": "RepertoireElement.svelte's 'repertoire' context (cited :56-77) covers status-cycle, pin-edition, remove, and Add-work controls, gated by canManageRepertoire/canEditRepertoireRow",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/components/agenda/RepertoireElement.svelte:56-79 doc block + props (seasonRights/eventRights/context, lines 165-218) + canManageRepertoire/canEditRepertoireRow (222-234) + manageAddControls snippet (506-567) match the cited description verbatim"
+          },
+          {
+            "claim": "RepertoireElement is prop-driven and fetch-free; component itself needs no code change to be dropped into a new panel section",
+            "verdict": "CONFIRMED",
+            "evidence": "RepertoireElement.svelte:1-6, 46-54 header docs; Props interface 161-199 takes rows/pickableWorksList/editionOptionsByRowId/pendingKeys/callback props only, no internal fetch anywhere in the file"
+          },
+          {
+            "claim": "RepertoireElement's current consumers are AgendaList.svelte (per-row, both contexts) and event/[id]/+page.svelte (programme context); the season-manage panel on +page.svelte does not currently render it",
+            "verdict": "CONFIRMED",
+            "evidence": "grep of `RepertoireElement` consumers: src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/components/agenda/AgendaList.svelte. src/routes/+page.svelte only imports ADD_WORK_KEY/ADD_PROGRAMME_KEY (line 63) and passes a `worksManage` object into <AgendaList worksManage={worksManage} /> (line 6995); it never instantiates <RepertoireElement> itself"
+          },
+          {
+            "claim": "The season repertoire read layer (listRepertoireItems) is season-scoped and callable without an event, independent of the event-scoped resolveEventWorks/loadWorksByEventId path",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/repertoire/repertoireData.ts:48-78 listRepertoireItems(cfg, seasonId, fetchImpl) queries repertoire_item by _parent.reference=seasonId directly, no eventId. Already called this way for the picker exclusion set: event/[id]/+page.svelte:770 and directly in +page.svelte's refreshWorks (line ~833)"
+          },
+          {
+            "claim": "Building WorkRow[] for a pure season-repertoire list (no event) requires composing listRepertoireItems + listWorks + listAllEditions + listAllCopies + buildWorkRows({source:'repertoire',...}) manually — no existing single function does this without an eventId",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/repertoire/workRows.ts: buildWorkRows(eventWorks, sources) at line 105 is pure and accepts an EventWorks value directly (so {source:'repertoire', items} works), but the only wrapper that also does the fetching, loadWorksByEventId (line 172), requires eventIds and short-circuits to {} when eventIds=[] (line 179) — it always goes through resolveEventWorksBatch, which needs at least one eventId to decide 'needsFallback'. There is no loadSeasonRepertoireRows-style helper today; the pieces (listRepertoireItems, listWorks, listAllEditions, listAllCopies, collectSources, buildWorkRows) are all exported and composable but not yet wired together for an event-less caller."
+          },
+          {
+            "claim": "The season-manage panel currently manages `manageableSeasonId` (current-if-running else soonest future season), which is a state deliberately distinct from `currentSeasonId` (the viewer-facing 'current season' that today's repertoire fallback/rights use)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:272-292 doc comments explicitly state the two are separate ('deliberately separate from currentSeasonId/seasonManageRights... diverges in the future-only case... and when the current season has LAPSED with a later one waiting'); showSeasonManageGear (2159-2161) gates on manageableSeasonId/manageableSeasonRights, not currentSeasonId/seasonManageRights"
+          },
+          {
+            "claim": "Opening the season-manage panel (openSeasonManagePanel) does NOT fetch repertoire_items, works, editions, or copies today — only roster, section tree, event series, and standalone events",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:2466-2537 openSeasonManagePanel body: getRoster, getSections, listEventSeriesForSeason, listEventsForSeason — no repertoire/library call. A new fetch must be added when wiring in the repertoire section."
+          },
+          {
+            "claim": "The existing agenda-page repertoire write handlers (handleAddWork, handleStatusChange, handlePinEdition, handleRemoveItem) are hardcoded to currentSeasonId and operate over the per-event worksByEventId map (via findRow/patchRow), not a standalone season-repertoire list, so they cannot be reused verbatim for a manageableSeasonId-scoped panel section",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:1342-1345 handleAddWork uses `const seasonId = currentSeasonId;` explicitly; findRow/patchRow (1277-1287) iterate Object.values(worksByEventId) — a per-event-id-keyed row cache. A repertoire section listing manageableSeasonId's items (which may differ from currentSeasonId, or exist when no agenda event references them) needs its own state + handler functions, following the shape of event/[id]/+page.svelte's loadManagePickers/loadComposeSurfaces (which correctly parameterize on `sid`/`loaded.seasonId` rather than a page global) as the closer precedent, or new season-manage-local equivalents."
+          },
+          {
+            "claim": "Rights gating for the new section needs no new rights read: the whole season-manage panel is already gated on manageableSeasonRights === 'editor' (showSeasonManageGear), so a repertoire section inside it can render unconditionally under that existing gate, matching the issue's 'reuse the rights that gate the repertoire surface today' instruction once read as 'editor on the managed season' rather than literally reusing the currentSeasonId-scoped seasonManageRights state",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:2159-2161 showSeasonManageGear = manageableSeasonId !== null && manageableSeasonRights === 'editor'; the panel body only renders under {#if seasonManageOpen} which openSeasonManagePanel only reaches when showSeasonManageGear was true. gh issue view 234 text: 'the section shows for the same rights that gate the repertoire surface today (season repertoire editor)' — literally reusing seasonManageRights (currentSeasonId-scoped) would wrongly hide the section for a future manageableSeasonId with no current season running; reusing manageableSeasonRights (already the panel's own gate) is correct and requires no new fetch."
+          },
+          {
+            "claim": "All 32 repertoire_* i18n keys (status labels, add-work/pin-edition/remove/borrow/pdf controls and aria-labels) exist identically across en/et/lv/uk and are directly reusable by RepertoireElement dropped into the panel with no new keys needed for the component's own controls",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/{en,et,lv,uk}.json each contain exactly 32 keys prefixed repertoire_ (counted via python3/json). Spot-checked repertoire_add_work_button/label across locales: en 'Add'/'Add a work', et 'Lisa'/'Lisa teos' (matches issue's cited Lisa button), lv 'Pievienot'/'Pievienot darbu', uk 'Додати'/'Додати твір'."
+          },
+          {
+            "claim": "No existing i18n key serves as a generic 'Repertoire' section heading for the panel; a new key (e.g. season_manage_repertoire_label) following the season_manage_series_label/season_manage_events_label pattern is needed",
+            "verdict": "CONFIRMED",
+            "evidence": "grep 'season_manage_repertoire\\|repertoire_label' messages/en.json -> no match. Existing sibling-section headings season_manage_series_label ('Event series') and season_manage_events_label ('Standalone events') at messages/en.json:380,383 establish the pattern the new heading key would follow, rendered via <p class=\"text-xs tracking-wide text-ink-2 uppercase\">{m.season_manage_X_label()}</p> per src/routes/+page.svelte:6128-6132."
+          },
+          {
+            "claim": "A new season-repertoire section slots naturally as a sibling div immediately after the 'standalone events' section, before the panel body closes",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte: standalone-events section runs 6127-6405 (heading m.season_manage_events_label() at 6131, {#each seasonManageEvents} loop, error slot at 6396-6404); the panel's conditional body closes at 6406-6409 ({/if} for a wrapper, then the outer panel div, then {#if seasonManageOpen}). The season-delete control sits earlier near the top (season-manage-delete-season-confirm ~5331, before season-manage-name at 5432), so it does not block appending a repertoire section after events."
+          }
+        ],
+        "risks": [
+          "Wiring the repertoire section needs a new manageableSeasonId-scoped fetch (listRepertoireItems + listWorks + listAllEditions + listAllCopies, or reuse of collective-wide libraryWorks/libraryEditions plus a fresh listAllCopies call) inside openSeasonManagePanel — this is 3-4 new network requests on every panel open that don't exist today; worth sizing against the panel's existing already-heavy open cost (roster + sections + series + events).",
+          "New parallel state + write handlers are needed for the section (its own WorkRow[] list, patchRow/findRow-equivalent, handleAddWork/handleRemoveItem scoped to manageableSeasonId) since the existing agenda handlers are hardcoded to currentSeasonId and the per-event worksByEventId cache — this is real new surface, not just a template drop-in, contrary to a naive reading of 'reusing RepertoireElement if it drops in'.",
+          "The issue's rights wording ('same rights that gate the repertoire surface today') is ambiguous between the currentSeasonId-scoped seasonManageRights and the panel's own manageableSeasonRights; manageableSeasonRights is read here as correct (it's already the panel's gate and avoids hiding the section for a future-only manageable season with no current season running), but this is a judgment call not settled by the issue text alone and should be confirmed with the implementing engineer/Gama rather than assumed silently. [speculative]",
+          "buildWorkRows requires the whole-collective works/editions/copies lookup sets (collectSources) even for a season-only list — reusing +page.svelte's existing libraryWorks/libraryEditions (already loaded for the agenda picker, collective-wide so season-agnostic) is safe to share, but listAllCopies is not currently loaded anywhere on +page.svelte and would be a genuinely new call.",
+          "Per the issue's 'Done when' item 3, the per-event 'repertoire'-context fallback rows must keep rendering unchanged — the new section is additive; care is needed that its own optimistic writes (create/delete of repertoire_item) also refresh/invalidate the agenda's separate worksByEventId fallback rows so the two surfaces don't drift out of sync after a panel-side add/remove (mirrors the event-detail page's existing dual-refresh pattern in refreshWorks, which already re-reads both loadWorksByEventId and listRepertoireItems after a write — a reusable precedent)."
+        ],
+        "notes": "Repo guard passed (mvox-app.git, branch feat/222-season-manage-card @ 70c78b5, read-only — made no changes). Read RepertoireElement.svelte in full (props/contexts/snippets), repertoireData.ts, workRows.ts, repertoireActions.ts, the season-manage panel's state block and template (src/routes/+page.svelte), AgendaList.svelte's consumer wiring, event/[id]/+page.svelte's compose-surfaces wiring, and all four messages/*.json locale files. Also read the live issue text via `gh issue view 234` to ground the verification against the actual Done-when criteria and PO framing. Key upshot for whoever implements #234: RepertoireElement itself needs zero changes and its i18n is fully reusable; the work is entirely new glue in +page.svelte — a manageableSeasonId-scoped data fetch, parallel write-handler state, and one new heading i18n key — the panel's existing manageableSeasonRights gate already covers rights with no new rights read needed."
+      },
+      {
+        "key": "rights-specs",
+        "claims": [
+          {
+            "claim": "Repo guard: ~/workspace-app origin is mvox-app.git, shared tree currently on branch feat/222-season-manage-card at commit 70c78b5 (\"feat(#222): season management as one card...\").",
+            "verdict": "CONFIRMED",
+            "evidence": "`git remote get-url origin` → https://github.com/mvox-dev/mvox-app.git; `git branch --show-current` → feat/222-season-manage-card; `git log -1 --oneline` → 70c78b5. This is the expected #222 pipeline branch, not main."
+          },
+          {
+            "claim": "Q1 — The 'repertoire' surface (row edit controls in RepertoireElement when context='repertoire') is gated on `seasonManageRights`, computed from the VIEWER's current season (currentSeasonId/seasonId), flowing: +page.svelte:688-691 `seasonManageRights = manageRightsFrom(seasonOwners, seasonEditors, personId)` → +page.svelte:1546 `worksManage.seasonRights = seasonManageRights` → AgendaList.svelte:294 `seasonRights={worksManage?.seasonRights}` → RepertoireElement.svelte:222-223 `canManageRepertoire = (seasonRights ?? ...) === 'editor'`.",
+            "verdict": "CONFIRMED",
+            "evidence": "Read all four hops directly. RepertoireElement.svelte:220-227 also confirms `canManageProgramme` is driven independently by `eventRights` (per-event owners/editors, +page.svelte:720-722 `eventManageRights`), not season rights."
+          },
+          {
+            "claim": "Q1 — showSeasonManageGear (the season-manage panel entry point) is gated on a DIFFERENT signal: `manageableSeasonRights`, keyed to `manageableSeasonId` (the admin's manageable season — current-if-running else soonest future, #167), computed at +page.svelte:697-699 `manageableSeasonRights = manageRightsFrom(mOwners, mEditors, personId)`; gate itself at +page.svelte:2159-2161 `showSeasonManageGear = manageableSeasonId !== null && manageableSeasonRights === 'editor'`.",
+            "verdict": "CONFIRMED",
+            "evidence": "Read +page.svelte:2141-2161 doc block, which states explicitly the gate is 'deliberately independent' of the season-repertoire-scoped signal, and +page.svelte:692-699/743-755 which name the two as governing DIFFERENT entities (manageable season vs current season) whenever the current season has lapsed."
+          },
+          {
+            "claim": "Q1 — `showSeasonManageGear`/manageableSeasonRights and the 'repertoire' surface's seasonManageRights CAN diverge (not the same signal, not merely two names for one computation): they read owners/editors off potentially different season entities, and even the fail-closed database-entity fallback (+page.svelte:739-773) sets them independently (`manageableRightsInvisible` vs `currentRightsInvisible` are separate triggers, each flipping only its own flag).",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte:739-774: two independently-computed booleans (`manageableRightsInvisible`, `currentRightsInvisible`) each gate their own rights variable inside the same `.then()`, with no assumption either implies the other. Comment at 747-755 states this in prose: '...produced exactly the contradiction this block exists to prevent'."
+          },
+          {
+            "claim": "Q1 consequence — a new 'season repertoire' section built inside the season-manage panel (only reachable when manageableSeasonRights===editor) must gate ITSELF on seasonManageRights, not inherit visibility from the panel being open, per issue #234 Done-when 4 ('the same rights that gate the repertoire surface today'). This is a real design/implementation risk: a viewer could see the panel (manageableSeasonRights editor) with no repertoire-edit rights (seasonManageRights not-editor) on the season being managed, or vice versa — needs an explicit answer for what the section renders in that gap, not assumed always-together.",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "This is a forward-looking implementation implication, not a fact checkable in current code (the section doesn't exist yet). Flagged as [speculative]/design-risk for the implementer, grounded in the CONFIRMED divergence above and issue #234's Done-when 4 wording."
+          },
+          {
+            "claim": "Q2 — Spec inventory: RepertoireElement itself is covered by RepertoireElement.spec.ts (incl. describe 'RepertoireElement — management: per-surface rights' at line 713, covering season-vs-event rights independently and the 'repertoire' context specifically), RepertoireElement.composer-label.spec.ts (#204 composer in add-work picker), RepertoireElement.status-edition.spec.ts (#125 inline status/edition), RepertoireElement.ux.spec.ts (#111 native pickers per surface).",
+            "verdict": "CONFIRMED",
+            "evidence": "Read describe-block headers in each file directly (RepertoireElement.spec.ts:713 'per-surface rights'; composer-label.spec.ts:64; status-edition.spec.ts:125/136/216; ux.spec.ts:118/152/238/297)."
+          },
+          {
+            "claim": "Q2 — The works lines are covered on both surfaces named in the issue: agenda rows via AgendaList.spec.ts + src/routes/page.repertoire-manage-wiring.spec.ts, page.repertoire-status-edition.spec.ts, page.repertoire-ux.spec.ts, page.repertoire-a11y.spec.ts, page.works-wiring.spec.ts, page.library-repertoire-badges.spec.ts; event detail via src/routes/event/[id]/page.spec.ts describe 'works section (#103 TE.3: RepertoireElement, always expanded)' (line 1725), which also asserts `work-manage-add-work`/`work-manage-remove` counts (lines 1774-1776, 1868-1874) using bare (unscoped) `container.querySelector`/`querySelectorAll` over the whole page.",
+            "verdict": "CONFIRMED",
+            "evidence": "grep of describe() headers and direct reads of page.spec.ts:1725-1881 and page.repertoire-manage-wiring.spec.ts:266-291 (also unscoped `container.querySelector`)."
+          },
+          {
+            "claim": "Q2 — Duplicate-testid risk: existing specs (page.repertoire-manage-wiring.spec.ts, event/[id]/page.spec.ts) assert on `work-manage-add-work` / `work-manage-remove` / `work-status-*` via bare, page-wide `container.querySelector`/`querySelectorAll` (first-match or exact-count), not scoped to a container. If the new season-manage-panel section reuses RepertoireElement in 'repertoire' context (Done-when 4's suggested approach) while an unprogrammed event's fallback row is simultaneously visible on the same page, a second instance of these same testids would appear on the DOM, silently matching the wrong node (querySelector) or breaking exact-count assertions (querySelectorAll length checks at repertoire-manage-wiring.spec.ts:636 and page.spec.ts:1774/1868). These specs need scoping (e.g. `within(panel)`/`within(agenda card)`) or new panel-specific testids as part of this issue's extension, not left as-is.",
+            "verdict": "CONFIRMED",
+            "evidence": "Read the assertion sites directly: repertoire-manage-wiring.spec.ts:275-276,288,517,529,531,636-638,690,754,759-764 all use unscoped `container.querySelector(All)`; event/[id]/page.spec.ts:1774,1776,1868-1871,1874 same pattern. This is a mechanical fact about current spec code, not speculation about the new section's exact shape — the risk it creates for the NEW section's implementation is [speculative] but grounded."
+          },
+          {
+            "claim": "Q2 — ADMIN_TESTIDS fail-closed sweep lives at src/routes/page.agenda-admin.spec.ts:364-374 (currently 9 testids: agenda-admin-card, season-manage-gear, season-manage-label, season-manage-panel, season-create, season-create-form, event-create, event-create-form, series-create-form), used by `expectNoAdminControls` (376-380) at 4 call sites (lines 715, 1044, 1059, 1070) covering non-editor / rights-error / failed-agenda-load scenarios. It currently only lists the panel's OUTER testid, not any of its internal section testids (name/dates/conductors/series/events/delete controls aren't individually enumerated) — the panel is swept as one opaque unit.",
+            "verdict": "CONFIRMED",
+            "evidence": "Read page.agenda-admin.spec.ts:364-1070 directly, including all 4 `expectNoAdminControls` call sites and their surrounding describe blocks (non-editor no-toolbar, rights-error, failed-agenda-load)."
+          },
+          {
+            "claim": "Q2 — Because the sweep tests scenarios with NO manageable-season rights at all (panel itself absent), a new repertoire section nested inside season-manage-panel is automatically covered by the EXISTING sweep for the 'no rights anywhere' case (panel doesn't render, so neither does anything inside it) — no new ADMIN_TESTIDS entry is strictly required for that scenario. However, the sweep has no case for the divergent scenario (manageableSeasonRights=editor, panel visible, but seasonManageRights≠editor for the same season) — that gap is NOT covered by any existing spec and is exactly the scenario Q1's divergence creates; it needs a new test (and arguably a new testid for the repertoire section, e.g. a `season-manage-repertoire` container) added to close it.",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "The 'automatically covered' half is a direct logical consequence of the CONFIRMED sweep structure (panel absent ⇒ children absent) — sound but about not-yet-written code. The 'gap not covered' half is confirmed by absence: grepped page.agenda-admin.spec.ts and page.season-manage*.spec.ts for any test rendering the panel open with season-repertoire-rights explicitly 'not-editor' while manageable-season rights are 'editor' — none exists today, which is expected since the section doesn't exist yet. Flagged as a needed-extension, not a bug."
+          },
+          {
+            "claim": "Q2 — Season-manage-panel-scope specs that must stay green untouched (existing sections: name/dates/conductors/series/standalone-events/season-delete) are page.season-manage.spec.ts, page.season-manage-delete.spec.ts, page.season-manage-whole-field.spec.ts, and the #222 card-shape specs in page.agenda-admin.spec.ts (describes at lines 474, 545, 655, 777, 944, 1011, 1030, 1076+). A new repertoire section added inside the same panel card is new surface area alongside these, not a replacement of any of them.",
+            "verdict": "CONFIRMED",
+            "evidence": "grep of describe() headers in each file (season-manage.spec.ts:462-1355 covers gear entry, inline field edit, conductors, series/events list, requestId guard, close-survival, conductor-select-empties; season-manage-delete.spec.ts:417-1325 covers series/event/season delete two-step confirms and shared progress counter; season-manage-whole-field.spec.ts:286 covers #205 whole-field activators; agenda-admin.spec.ts describes as listed)."
+          },
+          {
+            "claim": "Q3 — The 'repertoire'-context fallback path (entry point for event editors WITHOUT season rights, via 'Add to programme' on a season-repertoire fallback row) lives at RepertoireElement.svelte:507 (`{#if canManageRepertoire && context === 'repertoire'}` gates the season 'Add work' control) and RepertoireElement.svelte:540 (`{#if canManageProgramme}`, deliberately NOT the else-branch of 507, per the comment at 534-539, so 'Add to programme' still renders on a repertoire-context row for an event-only editor).",
+            "verdict": "CONFIRMED",
+            "evidence": "Read RepertoireElement.svelte:220-228 (canManageRepertoire/canManageProgramme are independent booleans, canManageRepertoire keyed on seasonRights, canManageProgramme keyed on eventRights, neither depends on `context`) and lines 505-540 (the two conditionally-rendered blocks) directly."
+          },
+          {
+            "claim": "Q3 — This path is pinned by a spec: RepertoireElement.spec.ts, describe 'RepertoireElement — management: per-surface rights' (line 713), test 'an EVENT editor sees \"Add to programme\" on a repertoire-context row — the only way to create the FIRST program_item' (lines 714-735), which renders with `seasonRights: 'not-editor', eventRights: 'editor', context: 'repertoire'` and asserts the add-programme control fires `onaddprogramitem('ed-9', 0)`. A companion test at lines 737-745 pins the inverse (event-only editor gets NO repertoire row controls).",
+            "verdict": "CONFIRMED",
+            "evidence": "Read RepertoireElement.spec.ts:713-745 verbatim, including the exact props passed and assertions made."
+          },
+          {
+            "claim": "Q3 — The issue's own text (#234, Done-when 3) independently corroborates this reading: \"the per-event works lines keep working exactly as today ('repertoire'-context fallback included — removing it is NOT in scope; it is still the entry point for event editors without season rights).\"",
+            "verdict": "CONFIRMED",
+            "evidence": "`gh issue view 234` output, Done-when section, item 3, read verbatim."
+          }
+        ],
+        "risks": [
+          "Design gap not yet resolved by anyone: the new repertoire section will live inside a panel gated on manageableSeasonRights/manageableSeasonId, but per Done-when 4 it must itself gate on seasonManageRights (keyed to a possibly-different currentSeasonId/seasonId). No test and no code today exercises 'panel open, repertoire section rights absent' — needs an explicit design answer (render nothing? a locked/empty state? which season's repertoire does it even show if manageableSeasonId != currentSeasonId?) before implementation, not just a rights-check bolted on.",
+          "If Done-when 4's suggested approach (reuse RepertoireElement in 'repertoire' context inside the panel) is taken literally, it will produce duplicate `data-testid` nodes (work-manage-add-work, work-manage-remove, work-status-*, work-row, etc.) on the same page whenever an unprogrammed event's fallback row is visible at the same time as the open panel. Several existing specs assert on these testids via unscoped `container.querySelector`/`querySelectorAll` with exact-length checks (repertoire-manage-wiring.spec.ts, event/[id]/page.spec.ts) — those will need to be scoped (e.g. `within('[data-testid=season-manage-panel]')` vs `within('[data-testid=agenda-...]')`) as part of this change, or the new section needs distinct testids, otherwise green tests could start silently asserting against the wrong instance.",
+          "ADMIN_TESTIDS (page.agenda-admin.spec.ts:364-374) sweeps the panel as one opaque unit and will pass trivially for the 'no rights anywhere' scenario without any change. But no fail-closed sweep exists (or is proposed) for the divergent scenario — manageable-season rights present (panel visible) but repertoire rights absent — which is exactly the case this issue's rights model can produce. That's a coverage gap the implementer should close with a new test, independent of whether ADMIN_TESTIDS itself needs a new literal entry."
+        ],
+        "notes": "Repo guard passed (mvox-app.git origin); shared tree observed on branch feat/222-season-manage-card @ 70c78b5, consistent with '#222 pipeline branch' expectation. All findings above are read-only verification against current code + `gh issue view 234`; no files were modified. Key file:line anchors for the implementer: rights split — +page.svelte:688-699 (two independent manageRightsFrom calls) and :2159-2161 (gear gate) vs RepertoireElement.svelte:222-227 (canManageRepertoire/canManageProgramme) via AgendaList.svelte:294; fallback entry point — RepertoireElement.svelte:507 vs :540 (deliberately not else-branched, comment at 534-539); pinning spec — RepertoireElement.spec.ts:713-745; ADMIN_TESTIDS — page.agenda-admin.spec.ts:364-380 plus call sites at 715/1044/1059/1070."
+      }
+    ],
+    "sweep": {
+      "claims": [
+        {
+          "claim": "Repo guard: workspace-app origin ends mvox-app.git",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+        },
+        {
+          "claim": "Shared tree state: on feat/222-season-manage-card @ 70c78b5 ('feat(#222): season management as one card'), working tree dirty with an uncommitted WIP fix to +page.svelte's toolbar disclosure gate (#222 review F1: adds `|| seasonManageOpen` to the card's {#if}) plus a spec file, and 3 untracked R1-related files (args-224-232.json, research-224-232.json, a probe script). This WIP touches the exact card {#if} line #234 will sit inside.",
+          "verdict": "CONFIRMED",
+          "evidence": "git log -1, git status --short, git diff --stat, git diff src/routes/+page.svelte (single hunk at the `agenda-admin-card` {#if}, ~line 5234)"
+        },
+        {
+          "claim": "R1 run (issues 224-232, 9 tasks per teams/mvox-dev/memory/pipeline-args/args-224-232.json) has zero file/line overlap with the season-manage panel region #234 targets (+page.svelte lines ~5304-6407).",
+          "verdict": "CONFIRMED",
+          "evidence": "args-224-232.json: #224-229 target app.css, locale JSON, and un-exports in admin/auth/invite/profile/rsvp/attendance/event/season/entity domain files (not +page.svelte template). #230 targets +page.svelte ~2787/~2814 (event-create Tallinn helpers); #231 targets ~2388/~2844 (event-create ISO-date formatter) plus AgendaList/InviteSurface/invite-token/library pages; #232 targets profile/roster/library +page.svelte route-load machines, explicitly excluding root +page.svelte's composed requestId+worksLoadId guard as 'optional follow-through, exclude unless trivially clean.' None cite the season-manage panel body or RepertoireElement."
+        },
+        {
+          "claim": "Season-manage panel is already large (~1100 lines: 5304-6407) with sections for name/dates, delete, series add, event add, delete-progress, event-convert — no repertoire section exists yet.",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/+page.svelte:5304 (season-manage-panel open) through :6407 (close, confirmed by the #217 comment at :6416 noting content 'deliberately OUTSIDE {#if seasonManageOpen}'); testid grep inside that span shows season-manage-delete-season*, season-manage-add-series, season-manage-add-event, season-manage-delete-progress — nothing repertoire-related."
+        },
+        {
+          "claim": "RepertoireElement instance collision is real and easily triggered: mounting it in the panel (context='repertoire', same season) alongside any unprogrammed event's own works line will duplicate data-testid values (work-row, work-status-{status}, work-status-group-{row.id}, work-manage-*) for the same repertoire_item rows, because these testids are static/row-id-keyed strings, not per-instance-unique like expandedRegionId (which uses $props.id()).",
+          "verdict": "CONFIRMED",
+          "evidence": "RepertoireElement.svelte: componentId/expandedRegionId are per-instance ($props.id()), but data-testid=\"work-row\", \"work-status-{opt.value}\", \"work-status-group-{row.id}\", \"work-manage-remove\" etc. are plain strings/row-id-keyed only (lines ~325-646). Done-when 3 in #234 explicitly keeps the per-event 'repertoire'-context fallback path alive on unprogrammed events, so both instances render the SAME season's repertoire_item ids simultaneously whenever both are open. Precedent (event/[id]/+page.svelte:2135-2137) mounts RepertoireElement management surfaces with `expanded={true}` (forceExpanded) rather than collapsed-by-default, so if the panel follows the same pattern the panel's rows render testids unconditionally on panel-open — collision needs only one extra click (expanding any one unprogrammed event's works line elsewhere in the agenda), not a rare edge case."
+        },
+        {
+          "claim": "#222's keyboard-roving toolbar and RepertoireElement's own per-row status toolbar cannot cross-contaminate: both keydown handlers scope querySelectorAll to their own e.currentTarget, and the season-manage-panel div is a DOM SIBLING of the role=\"toolbar\" header div (not nested inside it).",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:4315-4324 handleAdminToolbarKeydown scopes to `(e.currentTarget as HTMLElement).querySelectorAll(...)`; the toolbar div (role=\"toolbar\", :5239-5245) closes at :5303 BEFORE the panel div opens at :5304-5314 (role=\"dialog\", its own onkeydown={onSeasonManagePanelKeydown} which only handles Escape, +page.svelte:2616-2618). RepertoireElement.svelte:143-152 handleStatusGroupKeydown likewise scopes to its own `group` (e.currentTarget). No shared ancestor queries either group; adding a repertoire section inside the panel cannot join the header's roving walk."
+        },
+        {
+          "claim": "No extra network fetch is triggered by opening the panel: season-scoped picker data (seasonRepertoire, libraryWorks, libraryEditions) already loads via loadManagePickers whenever the viewer canManage (season or any event editor), independent of seasonManageOpen — same gate that already governs showSeasonManageGear.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:1099-1102 loadWorksAndManagement calls loadManagePickers(cfg, seasonId, thisRequest) whenever canManage, at season/collective load time, not on panel toggle; :1119-1138 loadManagePickers fetches listWorks/listAllEditions/listRepertoireItems into seasonRepertoire/libraryWorks/libraryEditions."
+        },
+        {
+          "claim": "Building the panel's WorkRow[] rows is straightforward reuse of existing plumbing (buildWorkRows({kind:'repertoire', items: seasonRepertoire}, sources) from workRows.ts) rather than new event-scoped machinery, but requires listAllCopies (currently fetched only inside the per-event loadWorksByEventId, not inside loadManagePickers) to be added/deduped for accurate canBorrow on the panel's rows.",
+          "verdict": "CONFIRMED",
+          "evidence": "workRows.ts:105 buildWorkRows(eventWorks: EventWorks, sources) is pure/event-agnostic — EventWorks is just {kind, items}; repertoireData.ts:36 EventWorks/:48 listRepertoireItems confirm 'repertoire' kind needs only RepertoireItem[] (= seasonRepertoire, already loaded). workRows.ts:180-186 loadWorksByEventId separately fetches listWorks/listAllEditions/listAllCopies for collectSources — loadManagePickers (+page.svelte:1119-1138) fetches listWorks/listAllEditions but NOT listAllCopies."
+        },
+        {
+          "claim": "Multi-collective panel reset already covers the sources a season-repertoire section would read (seasonRepertoire, libraryWorks, libraryEditions, managePendingKeys) — but ONLY if the implementation reads those directly and does not introduce a new dedicated cache variable that resetManagement() doesn't know about.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:954-966 resetManagement() zeroes exactly seasonRepertoire/libraryWorks/libraryEditions/managePendingKeys (plus rights fields) on collective switch."
+        },
+        {
+          "claim": "Rights: the panel's repertoire section can reuse seasonManageRights (the same variable already gating showSeasonManageGear/the panel itself) directly as RepertoireElement's seasonRights prop — no new rights derivation needed, and this preserves the event-editor path (done-when 3) since that path reads eventManageRights independently in AgendaList, untouched by anything in the panel.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte showSeasonManageGear/panel gating and RepertoireElement.svelte:167-170 seasonRights prop semantics (`_editor` on the SEASON); AgendaList.svelte:294-295 passes seasonRights/eventRights independently per event row, unaffected by the panel."
+        },
+        {
+          "claim": "i18n: no existing heading key is reusable verbatim for the new section (event_detail_works_heading is event-scoped, semantically wrong for a season-wide list), but RepertoireElement's own control-level messages (add-work label/button, status labels, remove, pin-edition, etc.) are already shared/component-owned keys requiring zero new keys — so scope is exactly one new heading key across the four locale files.",
+          "verdict": "CONFIRMED",
+          "evidence": "event/[id]/+page.svelte:2133 m.event_detail_works_heading() is the only heading key found referencing works/repertoire outside RepertoireElement.svelte itself, which owns m.repertoire_* directly (lines 113-118, 353, 517, etc.)."
+        },
+        {
+          "claim": "Invite-created-person axis: zero coupling between the invite/onboarding flow and repertoire rights or RepertoireElement — nothing repertoire-specific expected from #234.",
+          "verdict": "CONFIRMED",
+          "evidence": "grep 'invite' across src/lib/repertoire/*.ts and RepertoireElement.svelte returns no matches."
+        },
+        {
+          "claim": "Recommend slotting #234 ahead of (or interleaved without waiting on) the R1 9-task run: zero file/line overlap with any R1 target confirmed above, and #234 is the direct response to Mihkel's live-gate feedback just given, while R1 is invisible-to-user cleanup with no live-gate dependency.",
+          "verdict": "UNVERIFIABLE",
+          "evidence": "[speculative] Sequencing/prioritization judgment, not a checkable fact — grounded in the zero-overlap finding above and the issue's own text ('Mihkel live-gate feedback... follows his Add to programme question'), but the actual scheduling call belongs to PO/team-lead."
+        }
+      ],
+      "risks": [
+        "Real testid-collision risk: if the panel mounts RepertoireElement with expanded=true (the event/[id] precedent for management surfaces), opening the panel plus expanding any one unprogrammed event's own works line elsewhere in the same agenda renders duplicate data-testid values (work-row, work-status-{value}, work-status-group-{row.id}, work-manage-*) for the same repertoire_item ids on the page simultaneously. This will break any spec/assertion using page-level getByTestId without container scoping, and is a genuine (if narrower) pre-existing risk today across two-or-more simultaneously-expanded unprogrammed-event rows even before #234 — #234 makes it trivially reachable via panel-open + one click. Flag as a required review-checklist item: either scope test queries to a container, or accept/document the duplication.",
+        "If the implementation adds a new dedicated state variable (e.g. a cached season-repertoire WorkRow[] array) rather than deriving rows inline from existing seasonRepertoire/libraryWorks/libraryEditions, that variable must be added to resetManagement() (+page.svelte:954-966) or stale rows from the previous collective will persist visibly in the panel until the next async load resolves.",
+        "listAllCopies is not currently fetched by loadManagePickers (only by the per-event loadWorksByEventId) — omitting it for the panel's rows would silently drop the 'Borrow' link (canBorrow) on season-repertoire rows shown in the panel, a subtle correctness gap not caught by a green build.",
+        "The shared tree currently carries an uncommitted #222 F1 fix in +page.svelte at the exact {#if} line the panel hangs off of (the card's disclosure gate) plus an uncommitted spec change — this should land (commit) before or as part of #234's RED so #234's diff isn't built against a phantom/uncommitted baseline."
+      ],
+      "notes": "Repo guard passed (mvox-app.git). Branch feat/222-season-manage-card @ 70c78b5, dirty (uncommitted #222 F1 fix + R1 pipeline scratch files) — expected per the task brief. Read-only sweep only; no files changed.\\n\\nBottom line: #234 (season-manage panel gains a repertoire section) has zero structural overlap with any of the 9 R1 tasks (#224-232) — different files/line-ranges throughout, confirmed against args-224-232.json's own target-line citations. The panel is already dense (~1100 lines, 5304-6407) but adding one more section follows the existing pattern (season-manage-add-series/-add-event testid conventions) with no evidence of layout strain beyond 'one more section in a long list.' Keyboard-roving isolation from #222/#156 holds by construction (separate DOM subtrees, both handlers scope to their own currentTarget) — no risk there. The one genuinely sharp finding is the RepertoireElement testid-collision: done-when 3 deliberately keeps the per-event 'repertoire'-context fallback alive on unprogrammed events, and the panel's own RepertoireElement instance (likely expanded=true, per the event/[id] precedent) will render duplicate data-testid values for the same repertoire_item rows the moment both surfaces are open together — this belongs on #234's RED checklist explicitly (container-scoped queries, or an accepted/documented duplication). Load lifecycle is clean: zero extra fetch on panel-open (data already loads at season-select time under the same canManage gate that shows the gear itself); row construction reuses buildWorkRows/EventWorks{kind:'repertoire'} trivially, modulo adding listAllCopies to loadManagePickers for accurate Borrow links. Rights reuse seasonManageRights directly; the event-editor path is architecturally untouched (AgendaList reads eventManageRights independently). i18n scope is exactly one new heading key × 4 locales — RepertoireElement's own control strings are already shared. Invite-created-person axis: confirmed no coupling. Sequencing recommendation (labeled speculative, since it's a judgment call): slot #234 ahead of or interleaved with R1, since it has no file overlap to serialize against and is the direct answer to Mihkel's live-gate ask just now, whereas R1 is invisible cleanup with no live-gate urgency."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "sweep",
+      "phaseIndex": 2,
+      "phaseTitle": "Sweep",
+      "agentId": "a2653e53c14f835a5",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788466946716,
+      "queuedAt": 1788466944660,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git). Branch feat/222-season-ma…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. The shared tree may sit on a #222 pipeline branch — expected; state what commit/branch you observed. Be terse in evidence: file:line + the fact.\nIssue mvox-app#234 blast-radius sweep. Change: season-manage panel (src/routes/+page.svelte, post-#222 card structure) gains a reper…",
+      "lastProgressAt": 1788467276131,
+      "tokens": 94562,
+      "toolCalls": 34,
+      "durationMs": 329414,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: workspace-app origin ends mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Shared tree state: on feat/222-season-manage-card @ 70c78b5 ('feat(#222): season management as one card'), working tree dirty with an uncommitted WIP fix to +page.svelte's toolbar disclosure gate (#222 review F1…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:repertoire",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a209476d8a8ccf9e4",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788466946860,
+      "queuedAt": 1788466944691,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git, branch feat/222-season-man…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. The shared tree may sit on a #222 pipeline branch — expected; state what commit/branch you observed. Be terse in evidence: file:line + the fact.\nIssue mvox-app#234 (gh issue view 234): add a season-repertoire section to the season-manage panel, reusing the 'repertoire' context…",
+      "lastProgressAt": 1788467233182,
+      "tokens": 111644,
+      "toolCalls": 38,
+      "durationMs": 285574,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: cwd ~/workspace-app has origin mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; branch feat/222-season-manage-card at 70c78b5 'feat(#222): season management as one card — panel inside the toolbar frame, visible label when collapsed'\"},{\"claim\":\"RepertoireElement.svelte's 'repertoire' context (cit…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:rights-specs",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a78333e8b14e4c5ca",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788467236097,
+      "queuedAt": 1788466944691,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git origin); shared tree observ…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. The shared tree may sit on a #222 pipeline branch — expected; state what commit/branch you observed. Be terse in evidence: file:line + the fact.\nIssue mvox-app#234. Verify:\n1. RIGHTS: what exactly gates the 'repertoire' surface today (season repertoire editor — which derivatio…",
+      "lastProgressAt": 1788467482218,
+      "tokens": 78052,
+      "toolCalls": 34,
+      "durationMs": 246121,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: ~/workspace-app origin is mvox-app.git, shared tree currently on branch feat/222-season-manage-card at commit 70c78b5 (\\\"feat(#222): season management as one card...\\\").\",\"verdict\":\"CONFIRMED\",\"evidence\":\"`git remote get-url origin` → https://github.com/mvox-dev/mvox-app.git; `git branch --show-current` → feat/222-season-manage-card; `git log -1 --oneline` → 70c78b…"
+    }
+  ],
+  "totalTokens": 284258,
+  "totalToolCalls": 106
+}

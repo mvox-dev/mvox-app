@@ -1,0 +1,811 @@
+{
+  "summary": "Pre-RED verification batch for R1 cleanup epic #223 (tasks #224-#232)",
+  "agentCount": 10,
+  "logs": [],
+  "result": {
+    "verify": [
+      {
+        "issue": 224,
+        "claims": [
+          {
+            "claim": "src/lib/entity/entityCreate.ts:137 has a dead re-export `export type { EntuCfg } from './entuSeasons'`",
+            "verdict": "DRIFTED",
+            "evidence": "Line drifted by 2 (137→135 for the import; the export line itself is now `src/lib/entity/entityCreate.ts:137: export type { EntuCfg };` re-exporting the type imported at line 135 `import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';` — same dead pattern, same line number 137 for the export statement, content confirmed verbatim. Grepped all 83 EntuCfg reference sites repo-wide (src + specs incl. .svelte); zero import from entityCreate.ts. Dead, safe to delete."
+          },
+          {
+            "claim": "src/lib/events/eventConvert.ts:59 has the same dead `export type { EntuCfg }` pattern",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/events/eventConvert.ts:59: `export type { EntuCfg };` (imported at line 57: `import { type EntuCfg } from '$lib/seasons/entuSeasons';`). Zero of the 83 repo-wide EntuCfg reference sites import from eventConvert.ts. Dead."
+          },
+          {
+            "claim": "src/lib/seasons/seasonManage.ts:35 has the same dead `export type { EntuCfg } from './entuSeasons'` pattern",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/seasons/seasonManage.ts:35: `export type { EntuCfg } from './entuSeasons';` (also imported directly at line 33: `import type { EntuCfg } from './entuSeasons';`). Zero of the 83 repo-wide EntuCfg reference sites import from seasonManage.ts. Dead. This is the one line in the #222-behind surface (seasonManage.ts) — see notes."
+          },
+          {
+            "claim": "\"All ~80 EntuCfg import sites go straight to entuSeasons\" — no consumer relies on the three dead re-exports",
+            "verdict": "CONFIRMED",
+            "evidence": "Repo-wide grep for `EntuCfg` across src (incl. .svelte, .spec.ts) found 83 reference sites (issue said ~80, close enough — count includes a few more spec files than at review time, all still resolving to `$lib/seasons/entuSeasons` or `./entuSeasons`). Every single import line reads `from '$lib/seasons/entuSeasons'` or `from './entuSeasons'`; none import EntuCfg from entityCreate, eventConvert, or seasonManage. entuSeasons.ts:11 defines `export interface EntuCfg` — the canonical source. Confirmed for both source files and spec files."
+          },
+          {
+            "claim": "src/lib/entu/request.ts:51 — the `AuthExpiredError` half of `export { AuthExpiredError, isAuthExpiredError } from './auth-expired'` is dead; `isAuthExpiredError` stays (it is imported)",
+            "verdict": "CONFIRMED",
+            "evidence": "request.ts:51 verbatim: `export { AuthExpiredError, isAuthExpiredError } from './auth-expired';`. Repo-wide grep for `import.*AuthExpiredError` found zero sites importing the bare `AuthExpiredError` class from `$lib/entu/request` — the only consumers of the class are request.ts itself (imports it directly from './auth-expired' at line 6, throws it at line 92) and test files that duck-type-check `.name === 'AuthExpiredError'` (a string comparison, not a class import) across 7 spec files. `isAuthExpiredError` IS imported from `$lib/entu/request` in 6 live files (routes/+page.svelte, event/[id]/+page.svelte, profile/+page.svelte, roster/+page.svelte, library/+page.svelte, InviteSurface.svelte) plus collectives/marker.ts — confirming that half must stay."
+          },
+          {
+            "claim": "src/lib/admin/roleManagement.ts:131-132 — ROLE_LOCKOUT, ROLE_GRANT_MISSING are dead exports (specs hardcode raw strings instead)",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines confirmed exact: 131 `export const ROLE_LOCKOUT = 'role-lockout' as const;`, 132 `export const ROLE_GRANT_MISSING = 'role-grant-missing' as const;`. Used in-file at lines 136 and 151 (class `code` fields). Repo-wide grep found zero references outside roleManagement.ts itself — no spec imports either constant."
+          },
+          {
+            "claim": "src/lib/seasons/deleteErrors.ts:12,37,67,132 — DELETE_FORBIDDEN, SERIES_CASCADE_PARTIAL, EVENT_CASCADE_PARTIAL, SEASON_CASCADE_PARTIAL are dead exports (type-guard functions are the live API)",
+            "verdict": "CONFIRMED",
+            "evidence": "All four line numbers exact: 12 DELETE_FORBIDDEN, 37 SERIES_CASCADE_PARTIAL, 67 EVENT_CASCADE_PARTIAL, 132 SEASON_CASCADE_PARTIAL. Each used only in-file (class `code` fields + the type-guard functions e.g. `isSeriesCascadePartial` at line 122, `isEventCascadePartial` at 128, `isSeasonCascadePartial` at 168). Repo-wide grep found zero external references to any of the four constants — confirms type-guard functions are the actual live API, matching the issue's rationale."
+          },
+          {
+            "claim": "src/lib/sections/sectionErrors.ts:73 — SECTION_NOT_EMPTY is a dead export (isSectionNotEmpty is live)",
+            "verdict": "CONFIRMED",
+            "evidence": "Line 73 exact: `export const SECTION_NOT_EMPTY = 'section-not-empty';`. Used in-file at line 81 (class code field) and the type-guard function at line 102. Repo-wide grep found zero external references."
+          }
+        ],
+        "risks": [],
+        "notes": "Repo guard: ~/workspace-app origin confirmed = mvox-app.git. Observed at commit 7cec0b8 on branch feat/222-season-manage-card (in-flight #222 pipeline, as expected — no git state touched, read-only throughout).\\n\\nAll 7 findings in #224 CONFIRMED live and safe to delete/un-export with zero external consumers. No DRIFTED/REFUTED findings survived close inspection — my first pass flagged entityCreate.ts:137 as possibly drifted because the surrounding import line number differs slightly from what I initially eyeballed, but the cited export line (137) itself is exact and content matches verbatim, so I've recorded it as effectively CONFIRMED (labeled DRIFTED only for the minor import-line offset, not the cited target itself — treat as CONFIRMED for practical purposes).\\n\\nTests (step 3): No spec file imports any of the seven targeted symbols directly.\\n- EntuCfg: all spec files that reference it import from `$lib/seasons/entuSeasons` or `./entuSeasons` (the canonical source), never from entityCreate/eventConvert/seasonManage — deleting the three re-export lines breaks nothing.\\n- AuthExpiredError: 7 spec files reference the STRING 'AuthExpiredError' via duck-typing (`e.name === 'AuthExpiredError'` or manually setting `e.name = 'AuthExpiredError'`) — none import the class itself, confirmed by `grep import.*AuthExpiredError` returning zero spec hits. Deleting the re-export half is safe.\\n- ROLE_LOCKOUT/ROLE_GRANT_MISSING, the four deleteErrors constants, and SECTION_NOT_EMPTY: zero spec imports found for any of them (specs hardcode the raw string literals, matching the issue's own claim).\\nNo test will break from any of these seven deletions/un-exports.\\n\\nCross-cutting axes (step 4): i18n locale symmetry (#228/#229) and rights-tier axes are not applicable to #224's targets (none of the seven findings are i18n keys or rights-tier constructs) — correctly out of scope for this slice.\\n\\n#222 surface check (step 5): YES — #224 touches src/lib/seasons/seasonManage.ts (one line, 35: deleting the dead `export type { EntuCfg } from './entuSeasons'` re-export; the live `import type { EntuCfg } from './entuSeasons'` at line 33 stays untouched). This matches the epic's own ordering note (\\\"touches seasonManage.ts (one re-export line) — sequence behind #222 or rebase trivially\\\"). NO — #224 does NOT touch src/routes/+page.svelte or src/routes/event/[id]/+page.svelte; both files reference EntuCfg and isAuthExpiredError but import them from the canonical live sources ($lib/seasons/entuSeasons, $lib/entu/request's isAuthExpiredError which is explicitly preserved), so #224's edits don't intersect those two files at all. Since the seasonManage.ts touch is a single dead-line deletion with zero live behavior in the removed line, a trivial rebase over #222's changes (which are RED/test-stage work on that same file per the branch's current commit \\\"test(#222): RED\\\") should be low-risk, but the epic explicitly leaves the sequencing call to the remote/team-lead.\\n\\nAll findings are pure export-surface removals with implementations left untouched in-file, matching the epic's zero-behavior-change acceptance criterion for slices 1-6."
+      },
+      {
+        "issue": 225,
+        "claims": [
+          {
+            "claim": "src/lib/admin/roleManagement.ts:42,63,79 — RightsValue, OwnRights, RoleListing are exported with zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines match exactly: 42 `export interface RightsValue {`, 63 `export interface OwnRights {`, 79 `export interface RoleListing {`. Repo-wide grep (src + tests) for each symbol outside roleManagement.ts returns zero hits. RolePerson (line 24, also exported) is correctly excluded from the issue's list and untouched."
+          },
+          {
+            "claim": "src/lib/auth/exchange.ts:7,13,20 — EntuAccount, ExchangeSuccess, ExchangeFailure exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines match exactly: 7 EntuAccount, 13 ExchangeSuccess, 20 ExchangeFailure. Repo-wide grep outside exchange.ts returns zero hits for all three symbols."
+          },
+          {
+            "claim": "src/lib/auth/providers.ts:14 — AuthProvider exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Line 14: `export interface AuthProvider {`. Grep outside providers.ts: zero hits. (AUTH_PROVIDERS const, which is the runtime value consumed elsewhere, stays untouched and is not in scope.)"
+          },
+          {
+            "claim": "src/lib/auth/session.ts:12 — AuthState exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Line 12: `export type AuthState =`. Grep outside session.ts: zero hits. Verified specifically against the #222 surface src/routes/+page.svelte, which imports only the runtime `authStore` value from this module (line 3), never the `AuthState` type — so un-exporting AuthState does not touch #222."
+          },
+          {
+            "claim": "src/lib/invite/inviteData.ts:30,39,340,341 — InviteCreatePhase, InviteCreateReason, SelfLinkMintPhase, SelfLinkMintReason, CreateInviteResult; InviteCreateError/createInvite/mintSelfLinkInvite stay exported",
+            "verdict": "DRIFTED",
+            "evidence": "All 5 symbols verified zero-external-importer and safe to un-export, BUT the issue's own line-number list has a citation gap: it lists 4 line numbers (30,39,340,341) for 5 symbols. Actual locations: InviteCreatePhase=30, InviteCreateReason=39, CreateInviteResult=63 (MISSING from the issue's line list), SelfLinkMintPhase=340, SelfLinkMintReason=341. RED author should add line 63 when un-exporting CreateInviteResult. Separately confirmed: InviteCreateError, createInvite, and mintSelfLinkInvite are genuinely live-consumed elsewhere (InviteSurface.svelte, profile/+page.svelte, multiple *.spec.ts files) and correctly excluded from the un-export list."
+          },
+          {
+            "claim": "src/lib/invite/parse-invite-token.ts:17 — ParsedInvite exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Line 17: `export type ParsedInvite =`. Grep outside parse-invite-token.ts: zero hits (the runtime function `parseInviteToken` is a separate, still-consumed symbol not in scope)."
+          },
+          {
+            "claim": "src/lib/profile/autosave.ts:4,9 — AutosaveConfig, AutosaveController exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines match exactly: 4 AutosaveConfig, 9 AutosaveController. Grep outside autosave.ts: zero hits for both."
+          },
+          {
+            "claim": "src/lib/rsvp/rsvpOptimistic.ts:14,24 — ApplyRsvpChangeInput, ApplyRsvpChangeResult exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines match exactly: 14 ApplyRsvpChangeInput, 24 ApplyRsvpChangeResult. Grep outside rsvpOptimistic.ts: zero hits."
+          },
+          {
+            "claim": "src/lib/attendance/attendanceOptimistic.ts:11,20 — ApplyAttendanceChangeInput, ApplyAttendanceChangeResult exported, zero external importers",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines match exactly: 11 ApplyAttendanceChangeInput, 20 ApplyAttendanceChangeResult. Grep outside attendanceOptimistic.ts: zero hits."
+          },
+          {
+            "claim": "No #222 surface touched (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts)",
+            "verdict": "CONFIRMED",
+            "evidence": "None of the 9 target files are among the three named surfaces. Grepped all three surfaces for imports from the 9 target modules: only hit is src/routes/+page.svelte:3 `import { authStore } from '$lib/auth/session'` — a runtime value import, not the AuthState type being un-exported. event/[id]/+page.svelte and seasonManage.ts have zero references to any of the 9 modules. Slice does NOT touch #222 surfaces — safe to run independent of the #222 pipeline, matching epic #223's 'everything else in any order' ordering note."
+          },
+          {
+            "claim": "Tests referencing the un-exported types would break on deletion",
+            "verdict": "REFUTED",
+            "evidence": "All 19 targeted type/interface symbols are pure compile-time TS types (erased at runtime); repo-wide grep across src (including all *.spec.ts) found zero references outside their declaring module for every one. No spec imports or names any of these types, so no test pins current behavior on them and none would break from removing just the `export` keyword. (Runtime symbols in the same files — createInvite, mintSelfLinkInvite, InviteCreateError, parseInviteToken, AUTH_PROVIDERS, authStore — are correctly untouched by the issue and remain exported/consumed.)"
+          }
+        ],
+        "risks": [
+          "The issue's line-number citation for inviteData.ts is short one entry (63, for CreateInviteResult) relative to the 5 symbols listed — cosmetic drift only, doesn't change the un-export action, but the RED implementer should locate CreateInviteResult by name/grep rather than trusting the line list verbatim.",
+          "i18n locale axis (#228/#229 cross-cutting check) and extraction-duplication axis (#230/#231/#232) are not applicable to this slice — it is pure TS export-keyword removal with no Paraglide keys or duplicated logic involved, so those checklist axes are N/A here rather than skipped.",
+          "'Done when: typecheck + full suite GREEN' was not executed in this read-only verification pass (per task scope: READ-ONLY, no edits/commits) — the RED/GREEN implementer must run `pnpm check` and the full test suite after un-exporting to catch any TS structural-typing edge case (e.g. a consumer relying on an inferred type identity) that plain grep can't surface."
+        ],
+        "notes": "Verified at commit 7cec0b8 on branch feat/222-season-manage-card (in-flight #222 RED, as expected per task brief — shared tree not on main, untouched). Repo guard passed: origin=https://github.com/mvox-dev/mvox-app.git. All 19 findings in issue #225 CONFIRMED as accurate un-export targets with zero external consumers; one DRIFTED item is a harmless line-number citation gap in the issue body itself (CreateInviteResult's line 63 missing from the enumerated line list), not a defect in the finding's substance. Issue #225 does not touch any of the three #222-behind surfaces — YES it is safe to run in parallel/any order per epic #223's ordering note (explicit grep evidence: only src/routes/+page.svelte references any of the 9 target modules, and only for the untouched runtime value `authStore`, not the `AuthState` type being un-exported)."
+      },
+      {
+        "issue": 226,
+        "claims": [
+          {
+            "claim": "eventConvert.ts:69,83,133 — EventConvertStep, EventConvertReason, ConvertEventToSeriesResult are exported but unconsumed outside the module",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/events/eventConvert.ts:69 `export type EventConvertStep =`, :83 `export type EventConvertReason = ...`, :133 `export interface ConvertEventToSeriesResult {` — line numbers match exactly. Repo-wide grep (src+tests) shows all three used only within eventConvert.ts itself; no import site anywhere. eventConvert.spec.ts's import block (lines 84-88) imports only `convertEventToSeries`, `EventConvertError`, `type ConvertEventToSeriesInput` — confirming the issue's claim that sibling exports EventConvertError/ConvertEventToSeriesInput ARE genuinely consumed (by src/routes/+page.svelte:85,3776 and src/routes/page.event-convert.spec.ts:203,459, and eventConvert.spec.ts) while the three flagged types are not."
+          },
+          {
+            "claim": "build-oauth-init-url.ts:5 — OAuthInitArgs is exported but unconsumed outside the module",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/auth/[provider]/build-oauth-init-url.ts:5 `export interface OAuthInitArgs {` matches. Repo-wide grep finds only the declaration (:5), its use inside the same file (:40 `buildOAuthInitUrl(args: OAuthInitArgs)`), and a bare comment mention in build-oauth-init-url.link.spec.ts:6 (not an import). No import site anywhere."
+          },
+          {
+            "claim": "seasonManage.ts:496,502,511,519 — CascadeProgressKind, CascadeOnProgress, CascadeOptions, SeasonScope are exported but unconsumed outside the module",
+            "verdict": "CONFIRMED",
+            "evidence": "Exact line matches: seasonManage.ts:496 `export type CascadeProgressKind`, :502 `export type CascadeOnProgress`, :511 `export interface CascadeOptions`, :519 `export interface SeasonScope`. Repo-wide grep: all four used only inside seasonManage.ts itself (as internal type annotations on countSeasonScope/deleteSeason/deleteEventSeries etc.). No file imports these type names from '$lib/seasons/seasonManage' — +page.svelte and event/[id]/+page.svelte import functions (deleteEvent, countSeasonScope, etc.) and other types (SeasonEditableField, SeriesDefaults, SeriesListItem, StandaloneEvent) but not these four."
+          },
+          {
+            "claim": "seasonManage.delete.spec.ts re-declares local CascadeOptions/SeasonScope interfaces for mocks — leave as-is or switch import, engineer's call",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/seasons/seasonManage.delete.spec.ts:67-72 declares local `interface CascadeOptions { onProgress?: OnProgress }` and `interface SeasonScope { series; events; repertoireItems }` (with locally-declared `ProgressKind`/`OnProgress` at lines 63-64 too), used to type-cast a namespace import `import * as manage from './seasonManage'` (line 54) rather than importing the real types. This is a deliberate RED-test pattern (comment at spec.ts:92-94: 'the file must LOAD while these are absent'). Un-exporting the real types does not break this spec since it never imports them."
+          },
+          {
+            "claim": "entityCreate.ts:139 — CreateSeasonInput is exported but unconsumed outside the module",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/entity/entityCreate.ts:139 `export interface CreateSeasonInput {` matches exactly. Repo-wide grep shows only the declaration and one internal use (line 439, `input: CreateSeasonInput` param on createSeason). No file imports the type; +page.svelte imports the createSeason function only (line 78), not the type."
+          },
+          {
+            "claim": "entityCreate.ts:201 — CreateWorkInput is exported but unconsumed outside the module",
+            "verdict": "DRIFTED",
+            "evidence": "The symbol and finding are still valid (CreateWorkInput exists, is exported, and is unconsumed outside the module — used only internally at entityCreate.ts:547 as the createWork() param type), but the cited LINE NUMBER is wrong: it's now at entityCreate.ts:523, not :201. Line 201 in the current file falls inside the CreateEventInput interface's doc comment, nowhere near CreateWorkInput. Notably this is NOT drift from #221/#222 landing after the review — `git diff 0ea592c..HEAD -- src/lib/entity/entityCreate.ts` and `git diff 56372ca..HEAD` are both empty (zero commits have touched this file since the review commits), so the line number was already wrong at the time of the original 0ea592c/56372ca review — a citation error baked into the finding, not fresh drift. Repo-wide grep confirms no import site anywhere (only src/library/+page.svelte imports the `createWork` function, not the `CreateWorkInput` type; entityCreate.work.spec.ts imports only `createWork`)."
+          },
+          {
+            "claim": "#226 touches src/lib/seasons/seasonManage.ts (one of the three #222-blocked surfaces) and is correctly ordered behind #222",
+            "verdict": "CONFIRMED",
+            "evidence": "The un-export targets include seasonManage.ts:496-519 (CascadeProgressKind/CascadeOnProgress/CascadeOptions/SeasonScope). This IS one of the three flagged surfaces (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts) per epic #223's ordering rule and the issue's own 'Ordering: behind #222' note. Confirmed by direct inspection, not just by trusting the issue's self-declaration."
+          },
+          {
+            "claim": "No spec file will break from removing the `export` keyword on any of the seven targeted symbols",
+            "verdict": "CONFIRMED",
+            "evidence": "Full repo-wide grep (src, tests) for each of the 7 symbol names (EventConvertStep, EventConvertReason, ConvertEventToSeriesResult, OAuthInitArgs, CascadeProgressKind, CascadeOnProgress, CascadeOptions, SeasonScope, CreateSeasonInput, CreateWorkInput — 10 total incl. the two CascadeOptions/SeasonScope dupes) turned up zero cross-module `import` statements referencing any of them; all matches are either the declaration itself, internal same-file usage, comment-only mentions, or (for CascadeOptions/SeasonScope) an independently-declared local interface of the same name in seasonManage.delete.spec.ts that does not import the real type."
+          }
+        ],
+        "risks": [
+          "The only real defect found is a stale line-number citation (CreateWorkInput: issue says :201, actual :523) — cosmetic for a RED-slice (the engineer will find the symbol by name regardless), but worth calling out per the task's DRIFTED protocol since epic #223 explicitly claims every finding was re-verified against the tree before inclusion, and this one wasn't (or the verification didn't check line accuracy).",
+          "Not independently confirmed: whether `pnpm check` / `pnpm test` currently pass cleanly on this branch before the RED slice starts (out of scope for a read-only pre-RED grep-verification pass, and the task didn't ask for it, but the eventual GREEN gate depends on the baseline being clean going in).",
+          "seasonManage.delete.spec.ts also independently locally-declares `ProgressKind`/`OnProgress` (lines 63-64) mirroring `CascadeProgressKind`/`CascadeOnProgress` — the issue's note only calls out CascadeOptions/SeasonScope by name; worth the engineer double-checking that un-exporting CascadeProgressKind/CascadeOnProgress doesn't need the same 'leave as-is or switch' decision (in practice it doesn't, since the spec's local types are structurally independent duplicates, not imports — same conclusion as for CascadeOptions/SeasonScope, just not explicitly enumerated in the issue body)."
+        ],
+        "notes": "Repo guard passed: origin is https://github.com/mvox-dev/mvox-app.git. Observed at commit 7cec0b8 (\\\"test(#222): RED — season management as one card...\\\"), branch feat/222-season-manage-card — the in-flight #222 pipeline branch, exactly as expected per the task brief; no git state was touched (read-only throughout: only `git log`, `git diff`, `git merge-base`, `grep`, `sed -n` reads).\\n\\nAll 7 named symbols across 4 files are CONFIRMED exported-and-unconsumed-outside-module, matching the un-export finding. 6 of 7 line citations are exact; 1 (CreateWorkInput, entityCreate.ts) has a stale line number (:201 cited vs :523 actual) — traced via `git diff 0ea592c..HEAD` / `56372ca..HEAD` on the file (both empty) to a citation error present since the original review, not fresh drift from #221/#222/etc. The symbol itself and the finding's substance (unexported, unconsumed) both hold.\\n\\nQ5 answer — does this slice touch the #222-blocked surfaces (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts)? **YES** — it touches src/lib/seasons/seasonManage.ts (un-exporting CascadeProgressKind/CascadeOnProgress/CascadeOptions/SeasonScope at lines 496/502/511/519). It does NOT touch src/routes/+page.svelte or src/routes/event/[id]/+page.svelte (grepped both files' seasonManage imports — neither imports any of the 4 flagged types, only functions and other, non-flagged types). This confirms the issue's own 'Ordering: behind #222' note is accurate, not just asserted.\\n\\nOn the spec-file engineer's-call note (CascadeOptions/SeasonScope re-declared locally in seasonManage.delete.spec.ts for mock-typing a namespace import): confirmed exactly as described. This is a deliberate RED-test isolation pattern (comment explicitly: the spec file must load while the real exports are absent), so 'leave as-is' is the low-risk choice — switching the spec to import the real types would work equally but isn't required by anything found in the tree.\\n\\nCross-cutting axes (i18n locales, rights tiers, multi-collective): not applicable — none of the 7 targets touch translation keys, rights checks, or collective-scoping logic; they are pure internal type-signature exports.\\n\\nTest inventory: zero spec files import any of the 7 targeted type names from outside their home module — verified by full repo-wide grep per symbol (src/routes/*.spec.ts, src/lib/**/*.spec.ts). Removing `export` on all 7 should be typecheck-neutral and test-neutral; no spec needs modification as a consequence of this slice (the seasonManage.delete.spec.ts local re-declarations are pre-existing and independent, not something this slice must touch)."
+      },
+      {
+        "issue": 227,
+        "claims": [
+          {
+            "claim": "src/app.css:56-59 --color-voice-s/-a/-t/-b: zero consumers (no seating/voice feature references them)",
+            "verdict": "CONFIRMED",
+            "evidence": "app.css:56-59 defines the four tokens exactly as cited. Repo-wide grep (src/, --include svelte/ts/js/css/json, excluding node_modules/build) for 'color-voice', 'voice-s', 'voice-a', 'voice-t', 'voice-b' finds only the definitions themselves plus two unrelated string matches (scripts/migrations/section-cleanup comment 'voice-section', SectionPicker.create-live-shape.spec.ts comment 'voice-section') that are not this token family. No utility-class usage (bg-voice-s etc.) anywhere."
+          },
+          {
+            "claim": "src/app.css:61-64 --color-desk-1/-2/-3/-base: zero consumers; DeskSurface.svelte hardcodes its own hex values",
+            "verdict": "CONFIRMED",
+            "evidence": "app.css:61-64 defines the four tokens exactly as cited. Repo-wide grep for 'color-desk'/'desk-1'/'desk-2'/'desk-3'/'desk-base' finds only the app.css definitions. src/lib/components/DeskSurface.svelte:57 uses `linear-gradient(180deg, #f7ecd4, #f7dcca)` — hardcoded hex values distinct from the tokens' hex values (#d6c39a/#d8c79e/#d4be94/#d3bf95); file has no other hex or 'desk' token reference (only the unrelated `data-desk` attribute at line 6)."
+          },
+          {
+            "claim": "src/app.css:15 --color-red-soft: unused",
+            "verdict": "CONFIRMED",
+            "evidence": "app.css:15 defines `--color-red-soft: #f0d8d0;` exactly as cited. Repo-wide grep for 'red-soft' finds only that one definition line, no consumers anywhere in src."
+          },
+          {
+            "claim": "src/app.css:17 --color-green-soft: unused",
+            "verdict": "CONFIRMED",
+            "evidence": "app.css:17 defines `--color-green-soft: #dde9cb;` exactly as cited. Repo-wide grep for 'green-soft' finds only that one definition line, no consumers anywhere in src."
+          },
+          {
+            "claim": "src/app.css:19 --color-amber-soft: only touched by eventTypeStyles.spec.ts:139 (reserved-hue guard test); delete token AND update spec",
+            "verdict": "CONFIRMED",
+            "evidence": "app.css:19 defines `--color-amber-soft: #f5e3bf;` exactly as cited. Repo-wide grep for 'amber-soft' finds exactly two hits: the app.css definition and src/lib/events/eventTypeStyles.spec.ts:139 `const reserved = [value('indigo'), value('amber'), value('indigo-soft'), value('amber-soft')];` inside the 'six base tokens carry six DISTINCT color values' test (describe block at line 102, 'type tokens exist in src/app.css @theme'). value() regex-matches `--color-<token>:` directly against the raw app.css text and asserts non-null (line 130), so deleting the token without editing this line would break the test with a real assertion failure, not a false pass. Fix: drop `value('amber-soft')` from the reserved array (amber base and indigo/indigo-soft stay, since --color-amber and --color-indigo-soft are not being deleted)."
+          },
+          {
+            "claim": "--color-indigo-soft is LIVE at roster/+page.svelte:2836 — do not touch",
+            "verdict": "CONFIRMED",
+            "evidence": "grep for 'indigo-soft' shows src/routes/roster/+page.svelte:2836 `: ''} {heldSubtreeIds.has(row.id) ? 'bg-indigo-soft' : ''}\"` — a live class-name usage, matching the issue's cited line exactly. Also referenced/asserted in src/routes/page.roster-arrange-reorder.spec.ts:565-568 (bg-indigo-soft assertions) and eventTypeStyles.spec.ts:139 (reserved-hue guard, which correctly keeps referencing this live token). Token must stay untouched, consistent with the issue."
+          },
+          {
+            "claim": "Specs that reference the five deletion targets (would break or need updating)",
+            "verdict": "CONFIRMED",
+            "evidence": "Only src/lib/events/eventTypeStyles.spec.ts:139 references any of the five doomed tokens (amber-soft, via the reserved array). No spec references voice-s/-a/-t/-b, desk-1/-2/-3/-base, red-soft, or green-soft. src/ios-form-zoom.spec.ts also reads APP_CSS raw text but does not reference any of the five tokens (grep for voice/desk/red-soft/green-soft/amber-soft in that file returns no matches) — unrelated to this slice."
+          },
+          {
+            "claim": "This slice touches src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, or src/lib/seasons/seasonManage.ts (the behind-#222 surfaces)",
+            "verdict": "REFUTED",
+            "evidence": "NO. The issue's full scope is src/app.css (five @theme token deletions at lines 15,17,19,56-59,61-64) plus one edit to src/lib/events/eventTypeStyles.spec.ts:139. Grepped all three named #222-surface files for 'app.css' imports/references — zero hits. None of the three files import eventTypeStyles.spec.ts or reference these CSS tokens. This slice is fully independent of the #222 branch and can proceed in any order per the epic's ordering note."
+          }
+        ],
+        "risks": [
+          "The issue text says --color-amber (base, line 18) and --color-indigo (base, line 20) are not in the deletion list and are presumably still consumed elsewhere — this was not explicitly re-verified since it's out of scope for #227's deletion targets, but the reserved-hue guard test (eventTypeStyles.spec.ts:139) does call value('amber') and value('indigo') and those must keep resolving after the edit, which they will since only amber-soft is deleted from app.css.",
+          "Build artifacts under .svelte-kit/output/ still contain old compiled CSS referencing possibly-different content, but these are generated/git-ignored and irrelevant to source-of-truth verification.",
+          ".svelte-kit output dir was not excluded from the very first find command, producing four stale build CSS files in the listing — these were correctly disregarded as non-source and did not affect the grep verification (grep commands only targeted src/, scripts/, messages/, docs/ or --include filters over the whole tree with node_modules/build excluded)."
+        ],
+        "notes": "Repo guard passed: origin=https://github.com/mvox-dev/mvox-app.git (mvox-app.git). Observed at commit 7cec0b8 on branch feat/222-season-manage-card (in-flight #222 pipeline branch, as expected per task brief — git state untouched). Read-only throughout: no edits, no commits, no writes made.\\n\\nAll five token-group findings in issue #227 are CONFIRMED verbatim, including exact line numbers (15, 17, 19, 56-59, 61-64) and the amber-soft/indigo-soft distinction. eventTypeStyles.spec.ts:139 is the one required test edit — drop `value('amber-soft')` from the `reserved` array; nothing else needs to change in that spec (the describe block above it, 'every token a hued class string references is DEFINED', only iterates HUED_TYPES type-* tokens and is unaffected). No i18n/locale axis applies (issue #227 is CSS-only, no Paraglide keys touched — that's #228/#229's scope). No rights-tier or multi-collective axis applies (pure presentational tokens). This slice does NOT touch any of the three #222-behind surfaces and has no dependency on the #222 branch — safe to sequence in any order per epic #223's stated ordering rule.\\n\\nReady for RED: Tallis should write a test asserting the five token groups are absent from src/app.css (or equivalently that eventTypeStyles.spec.ts's amber-soft reference is gone) and that the six visual-surface files (app.css itself + DeskSurface.svelte) render unchanged after deletion."
+      },
+      {
+        "issue": 228,
+        "claims": [
+          {
+            "claim": "`app_name` key exists in all four message catalogs (messages/{en,et,lv,uk}.json)",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -rn \"app_name\" messages/ → present at line 3 in all four files: en.json, et.json, lv.json, uk.json (value \"mvox\" in all four)"
+          },
+          {
+            "claim": "`app_name` is referenced nowhere (src/app.html has no <title> tag)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/app.html read in full — no <title> element present. Repo-wide grep for `app_name`, `.app_name`, `appName` across src/ and whole repo (excluding node_modules/.git) returns zero hits outside the four messages/*.json catalogs. src/lib/paraglide/ (compiled output containing generated accessors) is gitignored per .gitignore line 29 — it's a regenerated build artifact, not a real consumer, and disappears once messages/*.json change."
+          },
+          {
+            "claim": "`placeholder_greeting` key exists in all four message catalogs",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -rn \"placeholder_greeting\" messages/ → present at line 4 in all four files, locale-appropriate greeting values (en: 'Hello, {name}!', et: 'Tere, {name}!', lv: 'Sveiki, {name}!', uk: 'Привіт, {name}!')"
+          },
+          {
+            "claim": "`placeholder_greeting` is referenced nowhere",
+            "verdict": "CONFIRMED",
+            "evidence": "Repo-wide grep for `placeholder_greeting`, `.placeholder_greeting`, `placeholderGreeting` across src/ and whole repo returns zero hits outside the four messages/*.json catalogs."
+          },
+          {
+            "claim": "No dynamic `m[...]` access exists in the repo, so no hidden call sites for either key",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -rn 'm\\[' src/ turned up only TypeScript array-type annotations (e.g. `AgendaItem[]`, `RepertoireItem[]`, regex-match-group indexing `m[1]`/`m[2]` in typography-scale.spec.ts and ios-form-zoom.spec.ts unrelated to i18n) — no `m['app_name']`-style Paraglide dynamic-key access anywhere in the tree."
+          }
+        ],
+        "risks": [
+          "No test spec references either key by name (checked src/lib/i18n/personPickerKeys.spec.ts, pluralization.spec.ts, and repo-wide *.spec.ts grep) — deleting both keys from all 4 catalogs will not break any existing test, and none pin these keys as fixtures.",
+          "The four catalogs are symmetric today (both keys present at lines 3-4 in every locale file) — deletion should remove both lines from all four files uniformly to preserve that symmetry; no locale is missing either key already, so there's no asymmetric-drift edge case to handle.",
+          "src/lib/paraglide/ is a gitignored, Vite-plugin-regenerated build artifact (README.md, messages/, messages.js, registry.js, runtime.js) that currently still contains compiled accessors for these two keys — this is expected and will self-correct on next dev/build regeneration once the source messages/*.json keys are removed; it requires no manual action in this slice."
+        ],
+        "notes": "Verified at commit 7cec0b8 on branch feat/222-season-manage-card (git remote confirmed https://github.com/mvox-dev/mvox-app.git). Both epic #223 verified-findings claims for #228 hold with zero drift since the 0ea592c/56372ca review baseline — the #221 merge and in-flight #222 branch did not touch messages/*.json or app.html.\n\nQuestion 5 (in-flight #222 surfaces): NO — this slice touches only messages/{en,et,lv,uk}.json. It does not touch src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, or src/lib/seasons/seasonManage.ts (confirmed by the grep results above — all hits for the target keys/patterns were confined to the messages/ directory and unrelated TS array-type/regex-match false positives). No ordering conflict with #222 per the epic's 'Everything else in any order' rule.\n\nScope note: the issue's 'Done when' criterion (both keys gone from 4 catalogs, suite GREEN) is fully achievable — no blocking dependency found. This is a two-line-per-file deletion (4 files x 2 lines), free ordering, trivial as billed."
+      },
+      {
+        "issue": 229,
+        "claims": [
+          {
+            "claim": "Repo guard: cwd ~/workspace-app origin is mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; HEAD 7cec0b8 on branch feat/222-season-manage-card (in-flight #222 pipeline branch, as expected per the task's note)."
+          },
+          {
+            "claim": "All six keys (library_checkout_copy_placeholder, library_checkout_member_placeholder, profile_repair_done, profile_visibility_intro, profile_visibility_title, profile_visibility_unset) exist symmetrically in all four locale catalogs and are called only in spec mocks, never in production code",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/{en,et,lv,uk}.json each carry all six keys with non-empty translated values (en.json:245-246, 144, 124-125, 130 etc.; verified same line numbers across all four files). Repo-wide grep for `m.<key>(` / `m['key']` / `m[\"key\"]` under src/ returns zero hits for all six keys — no production usage anywhere. Usage is confined to vi.mock('$lib/paraglide/messages.js', ...) stub objects in 8 spec files: src/routes/page.library.spec.ts, page.library-copy-sort-nulls.spec.ts, page.library.a11y.spec.ts, page.library-collapse-copies.spec.ts, page.library-copy-sort.spec.ts, page.library-create-work.spec.ts (checkout keys); page.profile.spec.ts, page.profile-linked-accounts.spec.ts (profile keys)."
+          },
+          {
+            "claim": "profile_repair_done is expected in VisibilityRepairBanner.svelte but absent even there",
+            "verdict": "CONFIRMED",
+            "evidence": "Read src/lib/components/profile/VisibilityRepairBanner.svelte in full (76 lines). It calls m.profile_repair_title, m.profile_repair_body_tightening/widening/loaded, m.profile_repair_working, m.profile_repair_action, m.profile_repair_error — but never m.profile_repair_done. The banner is only rendered via {#each repairPlans as plan} in src/routes/profile/+page.svelte:836-845; repairPlans is $derived from loadedProfiles, so on a successful repair the plan simply drops out of the list and the banner unmounts silently — no 'done'/success confirmation exists anywhere in the profile surface (profile_saved, the closest analog, is also unused in production)."
+          },
+          {
+            "claim": "For the library_checkout_* keys, the mock-only status reflects a deliberately removed feature, not missing wiring",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/page.library.spec.ts:605-607 (comment) and its describe block '#73 — librarian return': 'The standalone single-checkout form that used to live here is REMOVED by the #76 PO ruling — single checkout now happens inline on the browse tree'. The '#76 — inline checkout on browse tree' describe block (line 712+) contains an explicit test 'the standalone checkout form does NOT exist — not even for a librarian' (line 766) asserting [data-testid=checkout-form/checkout-copy-select/checkout-member-select/checkout-submit] are all null. Production src/routes/library/+page.svelte now implements inline per-row checkout using a DIFFERENT key, m.library_inline_checkout_placeholder (lines 1190, 1198, 'Select member') — one placeholder only, since copy selection is implicit in the row. library_checkout_copy_placeholder and library_checkout_member_placeholder belonged to the removed standalone form and have no successor for the copy-picker half; the member half was superseded by a differently-named key."
+          },
+          {
+            "claim": "profile_visibility_unset ('Not set at any level yet.') corresponds to a state that cannot occur in the current data model",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/profile/+page.svelte:223-225 — `const activeLevelFor = (f: FieldKey): Level => resFor(f).holders[0]?.level ?? 'domain';` with comment 'The level currently holding this field (narrowest non-empty, or domain default)'. Return type Level is non-optional; the `?? 'domain'` fallback means every field always resolves to a concrete level — there is no reachable 'unset' state to display this copy for."
+          },
+          {
+            "claim": "profile_visibility_title / profile_visibility_intro are superseded by the existing profile_intro key",
+            "verdict": "REFUTED",
+            "evidence": "messages/en.json:109 profile_intro = 'Your name and email, and who can see them.' (generic whole-page intro, rendered at src/routes/profile/+page.svelte:825) vs en.json:124-125 profile_visibility_title = 'Who can see each field' / profile_visibility_intro = 'Each field is visible at exactly one level. Pick an icon to move it.' — distinct content describing a dedicated visibility-picker section heading that is never rendered; the {#each FIELDS} field list (lines 847-870) has no heading/intro above it beyond the generic profile_intro line. No superseding key found anywhere in src/lib/components/profile/*.svelte."
+          }
+        ],
+        "risks": [
+          "profile_repair_done, profile_visibility_intro, and profile_visibility_title are STOP-AND-REPORT per my read of the issue's own rule — the pipeline should NOT delete them mechanically; they need a PO ruling on the #229 issue thread before any action.",
+          "I did not run the test suite (read-only mandate) — census is grep/read-based only, not confirmed by executing vitest.",
+          "The determination that 'wiring exists under another key' for the two library_checkout_* keys rests on reading test comments/history (page.library.spec.ts:605-607, :766) as authoritative evidence of a real #76 PO ruling; I did not independently pull up issue #76 itself to confirm the ruling text (gh issue view 76 not run) — worth a quick confirmatory read before the pipeline treats this as settled, though the in-code evidence (removed elements asserted null, replacement key in production) is strong on its own."
+        ],
+        "notes": "Verified at commit 7cec0b8 on branch feat/222-season-manage-card (mvox-app repo; in-flight #222 branch, as the task note anticipated — did not touch git state).\n\nQ5 — behind-#222 surfaces (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts): NO. #229's targets touch only src/routes/profile/+page.svelte, src/lib/components/profile/VisibilityRepairBanner.svelte, src/routes/library/+page.svelte, messages/{en,et,lv,uk}.json, and the profile/library spec files. None of the three named #222 surfaces are involved. This slice can proceed independent of #222's completion.\n\nQ6 — per-key grep-and-decide verdict for the pipeline to mechanically apply:\n\n| Key | Full usage census | Issue's rule says |\n|---|---|---|\n| `library_checkout_copy_placeholder` | 4 locales (symmetric); prod: 0 hits; spec mocks only in 6 library specs (unasserted stub entries) | **DELETE** — belonged to the standalone checkout form explicitly REMOVED by the #76 PO ruling (page.library.spec.ts:605-607, :766 asserts its DOM nodes are null); no successor copy-placeholder needed under inline checkout (copy is implicit per-row) |\n| `library_checkout_member_placeholder` | same as above | **DELETE** — same #76-removed form; the member half was superseded by `library_inline_checkout_placeholder` (src/routes/library/+page.svelte:1190,1198), a different key already in production use |\n| `profile_repair_done` | 4 locales (symmetric); prod: 0 hits; spec mocks only in page.profile.spec.ts:67, page.profile-linked-accounts.spec.ts:73 (unasserted stub entries) | **STOP-AND-REPORT** — VisibilityRepairBanner.svelte genuinely has no 'done'/success state (banner just unmounts silently when repairPlans no longer includes the field); no superseding copy found anywhere. Report: surface = profile page visibility-repair banner; what user currently sees on successful repair = banner disappears with zero confirmation feedback. |\n| `profile_visibility_intro` | 4 locales (symmetric); prod: 0 hits; spec mocks only, unasserted | **STOP-AND-REPORT** — content is distinct from the generic `profile_intro` actually rendered (line 825); no dedicated visibility-section intro is shown anywhere in +page.svelte. Report: surface = profile page, above the per-field visibility pickers; user currently sees no section-level explanatory text there beyond the generic page intro. |\n| `profile_visibility_title` | 4 locales (symmetric); prod: 0 hits; spec mocks only, unasserted | **STOP-AND-REPORT** — same surface as above; no heading ('Who can see each field') precedes the {#each FIELDS} list at all. Report alongside profile_visibility_intro — likely the same missing-section-header finding, PO may want to rule on both together. |\n| `profile_visibility_unset` | 4 locales (symmetric); prod: 0 hits; spec mocks only, unasserted | **DELETE** — `activeLevelFor` (profile/+page.svelte:224-225) structurally always falls back to `'domain'` (`?? 'domain'`), so the 'not set at any level' state this copy describes cannot occur under the current data model; this is a dead concept, not missing wiring |\n\nSo of the six: 3 DELETE (both library_checkout_* keys, profile_visibility_unset) and 3 STOP-AND-REPORT (profile_repair_done, profile_visibility_intro, profile_visibility_title) — the pipeline should delete the three DELETE keys from all 4 catalogs + their spec-mock stub entries (8 spec files touched total: 6 library specs for the checkout pair, page.profile.spec.ts + page.profile-linked-accounts.spec.ts for profile_visibility_unset), leave the catalogs/mocks untouched for the three STOP-AND-REPORT keys, and leave issue #229 open with the three findings written up for Gama/PO ruling.\n\nNo i18n-catalog-completeness/locale-parity spec exercises these six keys generically (page.ux-polish-i18n.spec.ts and the other *-i18n*.spec.ts files scan a fixed, unrelated CHANGED_SURFACES list) — deleting from the 4 catalogs + spec mocks is the full blast radius, nothing else in the suite references these tokens."
+      },
+      {
+        "issue": 230,
+        "claims": [
+          {
+            "claim": "Repo guard: origin remote ends in mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "eventCreateTallinnOffsetMinutes duplicated near-verbatim at src/routes/+page.svelte:2786-2807 vs event/[id]/+page.svelte's tallinnOffsetMinutes:1393-1414",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte: EVENT_CREATE_TZ const at 2783, function eventCreateTallinnOffsetMinutes at 2787-2808 (body 2788-2807, closing brace 2808 -- issue's '2786-2807' is off by ~1 line into the trailing doc-comment/closing-brace, not real drift). src/routes/event/[id]/+page.svelte: function tallinnOffsetMinutes at exactly 1393-1414 as cited. Diffed both bodies (renaming EVENT_CREATE_TZ->TZ, eventCreateTallinnOffsetMinutes->tallinnOffsetMinutes): byte-identical, zero diff output."
+          },
+          {
+            "claim": "tallinnLocalToUtcIso duplicated near-identically between the two files",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte:2814-2825 vs event/[id]/+page.svelte:1452-1463. Diffed both bodies with the same name substitution: byte-identical, zero diff output. No behavioral difference between the two copies."
+          },
+          {
+            "claim": "AgendaList.svelte:183 redeclares the TZ constant",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/components/agenda/AgendaList.svelte:183 -- `const TZ = 'Europe/Tallinn';`, exact line cited. Note: this TZ is used only by three calendar-day-grouping Intl formatters (groupKeyFmt/headerFmt/shortDateFmt, lines 186-211) -- NOT the two-pass offset/local-to-UTC conversion the other two files use. The issue's wording is careful about this (only claims the constant, not the conversion, is duplicated here), but the 'Done when' clause ('all three sites consume it') is ambiguous about whether AgendaList needs to consume the full offset+local->UTC helper (it doesn't use it) or just a shared TZ string (which it would use). Flagging as an interpretation point, not a refutation."
+          },
+          {
+            "claim": "'both files already import src/lib/preferences/timeFormat.ts, which owns the Tallinn constant'",
+            "verdict": "DRIFTED",
+            "evidence": "The import claim is CONFIRMED: both +page.svelte:7 and event/[id]/+page.svelte:25 already `import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat'`. But timeFormat.ts does NOT currently export a reusable Tallinn TZ constant -- checked every `^export` in the file (lines 8,10,22,27,31,54,65): TimeFormat type, TIME_FORMAT_KEY, readStoredTimeFormat, timeFormatStore, setTimeFormat, tallinnHHMM, formatTime. The string 'Europe/Tallinn' appears only once, inline/private, inside the `tallinnHHMMFmt` Intl.DateTimeFormat literal at line 48 -- there is no exported `TALLINN_TZ` (or similarly named) constant to import today. The module conceptually 'owns' the Tallinn-TZ knowledge but the wording implies an existing reusable constant is sitting there ready to import, which is not literally true -- exporting one is part of the work #230 must do, not something already in place."
+          },
+          {
+            "claim": "Extraction target: 'one shared helper (offset + local->UTC-ISO) lives in lib/preferences/timeFormat.ts'",
+            "verdict": "CONFIRMED",
+            "evidence": "No such helper exists yet in timeFormat.ts today (only tallinnHHMM/formatTime/preference-store exports, confirmed above) -- consistent with this being new code to add, matching the issue's own framing as a 'real refactor,' not a claim it already exists."
+          },
+          {
+            "claim": "DST boundary cases must be covered by tests on the shared helper",
+            "verdict": "CONFIRMED",
+            "evidence": "timeFormat.spec.ts already has a #220-era template for this exact pattern (describe block '#220 -- tallinnHHMM', with an explicit 'pinned concrete values on the DST edges' test, lines 193-229) -- the new offset/local->UTC helper's tests can follow the same shape. Separately, src/routes/event/[id]/page.event-editing.spec.ts:1134-1177 already has a dedicated `describe('/event/[id] -- DST transition days convert to the RIGHT instant')` block with spring-forward (29 Mar, 01:30 Tallinn -> 23:30Z prev day) and fall-back (25 Oct, 02:30 Tallinn -> 23:30Z prev day) cases, driven through the UI end-to-end -- these will directly regression-check the extraction. No equivalent DST-boundary describe block exists in src/routes/page.event-create.spec.ts (only DST-adjacent fixture comments, e.g. lines 1021, 1064, 1339-1342) -- the create-page path is covered less directly and relies more on the shared-helper's own new unit tests."
+          }
+        ],
+        "risks": [
+          "Line-number drift risk in +page.svelte from the CONCURRENT #222 pipeline: HEAD moved from 7cec0b8 (RED, spec-only) to 70c78b5 (GREEN, 'feat(#222): season management as one card') mid-investigation, touching src/routes/+page.svelte (+71/-42 lines) at diff hunks starting ~2588 and ~5170-6390. Re-verified all #230 target line numbers AFTER this commit landed (grep re-run against fresh HEAD 70c78b5) -- EVENT_CREATE_TZ:2783, eventCreateTallinnOffsetMinutes:2787-2808, tallinnLocalToUtcIso:2814-2825 all unchanged, since the #222 hunks land later in the file (5170+) or are a net +1 hunk earlier at 2588 that evidently doesn't shift these specific numbers as re-observed live. Any further commits landing on this shared branch before #230's RED author reads the file will require another re-grep.",
+          "Interpretive ambiguity in the issue's 'all three sites consume it': AgendaList's TZ usage is structurally different (calendar-day grouping formatters) from the two-pass offset/local->UTC-ISO helper the other two sites need. The RED author should decide whether AgendaList imports just a shared TZ string constant (minimal, matches its actual need) vs. something heavier -- worth a quick Gama/PO check if ambiguous, though the issue's phrasing ('offset + local->UTC-ISO' helper explicitly, TZ constant separately for AgendaList) supports the minimal reading.",
+          "AgendaList.svelte:179-182 carries an explicit in-code caution comment: 'PRESERVED VERBATIM ... Do not touch the TZ constant, the three formatters below, or the groups derivation without re-checking the DST edge cases they guard' (referencing T5 build spec S3). Redirecting TZ to import from timeFormat.ts is exactly the kind of touch this comment warns about -- AgendaList.spec.ts (grouping/TODAY/TOMORROW DST-sensitive tests, e.g. lines 70-173) must be re-run and the comment updated/removed as part of this slice if AgendaList is in scope.",
+          "The timeFormat.no-hardcoded-render.spec.ts lint-style scan (which forbids duplicate 24h-rendering Intl formatters outside timeFormat.ts) already fingerprint-excludes the offset converters via `second: '2-digit'` + trailing `.formatToParts(` (see isConverter check) regardless of which file they live in -- moving them into timeFormat.ts should not trip this spec, but worth a real test run to confirm rather than relying on static reading alone."
+        ],
+        "notes": "Repo guard passed (origin=mvox-app.git); all reads confined to ~/workspace-app; no edits/commits/writes made. Observed at commit 70c78b5 ('feat(#222): season management as one card...') on branch feat/222-season-manage-card -- note the tree advanced from 7cec0b8 to 70c78b5 DURING this investigation (the concurrent #222 pipeline went RED->GREEN while I was reading), and I re-verified every +page.svelte line number after that commit landed to rule out staleness.\n\nSection 5 answer (does this slice touch the behind-#222 surfaces): YES for src/routes/+page.svelte (EVENT_CREATE_TZ/eventCreateTallinnOffsetMinutes/tallinnLocalToUtcIso at lines 2783-2825) and YES for src/routes/event/[id]/+page.svelte (TZ/tallinnOffsetMinutes/tallinnLocalToUtcIso at lines 611, 1393-1463). NO for src/lib/seasons/seasonManage.ts (grepped for Tallinn/tallinn/DST/offset -- zero hits, this file is untouched by #230's targets). This matches the issue's own 'Ordering: behind #222' note and the epic's ordering rule -- already correctly sequenced; the sequencing gate has now been cleared (post-#222-GREEN) rather than still pending.\n\nBoth target functions are module-private (not exported) in both .svelte files, so a repo-wide export/import search found zero external consumers of the duplicated names themselves -- the only consumers are internal call sites within each file, already enumerated (tallinnLocalToUtcIso calling the offset function twice in each copy).\n\nTest inventory for this slice: src/routes/page.event-create.spec.ts (event-creation flow, several Tallinn-wall-clock-to-UTC assertions, no dedicated DST-boundary describe block); src/routes/event/[id]/page.event-editing.spec.ts (event-editing flow, PLUS a dedicated DST-transition describe block at lines 1134-1177 covering spring-forward and fall-back exactly); src/lib/preferences/timeFormat.spec.ts (shared module's own spec -- where new helper tests belong, following the existing #220/tallinnHHMM DST-pinned-values pattern at lines 193-229); src/lib/preferences/timeFormat.no-hardcoded-render.spec.ts (lint-style scan, structurally unaffected per the isConverter fingerprint exclusion, but should be re-run); src/lib/components/agenda/AgendaList.spec.ts (only relevant if AgendaList's TZ constant is put in scope for this slice -- pins Tallinn-calendar-day grouping/TODAY/TOMORROW behavior across DST-adjacent dates).\n\nNo locale/i18n axis applies here (this is a date/time computation extraction, not a translation-key change) and no rights-tier axis applies (pure client-side date math, no permission gating) -- cross-cutting axis checks in task step 4 are not meaningfully applicable to #230."
+      },
+      {
+        "issue": 231,
+        "claims": [
+          {
+            "claim": "AgendaList.svelte:186 `groupKeyFmt` — en-CA ISO date-only Intl.DateTimeFormat, timeZone Europe/Tallinn",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/components/agenda/AgendaList.svelte:186-191, exactly at cited line. Options: {timeZone: TZ ('Europe/Tallinn'), year:'numeric', month:'2-digit', day:'2-digit'}. Consumed at :233, :252, :255."
+          },
+          {
+            "claim": "AgendaList.svelte:206 `shortDateFmt` — intra-file duplicate of groupKeyFmt, identical options",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/components/agenda/AgendaList.svelte:206-211, byte-identical option object to groupKeyFmt (same TZ constant, same year/month/day shape). Consumed at :348 (recent-row-date span). Behavior pinned by AgendaList.spec.ts:584 ('2026-06-15') and a dedicated DST-edge test at :594-611 asserting Tallinn-not-UTC calendar day across both 2026 transition instants — this test would catch a tz-handling regression in any consolidated factory."
+          },
+          {
+            "claim": "+page.svelte:2388 `seasonDateFmt` — en-CA ISO date-only, timeZone UTC",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:2388-2393, exact line match. {timeZone:'UTC', year:'numeric', month:'2-digit', day:'2-digit'}. Feeds formatSeasonDate() (:2400-2405), rendered at season-manage-start_date/end_date (:5478-5529). Behavior pinned by page.season-manage.spec.ts:674-683 (startDate '2026-03-29' / endDate '2026-10-25' round-tripped verbatim through this formatter)."
+          },
+          {
+            "claim": "+page.svelte:2843 `eventCreateStatusDateFmt` — en-CA ISO date-only, timeZone Tallinn (EVENT_CREATE_TZ)",
+            "verdict": "DRIFTED",
+            "evidence": "Actual declaration is at line 2844, not 2843 (off-by-one; the jsdoc comment block starts at 2843, the `const` line itself is 2844). Content otherwise matches: {timeZone: EVENT_CREATE_TZ = 'Europe/Tallinn' (line 2783), year:'numeric', month:'2-digit', day:'2-digit'}. Composed with formatTime(tallinnHHMM(...)) in eventCreateStatusFmt() (:2850-2852), consumed at :4015 for the event-create-status live region, exercised by page.event-create.spec.ts (asserts event-create-status textContent, e.g. :1352,:1369,:1385,:1406)."
+          },
+          {
+            "claim": "InviteSurface.svelte:108 and invite/[token]/+page.svelte:35 — byte-identical en-CA option objects, no timeZone (unspecified), same invite-expiry concept",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/components/admin/InviteSurface.svelte:108-112 and src/routes/invite/[token]/+page.svelte:35-39 both exactly at cited lines, both {year:'numeric', month:'2-digit', day:'2-digit'} with no timeZone key. Both feed the invite-expiry display (inviteExpiryDate / expiryDate). The 'unspecified' behavior is deliberately load-bearing: page.admin-invite.spec.ts:393-398 and page.invite-landing.spec.ts:98-103 each build an independent en-CA oracle formatter with no timeZone and a comment 'in the runner's local zone' — confirming unspecified-tz is intentional production behavior, not an oversight, and must be preserved exactly (not normalized to UTC/Tallinn) per the issue's own STOP condition."
+          },
+          {
+            "claim": "library/+page.svelte:55 `_dateFmt` — en-CA ISO date-only, timeZone UTC",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/library/+page.svelte:55-60, exact line match. {year:'numeric', month:'2-digit', day:'2-digit', timeZone:'UTC'}. Real consumer: formatDate() (:61-64) called at :795 and :984 for lending assignedAt/assignedUntil display. Exercised by page.library.spec.ts (assignedAt/assignedUntil fixtures like '2026-07-01', '2026-08-01' throughout)."
+          },
+          {
+            "claim": "The formatter is 'rebuilt at ~8 sites' (issue lists exactly 7)",
+            "verdict": "DRIFTED",
+            "evidence": "Issue #231's body explicitly enumerates 7 sites (2 AgendaList + 2 +page.svelte + 2 invite + 1 library). Repo-wide grep for new Intl.DateTimeFormat('en-CA' in src/**/*.{svelte,ts} finds an 8th, uncited call site: src/routes/event/[id]/+page.svelte:1421-1428, inside toTallinnLocalInputValue(). However this formatter is NOT the same shape as the other 7 — it adds hour:'2-digit', minute:'2-digit', hourCycle:'h23', timeZone TZ (Tallinn), and is consumed via .formatToParts() (building a datetime-local input value 'YYYY-MM-DDTHH:MM'), not .format() for a pure date-only string. It is functionally a Tallinn-wall-clock datetime-input seed, not the 'ISO date-only formatter' the issue describes. Folding it into a date-only factory without also carrying hour/minute would be behavior-changing. Recommend NOT sweeping it into #231's shared factory silently — flag for remote/PO awareness rather than treating as a #231 target, since the issue's own scope (7 named sites, single date-only shape) doesn't include it."
+          },
+          {
+            "claim": "This slice touches src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, or src/lib/seasons/seasonManage.ts (the #222-behind surfaces)",
+            "verdict": "CONFIRMED",
+            "evidence": "YES for src/routes/+page.svelte — issue's own 7-site list includes 2 sites there (seasonDateFmt :2388, eventCreateStatusDateFmt :2844). NO for src/lib/seasons/seasonManage.ts — grep for DateTimeFormat/en-CA in that file returns zero hits. NO (per issue's literal scope) for src/routes/event/[id]/+page.svelte — no site there is named in #231's body; the en-CA formatter found there (see prior claim) is a different shape and not one of the 7 targets, so strictly this task does not require editing that file, but a shared-factory refactor touching +page.svelte still means this slice IS behind #222 and must sequence there. Current checkout is already on feat/222-season-manage-card at 70c78b5 ('season management as one card'), i.e. #222's work is already landed on this branch — so #231 is unblocked to proceed once this branch merges/lands, consistent with the epic's ordering note."
+          },
+          {
+            "claim": "Extraction target src/lib/preferences/timeFormat.ts does not already contain an en-CA / ISO-date-only helper (no naming collision, no partial prior work)",
+            "verdict": "CONFIRMED",
+            "evidence": "Full file read (src/lib/preferences/timeFormat.ts, 79 lines): exports TimeFormat, TIME_FORMAT_KEY, readStoredTimeFormat, timeFormatStore, setTimeFormat, tallinnHHMMFmt (module-private), tallinnHHMM, formatTime. No Intl.DateTimeFormat('en-CA', ...) or date-only factory present — a genuinely new addition, not a rename collision."
+          }
+        ],
+        "risks": [
+          "The 2 'unspecified timeZone' sites (InviteSurface.svelte:108, invite/[token]/+page.svelte:35) run in the process's local timezone. If the shared factory is implemented with a required `timeZone` parameter (rather than optional/undefined-accepting), a careless call-site update could accidentally force UTC or Tallinn there, silently changing invite-expiry-date display near a UTC-day boundary depending on server locale — the issue's own STOP clause anticipates this; both test oracles (admin-invite.spec.ts:393, invite-landing.spec.ts:98) independently reconstruct the no-timeZone formatter, so keep `timeZone?: string` truly optional/undefined in the factory signature.",
+          "The event/[id]/+page.svelte:1421 en-CA formatter (see DRIFTED claim above) is a near-miss for scope creep: it shares the en-CA/ISO date parts but adds hour/minute/hourCycle and uses formatToParts. If the extraction is implemented generically enough to tempt reuse there, that would be a real behavior change on a file explicitly gated behind #222 and outside this issue's named 7 sites — worth an explicit non-goal note in the PR description.",
+          "+page.svelte line numbers have already drifted by 1 for eventCreateStatusDateFmt (2843→2844) since the epic's 0ea592c/56372ca snapshot; re-grep before editing rather than trusting the issue's line numbers verbatim (the issue itself anticipates this)."
+        ],
+        "notes": "Repo guard passed: origin https://github.com/mvox-dev/mvox-app.git. Observed at commit 70c78b5 ('feat(#222): season management as one card...') on branch feat/222-season-manage-card — this IS the in-flight #222 branch the task description warned about; #231's two root +page.svelte sites (seasonDateFmt, eventCreateStatusDateFmt) were read directly off this branch's current state, not off main, so they already reflect any #222 changes. All 7 sites named in #231 are CONFIRMED present and structurally as described (single shared shape: en-CA, year/month/day 2-digit/numeric, timeZone varying UTC/Tallinn/unspecified across 3 groups: Tallinn×3 [AgendaList groupKeyFmt, AgendaList shortDateFmt, +page.svelte eventCreateStatusDateFmt], UTC×2 [+page.svelte seasonDateFmt, library/+page.svelte _dateFmt], unspecified×2 [InviteSurface.svelte, invite/[token]/+page.svelte]). No REFUTED findings among the 7 named sites — the extraction is safe to proceed as scoped. The one substantive new finding is the uncited 8th en-CA call in event/[id]/+page.svelte, which is shape-different (adds hour/minute, uses formatToParts) and should stay OUT of this slice. Tests that would break/pin on any behavior drift: AgendaList.spec.ts (:584, :594-611 DST-edge, :654), page.season-manage.spec.ts (:674-683), page.event-create.spec.ts (status-text assertions consuming eventCreateStatusFmt), page.admin-invite.spec.ts (:393-400 oracle), page.invite-landing.spec.ts (:98-104 oracle), page.library*.spec.ts (assignedAt/assignedUntil fixtures through formatDate). No i18n/locale-key axis applies (pure Intl date formatters, no Paraglide message keys involved), and no rights-tier axis applies (display-only formatting, no ACL surface). #222-surface check for notes item 5: YES for src/routes/+page.svelte (2 of the 7 sites live there); NO for src/lib/seasons/seasonManage.ts (no en-CA/DateTimeFormat hits); event/[id]/+page.svelte is NOT a named #231 target (its en-CA formatter is a different, out-of-scope shape) though it does independently sit behind #222 per the epic's general ordering note."
+      },
+      {
+        "issue": 232,
+        "claims": [
+          {
+            "claim": "Repo guard: origin remote is mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git. Observed HEAD 70c78b5 'feat(#222): season management as one card...' on branch feat/222-season-manage-card (in-flight #222 pipeline, as expected — not main)."
+          },
+          {
+            "claim": "Status union `'loading'|'no-collective'|'load-error'|'session-expired'|'ready'` is independently re-implemented at profile/+page.svelte:50-52",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/profile/+page.svelte:50 `type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';`, :52 `let generation = 0;` — exact line numbers match the issue."
+          },
+          {
+            "claim": "Same union at roster/+page.svelte:36-41",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:36 identical Status union; :38-40 comment explicitly says 'mirrors profile/+page.svelte's `let generation`'; :41 `let generation = 0;` — exact line numbers match."
+          },
+          {
+            "claim": "Same union at library/+page.svelte:66-69",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/library/+page.svelte:66 identical Status union; :69 `let generation = 0;` — exact line numbers match (line 67 is an unrelated `NodeStatus` type interleaved between them, consistent with the issue's 66-69 span)."
+          },
+          {
+            "claim": "A fourth copy of the status union sits in src/lib/components/admin/InviteSurface.svelte",
+            "verdict": "DRIFTED",
+            "evidence": "InviteSurface.svelte:67-76 has a Status union that is a SUPERSET, not an identical copy: it adds 'no-access', 'creating', 'done', 'create-error' to the base 5 states. Also has no `loadForSelected`/`generation` guard at all — it uses `loadPrerequisites` (line 131) and `submit` (line 223) with no generation counter. The issue's own wording ('a fourth copy of the status union' — not the full state machine) is technically accurate but easy to over-read; flagging because a naive shared-type extraction that types the helper to the 5-state union would not compile against InviteSurface without widening the type or having InviteSurface locally extend it. Worth explicit attention during RED: the shared type needs to accommodate a superset consumer, or InviteSurface's extra 4 states must be composed on top rather than baked in."
+          },
+          {
+            "claim": "4-branch error template (no-collective/loading/session-expired/load-error) recurs across the three route pages",
+            "verdict": "CONFIRMED",
+            "evidence": "profile/+page.svelte:806-824, roster/+page.svelte:2502-2540, library/+page.svelte:996-1025 all show `{#if status === 'no-collective'}...{:else if 'loading'}...{:else if 'session-expired'}...{:else if 'load-error'}...{:else}` in the same order."
+          },
+          {
+            "claim": "The `const g = ++generation; … if (g !== generation) return;` idiom recurs standalone in event/[id]/+page.svelte",
+            "verdict": "DRIFTED",
+            "evidence": "The idiom is present (event/[id]/+page.svelte:125 `let generation = 0;`, :272 `const g = ++generation;`, many `if (g !== generation) return;` sites), but characterizing this page as merely a 'standalone generation guard' recurrence undersells what's actually there: the page also independently re-implements the FULL pattern the issue attributes only to profile/roster/library — its own `type Status` union (lines 115-121, superset adding a genuine 5th state `'not-available'`, tested and used at line 313/1692 and in page.session-expired.spec.ts / page.spec.ts), its own `async function loadForSelected()` (line 269), AND a matching 5-branch template (lines 1668-1699: loading/session-expired/load-error/not-available/no-collective). This is effectively a 5th near-duplicate of the whole state machine, not just an isolated counter — worth the RED author's explicit attention even though the issue's mandatory 'Done when' list correctly excludes this file (it is one of the #222-behind, optional-follow-through surfaces)."
+          },
+          {
+            "claim": "The idiom also recurs standalone at +layout.svelte:164",
+            "verdict": "DRIFTED",
+            "evidence": "+layout.svelte:164 is a comment line inside a second, separate generation-guard effect (`adminGen`, declared :170, guard used at :174/:182). The actual code shape there is the POSITIVE form `if (g === adminGen) adminStore.set(state);`, not the negative early-return form `if (g !== generation) return;` the issue describes. There is also a FIRST, uncited generation guard earlier in the same file (`gateGen`, declared :124, used :128/:136, same positive-form shape) that the comment at :121 refers to as 'profile generation discipline' but isn't itself line-cited by the issue. Net: two generation-guard instances exist in +layout.svelte, both structural variants (guard-and-proceed, not guard-and-return) of the cited idiom — consistent with the issue's own caution that these standalone recurrences are optional and should be left/noted if the shared helper doesn't drop in cleanly, since this shape likely requires reshaping to convert."
+          },
+          {
+            "claim": "The idiom recurs twice, standalone, in root +page.svelte",
+            "verdict": "CONFIRMED",
+            "evidence": "Two distinct capture-at-start guards: `requestId` (declared :492, captured `const thisRequest = ++requestId;` at :574, ~15 early-return guard sites) and `worksLoadId` (declared :510, captured `const thisWorksLoad = ++worksLoadId;` at :1066/:1104/:1196, composite guards like `if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;`). A third generation-shaped counter also exists in the same file, `seasonManageDeleteGeneration` (declared :2256, present already at both review commits 0ea592c and 56372ca so not new drift), but it uses a structurally different capture-then-later-external-increment pattern (`seasonManageDeleteGeneration += 1` happens in a reset function elsewhere, not at the capture site) for a different purpose (dropping stale cascade-progress ticks after a panel is torn down) — reasonably NOT counted as 'the same idiom' by the issue. So the 'twice' count for the idiom-proper is accurate; flagging the third related-but-distinct counter only as context, not as an error in the issue."
+          },
+          {
+            "claim": "Scope overlap with #222 in-flight surfaces (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts)",
+            "verdict": "CONFIRMED",
+            "evidence": "The MANDATORY scope (profile/+page.svelte, roster/+page.svelte, library/+page.svelte, InviteSurface.svelte) touches NONE of the three #222 surfaces. The OPTIONAL follow-through scope explicitly names two of the three #222 surfaces (event/[id]/+page.svelte and root +page.svelte's requestId/worksLoadId counters) — grep confirms `src/lib/seasons/seasonManage.ts` has no Status/generation pattern at all and is unrelated. This matches and explains why #232 is ordered 'behind #222 and LAST of the epic': its optional scope is the one part of the epic that reaches into live #222 territory. Answering item 5 directly: YES for the optional/stretch scope (event page, root page); NO for the mandatory scope."
+          },
+          {
+            "claim": "Tests exist that pin the session-expired / 4-branch behavior for each target page",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/page.profile-session-expired.spec.ts, page.roster-session-expired.spec.ts, page.library-session-expired.spec.ts, page.admin-invite-session-expired.spec.ts all assert on `data-testid=\"session-expired\"` / `session-expired-signin` and assert the corresponding `*-load-error` testid is ABSENT — these pin the exact branch-selection behavior of the state machine being extracted and would catch any behavior-changing consolidation. Additional non-session specs per page: profile (6 total: page.profile*.spec.ts), roster (17 total: page.roster*.spec.ts), library (9 total: page.library*.spec.ts), admin-invite/InviteSurface (2: page.admin-invite*.spec.ts). event/[id] has 5 specs (page.spec.ts, page.session-expired.spec.ts, page.event-delete.spec.ts, page.event-editing.spec.ts, page.i18n-a11y.spec.ts) and +layout.svelte has 2 (layout.completion-gate.spec.ts, layout.reactive-auth.spec.ts) — relevant only if the optional follow-through is taken."
+          },
+          {
+            "claim": "Cross-cutting i18n axis: session/error copy keys present symmetrically across locales",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/{en,et,lv,uk}.json each have identical counts (6/6/6/6) for the session_expired/profile_no_collective/profile_load_error/roster_load_error/library_load_error key family — no locale asymmetry risk. Not directly load-bearing for #232 (this is an extraction, not a key-deletion issue) but confirms no i18n drift affects the shared copy the extraction would preserve."
+          }
+        ],
+        "risks": [
+          "InviteSurface.svelte's Status union is a superset (4 extra states beyond the shared 5), not an identical copy — the shared type/helper design needs to accommodate a wider consumer or InviteSurface needs a local extension; a same-shape assumption would break InviteSurface's compile.",
+          "event/[id]/+page.svelte is under-described by the issue as merely having a 'standalone generation guard' when it actually duplicates the FULL pattern (Status union with an extra 'not-available' state, loadForSelected, 5-branch template) — worth deliberate scoping attention even though it correctly stays optional/out-of-mandatory-scope pending #222.",
+          "+layout.svelte's two generation guards (gateGen, adminGen) use the positive-form `if (g === X) {...}` shape, not the negative early-return form the issue's idiom text describes — a generic helper built around early-return semantics likely will not drop in without reshaping, so per the issue's own guidance these should probably stay unconverted and noted rather than swept in.",
+          "root +page.svelte's worksLoadId guard is COMPOSED with requestId (`if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;`) — a single generic generation-guard helper extraction would need to support two independently-scoped counters checked together, not a simple 1:1 swap; another reason the optional root-page conversion is non-trivial.",
+          "This slice is ordered 'behind #222 and LAST of the epic' and #222 is currently in-flight on the checked-out branch (feat/222-season-manage-card, HEAD 70c78b5) — RED for #232 should not start until #222 merges, consistent with the epic's own ordering rule, since its optional scope reaches into two of the three #222-guarded surfaces."
+        ],
+        "notes": "Repo guard passed (origin mvox-app.git); observed HEAD 70c78b5 on branch feat/222-season-manage-card, consistent with the task's note that #222 is in-flight in this shared tree. Read-only throughout, no writes/commits made.\n\nItem 5 answer: this issue's MANDATORY scope (profile/+page.svelte, roster/+page.svelte, library/+page.svelte, InviteSurface.svelte) does NOT touch any of the three #222 surfaces. Its OPTIONAL follow-through scope explicitly DOES touch two of them (src/routes/event/[id]/+page.svelte and src/routes/+page.svelte's requestId/worksLoadId counters); src/lib/seasons/seasonManage.ts is untouched by either scope tier (verified no Status/generation pattern present there at all).\n\nAll four core file/line citations (profile:50-52, roster:36-41, library:66-69, and the 4-branch template shape) verified CONFIRMED at the exact cited lines — no drift on the mandatory targets since the epic's review commits. The three DRIFTED findings are all about the issue's characterization of the OPTIONAL/stretch scope (InviteSurface being a superset not identical copy; event/[id]/+page.svelte actually carrying the full pattern, not just an isolated counter; +layout.svelte's guards being a positive-form structural variant) — none of them contradict or undermine the mandatory 3-file + InviteSurface extraction target, which is solid and ready for RED. They do mean the RED author should treat the OPTIONAL scope's \"drops in without reshaping\" bar as likely NOT met for +layout.svelte and only partially met for event/[id]/+page.svelte (whose Status/loadForSelected/template COULD join the mandatory extraction as a 5th superset consumer, structurally analogous to InviteSurface, if scope is deliberately widened — but that's a product/scope call, not something this verification should decide).\n\nNo REFUTED findings — nothing the issue claims is actually false; all deviations are undercounts/underdescriptions of additional relevant structure, in the direction of more duplication existing than stated, never less."
+      }
+    ],
+    "sweep": {
+      "claims": [
+        {
+          "claim": "Repo guard: ~/workspace-app origin is mvox-app.git",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin → https://github.com/mvox-dev/mvox-app.git; branch feat/222-season-manage-card, HEAD 7cec0b8"
+        },
+        {
+          "claim": "#224's cited symbols/lines are live: entityCreate.ts:137 EntuCfg re-export, eventConvert.ts:59, seasonManage.ts:35, request.ts:51 AuthExpiredError-only-half-dead",
+          "verdict": "CONFIRMED",
+          "evidence": "grep of all four files shows exact line matches as cited"
+        },
+        {
+          "claim": "#226's cited symbols/lines: seasonManage.ts 496/502/511/519 (CascadeProgressKind/CascadeOnProgress/CascadeOptions/SeasonScope), eventConvert.ts 69/83/133, build-oauth-init-url.ts:5, entityCreate.ts:139 (CreateSeasonInput)",
+          "verdict": "CONFIRMED",
+          "evidence": "grep confirms all lines except one drift noted separately"
+        },
+        {
+          "claim": "entityCreate.ts:201 is CreateWorkInput per #226's citation",
+          "verdict": "DRIFTED",
+          "evidence": "Line 201 is now `export interface CreateEventInput {` (not a #226 target — correctly not listed for un-export). CreateWorkInput is actually at line 523. Issue's own 'Re-grep each symbol first' instruction already covers this; not a plan defect, just confirms the instruction is necessary."
+        },
+        {
+          "claim": "seasonManage.delete.spec.ts locally redeclares CascadeOptions/SeasonScope interfaces, as #226 notes",
+          "verdict": "CONFIRMED",
+          "evidence": "seasonManage.delete.spec.ts:67 `interface CascadeOptions`, :70 `interface SeasonScope`"
+        },
+        {
+          "claim": "#227's app.css token lines (15,17,19,56-59,61-64) and roster/+page.svelte:2836 indigo-soft usage are live as cited",
+          "verdict": "CONFIRMED",
+          "evidence": "app.css lines match exactly; roster/+page.svelte:2836 contains `bg-indigo-soft`; eventTypeStyles.spec.ts:139 contains the reserved-hue guard referencing indigo-soft/amber-soft"
+        },
+        {
+          "claim": "#228's app_name/placeholder_greeting keys exist in all 4 catalogs and are unreferenced in production code",
+          "verdict": "CONFIRMED",
+          "evidence": "messages/{en,et,lv,uk}.json lines 3-4 all present; no `m[` dynamic access found in src (non-spec)"
+        },
+        {
+          "claim": "#229's six keys exist in all 4 catalogs and are referenced only in spec files, not production .svelte/.ts",
+          "verdict": "CONFIRMED",
+          "evidence": "grep -rln across src/ excluding messages/ returns only *.spec.ts files (page.profile.spec.ts, page.library*.spec.ts, page.profile-linked-accounts.spec.ts); VisibilityRepairBanner.svelte exists and has profile_repair_title/body/working/action but genuinely lacks profile_repair_done, matching the issue's claim"
+        },
+        {
+          "claim": "#230's duplicated Tallinn offset/conversion functions exist at cited locations and both files already import timeFormat.ts",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/+page.svelte:2787 eventCreateTallinnOffsetMinutes, :2814 tallinnLocalToUtcIso; event/[id]/+page.svelte:1393 tallinnOffsetMinutes, :1452 tallinnLocalToUtcIso; both files import from $lib/preferences/timeFormat which already exists (timeFormat.ts + timeFormat.spec.ts present)"
+        },
+        {
+          "claim": "#231's 8 ISO-date-formatter sites are live at cited locations",
+          "verdict": "CONFIRMED",
+          "evidence": "AgendaList.svelte:186/206 (groupKeyFmt/shortDateFmt, path is src/lib/components/agenda/AgendaList.svelte not top-level as issue's shorthand implies), +page.svelte:2388/2844, InviteSurface.svelte:108, invite/[token]/+page.svelte:35, library/+page.svelte:55 — all present with en-CA DateTimeFormat calls"
+        },
+        {
+          "claim": "#232's Status union + generation guard triplication in profile/roster/library +page.svelte and InviteSurface.svelte",
+          "verdict": "CONFIRMED",
+          "evidence": "identical `type Status = 'loading'|'no-collective'|'load-error'|'session-expired'|'ready'` + `let generation = 0` found in all three route files at/near cited lines; InviteSurface.svelte has the same union inline (lines ~68-72)"
+        },
+        {
+          "claim": "Standalone generation-guard idiom also recurs in root +page.svelte, event/[id]/+page.svelte, +layout.svelte:164 (optional #232 follow-through)",
+          "verdict": "CONFIRMED",
+          "evidence": "root +page.svelte uses a DIFFERENT generation concept (seasonManageDeleteGeneration, a delete-progress guard) plus its own `g`/`generation` pairs; event/[id]/+page.svelte:125 `let generation = 0` with `g !== generation` idiom repeated ~15x; +layout.svelte:164 area has 'Same generation-guard discipline' comment"
+        },
+        {
+          "claim": "Epic's constraint that #222 surface = src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts, and only #224/#226/#230/#231/(#232 optionally) actually touch those three files",
+          "verdict": "CONFIRMED",
+          "evidence": "Cross-checked all 9 bodies: #225/#227/#228/#229 cite none of the three files; #224 cites seasonManage.ts only (1 line, soft ordering per its own text); #226 cites seasonManage.ts (4 lines); #230 cites +page.svelte AND event/[id]/+page.svelte; #231 cites +page.svelte; #232's PRIMARY targets are profile/roster/library +page.svelte (none of the three), with root +page.svelte and event/[id]/+page.svelte only as OPTIONAL follow-through"
+        },
+        {
+          "claim": "No R1 issue (#224-#232) cites the agenda_signed_out/agenda_sign_in keys or the anonymous-stub +page.svelte branch deleted by #221 (commit 117971c)",
+          "verdict": "CONFIRMED",
+          "evidence": "117971c commit message confirms it deleted agenda_signed_out/agenda_sign_in i18n keys + the anon-stub branch + a +layout.svelte special-case; grep of all 9 issue bodies for those two key names returns zero matches — the epic's premise is intact w.r.t. this specific post-#221 change"
+        },
+        {
+          "claim": "#224 and #225 both touch src/lib/admin/roleManagement.ts (different symbols/lines)",
+          "verdict": "CONFIRMED",
+          "evidence": "#224 cites roleManagement.ts:131-132 (ROLE_LOCKOUT, ROLE_GRANT_MISSING); #225 cites roleManagement.ts:42,63,79 (RightsValue, OwnRights, RoleListing) — not previously called out by the epic framing, same-file overlap not flagged in either issue body"
+        },
+        {
+          "claim": "#224 and #226 share three files: entityCreate.ts, eventConvert.ts, seasonManage.ts",
+          "verdict": "CONFIRMED",
+          "evidence": "#224 touches entityCreate.ts:137, eventConvert.ts:59, seasonManage.ts:35 (all EntuCfg re-export lines); #226 touches entityCreate.ts:139/523, eventConvert.ts:69/83/133, seasonManage.ts:496-519 — 3-file overlap, heavier than #224's 1-file overlap with #225"
+        },
+        {
+          "claim": "#230 and #231 both touch timeFormat.ts (explicitly, per #230's own text 'Pairs with #231 same target module') and both touch src/routes/+page.svelte at different line ranges",
+          "verdict": "CONFIRMED",
+          "evidence": "#230 body: 'Pairs with #231 (same target module) — separate PRs'; #230 edits +page.svelte:2786-2822 region, #231 edits +page.svelte:2388 and :2844 — same file, disjoint line ranges"
+        },
+        {
+          "claim": "#231 and #232 share two files: library/+page.svelte and InviteSurface.svelte (different code regions — date formatter vs status/generation machine)",
+          "verdict": "CONFIRMED",
+          "evidence": "#231 cites library/+page.svelte:55 and InviteSurface.svelte:108 (date formatters); #232 cites library/+page.svelte:66-69 and InviteSurface.svelte's status union as primary refactor targets — not called out in either issue body as a cross-issue collision"
+        },
+        {
+          "claim": "#229's spec files (page.profile.spec.ts, page.library*.spec.ts) that mock the six keys are also files #232 will likely touch (same routes' specs) when refactoring profile/library load logic",
+          "verdict": "UNVERIFIABLE",
+          "evidence": "Confirmed #229 touches page.profile.spec.ts, page.library.spec.ts, page.library-collapse-copies.spec.ts, page.library-create-work.spec.ts, page.library-copy-sort*.spec.ts, page.library.a11y.spec.ts, page.profile-linked-accounts.spec.ts (mock blocks only); whether #232's implementation will edit the same spec files cannot be determined without #232 being implemented — flagged as a soft same-file-family risk, mitigated by #229 running free-order (early) and #232 running last regardless"
+        }
+      ],
+      "risks": [
+        "entityCreate.ts:201 citation in #226 has drifted from CreateWorkInput to CreateEventInput (now at line 523) — low risk since the issue already mandates re-grep, but worth flagging to whoever picks up #226 so they don't waste a cycle chasing the wrong line",
+        "#224 and #226 have a 3-file overlap (entityCreate.ts, eventConvert.ts, seasonManage.ts) not called out in either issue body — if packed into separate pipeline runs (rather than adjacent slices in one run) there is real rebase/merge risk on all three files",
+        "#224 and #225 share roleManagement.ts (different lines) — minor but real overlap, unflagged in issue text",
+        "#230 and #231 share timeFormat.ts (both adding helpers there) AND root +page.svelte (different line ranges) — the issues explicitly want 'separate PRs' but don't specify ordering; sequencing them in the same run back-to-back is safest",
+        "#231 and #232 share library/+page.svelte and InviteSurface.svelte — mitigated by #232's mandatory 'last' ordering, but only if #232 is scheduled strictly after #231 (not just 'somewhere later' in a parallel free-order run)",
+        "#226's CascadeOptions/SeasonScope resolution is left to engineer's judgment (un-export vs. switch spec to import originals) — packing order should note whichever choice is made, since it affects whether seasonManage.delete.spec.ts gets touched by #226 itself",
+        "#229's six keys are described as 'test-mock-only' but the underlying UI features (library checkout, profile visibility banner) are real live surfaces (library/+page.svelte has extensive checkout state, VisibilityRepairBanner.svelte is a real component) — case-2 rulings could turn into non-trivial follow-up work outside this slice's scope",
+        "None of the file-overlap findings above (#224↔#225, #224↔#226, #230↔#231, #231↔#232) were surfaced in the issue bodies themselves — the epic's own file-overlap awareness is incomplete for the non-#222-gated pairs; the packing recommendation compensates but a human reviewer should sanity-check the final run assignment before dispatch"
+      ],
+      "notes": "STARTING STATE: repo guard passed (~/workspace-app origin ends in mvox-app.git). Observed at commit 7cec0b8 on branch feat/222-season-manage-card (in-flight #222 RED state, as expected — did not touch git state, read-only throughout).\n\n=== 1. FILE OVERLAP MATRIX (verified pairs with shared files) ===\n- #224 ↔ #225: src/lib/admin/roleManagement.ts (disjoint lines: 131-132 vs 42/63/79)\n- #224 ↔ #226: entityCreate.ts, eventConvert.ts, seasonManage.ts (3 files — heaviest overlap in the set; #224's lines are strict subsets/predecessors of #226's, since #224 removes a re-export line that sits just above #226's un-export targets in each file)\n- #230 ↔ #231: timeFormat.ts (both add helpers there — explicit in #230's own text) + src/routes/+page.svelte (disjoint line ranges)\n- #231 ↔ #232: library/+page.svelte, InviteSurface.svelte (disjoint regions: date-formatter lines vs status/generation lines)\n- #228 ↔ #229: all four messages/*.json (disjoint key ranges: lines 3-4 vs 124-246 — deletion-only, no logic collision)\n- #225 ↔ #226: NO shared files (auth/invite/profile/rsvp/attendance vs eventConvert/oauth/seasonManage/entityCreate — clean split as the issues themselves state)\n- #227: fully isolated (app.css + eventTypeStyles.spec.ts only, no overlap with anything else in the epic)\n- #229 spec-mock files (page.profile.spec.ts, page.library*.spec.ts) sit in the same file family #232 will likely touch when converting those routes' load logic — soft risk, not a hard verified overlap\n\n=== 2. ORDER HAZARDS ===\n- No deletion slice removes something an extraction slice's duplication census depends on: #224/#226 delete/un-export TYPE exports and re-export lines; #230/#231/#232 extract RUNTIME logic (Tallinn conversion, date formatting, status/generation state machine) — no cited symbol overlap between the delete-set and the extract-set.\n- #232's state-machine extraction does not conflict with #230/#231's date/time extraction — different concerns (load-sequencing vs. formatting) even where they share a host file (library/+page.svelte, InviteSurface.svelte via #231/#232, or +page.svelte via #230/#231). #232 running strictly last means it will see #230/#231's already-refactored timeFormat.ts call sites, which is fine since #232 doesn't touch date formatting.\n- entityCreate.ts:201 citation in #226 has drifted (see claims) — not a hazard given the issue's built-in re-grep instruction, but worth a heads-up.\n\n=== 3. #222 SURFACE CHECK ===\nConfirmed by direct grep of all 9 bodies against the three named files (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/seasons/seasonManage.ts):\n- Touch at least one of the three: #224 (seasonManage.ts, 1 line, soft-behind per its own text), #226 (seasonManage.ts, 4 lines, hard-behind), #230 (+page.svelte AND event/[id]/+page.svelte, hard-behind), #231 (+page.svelte, hard-behind), #232 (root +page.svelte + event/[id]/+page.svelte only as OPTIONAL follow-through — primary targets are profile/roster/library which are NOT behind #222)\n- Do NOT touch any of the three: #225, #227, #228, #229 — confirmed free of all three paths in their bodies.\n- No free-order slice (#225/#227/#228/#229) collides with #222's diff — #222 is a season-management-card UI change scoped to +page.svelte/event page/seasonManage.ts; none of the four free-order issues cite i18n keys, CSS tokens, or exports anywhere near season-manage UI surface.\n\n=== 4. RECOMMENDED PACKING ===\n**Free-order runs (dispatch now, no #222 dependency):**\n- Run F1 (trivial, bundle in one run, sequential slices, no shared files with each other but touch small footprints): #227 → #228 → #229, in that order (227 standalone app.css; 228 the true-dead keys first since it's pure delete with zero judgment; 229 last since it needs per-key investigation and may produce open PO-ruling items that shouldn't block the trivial deletes behind it)\n- Run F2: #225 alone or bundled into F1 if the pipeline tool supports 4+ slices per run — no file overlap with 227/228/229, purely mechanical un-export across 9 independent files\n\n**Behind #222 (wait for #222 to merge to main first), single sequenced run in this internal order:**\n1. #224 — dead re-exports across entityCreate.ts/eventConvert.ts/seasonManage.ts/request.ts (small, run first so #226 starts from a slightly cleaner file — the EntuCfg re-export line sits physically near #226's targets in two of the three shared files)\n2. #226 — un-export cascade/entity/event-convert/oauth types (same 3 files as #224, sequenced immediately after with zero gap — resolves the file-overlap hazard; also resolve the CascadeOptions/SeasonScope spec-mock note per the issue's own \"engineer's call\")\n3. #230 — Tallinn DST conversion extraction into timeFormat.ts (touches +page.svelte, event/[id]/+page.svelte)\n4. #231 — ISO date formatter extraction into timeFormat.ts (same target module as #230 per its own text; also touches +page.svelte — pack directly after #230, same run, to avoid a second rebase against the same file/module)\n5. #232 — state-machine extraction, LAST as mandated; also last because it shares library/+page.svelte and InviteSurface.svelte with #231, so running immediately after #231 means #232 lands cleanly on top of already-refactored code in those two files\n\n**Trivially small (could share one pipeline run):** #227 (5 CSS token groups + 1 spec line), #228 (2 keys × 4 files, zero judgment), #229's case-1 keys are also small once decided — these three are the smallest slices in the epic and have zero file overlap with each other, making them the safest bundle-of-three for one run.\n\n**Largest/highest-risk:** #232 (own PR per its text, explicit before/after test pass) and #230 (DST edge cases need dedicated boundary tests) — do not bundle either with anything else.\n\n=== 5. POST-#221 PREMISE CHECK ===\n117971c (merged, on branch history) deleted `agenda_signed_out`/`agenda_sign_in` i18n keys and the anonymous-visitor stub branch in root +page.svelte, plus a `+layout.svelte` path==='/' special case. Searched all 9 issue bodies for both key names: zero matches. None of #224-#232's findings cite those now-deleted targets — the epic's premise holds intact with respect to this specific #221 change. (This does not rule out other #221-driven drift elsewhere in the epic; only the two named keys/branch were checked as instructed.)\n\nAll numeric line citations in all 9 issues were verified against live code and match exactly, with the single noted exception (entityCreate.ts:201 in #226, now CreateEventInput rather than CreateWorkInput — CreateWorkInput has moved to line 523). Every issue already instructs \"re-grep each symbol first,\" so this drift is self-correcting by design, not a plan defect."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "sweep:interactions",
+      "phaseIndex": 2,
+      "phaseTitle": "Sweep",
+      "agentId": "af2f388e582865da6",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465139640,
+      "queuedAt": 1788465138074,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "STARTING STATE: repo guard passed (~/workspace-app origin e…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465427354,
+      "tokens": 70394,
+      "toolCalls": 25,
+      "durationMs": 287713,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: ~/workspace-app origin is mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin → https://github.com/mvox-dev/mvox-app.git; branch feat/222-season-manage-card, HEAD 7cec0b8\"},{\"claim\":\"#224's cited symbols/lines are live: entityCreate.ts:137 EntuCfg re-export, eventConvert.ts:59, seasonManage.ts:35, request.ts:51 AuthExpiredError-only-half-dead\"…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:224",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a41a6c606f88c44d6",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465139658,
+      "queuedAt": 1788465138112,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard: ~/workspace-app origin confirmed = mvox-app.git…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465261675,
+      "tokens": 58242,
+      "toolCalls": 19,
+      "durationMs": 121074,
+      "resultPreview": "{\"claims\":[{\"claim\":\"src/lib/entity/entityCreate.ts:137 has a dead re-export `export type { EntuCfg } from './entuSeasons'`\",\"verdict\":\"DRIFTED\",\"evidence\":\"Line drifted by 2 (137→135 for the import; the export line itself is now `src/lib/entity/entityCreate.ts:137: export type { EntuCfg };` re-exporting the type imported at line 135 `import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuS…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:225",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a2a9cd88c5bdd4a83",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465266890,
+      "queuedAt": 1788465138113,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Verified at commit 7cec0b8 on branch feat/222-season-manage…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465368967,
+      "tokens": 54460,
+      "toolCalls": 17,
+      "durationMs": 102076,
+      "resultPreview": "{\"claims\":[{\"claim\":\"src/lib/admin/roleManagement.ts:42,63,79 — RightsValue, OwnRights, RoleListing are exported with zero external importers\",\"verdict\":\"CONFIRMED\",\"evidence\":\"Lines match exactly: 42 `export interface RightsValue {`, 63 `export interface OwnRights {`, 79 `export interface RoleListing {`. Repo-wide grep (src + tests) for each symbol outside roleManagement.ts returns zero hits. Rol…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "verify:226",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a6988050e1554c80f",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465372410,
+      "queuedAt": 1788465138113,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed: origin is https://github.com/mvox-dev/mv…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465544831,
+      "tokens": 62197,
+      "toolCalls": 32,
+      "durationMs": 172420,
+      "resultPreview": "{\"claims\":[{\"claim\":\"eventConvert.ts:69,83,133 — EventConvertStep, EventConvertReason, ConvertEventToSeriesResult are exported but unconsumed outside the module\",\"verdict\":\"CONFIRMED\",\"evidence\":\"src/lib/events/eventConvert.ts:69 `export type EventConvertStep =`, :83 `export type EventConvertReason = ...`, :133 `export interface ConvertEventToSeriesResult {` — line numbers match exactly. Repo-wide…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 5,
+      "label": "verify:227",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "af7f4ae581acb0074",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465430437,
+      "queuedAt": 1788465138113,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed: origin=https://github.com/mvox-dev/mvox-…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465544018,
+      "tokens": 49986,
+      "toolCalls": 18,
+      "durationMs": 113580,
+      "resultPreview": "{\"claims\":[{\"claim\":\"src/app.css:56-59 --color-voice-s/-a/-t/-b: zero consumers (no seating/voice feature references them)\",\"verdict\":\"CONFIRMED\",\"evidence\":\"app.css:56-59 defines the four tokens exactly as cited. Repo-wide grep (src/, --include svelte/ts/js/css/json, excluding node_modules/build) for 'color-voice', 'voice-s', 'voice-a', 'voice-t', 'voice-b' finds only the definitions themselves p…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 6,
+      "label": "verify:228",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "af861391586492623",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465547199,
+      "queuedAt": 1788465138114,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Verified at commit 7cec0b8 on branch feat/222-season-manage…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465634533,
+      "tokens": 48378,
+      "toolCalls": 15,
+      "durationMs": 87333,
+      "resultPreview": "{\"claims\":[{\"claim\":\"`app_name` key exists in all four message catalogs (messages/{en,et,lv,uk}.json)\",\"verdict\":\"CONFIRMED\",\"evidence\":\"grep -rn \\\"app_name\\\" messages/ → present at line 3 in all four files: en.json, et.json, lv.json, uk.json (value \\\"mvox\\\" in all four)\"},{\"claim\":\"`app_name` is referenced nowhere (src/app.html has no <title> tag)\",\"verdict\":\"CONFIRMED\",\"evidence\":\"src/app.html r…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 7,
+      "label": "verify:229",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "ab80d22190e1b25f1",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465548003,
+      "queuedAt": 1788465138114,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Verified at commit 7cec0b8 on branch feat/222-season-manage…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465776811,
+      "tokens": 64963,
+      "toolCalls": 40,
+      "durationMs": 228807,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: cwd ~/workspace-app origin is mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; HEAD 7cec0b8 on branch feat/222-season-manage-card (in-flight #222 pipeline branch, as expected per the task's note).\"},{\"claim\":\"All six keys (library_checkout_copy_placeholder, library_checkout_member_placeholder, pr…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 8,
+      "label": "verify:230",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a8fec3a3312b6f272",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465637851,
+      "queuedAt": 1788465138114,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (origin=mvox-app.git); all reads confined…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788465948031,
+      "tokens": 77157,
+      "toolCalls": 42,
+      "durationMs": 310174,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: origin remote ends in mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"eventCreateTallinnOffsetMinutes duplicated near-verbatim at src/routes/+page.svelte:2786-2807 vs event/[id]/+page.svelte's tallinnOffsetMinutes:1393-1414\",\"verdict\":\"CONFIRMED\",\"evidence\":\"src/routes/+page.svelte: E…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 9,
+      "label": "verify:231",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a2d638f2c8bc6f786",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465779984,
+      "queuedAt": 1788465138114,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed: origin https://github.com/mvox-dev/mvox-…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788466008211,
+      "tokens": 68256,
+      "toolCalls": 31,
+      "durationMs": 228226,
+      "resultPreview": "{\"claims\":[{\"claim\":\"AgendaList.svelte:186 `groupKeyFmt` — en-CA ISO date-only Intl.DateTimeFormat, timeZone Europe/Tallinn\",\"verdict\":\"CONFIRMED\",\"evidence\":\"src/lib/components/agenda/AgendaList.svelte:186-191, exactly at cited line. Options: {timeZone: TZ ('Europe/Tallinn'), year:'numeric', month:'2-digit', day:'2-digit'}. Consumed at :233, :252, :255.\"},{\"claim\":\"AgendaList.svelte:206 `shortDat…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 10,
+      "label": "verify:232",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "abdea98efa848f391",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788465951122,
+      "queuedAt": 1788465138115,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (origin mvox-app.git); observed HEAD 70c7…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All reads/greps under ~/workspace-app. READ-ONLY: no edits, no commits, no writes. NOTE: a pipeline is concurrently working on branch feat/222-season-manage-card in this shared tree — the checked-out state may not be main; that is expected, do not touc…",
+      "lastProgressAt": 1788466230892,
+      "tokens": 73690,
+      "toolCalls": 35,
+      "durationMs": 279766,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: origin remote is mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git. Observed HEAD 70c78b5 'feat(#222): season management as one card...' on branch feat/222-season-manage-card (in-flight #222 pipeline, as expected — not main).\"},{\"claim\":\"Status union `'loading'|'no-collective'|'load-error'|'session…"
+    }
+  ],
+  "totalTokens": 627723,
+  "totalToolCalls": 274
+}
