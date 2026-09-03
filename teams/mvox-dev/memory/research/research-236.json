@@ -1,0 +1,165 @@
+{
+  "summary": "Pre-RED verification for #236 — one header row on the season-management card",
+  "agentCount": 2,
+  "logs": [],
+  "result": {
+    "verify": {
+      "claims": [
+        {
+          "claim": "REPO GUARD: cwd ~/workspace-app origin ends mvox-app.git",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git. Working tree on feat/234-season-repertoire-section @ d26a696 'feat(#234): season repertoire section in the season-manage panel', clean. Main is at f023e03 (chore: intake artifacts only, touches zero .svelte/.ts files) which sits directly on top of b554151 (the #222 one-card commit the issue was written against) — so main's +page.svelte content is byte-identical to b554151's. All line numbers below are read via `git show main:src/routes/+page.svelte` (safe on a dirty pipeline branch)."
+        },
+        {
+          "claim": "1. Two-header-row state — agenda-admin-card :5234, toolbar row :5239-5303, [+Season] :5254-5266, gear ml-auto :5279-5294, season-manage-label AFTER gear :5299-5301, panel header row :5325-5387, h2 :5326, season-manage-delete-season x :5377-5385, armed confirm/cancel :5327-5370, text-red-700 :5342",
+          "verdict": "CONFIRMED",
+          "evidence": "main:src/routes/+page.svelte, every line cited matches exactly: :5234 `{#if showSeasonManageGear || seasonManageOpen || (showSeasonCreate && !seasonCreateOpen)}`; :5235-5238 agenda-admin-card div; :5239-5246 opens agenda-admin-toolbar (role=toolbar), closes :5303; :5254-5266 season-create button block; :5279-5294 season-manage-gear button (class starts `ml-auto`); :5299-5301 `<span id=\"season-manage-label\" data-testid=\"season-manage-label\">` sits immediately after the gear's closing </button> (5294) and before the toolbar div's {/if} (5302); panel div opens :5305-5314, header row div :5325-5387 (closes 5387); h2 at :5326 `<h2 class=\"font-display text-lg text-ink\">{m.season_manage_panel_label()}</h2>`; armed confirm/cancel block :5327-5370 ({:else} at 5371); text-red-700 class literally on :5342; season-manage-delete-season x button :5377-5385. Panel div itself closes :6406, outer {#if seasonManageOpen} closes :6407 — confirming the delete-x header row (5325-5387) is a DOM descendant of the panel, not the toolbar."
+        },
+        {
+          "claim": "2. toolbarActiveTestid fallback :4302 — member list, ordering logic, is the label a non-stop today, what must change to slot season-manage-delete-season between label and season-create",
+          "verdict": "CONFIRMED",
+          "evidence": "main:src/routes/+page.svelte:4302-4313. `toolbarActiveTestid = $derived.by(...)`: only TWO members exist, hardcoded (not array-driven, not DOM-order-driven): `if (toolbarRoving === 'season-manage-gear' && gearEnabled) return toolbarRoving; if (toolbarRoving === 'season-create' && seasonEnabled) return toolbarRoving; if (seasonEnabled) return 'season-create'; if (gearEnabled) return 'season-manage-gear'; return null;` — 'last focused, else first enabled', fallback order is season-create THEN gear (comment :4307-4309 explains DOM order = [+Season] first, gear last for ml-auto). season-manage-label (a <span>, not a button) never appears in this function and is excluded from `handleAdminToolbarKeydown`'s roving query (`toolbar.querySelectorAll('button:not([disabled])')`, :4317) since it isn't a <button> — confirmed non-stop today. To slot season-manage-delete-season between label and season-create in roving order requires: (a) it must become an actual DOM `<button>` child of the toolbar element (id=agenda-admin-toolbar) — handleAdminToolbarKeydown's idx-based arrow-key roving (:4317-4319) is driven by live DOM position within that container, not a fixed list, so its arrow-key slot follows naturally from DOM placement; but (b) toolbarActiveTestid's INITIAL/fallback focus stop is hardcoded per-member (no generic array), so a third `gearEnabled`-style boolean + two new `if (toolbarRoving === 'season-manage-delete-season' && enabled) return ...` / fallback branches must be added explicitly, in the position matching its new DOM slot."
+        },
+        {
+          "claim": "3. Delete mechanics — armSeasonManageSeasonDelete + seasonManageDeleteArmed shared-slot semantics; anything assuming the delete control lives INSIDE the panel",
+          "verdict": "CONFIRMED",
+          "evidence": "main:src/routes/+page.svelte. `seasonManageDeleteArmed` state :2210; doc comment :2220-2224 states explicitly 'the SEASON control shares the ONE-armed-context slot every series/event row already uses, so arming the season disarms a row and vice versa'; `SEASON_DELETE_ROW_ID = '__season__'` sentinel :2225; shared arm/disarm helpers `armSeasonManageDelete` :3191-3198 and `disarmSeasonManageDelete` :3228-3234 (both write the single `seasonManageDeleteArmed` slot, used by series rows :3210-3225, event rows, and the season :3250-3267) — genuinely one shared slot, confirmed by grep hits at :3193/:3221/:3229/:3260/:3327(dup)/:3449/:3515/:6038/:6196. On the 'lives inside the panel' assumption: `onkeydown={onSeasonManagePanelKeydown}` is bound directly on the `id=\"season-manage-panel\"` div (:5313), and `onSeasonManagePanelKeydown` (:2616-2618) just checks `event.key === 'Escape'` — it relies on the keydown BUBBLING up from wherever focus sits, so it works today only because the delete x/confirm/cancel buttons (:5325-5387) are DOM descendants of that div (panel closes :6406). If the delete control moves to the toolbar row (a SIBLING of the panel per #222's structure, :5239-5246 vs :5304+), Escape pressed while focused on it would no longer bubble to this handler — a real breakage. By contrast, `armSeasonManageDelete`'s focus management (:3191-3198, :3228-3234) uses `document.querySelector(...)`.focus() — document-scoped, NOT panel-scoped — so it would keep working regardless of the control's location. No other panel-scoped (`.querySelector` off `seasonManagePanelEl` or similar) query references the delete control in app code; the only other reference is the ARIA id-based `aria-controls=\"season-manage-panel\"` on the gear (:5286), which needs no DOM nesting."
+        },
+        {
+          "claim": "4. Spec pins — page.agenda-admin.spec.ts :367/:945/:963-1005, page.season-manage.spec.ts :473-479, page.season-manage-delete.spec.ts :1042-1143; any OTHER spec asserting panel h2, delete control location, or header-row composition",
+          "verdict": "CONFIRMED",
+          "evidence": "All cited lines verified on main. page.agenda-admin.spec.ts: ADMIN_TESTIDS array :365-375 (agenda-admin-card/season-manage-label entries land inside, :367 is the array's first real entry line); describe/it block for the visible label at :944 describe, :945/:963/:991 the three `it`s (963-1005 range covers the aria-labelledby-resolution test and the create-rights-only-no-label test, ending before the :1011 i18n describe). page.season-manage.spec.ts: aria-labelledby test body at :473-482 (`expect(gear.hasAttribute('aria-label')).toBe(false)` etc.) — matches. page.season-manage-delete.spec.ts: header comment block + describe 'agenda — #217 the SEASON itself gets a delete control in the panel' at :1118, `it` body :1119-1136 including `expect(panel.contains(btn)).toBe(true)` at :1132 — falls inside the cited 1042-1143 range and IS the literal 'delete control lives inside panel' assertion. ADDITIONAL spec the body's ranges do NOT cover: page.season-manage-delete.spec.ts describe 'agenda — #197 delete buttons render in the season-manage panel' (:415) contains an identical `expect(panel.contains(btn)).toBe(true)` at :430, but for the SERIES/EVENT ROW delete buttons, not the season's own delete control — still a panel-containment assertion the RED contract should be aware of if the merge pattern generalizes. Also page.season-manage.spec.ts :544 `expect(panel.getAttribute('aria-label')).toBeTruthy()` pins the PANEL div's aria-label (not the h2 specifically). No spec anywhere asserts the h2 tag itself, its DOM position relative to the delete control, or header-row child order/composition beyond these containment/attribute checks — grepped for querySelector('h2'), tagName H2, nextElementSibling/children[] across all three spec files: no hits."
+        },
+        {
+          "claim": "5. i18n — season_manage_panel_label's consumers after the h2 goes; does the panel div's aria-label stay, or aria-labelledby to the card label instead",
+          "verdict": "CONFIRMED",
+          "evidence": "Grepped `season_manage_panel_label` across the whole main tree (git grep on the main ref): exactly TWO consumers, both in +page.svelte — the panel div's `aria-label={m.season_manage_panel_label()}` (:5310) and the h2's text content (:5326). No spec references the key by name; page.season-manage.spec.ts:544 only checks the panel's aria-label is truthy (not its text). Cross-checked messages/{en,et,lv,uk}.json: `season_manage_gear_label` and `season_manage_panel_label` are currently two SEPARATE keys carrying IDENTICAL copy in all four locales ('Manage season' / 'Halda hooaega' / 'Pārvaldīt sezonu' / 'Керувати сезоном') — same pattern #222 already retired once for the gear (aria-labelledby -> season-manage-label span, killing a duplicate aria-label key). If the h2 goes, the RED contract must decide between: (a) panel div keeps its own `aria-label={m.season_manage_panel_label()}` unchanged (h2 removal is purely visual, key survives with its sole remaining consumer at :5310), or (b) panel switches to `aria-labelledby` pointing at the existing `season-manage-label` span (id already present, :5299) and `season_manage_panel_label` is retired as a duplicate key exactly as `season_manage_gear_label`'s old aria-label was retired in #222 — this is unverified/undecided in code today, both are live options, not a fact to assert either way without a ruling."
+        }
+      ],
+      "risks": [
+        "The task is read-only verification; no code was changed. If a RED implementation later moves season-manage-delete-season out of the season-manage-panel div (e.g. into the toolbar row per the issue's apparent direction), onSeasonManagePanelKeydown's Escape handling (bound via onkeydown on the panel div, :5313) will silently stop catching Escape presses that originate on the relocated control — this needs an explicit fix (e.g. move/duplicate the keydown binding to the card, or keep a bubble path) in the same change, not an incidental one.",
+        "toolbarActiveTestid (:4302-4313) is hardcoded per-member, not data-driven — adding season-manage-delete-season into toolbar roving requires new explicit branches, not a one-line array edit; underestimating this in the plan will produce an incomplete roving implementation.",
+        "season_manage_panel_label vs season_manage_gear_label is a live open question (item 5) — no code signal resolves it either way; whoever writes the RED contract needs to make this call explicitly, it is not inferable from current source alone.",
+        "Working tree is on feat/234-season-repertoire-section (d26a696) with a live pipeline; +page.svelte line numbers in that branch differ from main (e.g. season_manage_panel_label sits at :5475/:5491 there, not :5310/:5326) because #234 inserted content earlier in the file — all line numbers in this report are for CURRENT MAIN only, not the branch tip."
+      ],
+      "notes": "Repo guard passed (mvox-app.git); read-only, no mutations made. Working tree observed on feat/234-season-repertoire-section @ d26a696, clean. Main @ f023e03 (intake-artifacts-only commit, does not touch +page.svelte) sits directly on b554151 (#222 one-card merge) — main's +page.svelte is byte-identical to b554151's, confirming the issue body's 'written against main b554151' framing and validating every cited line number exactly as given. All five issue claims verified CONFIRMED with no drift. Two concrete gaps surfaced beyond what the issue body already flags: (1) Escape-key bubbling is architecturally coupled to the delete control's current DOM nesting inside the panel div (onkeydown on :5313) — moving the control breaks Escape-while-focused-on-it unless addressed; (2) an additional pre-existing spec assertion (page.season-manage-delete.spec.ts:430, the #197 series/event row describe) makes the same 'panel.contains(btn)' containment check the body's cited :1132 makes for the season's own delete button — worth the RED author's awareness even though it's about row deletes, not the season delete control itself. season_manage_panel_label's fate (item 5) is a genuine open decision, not resolvable from source — flagged for the RED contract, not asserted either way."
+    },
+    "sweep": {
+      "claims": [
+        {
+          "claim": "Repo guard: origin is mvox-app.git",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+        },
+        {
+          "claim": "Working tree sits on the concurrent #234 pipeline branch as expected",
+          "verdict": "CONFIRMED",
+          "evidence": "git branch --show-current -> feat/234-season-repertoire-section; HEAD d26a696 'feat(#234): season repertoire section in the season-manage panel'; git status clean"
+        },
+        {
+          "claim": "#234's diff does NOT touch the panel header region (h2 row / delete-arm) or the toolbar row #236 must edit -- no collision",
+          "verdict": "CONFIRMED",
+          "evidence": "git diff main..HEAD -- src/routes/+page.svelte: 8 hunks, all at import block (~34,59), state block (~320), resetManagement (~988), new panel-repertoire functions (~1451-1550), derived rows (~1662), season-load fetch (~2673), and ONE markup insertion at @@ -6403,6 +6568,33@@ -- deep inside the OPEN panel, after the dates section, well past the header row. Toolbar div (agenda-admin-toolbar, current +page.svelte:5404-5468) and the h2/delete-arm row (+page.svelte:5490-5552, = main :5326-5390, matching the issue's cited :5325-5387) are untouched by #234. Spec-file diffs for page.agenda-admin.spec.ts and page.season-manage-delete.spec.ts are both the same 8-line vi.mock('$lib/repertoire/workRows', ...) importOriginal boilerplate plus one ADMIN_TESTIDS entry ('season-manage-repertoire') -- none of the arity/containment assertions in either file are touched by #234."
+        },
+        {
+          "claim": "Toolbar container already carries flex-wrap for the 5-item collapsed header (label, trashcan, [+Season], gap, gear; confirm/cancel pair while armed)",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/+page.svelte:5409 -- agenda-admin-toolbar: class=\"flex flex-wrap items-center gap-2\". This is the same div that must host the relocated trashcan per the issue, so flex-wrap already covers the widened armed state at 375px."
+        },
+        {
+          "claim": "Rights gate structure supports slotting the trashcan inside {#if showSeasonManageGear} with no new guard",
+          "verdict": "CONFIRMED",
+          "evidence": "showSeasonManageGear = manageableSeasonId !== null && manageableSeasonRights === 'editor' (+page.svelte:2298-2300). The current delete button (+page.svelte:5542-5550) carries NO rights check of its own -- it is only reachable today because it is nested inside the editor-gated season-manage-panel. Same rights surface, so nesting it in {#if showSeasonManageGear} in the toolbar changes nothing rights-wise. Matches issue body: 'the trashcan renders under the same rights gate as the gear... no extra guard added.'"
+        },
+        {
+          "claim": "ADMIN_TESTIDS fail-closed inventory (page.agenda-admin.spec.ts) does not list the delete-season testids",
+          "verdict": "CONFIRMED",
+          "evidence": "page.agenda-admin.spec.ts:370-382 (post-#234, already includes 'season-manage-repertoire' from #234). No 'season-manage-delete-season'/-confirm/-cancel entries -- today implicitly covered by 'season-manage-panel' absence since the delete controls are its descendants. Issue body itself names this file (:367, testid inventory) as needing an update pass."
+        },
+        {
+          "claim": "Multiple specs hard-assert toolbar arity 2 and will break once the trashcan becomes a third roving member",
+          "verdict": "CONFIRMED",
+          "evidence": "page.agenda-admin.spec.ts:679 toolbar.querySelectorAll('button').toHaveLength(2); :706-715 asserts buttons[0]==='season-create' and buttons[last]==='season-manage-gear' (order also shifts: trashcan precedes season-create per the issue's slot table, so buttons[0] becomes the trashcan, not season-create); :830-845 toEqual(['season-create','season-manage-gear']); describe block :2069-2153 titled 'roving tabindex (#156, arity 2 after #213)' with toHaveLength(2) at :2101 and hardcoded btns[0]/btns[1] indices throughout. toolbarActiveTestid ($derived, +page.svelte:4467-4478) currently branches only on 'season-manage-gear' and 'season-create' -- a third branch for the trashcan testid is needed or it never receives tabindex=0, breaking the single-roving-stop model. Issue body corroborates: 'toolbarActiveTestid's fallback ordering (:4302) must list it between the label and season-create' (main-branch line 4302 = current feat/234-branch line 4467, exactly the +165-line offset #234's earlier insertions produce)."
+        },
+        {
+          "claim": "Escape-while-armed is currently panel-scoped, and will stop working once the trashcan moves into the toolbar (a sibling of the panel, not a descendant)",
+          "verdict": "CONFIRMED",
+          "evidence": "onSeasonManagePanelKeydown (+page.svelte:2781-2783) is bound only via onkeydown on the season-manage-panel div (line 5478); on Escape it calls closeSeasonManagePanel(), which as a side effect also nulls seasonManageDeleteArmed (line 2733) -- there is no dedicated 'Escape disarms without closing' handler today. #222's own doc comment (+page.svelte:5344-5345) establishes the panel renders as the toolbar row's SIBLING, never its descendant. Once the trashcan/confirm/cancel triple relocates into agenda-admin-toolbar, it sits outside season-manage-panel's keydown scope entirely -- Escape pressed on the armed confirm/cancel pair in the collapsed header will do nothing unless #236 adds new Escape handling (e.g. in handleAdminToolbarKeydown or a toolbar-level listener). Not mentioned in the issue's Done-when list -- flagged as an open implementation question."
+        },
+        {
+          "claim": "#217 delete-cascade suite queries are container-scoped (not panel-scoped) and mostly survive the relocation, except one explicit containment assertion",
+          "verdict": "CONFIRMED",
+          "evidence": "page.season-manage-delete.spec.ts almost universally queries via q(container, testid) rather than a panel-scoped helper, so most assertions are unaffected by the DOM move. ONE exception: line 1138, expect(panel.contains(btn)).toBe(true), inside describe 'agenda -- #217 the SEASON itself gets a delete control in the panel' (:1124-1152, panel obtained via openPanelWithRows at :1127) -- this becomes FALSE once the trashcan moves outside season-manage-panel into the toolbar, and must be updated. Matches the issue's own 'Known test impact' citation of :1042-1143: 'It moves from the panel to the header row... the two-step assertions must survive unchanged.'"
+        },
+        {
+          "claim": "The delete progress/error status regions (role=status / role=alert) have no mount point when the delete is triggered from the collapsed header -- a gap not addressed in the issue body",
+          "verdict": "REFUTED",
+          "evidence": "Re-checked against the issue body fetched via `gh issue view 236`: it explicitly accepts 'the season delete now lives in the card header, so it is reachable while the panel is collapsed... PO ruling: accepted, no extra guard added.' The issue's Done-when/known-test-impact lists do not mention relocating season-manage-delete-progress/-error (they still render 'under the series list' inside season-manage-panel per page.season-manage-delete.spec.ts:1602-1605). This is a genuine, PO-unaddressed interaction gap -- downgrading from an unverified worry to a confirmed omission in the issue's own scope, not a misreading on my part. Recorded as a risk below rather than a claim about the code itself, since no test or code currently defines this behavior either way."
+        }
+      ],
+      "risks": [
+        "Escape-while-armed has no handler once the trashcan/confirm/cancel triple lives in agenda-admin-toolbar (sibling of season-manage-panel): pressing Escape on the armed confirm/cancel pair in the collapsed header currently does nothing (onSeasonManagePanelKeydown only covers the panel's own subtree, +page.svelte:5478). Not called out in issue #236's Done-when list -- needs an explicit decision (new toolbar-level Escape handling, or accept the gap) before merge.",
+        "season-manage-delete-progress (role=status) and season-manage-delete-error (role=alert) render inside season-manage-panel only (page.season-manage-delete.spec.ts:1602-1605, 'under the series list'). Issue #236 deliberately makes the whole-season delete reachable while the panel is collapsed ('Consequence, deliberate... PO ruling: accepted, no extra guard added') but its Done-when list never relocates or duplicates these two feedback regions -- a delete cascade started from the collapsed header has no visible progress/error surface until/unless the panel is opened. Worth a quick PO check before implementation, not just an incidental test update.",
+        "toolbarActiveTestid ($derived, +page.svelte:4467-4478) needs a third named branch for the trashcan testid (and its confirm/cancel variants while armed) or the roving-tabindex model silently degrades (no button ever gets tabindex=0 for that slot, or the wrong one keeps it). The issue names this exact function but the concrete 3-4-arity state machine (idle trashcan vs armed confirm+cancel, each independently enabled/disabled) is still open to design during implementation.",
+        "DOM order for arity/roving assertions changes, not just count: per the issue's slot table (label, trashcan, [+Season], gear), buttons[0] in the toolbar becomes the trashcan, not season-create as today (page.agenda-admin.spec.ts:706-715 pins season-create at buttons[0]) -- both count AND order need rewriting together, easy to get half-fixed."
+      ],
+      "notes": "Repo confirmed mvox-app.git; tree on feat/234-season-repertoire-section (HEAD d26a696), a live concurrent pipeline as expected -- read-only throughout, no writes made.\\n\\nHeadline: #234 vs #236 collision check is CLEAN. #234's entire +page.svelte diff (198 insertions) lands in imports/state/new-functions/derived/season-load-fetch (all well before the panel header) plus one markup insertion deep inside the OPEN panel (after the dates section, before the panel's closing tag) -- nowhere near the toolbar row (+page.svelte:5404-5468) or the h2/delete-arm header row (+page.svelte:5490-5552, matching the issue's own :5325-5387 citation on main). #234's spec-file touches are all the same mechanical vi.mock('$lib/repertoire/workRows') importOriginal boilerplate plus one ADMIN_TESTIDS line -- none of the arity/containment assertions #236 must edit.\\n\\nFetched the live issue body via `gh issue view 236` (Gama's ruling, 2026-09-04) to ground the review instead of guessing: it independently confirms nearly every finding above (trashcan replaces the panel's <h2> row, joins the toolbar's DOM order between label and [+Season], toolbarActiveTestid needs a third branch at what is main-line :4302 = current-branch :4467 given #234's +165-line offset, and page.season-manage-delete.spec.ts:1042-1143's containment/identity assertions need updating). The one thing the issue does NOT address, and that this sweep surfaces as new: where delete-progress/-error feedback renders when the cascade is triggered from a COLLAPSED panel, since today both status regions live inside season-manage-panel itself.\\n\\nADMIN_TESTIDS (page.agenda-admin.spec.ts:370-382) does not enumerate the delete-season testids -- currently fine (implicit coverage via season-manage-panel absence) but worth an explicit add once the trashcan becomes toolbar-level, matching the issue's own note to update that file.\\n\\nAll line numbers cited are from the live feat/234-season-repertoire-section tree unless explicitly marked '(main)' -- #234 shifts everything after its first insertion point (~line 320) down by roughly 165 lines relative to main."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "ae28a618c874a3fd7",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788471372844,
+      "queuedAt": 1788471371321,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git); read-only, no mutations m…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. Tree may sit on feat/234-season-repertoire-section (a live pipeline) — expected; state observed branch/commit. Terse evidence: file:line + fact.\nIssue mvox-app#236 (gh issue view 236 — body rewritten post-rulings, authoritative; written against main b554151). Verify its claims…",
+      "lastProgressAt": 1788471616008,
+      "tokens": 79672,
+      "toolCalls": 31,
+      "durationMs": 243163,
+      "resultPreview": "{\"claims\":[{\"claim\":\"REPO GUARD: cwd ~/workspace-app origin ends mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git. Working tree on feat/234-season-repertoire-section @ d26a696 'feat(#234): season repertoire section in the season-manage panel', clean. Main is at f023e03 (chore: intake artifacts only, touches zero .svelte/.ts files…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "sweep",
+      "phaseIndex": 2,
+      "phaseTitle": "Sweep",
+      "agentId": "a2ae1733ad214d940",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788471372976,
+      "queuedAt": 1788471371322,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo confirmed mvox-app.git; tree on feat/234-season-repert…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY. Tree may sit on feat/234-season-repertoire-section (a live pipeline) — expected; state observed branch/commit. Terse evidence: file:line + fact.\nIssue mvox-app#236 sweep. Change: collapse the season card to ONE header row (label, red trashcan, [+ Season], gap, gear); panel h2 …",
+      "lastProgressAt": 1788471692028,
+      "tokens": 94742,
+      "toolCalls": 28,
+      "durationMs": 318298,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: origin is mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Working tree sits on the concurrent #234 pipeline branch as expected\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git branch --show-current -> feat/234-season-repertoire-section; HEAD d26a696 'feat(#234): season repertoire section in the…"
+    }
+  ],
+  "totalTokens": 174414,
+  "totalToolCalls": 59
+}
