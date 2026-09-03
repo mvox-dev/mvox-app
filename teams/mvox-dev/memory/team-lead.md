@@ -2,7 +2,7 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
-### [NEXT SESSION] 2026-09-02 18:35 EEST — session MVOX-13 checkpoint (board EMPTY)
+### [NEXT SESSION] 2026-09-03 — session MVOX-13 → MVOX-14 (board EMPTY, clean shutdown 2026-09-03 21:30 EEST)
 
 mvox-app main @ `66ebd9d`. **13 issues closed this session** (all squash-merged, one commit each, `Closes #N` in body): #219 `0f98490`, #207 `32845d6`+`8e6d014`, #208 `63033d4`, #209 `5788866`, #211 `e53b8e9`, #214 `b598a61`, #212 `91b3905`, #213 `6cd7a72` (manual squash after YELLOW-cap halt → fix-213 agent → Bentham r4 GREEN), #215 `7ed4ede`, #217+#216 `6814565`, #218 `c0e6d1d`, #220 `66ebd9d`. Ready board: EMPTY. Open issues: NONE. Stray branches: none. finn/bentham/perotin standing.
 

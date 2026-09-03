@@ -170,59 +170,27 @@ branch (the common case — `add -A` often doesn't bite), so make it conditional
 And re-run BOTH diff forms at review time; a clean RED commit does not bind the GREEN/i18n/FIX
 commits that follow, each of which gets its own `add -A`.
 
-## 2026-09-01 — PO standing rules: registered review triggers
+## 2026-09-02 — PO standing rules: pointer only (shorthand pruned)
 
-**[CLOSED 2026-09-02]** All of this now lives in `architecture-decisions.md:779-854` as one
-consolidated section, landed at `44389f9`. Read that section, not this one, for the binding text —
-it is ahead of the notes below (rule 7 ISO-date, rule 5's `step="300"` addendum, and the rule-6
-`#210-is-CLOSED-but-unshipped` correction exist only there). The trigger summaries below are kept as
-my own shorthand.
+**The binding text is `architecture-decisions.md:779+`. Read it there; do not keep a second copy
+here.** I pruned my 55-line shorthand on 2026-09-02 because it had already drifted behind the
+canonical section, which is exactly the two-agents-different-contracts hazard I keep warning about.
+Rules 1–7 with all five triggers live there: `[TRIGGER-NATIVE-CONTROLS]`, `[TRIGGER-INSITU-WHOLE-FIELD]`,
+`[TRIGGER-24H-TIME]`, `[TRIGGER-MONDAY-FIRST]`, `[TRIGGER-ISO-DATE]`.
 
-- **[TRIGGER-NATIVE-CONTROLS]** Custom dropdown/input component where a native control serves =
-  **YELLOW minimum**. All dropdowns native `<select>`; all focused inputs native form controls; no
-  custom Autocomplete-style widgets for constrained choices. Origin: the #199-class defect — free-text
-  Autocomplete produced language-mismatched data.
-- **[TRIGGER-INSITU-WHOLE-FIELD]** (rule 4 + addendum) In-situ edit fields (pencil-decorated). Three
-  ways to earn **YELLOW minimum**: (i) activator is the pencil glyph alone rather than the whole field
-  area; (ii) **activator not reachable via Tab** (4b — click-to-activate must also be tab-to-activate);
-  (iii) profile `name`/`email` left out of a retrofit (4a — Mihkel OVERRULED the always-editable-is-more-
-  direct argument; click-to-activate costs what click-to-focus costs, so no exemption). Trail: #205
-  comments. Binds existing + future in-situ fields, especially event detail (name, datetime, duration,
-  location, description, conductor).
+**Shipped state as of 2026-09-02** (verified in code this session, and folded into that section):
+rules 5, 6 and 7 all landed via #207 — `32845d6` (TimeSelect composite, 5-minute resolution by
+construction, AM/PM profile preference, Monday-first display order with `getDay()` values intact) and
+`8e6d014` (`YYYY-MM-DD` on app-rendered date text). #220 `66ebd9d` extended the time preference to
+displays. **These are no longer pending retrofits — do not review them as outstanding.**
 
-  **Review shortcut**: the reference impl `src/routes/admin/+page.svelte:513-531` gets the keyboard half
-  FREE from a native `<button type="button">` (`:518`) — Tab stop, Enter/Space, `disabled` semantics all
-  from the element. So a 4b violation almost always means a hand-rolled `div`+`onclick`. **Check the
-  ELEMENT, not the handler.** Also verified there: `min-h-11 w-full` for the 44×44 minimum (`min-h-11`
-  alone with `p-0` collapses width back to the glyph — #165 F3), `aria-labelledby` + `sr-only` action
-  label, and a `group-hover` pointer cue (Tailwind preflight sets no `cursor:pointer` on `<button>`).
-- **[TRIGGER-24H-TIME]** (rule 5, 2026-09-01) Time pickers are **24h by default**; AM/PM only when
-  explicitly set on the user's profile. This is **the ONE sanctioned exception to rule 2's
-  native-controls mandate**, scoped strictly to time-format enforcement — `<input type="time">` renders
-  12h/24h from the **browser locale** and no attribute overrides it, so forcing 24h on an AM/PM-locale
-  browser genuinely requires replacing native rendering. Mihkel's wording pre-acknowledges this, so it
-  is sanctioned, not a violation to re-argue.
-
-  **Verdict shape**: a custom time control **without** the 24h-enforcement justification = YELLOW as
-  under rule 2. **With** it = do NOT reflexively flag — instead check the **AM/PM profile-preference
-  path actually exists**. A control hardcoded to 24h with no way to honour the profile flag fails
-  rule 5 just as surely as a locale-driven one does.
-
-  Two distinctions to hold: (a) **rule 5 binds `type="datetime-local"` too**, not just `type="time"` —
-  same locale-driven display, and 2 of the 3 live surfaces are datetime-local; don't read "time picker"
-  narrowly. (b) The **wire value of both is always 24h `HH:MM` regardless of display locale**, so this
-  is DISPLAY-only — a "fix" that changes stored or submitted values is out of scope and wrong.
-
-  **Retrofit surface, verified 2026-09-01** (all three native today; no custom time control exists):
-  `src/routes/+page.svelte:5159` (`type="time"`, series-create start), `src/routes/+page.svelte:5965`
-  (`type="datetime-local"`, event-create), `src/routes/event/[id]/+page.svelte:1753`
-  (`type="datetime-local"`, event-detail `start_datetime`). Retrofit lands as its own board issue.
-
-**[DONE 2026-09-02 @ `44389f9`]** Both queued `architecture-decisions.md` edits are landed and
-verified this session: the Path C trigger is reworded off the dead `setAccounts` symbol to its intent
-(`:506-511`), and rules 5–7 sit in the standing-rules section (`:803-819`). Nothing owed. The
-between-chains timing rule that governed them still stands as doctrine: never change an enforcement
-rule mid-run, or two agents in one pipeline apply different contracts.
+**Two live review traps in that shipped state:**
+- `TimeSelect` is the SANCTIONED custom control under rule 5. The check `[TRIGGER-24H-TIME]` actually
+  demands is "does the AM/PM profile path exist" — it does (`$lib/preferences/timeFormat`). Do not
+  re-flag it as a rule-2 native-controls violation.
+- **`[TRIGGER-ISO-DATE]` no longer binds native date pickers.** Mihkel ruled "Option 1" on #207
+  (11:53): native `<input type="date">` stays AS BUILT. Eight remain in `+page.svelte` **by decision**.
+  The trigger binds app-FORMATTED date text only. Firing it on a native picker YELLOWs a PO ruling.
 
 (*MVOX:Bentham*)
 
@@ -271,7 +239,10 @@ itself, not the summary. **Execution GREEN.** Ledger:
   and `section = 69c7ea4c…9f27`, exactly the two targets. Across all 20 registered types, `person` and
   `section` are prop-def names on **member alone**, so there was never a wrong id to hit.
 
-**[RESIDUAL — still open; do NOT mark #20 fully verified]** The last-mile visibility check has not
+**[RESIDUAL — NOT OURS as of 2026-09-02]** Gama ruled (18:32) that the #20/#29 non-owner
+widened-fields check is a **two-account item on Mihkel's own live-test checklist**, not a team
+deliverable. So this stays open as a fact but is no longer mine to chase or to gate a merge on.
+The technical statement, unchanged: the last-mile visibility check has not
 been done with a non-omniscient identity, and the ledger's own `verificationCaveat` says so plainly:
 the run executed under db-root's `ENTU_API_KEY`, which always reads the private bucket
 (`cleanupEntity` matches on `_owner` first). `touched`/`set` means the write landed and the property
@@ -302,6 +273,12 @@ review decision survive below. Full historical detail is recoverable from git hi
 (`git log -p -- teams/mvox-dev/memory/bentham.md`).
 
 ## Review method — how I establish ground truth
+
+- **[ENV-PNPM-NOT-ON-PATH]** `pnpm` is NOT on the default `PATH` in this container — a bare `pnpm check`
+  dies with `command not found` (exit 127), which reads like a broken repo and is not. It lives at
+  `~/.local/share/pnpm/pnpm` (v10.30.1). Prefix gate runs with
+  `export PATH="$HOME/.local/share/pnpm:$PATH"`. There is no nvm here; `node`, `npm` and `corepack` are
+  in `/usr/local/bin`. Cost me one failed gate run on #213.
 
 - **[GOTCHA-BRANCH-MOVED-UNDER-REVIEW]** Re-derive the branch's real HEAD; never trust a SHA quoted
   in a handoff. Capture `git rev-parse HEAD` + `git status -s` BEFORE and AFTER any gate run in the

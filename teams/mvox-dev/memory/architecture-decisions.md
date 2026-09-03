@@ -806,9 +806,11 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
    Two scope points a narrow reading gets wrong. **Rule 5 binds `type="datetime-local"` too**, not just `type="time"` — same locale-driven rendering, and 2 of the 3 live surfaces are `datetime-local`. And it is a **display-only** requirement: both input types submit `HH:MM` in 24h regardless of what the browser paints, so a change that alters stored or submitted values is out of scope and wrong.
 
-   **Addendum — 5-minute resolution**: time inputs carry `step="300"`. Verified unimplemented as of `1ccd497` (no `step=` on any time input in the codebase).
+   **Addendum — 5-minute resolution**: SHIPPED in `32845d6`, but not via `step="300"`. `TimeSelect` holds 5-minute resolution **by construction of its minute option list**, so there is no `step=` anywhere and none is wanted. It also carries a LEGACY-MINUTE rule: an incoming off-grid minute is added to the options rather than silently snapped, so existing data is never rewritten by the picker.
 
-   Surfaces (all native as of `9fe28ec`; no custom time control exists yet): `src/routes/+page.svelte:5159` (`type="time"`, series-create start), `src/routes/+page.svelte:5965` (`type="datetime-local"`, event-create), `src/routes/event/[id]/+page.svelte:1753` (`type="datetime-local"`, event-detail `start_datetime`).
+   **Status: SHIPPED (`32845d6`, #207 part 1/2). The surface list below is historical — do not use it as a retrofit target.** No `type="time"` or `type="datetime-local"` input remains in `+page.svelte`. All three surfaces now render `src/lib/components/TimeSelect.svelte`, the app's ONE time-entry composite: native `<select>`s only (so rules 1/2 hold), hour + minute, plus a third AM/PM select when `$lib/preferences/timeFormat` is `'ampm'`. The canonical store is always 24h, so the display-only boundary is preserved in code. #220 (`66ebd9d`) then extended the same preference to displayed times through one shared formatter.
+
+   **Reviewing TimeSelect against `[TRIGGER-24H-TIME]`**: it is the sanctioned custom control, and the AM/PM profile path genuinely exists — that is the check the trigger actually demands, and it passes. Do not re-flag it as a rule-2 violation.
 
 6. **Monday is the first day of the week.** Day-of-week pickers list Monday first, not Sunday. European/Estonian standard; JS `getDay()` (0 = Sunday) is an implementation detail, not a display order — **the `value` attributes stay on the JS convention so recurrence maths is untouched; only the display order changes.**
 
@@ -816,15 +818,13 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
    Affected surfaces per the source comment: season creation (`start_date`, `end_date`), season management (same two, editing), series creation ("Alates"/"Kuni"), event creation (date portion of `datetime-local`), event detail (`start_datetime` editing, date portion), skip dates in series creation, and any agenda/list date display.
 
-**Rules 5, 6 and 7 are one family** — calendar-convention overrides of native browser-locale rendering — and #207 tracks all three as a single retrofit slice, together with rule 5's `step="300"` addendum.
+**Rules 5, 6 and 7 are one family** — calendar-convention overrides of native browser-locale rendering — and #207 shipped all three as a single slice, in two parts: `32845d6` (24h time selects, 5-minute steps, profile AM/PM preference, Monday-first) and `8e6d014` (`YYYY-MM-DD` on app-rendered numeric date text). **All three rules are now IMPLEMENTED, not pending.**
 
-> **⚠ Correction, 2026-09-02 — rule 6 has NOT shipped, despite #210 reading CLOSED.**
+> **Rule 6 — RESOLVED 2026-09-02, shipped in `32845d6` via #207.** Verified in code, not from a relay: the series-create day `<select>` now renders options in the order `1,2,3,4,5,6,0`, with an in-file comment naming rule 6, and the `value` attributes stay on the JS `getDay()` convention so recurrence maths is untouched. That is exactly what `[TRIGGER-MONDAY-FIRST]` requires.
 >
-> An earlier draft of this section (mine, same day) said "Shipped for the series-creation picker as #210." **That is wrong, and I had it from a relay rather than from the code.** GitHub reports #210 as `CLOSED / COMPLETED`, but Gama's comment on #207 says "#210 closed as duplicate — scope absorbed here," and **the code is unchanged**: `src/routes/+page.svelte:5157-5163` still lists `<option value="0">` … `<option value="6">` in numeric order, and `series_create_day_0` is "Sunday"/"Pühapäev". So the picker is still Sunday-first.
+> **The earlier correction is kept because its lesson outlived its subject.** For most of 2026-09-02 this box read "rule 6 has NOT shipped, despite #210 reading CLOSED" — and that was right at the time. #210 was closed **as a duplicate**, which GitHub records as `COMPLETED` unless explicitly marked *not planned*, while the code was still Sunday-first. **A closed issue with a completed state is not evidence that its change shipped.**
 >
-> The trap: closing an issue as a duplicate records `COMPLETED` on GitHub unless it is explicitly marked *not planned*. A closed issue with a completed state is therefore **not** evidence that its change shipped. Anyone trusting #210 would let rule 6 silently never land, since #207 is now its only tracker.
->
-> **Standing lesson**: for any "shipped as #N" claim in this file, verify against the code, not the issue state. (*MVOX:Bentham*)
+> **Standing lesson, unchanged**: for any "shipped as #N" claim in this file, verify against the code, not the issue state. It cuts both ways — this box was itself stale within a day of being written. (*MVOX:Bentham*)
 
 ### Story authoring (rule 3)
 
@@ -843,7 +843,9 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 - **YELLOW minimum** — a custom dropdown or input component where a native control serves. `[TRIGGER-NATIVE-CONTROLS]`
 - **YELLOW minimum** — a custom time control with **no** 24h-enforcement justification (it is then just a rule-2 violation). Where the justification IS present, do **not** reflexively flag it — instead check that the **AM/PM profile-preference path actually exists**: a control hardcoded to 24h with no way to honour the profile flag fails rule 5 exactly as a locale-driven one does. The exception buys a custom control to enforce a *default*, never to drop the preference. `[TRIGGER-24H-TIME]`
 - **YELLOW minimum** — a day-of-week control listing Sunday first, or one that reorders the display by renumbering the `value` attributes (that silently breaks recurrence maths — reorder the options, keep the values). `[TRIGGER-MONDAY-FIRST]`
-- **YELLOW minimum** — a date display or picker rendering anything other than `YYYY-MM-DD`, including a native `type="date"` / `type="datetime-local"` left to browser-locale rendering. Same display-only boundary as rule 5: the wire value of a native date input is already ISO, so a change that alters stored or submitted values is out of scope and wrong. `[TRIGGER-ISO-DATE]`
+- **YELLOW minimum** — **app-rendered** date text printing anything other than `YYYY-MM-DD`. Same display-only boundary as rule 5: a change that alters stored or submitted values is out of scope and wrong. `[TRIGGER-ISO-DATE]`
+
+  **Scope narrowed 2026-09-02 by PO ruling — read before firing this trigger.** Mihkel chose "Option 1" on #207 (11:53): **native `<input type="date">` pickers stay AS BUILT and are NOT to be replaced.** So a native date input left to browser-locale rendering is **correct code**, not a finding — 8 of them remain in `+page.svelte` by decision. The trigger now binds only date text the app itself formats, which is what `8e6d014` shipped. Flagging a native date picker under this trigger would YELLOW a PO decision.
 - **YELLOW minimum** — an in-situ edit field whose activator is the pencil icon alone rather than the whole field area, **or whose activator is not reachable via Tab**. `[TRIGGER-INSITU-WHOLE-FIELD]` The reference pattern gets Tab-reachability for free from its native `<button>`, so a violation of the keyboard half almost always means someone hand-rolled a `div` + `onclick` instead — check the element, not just the handler. A profile `name`/`email` field left out of a retrofit is the same YELLOW (rule 4a: no exemption).
 - **Escalate to RED** only where the custom control additionally breaks an established contract — keyboard operability, form submission, or i18n of option labels. These are consistency and accessibility rules, and my standing calibration is never to RED on style alone.
 
