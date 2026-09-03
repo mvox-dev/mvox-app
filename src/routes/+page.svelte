@@ -6995,9 +6995,4 @@
 			{/if}
 		</main>
 	{/if}
-{:else if auth.status === 'anonymous'}
-	<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper text-ink">
-		<p class="text-sm text-ink" data-testid="auth-status">{m.agenda_signed_out()}</p>
-		<a class="text-sm underline" href="/auth/login">{m.agenda_sign_in()}</a>
-	</main>
 {/if}

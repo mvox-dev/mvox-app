@@ -6,6 +6,7 @@ import {
 	isTokenValid,
 	resolveGuardRedirect
 } from './guard';
+import { sessionExpiredSignInHref } from './session-expired';
 
 // Build an unsigned JWT (base64url, no padding) with a given payload — mirrors what
 // Entu issues, so the browser-side atob/base64url decode is exercised for real.
@@ -53,11 +54,11 @@ describe('isTokenValid', () => {
 
 describe('isProtectedPath', () => {
 	it('lets public + auth + asset paths through', () => {
-		for (const p of ['/', '/about', '/auth/login', '/auth/callback', '/_app/immutable/x.js', '/favicon.png'])
+		for (const p of ['/about', '/auth/login', '/auth/callback', '/_app/immutable/x.js', '/favicon.png'])
 			expect(isProtectedPath(p)).toBe(false);
 	});
-	it('protects app routes', () => {
-		for (const p of ['/agenda', '/library', '/roster', '/settings', '/library/x'])
+	it('protects app routes — including the root agenda (#221)', () => {
+		for (const p of ['/', '/agenda', '/library', '/roster', '/settings', '/library/x'])
 			expect(isProtectedPath(p)).toBe(true);
 	});
 
@@ -81,7 +82,7 @@ describe('resolveGuardRedirect', () => {
 	const validToken = jwt({ exp: 2_000_000_001 });
 
 	it('returns null (allowed) for a public path regardless of token', () => {
-		expect(resolveGuardRedirect({ pathname: '/', token: null, nowMs: now })).toBeNull();
+		expect(resolveGuardRedirect({ pathname: '/about', token: null, nowMs: now })).toBeNull();
 	});
 
 	it('returns null (allowed) for a protected path with a valid token', () => {
@@ -91,13 +92,57 @@ describe('resolveGuardRedirect', () => {
 	it('redirects to login (preserving the target) for a protected path without a token', () => {
 		expect(
 			resolveGuardRedirect({ pathname: '/agenda', search: '?org=x', token: null, nowMs: now })
-		).toBe('/auth/login?redirect=%2Fagenda%3Forg%3Dx');
+		).toEqual('/auth/login?redirect=%2Fagenda%3Forg%3Dx');
 	});
 
-	it('redirects when the token is expired', () => {
+	// #221 — expired token found at boot gets the session-expired login variant, so the
+	// login page explains WHY instead of rendering a bare picker. Derive the expected
+	// URL from sessionExpiredSignInHref (single source of truth) AND pin the literal.
+	it('redirects to the session-expired login variant when the token is expired', () => {
 		const expired = jwt({ exp: 1 });
-		expect(resolveGuardRedirect({ pathname: '/library', token: expired, nowMs: now })).toBe(
-			'/auth/login?redirect=%2Flibrary'
+		expect(resolveGuardRedirect({ pathname: '/library', token: expired, nowMs: now })).toEqual(
+			sessionExpiredSignInHref('/library', '')
 		);
+		expect(resolveGuardRedirect({ pathname: '/library', token: expired, nowMs: now })).toEqual(
+			'/auth/login?error=session_expired&redirect=%2Flibrary'
+		);
+	});
+
+	// ——— #221: the root agenda is protected — anonymous visit redirects to sign-in ———
+
+	it('root path with NO token redirects to the plain sign-in URL (#221)', () => {
+		expect(resolveGuardRedirect({ pathname: '/', token: null, nowMs: now })).toEqual(
+			'/auth/login?redirect=%2F'
+		);
+	});
+
+	it('root path with an EXPIRED token redirects to the session-expired sign-in URL (#221)', () => {
+		const expired = jwt({ exp: 1 });
+		const got = resolveGuardRedirect({ pathname: '/', token: expired, nowMs: now });
+		expect(got).toEqual(sessionExpiredSignInHref('/', ''));
+		expect(got).toEqual('/auth/login?error=session_expired&redirect=%2F');
+	});
+
+	it('no-token and expired-token redirects are DIFFERENT strings (#221)', () => {
+		const expired = jwt({ exp: 1 });
+		const noToken = resolveGuardRedirect({ pathname: '/', token: null, nowMs: now });
+		const withExpired = resolveGuardRedirect({ pathname: '/', token: expired, nowMs: now });
+		expect(noToken).toEqual('/auth/login?redirect=%2F');
+		expect(withExpired).toEqual('/auth/login?error=session_expired&redirect=%2F');
+		expect(withExpired).not.toEqual(noToken);
+	});
+
+	it('root path with a VALID token is allowed through (#221)', () => {
+		expect(resolveGuardRedirect({ pathname: '/', token: validToken, nowMs: now })).toBeNull();
+	});
+
+	it('root-path redirect preserves the query string (#221)', () => {
+		expect(
+			resolveGuardRedirect({ pathname: '/', search: '?collective=polyphony', token: null, nowMs: now })
+		).toEqual('/auth/login?redirect=%2F%3Fcollective%3Dpolyphony');
+	});
+
+	it('/about stays public — anonymous visit is allowed (#221)', () => {
+		expect(resolveGuardRedirect({ pathname: '/about', token: null, nowMs: now })).toBeNull();
 	});
 });

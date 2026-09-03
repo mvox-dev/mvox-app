@@ -348,8 +348,6 @@
 	"session_expired_signin": "Logi sisse",
 	"agenda_switch_collective": "Vaheta kollektiivi",
 	"agenda_signed_in": "Sisse logitud",
-	"agenda_signed_out": "Välja logitud",
-	"agenda_sign_in": "Logi sisse",
 	"agenda_collectives_none": "Kollektiive veel pole",
 	"agenda_collectives_error_retry": "Kollektiivide laadimine ebaõnnestus — proovi uuesti",
 	"agenda_collectives_loading": "Kollektiivide laadimine…",

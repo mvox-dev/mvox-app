@@ -350,8 +350,6 @@
 	"session_expired_signin": "Увійти",
 	"agenda_switch_collective": "Змінити колектив",
 	"agenda_signed_in": "Ви увійшли",
-	"agenda_signed_out": "Ви вийшли",
-	"agenda_sign_in": "Увійти",
 	"agenda_collectives_none": "Колективів поки немає",
 	"agenda_collectives_error_retry": "Не вдалося завантажити колективи — повторити",
 	"agenda_collectives_loading": "Завантаження колективів…",

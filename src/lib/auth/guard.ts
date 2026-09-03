@@ -8,6 +8,8 @@
 // `decodeJwtExpMs` + `isProtectedPath` are the reusable halves harvested from the
 // old `src/lib/server/auth/session-cookie.ts`; everything cookie-related is dropped.
 
+import { sessionExpiredSignInHref } from './session-expired';
+
 /** Decode an unverified JWT payload (base64url) to a plain object, or null on any malformed input. */
 export function decodeJwtPayload(token: string | null | undefined): Record<string, unknown> | null {
 	const parts = token?.split('.');
@@ -34,7 +36,7 @@ export function isTokenValid(token: string | null | undefined, nowMs: number): b
 	return expMs !== null && expMs > nowMs;
 }
 
-const PUBLIC_EXACT = new Set(['/', '/about']);
+const PUBLIC_EXACT = new Set(['/about']);
 
 /** True iff the path requires a session. Public allowlist + assets/internal paths pass through. */
 export function isProtectedPath(pathname: string): boolean {
@@ -49,7 +51,9 @@ export function isProtectedPath(pathname: string): boolean {
 /**
  * Decide where an unauthenticated visitor should be sent. Returns a
  * `/auth/login?redirect=<target>` path when the requested route is protected and
- * the token is missing/expired, or `null` when the visit is allowed to proceed.
+ * the token is missing (or undecodable), `sessionExpiredSignInHref(...)` when a
+ * token is present but its decoded `exp` has passed (so the login page explains
+ * why), or `null` when the visit is allowed to proceed.
  */
 export function resolveGuardRedirect(args: {
 	pathname: string;
@@ -59,7 +63,11 @@ export function resolveGuardRedirect(args: {
 }): string | null {
 	if (!isProtectedPath(args.pathname)) return null;
 	if (isTokenValid(args.token, args.nowMs)) return null;
-	const target = args.pathname + (args.search ?? '');
+	const search = args.search ?? '';
+	if (args.token && decodeJwtExpMs(args.token) !== null) {
+		return sessionExpiredSignInHref(args.pathname, search);
+	}
+	const target = args.pathname + search;
 	return `/auth/login?redirect=${encodeURIComponent(target)}`;
 }
 

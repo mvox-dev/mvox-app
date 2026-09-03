@@ -348,8 +348,6 @@
 	"session_expired_signin": "Sign in",
 	"agenda_switch_collective": "Switch collective",
 	"agenda_signed_in": "Signed in",
-	"agenda_signed_out": "Signed out",
-	"agenda_sign_in": "Sign in",
 	"agenda_collectives_none": "No collectives yet",
 	"agenda_collectives_error_retry": "Couldn't load collectives — retry",
 	"agenda_collectives_loading": "Loading collectives…",

@@ -150,12 +150,12 @@
 		if (auth.status !== 'authenticated' || !selected) return;
 		// This effect runs ONLY for an authenticated member with a selected collective,
 		// so `/` here is unambiguously the post-login app home (the agenda — the primary
-		// member-display surface, RECON A S1), NOT the public landing page. The guard's
-		// `isProtectedPath` puts `/` on the public allowlist (correct for the unauth
-		// login guard), so we redirect from `/` explicitly IN ADDITION to any protected
-		// path — otherwise an incomplete member would sit on the home agenda and never be
-		// "directed to the profile page" (the #28 ruling). Exempt `/profile` (loop).
-		if (gate === 'incomplete' && path !== '/profile' && (path === '/' || isProtectedPath(path))) {
+		// member-display surface, RECON A S1), NOT the public landing page. `/` is
+		// protected by guard.isProtectedPath (#221), so it's already covered by the
+		// `isProtectedPath(path)` check below — an incomplete member sitting on the home
+		// agenda still gets "directed to the profile page" (the #28 ruling). Exempt
+		// `/profile` itself (redirect loop).
+		if (gate === 'incomplete' && path !== '/profile' && isProtectedPath(path)) {
 			goto('/profile');
 		}
 	});

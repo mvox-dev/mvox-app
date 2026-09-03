@@ -349,8 +349,6 @@
 	"session_expired_signin": "Pieteikties",
 	"agenda_switch_collective": "Mainīt kolektīvu",
 	"agenda_signed_in": "Pieteicies",
-	"agenda_signed_out": "Neesat pieteicies",
-	"agenda_sign_in": "Pieteikties",
 	"agenda_collectives_none": "Vēl nav kolektīvu",
 	"agenda_collectives_error_retry": "Neizdevās ielādēt kolektīvus — mēģināt vēlreiz",
 	"agenda_collectives_loading": "Ielādē kolektīvus…",
