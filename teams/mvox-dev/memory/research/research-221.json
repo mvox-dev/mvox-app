@@ -1,0 +1,297 @@
+{
+  "summary": "Pre-RED verification for #221 — signed-out / redirect to sign-in",
+  "agentCount": 4,
+  "logs": [],
+  "result": {
+    "verify": [
+      {
+        "key": "guard",
+        "claims": [
+          {
+            "claim": "guard.ts: '/' is in PUBLIC_EXACT, cited at line 38",
+            "verdict": "DRIFTED",
+            "evidence": "src/lib/auth/guard.ts:37 — `const PUBLIC_EXACT = new Set(['/', '/about']);` — one line earlier than cited (line 38 is inside the doc-comment block above `isProtectedPath`, not the PUBLIC_EXACT declaration). Content of the claim (that '/' sits in PUBLIC_EXACT alongside '/about') is correct; only the line number is off by one."
+          },
+          {
+            "claim": "PUBLIC_EXACT / public-prefix set also covers /about, /auth/*, /invite/*",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/auth/guard.ts:37-46 — PUBLIC_EXACT = {'/', '/about'} (exact match); isProtectedPath() also returns false via prefix checks: `pathname.startsWith('/auth/')` (line 42), `pathname.startsWith('/invite/')` (line 43, comment: 'unauthed invite landing (later slice)'), `pathname.startsWith('/_app/')` and `/.well-known` (line 44), and any path with a file extension (line 45, asset fallback regex). Anything not matching one of these falls through to `return true` (protected) at line 46."
+          },
+          {
+            "claim": "src/routes/+layout.ts lines 19-25 call resolveGuardRedirect and redirect() from it; removing '/' from PUBLIC_EXACT would make anonymous visits to / redirect to /auth/login?redirect=%2F",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+layout.ts:19-25 matches exactly as cited: `const target = resolveGuardRedirect({ pathname: url.pathname, search: url.search, token, nowMs: Date.now() }); if (target) redirect(302, target);`. Tracing the logic: if '/' is removed from PUBLIC_EXACT, isProtectedPath('/') falls through none of the prefix checks (guard.ts:42-45 don't match '/') and no extension regex matches, so it returns true (protected) at guard.ts:46. resolveGuardRedirect (guard.ts:60-63) then checks isTokenValid — for an anonymous visitor (no/expired token) it returns `/auth/login?redirect=${encodeURIComponent('/')}` = '/auth/login?redirect=%2F', which +layout.ts:25 passes to SvelteKit's redirect(302, ...)."
+          },
+          {
+            "claim": "The loading state produces no redirect (no flash) when / becomes protected",
+            "verdict": "CONFIRMED",
+            "evidence": "Unlike the completion-gate (src/routes/+layout.svelte:110-161), which is async and has an explicit 'loading' intermediate state, resolveGuardRedirect is a pure synchronous function fed by a synchronous localStorage read (getToken() in +layout.ts:18) — there is no intermediate 'loading' phase in this guard at all. The root `load` in +layout.ts runs before any route component mounts (ssr=false, so the app boots into the layout's load before rendering +page.svelte), and calling SvelteKit's `redirect()` inside `load` aborts the render of the target branch entirely — the 'Signed out' stub in +page.svelte (line 7000, `auth.status === 'anonymous'` branch) never mounts for an anonymous visit to '/' once '/' is removed from PUBLIC_EXACT. No flash is possible by construction."
+          },
+          {
+            "claim": "The login page reads the redirect param and returns the user to / after sign-in; check for sanitization that would reject redirect=%2F",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/auth/login/+page.svelte:18-22 reads `page.url.searchParams.get('redirect')` (falling back to `return_to`) through `safeRedirectTarget()` (src/lib/auth/redirect.ts:4-7: `if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return '/'; return raw;`) — '/' passes this check untouched (starts with '/', not '//'), so `redirect=%2F` decodes to '/' and is NOT rejected/rewritten. It's embedded into each provider href via `providerHref()` (login/+page.svelte:25-27) as `return_to=%2F`. After OAuth, src/routes/auth/callback/run-callback-exchange.ts:83 returns `redirectTo: safeRedirectTarget(decoded.return_to)` and src/routes/auth/callback/+page.svelte:18 calls `goto(outcome.redirectTo)` — so a visitor bounced from '/' does land back on '/' post-sign-in."
+          },
+          {
+            "claim": "Guard spec files assert '/' is public and must be updated/inverted",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/auth/guard.spec.ts is the only spec file with direct assertions on this behavior, at two locations: (1) line 56, inside `isProtectedPath` describe block ('lets public + auth + asset paths through'): the loop `for (const p of ['/', '/about', '/auth/login', '/auth/callback', '/_app/immutable/x.js', '/favicon.png']) expect(isProtectedPath(p)).toBe(false);` — '/' must be removed from this array (and arguably added to the 'protects app routes' list at line 59-62, or given its own assertion of `.toBe(true)`). (2) line 84, inside `resolveGuardRedirect` describe block: `it('returns null (allowed) for a public path regardless of token', () => { expect(resolveGuardRedirect({ pathname: '/', token: null, nowMs: now })).toBeNull(); });` — this must be inverted to assert a redirect to `/auth/login?redirect=%2F` is returned instead of null. No other spec file (`redirect.spec.ts`, `session-expired.spec.ts`, `request.auth-expired.spec.ts`, layout specs, or the various `page.*-session-expired.spec.ts` files) asserts PUBLIC_EXACT/isProtectedPath('/') behavior — their uses of `'/'` are unrelated (history.replaceState reset boilerplate, or safeRedirectTarget's independent open-redirect tests which are orthogonal to guard.ts's allowlist and remain correct either way)."
+          }
+        ],
+        "risks": [
+          "src/routes/+layout.svelte:154-158 (completion-gate enforcement effect) has an inline comment explicitly reasoning that 'the guard's isProtectedPath puts / on the public allowlist (correct for the unauth login guard)' and therefore special-cases `path === '/'` in its own redirect condition. Once '/' is removed from PUBLIC_EXACT, isProtectedPath('/') becomes true and the explicit `path === '/'` disjunct in that condition becomes redundant (isProtectedPath(path) alone would already cover it) — the comment will read as stale/misleading unless updated, though functionally the effect still behaves correctly (redundant OR-clause is harmless, not a bug).",
+          "src/routes/+page.svelte's anonymous-branch stub (line 6998-7003, `{:else if auth.status === 'anonymous'}` rendering m.agenda_signed_out()) becomes unreachable in the live app once the layout guard redirects anonymous visitors away from '/' before the page ever mounts — but this branch is not asserted by any spec found in this scan (no spec renders +page.svelte in isolation with auth.status='anonymous' at path '/'), so no spec assertion contradicts leaving that dead branch in place; it is a cleanup opportunity, not a test-breaking one. Worth flagging to the implementer as optional follow-up rather than a hard requirement.",
+          "The issue's cited line 38 for PUBLIC_EXACT in guard.ts is off by one (actual: line 37) — likely just drift from a prior edit to the file (e.g. a comment line added/removed above); harmless for the fix itself but worth using the corrected line number in the PR description to avoid confusion during review."
+        ],
+        "notes": "Repo-guard check passed: origin resolves to https://github.com/mvox-dev/mvox-app.git (mvox-app.git). All reads were read-only under ~/workspace-app; no edits, commits, or writes were made, per instructions.\\n\\nSummary of the fix's mechanics: removing '/' from PUBLIC_EXACT (guard.ts:37) is sufficient and self-contained to make isProtectedPath('/') return true, which makes resolveGuardRedirect emit '/auth/login?redirect=%2F' for anonymous visitors, which +layout.ts's synchronous load()+redirect() call turns into an actual SvelteKit redirect before the root layout's page slot ever renders — so the 'Signed out' stub in +page.svelte never flashes. The login page and OAuth callback round-trip the redirect/return_to='/' target correctly with no sanitization rejecting it (safeRedirectTarget only rejects non-local/protocol-relative targets, and '/' is neither). Only guard.spec.ts needs test changes: one array entry removed/moved (line 56) and one assertion inverted (line 84). No other spec file in the repo makes an assertion that would break from this change.\""
+      },
+      {
+        "key": "stub-i18n",
+        "claims": [
+          {
+            "claim": "src/routes/+page.svelte:6998-7003 — the anonymous branch renders m.agenda_signed_out()/m.agenda_sign_in()",
+            "verdict": "CONFIRMED",
+            "evidence": "Read at src/routes/+page.svelte:6998-7003 (no line drift from the cited range — exact match). The block is `{:else if auth.status === 'anonymous'}` (top-level if/elseif starting at line 5099 `{#if auth.status === 'authenticated'}`) rendering a centered `<main>` containing `<p data-testid=\"auth-status\">{m.agenda_signed_out()}</p>` and `<a href=\"/auth/login\">{m.agenda_sign_in()}</a>`. Sibling branches: (1) `auth.status === 'authenticated'` (lines 5099-6997, the full agenda UI, itself branching on `collectives.status` into ready/none/error/loading sub-states using a *different* message set — agenda_collectives_none/error_retry/loading, and reusing the same `data-testid=\"auth-status\"` testid for its own `m.agenda_signed_in()` text at line 6988); (2) `auth.status === 'loading'` — NOT handled by this if/else-if chain at all (no matching branch, no final `{:else}`), so the whole block renders nothing during that state. Confirmed `AuthState` (src/lib/auth/session.ts:12-15) is `{status:'loading'} | {status:'anonymous'} | {status:'authenticated',...}`, and `authStore` initializes to `{status:'loading'}` (session.ts:17), resolved synchronously by `hydrateAuth()` called from `onMount` in src/routes/+layout.svelte:62 — so 'loading' is real but momentary/unrendered here, matching issue #221's note 'Keep the loading state as it is (no redirect while auth is unresolved, no flash)'."
+          },
+          {
+            "claim": "agenda_signed_out and agenda_sign_in have no other consumers besides +page.svelte and the four locale files; keys can be deleted cleanly",
+            "verdict": "CONFIRMED",
+            "evidence": "Repo-wide grep (excluding node_modules/.git/.svelte-kit/build/dist) for both key names across all extensions returns exactly 5 files: src/routes/+page.svelte (lines 7000-7001, the only consumer, itself being deleted) and messages/en.json:351-352, messages/et.json:351-352, messages/lv.json:352-353, messages/uk.json:353-354 (the key definitions). No spec/ts/js/svelte file elsewhere references either key. src/paraglide/messages/ and src/lib/paraglide/messages/ (Paraglide's generated `m.agenda_signed_out`/`m.agenda_sign_in` accessor functions) are git-ignored build output (src/paraglide/.gitignore:3, root .gitignore:29) with zero files tracked in git — they regenerate automatically from the JSON at build/dev time, so no manual edit is needed there. Deletion is clean."
+          },
+          {
+            "claim": "Specs assert the anonymous branch of the agenda page (need removal/inversion per done-when)",
+            "verdict": "REFUTED",
+            "evidence": "Searched every *.spec.ts file for the testid `auth-status` (present ONLY in +page.svelte itself, zero spec files reference it), for the literal strings 'Signed out'/'Sign in' (only hits: src/routes/auth/logout/page.logout.spec.ts, which asserts the OPPOSITE — that the logout page does NOT render 'signed out' text, part of #206's earlier fix, unrelated to +page.svelte's anonymous branch; and src/routes/page.session-expired.spec.ts:47, a mocked unrelated key `session_expired_signin`), and for `m.agenda_signed_out`/`m.agenda_sign_in` in any spec (none). Files that call `authStore.set({status:'anonymous'})` while importing +page.svelte (e.g. layout.reactive-auth.spec.ts, page.session-expired.spec.ts, collectives/session-expired.spec.ts, entu/request.auth-expired.spec.ts) all use the anonymous state for unrelated purposes — layout-guard reactivity, session-expiry recovery, collective-state resets — none render/assert +page.svelte's anonymous-branch DOM output. Conclusion: there is currently NO spec asserting the anonymous branch of +page.svelte, so there is nothing to remove or invert for that done-when bullet; it appears already (trivially) satisfied, or the issue anticipated a spec that doesn't actually exist in the current tree."
+          },
+          {
+            "claim": "A Playwright/E2E test visits / while anonymous",
+            "verdict": "REFUTED",
+            "evidence": "No Playwright infrastructure exists anywhere in mvox-app: no playwright.config.*, no e2e/ directory, no 'playwright' string anywhere in the tree (grep across all non-node_modules files), and package.json devDependencies list only vitest/@testing-library/svelte/happy-dom for testing — no @playwright/test dependency. CLAUDE.md's stack line (\"Playwright\" listed) does not match the current repo contents; this project apparently has no E2E layer yet, so there is no such test to update for this issue."
+          }
+        ],
+        "risks": [
+          "src/routes/+page.svelte:5099-6997 (authenticated branch, item 1) — the anonymous stub deletion is trivial, but the guard.ts change (removing '/' from PUBLIC_EXACT) means an anonymous visitor never mounts +page.svelte at all going forward; worth double-checking (not verified this turn) that no OTHER code path still reaches the +page.svelte anonymous branch after the guard change, making the branch truly dead rather than merely redundant.",
+          "The 'loading' auth.status is unhandled in the +page.svelte if/else-if chain (no matching branch, no final {:else}) — this is pre-existing, intentional-looking behavior (matches the issue's 'no flash' requirement) but is easy to break if a future edit adds a stray {:else} while touching this block; flagged for awareness, not a bug found this turn.",
+          "Item 3's expected done-when bullet ('the agenda anonymous-branch spec removed or inverted') presumes an existing spec that this search did not find anywhere in the tree — worth flagging back to the issue filer/PO in case a spec was expected to exist (e.g. planned but never written, or named differently than searched patterns) rather than treating the bullet as already satisfied.",
+          "CLAUDE.md (project doc) claims Playwright is part of the landed stack, but no Playwright artifacts exist in mvox-app — this doc/repo mismatch is outside this issue's scope but may be worth a separate correction."
+        ],
+        "notes": "Repo guard passed (origin ends in mvox-app.git). All work was read-only (Read/grep/gh issue view/git check-ignore) — no edits, writes, or commits made, per the read-only mandate. Fetched issue #221 body via `gh issue view 221` for done-when criteria context (not required by the task but clarified ambiguous wording, e.g. 'loading' state referring to guard/layout behavior, not a third +page.svelte render branch). Key finding for the pipeline: item 3 (spec to remove/invert) and item 4 (E2E test) both come back empty — the STUB-removal and i18n-key-deletion in +page.svelte + the 4 locale files are the only code changes actually required by this issue's done-when list; no test files need touching for those two bullets specifically (the guard.ts spec for '/' becoming protected is a separate, unverified-this-turn concern since the task scoped me to +page.svelte + i18n keys + specs, not guard.ts's own spec file)."
+      },
+      {
+        "key": "expired-session",
+        "claims": [
+          {
+            "claim": "hydrateAuth (session.ts) distinguishes 'no token' from 'expired token' internally and publishes different state for each",
+            "verdict": "REFUTED",
+            "evidence": "src/lib/auth/session.ts:25-50. Both the missing-token branch (27-31) and the expired/malformed-payload branch (35-40) set authStore/return the identical `{ status: 'anonymous' }` AuthState. AuthState type (12-15) has no 'expired' variant. Only difference is the side-effect clearAll() call in the expired branch, not anything published. Also: the layout guard never calls hydrateAuth/reads authStore at all (see guard finding below), so this module is not actually in the redirect path the issue describes."
+          },
+          {
+            "claim": "sessionExpiredSignInHref signature is at line 29 as cited, with identifiable consumers",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/auth/session-expired.ts:29 — `export function sessionExpiredSignInHref(pathname: string, search = ''): string`, unchanged from citation. Consumers: currentSessionExpiredSignInHref (38-41) wraps it; that wrapper is called from src/lib/auth/install-401-recovery.ts:34 and src/lib/components/auth/SessionExpiredNotice.svelte:31. No production code calls sessionExpiredSignInHref directly outside session-expired.spec.ts."
+          },
+          {
+            "claim": "install-401-recovery.ts 401 path already ends on /auth/login?error=session_expired",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/auth/install-401-recovery.ts:31-36 (cited 31-34, minor drift — function closes 2 lines later but the substantive goto call is still line 34): install401Recovery() calls goto(currentSessionExpiredSignInHref()), which builds `/auth/login?error=session_expired&redirect=<target>` via sessionExpiredSignInHref."
+          },
+          {
+            "claim": "The cold-visit layout guard (resolveGuardRedirect in guard.ts, wired via +layout.ts) currently sends expired-token visitors to the plain login URL, not the session_expired variant",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/auth/guard.ts:54-64 resolveGuardRedirect only checks isTokenValid(token,nowMs) (a boolean, lines 31-35) and on failure always returns the plain `/auth/login?redirect=<target>` string regardless of whether the token was missing or expired. This is locked in by an existing test at src/lib/auth/guard.spec.ts:97-102, which asserts the expired-token case produces the SAME plain string as the no-token case (line 91-95). src/routes/+layout.ts:15-28 wires this directly (reads getToken(), calls resolveGuardRedirect, redirect(302,target)) without ever consulting hydrateAuth or authStore."
+          }
+        ],
+        "risks": [
+          "guard.ts:54-64 resolveGuardRedirect and +layout.ts:15-28 are the actual fix point, not hydrateAuth/authStore as the issue's own framing (flag from hydrateAuth? second store value?) suggests — a fix aimed at session.ts would miss the cold-visit path entirely since the guard never touches that module.",
+          "guard.spec.ts:97-102 currently asserts the expired-token case equals the plain no-token redirect string — any fix must update this test or it will fail against the new behavior, and a reviewer relying on green-before-change tests could miss that this is the exact gap being closed.",
+          "sessionExpiredSignInHref (session-expired.ts) is already a pure, dependency-free function designed to be the single source of this URL — reusing it inside guard.ts is low-risk (no import cycle, session-expired.ts has zero imports) but was not verified against a live browser/e2e path in this review, only via static read of the source."
+        ],
+        "notes": "Read-only verification per task constraints; no files edited. Repo guard confirmed (origin mvox-app.git) before any reads. Key finding beyond the four checklist items: the two remediation shapes floated in Gama's comment (hydrateAuth flag, second store value) target the wrong module — the cold-visit guard path (+layout.ts -> guard.ts resolveGuardRedirect) never consults hydrateAuth or authStore, it reads the token directly. The smallest honest fix lives entirely in guard.ts: classify token state as none/expired/valid (reusing the already-present decodeJwtExpMs) and branch to sessionExpiredSignInHref(pathname search) for the expired case, keeping the plain redirect for the none case. Estimated ~10-15 lines in guard.ts plus one existing test update (guard.spec.ts:97-102); +layout.ts needs no changes. Assessed as proportionate for this slice."
+      }
+    ],
+    "sweep": {
+      "claims": [
+        {
+          "claim": "guard.spec.ts asserts '/' is currently public and must be updated for #221",
+          "verdict": "CONFIRMED",
+          "evidence": "src/lib/auth/guard.spec.ts:56 — `for (const p of ['/', '/about', '/auth/login', ...]) expect(isProtectedPath(p)).toBe(false)` includes '/'. src/lib/auth/guard.spec.ts:80 — `it('returns null (allowed) for a public path regardless of token', () => { expect(resolveGuardRedirect({ pathname: '/', token: null, nowMs: now })).toBeNull(); })` pins '/' as unauthed-allowed. Both must change (drop '/' from the first list / expect true, and either retarget or invert the second test) or CI goes red."
+        },
+        {
+          "claim": "No Playwright / e2e test suite exists in the repo to update for anonymous-'/' behavior",
+          "verdict": "CONFIRMED",
+          "evidence": "`grep -rl '@playwright/test'` and `find . -iname playwright.config*` under ~/workspace-app returned nothing; no .github/workflows directory either. Despite CLAUDE.md's stack table naming Playwright, there is no e2e infra wired up yet — this checklist item currently has zero files to touch."
+        },
+        {
+          "claim": "The root +page.svelte anonymous stub (agenda_signed_out/agenda_sign_in, data-testid=auth-status) has NO spec coverage of its own",
+          "verdict": "CONFIRMED",
+          "evidence": "grep for 'auth-status'/'agenda_signed_out'/'agenda_sign_in' across all *.spec.ts returned zero hits. src/routes/+page.svelte:6998-7002 is the sole render site; deleting it breaks no test, but also means its removal was previously unverified by any test."
+        },
+        {
+          "claim": "Logout flow expects '/' to be public / could loop",
+          "verdict": "REFUTED",
+          "evidence": "src/routes/auth/logout/+page.svelte:18-19 — `performLogout(); goto('/auth/login', { replaceState: true });` — logout already routes to /auth/login, never to '/'. No change needed, no loop risk."
+        },
+        {
+          "claim": "Post-signin redirects break or lose the target path for protected routes",
+          "verdict": "REFUTED",
+          "evidence": "src/lib/auth/guard.ts:63-64 builds `target = pathname + search` (full path incl. query) into `redirect=`; src/lib/auth/redirect.ts:5 `safeRedirectTarget` passes any local path through unchanged; src/routes/auth/callback/run-callback-exchange.ts:80 `redirectTo: safeRedirectTarget(decoded.return_to)` — token is persisted (setToken/hydrateAuth, lines 68-71) BEFORE this redirect fires, so the guard passes cleanly on arrival. Chain verified end-to-end, no loop or data loss."
+        },
+        {
+          "claim": "Invite accept/decline flow routes an anonymous user to '/' and could loop or lose invite context",
+          "verdict": "REFUTED",
+          "evidence": "src/routes/invite/[token]/+page.svelte:58 has the only href=\"/\" in the invite flow, gated behind `outcome === 'conflict'`. src/routes/auth/callback/run-invite-callback.ts:60-76 shows `redeemed`/`conflict`/`unexpected` all call setToken+hydrateAuth (persisting a REAL session) before ever reaching that landing or the `redirectTo: '/'` on line 84 (redeemed case) — so by the time href=\"/\" is clickable or the redirect fires, the visitor is already authenticated and the guard passes. `dead`/`failed`/`error` outcomes (no session persisted) carry no link back to '/' at all."
+        },
+        {
+          "claim": "'about page links' need auditing for this change",
+          "verdict": "UNVERIFIABLE",
+          "evidence": "No /about route exists anywhere in src/routes (`find src/routes -maxdepth 1 -type d` lists admin/auth/collectives/event/invite/library/profile/roster only); '/about' only appears as a still-untouched entry in guard.ts's PUBLIC_EXACT set (unaffected by #221) and in guard.spec.ts's allowlist test. This checklist item is currently N/A — nothing to sweep because the page doesn't exist yet in this snapshot."
+        },
+        {
+          "claim": "MvoxNav (or its actual component, NavShell) renders a link to '/' for anonymous visitors",
+          "verdict": "REFUTED",
+          "evidence": "There is no MvoxNav component (grep found none); the real component is src/lib/components/nav/NavShell.svelte. Line 120: `{#if !anonymous && visibleEntries.length > 0}` — the entire nav bar (including the agenda entry whose route is '/', src/lib/nav/entries.ts:24-30) is hidden outright when `anonymous` is true, so no anonymous-facing link to '/' exists to break."
+        },
+        {
+          "claim": "/auth/login can itself redirect back to '/', creating a loop for anonymous users",
+          "verdict": "REFUTED",
+          "evidence": "src/lib/auth/guard.ts:41-46 `isProtectedPath` returns false unconditionally for any pathname.startsWith('/auth/') — before ever consulting PUBLIC_EXACT — so /auth/login is never routed through resolveGuardRedirect regardless of the PUBLIC_EXACT change. src/routes/auth/login/+page.svelte has no self-redirect logic; it only builds provider hrefs."
+        },
+        {
+          "claim": "PUBLIC_EXACT (or an equivalent allowlist) is read from more than one place — SSR, service worker, or a leftover session-cookie gate",
+          "verdict": "REFUTED",
+          "evidence": "`grep -rn PUBLIC_EXACT src` → only src/lib/auth/guard.ts (definition) + guard.spec.ts (test). No hooks.server.ts, no session-cookie.ts, no service-worker file exist in the repo (`find src -iname session-cookie* -o -iname hooks.server* ; find . -iname *service-worker*` both empty) — guard.ts's own header comment confirms the old server-side cookie gate was already fully retired, this is genuinely the single source of truth."
+        },
+        {
+          "claim": "redirect=%2F survives db-scoped URLs (multi-collective axis)",
+          "verdict": "CONFIRMED",
+          "evidence": "guard.ts:63 encodes pathname+search together (so `/?collective=polyphony` becomes `redirect=%2F%3Fcollective%3Dpolyphony`); redirect.ts:5 `safeRedirectTarget` passes any string starting with a single '/' through unmodified; run-callback-exchange.ts:80 uses that exact value as the post-login destination. The collective query param round-trips through the whole login detour intact — this axis already works correctly, no fix needed."
+        },
+        {
+          "claim": "Deleting agenda_signed_out/agenda_sign_in message keys orphans references in other locales or other code",
+          "verdict": "REFUTED",
+          "evidence": "grep for both keys across src (excluding messages/*.json) found exactly one usage site: src/routes/+page.svelte:7000-7001 (the block being deleted). Key definitions exist symmetrically in all four locale files — messages/en.json:351-352, et.json:351-352, lv.json:352-353, uk.json:353-354 — so a consistent 4-file + 1-usage-site deletion leaves nothing orphaned. src/paraglide/messages/*.js is Vite-plugin-generated and gitignored (src/paraglide/.gitignore), so no stale generated artifact needs manual cleanup."
+        },
+        {
+          "claim": "Login page localization of the session-expired notice is affected by or needs updating for this change",
+          "verdict": "REFUTED",
+          "evidence": "session_expired_message already exists translated in all four locale files (en/et/lv/uk, verified at messages/*.json ~line 347-349) and is wired independently via src/lib/auth/session-expired.ts / SessionExpiredNotice.svelte — this path is untouched by the PUBLIC_EXACT edit; it was already correctly localized before and after."
+        },
+        {
+          "claim": "Anonymous '/' behavior differs by rights tier (viewer/editor/owner/memberless)",
+          "verdict": "REFUTED",
+          "evidence": "src/lib/auth/guard.ts's resolveGuardRedirect/isProtectedPath/isTokenValid operate purely on token presence+expiry (guard.ts:29-46); no rights/tier lookup happens at this layer at all. Post-auth tier/membership differences (e.g. `collectives.status === 'none'` in +page.svelte:6989) are gated by the SEPARATE authenticated branch and untouched by this change — the guard change is uniformly rights-agnostic across all tiers."
+        },
+        {
+          "claim": "Invite-created vs auto-provisioned persons could pass through '/' while auth is still 'loading', causing the guard to misfire",
+          "verdict": "REFUTED",
+          "evidence": "+layout.ts's `load()` (src/routes/+layout.ts:14-27) reads `getToken()` and calls `resolveGuardRedirect` SYNCHRONOUSLY and independently of the reactive `authStore` (which starts 'loading' until onMount's hydrateAuth() in +layout.svelte:63-65) — the guard never consults authStore's loading state, so there is no window where authStore=='loading' causes a misfire. Both callback paths (run-callback-exchange.ts:68-71, run-invite-callback.ts:70-73) call setToken/hydrateAuth SYNCHRONOUSLY before the goto to '/' fires, so the fresh token is already in localStorage when +layout.ts's load() re-runs for the client-side navigation — no race for either provisioning path."
+        }
+      ],
+      "risks": [
+        "src/routes/+layout.svelte:~145-153 (EFFECT B) — the comment explaining `path === '/' || isProtectedPath(path)` ('the guard's isProtectedPath puts / on the public allowlist ... so we redirect from / explicitly IN ADDITION') becomes factually stale once '/' leaves PUBLIC_EXACT: isProtectedPath('/') will now itself be true, making the explicit `path === '/'` disjunct redundant (harmless, but the code and its rationale will mislead the next reader into thinking '/' is still specially carved out). Worth simplifying to just `isProtectedPath(path)` and updating/removing the comment as part of this PR, not left as drift.",
+        "src/lib/auth/guard.spec.ts:56 and :80 will fail CI as-is once '/' is removed from PUBLIC_EXACT — both need explicit updates (not just incidental breakage): the isProtectedPath list test must drop '/' (or move it to the 'protects app routes' list) and the resolveGuardRedirect 'public path' test must swap its pathname (e.g. to '/about', the remaining public entry) or add a new paired test asserting '/' now redirects.",
+        "src/routes/+page.svelte:6998-7002 — deleting the `{:else if auth.status === 'anonymous'}` branch leaves the `{#if auth.status === 'authenticated'} ... {/if}` with no else at all, so the component renders nothing (blank) for any non-authenticated auth.status. This is normally unreachable post-guard, but in the narrow race where a token is valid at the synchronous +layout.ts guard check yet expires by the time onMount's hydrateAuth() runs (component already mounted), the page would go from showing a 'Signed out / Sign in' message today to a blank screen after this change — pre-existing race, but the user-visible failure mode changes from informative-stub to blank. Low severity/likelihood, worth a one-line note in the PR description rather than a blocking fix.",
+        "static/robots.txt still declares `Allow: /` — after this change every anonymous crawl of '/' 302s to /auth/login instead of serving content. Not a functional bug (no test covers it) but worth a heads-up if SEO/indexing of the root path is desired going forward."
+      ],
+      "notes": "Repo-guard check passed: origin is https://github.com/mvox-dev/mvox-app.git. All investigation was read-only (Read/Bash grep/find/cat only — no edits, no writes, no commits).\\n\\nSummary for Palestrina: the mechanical blast radius of #221 is small and contained to two files that need real edits — src/lib/auth/guard.ts (the described PUBLIC_EXACT change), and src/routes/+page.svelte (delete the anonymous stub block at lines 6998-7002) — plus the four messages/*.json locale files (delete agenda_signed_out/agenda_sign_in symmetrically) and src/lib/auth/guard.spec.ts (two assertions currently pin '/' as public and WILL fail CI unmodified). Every other Layer-1 code path I traced (logout, post-signin redirect, invite accept/decline, /auth/login self-redirect, nav) was already either not applicable or provably safe by tracing the actual token-persist-before-redirect ordering in the callback exchange code — none of them require changes. Layer-2 axes (multi-collective query-param survival, locale-key symmetry, rights-tier agnosticism, invite-vs-auto-provisioned loading-state race) were each traced through source and came back clean/no-op. Two non-blocking hygiene items surfaced beyond the ticket's checklist: the +layout.svelte EFFECT B comment goes stale (documentation-only, no functional break) and robots.txt still advertises '/' as crawlable. No Playwright/e2e suite exists in this repo despite being named in project stack docs, so that checklist bullet currently has zero files to touch — flag to the team if e2e coverage of the guard was expected to exist already."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "sweep:blast-radius",
+      "phaseIndex": 2,
+      "phaseTitle": "Sweep",
+      "agentId": "a2f3754e28755aaa3",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788461119976,
+      "queuedAt": 1788461118257,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo-guard check passed: origin is https://github.com/mvox-…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#221 blast-radius sweep. The change: remove '/' from PUBLIC_EXACT in src/lib/auth/guard.ts so anonymous visitors to / redirec…",
+      "lastProgressAt": 1788461518070,
+      "tokens": 100756,
+      "toolCalls": 66,
+      "durationMs": 398091,
+      "resultPreview": "{\"claims\":[{\"claim\":\"guard.spec.ts asserts '/' is currently public and must be updated for #221\",\"verdict\":\"CONFIRMED\",\"evidence\":\"src/lib/auth/guard.spec.ts:56 — `for (const p of ['/', '/about', '/auth/login', ...]) expect(isProtectedPath(p)).toBe(false)` includes '/'. src/lib/auth/guard.spec.ts:80 — `it('returns null (allowed) for a public path regardless of token', () => { expect(resolveGuardRe…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:guard",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a4d168517c3972907",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788461120192,
+      "queuedAt": 1788461118297,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo-guard check passed: origin resolves to https://github.…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#221: make anonymous visits to / redirect to /auth/login instead of rendering a \"Signed out\" stub. Verify the GUARD-side clai…",
+      "lastProgressAt": 1788461273869,
+      "tokens": 59166,
+      "toolCalls": 28,
+      "durationMs": 152908,
+      "resultPreview": "{\"claims\":[{\"claim\":\"guard.ts: '/' is in PUBLIC_EXACT, cited at line 38\",\"verdict\":\"DRIFTED\",\"evidence\":\"src/lib/auth/guard.ts:37 — `const PUBLIC_EXACT = new Set(['/', '/about']);` — one line earlier than cited (line 38 is inside the doc-comment block above `isProtectedPath`, not the PUBLIC_EXACT declaration). Content of the claim (that '/' sits in PUBLIC_EXACT alongside '/about') is correct; only…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:stub-i18n",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "addd1e3df2907c83d",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788461277304,
+      "queuedAt": 1788461118297,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (origin ends in mvox-app.git). All work w…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#221. Verify the STUB + i18n claims:\n1. src/routes/+page.svelte — find the anonymous branch rendering m.agenda_signed_out() /…",
+      "lastProgressAt": 1788461475763,
+      "tokens": 66558,
+      "toolCalls": 42,
+      "durationMs": 198458,
+      "resultPreview": "{\"claims\":[{\"claim\":\"src/routes/+page.svelte:6998-7003 — the anonymous branch renders m.agenda_signed_out()/m.agenda_sign_in()\",\"verdict\":\"CONFIRMED\",\"evidence\":\"Read at src/routes/+page.svelte:6998-7003 (no line drift from the cited range — exact match). The block is `{:else if auth.status === 'anonymous'}` (top-level if/elseif starting at line 5099 `{#if auth.status === 'authenticated'}`) render…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "verify:expired-session",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a164b2911d567567a",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788461478849,
+      "queuedAt": 1788461118297,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Read-only verification per task constraints; no files edite…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#221, Gama refinement comment: expired-token cold visit to / should ideally land on the session-expired variant of the login …",
+      "lastProgressAt": 1788461567496,
+      "tokens": 48406,
+      "toolCalls": 9,
+      "durationMs": 88646,
+      "resultPreview": "{\"claims\":[{\"claim\":\"hydrateAuth (session.ts) distinguishes 'no token' from 'expired token' internally and publishes different state for each\",\"verdict\":\"REFUTED\",\"evidence\":\"src/lib/auth/session.ts:25-50. Both the missing-token branch (27-31) and the expired/malformed-payload branch (35-40) set authStore/return the identical `{ status: 'anonymous' }` AuthState. AuthState type (12-15) has no 'expi…"
+    }
+  ],
+  "totalTokens": 274886,
+  "totalToolCalls": 145
+}
