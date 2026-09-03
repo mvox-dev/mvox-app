@@ -155,7 +155,13 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-vi.mock('$lib/repertoire/workRows', () => ({ loadWorksByEventId: vi.fn().mockResolvedValue({}) }));
+// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
+// repertoire section calls them for real (pure, no fetch); only
+// loadWorksByEventId (the fetching entry point) is mocked here.
+vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
+	loadWorksByEventId: vi.fn().mockResolvedValue({})
+}));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor in most cases here, so the page's
 // loadManagePickers fires — stub its reads or they hit the network.

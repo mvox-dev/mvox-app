@@ -82,7 +82,9 @@
 	repertoire_item/program_item id for row actions; the sentinels
 	`ADD_WORK_KEY`/`ADD_PROGRAMME_KEY` exported below for the two "Add"
 	controls) — every management button disables while its key is pending, the
-	same double-tap guard as attendance/rsvp.
+	same double-tap guard as attendance/rsvp. A caller rendering two repertoire
+	surfaces on one page overrides the "Add work" sentinel via `addWorkKey` so
+	the two surfaces' add controls stay independent.
 -->
 <script module lang="ts">
 	// Svelte 5: a plain `export` inside the instance script creates a component
@@ -174,6 +176,14 @@
 		context?: 'repertoire' | 'programme';
 		/** 'repertoire' context only — works not yet in the season's repertoire. */
 		pickableWorksList?: Work[];
+		/** The pending-key the "Add work" control watches. Defaults to the
+		 *  module-level `ADD_WORK_KEY` — what every single-surface caller uses.
+		 *  A page rendering TWO repertoire surfaces at once (#234: the
+		 *  season-manage panel's section alongside an event's fallback works
+		 *  line) gives each surface its own sentinel so one's in-flight create
+		 *  does not disable the other's button; that key has to reach THIS
+		 *  control, or the surface simply never shows pending (review F3). */
+		addWorkKey?: string;
 		/** 'programme' context only — editions not yet on tonight's programme. */
 		pickableEditions?: PickerOption[];
 		/** Per-row edition choices for "Pin edition" ('repertoire' context). A row
@@ -205,6 +215,7 @@
 		eventRights,
 		context = 'repertoire',
 		pickableWorksList = [],
+		addWorkKey = ADD_WORK_KEY,
 		pickableEditions = [],
 		editionOptionsByRowId = {},
 		pendingKeys = new Set<string>(),
@@ -249,7 +260,7 @@
 	let selectedEditionForAdd = $state('');
 
 	function handleAddWork() {
-		if (!selectedWorkId || pendingKeys.has(ADD_WORK_KEY)) return;
+		if (!selectedWorkId || pendingKeys.has(addWorkKey)) return;
 		onaddwork?.(selectedWorkId);
 		selectedWorkId = '';
 	}
@@ -510,7 +521,7 @@
 				data-testid="work-manage-add-work-select"
 				class="w-full sm:w-auto"
 				value={selectedWorkId}
-				disabled={pendingKeys.has(ADD_WORK_KEY)}
+				disabled={pendingKeys.has(addWorkKey)}
 				aria-label={m.repertoire_add_work_select_aria_label()}
 				onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
 			>
@@ -523,7 +534,7 @@
 				type="button"
 				data-testid="work-manage-add-work-button"
 				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-				disabled={pendingKeys.has(ADD_WORK_KEY) || !selectedWorkId}
+				disabled={pendingKeys.has(addWorkKey) || !selectedWorkId}
 				aria-label={m.repertoire_add_work_aria_label()}
 				onclick={handleAddWork}
 			>

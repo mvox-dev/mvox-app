@@ -34,7 +34,7 @@
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
-	import { loadWorksByEventId } from '$lib/repertoire/workRows';
+	import { loadWorksByEventId, collectSources, buildWorkRows } from '$lib/repertoire/workRows';
 	import { signFileUrl } from '$lib/repertoire/fileUrls';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import type {
@@ -59,8 +59,18 @@
 		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
-	import { listWorks, listAllEditions, type Edition, type Work } from '$lib/library/libraryData';
-	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
+	import {
+		listWorks,
+		listAllEditions,
+		listAllCopies,
+		type Copy,
+		type Edition,
+		type Work
+	} from '$lib/library/libraryData';
+	import RepertoireElement, {
+		ADD_PROGRAMME_KEY,
+		ADD_WORK_KEY
+	} from '$lib/components/agenda/RepertoireElement.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
@@ -309,6 +319,41 @@
 	// The last management write REJECTED (its optimistic change already rolled
 	// back). Surfaced inline: a value that silently snaps back reads as a bug.
 	let manageError = $state(false);
+
+	// #234 — the season-manage panel's OWN repertoire section. Deliberately
+	// SEPARATE state from `seasonRepertoire`/`worksByEventId`/`managePendingKeys`
+	// above: those are all `currentSeasonId`-scoped (the viewer's "current
+	// season"), while the panel manages `manageableSeasonId` (PO ruling on the
+	// issue — #167's admin pick, which diverges from `currentSeasonId` for a
+	// future-only season or a lapsed-current one). Reusing the currentSeasonId
+	// plumbing verbatim would list/write the WRONG season whenever the two
+	// diverge.
+	//
+	// #234 review F1 — the works/editions join sources are panel-local TOO, not
+	// borrowed from `libraryWorks`/`libraryEditions`. Those two are only ever
+	// filled by `loadManagePickers`, whose gate (`loadWorksAndManagement`) is
+	// `seasonManageRights === 'editor'` (currentSeasonId-scoped) OR an event
+	// editor — never `manageableSeasonRights`. In the FUTURE-ONLY season case —
+	// the exact state the PO ruling names as the reason for the panel scoping —
+	// `currentSeason()` is null, so `seasonManageRights` is 'not-editor', and a
+	// season with no events yet leaves `eventManageRights` empty: the pickers
+	// were never fetched, the add-work select rendered with only its prompt, and
+	// the rows lost their composer/edition labels. The panel already owns its own
+	// reads, so it owns these; nothing else consumes them.
+	let panelRepertoire = $state<RepertoireItem[]>([]);
+	let panelWorks = $state<Work[]>([]);
+	let panelEditions = $state<Edition[]>([]);
+	let panelCopies = $state<Copy[]>([]);
+	let panelPendingKeys = $state<Set<string>>(new Set());
+	// #234 review F4 — a FAILED panel read renders as an empty repertoire
+	// section, indistinguishable from a season with nothing in it. Surfaced the
+	// way this panel's sibling lists already surface theirs
+	// (`seasonManageSeriesError`/`seasonManageEventsError` → the shared
+	// `season_manage_list_load_error` line): fail loudly, never silently degrade.
+	// Covers BOTH panel reads — the season's repertoire and the works/editions/
+	// copies join sources — since either coming back empty misreads as "nothing
+	// here" (no rows, or rows with no labels and an empty add-work select).
+	let panelRepertoireError = $state(false);
 
 	// #85 TA.4 — the season summary's expand state (conductor-only) + the
 	// full-roster rates it reveals. Loaded lazily on first expand (most visits
@@ -963,6 +1008,14 @@
 		libraryEditions = [];
 		managePendingKeys = new Set();
 		manageError = false;
+		// #234 review 2 F1 — the panel's own repertoire state is NOT reset here.
+		// `resetManagement` runs on EVERY `loadForSelected`, including the
+		// panel-preserving `{ keepSeasonManage: true }` reloads, and the section is
+		// only ever (re)loaded on a panel OPEN: clearing it here blanked the section
+		// (reading as "this season has no repertoire") and emptied the add-work
+		// select after any panel-side create/delete refresh. It lives in
+		// `resetSeasonManage` instead — the panel-LIFETIME reset, which the genuine
+		// collective switch still runs.
 	}
 
 	type ManageCfg = { db: string; token: string };
@@ -1234,6 +1287,13 @@
 		},
 		reconcile(key) {
 			managePendingMarks.delete(key);
+			// #234 review 2 F2 — the agenda fallback line and the panel section are
+			// two views of the SAME season's repertoire_items whenever the panel's
+			// season is the current one. This queue owns the AGENDA side, so it must
+			// push into the panel the way `panelQueue` already pushes into the agenda
+			// (`refreshWorksAfterWrite`); before #234 both fallback surfaces shared
+			// one `seasonRepertoire` and the question could not arise.
+			syncPanelRepertoireAfterAgendaWrite();
 			// #91 review F3 — only a CREATE needs the server. Its entity id is
 			// assigned there and there is no optimistic row to keep; every other
 			// write kind (status / pin / ordinal / delete) already holds the
@@ -1248,6 +1308,10 @@
 			// own `rollback` hook (queue contract) — this surfaces the failure.
 			managePendingMarks.delete(key);
 			manageError = true;
+			// #234 review 2 F2 — same reason as `reconcile`, and for the same reason
+			// the refetch below exists: a failed write leaves the server's truth
+			// unknown to BOTH surfaces, not just this one.
+			syncPanelRepertoireAfterAgendaWrite();
 			// #91 review F5 — and then shows the TRUTH. None of these writes is
 			// atomic: `reorderProgramItems` writes program_items sequentially and
 			// throws on the first rejection, so earlier writes already landed; each
@@ -1420,6 +1484,128 @@
 		});
 	}
 
+	// ── #234 — the season-manage panel's repertoire section (manageableSeasonId
+	//    scoped, PO ruling) ──────────────────────────────────────────────────
+	// Its own write queue rather than sharing `repertoireQueue`: the two ADD
+	// controls (this section's and the agenda fallback's) would otherwise
+	// collide on the SAME sentinel key (`ADD_WORK_KEY` is a module-level
+	// constant), wrongly disabling one surface's add button while the other's
+	// create is in flight. Row-id keys (status/remove) cannot collide (Entu ids
+	// are globally unique), but a dedicated queue keeps the whole section's
+	// pending/settle wiring in one place.
+	//
+	// The sentinel is passed DOWN as RepertoireElement's `addWorkKey` (review
+	// F3): the component watches that prop, so a key the component never sees
+	// leaves the section's select/button permanently enabled — no pending
+	// feedback and a dead re-entry guard.
+	const PANEL_ADD_WORK_KEY = '__panel_add_work__';
+
+	/** Re-read the panel's own season's repertoire — the authoritative refetch
+	 *  a create's server-assigned id needs, and what a failed write reverts to. */
+	function refreshPanelRepertoire(): void {
+		const cfg = manageCfg();
+		if (!cfg || manageableSeasonId === null) return;
+		const seasonId = manageableSeasonId;
+		const thisRequest = requestId;
+		listRepertoireItems(cfg, seasonId)
+			.then((items) => {
+				if (thisRequest !== requestId || manageableSeasonId !== seasonId) return;
+				panelRepertoire = items;
+			})
+			.catch(() => {
+				/* keep the previous rows; the next open retries */
+			});
+	}
+
+	/**
+	 * #234 review 2 F2 — the OTHER direction of the sync. `panelQueue` already
+	 * calls `refreshWorksAfterWrite` so a panel-side write reaches the agenda's
+	 * fallback works rows; this is what an AGENDA-side repertoire write owes the
+	 * panel section, which holds its own copy of the same rows.
+	 *
+	 * Without it, with both surfaces open on the same season (the aligned case —
+	 * `manageableSeasonId === currentSeasonId`) an agenda-side remove left the
+	 * row standing in the panel, whose remove button then DELETEd an already-gone
+	 * repertoire_item; and an agenda-side add left the work still offered by
+	 * `panelPickableWorksList` (derived from the stale `panelRepertoire`), so a
+	 * second Add created a DUPLICATE repertoire_item for the season.
+	 *
+	 * Cheap enough to run on every settle rather than classify the key: one
+	 * `listRepertoireItems` read, only while the panel is open on the very season
+	 * the agenda write touched.
+	 */
+	function syncPanelRepertoireAfterAgendaWrite(): void {
+		if (!seasonManageOpen) return;
+		if (manageableSeasonId === null || manageableSeasonId !== currentSeasonId) return;
+		refreshPanelRepertoire();
+	}
+
+	const panelQueue = createRepertoireWriteQueue({
+		setPending(key, pending) {
+			const next = new Set(panelPendingKeys);
+			if (pending) next.add(key);
+			else next.delete(key);
+			panelPendingKeys = next;
+		},
+		// #234 SYNC — a repertoire_item is a child of the SEASON, so the same row
+		// can be showing on an unprogrammed event's fallback works line too.
+		// `refreshWorksAfterWrite` (unchanged, existing) re-reads that surface;
+		// calling it here is the sync hook, not a change to the per-event
+		// handlers themselves.
+		reconcile() {
+			refreshPanelRepertoire();
+			refreshWorksAfterWrite();
+		},
+		revert() {
+			refreshPanelRepertoire();
+			refreshWorksAfterWrite();
+		}
+	});
+
+	/** Add a work to the PANEL's season. No optimistic row (create's id is
+	 *  server-assigned) — mirrors `handleAddWork`'s reasoning exactly. */
+	function handlePanelAddWork(workId: string) {
+		const cfg = manageCfg();
+		const seasonId = manageableSeasonId;
+		if (!cfg || seasonId === null) return;
+		panelQueue.request(PANEL_ADD_WORK_KEY, async () => {
+			await createRepertoireItem(cfg, { seasonId, workId });
+		});
+	}
+
+	function handlePanelStatusChange(itemId: string, status: RepertoireStatus) {
+		const cfg = manageCfg();
+		if (!cfg) return;
+		const before = panelRepertoire.find((item) => item.id === itemId)?.status;
+		if (before === undefined) return;
+		panelQueue.request(itemId, () => updateRepertoireStatus(cfg, itemId, status), {
+			apply: () => {
+				panelRepertoire = panelRepertoire.map((item) =>
+					item.id === itemId ? { ...item, status } : item
+				);
+			},
+			rollback: () => {
+				panelRepertoire = panelRepertoire.map((item) =>
+					item.id === itemId ? { ...item, status: before } : item
+				);
+			}
+		});
+	}
+
+	function handlePanelRemoveItem(itemId: string) {
+		const cfg = manageCfg();
+		if (!cfg) return;
+		const before = panelRepertoire;
+		panelQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
+			apply: () => {
+				panelRepertoire = panelRepertoire.filter((item) => item.id !== itemId);
+			},
+			rollback: () => {
+				panelRepertoire = before;
+			}
+		});
+	}
+
 	/**
 	 * Reorder. BOTH sides of the move are written: setting only the moved item's
 	 * ordinal leaves it tied with its neighbour, and listProgramItems' numeric
@@ -1536,6 +1722,20 @@
 	});
 
 	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
+
+	// #234 — the panel's own row-building, joined against the panel's OWN
+	// works/editions/copies reads (review F1: `libraryWorks`/`libraryEditions`
+	// are never loaded in the future-only-season case this section exists for —
+	// see the state block's doc). `buildWorkRows`/`collectSources` are the exact
+	// pure functions `loadWorksByEventId` uses — no parallel row-shaping logic.
+	const panelWorkRowSources = $derived(collectSources(panelWorks, panelEditions, panelCopies));
+	const panelWorkRows = $derived(
+		buildWorkRows({ source: 'repertoire', items: panelRepertoire }, panelWorkRowSources)
+	);
+	/** "Add work" exclusion set — the PANEL season's repertoire, not
+	 *  `seasonRepertoire` (currentSeasonId-scoped): the divergence case is the
+	 *  whole reason this section has its own state (see the state block doc). */
+	const panelPickableWorksList = $derived(pickableWorks(panelWorks, panelRepertoire));
 
 	/** Absent entirely for a reader with no rights anywhere — AgendaList then
 	 *  renders exactly the read-only agenda it rendered before TR.3. */
@@ -2461,6 +2661,70 @@
 		seasonEditDraft = '';
 		seasonEditErrors = {};
 		seasonEditPending = {};
+		// #234 review 2 F1 — the panel's repertoire section belongs to the PANEL's
+		// lifetime, exactly like the series/events lists three lines up, so it is
+		// cleared where they are. Reached only on a genuine collective switch (both
+		// `loadForSelected` teardowns, with `dropConvertRun: true`) and on the
+		// agenda-failure path — never on a `{ keepSeasonManage: true }` reload, which
+		// deliberately keeps the panel and everything it is showing.
+		panelRepertoire = [];
+		panelWorks = [];
+		panelEditions = [];
+		panelCopies = [];
+		panelPendingKeys = new Set();
+		panelRepertoireError = false;
+	}
+
+	/**
+	 * #234 — the panel's own repertoire section, scoped to the PANEL's season
+	 * (`manageableSeasonId`, not `currentSeasonId` — see the state block's doc).
+	 *
+	 * Review F1: works/editions/copies are read HERE too, not borrowed from
+	 * `loadManagePickers`' `libraryWorks`/`libraryEditions` — those are gated on
+	 * the currentSeasonId-scoped `seasonManageRights`, which is 'not-editor' in
+	 * exactly the future-only-season case the panel-scoping exists for.
+	 * `listAllCopies` is the Borrow-link lookup (`WorkRow.canBorrow`), which
+	 * nothing else on this page reads.
+	 *
+	 * Review 2 F1 — extracted from `openSeasonManagePanel` so the panel-preserving
+	 * refresh (`refreshSeasonManageLists`) can re-run it: the panel now SURVIVES
+	 * `loadForSelected({ keepSeasonManage: true })`, and a reload that leaves the
+	 * section untouched would leave it describing the world as it was before the
+	 * write that triggered the reload.
+	 */
+	function loadPanelRepertoire(cfg: ManageCfg, seasonId: string): void {
+		const thisRequest = requestId;
+		panelRepertoireError = false;
+		listRepertoireItems(cfg, seasonId)
+			.then((items) => {
+				if (thisRequest !== requestId) return;
+				panelRepertoire = items;
+			})
+			.catch((e) => {
+				if (thisRequest !== requestId) return;
+				console.error('agenda: loading the season-manage repertoire failed', e);
+				panelRepertoire = [];
+				panelRepertoireError = true;
+			});
+		// One settle for the three join sources: any of them missing degrades the
+		// SAME section the same way (unlabelled rows and/or an add-work select
+		// with nothing in it), so they share one error surface rather than
+		// half-rendering.
+		Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
+			.then(([works, editions, copies]) => {
+				if (thisRequest !== requestId) return;
+				panelWorks = works;
+				panelEditions = editions;
+				panelCopies = copies;
+			})
+			.catch((e) => {
+				if (thisRequest !== requestId) return;
+				console.error('agenda: loading the season-manage repertoire sources failed', e);
+				panelWorks = [];
+				panelEditions = [];
+				panelCopies = [];
+				panelRepertoireError = true;
+			});
 	}
 
 	function openSeasonManagePanel(): void {
@@ -2534,6 +2798,7 @@
 				seasonManageEvents = [];
 				seasonManageEventsError = true;
 			});
+		loadPanelRepertoire(cfg, seasonId);
 	}
 
 	function closeSeasonManagePanel(): void {
@@ -3141,12 +3406,21 @@
 		return Number.isFinite(n) ? n : undefined;
 	}
 
-	/** Re-reads the panel's two lists after a PANEL-born create — the new
+	/** Re-reads the panel's lists after a PANEL-born create — the new
 	 *  occurrence must land in the counts the panel already shows. Mirrors
-	 *  `openSeasonManagePanel`'s pair of reads, minus the roster/open-state
-	 *  parts (this is a refresh, not a (re)open). */
+	 *  `openSeasonManagePanel`'s reads, minus the roster/open-state
+	 *  parts (this is a refresh, not a (re)open).
+	 *
+	 *  #234 review 2 F1 — the repertoire section rides along. Its state used to be
+	 *  wiped by `resetManagement` on every reload and rebuilt only by the next
+	 *  panel OPEN; now that it survives a `{ keepSeasonManage: true }` reload it
+	 *  needs the same re-read the two lists get, so the whole panel reconciles at
+	 *  one seam instead of one section quietly showing pre-write truth. Every
+	 *  caller passes the PANEL's own season (each one guards that), so this is
+	 *  always the section's own season. */
 	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
 		const thisRequest = requestId;
+		loadPanelRepertoire(cfg, seasonId);
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((list) => {
 				if (thisRequest !== requestId) return;
@@ -6402,6 +6676,47 @@
 											{seasonManageDeleteErrorText(seasonManageDeleteError)}
 										</p>
 									{/if}
+								</div>
+
+								<!-- season repertoire (#234 — Mihkel live-gate: "I cant see the
+								     programme management on season management card." Scoped to
+								     THIS panel's season (manageableSeasonId), per Gama's PO ruling
+								     on the issue — NOT the currentSeasonId-scoped `seasonRepertoire`/
+								     `pickableWorksList`/`handleAddWork` the per-event works lines use
+								     (those stay untouched — #234 Done-when 3, the fallback entry
+								     point for an event editor without season rights). Rights reuse
+								     `manageableSeasonRights`, the panel's own gate — the panel is
+								     unreachable without it, so no separate rights check is needed
+								     here. -->
+								<div data-testid="season-manage-repertoire">
+									<p class="text-xs tracking-wide text-ink-2 uppercase">
+										{m.season_manage_repertoire_label()}
+									</p>
+									<!-- Review F4 — a failed panel read says so, exactly as the
+									     series/events lists above do: an empty section otherwise
+									     reads as "this season has no repertoire". -->
+									{#if panelRepertoireError}
+										<p
+											data-testid="season-manage-repertoire-error"
+											role="alert"
+											class="mt-1 text-xs text-red-700"
+										>
+											{m.season_manage_list_load_error()}
+										</p>
+									{/if}
+									<RepertoireElement
+										rows={panelWorkRows}
+										context="repertoire"
+										seasonRights={manageableSeasonRights}
+										pickableWorksList={panelPickableWorksList}
+										pendingKeys={panelPendingKeys}
+										addWorkKey={PANEL_ADD_WORK_KEY}
+										expanded={true}
+										onpdfclick={handlePdfClick}
+										onaddwork={handlePanelAddWork}
+										onstatuschange={handlePanelStatusChange}
+										onremoveitem={handlePanelRemoveItem}
+									/>
 								</div>
 							</div>
 							{/if}

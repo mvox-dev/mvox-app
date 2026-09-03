@@ -383,6 +383,7 @@
 	"season_manage_series_event_count": "Події: {count}",
 	"season_manage_add_series": "+ Серія",
 	"season_manage_events_label": "Окремі події",
+	"season_manage_repertoire_label": "Репертуар сезону",
 	"season_manage_date_unset": "Не вказано",
 	"season_manage_list_load_error": "Не вдалося завантажити. Спробуйте ще раз.",
 	"season_manage_add_event": "+ Подія",

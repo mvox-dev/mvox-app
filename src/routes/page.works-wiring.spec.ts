@@ -73,7 +73,13 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-vi.mock('$lib/repertoire/workRows', () => ({ loadWorksByEventId: loadWorksByEventIdMock }));
+// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
+// repertoire section calls them for real (pure, no fetch); only
+// loadWorksByEventId (the fetching entry point) is mocked here.
+vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
+	loadWorksByEventId: loadWorksByEventIdMock
+}));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 
 import Page from './+page.svelte';

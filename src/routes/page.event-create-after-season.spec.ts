@@ -150,7 +150,13 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 }));
 // Named (not anonymous) so the review-F2 tests can assert that the repertoire
 // management reads actually re-run once the database-entity answer lands.
-vi.mock('$lib/repertoire/workRows', () => ({ loadWorksByEventId: loadWorksByEventIdMock }));
+// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
+// repertoire section calls them for real (pure, no fetch); only
+// loadWorksByEventId (the fetching entry point) is mocked here.
+vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
+	loadWorksByEventId: loadWorksByEventIdMock
+}));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: listWorksMock,

@@ -381,6 +381,7 @@
 	"season_manage_series_event_count": "Events: {count}",
 	"season_manage_add_series": "+ Series",
 	"season_manage_events_label": "Standalone events",
+	"season_manage_repertoire_label": "Season repertoire",
 	"season_manage_date_unset": "Not set",
 	"season_manage_list_load_error": "Couldn't load. Try again.",
 	"season_manage_add_event": "+ Event",

@@ -381,6 +381,7 @@
 	"season_manage_series_event_count": "Sündmusi: {count}",
 	"season_manage_add_series": "+ Seeria",
 	"season_manage_events_label": "Eraldiseisvad sündmused",
+	"season_manage_repertoire_label": "Hooaja repertuaar",
 	"season_manage_date_unset": "Määramata",
 	"season_manage_list_load_error": "Laadimine ebaõnnestus. Proovi uuesti.",
 	"season_manage_add_event": "+ Sündmus",

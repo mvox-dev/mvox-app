@@ -382,6 +382,7 @@
 	"season_manage_series_event_count": "Notikumi: {count}",
 	"season_manage_add_series": "+ Sērija",
 	"season_manage_events_label": "Atsevišķi notikumi",
+	"season_manage_repertoire_label": "Sezonas repertuārs",
 	"season_manage_date_unset": "Nav norādīts",
 	"season_manage_list_load_error": "Neizdevās ielādēt. Mēģiniet vēlreiz.",
 	"season_manage_add_event": "+ Notikums",
