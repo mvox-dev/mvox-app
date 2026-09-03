@@ -2,7 +2,15 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
-### [NEXT SESSION] 2026-09-03 — session MVOX-13 → MVOX-14 (board EMPTY, clean shutdown 2026-09-03 21:30 EEST)
+### [NEXT SESSION] 2026-09-03 — session MVOX-14 live (updated 22:40 EEST at #221→#222 boundary)
+
+**#221 CLOSED** — merged `117971c` (root / redirects to sign-in; expired-token → session-expired login variant, implemented in guard.ts NOT hydrateAuth — cold-visit path never consults authStore; research-221.json has the trace). Review r1 YELLOW (commit-body disclosures) → fix → r2 GREEN → merge. Live gates for Mihkel in commit body (phone: cold /, expired /, robots.txt note).
+
+**#222 IN FLIGHT at write time** — season-manage panel merges into one toolbar card. Args `pipeline-args/args-222.json`, research `research/research-222.json` (headline: panel must be SIBLING of role=toolbar header row inside new outer card — handleAdminToolbarKeydown full-subtree query + dialog-in-toolbar ARIA; label under showSeasonManageGear gate; gear aria-labelledby). If pipeline dead on relaunch: branch feat/222-season-manage-card, delete if incomplete, relaunch from args-222.json.
+
+**Deferred:** CLAUDE.md stack table claims Playwright — no E2E infra exists in mvox-app (research-221 finding); queue doc correction. robots.txt Allow:/ now 302s (noted to PO).
+
+### [PREVIOUS] 2026-09-03 — session MVOX-13 → MVOX-14 (board EMPTY, clean shutdown 2026-09-03 21:30 EEST)
 
 mvox-app main @ `66ebd9d`. **13 issues closed this session** (all squash-merged, one commit each, `Closes #N` in body): #219 `0f98490`, #207 `32845d6`+`8e6d014`, #208 `63033d4`, #209 `5788866`, #211 `e53b8e9`, #214 `b598a61`, #212 `91b3905`, #213 `6cd7a72` (manual squash after YELLOW-cap halt → fix-213 agent → Bentham r4 GREEN), #215 `7ed4ede`, #217+#216 `6814565`, #218 `c0e6d1d`, #220 `66ebd9d`. Ready board: EMPTY. Open issues: NONE. Stray branches: none. finn/bentham/perotin standing.
 

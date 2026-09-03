@@ -1,0 +1,357 @@
+{
+  "summary": "Pre-RED verification for #222 — season-manage panel merges into toolbar card",
+  "agentCount": 4,
+  "logs": [],
+  "result": {
+    "verify": [
+      {
+        "key": "markup",
+        "claims": [
+          {
+            "claim": "agenda-admin-toolbar is its own bordered frame with [+ Season] left, gear right via ml-auto, gear label aria-only via season_manage_gear_label",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:5198-5256 (current HEAD 06babdc). Container: `{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)}` wraps a single `<div data-testid=\"agenda-admin-toolbar\" role=\"toolbar\" aria-label={m.agenda_admin_toolbar_label()} tabindex=\"-1\" class=\"mb-3 flex flex-wrap items-center gap-2 rounded-md border border-ink-4 p-1.5\" onkeydown={handleAdminToolbarKeydown}>`. Children, in DOM order: (1) `{#if showSeasonCreate && !seasonCreateOpen}` → `<button data-testid=\"season-create\" disabled={createEntryPointsBlocked} ...>{m.season_create()}</button>` (no ml-auto, sits first/left); (2) `{#if showSeasonManageGear}` → `<button data-testid=\"season-manage-gear\" bind:this={seasonManageGearEl} aria-label={m.season_manage_gear_label()} aria-expanded={seasonManageOpen} aria-controls=\"season-manage-panel\" disabled={seasonManageGearDisabled} ... class=\"ml-auto flex min-h-11 min-w-11 items-center justify-center rounded-md border border-ink text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink\" onclick={toggleSeasonManagePanel}><span aria-hidden=\"true\">⚙</span></button>` — the gear's visible content is only the ⚙ glyph (aria-hidden), its accessible name comes solely from aria-label. Comment at 5207-5213 confirms `ml-auto` on the LAST item (the gear) is deliberate so it alone is pushed to the right edge while [+ Season] sits left."
+          },
+          {
+            "claim": "season-manage-panel is a separate SIBLING bordered frame (border border-ink-5) below the toolbar when open, and its contents come from #213/#215/#217",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:5258-6361. `{#if seasonManageOpen}` wraps a SIBLING div (not nested inside the toolbar div, which already closed at 5256/5257): `<div id=\"season-manage-panel\" data-testid=\"season-manage-panel\" bind:this={seasonManagePanelEl} role=\"dialog\" aria-label={m.season_manage_panel_label()} tabindex=\"-1\" class=\"mb-3 flex flex-col gap-3 border border-ink-5 p-3\" onkeydown={onSeasonManagePanelKeydown}>`. Top-level children (by indentation, 8 tabs deep): (a) header row 5279-5341 — h2 title + season delete two-step-confirm (arm/confirm/cancel, testids season-manage-delete-season / -confirm / -cancel) [#217]; (b) name field div, 5344; (c) dates div `class=\"flex gap-4\"` at 5412 (start_date/end_date, testids season-manage-start_date/end_date); (d) conductors div, 5522; (e) 'event series' div, 5609 — contains add-series button, series-create form incl. the #215 date-grid preview (`series-create-preview`, monthly-grouped toggle-chip dates, testid series-create-date-{iso}, lines ~5835-5900), per-series-row convert/delete controls, and the delete-progress/error region (season-manage-delete-progress/error, ~6053/6072) covering the #216/#217 serial cascade; (f) 'standalone events' div, 6082 — add-event button + events list with per-event convert/delete (testids season-manage-event-{id}, -convert-, -delete-). No literal 'bulk toolbar' UI element exists inside the panel — 'bulk' in the code refers to the serial createEvent/delete-cascade LOOPS (comments at lines 4048-4318), not a distinct toolbar component; #213's contribution is the gear-toggle mechanics living in the admin-toolbar above, not panel content."
+          },
+          {
+            "claim": "Gear semantics: aria-expanded, aria-controls pointing at the panel id, seasonManageGearDisabled derivation, focus-return-to-gear-on-close mechanism, all preserved per #213",
+            "verdict": "CONFIRMED",
+            "evidence": "aria-expanded={seasonManageOpen}, aria-controls=\"season-manage-panel\" at src/routes/+page.svelte:5245-5246, matching the panel's own id=\"season-manage-panel\" at 5260 exactly. seasonManageGearDisabled derivation at 4288-4290: `const seasonManageGearDisabled = $derived(seasonManageOpen && (seriesRunUnfinished || eventConvertRunUnfinished));` — disables the gear only while the panel is OPEN and a bulk series/conversion run is unfinished (close-refusal only, per comment 4280-4287, so opening is never blocked by a stopped run). Focus-return: closeSeasonManagePanel (function starts 2539) ends with `seasonManageGearEl?.focus();` at line 2576, with comment 2572-2575 explaining focus is handed back to the opening control since the dialog held focus and unmounts. toggleSeasonManagePanel (2585-2588) routes both directions: `if (seasonManageOpen) closeSeasonManagePanel(); else openSeasonManagePanel();` — so closing always goes through the same refusal guard (2561: `if (seriesRunUnfinished || eventConvertRunUnfinished) return;`) as seasonManageGearDisabled encodes, though the comment at 2579-2584 notes the button being `disabled` in that state means this branch is rarely reached directly."
+          },
+          {
+            "claim": "role='toolbar' + roving tabindex present on the admin toolbar, arity 2 (season-create, season-manage-gear)",
+            "verdict": "CONFIRMED",
+            "evidence": "role=\"toolbar\" at src/routes/+page.svelte:5201; roving-tabindex state/logic at 4292-4320: `let toolbarRoving = $state<string | null>(null);` and `const toolbarActiveTestid = $derived.by(...)` computing 'last focused, else first enabled' over exactly two possible members keyed by testid: 'season-create' and 'season-manage-gear' (4302-4311). `handleAdminToolbarKeydown` (4314+) walks `toolbar.querySelectorAll('button:not([disabled])')` for arrow-key roving. Comment at 5188-5192 explicitly notes the DEFAULT state renders both controls at once so arity-2 toolbar semantics are intentionally kept, not degenerate. onfocus handlers on each button (season-create: 5220, season-manage-gear: 5249) update toolbarRoving; tabindex on each button (5219, 5248) is 0 only when toolbarActiveTestid matches, else -1."
+          },
+          {
+            "claim": "Season-create form renders as a form-only block (trigger button lives in the toolbar), positioned after both the toolbar and the panel; gated by showSeasonCreate/seasonCreateOpen with the [+ Season] toolbar button gated by !seasonCreateOpen",
+            "verdict": "CONFIRMED",
+            "evidence": "Toolbar [+ Season] trigger gate: `{#if showSeasonCreate && !seasonCreateOpen}` at src/routes/+page.svelte:5214 (rights gate showSeasonCreate defined 1935: `$derived(seasonCreateRights === 'editor' && !hasUpcomingSeason)`). Comment 5138-5151 explains the shared !seasonCreateOpen guard prevents a second click while the form is open from silently discarding in-progress typed input (also reused by the #201 onboarding banner at 5152). The actual season-create-form block renders OUTSIDE and BELOW both the toolbar (5198-5257) and the season-manage-panel (5258-6361): it appears at lines 6386-6399+ — `<div data-testid=\"season-create-status\" ...>` (6386-6388) then `{#if showSeasonCreate}{#if seasonCreateOpen}<div data-testid=\"season-create-form\" role=\"dialog\" ...>` starting 6389-6396, i.e. a sibling block after `season-manage-delete-status` (6374-6381), confirming comment at 6382-6385: 'the trigger button now lives in the #149 admin toolbar above; this block is the form only.'"
+          }
+        ],
+        "risks": [
+          "The panel's full extent (5259-6361, ~1100 lines) was surveyed at top-level section granularity (name/dates/conductors/event-series/standalone-events) rather than every nested control; sub-details inside 'event series' (series-create form fields, per-row convert/delete) and 'standalone events' (per-event convert/delete) were sampled, not exhaustively line-verified.",
+          "Issue #222 was written against main@0ea592c; current HEAD is 06babdc0deec0887fb84886a9df7c5d4af9d848a with one additional commit (feat(#220) AM/PM time formatting) on top of the issue's base — that commit's diff was not checked for touching the toolbar/panel region, but line numbers cited in this report are the CURRENT ones and were used directly, not the issue's stale ~5198-5257 citation.",
+          "No literal 'bulk toolbar' component exists in the panel — the issue's phrase appears to be shorthand for #213's bulk-run guard/toggle mechanics (which live in the admin-toolbar's gear, not inside the panel itself); an implementer should not go looking for a missing UI element by that name."
+        ],
+        "notes": "Repo guard passed: origin is https://github.com/mvox-dev/mvox-app.git. All reads were read-only against ~/workspace-app at HEAD 06babdc0deec0887fb84886a9df7c5d4af9d848a (one commit ahead of the issue's cited base 0ea592c — feat(#220) AM/PM time formatting — which does not appear to touch this region based on the grep/read work done).\n\nStructural summary for the merge (#222): currently TWO sibling bordered frames — `agenda-admin-toolbar` (border-ink-4, rounded-md, lines 5198-5257) holding [+ Season] + gear, and `season-manage-panel` (border-ink-5, no rounding, lines 5258-6361) rendered conditionally below it when seasonManageOpen. The issue's fold-into-one-frame instruction (header row keeps [+Season]+gear, panel body expands below the header inside the SAME frame, collapsed header shows visible 'Manage season' text) is a real structural change: today the toolbar is `{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)}`-gated and the panel is a wholly separate `{#if seasonManageOpen}`-gated sibling with its own border/id/role=dialog/aria-label — an implementer will need to either wrap both in one outer bordered container (collapsing the two independent borders into one) or restructure so the panel's role=dialog content renders inside the toolbar's frame. The gear's aria-controls=\"season-manage-panel\" / the panel's id=\"season-manage-panel\" pairing, aria-expanded, seasonManageGearDisabled, and the focus-return-to-gear (seasonManageGearEl.focus() in closeSeasonManagePanel) all still need to resolve correctly once the DOM nesting changes. The toolbar's role=\"toolbar\"+roving-tabindex (arity 2: season-create, season-manage-gear) is explicitly noted by the issue as free to re-derive if header structure changes materially."
+      },
+      {
+        "key": "i18n",
+        "claims": [
+          {
+            "claim": "season_manage_gear_label and season_manage_panel_label are present in all four locale files (en/et/lv/uk), with en 'Manage season' and et 'Halda hooaega' as the issue states",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/en.json:368-369 'Manage season'/'Manage season'; messages/et.json:368-369 'Halda hooaega'/'Halda hooaega'; messages/lv.json:369-370 'Pārvaldīt sezonu'/'Pārvaldīt sezonu'; messages/uk.json:370-371 'Керувати сезоном'/'Керувати сезоном'. Both keys are identical strings per-locale."
+          },
+          {
+            "claim": "season_manage_gear_label is currently used only as an aria-only accessible name on the icon-only gear toggle button, with no visible-text consumer",
+            "verdict": "CONFIRMED",
+            "evidence": "Sole consumer: src/routes/+page.svelte:5244 `aria-label={m.season_manage_gear_label()}`; the glyph inside is `<span aria-hidden=\"true\">⚙</span>` (line 5253). No other src/ consumer (grep -rn across src/)."
+          },
+          {
+            "claim": "season_manage_panel_label is already used twice in the current code: as the dialog's aria-label AND as the panel's visible h2 heading",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:5264 `aria-label={m.season_manage_panel_label()}` on `role=\"dialog\"` wrapper; src/routes/+page.svelte:5280 `<h2 ...>{m.season_manage_panel_label()}</h2>` — same string, visible, inside that dialog. This is a pre-existing duplicate-authored-string instance of the exact pattern #222 risks repeating."
+          },
+          {
+            "claim": "No spec asserts the exact rendered text of either key or checks for aria-label/visible-text duplication; specs only check truthy presence",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/page.season-manage.spec.ts:472 `expect(gear.getAttribute('aria-label')).toBeTruthy()`; :533-534 `expect(panel.getAttribute('role')).toBe('dialog')` + `expect(panel.getAttribute('aria-label')).toBeTruthy()`. grep for `m.season_manage_gear_label(`/`m.season_manage_panel_label(` across src/routes/*.spec.ts returned no matches — no spec imports/asserts the literal string."
+          },
+          {
+            "claim": "season_manage_gear_label can serve as both the visible collapsed-header text and the gear's accessible name without a double-announcement problem, if wired via aria-labelledby rather than a duplicated aria-label",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "Design assessment, not a checkable fact. Reference precedent at src/routes/admin/+page.svelte:562-589 (aria-labelledby pointing at a visible child span id, avoiding a separately-authored aria-label string) supports this shape. Caveat from src/routes/page.season-manage-whole-field.spec.ts:337-365 (#205 review F1): aria-labelledby supersedes an element's own contents — safe for the gear button today since its only other content is the aria-hidden glyph, but would break if sr-only content is later added inside it."
+          }
+        ],
+        "risks": [
+          "src/routes/+page.svelte:5244 — if the new collapsed-header visible text is added as a sibling of the gear button while the gear keeps its own separate aria-label={m.season_manage_gear_label()}, the same string is authored/rendered twice adjacent in the DOM: translation-drift risk (two call sites to keep in sync per locale) and a doubled announcement on linear/virtual-cursor AT reading (static text read once, then focus announces it again on the button).",
+          "src/routes/+page.svelte:5264 and :5280 — the panel dialog's aria-label already duplicates its own visible h2 verbatim (pre-existing, not new to #222); recommend collapsing to aria-labelledby pointing at the h2's id (mirrors admin/+page.svelte:562-589) rather than leaving two authored copies of season_manage_panel_label.",
+          "No spec pins the computed accessible name (via getByRole(..., {name})) for the gear or the panel the way page.season-manage-whole-field.spec.ts:346-365 does for the whole-field editor button — new coverage for #222 should assert the computed name, not just aria-label truthiness, or a doubled/duplicated-copy regression could ship silently."
+        ],
+        "notes": "Repo guard confirmed (origin=mvox-app.git) before any reads; work stayed read-only under ~/workspace-app per instructions. Pulled full issue #222 body via `gh issue view 222` for context beyond the task prompt's summary — issue asks for the collapsed header row to carry visible 'Manage season' text alongside the gear, reusing season_manage_gear_label/season_manage_panel_label, no new keys. Recommended ARIA shape: give the new visible text (or the existing h2, for the dialog) a stable id, and point the gear button's (and/or dialog's) accessible name at it via aria-labelledby instead of a second aria-label call — this is the same pattern already live at src/routes/admin/+page.svelte:562-589 and independently hardened by src/routes/page.season-manage-whole-field.spec.ts:337-365, which found and fixed a real regression from careless aria-labelledby placement (it strips an element's own contents from the accname computation). The gear button has no other content besides the aria-hidden glyph, so that trap doesn't apply here, but is worth flagging to whoever implements/reviews."
+      },
+      {
+        "key": "specs",
+        "claims": [
+          {
+            "claim": "Repo guard: cwd git remote origin ends in mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "`git remote get-url origin` in ~/workspace-app returned https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "Current DOM model is a TWO-FRAME structure: `data-testid=\"agenda-admin-toolbar\"` (role=toolbar, bordered div with [+ Season] and the gear as its only two direct-child buttons) and `data-testid=\"season-manage-panel\"` (role=dialog) render as SIBLINGS — the panel is a separate `{#if seasonManageOpen}` block placed immediately AFTER the toolbar's closing `{/if}`, not nested inside it.",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:5185-5187 comment: 'The panel/form these open (season-manage-panel, season-create-form) render below, unchanged, outside the toolbar.' Structure confirmed at lines 5198-5257 (toolbar div, closes) then 5258-5260 (`{#if seasonManageOpen}` opens a new sibling div `id=\"season-manage-panel\"`)."
+          },
+          {
+            "claim": "MUST UPDATE (high risk) — src/routes/page.agenda-admin.spec.ts, describe 'agenda admin — #149/#213: the entry points live in one shared admin toolbar' (lines 651-740), it '[⚙] and [+ Season] are DIRECT children of the same agenda-admin-toolbar element — and they are ALL of its buttons' (652-669)",
+            "verdict": "CONFIRMED",
+            "evidence": "Asserts `control.parentElement === toolbar` for both season-manage-gear and season-create, AND `toolbar.querySelectorAll('button')).toHaveLength(2)` (line 668). Currently exercised only with the panel CLOSED (renderReady() never opens it), so it will not mechanically fail from a same-card merge as long as season-manage-panel is NOT placed as a DOM child of the `agenda-admin-toolbar` element itself. But the test's own guarantee ('ALL of its buttons') becomes false the moment the panel — with its own buttons (add-event, add-series, delete-season, conductor chips, etc.) — is nested inside that same node while open. This is the single spec whose literal claim the merge threatens; it needs either (a) an explicit scope note that it only covers the closed-panel button set, or (b) a new companion assertion for the open-panel state, or the implementation must keep season-manage-panel a sibling within a new outer wrapper card rather than a child of the `agenda-admin-toolbar` node."
+          },
+          {
+            "claim": "MUST UPDATE (medium risk) — same describe block, it 'the gear is RIGHT-ALIGNED...' (671-705)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/page.agenda-admin.spec.ts:695-704 walks `toolbar.querySelectorAll('button')` and asserts the LAST button is season-manage-gear, FIRST is season-create — again only run panel-closed. Same fragility as above: correct today, silently wrong if the panel's buttons ever end up inside the same queried node while open. No currently-failing assertion, but flagged because #222 is exactly the change that makes this assumption load-bearing for the first time."
+          },
+          {
+            "claim": "MUST UPDATE (design-constraint risk, not currently a failing assertion) — src/routes/page.agenda-admin.spec.ts, describe 'agenda admin toolbar — roving tabindex (#156, arity 2 after #213)' (lines 1776-1861)",
+            "verdict": "CONFIRMED",
+            "evidence": "toolbarButtons() helper (1777-1783) queries `agenda-admin-toolbar` → `querySelectorAll('button')`; every it() in this block (1798-1860) runs with the panel CLOSED — none open season-manage-panel while asserting arity/stops/arrow-nav, so nothing here mechanically breaks. The real risk: role=\"toolbar\" (WAI-ARIA) is defined to contain only toolbar widgets. If #222's merge nests the season-manage-panel (role=\"dialog\") as a DOM child of the same `role=\"toolbar\"` element, that's an accessibility-semantics regression this test suite is structurally incapable of catching (it never opens the panel). Recommend the merged 'card' be an outer wrapper DIV that contains the existing `role=\"toolbar\"` node and the panel as two sibling sections, not a single role=\"toolbar\" element enclosing both."
+          },
+          {
+            "claim": "MUST UPDATE (documentation/rationale only, assertions themselves survive) — src/routes/page.season-manage.spec.ts, describe 'agenda — closing the panel, and what survives it' (~1209+), comment at lines 1225-1230 and the pressEscapeAtFocus tests (1235-1310)",
+            "verdict": "CONFIRMED",
+            "evidence": "Comment: 'The panel is a SIBLING of the gear's wrapper, so unless the open ACTUALLY moves focus into the dialog, a browser Escape dispatches at the gear (or <body>) and never enters the panel's subtree.' This documents the CURRENT sibling model #222 changes. The tests themselves dispatch Escape at `document.activeElement` and check `q(container,'season-manage-panel')` nullness / focus returning to the gear by testid lookup — all position-independent (id/attribute/activeElement based) — so they should stay GREEN under the merge. Only the explanatory comment becomes stale and should be updated to describe the new containment relationship."
+          },
+          {
+            "claim": "MUST KEEP GREEN UNCHANGED (issue's explicit ask) — src/routes/page.agenda-admin.spec.ts, describe 'agenda admin — #213: the gear toggles the season-manage panel' (lines 541-636)",
+            "verdict": "CONFIRMED",
+            "evidence": "Six its: aria-expanded false→true on toggle (542-558), aria-controls resolves BY ID to the season-manage-panel element (560-569, uses `container.querySelector('[id=\"'+controlsId+'\"]')` — id lookup, not tree position), second click closes + gear keeps `document.activeElement` (572-593), gear stays mounted / no season-manage-close (595-604), Escape closes + refocuses gear (606-620), toggle round-trip (622-635). All are attribute/id/activeElement based, none use parentElement/closest/toolbar containment, so re-parenting season-manage-panel does not threaten any of them AS LONG AS the gear keeps `aria-controls=\"season-manage-panel\"` and the panel keeps `id=\"season-manage-panel\"`."
+          },
+          {
+            "claim": "MUST KEEP GREEN UNCHANGED — src/routes/page.season-manage.spec.ts, describe 'agenda — the [⚙] season-manage entry point' (462-543) plus the disabled/aria-expanded assertions scattered in event-convert.spec.ts (lines 347-964), series-create.spec.ts (409-2161), event-create-after-season.spec.ts (371-810), season-manage-delete.spec.ts (400-720) that check season-manage-gear disabled/aria-expanded state during bulk runs",
+            "verdict": "CONFIRMED",
+            "evidence": "e.g. page.season-manage.spec.ts:463-480 (gear renders as BUTTON with aria-label, not inside an agenda row via closest('[data-testid^=\"agenda-row-\"]') — unrelated to toolbar/panel merge), plus the many `(q(container,'season-manage-gear') as HTMLButtonElement).disabled` checks across the create/convert specs (e.g. event-convert.spec.ts:796,942,964; series-create.spec.ts scattered; agenda-admin.spec.ts:934,1112,1175,1391) — all attribute reads, position-independent, survive the merge untouched."
+          },
+          {
+            "claim": "UNTOUCHED (category c) — #217 delete-cascade specs: src/routes/page.season-manage-delete.spec.ts, 11 describe blocks (417, 458, 610, 768, 935, 1118, 1148, 1325, 1536, 1567, 1635)",
+            "verdict": "CONFIRMED",
+            "evidence": "Structural checks here are all INTERNAL to the panel element itself — `panel.contains(btn)` (430,439,1132), `btn.closest('[data-testid=\"season-manage-series-<id>\"]')` (429,438), `seriesSubPanel?.contains(alert/progress)` (800,1355,1599) — where `panel` is freshly re-queried via `q(container,'season-manage-panel')` each test. These hold regardless of where the panel element sits in the larger tree, so a toolbar/panel merge does not touch them. Covers: delete buttons render in panel, click removes series/event, two-step confirm, failed-delete error slot, convert disarms delete, season-level delete control, season delete two-step w/ live scope, shared progress counter, successful season delete closes+announces, failed cascade error, and the i18n key-existence check."
+          },
+          {
+            "claim": "UNTOUCHED (category c) — #215 date-chip grid specs: src/routes/page.series-create.spec.ts, testids `series-create-date-<YYYY-MM-DD>`, `series-create-month-<...>`, `series-create-preview` (describe blocks at 1560, 1667, 1721, 2186, 2247, plus fillValidSeries usage throughout)",
+            "verdict": "CONFIRMED",
+            "evidence": "Confirmed via git show 7ed4ede (feat #215: toggleable date-chip grid replacing skip-dates input) and grep of the testid comment at page.series-create.spec.ts:110 ('series-create-date-<YYYY-MM-DD> #215 — ONE CHIP PER CANDIDATE DATE'). These chips live inside `series-create-preview` inside `series-create-form` inside the panel (opened via season-manage-add-series); no assertion in this file references agenda-admin-toolbar or checks the panel's position relative to it — unaffected by #222."
+          },
+          {
+            "claim": "UNTOUCHED (category c) — src/routes/page.season-manage-whole-field.spec.ts, describe '#205 — season manage panel: whole-field activators (name/start_date/end_date)' (line 286+)",
+            "verdict": "CONFIRMED",
+            "evidence": "Its containment checks (line 317 'must be INSIDE season-edit-btn-<field>', lines 458-461 column/row parentElement chain, 478-480 'siblings in one flex row') are all about the internal field-row layout INSIDE the panel, unrelated to the toolbar/panel boundary. No reference to agenda-admin-toolbar anywhere in the file."
+          },
+          {
+            "claim": "UNTOUCHED (category c) — the bulk of #213-wiring functional specs: event-create.spec.ts (gear→panel→add-event flow, lines 508-649, 1157-1577), event-create-after-season.spec.ts (371-810), event-convert.spec.ts (334-1083), series-create.spec.ts (409-2161), event-type-picker.spec.ts (313-334) — every 'click gear, panel opens, click add-event/add-series, form opens' test",
+            "verdict": "CONFIRMED",
+            "evidence": "These exclusively use `q(container, testid)` lookups and click/waitFor sequencing (openPanel/openEventFormFromPanel/openSeriesForm helpers); none inspect parentElement, closest(), or button counts relative to the toolbar. DOM position of the panel is irrelevant to their pass/fail. Untouched by the merge."
+          },
+          {
+            "claim": "UNTOUCHED (category c) — touch-target and 375px-fluid class-contract blocks: page.agenda-admin.spec.ts describe 'every admin control is a 44x44px touch target' (1549-1732) and 'creation forms stay inside a 375px viewport (class contract)' (1734-1752)",
+            "verdict": "CONFIRMED",
+            "evidence": "expectTouchTarget/expectFormFluid operate on individual elements' class lists (min-h-11, min-w-11, w-full/flex-1/min-w-0) via `q(container, testid)` — no containment or toolbar-relative checks. Untouched."
+          },
+          {
+            "claim": "UNTOUCHED / no spec exists to update — season-create form placement (seasonCreateOpen)",
+            "verdict": "CONFIRMED",
+            "evidence": "grep across src/routes for `seasonCreateOpen` found zero testid or parentElement/closest/contains assertions tying season-create-form's DOM position to the toolbar or panel (only one narrative comment at page.agenda-onboarding.spec.ts:340). The gating logic `showSeasonCreate && !seasonCreateOpen` (used at +page.svelte:5198,5214) only controls whether the [+ Season] BUTTON renders inside the toolbar, not where the resulting season-create-form renders; no spec pins that relationship. Nothing to update here for #222."
+          },
+          {
+            "claim": "Non-editor / fail-closed toolbar tests are unaffected — page.agenda-admin.spec.ts:707-716 'a NON-editor gets no toolbar at all'",
+            "verdict": "CONFIRMED",
+            "evidence": "Checks `q(container, TOOLBAR)` is null for a non-editor — independent of panel nesting since the panel never renders for a non-editor either (season-manage-gear absent). Untouched."
+          }
+        ],
+        "risks": [
+          "src/routes/page.agenda-admin.spec.ts:652-669 — the 'ALL of its buttons' / toHaveLength(2) assertion only runs panel-CLOSED; if the #222 implementation nests season-manage-panel as a literal DOM child of the `data-testid=\"agenda-admin-toolbar\"` element (rather than a sibling inside a new outer wrapper card), this test's title becomes false for the open-panel state even though the assertion itself won't be re-run there and so won't go red — a silent contract violation, not a build break. Recommend adding an explicit open-panel button-count assertion (or an explicit 'still exactly 2 direct-child buttons of the toolbar while the panel is open' test) as part of the #222 GREEN.",
+          "src/routes/page.agenda-admin.spec.ts:1776-1861 (roving-tabindex, arity 2) — no test in this block ever opens season-manage-panel, so it cannot detect whether the merge places a role=\"dialog\" element inside the role=\"toolbar\" container, which would be an ARIA-toolbar semantics violation (toolbar should contain only toolbar widgets) even though it wouldn't fail any current assertion. Recommend keeping the existing `role=\"toolbar\"` div scoped to just its two buttons, wrapped together with the panel in a new non-toolbar outer container.",
+          "src/routes/page.season-manage.spec.ts:1226-1230 comment describes the panel as 'a SIBLING of the gear's wrapper' as the reason Escape-reachability tests dispatch at document.activeElement rather than the panel node — this rationale becomes stale/inaccurate prose once #222 lands (even though the tests keep passing); leaving it uncorrected will confuse the next reader into thinking the two-frame model still holds.",
+          "No spec anywhere asserts season-manage-panel is NOT inside agenda-admin-toolbar (i.e. there is no negative/forbidding test), so nothing will go red purely from the re-parenting itself except via the button-count coincidence above — reviewers should not rely on 'tests still pass' as proof the merge preserved the intended toolbar semantics; the arity-2 and 'ALL of its buttons' claims need a deliberate new assertion covering the panel-OPEN state, not just continued green on the panel-CLOSED path.",
+          "+page.svelte:5182-5197 source comments explicitly document the current two-frame rationale (flex/w-fit spacing for ml-auto, 'render below, unchanged, outside the toolbar') — not specs, but will need updating alongside the merge so the code comments don't contradict the new structure; flagged for completeness since the task asked about anything pinning the current structure."
+        ],
+        "notes": "Scope of audit: read src/routes/page.agenda-admin.spec.ts (full structural sections), src/routes/page.season-manage.spec.ts (entry-point + close/focus sections), src/routes/page.season-manage-whole-field.spec.ts, src/routes/page.season-manage-delete.spec.ts, src/routes/page.series-create.spec.ts, plus grepped page.event-create.spec.ts / page.event-create-after-season.spec.ts / page.event-convert.spec.ts / page.event-type-picker.spec.ts for every season-manage-*/agenda-admin-toolbar testid reference and every parentElement/closest/contains structural assertion in the whole src/routes tree. Cross-checked against the actual current +page.svelte markup (lines 5175-5310) to confirm the panel today renders as a DOM SIBLING immediately after the toolbar's closing tag, not nested inside it — that is the 'two-frame structure' issue #222 collapses.\n\nBottom line for the merge:\n(a) MUST UPDATE / needs explicit new coverage: page.agenda-admin.spec.ts lines 652-669 and 671-705 (toolbar button-count/order claims, currently panel-closed-only), and the roving-tabindex block 1776-1861 (ARIA-scope risk, no current assertion opens the panel). None of these will fail mechanically from the merge alone — they need a deliberate new open-panel assertion added as part of #222's GREEN, or they'll silently stop meaning what their titles claim.\n(b) MUST KEEP GREEN UNCHANGED, and will survive without any code change: the full #213 gear semantics suite (aria-expanded/aria-controls/disabled/focus-return) in both page.agenda-admin.spec.ts:541-636 and page.season-manage.spec.ts (entry-point + close/focus blocks) — all id/attribute/activeElement based, no DOM-position dependency.\n(c) UNTOUCHED: everything else — the #215 date-chip grid, the #217 delete-cascade suite, the #205 whole-field activators, all the create/convert/series wiring specs, and the touch-target/375px class contracts. These probe structure strictly INSIDE the panel or check individual element classes/attributes, none of them reference agenda-admin-toolbar or the panel's position relative to it.\n(d) season-create-form placement / seasonCreateOpen: no spec exists that pins this to the toolbar at all — nothing to update.\n\nOne documentation-only item surfaced: the 'sibling' rationale comment at page.season-manage.spec.ts:1226-1230 should be corrected for the next reader even though its tests stay green."
+      }
+    ],
+    "sweep": {
+      "claims": [
+        {
+          "claim": "Repo guard: reviewing under ~/workspace-app, origin is mvox-app.git (READ-ONLY sweep, no edits made).",
+          "verdict": "CONFIRMED",
+          "evidence": "`git remote get-url origin` => https://github.com/mvox-dev/mvox-app.git"
+        },
+        {
+          "claim": "Layer 1 — sticky/overflow-ancestor hazard from re-parenting does not apply here: no `sticky` or `overflow-*` classes exist anywhere on the page or in DeskSurface.",
+          "verdict": "REFUTED",
+          "evidence": "grep for 'sticky|overflow-' across src/routes/+page.svelte returns only a comment mentioning 'not sticky' (line 2180, unrelated field-flag semantics); src/lib/components/DeskSurface.svelte has zero matches for sticky/overflow. No ancestor of the toolbar/panel is position:sticky, so the house rule does not apply to this change."
+        },
+        {
+          "claim": "aria-controls/id targeting the panel survives the move: `id=\"season-manage-panel\"` (+page.svelte:5260) and `aria-controls=\"season-manage-panel\"` (+page.svelte:5246) are hardcoded literals, position-independent.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:5246 `aria-controls=\"season-manage-panel\"`; :5260 `id=\"season-manage-panel\"`. No getElementById/querySelector elsewhere keys off DOM position for this id (only unrelated line 3573 queries a per-event testid, document-scoped, unaffected by the merge)."
+        },
+        {
+          "claim": "Keyboard/roving-tabindex hazard: `handleAdminToolbarKeydown` enumerates ALL descendant `<button>` elements of the toolbar via `toolbar.querySelectorAll('button:not([disabled])')`, not direct children only — if the season-manage-panel (many buttons: add-event, delete confirm/cancel, field-edit pencils, etc.) is nested inside the same `role=\"toolbar\"` element that carries this handler, arrow-key/Home/End presses on ANY panel button will be captured and jump focus across the whole merged subtree, breaking the #213-pinned arity-2 toolbar contract.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:4314-4323 `handleAdminToolbarKeydown` does `Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button:not([disabled])'))` on `e.currentTarget` (the div at :5199-5206 with role=\"toolbar\" + this onkeydown), then `rovingNextIndex` (src/lib/a11y/roving.ts:36-43) moves focus on ArrowRight/Left/Up/Down/Home/End among ALL matched buttons. This is a subtree query, not scoped to direct children."
+        },
+        {
+          "claim": "Existing regression test `toolbar.querySelectorAll('button')).toHaveLength(2)` does NOT protect against the above hazard, because it only runs against the default (panel-closed) render state.",
+          "verdict": "CONFIRMED",
+          "evidence": "page.agenda-admin.spec.ts:652-669, the assertion at :668 runs inside `it('[⚙] and [+ Season] are DIRECT children...')` using plain `renderReady()` with no panel-open step. The one test that DOES open the panel (:731-739, 'with the panel open and its [+ Event] form up...') only checks `.parentElement` identity for the two header buttons, not total button count or arrow-key behavior — so a naive full-merge (panel nested directly inside the `role=toolbar` div) would pass every existing test in this file while still shipping the keyboard regression above."
+        },
+        {
+          "claim": "Correct structure requires a NEW outer 'card' wrapper (border/rounded) holding an inner header-row div (role=toolbar, scoped ONLY to [+Season] + label + gear) and the panel as a sibling of that header row inside the card — not literally extending the existing role=\"toolbar\" div to also contain the panel body.",
+          "verdict": "CONFIRMED",
+          "evidence": "Derived directly from the querySelectorAll hazard above plus ARIA authoring-practice concern: role=\"dialog\" content (panel, +page.svelte:5258-5266) nested inside role=\"toolbar\" (whose children are meant to be widgets like buttons) is invalid landmark nesting. The issue's own text ('one card: header row = ... ; panel content below within the same frame') is consistent with this reading (panel below the header row, inside one visual frame) but is implementation-ambiguous about whether role=toolbar itself is the outer frame — worth an explicit eng note in the delivery report per the issue's own 'eng freedom' callout on role=\"toolbar\"/roving-tabindex survival."
+        },
+        {
+          "claim": "Double-border/visual artifact risk: the toolbar row currently carries `rounded-md border border-ink-4 p-1.5` (own frame) and the panel currently carries its own `border border-ink-5 p-3` (own frame) plus `mb-3` — merging into 'one card, no second stacked frame' requires removing/adjusting one of these class sets, not just relocating markup.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:5204 toolbar div classes include `rounded-md border border-ink-4 p-1.5`; +page.svelte:5266 panel div classes include `mb-3 flex flex-col gap-3 border border-ink-5 p-3`. Leaving both border declarations in place while nesting one inside the other produces a border-in-border look even though it is technically a single DOM subtree."
+        },
+        {
+          "claim": "Rights tiers: the gear itself is gated by `showSeasonManageGear` (editor-only); the new visible 'Manage season' label must be placed inside that SAME conditional block (lines 5239-5255), not the outer toolbar-mount conditional (line 5198, `showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)`) — otherwise a caller with season-create rights but no manage rights (e.g. a fresh collective with zero seasons: showSeasonCreate true, showSeasonManageGear false since manageableSeasonId is null) would see the 'Manage season' label with no functioning gear beside it.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:2159-2161 `showSeasonManageGear = manageableSeasonId !== null && manageableSeasonRights === 'editor'`; :1935 `showSeasonCreate = seasonCreateRights === 'editor' && !hasUpcomingSeason`; these are independent rights/state signals (different derivation functions, different season-existence checks), so the OR at the outer :5198 conditional can be true from showSeasonCreate alone while showSeasonManageGear is false."
+        },
+        {
+          "claim": "No existing test would catch a rights-gating mistake on the new label (i.e. it rendering for a non-editor) — the fail-closed sweep (`ADMIN_TESTIDS`/`expectNoAdminControls`) has no slot for a label testid.",
+          "verdict": "CONFIRMED",
+          "evidence": "page.agenda-admin.spec.ts:362-370, `ADMIN_TESTIDS = ['season-manage-gear','season-manage-panel','season-create','season-create-form','event-create','event-create-form','series-create-form']` — no entry for a new visible-label element; new coverage is needed once the implementer adds one."
+        },
+        {
+          "claim": "All four locales (en/et/lv/uk) already carry the reused copy keys `season_manage_gear_label` and `season_manage_panel_label` — no missing translations.",
+          "verdict": "CONFIRMED",
+          "evidence": "messages/en.json 'Manage season'; et.json 'Halda hooaega'; lv.json 'Pārvaldīt sezonu'; uk.json 'Керувати сезоном' — all present, and gear_label/panel_label are identical strings within each locale, so either key is safe to reuse for the visible label."
+        },
+        {
+          "claim": "Mobile-width risk: lv/uk label text is longer than en/et and sits between the [+Season] button and the gear in the same flex-wrap row inside a max-w-md (448px) container — narrow-width wrapping behavior for this 3-item row (button, plain-text label, icon button) is untested and should be visually verified, especially in lv/uk.",
+          "verdict": "UNVERIFIABLE",
+          "evidence": "+page.svelte:5204 toolbar row is `flex flex-wrap items-center gap-2 ... p-1.5` inside a `max-w-md` page container (+page.svelte:5102); messages show uk 'Керувати сезоном' (~16 chars) and lv 'Pārvaldīt sezonu' (~16 chars) vs en 'Manage season' (14 chars) — plausible narrow-width wrap risk, but this sub-agent is read-only/no-browser and cannot render/measure actual pixel widths to confirm overflow."
+        },
+        {
+          "claim": "Multi-collective: season-manage panel open/closed state (`seasonManageOpen`) is reset on a real collective switch via `loadForSelected`/`resetSeasonManage`, independent of DOM position, so the #222 markup restructuring does not affect this behavior.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:521-628 `loadForSelected` calls `resetSeasonManage({ dropConvertRun: true })` (:613) on a real switch (`!keepSeasonManage`); :2427-2464 `resetSeasonManage` sets `seasonManageOpen = false` among other state resets — all plain `$state` writes, not tied to DOM structure, so nesting the panel differently in the markup does not change this logic."
+        },
+        {
+          "claim": "Invite-created vs auto-provisioned persons: season-rights derivation (`manageableSeasonRights`, `seasonCreateRights`, `deriveSeasonCreateRights`) reads only Entu editor/owner rights signals, with no branch on how the person entity was provisioned — so this axis is not applicable to #222, which the issue itself scopes as 'a container/visibility change, not a rights change.'",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:985 `deriveSeasonCreateRights` and its call sites (:698-763) key off rights-read results (`manageableRightsInvisible`, editor/owner checks) with no reference to invite/auto-provisioning fields; the issue's 'Done when' section explicitly frames the change as container/visibility-only."
+        },
+        {
+          "claim": "Documentation drift: the doc comment above the panel's focus-management `$effect` explicitly reasons from 'the panel is a SIBLING of the gear's wrapper' — this framing goes stale once the panel is nested inside the merged card, though the actual focus mechanism (`bind:this` + `.focus()`) is nesting-independent and will keep working.",
+          "verdict": "CONFIRMED",
+          "evidence": "+page.svelte:2590-2599, comment reads '...the panel is a SIBLING of the gear's wrapper, so a keypress at the still-focused gear never enters the panel's subtree...'; the effect body itself (`if (seasonManageOpen && seasonManagePanelEl) seasonManagePanelEl.focus();`) uses a direct element reference and has no DOM-position dependency, so no functional break — just a comment that should be corrected post-merge so it doesn't mislead future readers."
+        },
+        {
+          "claim": "Season-create form placement: the actual `season-create-form` block renders ~1100 lines away from the admin-toolbar/season-manage-panel block, in an entirely separate section of the page, not adjacent to either — this pre-existing disconnect is unchanged by #222's stated scope but becomes more visually jarring once the toolbar+panel become one persistent bordered 'card.'",
+          "verdict": "CONFIRMED",
+          "evidence": "Admin toolbar + season-manage-panel block spans +page.svelte:5198-5361ish; `season-create-form` renders at +page.svelte:6389-6414 inside a `{#if showSeasonCreate}{#if seasonCreateOpen}` block that is a sibling of, but far below, the season-manage-panel's own closing tags and the delete-status/season-create-status regions (:6374-6388). Clicking [+Season] removes that button from the new merged card (guard `!seasonCreateOpen`, :5214) while the form itself opens far below, outside the card — issue explicitly flags this placement as an open eng call to report on."
+        }
+      ],
+      "risks": [
+        "src/routes/+page.svelte:4316 — handleAdminToolbarKeydown's `toolbar.querySelectorAll('button:not([disabled])')` walks the FULL subtree of `e.currentTarget`, not direct children. If the implementer nests season-manage-panel's markup directly inside the same div that carries `role=\"toolbar\"\" onkeydown={handleAdminToolbarKeydown}` (+page.svelte:5199-5206), every panel button (add-event, series/event delete confirm+cancel, field-edit pencils, conductor controls, etc.) joins the arrow-key roving pool, breaking the #213-pinned toolbar arity-2 contract and normal in-panel keyboard use. No existing test (page.agenda-admin.spec.ts:652-739) exercises arrow keys with the panel open, so this would ship silently. Fix: keep role=\"toolbar\" scoped to a header-row wrapper containing only [+Season]/label/gear; the panel must sit outside that specific element (still inside a new outer visual card if desired).",
+        "src/routes/+page.svelte:5204 vs 5266 — toolbar row (`border border-ink-4 p-1.5`) and panel (`border border-ink-5 p-3 mb-3`) each currently carry their own frame/border classes. Naively nesting markup without adjusting these classes will render a border-inside-a-border artifact, contradicting the issue's 'one card, no second stacked frame' requirement even though the DOM would technically be a single subtree.",
+        "src/routes/+page.svelte:5198 vs 5239-5255 — the new visible 'Manage season' label must be placed inside the INNER `{#if showSeasonManageGear}` block (same gate as the gear), not the outer `{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)}` toolbar-mount conditional. showSeasonCreate (season-create rights) and showSeasonManageGear (season-manage rights) are independently derived (+page.svelte:1935, 2159-2161) and can diverge (e.g. a brand-new collective with zero seasons), so mis-placing the label would show 'Manage season' with no working gear for a season-create-only caller.",
+        "src/routes/page.agenda-admin.spec.ts:362-370 (ADMIN_TESTIDS) — has no slot for a new label testid, so a rights-gating mistake on the visible label (per the risk above) would NOT be caught by the existing fail-closed sweep (`expectNoAdminControls`). New test coverage should add the label's testid to this list once one exists.",
+        "src/routes/page.agenda-admin.spec.ts:668 — `toolbar.querySelectorAll('button')).toHaveLength(2)` only runs against the default/panel-closed render, so it will pass even under the naive full-merge implementation described above. New tests are needed that (a) open the panel and assert the button count of the true `role=\"toolbar\"` element stays at 2 (or whatever the header-row count becomes with the label), and (b) simulate an arrow-key press while focus is on a panel-internal button and assert focus does NOT jump to a toolbar/header member.",
+        "src/routes/+page.svelte:5204, messages/uk.json ('Керувати сезоном') and messages/lv.json ('Pārvaldīt sezonu') — longest of the four locale strings for the reused label, sitting in a `flex flex-wrap` row alongside the [+Season] button and gear icon inside a max-w-md (448px) page container; narrow-mobile wrap behavior for this three-item row is untested and should be visually checked in these two locales specifically.",
+        "src/routes/+page.svelte:2590-2599 — the focus-management doc comment's rationale ('the panel is a SIBLING of the gear's wrapper') goes stale once the panel nests inside the merged card; not a functional bug (the effect uses a direct `bind:this` reference), but should be corrected during the #222 change so the comment doesn't mislead future readers about the DOM shape.",
+        "src/routes/+page.svelte:6389-6414 vs 5198-5361 — season-create-form renders far below the merged admin-toolbar card (~1100 lines away), so clicking [+Season] inside the new card removes that button (leaving gear+label alone in the card) while the form itself opens in an unrelated section of the page — pre-existing disconnect the issue explicitly asks eng to weigh in on; worth deciding/reporting rather than leaving as an accidental side effect of the merge."
+      ],
+      "notes": "Read-only sweep against mvox-app on branch feat/221-root-signin-redirect (uncommitted, unrelated #221 work in progress); #222 itself has not been started (no #222 references anywhere in src/). All findings are forward-looking implementation risks for the not-yet-written #222 change, verified by reading the live +page.svelte structure, its supporting a11y helper (src/lib/a11y/roving.ts), the four locale message files, and the existing page.agenda-admin.spec.ts test suite that currently pins the toolbar's DOM shape.\n\nHeadline risk (most important, most likely to be missed): handleAdminToolbarKeydown's button query is a full-subtree querySelectorAll, not a direct-children query, and the ONE existing test that would normally catch a scope violation (button count === 2) only runs at default/closed-panel state. A naive 'move the panel's markup inside the existing role=toolbar div' implementation would pass every current test while still breaking keyboard roving the moment the panel is open — exactly the scenario the issue prompt calls out as mandatory to check. The safe structure is: new outer bordered 'card' div > inner header-row div (role=toolbar, scoped to [+Season]/label/gear only) + panel as a sibling of that header row, both inside the new outer card.\n\nTwo other genuinely load-bearing, code-verified points: (1) the visible label must live under the SAME `{#if showSeasonManageGear}` gate as the gear itself, not the outer toolbar-mount OR-conditional, to avoid a rights leak for season-create-only callers; (2) no existing test slot exists for a new label testid, so that rights-leak scenario would ship undetected without new coverage.\n\nSticky/overflow-ancestor hazard, multi-collective state reset, and invite-vs-auto-provisioned rights derivation were all checked and found NOT applicable / unaffected — confidently ruled out rather than left as open questions.\n\nOne item (mobile-width wrap behavior for lv/uk) is flagged UNVERIFIABLE from static reading alone since this sub-agent has no browser access — recommend a quick visual check at narrow width in those two locales before merging."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_phase",
+      "index": 2,
+      "title": "Sweep"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "sweep:blast-radius",
+      "phaseIndex": 2,
+      "phaseTitle": "Sweep",
+      "agentId": "ac339dafc2dda352f",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788461988008,
+      "queuedAt": 1788461986025,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Read-only sweep against mvox-app on branch feat/221-root-si…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#222 blast-radius sweep. The change: in src/routes/+page.svelte, the season-manage panel body moves INSIDE the admin-toolbar'…",
+      "lastProgressAt": 1788462381119,
+      "tokens": 89963,
+      "toolCalls": 35,
+      "durationMs": 393110,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: reviewing under ~/workspace-app, origin is mvox-app.git (READ-ONLY sweep, no edits made).\",\"verdict\":\"CONFIRMED\",\"evidence\":\"`git remote get-url origin` => https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Layer 1 — sticky/overflow-ancestor hazard from re-parenting does not apply here: no `sticky` or `overflow-*` classes exist anywhere on the page or in DeskSurf…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:markup",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "af010c94d6fb8f11c",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788461988076,
+      "queuedAt": 1788461986055,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed: origin is https://github.com/mvox-dev/mv…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#222: merge the season-manage panel INTO the admin toolbar card — one bordered container, header row holds [+ Season] + gear,…",
+      "lastProgressAt": 1788462123707,
+      "tokens": 56316,
+      "toolCalls": 20,
+      "durationMs": 134135,
+      "resultPreview": "{\"claims\":[{\"claim\":\"agenda-admin-toolbar is its own bordered frame with [+ Season] left, gear right via ml-auto, gear label aria-only via season_manage_gear_label\",\"verdict\":\"CONFIRMED\",\"evidence\":\"src/routes/+page.svelte:5198-5256 (current HEAD 06babdc). Container: `{#if showSeasonManageGear || (showSeasonCreate && !seasonCreateOpen)}` wraps a single `<div data-testid=\\\"agenda-admin-toolbar\\\" ro…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:i18n",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a591d3455b405697b",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788462127480,
+      "queuedAt": 1788461986055,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard confirmed (origin=mvox-app.git) before any reads…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#222. Verify the I18N claims:\n1. Keys season_manage_gear_label and season_manage_panel_label: present in all four locale file…",
+      "lastProgressAt": 1788462301272,
+      "tokens": 56590,
+      "toolCalls": 16,
+      "durationMs": 173787,
+      "resultPreview": "{\"claims\":[{\"claim\":\"season_manage_gear_label and season_manage_panel_label are present in all four locale files (en/et/lv/uk), with en 'Manage season' and et 'Halda hooaega' as the issue states\",\"verdict\":\"CONFIRMED\",\"evidence\":\"messages/en.json:368-369 'Manage season'/'Manage season'; messages/et.json:368-369 'Halda hooaega'/'Halda hooaega'; messages/lv.json:369-370 'Pārvaldīt sezonu'/'Pārvaldīt…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "verify:specs",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "aa33d0d4f1ff64824",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788462304279,
+      "queuedAt": 1788461986055,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Scope of audit: read src/routes/page.agenda-admin.spec.ts (…",
+      "promptPreview": "FIRST ACTION (repo guard): run `cd ~/workspace-app && git remote get-url origin` — ABORT with an error finding unless the URL ends in mvox-app.git. All file reads/greps happen under ~/workspace-app. You are READ-ONLY: no edits, no commits, no writes anywhere.\n\nIssue mvox-app#222 merges the season-manage panel into the toolbar card in src/routes/+page.svelte. Find every SPEC that pins the CURRENT t…",
+      "lastProgressAt": 1788462585984,
+      "tokens": 116923,
+      "toolCalls": 28,
+      "durationMs": 281697,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: cwd git remote origin ends in mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"`git remote get-url origin` in ~/workspace-app returned https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Current DOM model is a TWO-FRAME structure: `data-testid=\\\"agenda-admin-toolbar\\\"` (role=toolbar, bordered div with [+ Season] and the gear as its only two direct-child buttons) an…"
+    }
+  ],
+  "totalTokens": 319792,
+  "totalToolCalls": 99
+}
