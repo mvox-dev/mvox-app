@@ -6092,193 +6092,251 @@
 										>
 											<!-- Every box below carries `disabled={seriesCreateLocked}`: once a
 											     run has stopped partway, submit finishes THAT run and edits here
-											     would be silently discarded (review F5). -->
-											<input
-												type="text"
-												data-testid="series-create-name"
-												bind:this={seriesCreateNameInput}
-												aria-label={m.series_create_name_label()}
-												aria-invalid={seriesCreateInvalid('name')}
-												aria-describedby={seriesCreateDescribedBy('name')}
-												placeholder={m.series_create_name_placeholder()}
-												disabled={seriesCreateLocked}
-												value={seriesCreateName}
-												oninput={(e) => {
-													seriesCreateName = (e.currentTarget as HTMLInputElement).value;
-													clearSeriesCreateError();
-												}}
-												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-											/>
-											<!-- #199 review F4 — same reasoning as event-create-type: a
-											     never-blank <select> has no placeholder to name itself
-											     with, so the visible name is a wrapping <label>. -->
-											<label class="flex w-full flex-col gap-0.5">
-												<span data-testid="series-create-type-label" class="text-xs text-ink-2">
-													{m.series_create_type_label()}
-												</span>
-												<select
-													data-testid="series-create-type"
-													aria-label={m.series_create_type_label()}
-													aria-invalid={seriesCreateInvalid('type')}
-													aria-describedby={seriesCreateDescribedBy('type')}
-													disabled={seriesCreateLocked}
-													value={seriesCreateType}
-													onchange={(e) => {
-														seriesCreateType = (e.currentTarget as HTMLSelectElement).value;
-														clearSeriesCreateError();
-													}}
-													class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-												>
-													{#each CANONICAL_EVENT_TYPES as type (type)}
-														<option value={type}>{eventTypeLabel(type)}</option>
-													{/each}
-												</select>
-											</label>
-											<input
-												type="number"
-												data-testid="series-create-duration"
-												aria-label={m.series_create_duration_label()}
-												aria-invalid={seriesCreateInvalid('duration')}
-												aria-describedby={seriesCreateDescribedBy('duration')}
-												placeholder={m.series_create_duration_placeholder()}
-												disabled={seriesCreateLocked}
-												value={seriesCreateDuration}
-												oninput={(e) => {
-													seriesCreateDuration = (e.currentTarget as HTMLInputElement).value;
-													clearSeriesCreateError();
-												}}
-												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-											/>
-											<input
-												type="text"
-												data-testid="series-create-location"
-												aria-label={m.series_create_location_label()}
-												placeholder={m.series_create_location_placeholder()}
-												disabled={seriesCreateLocked}
-												value={seriesCreateLocation}
-												oninput={(e) =>
-													(seriesCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-											/>
-											<textarea
-												data-testid="series-create-description"
-												aria-label={m.series_create_description_label()}
-												placeholder={m.series_create_description_placeholder()}
-												disabled={seriesCreateLocked}
-												value={seriesCreateDescription}
-												oninput={(e) =>
-													(seriesCreateDescription = (
-														e.currentTarget as HTMLTextAreaElement
-													).value)}
-												class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-											></textarea>
-
-											<div class="flex gap-2">
-												<select
-													data-testid="series-create-repeat"
-													aria-label={m.series_create_repeat_label()}
-													disabled={seriesCreateLocked}
-													value={seriesCreateRepeat}
-													onchange={(e) =>
-														(seriesCreateRepeat = (e.currentTarget as HTMLSelectElement)
-															.value as RepeatPattern)}
-													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-												>
-													<option value="weekly">{m.series_create_repeat_weekly()}</option>
-													<option value="biweekly">{m.series_create_repeat_biweekly()}</option>
-													<option value="daily">{m.series_create_repeat_daily()}</option>
-												</select>
-												<!-- Daily ignores the day of week entirely (recurrence.ts) — an
-												     inert control must not be shown, let alone demanded. -->
-												{#if seriesCreateDayApplies}
-													<select
-														data-testid="series-create-day"
-														aria-label={m.series_create_day_label()}
-														aria-invalid={seriesCreateInvalid('day')}
-														aria-describedby={seriesCreateDescribedBy('day')}
+											     would be silently discarded (review F5).
+											     #239 — four native <fieldset>/<legend> groups (PO ruling,
+											     2026-09-04): general / location / schedule / preview. Every
+											     control now carries a VISIBLE <label> that IS its accessible
+											     name — the old aria-labels are dropped so the name has exactly
+											     one author (the #205 review F1 trap). -->
+											<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
+												<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
+													{m.series_create_group_general_label()}
+												</legend>
+												<label class="flex w-full flex-col gap-0.5">
+													<span class="text-xs text-ink-2">{m.series_create_name_label()}</span>
+													<input
+														type="text"
+														data-testid="series-create-name"
+														bind:this={seriesCreateNameInput}
+														aria-invalid={seriesCreateInvalid('name')}
+														aria-describedby={seriesCreateDescribedBy('name')}
+														placeholder={m.series_create_name_placeholder()}
 														disabled={seriesCreateLocked}
-														value={seriesCreateDay}
-														onchange={(e) => {
-															seriesCreateDay = (e.currentTarget as HTMLSelectElement).value;
+														value={seriesCreateName}
+														oninput={(e) => {
+															seriesCreateName = (e.currentTarget as HTMLInputElement).value;
 															clearSeriesCreateError();
 														}}
-														class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+													/>
+												</label>
+												<!-- #199 review F4 — same reasoning as event-create-type: a
+												     never-blank <select> has no placeholder to name itself
+												     with, so the visible name is a wrapping <label>. -->
+												<label class="flex w-full flex-col gap-0.5">
+													<span data-testid="series-create-type-label" class="text-xs text-ink-2">
+														{m.series_create_type_label()}
+													</span>
+													<select
+														data-testid="series-create-type"
+														aria-invalid={seriesCreateInvalid('type')}
+														aria-describedby={seriesCreateDescribedBy('type')}
+														disabled={seriesCreateLocked}
+														value={seriesCreateType}
+														onchange={(e) => {
+															seriesCreateType = (e.currentTarget as HTMLSelectElement).value;
+															clearSeriesCreateError();
+														}}
+														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 													>
-														<option value="">{m.series_create_day_placeholder()}</option>
-														<!-- #207 rule 6 — Monday-first DISPLAY order (1,2,3,4,5,6,0).
-														     VALUES stay JS getDay() numbers, untouched — only the
-														     rendering order changes. -->
-														<option value="1">{m.series_create_day_1()}</option>
-														<option value="2">{m.series_create_day_2()}</option>
-														<option value="3">{m.series_create_day_3()}</option>
-														<option value="4">{m.series_create_day_4()}</option>
-														<option value="5">{m.series_create_day_5()}</option>
-														<option value="6">{m.series_create_day_6()}</option>
-														<option value="0">{m.series_create_day_0()}</option>
+														{#each CANONICAL_EVENT_TYPES as type (type)}
+															<option value={type}>{eventTypeLabel(type)}</option>
+														{/each}
 													</select>
-												{/if}
-											</div>
+												</label>
+												<label class="flex w-full flex-col gap-0.5">
+													<span class="text-xs text-ink-2">
+														{m.series_create_description_label()}
+													</span>
+													<textarea
+														data-testid="series-create-description"
+														placeholder={m.series_create_description_placeholder()}
+														disabled={seriesCreateLocked}
+														value={seriesCreateDescription}
+														oninput={(e) =>
+															(seriesCreateDescription = (
+																e.currentTarget as HTMLTextAreaElement
+															).value)}
+														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+													></textarea>
+												</label>
+											</fieldset>
 
-											<!-- #207 rule 5 — the TimeSelect composite replaces the native
-											     type="time" input (whose rendering followed browser locale):
-											     24h by default, 5-minute resolution BY CONSTRUCTION of the
-											     minute options, AM/PM via the profile preference. The wrapper
-											     keeps the surface testid and, as a NAMED role="group", carries
-											     the accessible name the old input's aria-label carried; the
-											     aria-invalid/describedby wiring goes DOWN onto the selects
-											     themselves, where a screen reader actually announces it
-											     (#207 review F2). -->
-											<div
-												data-testid="series-create-time"
-												role="group"
-												aria-label={m.series_create_time_label()}
-												class="flex gap-2"
-											>
-												<TimeSelect
-													prefix="series-create-time"
-													value={seriesCreateTime}
-													disabled={seriesCreateLocked}
-													invalid={seriesCreateInvalid('time')}
-													describedBy={seriesCreateDescribedBy('time')}
-													onchange={(v) => {
-														seriesCreateTime = v;
-														clearSeriesCreateError();
-													}}
-												/>
-											</div>
+											<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
+												<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
+													{m.series_create_group_location_label()}
+												</legend>
+												<label class="flex w-full flex-col gap-0.5">
+													<span class="text-xs text-ink-2">
+														{m.series_create_duration_label()}
+													</span>
+													<input
+														type="number"
+														data-testid="series-create-duration"
+														aria-invalid={seriesCreateInvalid('duration')}
+														aria-describedby={seriesCreateDescribedBy('duration')}
+														placeholder={m.series_create_duration_placeholder()}
+														disabled={seriesCreateLocked}
+														value={seriesCreateDuration}
+														oninput={(e) => {
+															seriesCreateDuration = (e.currentTarget as HTMLInputElement).value;
+															clearSeriesCreateError();
+														}}
+														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+													/>
+												</label>
+												<label class="flex w-full flex-col gap-0.5">
+													<span class="text-xs text-ink-2">
+														{m.series_create_location_label()}
+													</span>
+													<input
+														type="text"
+														data-testid="series-create-location"
+														placeholder={m.series_create_location_placeholder()}
+														disabled={seriesCreateLocked}
+														value={seriesCreateLocation}
+														oninput={(e) =>
+															(seriesCreateLocation = (e.currentTarget as HTMLInputElement).value)}
+														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+													/>
+												</label>
+											</fieldset>
 
-											<div class="flex gap-2">
-												<input
-													type="date"
-													data-testid="series-create-from"
-													aria-label={m.series_create_from_label()}
-													aria-invalid={seriesCreateInvalid('from')}
-													aria-describedby={seriesCreateDescribedBy('from')}
-													disabled={seriesCreateLocked}
-													value={seriesCreateFrom}
-													oninput={(e) => {
-														seriesCreateFrom = (e.currentTarget as HTMLInputElement).value;
-														clearSeriesCreateError();
-													}}
-													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-												/>
-												<input
-													type="date"
-													data-testid="series-create-until"
-													aria-label={m.series_create_until_label()}
-													aria-invalid={seriesCreateInvalid('until')}
-													aria-describedby={seriesCreateDescribedBy('until')}
-													disabled={seriesCreateLocked}
-													value={seriesCreateUntil}
-													oninput={(e) => {
-														seriesCreateUntil = (e.currentTarget as HTMLInputElement).value;
-														clearSeriesCreateError();
-													}}
-													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-												/>
-											</div>
+											<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
+												<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
+													{m.series_create_group_schedule_label()}
+												</legend>
+												<div class="flex gap-2">
+													<label class="flex min-w-0 flex-1 flex-col gap-0.5">
+														<span class="text-xs text-ink-2">
+															{m.series_create_repeat_label()}
+														</span>
+														<select
+															data-testid="series-create-repeat"
+															disabled={seriesCreateLocked}
+															value={seriesCreateRepeat}
+															onchange={(e) =>
+																(seriesCreateRepeat = (e.currentTarget as HTMLSelectElement)
+																	.value as RepeatPattern)}
+															class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+														>
+															<option value="weekly">{m.series_create_repeat_weekly()}</option>
+															<option value="biweekly">{m.series_create_repeat_biweekly()}</option>
+															<option value="daily">{m.series_create_repeat_daily()}</option>
+														</select>
+													</label>
+													<!-- Daily ignores the day of week entirely (recurrence.ts) — an
+													     inert control must not be shown, let alone demanded. -->
+													{#if seriesCreateDayApplies}
+														<label class="flex min-w-0 flex-1 flex-col gap-0.5">
+															<span class="text-xs text-ink-2">
+																{m.series_create_day_label()}
+															</span>
+															<select
+																data-testid="series-create-day"
+																aria-invalid={seriesCreateInvalid('day')}
+																aria-describedby={seriesCreateDescribedBy('day')}
+																disabled={seriesCreateLocked}
+																value={seriesCreateDay}
+																onchange={(e) => {
+																	seriesCreateDay = (e.currentTarget as HTMLSelectElement).value;
+																	clearSeriesCreateError();
+																}}
+																class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+															>
+																<option value="">{m.series_create_day_placeholder()}</option>
+																<!-- #207 rule 6 — Monday-first DISPLAY order (1,2,3,4,5,6,0).
+																     VALUES stay JS getDay() numbers, untouched — only the
+																     rendering order changes. -->
+																<option value="1">{m.series_create_day_1()}</option>
+																<option value="2">{m.series_create_day_2()}</option>
+																<option value="3">{m.series_create_day_3()}</option>
+																<option value="4">{m.series_create_day_4()}</option>
+																<option value="5">{m.series_create_day_5()}</option>
+																<option value="6">{m.series_create_day_6()}</option>
+																<option value="0">{m.series_create_day_0()}</option>
+															</select>
+														</label>
+													{/if}
+												</div>
 
-											{#if seriesCreateMonthGroups !== null}
+												<!-- #207 rule 5 — the TimeSelect composite replaces the native
+												     type="time" input (whose rendering followed browser locale):
+												     24h by default, 5-minute resolution BY CONSTRUCTION of the
+												     minute options, AM/PM via the profile preference. The wrapper
+												     keeps the surface testid and, as a NAMED role="group", carries
+												     the accessible name the old input's aria-label carried; the
+												     aria-invalid/describedby wiring goes DOWN onto the selects
+												     themselves, where a screen reader actually announces it
+												     (#207 review F2). #239 — the group's name now comes from a
+												     VISIBLE sibling label (aria-labelledby), not an aria-label:
+												     the per-select aria-labels on the hour/minute PARTS are
+												     untouched (TimeSelect.spec.ts owns their contract). -->
+												<div class="flex flex-col gap-0.5">
+													<span id="series-create-time-label" class="text-xs text-ink-2">
+														{m.series_create_time_label()}
+													</span>
+													<div
+														data-testid="series-create-time"
+														role="group"
+														aria-labelledby="series-create-time-label"
+														class="flex gap-2"
+													>
+														<TimeSelect
+															prefix="series-create-time"
+															value={seriesCreateTime}
+															disabled={seriesCreateLocked}
+															invalid={seriesCreateInvalid('time')}
+															describedBy={seriesCreateDescribedBy('time')}
+															onchange={(v) => {
+																seriesCreateTime = v;
+																clearSeriesCreateError();
+															}}
+														/>
+													</div>
+												</div>
+
+												<div class="flex gap-2">
+													<label class="flex min-w-0 flex-1 flex-col gap-0.5">
+														<span class="text-xs text-ink-2">{m.series_create_from_label()}</span>
+														<input
+															type="date"
+															data-testid="series-create-from"
+															aria-invalid={seriesCreateInvalid('from')}
+															aria-describedby={seriesCreateDescribedBy('from')}
+															disabled={seriesCreateLocked}
+															value={seriesCreateFrom}
+															oninput={(e) => {
+																seriesCreateFrom = (e.currentTarget as HTMLInputElement).value;
+																clearSeriesCreateError();
+															}}
+															class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+														/>
+													</label>
+													<label class="flex min-w-0 flex-1 flex-col gap-0.5">
+														<span class="text-xs text-ink-2">{m.series_create_until_label()}</span>
+														<input
+															type="date"
+															data-testid="series-create-until"
+															aria-invalid={seriesCreateInvalid('until')}
+															aria-describedby={seriesCreateDescribedBy('until')}
+															disabled={seriesCreateLocked}
+															value={seriesCreateUntil}
+															oninput={(e) => {
+																seriesCreateUntil = (e.currentTarget as HTMLInputElement).value;
+																clearSeriesCreateError();
+															}}
+															class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+														/>
+													</label>
+												</div>
+											</fieldset>
+
+											<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
+												<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
+													{m.series_create_group_preview_label()}
+												</legend>
+												{#if seriesCreateMonthGroups !== null}
 												<!-- #215 — the preview lists EVERY candidate date as a native
 												     toggle chip; tapping one skips it (struck + muted, still
 												     rendered) instead of routing through a separate skip input.
@@ -6389,6 +6447,7 @@
 													{m.roster_cancel()}
 												</button>
 											</div>
+											</fieldset>
 										</div>
 									{/if}
 									{#if seasonManageSeriesError}

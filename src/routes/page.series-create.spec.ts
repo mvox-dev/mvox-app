@@ -2322,6 +2322,341 @@ describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 	});
 });
 
+// ── #239 — visible labels on every field + fieldset grouping ────────────────────
+//
+// From live pilot testing (Mihkel + Joosep, 2026-09-04): nine of the form's
+// controls carried only an aria-label (with a placeholder doing the visible
+// work — and a <select> has no placeholder, so Joosep met two EMPTY unlabeled
+// boxes and had to guess "Ma eeldan, et siin on kellaaeg…"). Every control now
+// gets a VISIBLE <label> that IS its accessible name, and the form is grouped
+// into four native <fieldset>/<legend> sections (PO-ruled membership — note
+// group 4 is the PREVIEW group: #240 already deleted the generate control the
+// issue's original table anchored it on).
+//
+// Naming contract (the #205 review F1 trap, generalized): when a control gains
+// a visible label the old aria-label GOES — two authored names on one control
+// drift apart. So these tests assert the COMPUTED accessible name (accname
+// precedence: aria-labelledby > aria-label > associated <label>), not
+// aria-label truthiness, AND that no aria-label remains on the control.
+// Placeholders may stay (they are descriptive — #208's ruling) but are
+// deliberately NOT consulted by the computation below: a control whose only
+// name is its placeholder computes '' here, which is exactly the bug.
+describe('#239 — every control carries a visible label that IS its accessible name', () => {
+	/** The visible label element that names `el`: a `label[for]` match when the
+	 *  control has an id, else a wrapping <label> ancestor. */
+	function labelElementOf(container: HTMLElement, el: HTMLElement): HTMLLabelElement | null {
+		const id = el.getAttribute('id');
+		if (id) {
+			const forLabel = container.querySelector<HTMLLabelElement>(`label[for="${id}"]`);
+			if (forLabel) return forLabel;
+		}
+		return el.closest('label');
+	}
+
+	/** A label's naming text: its subtree text MINUS any embedded controls (a
+	 *  wrapping label names the control with its OTHER text, never the
+	 *  control's own options/value — the accname embedded-control rule). */
+	function labelText(label: HTMLElement): string {
+		const clone = label.cloneNode(true) as HTMLElement;
+		for (const embedded of clone.querySelectorAll('input, select, textarea')) embedded.remove();
+		return clone.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+	}
+
+	/** The slice of the accname algorithm these pins need, in precedence order:
+	 *  aria-labelledby > aria-label > associated <label>. NO placeholder step. */
+	function computedName(container: HTMLElement, el: HTMLElement): string {
+		const labelledby = el.getAttribute('aria-labelledby');
+		if (labelledby) {
+			return labelledby
+				.split(/\s+/)
+				.map((id) => container.querySelector(`[id="${id}"]`)?.textContent?.trim() ?? '')
+				.join(' ')
+				.trim();
+		}
+		const ariaLabel = el.getAttribute('aria-label');
+		if (ariaLabel !== null) return ariaLabel.trim();
+		const label = labelElementOf(container, el);
+		return label ? labelText(label) : '';
+	}
+
+	/** Visible = actually on screen for Joosep: rendered text, not hidden away. */
+	function expectVisibleText(el: HTMLElement, what: string): void {
+		expect(el.hasAttribute('hidden'), `${what} must not be [hidden]`).toBe(false);
+		expect(el.getAttribute('aria-hidden'), `${what} must not be aria-hidden`).not.toBe('true');
+		expect(
+			Array.from(el.classList),
+			`${what} must be visibly rendered, not screen-reader-only`
+		).not.toContain('sr-only');
+	}
+
+	// The nine labelable controls — eight were aria-only in the pilot; type
+	// already had a visible label (it stays, but sheds its now-redundant
+	// aria-label like the rest).
+	const FIELD_LABEL_KEYS: ReadonlyArray<readonly [testid: string, key: string]> = [
+		['series-create-name', 'series_create_name_label'],
+		['series-create-type', 'series_create_type_label'],
+		['series-create-duration', 'series_create_duration_label'],
+		['series-create-location', 'series_create_location_label'],
+		['series-create-description', 'series_create_description_label'],
+		['series-create-repeat', 'series_create_repeat_label'],
+		['series-create-day', 'series_create_day_label'],
+		['series-create-from', 'series_create_from_label'],
+		['series-create-until', 'series_create_until_label']
+	];
+
+	it('all nine labelable controls: a visible <label> (for= or wrapping) computes as the accessible name, and the old aria-label is GONE — never a placeholder as the only name', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		// Default repeat is weekly, so the day select is on screen.
+
+		for (const [testid, key] of FIELD_LABEL_KEYS) {
+			const control = q(container, testid) as HTMLElement;
+			expect(control, testid).not.toBeNull();
+
+			// No double-authoring: the name must COME FROM the label element.
+			expect(
+				control.getAttribute('aria-label'),
+				`${testid}: aria-label must be dropped once the visible label names it`
+			).toBeNull();
+
+			const label = labelElementOf(container, control);
+			expect(label, `${testid}: needs a label[for] or wrapping <label>`).not.toBeNull();
+			expectVisibleText(label as HTMLElement, `${testid}'s label`);
+
+			// The lenient message mock renders every key as its own name, so the
+			// EXISTING i18n key (all four locales already carry it) is pinned as
+			// the label text — no new field-label copy.
+			expect(
+				computedName(container, control),
+				`${testid}: computed accessible name must be the visible label's text`
+			).toBe(key);
+		}
+	});
+
+	it('the time composite: the role="group" wrapper is named by a VISIBLE series_create_time_label element (aria-labelledby), its own aria-label gone; the hour/minute selects keep their PART names', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		const group = q(container, 'series-create-time') as HTMLElement;
+		expect(group).not.toBeNull();
+		expect(group.getAttribute('role')).toBe('group');
+
+		// A div is not labelable by <label for> — the visible text is wired in
+		// with aria-labelledby. Same no-double-authoring rule as the fields.
+		expect(
+			group.getAttribute('aria-label'),
+			'the group must be named by its visible label, not an aria-label'
+		).toBeNull();
+		const labelledby = group.getAttribute('aria-labelledby');
+		expect(labelledby, 'series-create-time needs aria-labelledby').not.toBeNull();
+		const nameEl = container.querySelector(`[id="${labelledby}"]`) as HTMLElement | null;
+		expect(nameEl, `aria-labelledby="${labelledby}" must resolve inside the form`).not.toBeNull();
+		expectVisibleText(nameEl as HTMLElement, "the time group's label");
+		expect(computedName(container, group)).toBe('series_create_time_label');
+
+		// The per-select aria-labels name the PARTS (hour/minute), not the
+		// whole — they stay (TimeSelect.spec.ts owns their exact contract).
+		for (const part of ['series-create-time-hour', 'series-create-time-minute']) {
+			const sel = q(container, part) as HTMLSelectElement;
+			expect(sel, part).not.toBeNull();
+			expect(sel.getAttribute('aria-label')?.trim(), `${part} keeps its part name`).toBeTruthy();
+		}
+	});
+});
+
+describe('#239 — the form is grouped into four native fieldsets with visible legends', () => {
+	function formFieldsets(container: HTMLElement): HTMLFieldSetElement[] {
+		const form = q(container, 'series-create-form') as HTMLElement;
+		expect(form).not.toBeNull();
+		return [...form.querySelectorAll<HTMLFieldSetElement>('fieldset')];
+	}
+
+	// PO-ruled grouping (2026-09-04) — supersedes the issue's original table
+	// for group 4, whose anchor (the generate control) #240 deleted:
+	//   1 general:  name, type, description
+	//   2 location: location, duration
+	//   3 schedule: repeat, day, time, from, until
+	//   4 preview:  the preview block and submit — nothing left to toggle
+	const GROUP_LEGEND_KEYS = [
+		'series_create_group_general_label',
+		'series_create_group_location_label',
+		'series_create_group_schedule_label',
+		'series_create_group_preview_label'
+	] as const;
+
+	it('exactly four <fieldset>s, unnested, in the PO-ruled order, each led by a visible <legend> carrying its group key', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		const fieldsets = formFieldsets(container);
+		expect(fieldsets, 'the form must hold exactly four fieldsets').toHaveLength(4);
+
+		fieldsets.forEach((fieldset, i) => {
+			expect(
+				fieldset.parentElement?.closest('fieldset'),
+				`fieldset ${i} must not nest inside another`
+			).toBeNull();
+			// Native rendering only draws a legend into the group border when it
+			// is the fieldset's FIRST element — the semantically correct idiom.
+			const legend = fieldset.firstElementChild as HTMLElement | null;
+			expect(legend?.tagName, `fieldset ${i} must LEAD with its <legend>`).toBe('LEGEND');
+			expect((legend as HTMLElement).textContent?.trim()).toBe(GROUP_LEGEND_KEYS[i]);
+			expect(
+				(legend as HTMLElement).hasAttribute('hidden') ||
+					(legend as HTMLElement).getAttribute('aria-hidden') === 'true' ||
+					Array.from((legend as HTMLElement).classList).includes('sr-only'),
+				`fieldset ${i}'s legend must be visible — the heading is the point`
+			).toBe(false);
+		});
+	});
+
+	it('membership: general(name,type,description) · location(location,duration) · schedule(repeat,day,time,from,until)', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		const fieldsets = formFieldsets(container);
+		expect(fieldsets).toHaveLength(4);
+
+		const MEMBERSHIP: ReadonlyArray<readonly [testid: string, group: number]> = [
+			['series-create-name', 0],
+			['series-create-type', 0],
+			['series-create-description', 0],
+			['series-create-location', 1],
+			['series-create-duration', 1],
+			['series-create-repeat', 2],
+			['series-create-day', 2], // weekly default → rendered
+			['series-create-time', 2],
+			['series-create-from', 2],
+			['series-create-until', 2]
+		];
+		for (const [testid, group] of MEMBERSHIP) {
+			const control = q(container, testid) as HTMLElement;
+			expect(control, testid).not.toBeNull();
+			expect(
+				control.closest('fieldset'),
+				`${testid} belongs in fieldset ${group} (${GROUP_LEGEND_KEYS[group]})`
+			).toBe(fieldsets[group]);
+		}
+	});
+
+	it('group 4 (Loodavad sündmused): the live preview and the submit button sit under the preview legend — and no generate control returns to anchor it', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-preview')).not.toBeNull();
+		});
+
+		const fieldsets = formFieldsets(container);
+		expect(fieldsets).toHaveLength(4);
+		const previewFieldset = fieldsets[3];
+
+		expect((q(container, 'series-create-preview') as HTMLElement).closest('fieldset')).toBe(
+			previewFieldset
+		);
+		expect((q(container, 'series-create-preview-count') as HTMLElement).closest('fieldset')).toBe(
+			previewFieldset
+		);
+		expect((q(container, 'series-create-submit') as HTMLElement).closest('fieldset')).toBe(
+			previewFieldset
+		);
+		// #240's retirement holds through the regrouping.
+		expect(q(container, 'series-create-generate')).toBeNull();
+	});
+
+	it('375px stays fluid (class contract, happy-dom computes no layout): every fieldset carries min-w-0 — the UA default min-inline-size:min-content would floor the row — and no legend or label text is whitespace-nowrap', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		const fieldsets = formFieldsets(container);
+		expect(fieldsets).toHaveLength(4);
+		for (const fieldset of fieldsets) {
+			expect(
+				Array.from(fieldset.classList),
+				'a fieldset defaults to min-inline-size:min-content — min-w-0 keeps it shrinkable at 375px'
+			).toContain('min-w-0');
+		}
+		const form = q(container, 'series-create-form') as HTMLElement;
+		for (const el of form.querySelectorAll<HTMLElement>('legend, label')) {
+			expect(
+				Array.from(el.classList),
+				'long lv/uk copy must be allowed to wrap, not overflow the card'
+			).not.toContain('whitespace-nowrap');
+		}
+	});
+});
+
+// ── #239 — the four group-legend keys land in all four locales ─────────────────
+//
+// Source scan (the ux-polish precedent). The et/en copy is a PO ruling
+// (Mihkel, 2026-09-04) and is pinned VERBATIM; lv/uk are natural translations,
+// pinned present + non-empty. The field-label keys the visible labels REUSE
+// must stay everywhere — reuse, not re-authoring.
+describe('#239 — locale files: group keys verbatim (et/en), present everywhere; field keys stay', () => {
+	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
+	const GROUP_KEYS = [
+		'series_create_group_general_label',
+		'series_create_group_location_label',
+		'series_create_group_schedule_label',
+		'series_create_group_preview_label'
+	] as const;
+	const REUSED_FIELD_KEYS = [
+		'series_create_name_label',
+		'series_create_type_label',
+		'series_create_duration_label',
+		'series_create_location_label',
+		'series_create_description_label',
+		'series_create_repeat_label',
+		'series_create_day_label',
+		'series_create_time_label',
+		'series_create_from_label',
+		'series_create_until_label'
+	] as const;
+
+	function messageFile(locale: string): MessageFile {
+		return JSON.parse(
+			readFileSync(resolvePath(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as MessageFile;
+	}
+
+	it.each(LOCALES)('%s: the four series_create_group_* keys are present, non-empty', (locale) => {
+		const file = messageFile(locale);
+		for (const key of GROUP_KEYS) {
+			expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(false);
+		}
+	});
+
+	it('et carries the PO-ruled copy VERBATIM', () => {
+		const file = messageFile('et');
+		expect(file['series_create_group_general_label']).toBe('Üldandmed');
+		expect(file['series_create_group_location_label']).toBe('Koht ja kestus');
+		expect(file['series_create_group_schedule_label']).toBe('Kordumine ja ajad');
+		expect(file['series_create_group_preview_label']).toBe('Loodavad sündmused');
+	});
+
+	it('en carries the PO-ruled copy VERBATIM', () => {
+		const file = messageFile('en');
+		expect(file['series_create_group_general_label']).toBe('General');
+		expect(file['series_create_group_location_label']).toBe('Place and duration');
+		expect(file['series_create_group_schedule_label']).toBe('Repeat and dates');
+		expect(file['series_create_group_preview_label']).toBe('Events to create');
+	});
+
+	it.each(LOCALES)('%s: the ten reused field-label keys stay, non-empty', (locale) => {
+		const file = messageFile(locale);
+		for (const key of REUSED_FIELD_KEYS) {
+			expect(isMessageEmpty(file[key]), `${key} must stay, non-empty, in ${locale}`).toBe(false);
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #239 RED: visible <label> per control computing as the
+// accessible name (aria-labels retired with it), the time group named by a
+// visible aria-labelledby target, four native fieldset/legend groups per the
+// PO ruling — general/location/schedule/preview — with the four legend keys
+// verbatim et/en in all four locales)
+
 // (*MVOX:Tallis* — #240 RED: generate-events checkbox retired — generation
 // always on, preview unconditional on a complete recurrence, the series-only
 // OFF submit path and its verbatim-range wire shape deleted, the label key
