@@ -479,7 +479,6 @@
 	"series_create_time_label": "Time",
 	"series_create_from_label": "From",
 	"series_create_until_label": "Until",
-	"series_create_generate_label": "Generate events",
 	"series_create_preview_label": "Preview",
 	"series_create_date_skipped": "{date} (skipped, tap to include)",
 	"series_create_submit": "Create series",

@@ -48,10 +48,10 @@
 //   REFRESH AFTER EVERY SUCCESSFUL CREATE
 //     season create  → loadFullAgenda re-invoked (T2, held to here)
 //     event create   → loadFullAgenda re-invoked (T4, held to here)
-//     series create  → loadFullAgenda re-invoked — INCLUDING the generation-OFF
-//                      series-only path (NEW: today only the panel's lists
-//                      re-read; the agenda-refresh discipline must be uniform),
-//                      and the panel it was born in survives the refresh.
+//     series create  → loadFullAgenda re-invoked (#240 — generation is always
+//                      on: every series create is a bulk create; the
+//                      agenda-refresh discipline is uniform), and the panel it
+//                      was born in survives the refresh.
 //
 //   MOBILE (375px) — class contract, because happy-dom computes no layout:
 //     a real 375px scroll measurement needs a browser; what a unit test CAN
@@ -470,7 +470,8 @@ async function fillValidEvent(container: HTMLElement): Promise<void> {
 	await fill(container, 'event-create-name', 'Extra rehearsal');
 }
 
-/** Minimal VALID series-only fill (generation stays OFF — its default). */
+/** Minimal VALID series template fill. #240 — generation is always on; a
+ *  weekly submit additionally needs a day (`enableMondayGeneration`). */
 async function fillValidSeries(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
@@ -906,7 +907,7 @@ describe('agenda admin — #222: one card — the panel opens inside the toolbar
 	// round-trip. Both disjuncts of the card gate therefore go false mid-refresh,
 	// and a card that mounts only on rights would take the open panel down with it
 	// and re-mount it on the other side — exactly the teardown that every
-	// `keepSeasonManage: true` caller exists to prevent (series-only create, event
+	// `keepSeasonManage: true` caller exists to prevent (series create, event
 	// create from the panel, event-convert occurrence failure, the season-manage
 	// delete flows). $state survives a remount; the DOM does not — focus drops to
 	// <body>, the panel's focus $effect re-fires and steals it back to the dialog,
@@ -916,13 +917,15 @@ describe('agenda admin — #222: one card — the panel opens inside the toolbar
 	// the stopped-run 'N of M' notice live inside the panel.
 	//
 	// The existing survives-the-refresh pin (`every successful create refreshes
-	// the agenda` → series-only create) cannot see this: its `loadFullAgenda` mock
+	// the agenda` → `series create → loadFullAgenda re-invoked TOO … (#240: every
+	// series create bulk-creates its occurrences)`) cannot see this: its `loadFullAgenda` mock
 	// resolves in the same microtask, so the rights-blank window never flushes to
 	// the DOM. Holding the refresh OPEN is what makes the window observable.
 	it('panel OPEN: the card survives the mid-refresh rights blank — a keepSeasonManage reload never unmounts the open panel while loadFullAgenda is in flight', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidSeries(container);
+		await enableMondayGeneration(container); // #240 — a valid weekly submit needs a day
 
 		// Hold the post-create refresh open: while this promise is pending,
 		// resetManagement() has already blanked BOTH rights signals.
@@ -1302,10 +1305,10 @@ describe('agenda admin — creation forms are mutually exclusive', () => {
 // series run is the case that matters — many serial POSTs, and a resume record
 // that exists nowhere but this form's state.
 
-/** Generation ON, Mondays. Over `fillValidSeries`'s 2026-09-01…09-21 range that
- *  is exactly 3 occurrences: Sep 7, Sep 14, Sep 21. */
+/** Pick Mondays (#240 — generation is always on, there is no checkbox). Over
+ *  `fillValidSeries`'s 2026-09-01…09-21 range that is exactly 3 occurrences:
+ *  Sep 7, Sep 14, Sep 21. */
 async function enableMondayGeneration(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 	await selectValue(container, 'series-create-day', '1');
 }
 
@@ -1914,18 +1917,22 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
 		});
 	});
 
-	it('series-only create (generation OFF) → loadFullAgenda re-invoked TOO — the refresh discipline is uniform — and the panel it was born in survives the refresh', async () => {
+	it('series create → loadFullAgenda re-invoked TOO — the refresh discipline is uniform — and the panel it was born in survives the refresh (#240: every series create bulk-creates its occurrences)', async () => {
 		const container = await renderReady();
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(1);
 
 		await openSeriesForm(container);
 		await fillValidSeries(container);
+		await enableMondayGeneration(container);
 		await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
 
 		await waitFor(() => {
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
-		expect(createEventMock).not.toHaveBeenCalled(); // generation OFF — series only
+		// #240 — generation is unconditional: the 3 Mondays follow the series.
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(3);
+		});
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).toBeNull();
 		});
@@ -1951,28 +1958,21 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
  *  (a gear, an ×) also need the WIDTH floor — text buttons get their width
  *  from their label + padding, but a lone glyph does not.
  *
- *  `onWrappingLabel` moves the assertion off the testid'd element and onto the
- *  <label> around it. That is the honest target for a CHECKBOX: the box itself
- *  is a ~13px UA-drawn widget that a height utility does not grow, while the
- *  whole label is clickable (clicking the text toggles it). Asserting on the
- *  input would pin a class that changes nothing on screen. */
+ *  Every control this covers is a button (or a native <select>), so the class
+ *  contract sits on the testid'd element itself. The `onWrappingLabel` escape
+ *  hatch that used to live here existed for ONE checkbox — the series form's
+ *  generate toggle, retired in #240 — and went with it; a future non-button
+ *  whose real target is an ancestor needs the option written back deliberately,
+ *  not inherited from a control that no longer renders. */
 function expectTouchTarget(
 	container: HTMLElement,
 	testid: string,
-	opts: { iconOnly?: boolean; onWrappingLabel?: boolean } = {}
+	opts: { iconOnly?: boolean } = {}
 ): void {
 	const found = q(container, testid);
 	expect(found, `${testid} must be in the DOM`).not.toBeNull();
-	const el = opts.onWrappingLabel
-		? (found as HTMLElement).closest('label')
-		: (found as HTMLElement);
-	expect(
-		el,
-		`${testid} must sit inside a <label> — that label is what carries the touch target`
-	).not.toBeNull();
-	const what = opts.onWrappingLabel ? `the <label> wrapping ${testid}` : testid;
-	const classes = Array.from((el as HTMLElement).classList);
-	expect(classes, `${what} must reserve a 44px-tall touch target (min-h-11)`).toContain('min-h-11');
+	const classes = Array.from((found as HTMLElement).classList);
+	expect(classes, `${testid} must reserve a 44px-tall touch target (min-h-11)`).toContain('min-h-11');
 	if (opts.iconOnly) {
 		expect(classes, `${testid} is icon-only — it must also floor its width (min-w-11)`).toContain(
 			'min-w-11'
@@ -2110,18 +2110,8 @@ describe('agenda admin — every admin control is a 44x44px touch target', () =>
 		expect(container.querySelector('[data-testid^="series-create-skip-remove-"]')).toBeNull();
 	});
 
-	// #136 — the generate checkbox, the one non-button the contract covers (see
-	// the SCOPE note in the header). The testid rides on the <input>, but the
-	// input is the ~13px UA widget; the <label> around it is the click target and
-	// therefore where the floor has to live. Resolving through `.closest('label')`
-	// is the point of the case: an assertion on the input would pass while the
-	// row on screen stayed 16px tall.
-	it('series form generate checkbox: its wrapping label row is the 44px target', async () => {
-		const container = await renderReady();
-		await openSeriesForm(container);
-
-		expectTouchTarget(container, 'series-create-generate', { onWrappingLabel: true });
-	});
+	// (#240 — the generate checkbox's wrapping-label touch-target case is GONE
+	// with the checkbox itself; the retired control must not render at all.)
 
 	// #209 — the Autocomplete option-row touch-target cases that lived here are
 	// GONE with the component: all five person pickers are native <select>

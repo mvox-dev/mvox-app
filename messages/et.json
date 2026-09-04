@@ -479,7 +479,6 @@
 	"series_create_time_label": "Kellaaeg",
 	"series_create_from_label": "Alates",
 	"series_create_until_label": "Kuni",
-	"series_create_generate_label": "Loo sündmused",
 	"series_create_preview_label": "Eelvaade",
 	"series_create_date_skipped": "{date} (vahele jäetud, puuduta lisamiseks)",
 	"series_create_submit": "Loo seeria",

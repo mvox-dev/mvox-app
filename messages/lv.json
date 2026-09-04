@@ -480,7 +480,6 @@
 	"series_create_time_label": "Laiks",
 	"series_create_from_label": "No",
 	"series_create_until_label": "Līdz",
-	"series_create_generate_label": "Izveidot notikumus",
 	"series_create_preview_label": "Priekšskatījums",
 	"series_create_date_skipped": "{date} (izlaists, pieskarieties, lai iekļautu)",
 	"series_create_submit": "Izveidot sēriju",

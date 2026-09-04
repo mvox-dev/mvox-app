@@ -18,13 +18,16 @@
 // `end_date`, `duration_minutes` REQUIRED on event_series, and T1's
 // `createEventSeries` enforces exactly that — so the sketch's "optional
 // recurrence section" cannot mean those fields are omittable. The schedule
-// fields are therefore ALWAYS collected (they ARE the series template), and
-// the genuinely optional thing is GENERATION: the `series-create-generate`
-// checkbox (default OFF). OFF → submit creates the series ONLY. ON → submit
-// creates the series, then POSTs each generated occurrence individually, in
-// SERIAL, ascending. Because the sketch lists no event-type field but the
-// wire requires one, `series-create-type` is a text input PRE-FILLED
-// 'rehearsal' (the workflow's own default for generated occurrences).
+// fields are therefore ALWAYS collected (they ARE the series template).
+// #240 — GENERATION IS ALWAYS ON. The `series-create-generate` checkbox is
+// GONE (control, state, and the `series_create_generate_label` key in all
+// four locales): submit creates the series, then POSTs each generated
+// occurrence individually, in SERIAL, ascending — there is NO series-only
+// submit path any more, and creating a series without events is deliberately
+// impossible (Mihkel: "Event generation should be always on and responsive").
+// Because the sketch lists no event-type field but the wire requires one,
+// `series-create-type` is a text input PRE-FILLED 'rehearsal' (the
+// workflow's own default for generated occurrences).
 //
 // Pinned wiring contract:
 //
@@ -36,18 +39,19 @@
 //       the create body is entirely T1's business).
 //     - repeat → intervalDays mapping: daily → 1, weekly → 7, biweekly → 14.
 //     - startDate/endDate are the FIRST and LAST OCCURRENCE (entityCreate.ts's
-//       own contract for the two fields). With generation ON that is
-//       `generateEventDates`' first/last date — NOT the from/until search
-//       range: the weekday is not stored on the series (only interval_days +
-//       start_time), so start_date is the only place a later reader can recover
-//       which day the cadence lands on, and a Monday series stamped with a
-//       Tuesday `from` describes a schedule it never had (review F1). With
-//       generation OFF nothing better than the operator's range exists, so
-//       from/until go through verbatim. startTime = the time field;
-//       durationMinutes = the duration field. Blank optional
-//       location/description → the input carries NO value for them (T1 drops
-//       blanks; the page must not invent '').
-//     - bulk generation (generate ON): after `createEventSeries` resolves,
+//       own contract for the two fields) — `generateEventDates`' first/last
+//       date, NEVER the from/until search range: the weekday is not stored on
+//       the series (only interval_days + start_time), so start_date is the
+//       only place a later reader can recover which day the cadence lands on,
+//       and a Monday series stamped with a Tuesday `from` describes a
+//       schedule it never had (review F1). #240 — the OFF-path "from/until go
+//       through verbatim" wire shape no longer exists; a submit whose series
+//       input carries the raw range instead of the occurrence bounds is a
+//       regression. startTime = the time field; durationMinutes = the
+//       duration field. Blank optional location/description → the input
+//       carries NO value for them (T1 drops blanks; the page must not invent
+//       '').
+//     - bulk generation (#240 — EVERY submit): after `createEventSeries` resolves,
 //       ONE `createEvent(cfg, input)` per date from the REAL
 //       `generateEventDates`, IN ASCENDING ORDER, STRICTLY SERIAL (never two
 //       in flight — Entu rate/ordering). Each occurrence sets ONLY:
@@ -61,8 +65,6 @@
 //       19:00 EET = 17:00Z after).
 //     - validation runs BEFORE ANY write — a refused submit must not leave a
 //       half-made series behind.
-//     - series-only success → form closes, the panel STAYS OPEN, and the
-//       panel's series list re-reads (the new series must appear).
 //     - bulk success → form closes, panel series list re-reads AND
 //       `loadFullAgenda` re-invokes (the generated occurrences must land on
 //       the agenda).
@@ -102,11 +104,13 @@
 //                                 panel season's start date
 //     series-create-until         <input type="date">, PRE-FILLED with the
 //                                 panel season's end date
-//     series-create-generate      checkbox, UNCHECKED by default — ON enables
-//                                 the preview + the bulk generator
+//     series-create-generate     #240 — RETIRED. Generation is always on; the
+//                                 checkbox must NOT render (asserted absent).
 //     series-create-preview       the live preview container — renders IFF
-//                                 generate is ON and day/time/from/until are
-//                                 all set; updates as params change ($derived)
+//                                 time/from/until are set (plus a day when the
+//                                 pattern uses one); updates as params change
+//                                 ($derived). #240 — NO generate gate: a
+//                                 complete recurrence previews immediately
 //     series-create-date-<YYYY-MM-DD>  #215 — ONE CHIP PER CANDIDATE DATE
 //                                 (generateEventDates WITHOUT skipDates): a
 //                                 native <button type="button"> whose text is
@@ -436,8 +440,10 @@ async function submit(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
 }
 
-/** The minimum a VALID series-only submit needs beyond the prefills: name,
- *  duration, time — plus fixed from/until so recurrence math is deterministic. */
+/** The template fields a valid submit needs beyond the prefills: name,
+ *  duration, time — plus fixed from/until so recurrence math is
+ *  deterministic. #240 — a valid WEEKLY submit also needs a day
+ *  (enableMondayGeneration); day-less callers are the refusal cases. */
 async function fillValidTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
@@ -446,11 +452,28 @@ async function fillValidTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-until', '2026-09-21');
 }
 
-/** Turn generation ON, Mondays. With fillValidTemplate's range that yields
- *  exactly 3 occurrences: Sep 7, Sep 14, Sep 21 (all EEST, +3). */
+/** Pick Mondays (#240 — generation is ALWAYS ON, there is no checkbox to
+ *  tick any more; the name survives so ~10 call sites read unchanged). With
+ *  fillValidTemplate's range that yields exactly 3 occurrences: Sep 7,
+ *  Sep 14, Sep 21 (all EEST, +3). */
 async function enableMondayGeneration(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 	await selectValue(container, 'series-create-day', '1');
+}
+
+/** Wait for a SUCCESSFUL submit's whole run to finish, not just its first
+ *  await. #240 made every submit generate, so `createEventSeries` resolving is
+ *  now the START of the run: the serial `createEvent` loop and the trailing
+ *  `loadForSelected({ keepSeasonManage: true })` still follow it. A test that
+ *  returns at the `createEventSeries` (or Nth `createEvent`) assertion lets
+ *  that tail run AFTER `afterEach` has reset the mocks — `loadFullAgenda()`
+ *  then returns undefined and the page's `.then(...)` rejects UNHANDLED,
+ *  failing the whole vitest run while every test still reports green. The
+ *  form unmounting is the run's own last observable step, so awaiting it
+ *  brackets the tail inside the test. */
+async function settleSeriesRun(container: HTMLElement): Promise<void> {
+	await waitFor(() => {
+		expect(q(container, 'series-create-form')).toBeNull();
+	});
 }
 
 /** #215 — every rendered candidate-date CHIP, in document order, skipped or
@@ -507,18 +530,19 @@ function eventInput(callIndex: number): CreateEventInput {
 // ── the entry point: T3's [+ Series] stub becomes a live form ───────────────────
 
 describe('season panel — the [+ Series] entry point', () => {
-	it('season editor: clicking season-manage-add-series opens series-create-form INLINE (no goto); merely opening writes nothing and shows no preview', async () => {
+	it('season editor: clicking season-manage-add-series opens series-create-form INLINE (no goto); merely opening writes nothing and shows no preview (the recurrence is incomplete, not gated — #240)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 
 		expect(gotoMock).not.toHaveBeenCalled();
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
+		// No day/time yet → nothing determinate to preview. This is the ONLY
+		// reason no preview shows: there is no generate gate any more.
 		expect(q(container, 'series-create-preview')).toBeNull();
 
-		const generate = q(container, 'series-create-generate') as HTMLInputElement;
-		expect(generate).not.toBeNull();
-		expect(generate.checked).toBe(false);
+		// #240 — the generate checkbox is gone from the form entirely.
+		expect(q(container, 'series-create-generate')).toBeNull();
 	});
 
 	it('NON-editor: no season-manage-gear at all — the panel (and with it the form) is unreachable, fail-closed like every other rights gate', async () => {
@@ -547,7 +571,7 @@ describe('season panel — the [+ Series] entry point', () => {
 // ── the form's fields (design sketch D) ─────────────────────────────────────────
 
 describe('season panel — the series form carries every sketch-D field', () => {
-	it('name (text), type (#199: canonical select, PRE-SELECTED rehearsal — see page.event-type-picker.spec.ts for the full picker contract), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates), generate (checkbox) — and NO skip picker (#215: the chips are the skip mechanism)', async () => {
+	it('name (text), type (#199: canonical select, PRE-SELECTED rehearsal — see page.event-type-picker.spec.ts for the full picker contract), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates) — NO generate checkbox (#240: generation is always on) and NO skip picker (#215: the chips are the skip mechanism)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 
@@ -618,7 +642,9 @@ describe('season panel — the series form carries every sketch-D field', () => 
 		expect(q(container, 'series-create-time-ampm')).toBeNull();
 		expect((q(container, 'series-create-from') as HTMLInputElement).type).toBe('date');
 		expect((q(container, 'series-create-until') as HTMLInputElement).type).toBe('date');
-		expect((q(container, 'series-create-generate') as HTMLInputElement).type).toBe('checkbox');
+		// #240 — the generate checkbox is RETIRED: generation is always on, so
+		// the control (and any replacement toggle for it) must not exist.
+		expect(q(container, 'series-create-generate')).toBeNull();
 		// #215 — the skip picker is GONE: the preview's date chips are the skip
 		// mechanism now. No input, no Add, no removable chip list, no heading.
 		expect(q(container, 'series-create-skip-date')).toBeNull();
@@ -640,7 +666,7 @@ describe('season panel — the series form carries every sketch-D field', () => 
 // ── the live preview: the REAL generateEventDates, on the real page ─────────────
 
 describe('season panel — the recurrence preview is live and real', () => {
-	it('generate ON + day/time/from/until set → series-create-preview lists EXACTLY the generated dates (real generateEventDates: 13 Mondays for Sep 1 – Dec 1 2026) — and previewing writes NOTHING', async () => {
+	it('day/time/from/until set → series-create-preview lists EXACTLY the generated dates (real generateEventDates: 13 Mondays for Sep 1 – Dec 1 2026) — and previewing writes NOTHING', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillTime(container, 'series-create-time', '19:00');
@@ -798,7 +824,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-11-29');
 		await selectValue(container, 'series-create-repeat', 'daily');
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(90); // 30 + 31 + 29
@@ -830,49 +855,62 @@ describe('season panel — the recurrence preview is live and real', () => {
 		}
 	});
 
-	it('generate OFF → no preview, even with a complete recurrence; toggling it ON brings the preview up, OFF takes it down', async () => {
+	it('#240 — the preview is UNCONDITIONAL: completing the recurrence brings it up immediately, with no checkbox, no button and no other trigger to find', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-30');
+		// The recurrence becomes complete on this very input — nothing else is
+		// clicked between here and the preview appearing.
 		await selectValue(container, 'series-create-day', '1');
-		await flush();
-		expect(q(container, 'series-create-preview')).toBeNull();
 
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'series-create-preview')).not.toBeNull();
 		});
-
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'series-create-preview')).toBeNull();
-		});
+		expect(previewDates(container)).toEqual([
+			'2026-09-07',
+			'2026-09-14',
+			'2026-09-21',
+			'2026-09-28'
+		]);
+		// No gate control exists to take it down again.
+		expect(q(container, 'series-create-generate')).toBeNull();
 	});
 
-	it('generate ON but recurrence INCOMPLETE (no day picked): no preview yet', async () => {
+	it('recurrence INCOMPLETE (no day picked on a day-using pattern): no preview yet — incompleteness, not a gate (#240)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-30');
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 
 		await flush();
 		expect(q(container, 'series-create-preview')).toBeNull();
 	});
 });
 
-// ── series-only submit (generate OFF) ───────────────────────────────────────────
+// ── the series template wire — submit ALWAYS generates (#240) ──────────────────
+//
+// The old "submit WITHOUT generation creates the series only" describe died
+// WITH the OFF branch (#240): no state of the form produces a series-only
+// write any more. The wire pins that block carried — full createEventSeries
+// shape, blank optionals, the AM/PM 24h wire, the biweekly mapping, the
+// failed-write handling — live on here, re-homed onto the ONLY submit path
+// left, the generating one. Deleted outright, with the branch they covered:
+//   - the OFF full flow ("from/until verbatim as startDate/endDate — and NO
+//     createEvent") — that wire shape is asserted ABSENT below;
+//   - "…and daily → 1" — the DAILY describe's own submit case already pins
+//     the mapping on the generating path.
 
-describe('season panel — submit WITHOUT generation creates the series only', () => {
-	it('full flow: createEventSeries(cfg, {…}) ONCE, FULL shape — org from resolveDatabaseEntityId, season in extraParentIds, weekly → intervalDays 7, from/until verbatim as startDate/endDate — and NO createEvent; form closes, panel stays open, series list re-reads', async () => {
+describe('season panel — submit ALWAYS generates (#240): the series wire, full shape', () => {
+	it('full flow: createEventSeries(cfg, {…}) ONCE, FULL shape — org from resolveDatabaseEntityId, season in extraParentIds, weekly → intervalDays 7, startDate/endDate = FIRST/LAST OCCURRENCE — and the occurrences ALWAYS follow (no series-only outcome exists); form closes, panel stays open, series list re-reads', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		const seriesReadsBefore = listEventSeriesForSeasonMock.mock.calls.length;
 
 		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
 		await fill(container, 'series-create-location', 'Main hall');
 		await fill(container, 'series-create-description', 'Bring the black folder');
 		await submit(container);
@@ -880,7 +918,10 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 		await waitFor(() => {
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
-		// FULL param shape (partial assertions hide bugs).
+		// FULL param shape (partial assertions hide bugs). startDate is the
+		// first MONDAY (2026-09-07), endDate the last — NEVER the raw
+		// 2026-09-01/2026-09-21 range: the retired OFF path's verbatim-range
+		// wire shape must not reach createEventSeries in any form state.
 		expect(createEventSeriesMock).toHaveBeenCalledWith(CFG, {
 			name: 'Monday rehearsals',
 			dbEntityId: ORG_EFK,
@@ -889,13 +930,17 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 			intervalDays: 7,
 			startTime: '19:00',
 			durationMinutes: 90,
-			startDate: '2026-09-01',
+			startDate: '2026-09-07',
 			endDate: '2026-09-21',
 			defaultLocation: 'Main hall',
 			defaultDescription: 'Bring the black folder'
 		});
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(CFG);
-		expect(createEventMock).not.toHaveBeenCalled();
+		// #240 — generation is unconditional: the occurrences follow the series
+		// on EVERY successful submit.
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(3);
+		});
 
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).toBeNull();
@@ -910,6 +955,7 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
 		await submit(container);
 
 		await waitFor(() => {
@@ -918,6 +964,7 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 		const input = lastSeriesInput();
 		expect(input.defaultLocation ?? '').toBe('');
 		expect(input.defaultDescription ?? '').toBe('');
+		await settleSeriesRun(container);
 	});
 
 	it('#207 AM/PM preference (integration): the store flips the surface to 12h selects — and submit STILL sends the 24h HH:MM wire string', async () => {
@@ -951,6 +998,7 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 
 			await fill(container, 'series-create-from', '2026-09-01');
 			await fill(container, 'series-create-until', '2026-09-21');
+			await enableMondayGeneration(container);
 			await submit(container);
 
 			await waitFor(() => {
@@ -959,6 +1007,8 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 			// FULL param shape (partial assertions hide bugs): the wire carries
 			// 24h 'HH:MM' regardless of the display preference. The two untouched
 			// optionals are asserted blank/absent the way the optionals spec does.
+			// #240 — startDate/endDate are the occurrence bounds (Mondays), not
+			// the raw range.
 			const { defaultLocation, defaultDescription, ...rest } = lastSeriesInput();
 			expect(rest).toEqual({
 				name: 'Evening rehearsals',
@@ -968,20 +1018,22 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 				intervalDays: 7,
 				startTime: '19:05',
 				durationMinutes: 90,
-				startDate: '2026-09-01',
+				startDate: '2026-09-07',
 				endDate: '2026-09-21'
 			});
 			expect(defaultLocation ?? '').toBe('');
 			expect(defaultDescription ?? '').toBe('');
+			await settleSeriesRun(container);
 		} finally {
 			timeFormatStore.set('24h');
 		}
 	});
 
-	it('the repeat select maps to intervalDays: biweekly → 14', async () => {
+	it('the repeat select maps to intervalDays: biweekly → 14 — and still generates (two biweekly Mondays: Sep 7 + Sep 21)', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
 		await selectValue(container, 'series-create-repeat', 'biweekly');
 		await submit(container);
 
@@ -989,19 +1041,10 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
 		expect(lastSeriesInput().intervalDays).toBe(14);
-	});
-
-	it('…and daily → 1', async () => {
-		const container = await renderReady();
-		await openSeriesForm(container);
-		await fillValidTemplate(container);
-		await selectValue(container, 'series-create-repeat', 'daily');
-		await submit(container);
-
 		await waitFor(() => {
-			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+			expect(createEventMock).toHaveBeenCalledTimes(2);
 		});
-		expect(lastSeriesInput().intervalDays).toBe(1);
+		await settleSeriesRun(container);
 	});
 
 	it('a FAILED series write: series-create-error (role="alert"), the form stays OPEN with the work still in it, nothing generated', async () => {
@@ -1009,6 +1052,7 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
 		await submit(container);
 
 		await waitFor(() => {
@@ -1023,9 +1067,9 @@ describe('season panel — submit WITHOUT generation creates the series only', (
 	});
 });
 
-// ── bulk submit (generate ON): series first, then one event per date, serial ────
+// ── bulk submit (#240 — every submit): series first, then one event per date, serial ──
 
-describe('season panel — submit WITH generation bulk-creates the occurrences', () => {
+describe('season panel — submit bulk-creates the occurrences (generation always on, #240)', () => {
 	it('creates the series FIRST, then ONE createEvent per generated date, ascending: each occurrence sets ONLY org/series/season parents + eventType + startDatetime (Tallinn wall clock → UTC instant); name/duration/location/description INHERIT — never copied', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
@@ -1389,11 +1433,10 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 	});
 
-	it('generate ON but NO day picked: refused with the DAY message and NO write at all — otherwise a refused form leaves a half-made series behind', async () => {
+	it('NO day picked on a day-using pattern: refused with the DAY message and NO write at all — the check is unconditional now that generation is (#240) — otherwise a refused form leaves a half-made series behind', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 		await submit(container);
 
 		await waitFor(() => {
@@ -1411,6 +1454,9 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		await openSeriesForm(container);
 		await fill(container, 'series-create-duration', '90');
 		await fillTime(container, 'series-create-time', '19:00');
+		// #240 — a valid submit always generates, so the day must be picked for
+		// the SECOND submit to write; the FIRST still refuses on the name.
+		await selectValue(container, 'series-create-day', '1');
 		await submit(container);
 		await waitFor(() => {
 			expect(q(container, 'series-create-error')).not.toBeNull();
@@ -1422,6 +1468,7 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		await waitFor(() => {
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
+		await settleSeriesRun(container);
 	});
 });
 
@@ -1447,7 +1494,6 @@ describe('season panel — DAILY generation needs no day of week', () => {
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-04');
 		await selectValue(container, 'series-create-repeat', 'daily');
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 
 		await waitFor(() => {
 			expect(q(container, 'series-create-preview')).not.toBeNull();
@@ -1470,7 +1516,6 @@ describe('season panel — DAILY generation needs no day of week', () => {
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-04');
 		await selectValue(container, 'series-create-repeat', 'daily');
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 		await submit(container);
 
 		await waitFor(() => {
@@ -1494,7 +1539,6 @@ describe('season panel — DAILY generation needs no day of week', () => {
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
 		await selectValue(container, 'series-create-repeat', 'daily');
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
 		await selectValue(container, 'series-create-repeat', 'weekly');
 
 		await waitFor(() => {
@@ -1819,10 +1863,10 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 				(q(container, testid) as HTMLInputElement | HTMLButtonElement | null)?.disabled
 			).toBe(true);
 		}
-		// Submit stays live (finish the run) and so does the generate checkbox —
-		// turning it OFF is the documented way to close out without the rest.
+		// Submit stays live (finish the run) and so does Cancel — #240 retired
+		// the generate checkbox, so Cancel is the ONLY close-out that abandons a
+		// stopped run without writing the rest.
 		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
-		expect((q(container, 'series-create-generate') as HTMLInputElement).disabled).toBe(false);
 		expect((q(container, 'series-create-cancel') as HTMLButtonElement).disabled).toBe(false);
 	});
 
@@ -1858,30 +1902,10 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 		}
 	});
 
-	it('turning generation OFF after a stopped run closes out without writing a SECOND series', async () => {
-		createEventMock.mockImplementation(async () => {
-			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
-			return `ev-new-${createEventMock.mock.calls.length}`;
-		});
-		const container = await renderReady();
-		await openSeriesForm(container);
-		await fillValidTemplate(container);
-		await enableMondayGeneration(container);
-		await submit(container);
-		await waitFor(() => {
-			expect(q(container, 'series-create-error')).not.toBeNull();
-		});
-
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
-		await submit(container);
-
-		await waitFor(() => {
-			expect(q(container, 'series-create-form')).toBeNull();
-		});
-		await flush();
-		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
-		expect(createEventMock).toHaveBeenCalledTimes(2);
-	});
+	// (#240 — the "turning generation OFF after a stopped run closes out
+	// without writing a SECOND series" case is GONE with the checkbox: the OFF
+	// close-out path no longer exists. Abandoning a stopped run is Cancel's
+	// job, pinned by the #138 'Cancel after the round trip' case below.)
 });
 
 // ── #138 — a stopped run survives the COLLECTIVE ROUND TRIP ────────────────────
@@ -2061,7 +2085,8 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 
 		createEventMock.mockImplementation(async () => `ev-b-${createEventMock.mock.calls.length}`);
 		await fillValidTemplate(container);
-		await submit(container); // generation OFF — series only
+		await enableMondayGeneration(container); // #240 — every submit generates
+		await submit(container);
 
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).toBeNull();
@@ -2284,7 +2309,23 @@ describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 			expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(false);
 		}
 	});
+
+	// #240 — the generate checkbox's label goes WITH the checkbox: its sole
+	// consumer is deleted, and a dead key in four locales is translator work
+	// nothing renders (the same discipline as the retired skip keys above).
+	it.each(LOCALES)('%s: series_create_generate_label is ABSENT (#240 — the checkbox is retired)', (locale) => {
+		const file = messageFile(locale);
+		expect(
+			'series_create_generate_label' in file,
+			`series_create_generate_label must be gone from messages/${locale}.json`
+		).toBe(false);
+	});
 });
+
+// (*MVOX:Tallis* — #240 RED: generate-events checkbox retired — generation
+// always on, preview unconditional on a complete recurrence, the series-only
+// OFF submit path and its verbatim-range wire shape deleted, the label key
+// leaves all four locales)
 
 // (*MVOX:Tallis* — #215 RED: toggleable date-chip grid replaces the skip-dates
 // input — native aria-pressed chips, month-grouped wrap-not-scroll grid, live

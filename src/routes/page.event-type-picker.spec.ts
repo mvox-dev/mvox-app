@@ -364,13 +364,16 @@ function canonicalPairs(): Array<[string, string]> {
 	return CANONICAL_EVENT_TYPES.map((key) => [key, `event_type_${key}`]);
 }
 
-/** The minimum a VALID series-only submit needs beyond the prefills. */
+/** The minimum a VALID series submit needs beyond the prefills. #240 —
+ *  generation is always on, so a weekly submit also needs a day: Mondays,
+ *  which over this fixed range generate Sep 7 / 14 / 21. */
 async function fillValidSeriesTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
 	await fillTime(container, 'series-create-time', '19:00');
 	await fill(container, 'series-create-from', '2026-09-01');
 	await fill(container, 'series-create-until', '2026-09-21');
+	await selectValue(container, 'series-create-day', '1');
 }
 
 /** The input object the page handed createEventSeries on its most recent call. */
@@ -436,9 +439,8 @@ describe('series form — series-create-type is a localized canonical picker', (
 		await openSeriesForm(container);
 		await fillValidSeriesTemplate(container);
 		await selectValue(container, 'series-create-type', 'concert');
-		// Generation ON, Mondays: Sep 7 / 14 / 21 within the fixed range above.
-		await fireEvent.click(q(container, 'series-create-generate') as HTMLElement);
-		await selectValue(container, 'series-create-day', '1');
+		// #240 — generation is always on; the helper already picked Mondays, so
+		// Sep 7 / 14 / 21 generate within the fixed range above.
 		await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
 
 		await waitFor(() => {

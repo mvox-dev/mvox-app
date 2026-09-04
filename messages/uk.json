@@ -481,7 +481,6 @@
 	"series_create_time_label": "Час",
 	"series_create_from_label": "Від",
 	"series_create_until_label": "До",
-	"series_create_generate_label": "Створити події",
 	"series_create_preview_label": "Попередній перегляд",
 	"series_create_date_skipped": "{date} (пропущено, торкніться, щоб додати)",
 	"series_create_submit": "Створити серію",

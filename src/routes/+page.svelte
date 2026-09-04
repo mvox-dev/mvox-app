@@ -4346,10 +4346,9 @@
 	// template fields (name/type/duration/location/description) plus the
 	// ALWAYS-collected schedule fields (v4E requires interval_days/start_time/
 	// start_date/end_date on event_series, so the sketch's "optional recurrence"
-	// can only mean optional GENERATION — see the RED spec's header). Generation
-	// is the `seriesCreateGenerate` checkbox (default OFF); ON reveals the live
-	// preview and turns a plain series-create into a serial bulk `createEvent`
-	// per occurrence.
+	// can only mean optional GENERATION — see the RED spec's header). #240 —
+	// generation is always on: the form always shows the live preview and
+	// submit always runs a serial bulk `createEvent` per occurrence.
 
 	/** The series-create fields a validation message can belong to; `null` = a
 	 *  form-wide failure (no org, a failed write) that names no single box. */
@@ -4384,7 +4383,6 @@
 	let seriesCreateTime = $state('');
 	let seriesCreateFrom = $state('');
 	let seriesCreateUntil = $state('');
-	let seriesCreateGenerate = $state(false);
 	/** #215 — the ONLY skip mechanism now: toggled by tapping a candidate-date
 	 *  chip in the preview grid. No separate input/Add/removable-chip UI. */
 	let seriesCreateSkipDates = $state<string[]>([]);
@@ -4700,15 +4698,14 @@
 	 * The live preview's source — the REAL `generateEventDates` (T5's own pinned
 	 * point: the preview must be the actual generator, not a lookalike),
 	 * recomputed on every param change via `$derived`. `null` (no render) unless
-	 * generation is ON AND time/from/until are set — plus a day WHEN THE PATTERN
-	 * USES ONE. An incomplete recurrence has nothing determinate to preview yet.
+	 * time/from/until are set — plus a day WHEN THE PATTERN USES ONE. An
+	 * incomplete recurrence has nothing determinate to preview yet.
 	 *
 	 * #215 — this is now the SKIP-APPLIED set: it feeds the live count line and
 	 * the submit-disabled gate (Gama ruling 2 — all chips toggled off means this
 	 * comes back `[]`), never the grid itself.
 	 */
 	const seriesCreatePreviewDates = $derived.by(() => {
-		if (!seriesCreateGenerate) return null;
 		if (seriesCreateDayApplies && seriesCreateDay === '') return null;
 		if (!seriesCreateTime || !seriesCreateFrom || !seriesCreateUntil) {
 			return null;
@@ -4727,12 +4724,11 @@
 	 * #215 — every CANDIDATE occurrence, ignoring `seriesCreateSkipDates`
 	 * entirely: the chip grid renders this set (skipped chips stay rendered,
 	 * merely struck), never the skip-applied one above. Same gating as
-	 * `seriesCreatePreviewDates` (`null` unless generation is ON and the
-	 * recurrence is complete) so the two stay in lockstep on when a preview
-	 * exists at all — they differ only in which dates they list.
+	 * `seriesCreatePreviewDates` (`null` unless the recurrence is complete) so
+	 * the two stay in lockstep on when a preview exists at all — they differ
+	 * only in which dates they list.
 	 */
 	const seriesCreateCandidateDates = $derived.by(() => {
-		if (!seriesCreateGenerate) return null;
 		if (seriesCreateDayApplies && seriesCreateDay === '') return null;
 		if (!seriesCreateTime || !seriesCreateFrom || !seriesCreateUntil) {
 			return null;
@@ -4858,7 +4854,6 @@
 		// panel is always open before this form can be reached.
 		seriesCreateFrom = seasonManageStartDate;
 		seriesCreateUntil = seasonManageEndDate;
-		seriesCreateGenerate = false;
 		seriesCreateSkipDates = [];
 		seriesCreateProgress = null;
 		// #138 review F1 — NO resume clear here. `createEntryPointsBlocked` above
@@ -4955,9 +4950,6 @@
 		seriesCreateFrom = form.from;
 		seriesCreateUntil = form.until;
 		seriesCreateSkipDates = [...form.skipDates];
-		// A resume record only ever exists for a GENERATING run (a series-only
-		// create has nothing left to owe), and the preview/notice both need it on.
-		seriesCreateGenerate = true;
 		seriesCreateProgress = null;
 		clearSeriesCreateError();
 		seriesCreateOpen = true;
@@ -5010,15 +5002,17 @@
 	}
 
 	/**
-	 * Submit: series-only when generation is OFF — `createEventSeries` (T1) is
-	 * the ONE seam, org from `resolveDatabaseEntityId`, the panel's season in
-	 * `extraParentIds`. WITH generation, bulk-creates one `createEvent` per
+	 * Submit: ONE path — `createEventSeries` (T1) is the ONE seam for the series
+	 * itself (org from `resolveDatabaseEntityId`, the panel's season in
+	 * `extraParentIds`), and the occurrences ALWAYS follow: one `createEvent` per
 	 * `generateEventDates` date, STRICTLY SERIAL, ascending (Entu rate/ordering
-	 * — #132/T5's pinned contract). Validation runs BEFORE any fetch, each
-	 * refusal naming its own field (the T4 discipline this form inherits) — a
-	 * refused submit must never leave a half-made series behind. When
-	 * `seriesCreateResume` is set (a previous run stopped partway) the series is
-	 * NOT re-created: the run picks up at the occurrence that failed.
+	 * — #132/T5's pinned contract). #240 retired the generate toggle, so there is
+	 * no state of this form that produces a childless series; an empty occurrence
+	 * set is a REFUSAL, not a series-only outcome. Validation runs BEFORE any
+	 * fetch, each refusal naming its own field (the T4 discipline this form
+	 * inherits) — a refused submit must never leave a half-made series behind.
+	 * When `seriesCreateResume` is set (a previous run stopped partway) the
+	 * series is NOT re-created: the run picks up at the occurrence that failed.
 	 */
 	async function submitSeriesCreate(): Promise<void> {
 		if (seriesCreateSubmitting) return;
@@ -5072,7 +5066,7 @@
 		}
 		// 'daily' ignores dayOfWeek entirely, so only the day-using patterns may
 		// demand one.
-		if (seriesCreateGenerate && seriesCreateDayApplies && seriesCreateDay === '') {
+		if (seriesCreateDayApplies && seriesCreateDay === '') {
 			setSeriesCreateError(m.series_create_day_required, 'day');
 			return;
 		}
@@ -5080,31 +5074,18 @@
 		// The occurrence set is computed BEFORE any write: a recurrence that
 		// yields nothing (Mondays over a Tue–Sun range) must be REFUSED, not
 		// reported as a silent success with a childless series behind it.
-		let dates: string[] = [];
-		if (seriesCreateGenerate) {
-			dates =
-				resume?.remaining ??
-				generateEventDates({
-					repeat: seriesCreateRepeat,
-					dayOfWeek: seriesCreateDayOfWeek,
-					timeOfDay: time,
-					from: seriesCreateFrom,
-					until: seriesCreateUntil,
-					skipDates: seriesCreateSkipDates
-				});
-			if (dates.length === 0) {
-				setSeriesCreateError(m.series_create_no_dates, null);
-				return;
-			}
-		} else if (resume) {
-			// Generation switched OFF after a partial run: the series already
-			// exists, so there is nothing left to write — just close out rather
-			// than creating a SECOND series for the same form. #138 review F1 —
-			// this is the second operator-facing close-out, so it forgets the run
-			// explicitly (`closeSeriesCreateForm` no longer does).
-			clearSeriesCreateResumeForSelected();
-			closeSeriesCreateForm();
-			restoreSeriesCreateFocus();
+		const dates: string[] =
+			resume?.remaining ??
+			generateEventDates({
+				repeat: seriesCreateRepeat,
+				dayOfWeek: seriesCreateDayOfWeek,
+				timeOfDay: time,
+				from: seriesCreateFrom,
+				until: seriesCreateUntil,
+				skipDates: seriesCreateSkipDates
+			});
+		if (dates.length === 0) {
+			setSeriesCreateError(m.series_create_no_dates, null);
 			return;
 		}
 		// On a resume run `total` stays the ORIGINAL occurrence count so every
@@ -5214,16 +5195,16 @@
 			// which weekday the cadence lands on. With the season defaults
 			// (2026-09-01 is a Tuesday) a weekly-MONDAY series would otherwise
 			// persist a Tuesday start_date and describe a schedule it never had.
-			// Only the generated set knows the real bounds, so this applies when
-			// generation is ON; with generation OFF there is nothing better than
-			// the operator's own range. (On a RESUME run `dates` is only the tail,
-			// but `seriesInput` is never sent then — the series already exists.)
-			const startDate =
-				seriesCreateGenerate && dates.length > 0 ? seriesCreateIsoDay(dates[0]) : seriesCreateFrom;
-			const endDate =
-				seriesCreateGenerate && dates.length > 0
-					? seriesCreateIsoDay(dates[dates.length - 1])
-					: seriesCreateUntil;
+			// (On a RESUME run `dates` is only the tail, but `seriesInput` is never
+			// sent then — the series already exists.)
+			//
+			// #240 — unconditional: the empty-occurrence refusal above returns
+			// before this point, so `dates` is always non-empty here. The old
+			// `dates.length > 0 ? … : seriesCreateFrom/Until` fallback to the raw
+			// operator range belonged to the retired generate-OFF branch, and that
+			// verbatim-range wire shape is exactly what #240 takes off the wire.
+			const startDate = seriesCreateIsoDay(dates[0]);
+			const endDate = seriesCreateIsoDay(dates[dates.length - 1]);
 
 			const seriesInput: CreateEventSeriesInput = {
 				name,
@@ -5260,26 +5241,10 @@
 			// (skipped entirely on a resume, but still an await on a fresh run).
 			if (dbChanged()) {
 				// #138 — the series LANDED in `runDb` and the viewer left before a
-				// single occurrence followed. With generation on that is a stopped
-				// run owing everything, and the record is the only thing standing
-				// between a return visit and a duplicate series.
-				if (seriesCreateGenerate) recordStop(seriesId, 0);
-				return;
-			}
-
-			if (!seriesCreateGenerate) {
-				closeSeriesCreateForm();
-				// #132/T6 — the refresh discipline is UNIFORM across all three
-				// creation kinds: a series-only create also re-reads the whole
-				// agenda (`loadFullAgenda`), not just the panel's own lists — a
-				// new series can change what series pickers elsewhere on the page
-				// offer. `keepSeasonManage` keeps the panel
-				// the series was just made in.
-				loadForSelected({ keepSeasonManage: true });
-				if (panelSeasonId === seasonId) {
-					refreshSeasonManageLists(cfg, panelSeasonId);
-				}
-				restoreSeriesCreateFocus();
+				// single occurrence followed. That is a stopped run owing everything,
+				// and the record is the only thing standing between a return visit
+				// and a duplicate series.
+				recordStop(seriesId, 0);
 				return;
 			}
 
@@ -6312,18 +6277,6 @@
 													class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 												/>
 											</div>
-
-											<label class="flex min-h-11 items-center gap-1.5 text-xs text-ink">
-												<input
-													type="checkbox"
-													data-testid="series-create-generate"
-													checked={seriesCreateGenerate}
-													onchange={(e) =>
-														(seriesCreateGenerate = (e.currentTarget as HTMLInputElement)
-															.checked)}
-												/>
-												{m.series_create_generate_label()}
-											</label>
 
 											{#if seriesCreateMonthGroups !== null}
 												<!-- #215 — the preview lists EVERY candidate date as a native
