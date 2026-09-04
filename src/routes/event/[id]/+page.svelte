@@ -26,7 +26,8 @@
 	// #194/#202 — the type-label map is SHARED with the agenda's per-row badge
 	// (was inline here only, #101 review F3; a second inline copy is exactly
 	// the drift class the WorkRow/AttendanceBadge cleanups already paid for).
-	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
+	// #199 — the canonical select options, SAME source as the create forms.
+	import { eventTypeLabel, CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
 	// #211 — the SAME color scheme the agenda badges consume.
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -1357,6 +1358,8 @@
 				return d.location;
 			case 'description':
 				return d.description;
+			case 'event_type':
+				return d.eventType;
 		}
 	}
 
@@ -1382,6 +1385,9 @@
 				break;
 			case 'description':
 				detail = { ...detail, description: value as string };
+				break;
+			case 'event_type':
+				detail = { ...detail, eventType: value as string };
 				break;
 		}
 	}
@@ -1702,15 +1708,71 @@
 			</p>
 		{:else if detail}
 			<div class="flex flex-col gap-1.5">
-				<!-- Guarded like every other optional header field below: an event with
-				     no `event_type` must not render a bare, empty pill. -->
-				{#if detail.eventType}
-					<span
-						data-testid="event-detail-type"
-						class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(detail.eventType)}"
+				<!-- #245 — event_type: the SIXTH #157 whole-field activator. Guarded
+				     like every other optional header field below: an event with no
+				     `event_type` must not render a bare, empty pill — for anyone,
+				     editor included (the empty-guard stays; only the ACTIVATOR is
+				     rights-gated). -->
+				{#if editingField === 'event_type'}
+					<!-- Standing rule 1 — native <select>, the #199 canonical option
+					     source (SAME list the create forms render), no second hand-typed
+					     list. The activator is unmounted the instant this mounts, so the
+					     select carries its OWN aria-label (unlike the button, which uses
+					     an sr-only child — there is no value-bearing content here to
+					     silence). An empty option keeps '' representable so opening +
+					     blurring an unset type can never manufacture a value. -->
+					<select
+						data-testid="event-edit-input-event_type"
+						aria-label={m.event_edit_event_type_aria_label()}
+						class="w-fit border-b border-ink bg-transparent text-ink-2"
+						value={editDraft}
+						use:focusOnMount
+						onchange={(e) => (editDraft = (e.currentTarget as HTMLSelectElement).value)}
+						onblur={() => confirmFieldEdit('event_type', false)}
+						onkeydown={(e) => handleFieldKeydown(e, 'event_type', false)}
 					>
-						{eventTypeLabel(detail.eventType)}
-					</span>
+						<option value=""></option>
+						{#each CANONICAL_EVENT_TYPES as type (type)}
+							<option value={type}>{eventTypeLabel(type)}</option>
+						{/each}
+					</select>
+				{:else if detail.eventType || isEditor}
+					{#if isEditor}
+						<!-- #157 — whole-field tap target, see the `name` field above. The
+						     #211-colored badge rides INSIDE the button so its color and
+						     label survive the wrap. -->
+						<button
+							type="button"
+							data-testid="event-edit-btn-event_type"
+							class="group flex min-h-11 w-fit appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left disabled:opacity-40"
+							disabled={editWritePending.event_type === true}
+							bind:this={pencilRefs.event_type}
+							onclick={() => beginFieldEdit('event_type')}
+						>
+							<span class="sr-only">{m.event_edit_event_type_aria_label()}</span>
+							<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+							{#if detail.eventType}
+								<span
+									data-testid="event-detail-type"
+									class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(detail.eventType)}"
+								>
+									{eventTypeLabel(detail.eventType)}
+								</span>
+							{/if}
+						</button>
+					{:else}
+						<span
+							data-testid="event-detail-type"
+							class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(detail.eventType)}"
+						>
+							{eventTypeLabel(detail.eventType)}
+						</span>
+					{/if}
+				{/if}
+				{#if editErrors.event_type}
+					<p data-testid="event-edit-error-event_type" role="alert" class="text-xs text-red-700">
+						{m.event_edit_save_error()}
+					</p>
 				{/if}
 				<!-- #104 TE.4 — name: always present, no empty-guard needed. -->
 				{#if editingField === 'name'}

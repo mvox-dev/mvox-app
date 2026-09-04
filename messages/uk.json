@@ -321,6 +321,7 @@
 	"event_edit_duration_minutes_aria_label": "Редагувати тривалість",
 	"event_edit_location_aria_label": "Редагувати місце",
 	"event_edit_description_aria_label": "Редагувати опис",
+	"event_edit_event_type_aria_label": "Редагувати тип події",
 	"event_edit_save_error": "Не вдалося зберегти. Спробуйте ще раз.",
 	"event_detail_rsvp_heading": "Ваша відповідь",
 	"event_type_rehearsal": "Репетиція",

@@ -319,6 +319,7 @@
 	"event_edit_duration_minutes_aria_label": "Edit duration",
 	"event_edit_location_aria_label": "Edit location",
 	"event_edit_description_aria_label": "Edit description",
+	"event_edit_event_type_aria_label": "Edit event type",
 	"event_edit_save_error": "Couldn't save. Try again.",
 	"event_detail_rsvp_heading": "Your answer",
 	"event_type_rehearsal": "Rehearsal",

@@ -320,6 +320,7 @@
 	"event_edit_duration_minutes_aria_label": "Rediģēt ilgumu",
 	"event_edit_location_aria_label": "Rediģēt vietu",
 	"event_edit_description_aria_label": "Rediģēt aprakstu",
+	"event_edit_event_type_aria_label": "Rediģēt pasākuma veidu",
 	"event_edit_save_error": "Neizdevās saglabāt. Mēģiniet vēlreiz.",
 	"event_detail_rsvp_heading": "Jūsu atbilde",
 	"event_type_rehearsal": "Mēģinājums",

@@ -19,7 +19,8 @@ export type EditableEventField =
 	| 'start_datetime'
 	| 'duration_minutes'
 	| 'location'
-	| 'description';
+	| 'description'
+	| 'event_type';
 
 /** Which wire value key each editable field is written under. */
 function wireProp(field: EditableEventField, value: string | number): EntuWireValue {

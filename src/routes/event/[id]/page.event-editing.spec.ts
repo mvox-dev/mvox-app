@@ -513,8 +513,10 @@ describe('/event/[id] — edit buttons, gated on the event-rights rule (owner OR
 			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!;
 			expect(btn.tagName, `event-edit-btn-${field} must be a real button`).toBe('BUTTON');
 		}
-		// EXACTLY the five — no stray pencil on any non-editable surface.
-		expect(container.querySelectorAll('[data-testid^="event-edit-btn-"]')).toHaveLength(5);
+		// EXACTLY the editable set, no stray pencil on any non-editable surface —
+		// #245 adds event_type as the sixth (its own contract lives in
+		// page.event-type-edit.spec.ts).
+		expect(container.querySelectorAll('[data-testid^="event-edit-btn-"]')).toHaveLength(6);
 	});
 
 	it('a plain member (no rights visible — the private-bucket default) sees NO edit buttons at all', async () => {
@@ -542,7 +544,8 @@ describe('/event/[id] — edit buttons, gated on the event-rights rule (owner OR
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
 		});
-		expect(container.querySelectorAll('[data-testid^="event-edit-btn-"]')).toHaveLength(5);
+		// #245 — five original fields + event_type.
+		expect(container.querySelectorAll('[data-testid^="event-edit-btn-"]')).toHaveLength(6);
 	});
 });
 
@@ -1183,19 +1186,22 @@ describe('/event/[id] — DST transition days convert to the RIGHT instant', () 
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('/event/[id] — non-editable header surfaces get no pencil', () => {
-	it('event_type, capacity and the conductor line have NO edit buttons, even for an _editor', async () => {
+	// #245 supersedes the original event_type pin here: the type badge is now
+	// the SIXTH editable field (contract in page.event-type-edit.spec.ts).
+	it('capacity and the conductor line have NO edit buttons, even for an _editor', async () => {
 		const { container } = renderEditPage(editorEvent());
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="event-edit-btn-event_type"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-edit-btn-capacity"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-edit-btn-conductor"]')).toBeNull();
-		// The exhaustive form of the same claim: only the five editable fields.
+		// The exhaustive form of the same claim: only the six editable fields.
 		const testids = [...container.querySelectorAll('[data-testid^="event-edit-btn-"]')].map((el) =>
 			el.getAttribute('data-testid')
 		);
-		expect(testids.sort()).toEqual(EDITABLE_FIELDS.map((f) => `event-edit-btn-${f}`).sort());
+		expect(testids.sort()).toEqual(
+			[...EDITABLE_FIELDS.map((f) => `event-edit-btn-${f}`), 'event-edit-btn-event_type'].sort()
+		);
 	});
 });
 

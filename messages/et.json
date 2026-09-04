@@ -319,6 +319,7 @@
 	"event_edit_duration_minutes_aria_label": "Muuda kestust",
 	"event_edit_location_aria_label": "Muuda asukohta",
 	"event_edit_description_aria_label": "Muuda kirjeldust",
+	"event_edit_event_type_aria_label": "Muuda ürituse liiki",
 	"event_edit_save_error": "Salvestamine ebaõnnestus. Proovi uuesti.",
 	"event_detail_rsvp_heading": "Sinu vastus",
 	"event_type_rehearsal": "Proov",
