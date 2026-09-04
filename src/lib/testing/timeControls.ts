@@ -22,7 +22,10 @@
 //   <prefix>-ampm     native <select> 'AM'/'PM' — AM/PM mode only
 //
 // Prefixes in use: series-create-time, event-create-datetime,
-// event-edit-input-start_datetime.
+// event-edit-input-start_datetime, event-create-end (#243 — the create form's
+// end pair), event-edit-input-duration_minutes (#243 — the detail page's end
+// composite: the FIELD keeps its duration_minutes identity, only its editor
+// became an end date+time).
 //
 // These helpers are the ONE migration seam for the ~45 old `fill()` /
 // `beginEdit()` call sites — specs drive the composite through them instead of

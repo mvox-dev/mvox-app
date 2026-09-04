@@ -3105,13 +3105,44 @@
 		return new Date(instantMs).toISOString();
 	}
 
+	/** #243 — the end pair replaces the duration number input: `endLocal` is the
+	 *  end composite's 'YYYY-MM-DDTHH:MM' Tallinn wall clock (or '' while either
+	 *  part is missing). `undefined` when there is nothing to derive (blank end
+	 *  = "inherit from series", the old blank number input's meaning); `'range'`
+	 *  when the resulting span is zero or negative (end at or before start);
+	 *  otherwise the REAL elapsed minutes from two INDEPENDENT UTC conversions
+	 *  (start and end each converted on their own via `tallinnLocalToUtcIso`,
+	 *  then subtracted) — DST-safe, never wall-clock arithmetic. Same
+	 *  convention as event/[id]'s duration_minutes end editor.
+	 *
+	 *  `undefined` is reserved STRICTLY for the genuinely blank composite. A
+	 *  FILLED end that cannot be converted (unparseable local, or a start that
+	 *  yields no finite span) refuses with `'range'` instead — the submit path
+	 *  reads `undefined` as "inherit from series" and writes no durationMinutes
+	 *  key at all, so returning it here would silently DROP an end the viewer
+	 *  filled in. Unreachable through the native date input plus TimeSelect, and
+	 *  kept loud anyway (review #243 F4). */
+	function eventCreateDerivedDuration(
+		startIso: string,
+		endLocal: string
+	): number | 'range' | undefined {
+		if (!endLocal) return undefined;
+		const endIso = tallinnLocalToUtcIso(endLocal);
+		if (!endIso) return 'range';
+		const startMs = new Date(startIso).getTime();
+		const endMs = new Date(endIso).getTime();
+		const minutes = Math.round((endMs - startMs) / 60_000);
+		if (!Number.isFinite(minutes)) return 'range';
+		return minutes <= 0 ? 'range' : minutes;
+	}
+
 	// #213 removed the page-level [+ Event]; its own rights gate (the same
 	// `manageableSeasonId`/`manageableSeasonRights` formula as the gear) is
 	// gone with it — the gear IS that entry point now (`showSeasonManageGear`).
 
 	/** The event-create fields a validation message can belong to; `null` = a
 	 *  form-wide failure (no org, a failed write) that names no single box. */
-	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | null;
+	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | 'end' | null;
 
 	/** The created event's start, Tallinn wall clock, for the success
 	 *  announcement — #207 rule 7 (PO standing rule, Gama's 2026-09-02
@@ -3163,7 +3194,19 @@
 	const eventCreateDatetime = $derived(
 		eventCreateDate && eventCreateTime ? `${eventCreateDate}T${eventCreateTime}` : ''
 	);
-	let eventCreateDuration = $state('');
+	// #243 — the end pair replaces the duration number input. `eventCreateEndDate`
+	// mirrors `eventCreateDate` (the start date) until the viewer touches the end
+	// date input directly, at which point `eventCreateEndTouched` latches and the
+	// mirror stops following (Done-when 4: the common same-day case costs one
+	// interaction, the multi-day case exactly one extra date pick).
+	// `eventCreateEndDatetime` is DERIVED, same shape as `eventCreateDatetime`
+	// above — '' while either part is missing, never a malformed string.
+	let eventCreateEndDate = $state('');
+	let eventCreateEndTime = $state('');
+	let eventCreateEndTouched = $state(false);
+	const eventCreateEndDatetime = $derived(
+		eventCreateEndDate && eventCreateEndTime ? `${eventCreateEndDate}T${eventCreateEndTime}` : ''
+	);
 	let eventCreateLocation = $state('');
 	let eventCreateDescription = $state('');
 	let eventCreateCapacity = $state('');
@@ -3271,7 +3314,9 @@
 		eventCreateName = '';
 		eventCreateDate = '';
 		eventCreateTime = '';
-		eventCreateDuration = '';
+		eventCreateEndDate = '';
+		eventCreateEndTime = '';
+		eventCreateEndTouched = false;
 		eventCreateLocation = '';
 		eventCreateDescription = '';
 		eventCreateCapacity = '';
@@ -3306,7 +3351,9 @@
 		eventCreateName = '';
 		eventCreateDate = '';
 		eventCreateTime = '';
-		eventCreateDuration = '';
+		eventCreateEndDate = '';
+		eventCreateEndTime = '';
+		eventCreateEndTouched = false;
 		eventCreateLocation = '';
 		eventCreateDescription = '';
 		eventCreateCapacity = '';
@@ -4236,6 +4283,16 @@
 			setEventCreateError(m.event_create_datetime_required, 'datetime');
 			return;
 		}
+		// #243 — the end pair replaces the duration number input; derived BEFORE
+		// any fetch, same discipline as every other validation on this form. A
+		// blank end (date+time not both filled) is the "inherit from series"
+		// state — `durationValue` stays undefined and no key reaches the wire.
+		const derivedDuration = eventCreateDerivedDuration(startDatetime, eventCreateEndDatetime);
+		if (derivedDuration === 'range') {
+			setEventCreateError(m.event_end_before_start, 'end');
+			return;
+		}
+		const durationValue = derivedDuration;
 		const trimmedName = eventCreateName.trim();
 		// A SERIES occurrence inherits its name from the series (the read-side
 		// merge), so a blank name there is the normal, correct shape. A
@@ -4270,7 +4327,6 @@
 				return;
 			}
 
-			const durationValue = eventCreateNumberOrUndefined(eventCreateDuration);
 			const capacityValue = eventCreateNumberOrUndefined(eventCreateCapacity);
 			const trimmedLocation = eventCreateLocation.trim();
 			const trimmedDescription = eventCreateDescription.trim();
@@ -7306,71 +7362,96 @@
 									</p>
 								{/if}
 
-								<!-- #207 rule 5 — a composite: the native date input stays (Gama
+								<!-- #207 rule 5 / #239 idiom / #243 (Gama's on-issue addition,
+								     binding) — a composite: the native date input stays (Gama
 								     ruling — native date pickers are kept), paired with the
 								     TimeSelect hour/minute composite instead of the datetime-local
-								     input's browser-locale time half. The wrapper keeps the surface
-								     testid and, as a NAMED role="group", carries the accessible name
-								     the old input's aria-label carried ("Date & time" names the whole
-								     group; the date input inside gets its own date-specific label).
+								     input's browser-locale time half. The group's accessible name
+								     comes from a VISIBLE sibling <span> via aria-labelledby, NOT an
+								     aria-label on the wrapper (#205 F1 trap) — the date input inside
+								     keeps its own date-specific aria-label naming its PART.
 								     aria-invalid/describedby goes DOWN onto the real controls, where
 								     a screen reader actually announces it (#207 review F2). -->
-								<div
-									data-testid="event-create-datetime"
-									role="group"
-									aria-label={m.event_create_datetime_label()}
-									class="flex flex-wrap gap-2"
-								>
-									<input
-										type="date"
-										data-testid="event-create-datetime-date"
-										aria-label={m.time_select_date_label()}
-										aria-invalid={eventCreateInvalid('datetime')}
-										aria-describedby={eventCreateDescribedBy('datetime')}
-										value={eventCreateDate}
-										oninput={(e) => {
-											eventCreateDate = (e.currentTarget as HTMLInputElement).value;
-											clearEventCreateError();
-										}}
-										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									/>
-									<TimeSelect
-										prefix="event-create-datetime"
-										value={eventCreateTime}
-										invalid={eventCreateInvalid('datetime')}
-										describedBy={eventCreateDescribedBy('datetime')}
-										onchange={(v) => {
-											eventCreateTime = v;
-											clearEventCreateError();
-										}}
-									/>
+								<div class="flex flex-col gap-0.5">
+									<span id="event-create-start-label" class="text-xs text-ink-2">
+										{m.event_create_start_label()}
+									</span>
+									<div
+										data-testid="event-create-datetime"
+										role="group"
+										aria-labelledby="event-create-start-label"
+										class="flex flex-wrap gap-2"
+									>
+										<input
+											type="date"
+											data-testid="event-create-datetime-date"
+											aria-label={m.time_select_date_label()}
+											aria-invalid={eventCreateInvalid('datetime')}
+											aria-describedby={eventCreateDescribedBy('datetime')}
+											value={eventCreateDate}
+											oninput={(e) => {
+												eventCreateDate = (e.currentTarget as HTMLInputElement).value;
+												// #243 — the end date MIRRORS the start date until the viewer
+												// touches the end date directly (Done-when 4): the common
+												// same-day camp costs one interaction, not two.
+												if (!eventCreateEndTouched) eventCreateEndDate = eventCreateDate;
+												clearEventCreateError();
+											}}
+											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+										/>
+										<TimeSelect
+											prefix="event-create-datetime"
+											value={eventCreateTime}
+											invalid={eventCreateInvalid('datetime')}
+											describedBy={eventCreateDescribedBy('datetime')}
+											onchange={(v) => {
+												eventCreateTime = v;
+												clearEventCreateError();
+											}}
+										/>
+									</div>
 								</div>
-								
-								<div class="flex gap-2">
-									<input
-										type="number"
-										data-testid="event-create-duration"
-										aria-label={m.event_create_duration_label()}
-										placeholder={m.event_create_duration_placeholder()}
-										value={eventCreateDuration}
-										oninput={(e) =>
-											(eventCreateDuration = (e.currentTarget as HTMLInputElement).value)}
-										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									/>
-									<!-- #132/T4 review F5 — a visible hint, not an aria-label alone:
-									     this box sits beside a duration box that HAS one, so a sighted
-									     viewer otherwise reads one labelled number field next to an
-									     anonymous one. -->
-									<input
-										type="number"
-										data-testid="event-create-capacity"
-										aria-label={m.event_create_capacity_label()}
-										placeholder={m.event_create_capacity_placeholder()}
-										value={eventCreateCapacity}
-										oninput={(e) =>
-											(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
-										class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									/>
+
+								<!-- #243 — the end pair REPLACES the duration number input: nobody
+								     thinks of a camp as 2 880 minutes. duration_minutes is DERIVED
+								     on submit from two INDEPENDENT UTC conversions (DST-safe — see
+								     `eventCreateDerivedDuration`); a blank end TIME is exactly the
+								     "inherit from series" state the old blank number input meant. -->
+								<div class="flex flex-col gap-0.5">
+									<span id="event-create-end-label" class="text-xs text-ink-2">
+										{m.event_create_end_label()}
+									</span>
+									<div
+										data-testid="event-create-end"
+										role="group"
+										aria-labelledby="event-create-end-label"
+										class="flex flex-wrap gap-2"
+									>
+										<input
+											type="date"
+											data-testid="event-create-end-date"
+											aria-label={m.time_select_date_label()}
+											aria-invalid={eventCreateInvalid('end')}
+											aria-describedby={eventCreateDescribedBy('end')}
+											value={eventCreateEndDate}
+											oninput={(e) => {
+												eventCreateEndDate = (e.currentTarget as HTMLInputElement).value;
+												eventCreateEndTouched = true;
+												clearEventCreateError();
+											}}
+											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+										/>
+										<TimeSelect
+											prefix="event-create-end"
+											value={eventCreateEndTime}
+											invalid={eventCreateInvalid('end')}
+											describedBy={eventCreateDescribedBy('end')}
+											onchange={(v) => {
+												eventCreateEndTime = v;
+												clearEventCreateError();
+											}}
+										/>
+									</div>
 								</div>
 								{#if eventCreateSeriesDefaults && eventCreateSeriesDefaults.durationMinutes !== null}
 									<p data-testid="event-create-duration-inherited" class="text-xs text-ink-2">
@@ -7381,6 +7462,17 @@
 										})}
 									</p>
 								{/if}
+
+								<input
+									type="number"
+									data-testid="event-create-capacity"
+									aria-label={m.event_create_capacity_label()}
+									placeholder={m.event_create_capacity_placeholder()}
+									value={eventCreateCapacity}
+									oninput={(e) =>
+										(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+								/>
 
 								<input
 									type="text"

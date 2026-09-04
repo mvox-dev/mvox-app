@@ -1268,10 +1268,16 @@
 	// and the TimeSelect hour/minute keep their own pieces here, combined into
 	// the SAME `editDraft` 'YYYY-MM-DDTHH:MM' string (or '' while either part is
 	// missing) every existing reader (draftWireValue/isUnchanged) already
-	// expects — see `updateStartDatetimeDraft` below.
+	// expects — see `updateCompositeDraft` below.
 	let editDraftDate = $state('');
 	let editDraftTime = $state('');
 	let editErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
+	// #243 — duration_minutes' end editor can be refused for a REASON (end at
+	// or before start) distinct from a failed WRITE: this flag picks the
+	// `event_end_before_start` copy over the generic save-error copy in the
+	// SAME `event-edit-error-duration_minutes` slot (one testid, two possible
+	// messages). Cleared alongside `editErrors` whenever the pencil reopens.
+	let editRangeErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
 	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
 
 	// #105 TE.5 — focus management (WAI-ARIA edit-in-place). Plain (non-$state)
@@ -1474,8 +1480,25 @@
 		// a tap that beat the re-render (#104 review F1).
 		if (!detail || editWritePending[field]) return;
 		editErrors = { ...editErrors, [field]: false };
+		editRangeErrors = { ...editRangeErrors, [field]: false };
 		if (field === 'start_datetime') {
 			const seeded = toTallinnLocalInputValue(detail.startDatetime);
+			const [datePart, timePart] = seeded.split('T');
+			editDraftDate = datePart ?? '';
+			editDraftTime = timePart ?? '';
+			editDraft = seeded;
+		} else if (field === 'duration_minutes') {
+			// #243 (Done-when 6) — the editor is now an END composite, seeded with
+			// start + duration projected to the Tallinn wall clock: existing events
+			// carrying only a duration derive their end with no migration, no
+			// backfill. A timeless event (no parseable start) seeds '' — same
+			// posture as start_datetime's own empty seed.
+			const startMs = new Date(detail.startDatetime).getTime();
+			const seeded = Number.isNaN(startMs)
+				? ''
+				: toTallinnLocalInputValue(
+						new Date(startMs + detail.durationMinutes * 60_000).toISOString()
+					);
 			const [datePart, timePart] = seeded.split('T');
 			editDraftDate = datePart ?? '';
 			editDraftTime = timePart ?? '';
@@ -1486,11 +1509,15 @@
 		editingField = field;
 	}
 
-	/** #207 — the start_datetime composite's own onchange seam: the native date
-	 *  input and the TimeSelect each call this with their OWN new part plus the
-	 *  OTHER part unchanged, recombining into the same 'YYYY-MM-DDTHH:MM'
-	 *  `editDraft` every other function here already reads. */
-	function updateStartDatetimeDraft(datePart: string, timePart: string): void {
+	/** #207 — a date+time composite's own onchange seam: the native date input
+	 *  and the TimeSelect each call this with their OWN new part plus the OTHER
+	 *  part unchanged, recombining into the same 'YYYY-MM-DDTHH:MM' `editDraft`
+	 *  every other function here already reads. Field-NEUTRAL in name and in
+	 *  body (it touches only the shared draft state): #243 gave duration_minutes
+	 *  an END composite of the same shape, so both fields' four controls call
+	 *  this one function — a `start_datetime`-flavoured name would now be wrong
+	 *  at half the call sites. */
+	function updateCompositeDraft(datePart: string, timePart: string): void {
 		editDraftDate = datePart;
 		editDraftTime = timePart;
 		editDraft = datePart && timePart ? `${datePart}T${timePart}` : '';
@@ -1505,6 +1532,15 @@
 		const next = e.relatedTarget as Node | null;
 		if (next && wrapper.contains(next)) return;
 		confirmFieldEdit('start_datetime', false);
+	}
+
+	/** #243 — the same wrapper-focusout commit rule, for the duration_minutes
+	 *  END composite. */
+	function handleDurationEndFocusOut(e: FocusEvent): void {
+		const wrapper = e.currentTarget as HTMLElement;
+		const next = e.relatedTarget as Node | null;
+		if (next && wrapper.contains(next)) return;
+		confirmFieldEdit('duration_minutes', false);
 	}
 
 	/** Restores focus to the pencil button for `field`, once it has remounted
@@ -1566,13 +1602,33 @@
 			const iso = tallinnLocalToUtcIso(editDraft);
 			return iso === '' ? null : iso;
 		}
-		if (field === 'duration_minutes') {
-			if (editDraft.trim() === '') return null;
-			const n = Number(editDraft);
-			return Number.isFinite(n) && n >= 0 ? n : null;
-		}
+		// duration_minutes is handled separately by `draftDurationEndMinutesRaw`
+		// (#243) — its draft is now an END composite, not a raw number, and its
+		// confirm needs the RAW (possibly non-positive) minutes to tell "no
+		// change" from "an invalid range", which this generic null-or-value shape
+		// cannot express.
 		if (editDraft.trim() === '') return null;
 		return editDraft;
+	}
+
+	/** #243 — duration_minutes' own draft resolution: `editDraft` is the END
+	 *  composite's 'YYYY-MM-DDTHH:MM' Tallinn wall clock (same shape
+	 *  start_datetime's editor uses), not a raw number any more. `null` when
+	 *  there is nothing writable at all — an empty/partial composite, or no
+	 *  parseable `start_datetime` to derive against (the timeless-event guard).
+	 *  Otherwise the RAW elapsed minutes (possibly zero or negative — the
+	 *  caller decides what that means) from two INDEPENDENT UTC conversions:
+	 *  start read straight off `detail.startDatetime`, end converted the SAME
+	 *  way start_datetime's own editor does (`tallinnLocalToUtcIso`) — DST-safe,
+	 *  never wall-clock subtraction. */
+	function draftDurationEndMinutesRaw(): number | null {
+		if (!detail || editDraft.trim() === '') return null;
+		const endIso = tallinnLocalToUtcIso(editDraft);
+		if (endIso === '') return null;
+		const startMs = new Date(detail.startDatetime).getTime();
+		if (Number.isNaN(startMs)) return null;
+		const endMs = new Date(endIso).getTime();
+		return Math.round((endMs - startMs) / 60_000);
 	}
 
 	/** True when confirming would write back exactly what is displayed. Note
@@ -1617,6 +1673,43 @@
 	function confirmFieldEdit(field: EditableEventField, restoreFocus: boolean): void {
 		if (!selected || !detail || editingField !== field) return;
 		const before = fieldValue(detail, field);
+		// #243 — duration_minutes takes its own path: the derived RAW minutes
+		// (which may be zero or negative) decide between "no change" (cancel,
+		// silent), "an invalid range" (cancel, but SAY WHY — fail loudly, not a
+		// silent no-op) and "write it". Checking against `before` BEFORE the
+		// range check matters: an untouched pencil tap on a zero/unset-duration
+		// event seeds end === start, which is <= 0 but equal to `before` — that
+		// must cancel silently like every other idle tap, not surface a bogus
+		// refusal.
+		if (field === 'duration_minutes') {
+			const raw = draftDurationEndMinutesRaw();
+			if (raw === null || raw === before) {
+				cancelFieldEdit(field, restoreFocus);
+				return;
+			}
+			if (raw <= 0) {
+				cancelFieldEdit(field, restoreFocus);
+				editRangeErrors = { ...editRangeErrors, duration_minutes: true };
+				return;
+			}
+			editingField = null;
+			pendingFocusRestore[field] = restoreFocus;
+			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const evId = detail.id;
+			editWriteQueue.request(
+				field,
+				() =>
+					updateEventField(cfg, evId, field, raw, fetch).catch((e) => {
+						console.error('event detail: field edit failed', field, e);
+						throw e;
+					}),
+				{
+					apply: () => applyFieldLocally(field, raw),
+					rollback: () => applyFieldLocally(field, before)
+				}
+			);
+			return;
+		}
 		const value = draftWireValue(field);
 		if (value === null || isUnchanged(field, value, before)) {
 			cancelFieldEdit(field, restoreFocus);
@@ -1881,14 +1974,14 @@
 							value={editDraftDate}
 							use:focusOnMount
 							oninput={(e) =>
-								updateStartDatetimeDraft((e.currentTarget as HTMLInputElement).value, editDraftTime)}
+								updateCompositeDraft((e.currentTarget as HTMLInputElement).value, editDraftTime)}
 							onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
 						/>
 						<TimeSelect
 							prefix="event-edit-input-start_datetime"
 							value={editDraftTime}
 							onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
-							onchange={(v) => updateStartDatetimeDraft(editDraftDate, v)}
+							onchange={(v) => updateCompositeDraft(editDraftDate, v)}
 						/>
 					</div>
 				{:else if startAt}
@@ -1955,22 +2048,49 @@
 					</p>
 				{/if}
 
-				<!-- #104 TE.4 — duration_minutes: an unknown duration (0) still shows no
-				     "0 min" text (nothing to say), but a rights-holder gets the pencil
-				     regardless, so the duration can be SET inline from unset. -->
+				<!-- #243 — duration_minutes: the number input is GONE. The field keeps
+				     its duration_minutes IDENTITY (this testid, the wire, the queue key)
+				     but its editor is now an END composite — the SAME rule-5 shape as
+				     start_datetime, seeded with start + duration projected to the
+				     Tallinn wall clock (`beginFieldEdit`). Commit derives minutes from
+				     two INDEPENDENT UTC conversions (`draftDurationEndMinutesRaw`) and
+				     writes duration_minutes ONLY; start_datetime is never touched.
+
+				     `event_edit_duration_minutes_aria_label` names BOTH halves of this
+				     field ("Edit end and duration") on purpose — review #243 F1: the
+				     key labels the END composite here AND the pencil below, whose
+				     visible value is still the duration (`agenda_duration_min`, "90
+				     min"). An end-only label announced "Edit end, 90 min"; a
+				     duration-only one would label a control that asks for a date and a
+				     time. Teaching the DISPLAY surfaces to speak end/day-span (this
+				     line, `timeRange`, AgendaList) is a separate, PO-copy call —
+				     nothing here reads a multi-day span as anything but minutes. -->
 				{#if editingField === 'duration_minutes'}
-					<input
-						type="number"
-						min="0"
+					<div
 						data-testid="event-edit-input-duration_minutes"
+						role="group"
 						aria-label={m.event_edit_duration_minutes_aria_label()}
-						class="w-24 border-b border-ink bg-transparent text-ink-2"
-						value={editDraft}
-						use:focusOnMount
-						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('duration_minutes', false)}
-						onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
-					/>
+						class="flex flex-wrap items-center gap-2 text-ink-2"
+						onfocusout={handleDurationEndFocusOut}
+					>
+						<input
+							type="date"
+							data-testid="event-edit-input-duration_minutes-date"
+							aria-label={m.time_select_date_label()}
+							class="min-w-0 border-b border-ink bg-transparent text-ink-2"
+							value={editDraftDate}
+							use:focusOnMount
+							oninput={(e) =>
+								updateCompositeDraft((e.currentTarget as HTMLInputElement).value, editDraftTime)}
+							onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
+						/>
+						<TimeSelect
+							prefix="event-edit-input-duration_minutes"
+							value={editDraftTime}
+							onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
+							onchange={(v) => updateCompositeDraft(editDraftDate, v)}
+						/>
+					</div>
 				{:else if detail.durationMinutes > 0 || isEditor}
 					{#if isEditor}
 						<!-- #157 — whole-field tap target, see the `name` field above. -->
@@ -1998,7 +2118,13 @@
 						</p>
 					{/if}
 				{/if}
-				{#if editErrors.duration_minutes}
+				{#if editRangeErrors.duration_minutes}
+					<!-- #243 — end at or before start: a REASON, not the generic
+					     save-error copy (fail loudly with the actual cause). -->
+					<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
+						{m.event_end_before_start()}
+					</p>
+				{:else if editErrors.duration_minutes}
 					<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
 						{m.event_edit_save_error()}
 					</p>

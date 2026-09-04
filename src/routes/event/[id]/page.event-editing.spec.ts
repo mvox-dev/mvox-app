@@ -64,7 +64,31 @@
 //                                  commit. A PARTIAL composite (date without
 //                                  time or vice versa) reads as EMPTY — it
 //                                  must never produce a malformed string.
-//         duration_minutes       → <input type="number">
+//         duration_minutes       → #243: the number input is GONE. The field
+//                                  keeps its duration_minutes IDENTITY (testids,
+//                                  wire, eventFieldEdit.ts all unchanged) but
+//                                  its EDITOR is now an END composite — the
+//                                  same rule-5 shape as start_datetime, under
+//                                  this same testid on a wrapper: -date native
+//                                  input + TimeSelect -hour/-minute. SEEDED
+//                                  with start + duration projected to Tallinn
+//                                  wall clock (Done-when 6: existing events
+//                                  with only a duration derive their end — no
+//                                  migration, no backfill). Commit derives
+//                                  minutes = (utc(end) − utc(start)), each
+//                                  endpoint converted INDEPENDENTLY (DST-safe:
+//                                  real elapsed minutes, never wall-clock
+//                                  arithmetic), and writes duration_minutes
+//                                  ONLY — an end edit never touches
+//                                  start_datetime, and NO end prop of any
+//                                  spelling ever reaches the wire (schema
+//                                  settled on the issue: event =
+//                                  start_datetime + duration_minutes). An end
+//                                  at or before the start writes NOTHING and
+//                                  surfaces event_end_before_start in the
+//                                  existing event-edit-error-duration_minutes
+//                                  slot; a cleared end cancels (a literal 0
+//                                  would mask a series-inherited duration).
 //         description            → <textarea> (multiline)
 //       Every edit input carries its OWN accessible name (aria-label, the same
 //       per-field key the pencil uses): the pencil <button> is UNMOUNTED the
@@ -594,12 +618,47 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('2026-09-01T19:00');
 	});
 
-	it('duration_minutes → a number input seeded with the current minutes', async () => {
+	it('duration_minutes → #243: an END composite seeded with start + duration as Tallinn wall clock (19:00 + 90 min → 20:30, Done-when 6)', async () => {
 		const { container } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'duration_minutes');
-		expect(input.tagName).toBe('INPUT');
-		expect((input as HTMLInputElement).type).toBe('number');
-		expect(input.value).toBe('90');
+		const wrapper = await beginEdit(container, 'duration_minutes');
+		// The editor is the SAME composite shape as start_datetime — never a
+		// number input, never a hand-rolled second time control (Done-when 7).
+		expect(wrapper.tagName).not.toBe('INPUT');
+		const date = container.querySelector(
+			'[data-testid="event-edit-input-duration_minutes-date"]'
+		) as HTMLInputElement;
+		expect(date, 'native end date input (picker stays)').not.toBeNull();
+		expect(date.type).toBe('date');
+		const hour = container.querySelector(
+			'[data-testid="event-edit-input-duration_minutes-hour"]'
+		) as HTMLSelectElement;
+		const minute = container.querySelector(
+			'[data-testid="event-edit-input-duration_minutes-minute"]'
+		) as HTMLSelectElement;
+		expect(hour.tagName).toBe('SELECT');
+		expect(minute.tagName).toBe('SELECT');
+		expect(optionValues(hour).filter((v) => v !== '')).toEqual(HOURS_24);
+		expect(optionValues(minute).filter((v) => v !== '')).toEqual(MINUTES_5);
+		expect(
+			container.querySelector('[data-testid="event-edit-input-duration_minutes-ampm"]'),
+			'24h is the default mode'
+		).toBeNull();
+		// 2026-09-01T16:00Z (19:00 EEST) + 90 min → the END the header displays.
+		expect(readDateTime(container, 'event-edit-input-duration_minutes')).toBe('2026-09-01T20:30');
+	});
+
+	it('#243 seed round-trips across the October fall-back: start 10:00 EEST + 1800 min → end 2026-10-25T15:00 wall clock (not 16:00)', async () => {
+		const { container } = renderEditPage(
+			editorEvent({
+				start_datetime: [{ _id: 'val-start-1', datetime: '2026-10-24T07:00:00.000Z' }],
+				duration_minutes: [{ _id: 'val-dur-1', number: 1800 }]
+			})
+		);
+		await beginEdit(container, 'duration_minutes');
+		// 1800 REAL minutes from 2026-10-24T07:00Z is 2026-10-25T13:00Z, which the
+		// fallen-back clock (EET, UTC+2) reads as 15:00 — wall-clock arithmetic
+		// (10:00 + 30h = 16:00) would show the viewer an end an hour late.
+		expect(readDateTime(container, 'event-edit-input-duration_minutes')).toBe('2026-10-25T15:00');
 	});
 
 	it('location → a text input; description → a TEXTAREA (multiline), both seeded', async () => {
@@ -716,11 +775,12 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		expect(desc?.textContent).toContain('Doors at 18:30.');
 	});
 
-	it('duration_minutes: blur writes a NUMBER (120, not "120") and the duration line updates', async () => {
+	it('duration_minutes: #243 — committing an END of 21:00 writes a NUMBER (120, not "120"), duration_minutes ONLY, and the duration line updates', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'duration_minutes');
-		await fireEvent.input(input, { target: { value: '120' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'duration_minutes');
+		// 19:00 start, end moved 20:30 → 21:00 the same day = 120 minutes.
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-01', '21:00');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
@@ -732,6 +792,44 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 			expect(
 				container.querySelector('[data-testid="event-detail-duration"]')?.textContent
 			).toContain('120');
+		});
+		// WIRE DISCIPLINE (full shape of everything written): editing the end
+		// writes duration_minutes and NOTHING else — start_datetime untouched, no
+		// end prop of any spelling invented.
+		await new Promise((r) => setTimeout(r, 30));
+		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
+		expect(allProps).toEqual([{ type: 'duration_minutes', number: 120 }]);
+	});
+
+	it('#243 — a MULTI-DAY end across the October fall-back writes the real elapsed minutes: 10:00 EEST → next-day 15:00 EET = 1800, not 1740', async () => {
+		const { container, fetchStub } = renderEditPage(
+			editorEvent({
+				start_datetime: [{ _id: 'val-start-1', datetime: '2026-10-24T07:00:00.000Z' }]
+			})
+		);
+		await beginEdit(container, 'duration_minutes');
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-10-25', '15:00');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
+		await waitFor(() => {
+			const posts = editPosts(fetchStub);
+			expect(posts.length).toBeGreaterThan(0);
+			expect(postedProps(posts[0])).toEqual([{ type: 'duration_minutes', number: 1800 }]);
+		});
+	});
+
+	it('#243 — across the March spring-forward: 10:00 EET → next-day 15:00 EEST = 1680, not 1740', async () => {
+		const { container, fetchStub } = renderEditPage(
+			editorEvent({
+				start_datetime: [{ _id: 'val-start-1', datetime: '2026-03-28T08:00:00.000Z' }]
+			})
+		);
+		await beginEdit(container, 'duration_minutes');
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-03-29', '15:00');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
+		await waitFor(() => {
+			const posts = editPosts(fetchStub);
+			expect(posts.length).toBeGreaterThan(0);
+			expect(postedProps(posts[0])).toEqual([{ type: 'duration_minutes', number: 1680 }]);
 		});
 	});
 
@@ -947,11 +1045,20 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 		);
 	});
 
-	it('a CLEARED duration writes nothing — a literal 0 would MASK the series-inherited duration, not restore it', async () => {
+	it('#243 — a CLEARED end (date part emptied → partial composite) writes nothing: a literal 0 would MASK the series-inherited duration, not restore it', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'duration_minutes');
-		await fireEvent.input(input, { target: { value: '' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'duration_minutes');
+		await fireEvent.input(
+			container.querySelector('[data-testid="event-edit-input-duration_minutes-date"]')!,
+			{ target: { value: '' } }
+		);
+		expect(readDateTime(container, 'event-edit-input-duration_minutes')).toBe('');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-edit-input-duration_minutes"]')
+			).toBeNull();
+		});
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
 		expect(
@@ -959,14 +1066,96 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 		).toContain('90');
 	});
 
-	it('a NEGATIVE duration is refused — no minutes value below zero reaches the wire', async () => {
+	it('#243 — an UNCHANGED end commit writes nothing (the seeded projection is not a change): an idle pencil tap must not materialise anything', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
-		const input = await beginEdit(container, 'duration_minutes');
-		await fireEvent.input(input, { target: { value: '-30' } });
-		await fireEvent.blur(input);
+		await beginEdit(container, 'duration_minutes');
+		expect(readDateTime(container, 'event-edit-input-duration_minutes')).toBe('2026-09-01T20:30');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
-		expect((await beginEdit(container, 'duration_minutes')).getAttribute('min')).toBe('0');
+	});
+
+	it('#243 — Escape from inside the end composite reverts: editor closes, nothing written, the 90-minute display stands (#207 review F3 gesture placement)', async () => {
+		const { container, fetchStub } = renderEditPage(editorEvent());
+		await beginEdit(container, 'duration_minutes');
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-02', '15:00');
+		const date = container.querySelector(
+			'[data-testid="event-edit-input-duration_minutes-date"]'
+		) as HTMLInputElement;
+		await fireEvent.keyDown(date, { key: 'Escape' });
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-edit-input-duration_minutes"]')
+			).toBeNull();
+		});
+		expect(
+			container.querySelector('[data-testid="event-edit-btn-duration_minutes"]')
+		).not.toBeNull();
+		await new Promise((r) => setTimeout(r, 30));
+		expect(editPosts(fetchStub)).toEqual([]);
+		expect(
+			container.querySelector('[data-testid="event-detail-duration"]')?.textContent
+		).toContain('90');
+	});
+
+	it('#243 — an end AT the start writes nothing and says WHY: event_end_before_start in the existing error slot (fail loudly, not a silent no-op)', async () => {
+		const { container, fetchStub } = renderEditPage(editorEvent());
+		await beginEdit(container, 'duration_minutes');
+		// End == start (19:00 on the same day) — the rule is end <= start on
+		// DATETIMES; the date-flavoured copy of season/series/convert would be
+		// wrong here, hence the one new shared key.
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-01', '19:00');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-edit-error-duration_minutes"]')
+			).not.toBeNull();
+		});
+		expect(
+			container
+				.querySelector('[data-testid="event-edit-error-duration_minutes"]')
+				?.textContent?.trim()
+		).toBe('[event_end_before_start]');
+		await new Promise((r) => setTimeout(r, 30));
+		expect(editPosts(fetchStub)).toEqual([]);
+		// The display never budged.
+		expect(
+			container.querySelector('[data-testid="event-detail-duration"]')?.textContent
+		).toContain('90');
+	});
+
+	it('#243 — an end BEFORE the start (earlier same day) is refused identically, and reopening the pencil clears the range error', async () => {
+		const { container, fetchStub } = renderEditPage(editorEvent());
+		await beginEdit(container, 'duration_minutes');
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-01', '18:00');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-edit-error-duration_minutes"]')
+			).not.toBeNull();
+		});
+		expect(editPosts(fetchStub)).toEqual([]);
+
+		// Reopening clears the stale refusal — the next commit re-decides.
+		await beginEdit(container, 'duration_minutes');
+		expect(
+			container.querySelector('[data-testid="event-edit-error-duration_minutes"]')
+		).toBeNull();
+	});
+
+	it('#243 — a TIMELESS event (no start) has an inert end editor: it opens, commits nothing, never throws', async () => {
+		const { container, fetchStub } = renderEditPage(editorEvent({ start_datetime: undefined }));
+		await beginEdit(container, 'duration_minutes');
+		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-02', '15:00');
+		await commitDateTime(container, 'event-edit-input-duration_minutes');
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-edit-input-duration_minutes"]'),
+				'the editor must close, not strand the page in edit mode'
+			).toBeNull();
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		expect(editPosts(fetchStub)).toEqual([]);
 	});
 });
 

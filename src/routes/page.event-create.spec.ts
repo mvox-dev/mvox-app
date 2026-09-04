@@ -83,7 +83,25 @@
 //                                 TALLINN wall clock — converted to the UTC
 //                                 instant on submit (the event/[id] TE.4
 //                                 convention, exactly)
-//     event-create-duration       number input (minutes)
+//     event-create-end            #243 — the duration number input is GONE.
+//                                 In its place: an END composite under this
+//                                 wrapper testid — event-create-end-date
+//                                 (native <input type="date">, mirrors the
+//                                 start date until the viewer touches it) +
+//                                 -hour/-minute selects (TimeSelect, rule 5;
+//                                 -ampm in AM/PM preference mode). Named by a
+//                                 VISIBLE label (#239 idiom, Gama's on-issue
+//                                 addition): aria-labelledby → a visible span,
+//                                 NO aria-label on the wrapper. Submit derives
+//                                 duration_minutes = (utc(end) − utc(start))
+//                                 via the SAME two-pass Tallinn conversion,
+//                                 each endpoint INDEPENDENTLY — real elapsed
+//                                 minutes across a DST transition, never
+//                                 wall-clock arithmetic. Blank end time = no
+//                                 durationMinutes key at all (series
+//                                 inheritance preserved). The wire is
+//                                 UNCHANGED: only start_datetime +
+//                                 duration_minutes, no end prop exists.
 //     event-create-location       text input
 //     event-create-description    TEXTAREA (multiline)
 //     event-create-conductors-field  wrapper around the conductor <select>
@@ -268,7 +286,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { HOURS_24, MINUTES_5, fillDateTime, optionValues } from '$lib/testing/timeControls';
+import { HOURS_24, MINUTES_5, fillDateTime, fillTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
@@ -711,9 +729,23 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 		expect(optionValues(dtMinute).filter((v) => v !== '')).toEqual(MINUTES_5);
 		expect(q(container, 'event-create-datetime-ampm'), '24h is the default').toBeNull();
 
-		const duration = q(container, 'event-create-duration') as HTMLInputElement;
-		expect(duration).not.toBeNull();
-		expect(duration.type).toBe('number');
+		// #243 — the duration NUMBER INPUT is GONE: nobody thinks of a camp as
+		// 2880 minutes. It is replaced by an END composite (end date + end time)
+		// mirroring the start one; duration_minutes is COMPUTED on submit.
+		expect(q(container, 'event-create-duration'), '#243 removed the duration input').toBeNull();
+		const end = q(container, 'event-create-end') as HTMLElement;
+		expect(end, '#243: the end composite (event-create-end)').not.toBeNull();
+		expect(end.tagName).not.toBe('INPUT');
+		const endDate = q(container, 'event-create-end-date') as HTMLInputElement;
+		expect(endDate, 'native end date input (native pickers stay, #207 Option 1)').not.toBeNull();
+		expect(endDate.type).toBe('date');
+		const endHour = q(container, 'event-create-end-hour') as HTMLSelectElement;
+		const endMinute = q(container, 'event-create-end-minute') as HTMLSelectElement;
+		expect(endHour.tagName, 'end time is the shipped TimeSelect (rule 5)').toBe('SELECT');
+		expect(endMinute.tagName).toBe('SELECT');
+		expect(optionValues(endHour).filter((v) => v !== '')).toEqual(HOURS_24);
+		expect(optionValues(endMinute).filter((v) => v !== '')).toEqual(MINUTES_5);
+		expect(q(container, 'event-create-end-ampm'), '24h is the default').toBeNull();
 
 		const capacity = q(container, 'event-create-capacity') as HTMLInputElement;
 		expect(capacity).not.toBeNull();
@@ -923,17 +955,21 @@ describe('agenda — selecting a series keeps DESCRIPTIVE placeholders and shows
 		// …while the inputs themselves are untouched by the selection: the
 		// descriptive placeholders never leave, and no value is written.
 		const name = q(container, 'event-create-name') as HTMLInputElement;
-		const duration = q(container, 'event-create-duration') as HTMLInputElement;
 		const location = q(container, 'event-create-location') as HTMLInputElement;
 		const description = q(container, 'event-create-description') as HTMLTextAreaElement;
 		expect(name.placeholder).toBe('event_create_name_placeholder');
-		expect(duration.placeholder).toBe('event_create_duration_placeholder');
 		expect(location.placeholder).toBe('event_create_location_placeholder');
 		expect(description.placeholder).toBe('event_create_description_placeholder');
 		expect(name.value).toBe('');
-		expect(duration.value).toBe('');
 		expect(location.value).toBe('');
 		expect(description.value).toBe('');
+		// #243 — the duration input is gone; the inherited duration must NEVER be
+		// pre-filled into the END composite either (#208's rule: an inherited
+		// value is never copied into a value or a placeholder). The end time
+		// selects stay unpicked — a blank end time IS the "inherit from series"
+		// state on the wire (no durationMinutes key sent).
+		expect((q(container, 'event-create-end-hour') as HTMLSelectElement).value).toBe('');
+		expect((q(container, 'event-create-end-minute') as HTMLSelectElement).value).toBe('');
 
 		// The line is PLAIN TEXT, not a widget (PO native-controls rule): nothing
 		// interactive hides inside it.
@@ -1027,7 +1063,9 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		// 19:00 Europe/Tallinn on 18 Apr 2027 (EEST, UTC+3) = 16:00Z — the same
 		// wall-clock convention the event/[id] editor pins (TE.4).
 		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
-		await fill(container, 'event-create-duration', '120');
+		// #243 — the end pair replaces the duration input: same-day end at 21:00
+		// (the end DATE mirrors the start date untouched) → 120 computed minutes.
+		await fillTime(container, 'event-create-end', '21:00');
 		await fill(container, 'event-create-location', 'Estonia Hall');
 		await fill(container, 'event-create-description', 'Doors at 18:30');
 		await pickConductor(container, 'p-ada');
@@ -1095,7 +1133,9 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await chooseType(container, 'rehearsal');
 		await fillDateTime(container, 'event-create-datetime', '2026-09-07', '18:30');
 		await fill(container, 'event-create-name', 'Extra rehearsal');
-		await fill(container, 'event-create-duration', '45');
+		// #243 — a 45-minute override is now an END at 19:15 (end date mirrors the
+		// start date: the same-day case costs exactly one interaction, Done-when 4).
+		await fillTime(container, 'event-create-end', '19:15');
 		await submit(container);
 
 		await waitFor(() => {
@@ -1248,7 +1288,16 @@ describe('agenda — event create REFUSES an incomplete form before it writes (r
 		// wrapper alone was the partial assertion that let the regression pass.
 		const wrapper = q(container, 'event-create-datetime') as HTMLElement;
 		expect(wrapper.getAttribute('role')).toBe('group');
-		expect(wrapper.getAttribute('aria-label')).toBe('event_create_datetime_label');
+		// #243 (Gama's on-issue addition, binding): the start/end pair is named by
+		// VISIBLE labels in #239's idiom — a visible sibling <span> via
+		// aria-labelledby, NO aria-label on the group. This INVERTS the previous
+		// aria-label assertion deliberately.
+		expect(wrapper.getAttribute('aria-label')).toBeNull();
+		const startLabelledby = wrapper.getAttribute('aria-labelledby');
+		expect(startLabelledby, 'the start group is named by a visible label').toBeTruthy();
+		const startLabel = container.querySelector(`#${startLabelledby}`) as HTMLElement;
+		expect(startLabel).not.toBeNull();
+		expect(startLabel.textContent?.trim()).toBe('event_create_start_label');
 		for (const testid of [
 			'event-create-datetime-date',
 			'event-create-datetime-hour',
@@ -1458,9 +1507,6 @@ describe('agenda — every event-create field keeps a VISIBLE label (review F4 +
 		);
 		expect((q(container, 'event-create-location') as HTMLInputElement).placeholder).toBe(
 			'event_create_location_placeholder'
-		);
-		expect((q(container, 'event-create-duration') as HTMLInputElement).placeholder).toBe(
-			'event_create_duration_placeholder'
 		);
 		expect((q(container, 'event-create-description') as HTMLTextAreaElement).placeholder).toBe(
 			'event_create_description_placeholder'
@@ -1804,3 +1850,396 @@ describe('#220 — AM/PM preference on the event-created toast (and NOT on the w
 });
 
 // (*MVOX:Tallis* — #220 RED: ampm toast rendering + display-only wire guard)
+
+// ═════════════════════════════════════════════════════════════════════════════
+// #243 — multi-day events: start/end date+time entry instead of a duration
+//
+// "Nobody thinks of a camp as 2 880 minutes long; they think of it as running
+// from Saturday morning to Sunday afternoon." The duration NUMBER INPUT is
+// replaced by an END pair (native date input + TimeSelect); duration_minutes
+// is COMPUTED on submit and written EXACTLY as today — the wire shape, the
+// property names and eventDetail's read are all unchanged (Done-when 2; the
+// schema question is SETTLED on the issue: event = start_datetime +
+// duration_minutes, NO end field — do not re-open).
+//
+// Derivation contract (SPIKE-settled): convert start-local and end-local
+// INDEPENDENTLY to UTC instants via the existing two-pass Tallinn helper,
+// subtract, divide by 60 000. Naive wall-clock arithmetic is WRONG across a
+// DST transition — the fixtures below pin the exact real-minutes numbers on
+// both 2026 transitions (Europe/Tallinn: spring-forward 2026-03-29,
+// fall-back 2026-10-25).
+//
+// Same-day mechanism (Done-when 4, engineering pick STATED): the end date
+// MIRRORS the start date until the viewer touches the end date input — the
+// common same-day case costs exactly one interaction (pick the end time),
+// the multi-day case exactly one extra date pick.
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe('#243 — visible labels on the start/end pair (Gama on-issue addition, #239 idiom)', () => {
+	it('the END group: role="group", named by a VISIBLE label via aria-labelledby, NO aria-label on the wrapper; inner per-control labels name the parts', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+
+		const end = q(container, 'event-create-end') as HTMLElement;
+		expect(end.getAttribute('role')).toBe('group');
+		expect(end.getAttribute('aria-label'), 'no aria-label on the group — #205 F1 trap').toBeNull();
+		const labelledby = end.getAttribute('aria-labelledby');
+		expect(labelledby, 'named by a visible label').toBeTruthy();
+		const label = container.querySelector(`#${labelledby}`) as HTMLElement;
+		expect(label, 'the aria-labelledby target exists').not.toBeNull();
+		expect(label.textContent?.trim()).toBe('event_create_end_label');
+		// VISIBLE — not an sr-only crutch: the whole point of Gama's addition.
+		expect(label.classList.contains('sr-only')).toBe(false);
+		// The inner date input names its PART (the #239 shape: parts name the
+		// parts, the visible label names the whole).
+		expect(
+			(q(container, 'event-create-end-date') as HTMLElement).getAttribute('aria-label')
+		).toBe('time_select_date_label');
+	});
+
+	it('the START group flips to the same idiom: visible label, no aria-label', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+
+		const start = q(container, 'event-create-datetime') as HTMLElement;
+		expect(start.getAttribute('role')).toBe('group');
+		expect(start.getAttribute('aria-label')).toBeNull();
+		const labelledby = start.getAttribute('aria-labelledby');
+		expect(labelledby).toBeTruthy();
+		const label = container.querySelector(`#${labelledby}`) as HTMLElement;
+		expect(label).not.toBeNull();
+		expect(label.textContent?.trim()).toBe('event_create_start_label');
+		expect(label.classList.contains('sr-only')).toBe(false);
+	});
+});
+
+describe('#243 — the end date MIRRORS the start date until touched (Done-when 4)', () => {
+	it('filling/changing the start date writes the end date too — until the viewer touches the end date, after which it stays put', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+
+		const endDate = q(container, 'event-create-end-date') as HTMLInputElement;
+		await fill(container, 'event-create-datetime-date', '2027-04-18');
+		expect(endDate.value, 'end date mirrors the start date').toBe('2027-04-18');
+
+		await fill(container, 'event-create-datetime-date', '2027-04-19');
+		expect(endDate.value, 'the mirror keeps following').toBe('2027-04-19');
+
+		// The viewer touches the end date — the mirror latches OFF.
+		await fill(container, 'event-create-end-date', '2027-04-20');
+		await fill(container, 'event-create-datetime-date', '2027-04-21');
+		expect(endDate.value, 'a touched end date is never silently overwritten').toBe('2027-04-20');
+	});
+
+	it('cancel + reopen re-arms the mirror (the latch resets with the rest of the form)', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await fill(container, 'event-create-end-date', '2027-04-20');
+		await fireEvent.click(q(container, 'event-create-cancel') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-create-form')).toBeNull();
+		});
+
+		await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-create-form')).not.toBeNull();
+		});
+		expect((q(container, 'event-create-end-date') as HTMLInputElement).value).toBe('');
+		await fill(container, 'event-create-datetime-date', '2027-05-01');
+		expect((q(container, 'event-create-end-date') as HTMLInputElement).value).toBe('2027-05-01');
+	});
+});
+
+describe('#243 — duration_minutes is DERIVED, DST-safe (two independent UTC conversions)', () => {
+	/** Standard standalone preamble: season + type + name. */
+	async function standaloneReady(container: HTMLElement): Promise<void> {
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-season', SEASON_ID);
+		await chooseType(container, 'concert');
+		await fill(container, 'event-create-name', 'Autumn camp');
+	}
+
+	it('October FALL-BACK camp: 2026-10-24 10:00 → 2026-10-25 15:00 = 1800 real minutes (naive wall-clock says 1740) — FULL wire shape, and NO end prop of any spelling', async () => {
+		const container = await renderReady();
+		await standaloneReady(container);
+		await fillDateTime(container, 'event-create-datetime', '2026-10-24', '10:00');
+		await fill(container, 'event-create-end-date', '2026-10-25');
+		await fillTime(container, 'event-create-end', '15:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		// 10:00 EEST (UTC+3) = 07:00Z; the clock falls back 04:00→03:00 on
+		// 2026-10-25, so the span holds a 25-hour day: 30h elapsed = 1800 min.
+		expect(lastCreateInput()).toEqual({
+			name: 'Autumn camp',
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'concert',
+			startDatetime: '2026-10-24T07:00:00.000Z',
+			durationMinutes: 1800
+		});
+		// The wire NEVER grows an end property under any name — duration is the
+		// stored fact, end is a projection (settled on the issue).
+		expect(Object.keys(lastCreateInput()).filter((k) => /end/i.test(k))).toEqual([]);
+	});
+
+	it('March SPRING-FORWARD camp: 2026-03-28 10:00 → 2026-03-29 15:00 = 1680 real minutes (naive says 1740)', async () => {
+		const container = await renderReady();
+		await standaloneReady(container);
+		await fillDateTime(container, 'event-create-datetime', '2026-03-28', '10:00');
+		await fill(container, 'event-create-end-date', '2026-03-29');
+		await fillTime(container, 'event-create-end', '15:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		// 10:00 EET (UTC+2) = 08:00Z; 03:00→04:00 skips an hour on 2026-03-29:
+		// 29h wall-clock span = 28h elapsed = 1680 min.
+		expect(lastCreateInput()).toEqual({
+			name: 'Autumn camp',
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'concert',
+			startDatetime: '2026-03-28T08:00:00.000Z',
+			durationMinutes: 1680
+		});
+	});
+
+	it('the 25-HOUR DAY itself: 2026-10-25 00:00 → 2026-10-26 00:00 = 1500 min, exactly', async () => {
+		const container = await renderReady();
+		await standaloneReady(container);
+		await fillDateTime(container, 'event-create-datetime', '2026-10-25', '00:00');
+		await fill(container, 'event-create-end-date', '2026-10-26');
+		await fillTime(container, 'event-create-end', '00:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		// Midnight EEST 2026-10-25 = 2026-10-24T21:00Z; midnight EET 2026-10-26 =
+		// 2026-10-25T22:00Z → 25h = 1500 min. A wall-clock subtraction says 1440.
+		expect(lastCreateInput()).toEqual({
+			name: 'Autumn camp',
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'concert',
+			startDatetime: '2026-10-24T21:00:00.000Z',
+			durationMinutes: 1500
+		});
+	});
+
+	it('a BLANK end time sends NO durationMinutes key at all — the optionality that carries series inheritance survives (full shape, phantom-key scan)', async () => {
+		const container = await renderReady();
+		await standaloneReady(container);
+		// Start fully set; the end DATE is mirrored, but no end TIME is picked —
+		// exactly the "no own duration" state the old blank number input meant.
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		expect(lastCreateInput()).toEqual({
+			name: 'Autumn camp',
+			dbEntityId: ORG_EFK,
+			extraParentIds: [SEASON_ID],
+			eventType: 'concert',
+			startDatetime: '2027-04-18T16:00:00.000Z'
+		});
+		expect(Object.keys(lastCreateInput()).filter((k) => /end|duration/i.test(k))).toEqual([]);
+	});
+});
+
+describe('#243 — an end at or before the start is refused BEFORE any write (Done-when 5)', () => {
+	// Copy note (SPIKE-settled): the three existing end-before-start keys
+	// (season_date_range_invalid / series_create_until_before_from /
+	// event_convert_end_before_start) all speak of DATES and all sit behind a
+	// strict `<` — they PERMIT equality. #243 rejects `end <= start` on
+	// DATETIMES, so reusing any of them would tell a viewer who set end == start
+	// that her end "cannot be before the start date" — an actively wrong
+	// message. ONE new surface-neutral key, `event_end_before_start`, in the
+	// same phrasing family (Done-when 5's "reuse that copy pattern"), shared by
+	// the create form and the detail editor. No other new error keys.
+	async function readySameDay(container: HTMLElement): Promise<void> {
+		await openFormFromPanel(container);
+		await selectValue(container, 'event-create-season', SEASON_ID);
+		await chooseType(container, 'concert');
+		await fill(container, 'event-create-name', 'Inverted event');
+		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
+	}
+
+	it('end time EARLIER the same day: refused with event_end_before_start, createEvent never called, the end controls carry aria-invalid + aria-describedby', async () => {
+		const container = await renderReady();
+		await readySameDay(container);
+		await fillTime(container, 'event-create-end', '18:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-error')).not.toBeNull();
+		});
+		expect(q(container, 'event-create-error')?.textContent?.trim()).toBe(
+			'event_end_before_start'
+		);
+		expect(q(container, 'event-create-error')?.getAttribute('role')).toBe('alert');
+		expect(createEventMock).not.toHaveBeenCalled();
+		expect(q(container, 'event-create-form')).not.toBeNull();
+		// #207 review F2 — the wiring lives on the real controls, not the group.
+		for (const testid of [
+			'event-create-end-date',
+			'event-create-end-hour',
+			'event-create-end-minute'
+		]) {
+			const control = q(container, testid) as HTMLElement;
+			expect(control.getAttribute('aria-invalid'), testid).toBe('true');
+			expect(control.getAttribute('aria-describedby'), testid).toBe('event-create-error');
+		}
+	});
+
+	it('end EQUAL to start: refused too — the rule is end <= start on DATETIMES, which is why the date-flavoured copy could not be reused', async () => {
+		const container = await renderReady();
+		await readySameDay(container);
+		await fillTime(container, 'event-create-end', '19:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-error')).not.toBeNull();
+		});
+		expect(q(container, 'event-create-error')?.textContent?.trim()).toBe(
+			'event_end_before_start'
+		);
+		expect(createEventMock).not.toHaveBeenCalled();
+	});
+
+	it('end DATE before the start date (a touched mirror the viewer then out-ran): refused, loud — never a silent fix-up of the end date', async () => {
+		const container = await renderReady();
+		await readySameDay(container);
+		await fill(container, 'event-create-end-date', '2027-04-17');
+		await fillTime(container, 'event-create-end', '20:00');
+		await submit(container);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-error')).not.toBeNull();
+		});
+		expect(q(container, 'event-create-error')?.textContent?.trim()).toBe(
+			'event_end_before_start'
+		);
+		expect(createEventMock).not.toHaveBeenCalled();
+	});
+
+	it('the refusal is not sticky: editing the end time clears it, and the corrected submit writes', async () => {
+		const container = await renderReady();
+		await readySameDay(container);
+		await fillTime(container, 'event-create-end', '18:00');
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'event-create-error')).not.toBeNull();
+		});
+
+		await fillTime(container, 'event-create-end', '21:00');
+		expect(q(container, 'event-create-error')).toBeNull();
+		await submit(container);
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		expect(lastCreateInput().durationMinutes).toBe(120);
+	});
+});
+
+describe('#243 — the end time honours the AM/PM preference (rule 5, shipped TimeSelect)', () => {
+	it("'ampm': the end composite grows its -ampm select; 7:00 PM → 9:00 PM writes durationMinutes 120 on an unchanged wire", async () => {
+		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
+		timeFormatStore.set('ampm');
+		try {
+			const container = await renderReady();
+			await openFormFromPanel(container);
+			await selectValue(container, 'event-create-season', SEASON_ID);
+			await chooseType(container, 'concert');
+			await fill(container, 'event-create-name', 'Spring concert');
+			await fillDateTimeAmpm(container, 'event-create-datetime', '2027-04-18', '7', '00', 'PM');
+			// The end composite is the SAME TimeSelect — the preference applies to
+			// both ends automatically (Done-when 7), no hand-rolled second control.
+			expect(q(container, 'event-create-end-ampm'), 'end TimeSelect in ampm mode').not.toBeNull();
+			await fireEvent.change(q(container, 'event-create-end-hour') as HTMLElement, {
+				target: { value: '9' }
+			});
+			await fireEvent.change(q(container, 'event-create-end-minute') as HTMLElement, {
+				target: { value: '00' }
+			});
+			await fireEvent.change(q(container, 'event-create-end-ampm') as HTMLElement, {
+				target: { value: 'PM' }
+			});
+			await submit(container);
+
+			await waitFor(() => {
+				expect(createEventMock).toHaveBeenCalledTimes(1);
+			});
+			expect(createEventMock).toHaveBeenCalledWith(CFG, {
+				name: 'Spring concert',
+				dbEntityId: ORG_EFK,
+				extraParentIds: [SEASON_ID],
+				eventType: 'concert',
+				startDatetime: '2027-04-18T16:00:00.000Z',
+				durationMinutes: 120
+			});
+		} finally {
+			timeFormatStore.set('24h');
+		}
+	});
+});
+
+// ── #243: the new keys exist in ALL FOUR locales (the render mock above hides
+//    a missing key, so the message FILES are pinned directly — same guard
+//    family as the #208 block) ─────────────────────────────────────────────────
+
+describe('#243 — locale coverage for the start/end labels and the range error', () => {
+	function messages(locale: string): Record<string, string> {
+		return JSON.parse(
+			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as Record<string, string>;
+	}
+
+	it('event_create_start_label / event_create_end_label / event_end_before_start exist in en/et/lv/uk and are non-empty', () => {
+		for (const locale of ['en', 'et', 'lv', 'uk']) {
+			for (const key of [
+				'event_create_start_label',
+				'event_create_end_label',
+				'event_end_before_start'
+			]) {
+				const msg = messages(locale)[key];
+				expect(msg, `${locale}.json is missing ${key}`).toBeDefined();
+				expect(msg, `${locale}.json ${key} is empty`).toMatch(/\S/);
+			}
+		}
+	});
+
+	it('the detail editor’s field name follows the field: event_edit_duration_minutes_aria_label no longer says "Edit duration" (the KEY stays — a rename would break the derived-key a11y suite)', () => {
+		// SPIKE-settled: the detail page keeps its sr-only/aria-label idiom
+		// (Gama's visible-label addition names the CREATE form only), but the
+		// editor it names is now the END composite — "Edit duration" would label
+		// a control that asks for a date and a time. Copy is Comenius's; this
+		// only pins that the OLD wording is gone in the two ruled locales.
+		expect(messages('en')['event_edit_duration_minutes_aria_label']).not.toBe('Edit duration');
+		expect(messages('et')['event_edit_duration_minutes_aria_label']).not.toBe('Muuda kestust');
+	});
+
+	it('event_end_before_start is its OWN copy, not a byte-copy of the date-flavoured keys it deliberately does not reuse', () => {
+		// The predicate differs (datetimes, equality rejected) — a pasted date
+		// message would be wrong for end == start. Same phrasing FAMILY is fine;
+		// identical bytes to a date key is the copy-paste this guards against.
+		for (const locale of ['en', 'et']) {
+			const msgs = messages(locale);
+			expect(msgs['event_end_before_start']).not.toBe(msgs['season_date_range_invalid']);
+			expect(msgs['event_end_before_start']).not.toBe(msgs['series_create_until_before_from']);
+			expect(msgs['event_end_before_start']).not.toBe(msgs['event_convert_end_before_start']);
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #243 RED: end date+time pair replaces the duration input;
+// visible start/end labels (#239 idiom, Gama's binding addition); same-day
+// mirror; DST-safe two-endpoint derivation with exact fall-back/spring-forward
+// minutes; end<=start refusal on one new shared key; blank end = inheritance
+// preserved; wire discipline — no end prop of any spelling)
