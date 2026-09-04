@@ -1,0 +1,353 @@
+{
+  "summary": "Pre-RED verification for pilot fixes #238, #239-241 pack, #243",
+  "agentCount": 3,
+  "logs": [],
+  "result": {
+    "verify": [
+      {
+        "key": "238",
+        "claims": [
+          {
+            "claim": "Repo guard: workspace-app origin ends mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; HEAD=1fedb0d6...; branch main"
+          },
+          {
+            "claim": "Header row shape post-#236 at +page.svelte:5636-5720: h2 label, trashcan button, gear at :5762 (issue cites :5762 for gear span)",
+            "verdict": "DRIFTED",
+            "evidence": "h2 is :5636-5642 with id=season-manage-label, data-testid=season-manage-label, class font-display text-lg text-ink, text {m.season_manage_gear_label()}. Trashcan button (unarmed state) is :5710-5720 with class '...text-red-700 hover:text-red-800' and <span aria-hidden=\"true\">🗑</span> at :5719 (issue's :5710-5720 range is exact). Gear's own <span aria-hidden=\"true\">⚙</span> is at :5762 (issue's cited line matches exactly), gear button spans :5748-5763."
+          },
+          {
+            "claim": "seasonManageDeleteName derivation (+page.svelte:2435-2439) is non-panel-gated and correct when panel never opened, with zero extra fetch",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte:2435-2439: `const seasonManageDeleteName = $derived(seasonManageFieldsLoaded ? seasonManageName : (seasons.find((s) => s.id === manageableSeasonId)?.name ?? ''))`. Falls back to the already-fetched `seasons` array (loadForSelected), no new fetch call. Comment block :2426-2434 explicitly states this rationale."
+          },
+          {
+            "claim": "What seasonManageDeleteName yields when no manageable season name exists",
+            "verdict": "CONFIRMED",
+            "evidence": "It yields empty string '' (via `?? ''` at :2438), never null/undefined. However this branch only fires when `manageableSeasonId` fails to match any entry in the `seasons` array (a stale/desynced-id edge case) — the ordinary 'no manageable season' case never reaches this code path because the entire header row (h2 + trashcan) is gated by `showSeasonManageGear` (+page.svelte:2359-2361: `manageableSeasonId !== null && manageableSeasonRights === 'editor'`), so whenever the row renders, manageableSeasonId is non-null and normally present in `seasons`."
+          },
+          {
+            "claim": "Both the gear's aria-labelledby and the panel's aria-labelledby resolve to season-manage-label today",
+            "verdict": "CONFIRMED",
+            "evidence": "Gear: +page.svelte:5753 `aria-labelledby=\"season-manage-label\"`. Panel: +page.svelte:5807 `aria-labelledby=\"season-manage-label\"` (panel opens at :5803 with id=\"season-manage-panel\"). Both point at the same h2 (:5637)."
+          },
+          {
+            "claim": "Specs pin the gear's computed accessible name = 'Manage season' (season_manage_gear_label) via aria-labelledby, asserting NO separate aria-label — these will need inverting under #238",
+            "verdict": "CONFIRMED",
+            "evidence": "page.season-manage.spec.ts:469-489 asserts gear.getAttribute('aria-labelledby') resolves to season-manage-label whose textContent is 'season_manage_gear_label', and `expect(gear.hasAttribute('aria-label')).toBe(false)`. page.agenda-admin.spec.ts:1008-1025 same pattern plus `getByRole('button', {name: 'season_manage_gear_label'})`. Panel: page.season-manage.spec.ts:545-566 asserts panel aria-labelledby -> season-manage-label with that same key text, and hasAttribute('aria-label') is false. page.agenda-admin.spec.ts:980-1006 asserts label.textContent.trim() === 'season_manage_gear_label' and label.tagName === 'H2'. page.season-manage.spec.ts:574-587 asserts the phrase 'season_manage_gear_label' occurs exactly ONCE in the open-panel DOM. All of these directly contradict #238's target shape (h2 text -> season name, gear gets own aria-label) and are the specs that must flip."
+          },
+          {
+            "claim": "season-edit-btn-name / season-manage-name panel editor location and shape (+page.svelte:5866)",
+            "verdict": "CONFIRMED",
+            "evidence": "Button data-testid=season-edit-btn-name at :5857, value span data-testid=\"season-manage-name\" at :5866 rendering {seasonManageName} (not the delete-name fallback derivation). No spec asserts h2 text equals season_manage_gear_label as a *requirement outside* the ones listed above that must change; those ARE the specs asserting exactly that equality and will need updating to assert h2 text equals the season name instead."
+          },
+          {
+            "claim": "No existing SVG icon *component* precedent under src/lib/components/ to model the trashcan on; two other in-repo SVG patterns exist",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/components/ contains flat PascalCase.svelte files (DeskSurface.svelte, LanguageSelector.svelte, TimeSelect.svelte) and feature subdirs (admin/, agenda/, attendance/, auth/, nav/, profile/) but no icons/ dir and no dedicated icon component. Two ad-hoc SVG patterns exist instead: (1) src/lib/nav/entries.ts:17-27 defines raw SVG markup strings (stroke=\"currentColor\", viewBox 24x24, lucide/feather style) injected via `{@html entry.icon}` inside `<span class=\"nav-icon\" aria-hidden=\"true\">` in src/lib/components/nav/NavShell.svelte:139; (2) inline `<svg>` markup directly in templates, e.g. src/routes/roster/+page.svelte:2982-2990, 3062-3064, 3078-3080, using `fill-current`/`aria-hidden=\"true\"`, viewBox 16x16, no separate component. Neither is a reusable Svelte icon component, so #238's ask (a new small reusable component under src/lib/components/) has no direct precedent to copy verbatim; naming/dir convention is at engineering's discretion as the issue itself says."
+          },
+          {
+            "claim": "No spec asserts the trashcan's or gear's literal glyph/emoji content — only comments reference 🗑/⚙",
+            "verdict": "CONFIRMED",
+            "evidence": "grep for '🗑' and '⚙' across src/routes/*.spec.ts: all hits are in `it(...)` description strings or `//` comments (page.agenda-admin.spec.ts:1908,1919; page.season-manage.spec.ts:8,34,468,545,1307,1434), none are `expect(...)` assertions on textContent/innerHTML matching the emoji character. Touch-target and roving-focus specs (page.agenda-admin.spec.ts:1907-1923, 2170-2233) key off `data-testid` and CSS classes (min-h-11/min-w-11), not glyph content, so swapping emoji->SVG is safe for those."
+          }
+        ],
+        "risks": [
+          "Findings are current-main-only (commit 1fedb0d6); tree may move under a live team, so line numbers should be re-verified at implementation time.",
+          "The 'exactly ONE occurrence of season_manage_gear_label' spec (page.season-manage.spec.ts:574-587) and the accname specs will all need edits alongside the +page.svelte change — this is implementation-affecting, not just informational.",
+          "Did not exhaustively grep every *.spec.ts in the repo (only src/routes/*.spec.ts matched by testid/copy-key search) — a broader sweep (e.g. e2e/Playwright specs) was not run; if such specs exist and assert header copy or glyph, they were not checked.",
+          "seasonManageDeleteName's '' fallback edge case (manageableSeasonId present but absent from seasons array) was reasoned from code shape, not exercised live/in a test — flagging as a theoretical edge worth a defensive look during implementation, not a confirmed live bug."
+        ],
+        "notes": "Repo guard passed (mvox-app.git, main @ 1fedb0d6). Issue #238 body read via `gh issue view 238` (0 comments, author Gama). All six numbered questions verified directly against current main +page.svelte and the three matching spec files (page.season-manage.spec.ts, page.agenda-admin.spec.ts, page.season-manage-delete.spec.ts). Key actionable finding beyond the issue's own text: several existing specs currently assert the INVERSE of #238's target aria shape (gear has no aria-label, panel/gear label text equals the gear-label copy, occurs exactly once) — these are enumerated with line numbers above and will need corresponding edits when #238 is implemented, not just the +page.svelte change. No SVG icon *component* precedent exists yet in src/lib/components/; two different raw-SVG patterns exist (nav/entries.ts string+{@html}, and inline <svg> in roster/+page.svelte) that could inform but not dictate the new component's shape/location."
+      },
+      {
+        "key": "239-241",
+        "claims": [
+          {
+            "claim": "Repo guard: workspace-app origin ends mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; HEAD 1fedb0d6 on main, matches '1fedb0d' cited by orchestrator (tree may have moved since, this is the observed commit)"
+          },
+          {
+            "claim": "Issues #239/#240/#241 all have zero comments, bodies are authoritative",
+            "verdict": "CONFIRMED",
+            "evidence": "gh issue view --json comments returned [] for all three"
+          },
+          {
+            "claim": "Form field structure matches #239's table: 9 of 11 controls lack a visible label (aria-label + placeholder only or aria-label only on selects); Type (6142) and Generate (6304) are the only two with a wrapping visible <label>",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte:6118-6313 read directly — name 6120 (aria-label+placeholder), type 6137-6158 (wrapping <label>+<span>), duration 6161, location 6176, description 6186 (aria-label+placeholder), repeat 6200 (aria-label only, select), day 6217 (aria-label only, select), time group 6253-6270 (role=group aria-label + per-select aria-labels), from 6275, until 6289 (aria-label only), generate 6303-6313 (wrapping <label>). Line numbers are 1-14 lines higher than the issue's cited numbers (drift from work landed after the issue was filed) but field-for-field content matches exactly."
+          },
+          {
+            "claim": "No <fieldset>/<legend> precedent exists anywhere in the repo",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -rn '<fieldset|<legend>' src/ returned zero hits — #239's fieldset/legend grouping will be the FIRST use of these elements in the codebase, not a reuse of an existing idiom. Flag for whoever implements: no local pattern to copy, follow the issue's own spec literally."
+          },
+          {
+            "claim": "All 9 field-label i18n keys #239 needs already exist in all four locales",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/en.json contains series_create_name_label, _duration_label, _location_label, _description_label, _repeat_label, _day_label, _time_label, _from_label, _until_label — all present (grep on messages/en.json). Group-heading keys (4 new ones per #239 point 2) do NOT exist yet — confirmed absent from the same grep; must be added in all 4 locales."
+          },
+          {
+            "claim": "#240: seriesCreateGenerate gates exactly the 5 derived values the issue cites, plus the two submit paths at 5083 and 5265/5269, plus the day-validation at 5074",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte: state decl 4386; early-returns at 4710 (seriesCreatePreviewDates) and 4734 (seriesCreateCandidateDates); seriesCreateGridDates (4756) and seriesCreateNothingToSubmit (4776) derive from those two so are correctly described as gated transitively, not by their own `if`; seriesCreateMonthGroups (4801) same. Submit: day-validation 5074, generate-branch 5083, OFF-close-out branch 5098-5108, dbChanged/recordStop guard 5265, OFF full-close 5269 — all match the issue's line citations almost exactly (±1-2 lines)."
+          },
+          {
+            "claim": "#240's cited consumer list is INCOMPLETE: two more `seriesCreateGenerate` reads exist that the issue does not mention and must also be removed for 'seriesCreateGenerate is removed as state' to hold",
+            "verdict": "CONFIRMED",
+            "evidence": "(1) +page.svelte:4959 `restoreSeriesCreateRun()` sets `seriesCreateGenerate = true` when re-opening a resumed run ('a resume record only ever exists for a GENERATING run') — this assignment becomes dead/must be deleted, and the comment at 4957-4958 needs revision since generation is now always true. (2) +page.svelte:5220-5225 compute `startDate`/`endDate` for the series POST via `seriesCreateGenerate && dates.length > 0 ? ... : seriesCreateFrom/Until` — with the OFF branch gone this collapses to plain `dates.length > 0 ? ... : seriesCreateFrom/Until` (the ELSE arm becomes effectively unreachable once dates.length===0 always throws series_create_no_dates first, but the ternary structure itself still needs the `seriesCreateGenerate &&` term stripped). Also +page.svelte:4860 resets `seriesCreateGenerate = false` in `openSeriesCreateForm` — dead once the var is gone. Recommend flagging these three sites explicitly to the implementer rather than relying on a naive grep-and-delete of only the issue's cited lines."
+          },
+          {
+            "claim": "#240's checkbox markup at +page.svelte:6303-6313 matches the issue exactly, keyed off `series_create_generate_label`",
+            "verdict": "CONFIRMED",
+            "evidence": "Read directly: <label> wrapping <input type=checkbox data-testid=series-create-generate checked={seriesCreateGenerate} onchange=...> then {m.series_create_generate_label()}"
+          },
+          {
+            "claim": "#241: no cap exists anywhere in the pipeline (generateEventDates, seriesCreateCandidateDates, seriesCreateMonthGroups, or the template)",
+            "verdict": "CONFIRMED",
+            "evidence": "recurrence.ts:100-141 generateEventDates has no length limit in either the daily or weekly/biweekly branch; +page.svelte:4801-4814 seriesCreateMonthGroups groups the FULL seriesCreateGridDates with no slice; template 6340-6371 {#each seriesCreateMonthGroups as group} renders every group/date with no cap. Comment at 6316-6321 explicitly records the #215 'no inner scroll, full flat grid' ruling that #241 revises."
+          },
+          {
+            "claim": "#241's count line (series-create-preview-count) already sources the single full total (`seriesCreatePreviewDates.length`) that the show-all-N button must reuse",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte:6330-6337 — count line uses seriesCreatePreviewDates.length (the skip-applied set), matching the issue's 'N is the same total the count line already computes' instruction. NOTE: seriesCreatePreviewDates (skip-applied) differs from seriesCreateCandidateDates/seriesCreateGridDates (all candidates, pre-skip) which is what the GRID renders — the cap/reveal logic must be built on seriesCreateGridDates (the rendered set) while N for the 'show all N' label reads seriesCreatePreviewDates.length per the issue's explicit instruction. These are two different arrays; conflating them would double-count or mis-count skipped dates."
+          },
+          {
+            "claim": "No i18n keys exist yet for #241's 'show next 50' / 'show all N' controls, and no reusable pagination/show-more key pattern exists elsewhere in the repo",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -io on messages/en.json for show/more/next/all-ish keys found only unrelated hits (admin_invite_show_once, agenda_filter_all, attendance tally keys, picker_order_fallback) — none are a reusable 'show N more' pattern. New keys required in all 4 locales, as the orchestrator's prompt anticipated."
+          },
+          {
+            "claim": "Cross-issue line overlap: #239 (labels/fieldsets, ~6106-6427) and #241 (preview cap, ~6315-6374) both touch the preview block; #240 deletes the checkbox block (6303-6313) which sits between #239's 'Generation' fieldset start and the preview #241 touches",
+            "verdict": "CONFIRMED",
+            "evidence": "Direct read of 6106-6427 above. #239's fieldset scheme groups 'Generation — the generate control and everything below it (preview, count, chips, submit)' — but #240 REMOVES the generate control entirely, so #239's 4th fieldset boundary must open at the preview/count block instead of the checkbox once #240 has landed. If #239 lands with a fieldset literally wrapping the (still-present) checkbox and #240 lands second, the fieldset survives structurally (it wraps the whole tail already) and only loses one child element — clean. If #240 lands FIRST, #239's own fieldset-4 description ('the generate control and everything below it') needs silent adjustment since there is no longer a generate control to anchor it — recommend order 240 -> 239 -> 241, or 240 -> 241 -> 239, i.e. delete the checkbox before writing the fieldset that used to be named around it, so #239's implementer names fieldset 4 from the preview block directly rather than writing prose that references a control being deleted underneath them."
+          },
+          {
+            "claim": "Recommended run order: #240 first, #239 second, #241 third",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "[speculative] This is a judgment call, not a checkable fact. Rationale: (a) #240 deletes code (checkbox + 2 derived-value early-returns + 2 submit branches) inside the exact line range #239 is about to restructure into fieldsets — landing labels/fieldsets first means immediately re-touching the same lines to remove the checkbox, versus landing the deletion first so #239 writes fieldsets against final content once. (b) #240 also changes gating so the preview block (#241's target) renders unconditionally instead of behind a tick — #241's cap/reveal logic is simpler to write once 'preview always shows once inputs are complete' is already true rather than needing to also reason about the OFF state. (c) Issue #241 itself states 'Sequencing with the generate-checkbox removal is free — the two touch different code' — i.e. Gama already signed off that 240/241 order doesn't matter for correctness; the recommendation to do 240 before 239 is purely to avoid #239 authoring a fieldset caption around a control #240 is about to delete."
+          },
+          {
+            "claim": "Specs — page.event-create-after-season.spec.ts has ZERO coupling to the series-create form",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -n 'series-create' src/routes/page.event-create-after-season.spec.ts returned no matches; its describe blocks (lines 369-713) are all '#167' event-creation-controls-after-season-create scenarios, unrelated to seriesCreateGenerate/labels/preview. It does not need touching by any of these three issues, despite being named in the task brief as one to check."
+          },
+          {
+            "claim": "page.series-create.spec.ts (2304 lines) is the real target; it has ~14 sites that fireEvent.click the generate checkbox (1 inside the `enableMondayGeneration` helper used by ~10 call sites, 9 direct raw clicks elsewhere) plus 3 assertion sites reading the checkbox's type/disabled state directly",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -n on the spec file: click sites at 452(helper),801,843,848,860,1396,1450,1473,1497,1875; type/disabled assertions at 519,621,1825"
+          },
+          {
+            "claim": "For #240, an entire describe block ('season panel — submit WITHOUT generation creates the series only', ~869-1027) must be DELETED, not rewritten, since it tests the OFF submit path #240 removes",
+            "verdict": "CONFIRMED",
+            "evidence": "Read spec.ts:867-1027 header/tests; block tests createEventSeries-only-no-createEvent path, location/description blank-arrival on the OFF path, and a failed-OFF-write case — all premised on generation being optional, which #240 eliminates"
+          },
+          {
+            "claim": "For #240, the test 'generate OFF -> no preview...' (spec.ts:833-852) must be DELETED (tests toggle behavior that no longer exists); the sibling test 'generate ON but recurrence INCOMPLETE...' (854-864) must be REWRITTEN to drop its click line only, substance unchanged",
+            "verdict": "CONFIRMED",
+            "evidence": "Read spec.ts:833-864 directly — 833's whole point is proving ON/OFF toggling changes preview visibility, which is impossible once the checkbox is gone; 854's point ('incomplete recurrence -> no preview') is independent of the checkbox and survives once generation is implicit"
+          },
+          {
+            "claim": "For #240, the test 'turning generation OFF after a stopped run closes out without writing a SECOND series' (spec.ts:1861-1884) must be DELETED — the scenario it pins (toggle OFF mid-resume to close out) becomes impossible once the checkbox and the `else if (resume)` submit branch (5098-5108) are both gone",
+            "verdict": "CONFIRMED",
+            "evidence": "Read spec.ts:1861-1884 directly; it fires the generate checkbox click after a stopped run specifically to exercise the OFF-close-out branch at +page.svelte:5098-5108, which #240 point 4 requires deleting"
+          },
+          {
+            "claim": "For #240, spec.ts:1822-1826 ('review F5' locked-state test) contains a stale comment + assertion ('the generate checkbox stays enabled while locked... turning it OFF is the documented way to close out') that must be dropped from that test once the checkbox is gone",
+            "verdict": "CONFIRMED",
+            "evidence": "Read spec.ts:1787-1827 directly; lines 1822-1825 explicitly assert `series-create-generate` disabled===false with a comment describing exactly the OFF-close-out affordance #240 removes"
+          },
+          {
+            "claim": "For #240, the field-enumeration test at spec.ts:550-629 has an assertion at line 621 (`(q(container,'series-create-generate') as HTMLInputElement).type).toBe('checkbox')`) that must change to a not-present assertion, following the same 'retired control' idiom already used two lines below it for the #215 skip-picker retirement (622-628)",
+            "verdict": "CONFIRMED",
+            "evidence": "Read spec.ts:619-629 directly; the file already has a working precedent one describe-block away for asserting a retired control is entirely absent (`expect(q(container,'series-create-skip-date')).toBeNull()` etc.) — same pattern applies to series-create-generate post-#240"
+          },
+          {
+            "claim": "For #241, the '#215 — the grid WRAPS instead of scrolling... 90-chip daily season renders 3 month headings and all 90 chips flat' test (spec.ts:792-831) directly contradicts the 50-cap and must be rewritten: the DOM-chip-count assertion `previewDates(container)` toHaveLength(90) breaks once only 50 render initially",
+            "verdict": "CONFIRMED",
+            "evidence": "Read spec.ts:792-831 directly; `previewDates()` (defined at 460-464) counts actual rendered `[data-testid^=series-create-date-]` DOM nodes, so with a 50-cap this assertion must become toHaveLength(50) initially (or add a 'show all' click before asserting 90) — the no-scroll-trap assertion (818-830) is unaffected and should be kept as-is per #241 point 7 ('No inner scroll region is introduced... the grid still grows the page')."
+          },
+          {
+            "claim": "For #241, seriesCreatePreviewDates (skip-applied) and seriesCreateGridDates (all candidates, pre-skip, what the template actually iterates) are two DIFFERENT derived arrays and the cap/reveal state must be built against seriesCreateGridDates (or seriesCreateMonthGroups derived from it), never against seriesCreatePreviewDates — conflating them would make a skipped-but-hidden-past-the-cap date behave differently than the issue's point 4 requires ('skip-toggling still works on every date, shown or not')",
+            "verdict": "CONFIRMED",
+            "evidence": "+page.svelte:4756-4759 (seriesCreateGridDates, feeds the {#each} at 6340) vs 4709-4723 (seriesCreatePreviewDates, feeds only the count line at 6330-6337) — traced directly from source; these are documented in the code's own comments as serving different consumers (grid vs. count/submit-gate)"
+          },
+          {
+            "claim": "For #241, the reveal-state (how many of the 50-groups are shown) must reset on any regenerate of the candidate set, and #215's existing derived-chain shape ($derived.by keyed off seriesCreateGridDates identity changing on every keystroke) means a naive `$state` counter would NOT auto-reset without an explicit $effect or a derived-from-length reset — this is the main implementation risk for #241 point 5",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "[speculative] This is an implementation-approach prediction, not something checkable by reading the current code (the reveal feature doesn't exist yet). Flagging as a risk for whoever implements #241: because seriesCreateGridDates is a $derived.by that recomputes a NEW array reference on every relevant keystroke, a plain `let seriesCreateRevealCount = $state(50)` will NOT reset itself when the set changes size — the issue's point 5 ('resets to first 50 whenever the generated set changes') needs either an $effect watching seriesCreateGridDates (or its .join/length) to reset the counter, or deriving visibility from the *first N* of the CURRENT array each render rather than storing an absolute reveal count across recomputes. Worth flagging to whoever picks up #241 rather than asserting a fix here."
+          }
+        ],
+        "risks": [
+          "Line numbers in all three issues are consistently 1-14 lines lower than current file content (e.g. issue's 6106 is now 6106 for the {#if seriesCreateOpen}, but the Type-label wrap is 6137 in the issue text vs 6138 in the file) — minor drift, does not change field identity, but whoever implements should re-grep testids rather than trust literal line numbers.",
+          "The three issues overlap in the SAME physical block (6106-6427). Landing #239 (fieldsets) and #240 (checkbox deletion) out of order against a shared working tree risks a merge/rebase conflict inside the tail 'Generation' fieldset region — recommend serializing per the team's 'No parallel branches' rule (already team policy) and picking 240 -> 239 -> 241 or 240 -> 241 -> 239 so #239 never writes prose/fieldset structure referencing a control #240 is about to delete underneath it.",
+          "#241's reveal-state reset behavior (point 5) has a real implementation trap: a bare $state counter will not auto-reset when the derived candidate set changes shape, per the $derived.by pattern already used throughout this file for seriesCreateGridDates/seriesCreateMonthGroups. Flag to implementer; not something this verification pass can resolve since the code doesn't exist yet.",
+          "spec.ts's 'enableMondayGeneration' helper (line 449-454) is called from ~10 test sites; fixing it to drop the click (rather than deleting it) is the single highest-leverage edit for #240's spec migration, but every RAW fireEvent.click(...'series-create-generate') call site outside the helper (9 of them) still needs its own line removed individually — a plain find-and-delete of the helper's click line alone will not cover those.",
+          "#239's four new fieldset-heading i18n keys and #241's two new show-more-control i18n keys have no naming convention to inherit (no prior 'group heading' or 'show more' keys exist in messages/*.json) — the implementer will be picking key names from scratch; recommend following the existing series_create_<field>_label naming shape (e.g. series_create_group_what_label, series_create_show_next_50, series_create_show_all) for consistency, though this is a naming suggestion, not something to verify."
+        ],
+        "notes": "Read-only verification only; no code, specs, or issues were modified. Working tree confirmed at ~/workspace-app, origin mvox-app.git, HEAD 1fedb0d6 on main (clean). All three issue bodies read in full via `gh issue view --json`, zero comments each, bodies treated as authoritative per the task brief. Source verified: src/routes/+page.svelte (form template 6106-6427, state decls 4353-4439, derivations 4695-4824, submit function 5060-5300+), src/lib/events/recurrence.ts:100-141 (generateEventDates, confirmed uncapped), messages/en.json (key inventory), src/routes/page.series-create.spec.ts (2304 lines, full click/assertion-site inventory for the generate checkbox, plus the #215 90-chip flat-grid test that directly conflicts with #241's cap), src/routes/page.event-create-after-season.spec.ts (confirmed zero coupling to series-create, despite being named in the brief as a spec to check).\n\nTwo omissions found in issue #240's own line-citation list (spec-accurate but incomplete as an implementation checklist): (1) +page.svelte:4959 sets seriesCreateGenerate = true inside restoreSeriesCreateRun() — not mentioned by the issue but must be deleted for 'state removed' to hold; (2) +page.svelte:5220-5225 gates the series' startDate/endDate computation on seriesCreateGenerate — also not mentioned. Both are load-bearing for a clean implementation and worth surfacing to whoever picks up #240 rather than trusting the issue's line list as exhaustive.\n\nSpec-migration inventory for #240 is the single largest verification finding: at least 3 whole tests/blocks need DELETION (the ~159-line 'submit WITHOUT generation' describe block at 869-1027, the 'generate OFF -> no preview' test at 833-852, and the 'turning generation OFF after a stopped run' test at 1861-1884), at least 9 raw fireEvent.click call sites plus 1 helper call site need their click line dropped (substance otherwise unchanged), and 2 direct-assertion sites (line 621 type-check, line 1825 disabled-state-with-stale-comment) need rewriting to the 'retired control' idiom the file already uses for the #215 skip-picker retirement two describe-blocks away — a ready-made precedent to copy.\n\nFor #241, the 90-chip flat-grid test (792-831) is the one existing spec that actively contradicts the new cap and must be updated, not just extended; and the critical design note is that the cap/reveal must be built on seriesCreateGridDates (the un-skip-filtered set the template actually renders), not seriesCreatePreviewDates (the skip-applied set the count line and submit gate use) — conflating the two would break #241 point 4's 'skip-toggling still works on every date, shown or not' requirement.\n\nFor #239, the fieldset/legend structure has zero precedent anywhere in this repo (confirmed via repo-wide grep), so this issue is introducing the pattern fresh rather than reusing one — worth flagging so the implementer doesn't go looking for an existing local idiom that doesn't exist. All 9 field-label keys the issue needs already exist and are non-empty in all four locales (confirmed via messages/en.json inventory); only the 4 new group-heading keys are missing.\n\nRecommended run order (240 -> 239 -> 241, or 240 -> 241 -> 239) is a judgment call [speculative], grounded in: #239 and #240 both rewrite the same physical block and #239's own 'Generation' fieldset is explicitly scoped around 'the generate control and everything below it' — a phrase that only makes sense to author BEFORE that control still exists if #240 hasn't landed, or is trivially reworded if #240 lands first. Issue #241 itself explicitly states its sequencing with #240 is free ('touch different code'), so the only real ordering constraint in this pack is 240-before-239, not 241's position."
+      },
+      {
+        "key": "243",
+        "claims": [
+          {
+            "claim": "Repo guard: ~/workspace-app origin is mvox-app.git, tree on main",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; git log -1 --oneline -> 1fedb0d chore(#227)...; branch main. Matches expected commit."
+          },
+          {
+            "claim": "Issue #243 has zero comments and its body is authoritative",
+            "verdict": "CONFIRMED",
+            "evidence": "gh issue view 243 --json comments -> [] (empty array); state OPEN, labels task+ready."
+          },
+          {
+            "claim": "Surface 1 — event-create form: start date native input + TimeSelect for start time, plus a plain number input for duration_minutes",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:7180-7245 — data-testid='event-create-datetime' group (date input :7186 + <TimeSelect prefix=\"event-create-datetime\"> :7199), followed by data-testid='event-create-duration' <input type=\"number\"> :7212-7221, aria-label m.event_create_duration_label, with an 'inherited from series' hint at :7237-7245 when a series default exists."
+          },
+          {
+            "claim": "Surface 2 — event detail page in-situ edit: duration_minutes edited via a standalone number input, independent of start_datetime editing",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/event/[id]/+page.svelte:1880-1943 — start_datetime pencil/edit block (1880-1894) and a SEPARATE duration_minutes pencil/edit block (1896-1943): {#if editingField==='duration_minutes'} <input type=\"number\" min=\"0\" data-testid=\"event-edit-input-duration_minutes\">, display text via m.agenda_duration_min at data-testid='event-detail-duration'."
+          },
+          {
+            "claim": "Surface 3 — series-create form has its own per-occurrence duration_minutes field (series-create-duration), explicitly OUT of scope per issue Notes",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:6159-6170 <input type=\"number\" data-testid=\"series-create-duration\">, m.series_create_duration_label; bound to seriesCreateDuration ($state at :4377), validated at :5051-5052, written into seriesInput.durationMinutes at :5234 -> createEventSeries. Issue body Notes section: 'Do not extend this to the series form; if the code makes it nearly free, report that and let it be ruled separately.'"
+          },
+          {
+            "claim": "A fourth, unrequested duration UI surface exists: the 'convert event to series' flow has its own eventConvertDuration input, separate feature not named in the issue's Done-when list",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:4001-4076 — eventConvertDuration -> durationMinutes, validated (>=1) and passed into ConvertEventToSeriesInput; this flow already has its own end-date-before-start rejection at :4006-4012 using m.event_convert_end_before_start / m.event_convert_end_required. This is a distinct feature (single event -> recurring series) not mentioned in issue #243's Done-when items 1-8; flagging as a boundary the issue is silent on."
+          },
+          {
+            "claim": "Wire write sites for duration_minutes on create: createEventSeries (required) and createEvent (optional)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/entity/entityCreate.ts:482 `{ type: 'duration_minutes', number: durationMinutes }` (event_series, required) and :514 `...optionalNumber('duration_minutes', input.durationMinutes)` (event, optional). Matches issue body's cited entityCreate.ts:495-520 range for the optional path (actual line is 514, close to cited range)."
+          },
+          {
+            "claim": "Wire write site for duration_minutes on edit (event detail inline edit): eventFieldEdit.ts, one-field-per-write model",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/events/eventFieldEdit.ts:17-33 — EditableEventField union includes 'start_datetime' and 'duration_minutes' as SEPARATE fields, each written via its own updateEventField() call / replaceEntityProperty round-trip ('per-tap writes, same posture as attendanceData/repertoireActions — there is no save-all payload', module header comment). This is a real design tension for Done-when #6: an 'end datetime' edit would need to write duration_minutes (computed from start+end) rather than a field of its own name, breaking the current one-field-one-write UI/wire mapping. Not resolved by the issue text — flagging for engineering."
+          },
+          {
+            "claim": "The DST hazard is real and the current code already solves the equivalent problem in a specific, reusable way: local wall-clock string -> UTC instant via a two-pass offset correction",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:3065-3105 tallinnLocalToUtcIso() / eventCreateTallinnOffsetMinutes() — computes the Tallinn UTC offset at a first-guess instant, converts, then RE-computes the offset at the resulting instant and corrects again if it differs (handles the DST-transition edge exactly). An identical duplicate exists at src/routes/event/[id]/+page.svelte:1393-1460 (tallinnOffsetMinutes/tallinnLocalToUtcIso). Comment at +page.svelte:3058-3062 explicitly says this is 'the third site to need the SAME two-pass DST-aware conversion' but only 2 live sites with this exact two-pass pattern were found in current source (grep for 'guessUtcMs'/'two-pass' across src/**/*.{svelte,ts} excluding specs matched only these two files) — the claimed third site is UNVERIFIED; AgendaList.svelte only does forward display formatting (tallinnHHMM), not the reverse local->UTC conversion, so it is not that third site."
+          },
+          {
+            "claim": "Correct semantics for duration under DST: duration_minutes must be computed as the difference between two UTC instants (each wall-clock endpoint independently converted via the two-pass Tallinn conversion), NOT as a naive wall-clock hour/minute subtraction",
+            "verdict": "DRIFTED",
+            "evidence": "This is the correct approach given the existing tallinnLocalToUtcIso helper and how duration_minutes is currently used as elapsed real minutes (durationMinutes is a `number` prop consumed as literal minutes, e.g. m.agenda_duration_min({minutes}) and no other end-instant math exists in the codebase) — but no code currently computes an end instant from start+duration or vice versa across a DST boundary, so this is my derivation from the existing helper's behavior and the wire's `number` semantics, not a directly-read implementation. Labeled DRIFTED (from a pure fact to inference) rather than CONFIRMED; treat as [speculative] design guidance for whoever implements — the described derivation (convert start-local and end-local independently to UTC instants, then durationMinutes = (endInstant-startInstant)/60000) is the only DST-correct construction available from the current helpers, but is not yet code that exists to point at."
+          },
+          {
+            "claim": "TimeSelect (src/lib/components/TimeSelect.svelte) is the shared 24h/AM-PM time-entry composite (#207 rule 5) and is prefix-parameterized, so it is directly reusable for a second ('end time') instance on the same form",
+            "verdict": "CONFIRMED",
+            "evidence": "TimeSelect.svelte:1-40 — props are {value, prefix, onchange, disabled, invalid, describedBy, onkeydown}; mode derives from $timeFormatStore (module header: 'hour24/minute... always in 24h terms... a mode switch is a pure re-render'). Already instantiated twice with distinct `prefix` values on two different forms (event-create-datetime at +page.svelte:7199, series-create-time at +page.svelte:6259), confirming a second instance per form (e.g. prefix='event-create-end-time') is the established pattern, not a new one."
+          },
+          {
+            "claim": "Rule 7 ISO-date display convention (en-CA formatter) is already established and would be the pattern to reuse for an end-date display, per the issue's implicit ask",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:3115-3131 eventCreateStatusDateFmt = new Intl.DateTimeFormat('en-CA', {timeZone: 'Europe/Tallinn', ...}) with comment '#207 rule 7 ... renders as the ISO calendar date YYYY-MM-DD (en-CA gives ISO date format)'. Same en-CA/ISO convention also used in AgendaList.svelte:185,203,227."
+          },
+          {
+            "claim": "The end-before-start validation copy pattern the issue asks to reuse (Done-when #5) already exists in three places with all four locale translations present",
+            "verdict": "CONFIRMED",
+            "evidence": "Data-layer generic rejection: src/lib/entity/entityCreate.ts:351-364 requireDateRange() throws `${fn}: ${endField} must not be before ${startField}` (thrown Error, not i18n — caught-and-generic, which the UI layer deliberately avoids per its own comments). UI-level pre-checks with dedicated i18n keys, confirmed present in all 4 locale files (messages/{en,et,lv,uk}.json): season_date_range_invalid (+page.svelte:2279-2281), series_create_until_before_from (+page.svelte:5068-5070), event_convert_end_before_start (+page.svelte:4010-4012). A fourth key for event-create's own end<start check does not yet exist and would need to be added, per the issue's explicit instruction to 'reuse that copy pattern rather than inventing a second phrasing.'"
+          },
+          {
+            "claim": "Full list of spec files that currently assert duration_minutes entry/display behavior (would need updates for the issue's UI change)",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -rn 'duration_minutes' src (excluding node_modules) across non-.test files vs spec files shows duration_minutes/duration assertions in: src/routes/page.event-create.spec.ts, src/routes/page.event-create-after-season.spec.ts (4 matches), src/routes/page.series-create.spec.ts (series scope only, comment says out of scope), src/routes/event/[id]/page.i18n-a11y.spec.ts, src/routes/event/[id]/page.event-delete.spec.ts, src/routes/event/[id]/page.event-editing.spec.ts (heaviest — ~15 assertions incl. wire-shape and inline-edit-input tests), src/routes/event/[id]/page.spec.ts, src/lib/events/eventConvert.spec.ts (convert-to-series flow, separate feature), src/lib/seasons/seasonManage.spec.ts, src/lib/seasons/entuSeasons.spec.ts (read-side inheritance), src/lib/entity/entityCreate.spec.ts (wire-shape assertions for both createEvent and createEventSeries), src/lib/components/agenda/AgendaList.spec.ts (display: '90 min' text at row-duration testid)."
+          },
+          {
+            "claim": "Native date inputs stay as built (Mihkel Option 1) — confirmed as the existing, unchanged convention for date entry across event-create, series-create",
+            "verdict": "CONFIRMED",
+            "evidence": "<input type=\"date\"> used verbatim at +page.svelte:7186 (event-create-datetime-date), :6274 (series-create-from), :6287 (series-create-until) — all plain native date inputs, no custom date picker component exists anywhere in the grepped surfaces, consistent with the issue's Done-when #8 and the #207 rule-5 comment at :7171-7173 ('the native date input stays — Gama ruling')."
+          }
+        ],
+        "risks": [
+          "The claimed 'third site' for the two-pass DST-aware local->UTC conversion (per the code comment at +page.svelte:3058-3062) was not located in current source — only 2 of the claimed 3 sites exist today. Either the comment is stale/aspirational, or a third site exists somewhere not covered by the grep patterns used (guessUtcMs / two-pass / firstOffset..secondOffset). Worth a targeted follow-up grep before design work proceeds, since if a third site does exist it should also be updated/reused rather than a 4th copy pasted in for the end-time conversion.",
+          "The one-field-per-write architecture in eventFieldEdit.ts (EditableEventField: 'start_datetime' | 'duration_minutes' | ... each independently PATCHed) is a real implementation friction for Done-when #6 (inline edit deriving end from start+duration) that the issue text does not address — implementers will need to decide whether editing 'end' writes duration_minutes under the hood (contract change to the edit UI's field model) or whether a new synthetic 'end_datetime' editable pseudo-field is introduced client-side only. This is a design decision, not something already settled by the issue.",
+          "The DST-correct duration computation (convert start-local and end-local wall-clock strings independently to UTC instants via the existing two-pass offset helper, then subtract) is inferred/derived from the existing helpers' behavior, not read from code that performs this exact operation today — no code currently computes duration_minutes from two datetime endpoints. Implementers should verify this construction against a concrete DST-boundary test case (e.g. a camp spanning Estonia's autumn clock change) before relying on it.",
+          "The event-convert-to-series flow (eventConvertDuration, +page.svelte ~4001-4130) is a duration-UI surface the issue's Done-when list never mentions. It already has independent start/end-date UI and its own end-before-start check, so it may already satisfy something adjacent to #243's spirit for that one flow — but since the issue is scoped to 'the event-create form' only, this surface should probably be left alone; flagging in case scope discussions come up."
+        ],
+        "notes": "Repo guard passed (mvox-app.git, main @ 1fedb0d). Issue #243 body is the sole source (zero comments) and is internally consistent with the verified code: schema is confirmed unchanged (event has start_datetime + duration_minutes only, no end field), and every 'existing pattern to reuse' claim in the issue (TimeSelect, native date inputs, end-before-start copy pattern, entityCreate.ts write sites) checks out against source. The two open technical risks worth surfacing to engineering before a plan is written: (1) the inline per-field edit architecture on the event detail page doesn't cleanly support an 'end datetime' field that actually writes duration_minutes, and (2) the DST-safe duration derivation needs to be built fresh (by composing the existing two-pass Tallinn local->UTC helper on both endpoints) since no such two-endpoint-to-duration code exists yet anywhere in the repo — it is not a drop-in reuse, it's a new composition of two existing primitives. Full spec-file list for surface 1+2 assembled above (13 files) for scoping the RED phase."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify:238",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a173be3fcf827b00f",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788526426431,
+      "queuedAt": 1788526424862,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git, main @ 1fedb0d6). Issue #2…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY (tree on main @ 1fedb0d, may move — state observed commit). Read the issue(s) with gh issue view N (all zero comments, body authoritative). Terse evidence: file:line + fact.\nIssue #238 (season-name header text swap + red SVG trashcan component). Verify on current main: 1. Heade…",
+      "lastProgressAt": 1788526567052,
+      "tokens": 67046,
+      "toolCalls": 25,
+      "durationMs": 140620,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: workspace-app origin ends mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; HEAD=1fedb0d6...; branch main\"},{\"claim\":\"Header row shape post-#236 at +page.svelte:5636-5720: h2 label, trashcan button, gear at :5762 (issue cites :5762 for gear span)\",\"verdict\":\"DRIFTED\",\"evidence\":\"h2 is :5636-5642 w…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:239-241",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a0501525d4dd547ea",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788526426446,
+      "queuedAt": 1788526424862,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Read-only verification only; no code, specs, or issues were…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY (tree on main @ 1fedb0d, may move — state observed commit). Read the issue(s) with gh issue view N (all zero comments, body authoritative). Terse evidence: file:line + fact.\nIssues #239 + #240 + #241 — ONE pack, all rewrite the series-create form (+page.svelte ~:6106-6427, deri…",
+      "lastProgressAt": 1788526671021,
+      "tokens": 88024,
+      "toolCalls": 34,
+      "durationMs": 243029,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: workspace-app origin ends mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; HEAD 1fedb0d6 on main, matches '1fedb0d' cited by orchestrator (tree may have moved since, this is the observed commit)\"},{\"claim\":\"Issues #239/#240/#241 all have zero comments, bodies are authoritative\",\"verdict\":\"CONFIRM…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:243",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a4e03ff507f7e3860",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788526570083,
+      "queuedAt": 1788526424862,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git, main @ 1fedb0d). Issue #24…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY (tree on main @ 1fedb0d, may move — state observed commit). Read the issue(s) with gh issue view N (all zero comments, body authoritative). Terse evidence: file:line + fact.\nIssue #243 — multi-day events: start/end date+time UI instead of duration; SETTLED: v4E event = start_da…",
+      "lastProgressAt": 1788526811736,
+      "tokens": 79367,
+      "toolCalls": 43,
+      "durationMs": 241652,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: ~/workspace-app origin is mvox-app.git, tree on main\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; git log -1 --oneline -> 1fedb0d chore(#227)...; branch main. Matches expected commit.\"},{\"claim\":\"Issue #243 has zero comments and its body is authoritative\",\"verdict\":\"CONFIRMED\",\"evidence\":\"gh issue view 24…"
+    }
+  ],
+  "totalTokens": 234437,
+  "totalToolCalls": 102
+}
