@@ -136,7 +136,9 @@ describe('type tokens exist in src/app.css @theme (#211 adds them)', () => {
 		expect(new Set(softs).size).toBe(6);
 		// indigo and amber already mean roster/attendance in this app — the type
 		// scheme must not reuse their values (Gama: distinct new hues).
-		const reserved = [value('indigo'), value('amber'), value('indigo-soft'), value('amber-soft')];
+		// --color-amber-soft was removed as an unused theme token (#227) — the
+		// guard now covers the tokens that still exist.
+		const reserved = [value('indigo'), value('amber'), value('indigo-soft')];
 		for (const v of [...bases, ...softs]) {
 			expect(reserved, `type token value ${v} reuses a roster/attendance hue`).not.toContain(v);
 		}
