@@ -502,6 +502,8 @@
 	"series_create_no_dates": "Це повторення не дає жодної події. Змініть день або діапазон дат.",
 	"series_create_preview_count_one": "Буде створено 1 подію.",
 	"series_create_preview_count_other": "Буде створено подій: {count}.",
+	"series_create_show_next_label": "Показати наступні {count} подій",
+	"series_create_show_all_label": "Показати всі {count} подій",
 	"series_create_resume_notice": "Серія вже існує. Повторне надсилання створить лише події, яких бракує ({remaining} з {total}).",
 	"library_create_work_button": "Додати твір",
 	"library_create_work_name_label": "Назва",

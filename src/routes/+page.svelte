@@ -4386,6 +4386,15 @@
 	/** #215 — the ONLY skip mechanism now: toggled by tapping a candidate-date
 	 *  chip in the preview grid. No separate input/Add/removable-chip UI. */
 	let seriesCreateSkipDates = $state<string[]>([]);
+	/**
+	 * #241 — how many of `seriesCreateGridDates` (chronological) the grid
+	 * currently DRAWS; `series-create-show-next` / `series-create-show-all`
+	 * raise it. A VIEW-only counter: toggling a chip's skip state never
+	 * touches it (skips live in `seriesCreateSkipDates`, an entirely
+	 * different set — see the reset effect below for why a plain length
+	 * comparison cannot drive this).
+	 */
+	let seriesCreateRevealedCount = $state(50);
 	let seriesCreateSubmitting = $state(false);
 	/**
 	 * #138 review 2 — WHICH db the in-flight run belongs to (null when nothing is
@@ -4756,6 +4765,77 @@
 	});
 
 	/**
+	 * #241 — reset the reveal to the first 50 whenever the GENERATED set
+	 * changes. Keyed off `seriesCreateGridDates` ITSELF (object identity),
+	 * never its `.length`: a `$derived.by` block returns a fresh array on
+	 * every recompute, so re-reading the array here re-runs this effect on
+	 * ANY param change that reshapes the candidate set — including a
+	 * time-only edit that keeps the same calendar days (same length, brand
+	 * new array) and would slip past a length-keyed reset undetected. A bare
+	 * `$state` counter with no reset at all would fail the same way, only
+	 * silently: it would keep pointing at stale positions in a set that no
+	 * longer exists.
+	 */
+	$effect(() => {
+		void seriesCreateGridDates;
+		seriesCreateRevealedCount = 50;
+	});
+
+	/** #241 — the dates the grid actually DRAWS this render: `seriesCreateGridDates`
+	 *  capped at `seriesCreateRevealedCount`, chronological order preserved. The
+	 *  month grouping below runs over THIS set, not the full one, so a heading
+	 *  only ever appears once one of its dates is shown. */
+	const seriesCreateVisibleGridDates = $derived.by(() => {
+		if (seriesCreateGridDates === null) return null;
+		return seriesCreateGridDates.slice(0, seriesCreateRevealedCount);
+	});
+
+	/** #241 — how many GRID (pre-skip) dates remain undrawn — drives both the
+	 *  next-batch size and whether either reveal control renders at all. */
+	const seriesCreateHiddenCount = $derived(
+		seriesCreateGridDates === null
+			? 0
+			: Math.max(0, seriesCreateGridDates.length - seriesCreateRevealedCount)
+	);
+
+	/** #241 — `series-create-show-next`'s `{count}`: the ACTUAL size of the next
+	 *  batch (never a bare 50 once fewer than 50 remain). */
+	const seriesCreateNextBatchSize = $derived(Math.min(50, seriesCreateHiddenCount));
+
+	/**
+	 * #241 review F1 — `series-create-show-all`'s `{count}`: the size of the set
+	 * the button actually REVEALS, which is not one fixed expression.
+	 *
+	 * Normally that is the count line's own skip-applied total (issue point 2's
+	 * ONE source: the two numbers on screen must be the same number, and the
+	 * grid's extra struck-through chips are not events the submit will create).
+	 *
+	 * Under a resumable stopped run the count line is SUPPRESSED and the grid
+	 * switches to `seriesCreateResume.remaining`, while
+	 * `seriesCreatePreviewDates` keeps re-generating the full candidate set off
+	 * the restored form fields — so borrowing its total there would advertise
+	 * "show all 153 events" over a button that reveals 133 chips, contradicting
+	 * the resume notice's own `remaining` directly below. Skips would make it a
+	 * third unrelated number again (the chips ignore them while resuming). The
+	 * number that applies once a run is resumable is the remainder, so read the
+	 * grid set itself.
+	 */
+	const seriesCreateShowAllCount = $derived(
+		seriesCreateResume
+			? (seriesCreateGridDates?.length ?? 0)
+			: (seriesCreatePreviewDates?.length ?? 0)
+	);
+
+	/** #241 — reveal everything at once. */
+	function revealSeriesCreateNext(): void {
+		seriesCreateRevealedCount += 50;
+	}
+	function revealSeriesCreateAll(): void {
+		if (seriesCreateGridDates === null) return;
+		seriesCreateRevealedCount = seriesCreateGridDates.length;
+	}
+
+	/**
 	 * #215 Gama ruling (2) — every candidate toggled OFF BY HAND leaves nothing
 	 * to submit; the count line already reads the 0 form, this wires that into
 	 * the button. Deliberately NOT the same trigger as "the recurrence itself
@@ -4789,16 +4869,20 @@
 		return date.slice(0, 10);
 	}
 
-	/** #215 — `seriesCreateGridDates` grouped by calendar month (`YYYY-MM`),
-	 *  preserving ascending order (the generator already emits ascending, so a
-	 *  simple run-length grouping suffices — no sort). Each group carries the
-	 *  display-only month heading's key alongside its own dates so the grid can
-	 *  render `<h4>` + chips per month without re-scanning the full list per
-	 *  group (`$derived`, not a template-level filter). */
+	/** #215 — `seriesCreateVisibleGridDates` grouped by calendar month
+	 *  (`YYYY-MM`), preserving ascending order (the generator already emits
+	 *  ascending, so a simple run-length grouping suffices — no sort). Each
+	 *  group carries the display-only month heading's key alongside its own
+	 *  dates so the grid can render `<h4>` + chips per month without
+	 *  re-scanning the full list per group (`$derived`, not a template-level
+	 *  filter). #241 — grouping the VISIBLE (capped) set rather than the full
+	 *  one is what makes a heading appear IFF one of its dates is currently
+	 *  shown; a month straddling the reveal boundary still gets exactly one
+	 *  heading, since both halves come from the same ascending run. */
 	const seriesCreateMonthGroups = $derived.by(() => {
-		if (seriesCreateGridDates === null) return null;
+		if (seriesCreateVisibleGridDates === null) return null;
 		const groups: { month: string; dates: string[] }[] = [];
-		for (const date of seriesCreateGridDates) {
+		for (const date of seriesCreateVisibleGridDates) {
 			const month = seriesCreateIsoDay(date).slice(0, 7);
 			const current = groups[groups.length - 1];
 			if (current && current.month === month) {
@@ -6394,6 +6478,35 @@
 															</div>
 														{/each}
 													</div>
+													<!-- #241 — the display cap: at most 50 chips draw at a time.
+													     Both controls are VIEW-only (never touch skip state) and
+													     leave once everything is shown; show-next's {count} is the
+													     actual next-batch size off the pre-skip GRID set, show-all's
+													     is the count line's own skip-applied total — one source —
+													     falling back to the grid's own length once the count line is
+													     suppressed by a resumable run (review F1). -->
+													{#if seriesCreateHiddenCount > 0}
+														<div class="flex gap-2">
+															<button
+																type="button"
+																data-testid="series-create-show-next"
+																class="flex min-h-11 items-center border border-ink-5 px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
+																onclick={revealSeriesCreateNext}
+															>
+																{m.series_create_show_next_label({ count: seriesCreateNextBatchSize })}
+															</button>
+															<button
+																type="button"
+																data-testid="series-create-show-all"
+																class="flex min-h-11 items-center border border-ink-5 px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
+																onclick={revealSeriesCreateAll}
+															>
+																{m.series_create_show_all_label({
+																	count: seriesCreateShowAllCount
+																})}
+															</button>
+														</div>
+													{/if}
 												</div>
 											{/if}
 

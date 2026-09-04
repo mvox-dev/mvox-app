@@ -500,6 +500,8 @@
 	"series_create_no_dates": "This recurrence produces no events. Adjust the day or the date range.",
 	"series_create_preview_count_one": "1 event will be created.",
 	"series_create_preview_count_other": "{count} events will be created.",
+	"series_create_show_next_label": "Show next {count} events",
+	"series_create_show_all_label": "Show all {count} events",
 	"series_create_resume_notice": "The series already exists. Submitting again creates only the events still missing ({remaining} of {total}).",
 	"library_create_work_button": "Add work",
 	"library_create_work_name_label": "Title",

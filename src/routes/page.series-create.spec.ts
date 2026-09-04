@@ -131,6 +131,23 @@
 //                                 grid WRAPS — no inner scroll region: no
 //                                 max-h-* / overflow-y-auto class anywhere
 //                                 on or under series-create-preview.
+//     series-create-show-next     #241 — the grid renders at most 50 chips at
+//                                 a time; this native <button type="button">
+//                                 below the grid reveals the NEXT 50
+//                                 (cumulative). Label =
+//                                 series_create_show_next_label with the
+//                                 ACTUAL next-batch size as {count} (the
+//                                 pre-skip GRID set drives it). Absent once
+//                                 everything is shown, or when 50 or fewer
+//                                 dates exist.
+//     series-create-show-all      #241 — native <button type="button"> after
+//                                 show-next: reveals the remainder in ONE
+//                                 step. Label = series_create_show_all_label
+//                                 with {count} = the FULL skip-applied total
+//                                 the count line already computes
+//                                 (seriesCreatePreviewDates.length — ONE
+//                                 source, never recounted). Absent once
+//                                 everything is shown.
 //     series-create-progress      role="status" — bulk progress indicator
 //     series-create-submit        fires the write(s)
 //     series-create-cancel        closes the form; nothing written
@@ -147,12 +164,15 @@
 //       0 form of the _other key ("Luuakse 0 sündmust"), NEVER
 //       series_create_no_dates (that key keeps meaning "the recurrence
 //       generated nothing" — Gama ruling, #215)
+//     series_create_show_next_label / series_create_show_all_label {count}
+//       #241 — the reveal controls' labels; {count} is a REAL param in BOTH
+//       (the 50 cap is never baked into the copy)
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // #215 locale-key scan (source scan, no rendering — the ux-polish precedent).
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
 // Params (progress/failure counts) are surfaced as JSON so their NAMES and
@@ -815,7 +835,7 @@ describe('season panel — the recurrence preview is live and real', () => {
 		expect(monthText).not.toMatch(/^\d{4}-\d{2}$/);
 	});
 
-	it('#215 — the grid WRAPS instead of scrolling: no max-h-* / overflow scroll class anywhere on or under the preview; a 90-chip daily season renders 3 month headings and all 90 chips flat', async () => {
+	it('#215→#241 — the grid still WRAPS (no scroll-trap class anywhere on or under the preview) but no longer renders flat: a 90-chip daily season opens at the FIRST 50 chips under TWO headings (Sep + Oct 1–20); show-all brings the full 90 under three', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 		await fill(container, 'series-create-name', 'Daily grind');
@@ -825,8 +845,26 @@ describe('season panel — the recurrence preview is live and real', () => {
 		await fill(container, 'series-create-until', '2026-11-29');
 		await selectValue(container, 'series-create-repeat', 'daily');
 
+		// #241 revises #215's "stays flat" ruling on the CHIP COUNT only: 90
+		// dates exist (the count line below says so) but only the first 50
+		// draw. November has no shown date yet, so its heading must not render
+		// (a month heading renders IFF at least one of its dates is shown).
 		await waitFor(() => {
-			expect(previewDates(container)).toHaveLength(90); // 30 + 31 + 29
+			expect(previewDates(container)).toHaveLength(50); // of 90 = 30 + 31 + 29
+		});
+		expect(q(container, 'series-create-preview-count')?.textContent).toContain('"count":90');
+		expect(
+			[
+				...(q(container, 'series-create-preview') as HTMLElement).querySelectorAll(
+					'[data-testid^="series-create-month-"]'
+				)
+			].map((el) => el.getAttribute('data-testid'))
+		).toEqual(['series-create-month-2026-09', 'series-create-month-2026-10']);
+
+		// show-all reveals the remainder in one step: all 90, three headings.
+		await fireEvent.click(q(container, 'series-create-show-all') as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(90);
 		});
 		expect(
 			[
@@ -840,9 +878,10 @@ describe('season panel — the recurrence preview is live and real', () => {
 			'series-create-month-2026-11'
 		]);
 
-		// Gama ruling (1): NO inner scroll region inside the form — the grid
-		// wraps. Scan the preview container AND every descendant for the
-		// scroll-trap classes the old list carried (max-h-32 overflow-y-auto).
+		// Gama ruling (1) SURVIVES #241 (its point 7): NO inner scroll region
+		// inside the form — the fully revealed grid wraps and grows the page.
+		// Scan the preview container AND every descendant for the scroll-trap
+		// classes the old list carried (max-h-32 overflow-y-auto).
 		const preview = q(container, 'series-create-preview') as HTMLElement;
 		const scrollTrap = /^(max-h-|overflow-y-auto$|overflow-auto$|overflow-scroll$|overflow-y-scroll$)/;
 		for (const el of [preview, ...preview.querySelectorAll('*')]) {
@@ -2650,6 +2689,465 @@ describe('#239 — locale files: group keys verbatim (et/en), present everywhere
 		}
 	});
 });
+
+// ── #241 — the preview caps at 50 chips: show next 50 / show all N ─────────────
+//
+// From live pilot testing (Mihkel, 2026-09-04): "Limit generated events to 50
+// and provide controls at the end: show next 50 / show all 233 events". A
+// DISPLAY cap on the preview grid, not a generation cap: every generated
+// occurrence is still created on submit — only the number of chips DRAWN at
+// once is limited. This revises #215's "a 90-date daily season stays flat"
+// ruling on the chip count only; the wrap-not-scroll rule survives (#241
+// point 7 — the grid still grows the page, it just starts short).
+//
+// Pinned contract:
+//   - at most 50 chips render initially, in the existing chronological order,
+//     month groupings intact: a month heading renders IFF at least one of its
+//     dates is currently shown (a month may be partially shown, under its ONE
+//     heading — never forked across the reveal boundary).
+//   - series-create-show-next reveals the NEXT 50, CUMULATIVE; its {count} is
+//     the ACTUAL next-batch size (min(50, hidden)), driven by the GRID
+//     (pre-skip) set. series-create-show-all reveals the remainder in ONE
+//     step; its {count} is the FULL total the count line already computes
+//     (seriesCreatePreviewDates.length, skip-applied — ONE source, never
+//     recounted) — EXCEPT while a stopped run is resumable, where the count
+//     line is suppressed and the grid is the remainder, so show-all counts
+//     the remainder too and agrees with the resume notice (review F1). Both
+//     native buttons, below the grid, next-then-all; both
+//     leave once everything is shown, and never render for a ≤50 set.
+//   - the count line keeps reporting the FULL (skip-applied) total, never the
+//     visible count.
+//   - revealing is a VIEW operation: skip toggles survive it, late-revealed
+//     chips arrive with their kept state, and toggling a chip never resets
+//     (or extends) the reveal — the CANDIDATE set is untouched by skips.
+//   - the reveal RESETS to the first 50 whenever the GENERATED set changes —
+//     including a time-only edit that keeps the set the SAME LENGTH (the
+//     issue names repeat/day/time/from/until; a bare $state counter, or a
+//     reset keyed off the set's LENGTH, fails exactly here).
+//   - submit is unaffected: ALL generated occurrences are created regardless
+//     of how many chips are on screen.
+describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N', () => {
+	/** Every calendar day from `from` to `until` INCLUSIVE, as ISO dates — a
+	 *  UTC-stepped walk, matching generateEventDates' calendar stepping (no
+	 *  DST wobble across the 2026-10-25 fall-back). */
+	function dailyIsoDates(from: string, until: string): string[] {
+		const dates: string[] = [];
+		const cursor = new Date(`${from}T00:00:00Z`);
+		const end = new Date(`${until}T00:00:00Z`);
+		while (cursor.getTime() <= end.getTime()) {
+			dates.push(cursor.toISOString().slice(0, 10));
+			cursor.setUTCDate(cursor.getUTCDate() + 1);
+		}
+		return dates;
+	}
+
+	/** The month-grouped document-order testid sequence `gridSequence` must
+	 *  yield for EXACTLY these shown dates: each month's heading once, before
+	 *  its first shown chip. */
+	function expectedSequence(isoDates: string[]): string[] {
+		const seq: string[] = [];
+		let month = '';
+		for (const iso of isoDates) {
+			if (iso.slice(0, 7) !== month) {
+				month = iso.slice(0, 7);
+				seq.push(`series-create-month-${month}`);
+			}
+			seq.push(`series-create-date-${iso}`);
+		}
+		return seq;
+	}
+
+	function showNextButton(container: HTMLElement): HTMLButtonElement | null {
+		return q(container, 'series-create-show-next') as HTMLButtonElement | null;
+	}
+
+	function showAllButton(container: HTMLElement): HTMLButtonElement | null {
+		return q(container, 'series-create-show-all') as HTMLButtonElement | null;
+	}
+
+	function countLine(container: HTMLElement): string {
+		return q(container, 'series-create-preview-count')?.textContent ?? '';
+	}
+
+	/** Open the form on a DAILY season over the given range — daily needs no
+	 *  day pick, so the preview appears as soon as time/from/until are set. */
+	async function renderDaily(from: string, until: string): Promise<HTMLElement> {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillTime(container, 'series-create-time', '19:00');
+		await fill(container, 'series-create-from', from);
+		await fill(container, 'series-create-until', until);
+		await selectValue(container, 'series-create-repeat', 'daily');
+		return container;
+	}
+
+	/** The big case: 153 daily occurrences over five months (Sep 30 + Oct 31 +
+	 *  Nov 30 + Dec 31 + Jan 31) — three reveal steps' worth. */
+	const FULL_153 = dailyIsoDates('2026-09-01', '2027-01-31');
+
+	it('a 153-date daily season renders EXACTLY the first 50 chips (Sep + Oct 1–20, TWO headings), the count line reads the FULL 153, and two NATIVE keyboard-reachable buttons follow the grid: show-next {"count":50}, then show-all {"count":153} — and nothing is written', async () => {
+		const container = await renderDaily('2026-09-01', '2027-01-31');
+
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		expect(previewDates(container)).toEqual(FULL_153.slice(0, 50));
+		// Month grouping intact under the cap: the FULL document-order
+		// sequence — Sep's heading + 30 chips, Oct's heading + its first 20.
+		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153.slice(0, 50)));
+		// The count line NEVER tracks the visible count (#241 point 3).
+		expect(countLine(container)).toContain('"count":153');
+
+		const next = showNextButton(container);
+		const all = showAllButton(container);
+		expect(next, 'series-create-show-next must render').not.toBeNull();
+		expect(all, 'series-create-show-all must render').not.toBeNull();
+		for (const btn of [next as HTMLButtonElement, all as HTMLButtonElement]) {
+			expect(btn.tagName).toBe('BUTTON');
+			expect(btn.getAttribute('type')).toBe('button');
+			expect(btn.disabled).toBe(false);
+			// Native buttons are keyboard-reachable by construction — pinned
+			// against a tabindex="-1" (or non-button re-implementation) later.
+			expect(btn.tabIndex).toBeGreaterThanOrEqual(0);
+		}
+		// {count} is a REAL param in both labels: show-next carries the actual
+		// next-batch size, show-all the full total (the count line's number).
+		expect(next?.textContent?.trim()).toBe('series_create_show_next_label {"count":50}');
+		expect(all?.textContent?.trim()).toBe('series_create_show_all_label {"count":153}');
+
+		// "controls at the end" — both buttons FOLLOW the last rendered chip,
+		// show-next before show-all.
+		const lastChip = dateChip(container, '2026-10-20') as HTMLElement;
+		expect(
+			lastChip.compareDocumentPosition(next as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'show-next must come after the grid'
+		).not.toBe(0);
+		expect(
+			(next as HTMLElement).compareDocumentPosition(all as HTMLElement) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+			'show-all must come after show-next'
+		).not.toBe(0);
+
+		// Previewing (capped or not) still writes NOTHING.
+		expect(createEventSeriesMock).not.toHaveBeenCalled();
+		expect(createEventMock).not.toHaveBeenCalled();
+	});
+
+	it('show-next is CUMULATIVE and order-preserving: 50 → 100 → 150 → 153; the boundary month keeps its ONE heading; the label carries the ACTUAL batch size ({"count":3} on the last step); both controls leave once everything is shown', async () => {
+		const container = await renderDaily('2026-09-01', '2027-01-31');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+
+		await fireEvent.click(showNextButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(100);
+		});
+		// The first 50 STAYED (cumulative, order preserved) and October — the
+		// month straddling the first boundary — completed under its single
+		// heading: the full sequence proves no month heading forked.
+		expect(previewDates(container)).toEqual(FULL_153.slice(0, 100));
+		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153.slice(0, 100)));
+		expect(
+			container.querySelectorAll('[data-testid="series-create-month-2026-10"]')
+		).toHaveLength(1);
+		expect(countLine(container)).toContain('"count":153');
+
+		await fireEvent.click(showNextButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(150);
+		});
+		// Only 3 remain hidden: show-next says so; show-all keeps the total.
+		expect(showNextButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_next_label {"count":3}'
+		);
+		expect(showAllButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_all_label {"count":153}'
+		);
+
+		await fireEvent.click(showNextButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(153);
+		});
+		expect(previewDates(container)).toEqual(FULL_153);
+		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153));
+		// Everything is shown — both controls disappear (#241 point 2).
+		expect(showNextButton(container)).toBeNull();
+		expect(showAllButton(container)).toBeNull();
+	});
+
+	it('show-all reveals the remainder in ONE step: 50 → 153, full month-grouped sequence, both controls gone', async () => {
+		const container = await renderDaily('2026-09-01', '2027-01-31');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+
+		await fireEvent.click(showAllButton(container) as HTMLElement);
+
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(153);
+		});
+		expect(previewDates(container)).toEqual(FULL_153);
+		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153));
+		expect(showNextButton(container)).toBeNull();
+		expect(showAllButton(container)).toBeNull();
+	});
+
+	it('50 or fewer dates: no cap engages and NEITHER control renders (exactly-50 boundary)', async () => {
+		const container = await renderDaily('2026-09-01', '2026-10-20'); // 30 + 20 = 50
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		expect(previewDates(container)).toEqual(dailyIsoDates('2026-09-01', '2026-10-20'));
+		expect(showNextButton(container)).toBeNull();
+		expect(showAllButton(container)).toBeNull();
+	});
+
+	it('revealing is a VIEW operation (#241 point 4): skips survive it, a skip toggle never collapses the reveal, the count line and show-all N track the SKIP-APPLIED total while show-next tracks the GRID', async () => {
+		const container = await renderDaily('2026-09-01', '2026-11-29'); // 90
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		expect(countLine(container)).toContain('"count":90');
+		// 40 hidden (grid set), 90 total (skip-applied set) — same number for
+		// now, the toggle below splits them.
+		expect(showNextButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_next_label {"count":40}'
+		);
+		expect(showAllButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_all_label {"count":90}'
+		);
+
+		// Toggle a VISIBLE chip off: the count drops to 89 — but the cap and
+		// the reveal stand exactly where they were (a skip does not change the
+		// CANDIDATE set, so it must not reset — or extend — the view).
+		await toggleDate(container, '2026-09-05');
+		await waitFor(() => {
+			expect(countLine(container)).toContain('"count":89');
+		});
+		expect(previewDates(container)).toHaveLength(50);
+		expect(previewDates(container)).toEqual(dailyIsoDates('2026-09-01', '2026-10-20'));
+		expect(dateChip(container, '2026-09-05')?.getAttribute('aria-pressed')).toBe('false');
+		// The two sets diverge here: show-all's N follows the count line's
+		// skip-applied total (ONE source — issue point 2); show-next's batch
+		// follows the pre-skip GRID (40 chips are still hidden either way).
+		expect(showAllButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_all_label {"count":89}'
+		);
+		expect(showNextButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_next_label {"count":40}'
+		);
+
+		await fireEvent.click(showAllButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(90);
+		});
+		// The skip SURVIVED the reveal; late-revealed chips arrive ACTIVE.
+		expect(dateChip(container, '2026-09-05')?.getAttribute('aria-pressed')).toBe('false');
+		expect(dateChip(container, '2026-11-20')?.getAttribute('aria-pressed')).toBe('true');
+		expect(activeDates(container)).toHaveLength(89);
+		expect(countLine(container)).toContain('"count":89');
+
+		// Skip-toggling works on a LATE-REVEALED chip too — and still does not
+		// collapse the reveal back to 50.
+		await toggleDate(container, '2026-11-20');
+		await waitFor(() => {
+			expect(dateChip(container, '2026-11-20')?.getAttribute('aria-pressed')).toBe('false');
+		});
+		expect(previewDates(container)).toHaveLength(90);
+		expect(countLine(container)).toContain('"count":88');
+		expect(showNextButton(container)).toBeNull();
+		expect(showAllButton(container)).toBeNull();
+	});
+
+	it('review F1 — under a RESUMABLE stopped run show-all counts the REMAINDER, not the re-generated full set: a 153-date run that stops after 20 shows "show all 133" over a button that reveals exactly those 133 — the same number the resume notice carries', async () => {
+		// Stop the run on the 21st occurrence: 20 landed, 133 remain.
+		createEventMock.mockImplementation(async () => {
+			if (createEventMock.mock.calls.length === 21) throw new Error('boom');
+			return `ev-new-${createEventMock.mock.calls.length}`;
+		});
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fill(container, 'series-create-name', 'Daily grind');
+		await fill(container, 'series-create-duration', '90');
+		await fillTime(container, 'series-create-time', '19:00');
+		await fill(container, 'series-create-from', '2026-09-01');
+		await fill(container, 'series-create-until', '2027-01-31');
+		await selectValue(container, 'series-create-repeat', 'daily');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50); // of 153
+		});
+
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-error')).not.toBeNull();
+		});
+
+		const REMAINING_133 = dailyIsoDates('2026-09-21', '2027-01-31');
+		expect(REMAINING_133).toHaveLength(133);
+		// The grid switched to the remainder — still capped at the first 50.
+		await waitFor(() => {
+			expect(previewDates(container)).toEqual(REMAINING_133.slice(0, 50));
+		});
+		// The count line is gone; the resume notice is the number that applies.
+		expect(q(container, 'series-create-preview-count')).toBeNull();
+		expect(q(container, 'series-create-resume')?.textContent).toContain('"remaining":133');
+		expect(q(container, 'series-create-resume')?.textContent).toContain('"total":153');
+
+		// show-all must agree with the resume notice, NOT with the 153-date
+		// candidate set the restored form fields still generate.
+		expect(showAllButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_all_label {"count":133}'
+		);
+		expect(showNextButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_next_label {"count":50}'
+		);
+
+		// …and clicking it reveals exactly that many chips.
+		await fireEvent.click(showAllButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(133);
+		});
+		expect(previewDates(container)).toEqual(REMAINING_133);
+		expect(showNextButton(container)).toBeNull();
+		expect(showAllButton(container)).toBeNull();
+	});
+
+	it('the reveal RESETS to the first 50 when the range changes (#241 point 5): show-all 153, then until → 2026-12-31 collapses to the new 122-set’s first 50, controls back with the NEW numbers', async () => {
+		const container = await renderDaily('2026-09-01', '2027-01-31');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		await fireEvent.click(showAllButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(153);
+		});
+
+		await fill(container, 'series-create-until', '2026-12-31');
+
+		const FULL_122 = dailyIsoDates('2026-09-01', '2026-12-31');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		expect(previewDates(container)).toEqual(FULL_122.slice(0, 50));
+		expect(countLine(container)).toContain('"count":122');
+		expect(showNextButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_next_label {"count":50}'
+		);
+		expect(showAllButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_all_label {"count":122}'
+		);
+	});
+
+	it('the reset keys off the SET, not its length: a time-only edit (same 153 calendar days, new datetimes) collapses show-all back to the first 50 — a length-keyed or bare-counter reset fails exactly here', async () => {
+		const container = await renderDaily('2026-09-01', '2027-01-31');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		await fireEvent.click(showAllButton(container) as HTMLElement);
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(153);
+		});
+
+		// The generated set CHANGES (every occurrence datetime moves to 20:00)
+		// while its LENGTH — and every calendar day — stays identical.
+		await fillTime(container, 'series-create-time', '20:00');
+
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50);
+		});
+		expect(previewDates(container)).toEqual(FULL_153.slice(0, 50));
+		expect(countLine(container)).toContain('"count":153');
+		expect(showAllButton(container)?.textContent?.trim()).toBe(
+			'series_create_show_all_label {"count":153}'
+		);
+	});
+
+	it('submit is UNAFFECTED by the cap (#241 point 6): 60 generated, 50 shown → the series carries the true occurrence bounds and ALL 60 occurrences are created, ascending', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fill(container, 'series-create-name', 'Daily grind');
+		await fill(container, 'series-create-duration', '90');
+		await fillTime(container, 'series-create-time', '19:00');
+		await fill(container, 'series-create-from', '2026-09-01');
+		await fill(container, 'series-create-until', '2026-10-30');
+		await selectValue(container, 'series-create-repeat', 'daily');
+		await waitFor(() => {
+			expect(previewDates(container)).toHaveLength(50); // of 60
+		});
+
+		await submit(container);
+		await settleSeriesRun(container);
+
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+		const input = lastSeriesInput();
+		// First/last OCCURRENCE of the FULL set — the cap must not leak into
+		// the series bounds any more than into the occurrence loop.
+		expect(input.startDate).toBe('2026-09-01');
+		expect(input.endDate).toBe('2026-10-30');
+
+		expect(createEventMock).toHaveBeenCalledTimes(60);
+		// Full shape, all 60, ascending — Tallinn wall clock → UTC instant
+		// (19:00 EEST = 16:00Z through 2026-10-24, EET = 17:00Z from the
+		// 2026-10-25 fall-back on).
+		const expectedInstants = dailyIsoDates('2026-09-01', '2026-10-30').map(
+			(iso) => `${iso}T${iso >= '2026-10-25' ? '17' : '16'}:00:00.000Z`
+		);
+		expect(
+			createEventMock.mock.calls.map((c) => (c[1] as CreateEventInput).startDatetime)
+		).toEqual(expectedInstants);
+	});
+});
+
+// ── #241 — the two show-more keys, four locales, {count} parameterised ─────────
+//
+// Source scan, no rendering (the locale-scan precedent above). PO-ruled et/en
+// copy is VERBATIM — the Estonian partitive ("järgmisi … sündmust" / "kõiki …
+// sündmust") is deliberate. {count} is a real parameter in BOTH keys in EVERY
+// locale: the 50 cap lives in code, never in copy.
+describe('#241 — locale files: series_create_show_next_label / series_create_show_all_label', () => {
+	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
+	const REVEAL_KEYS = ['series_create_show_next_label', 'series_create_show_all_label'] as const;
+
+	function messageFile(locale: string): MessageFile {
+		return JSON.parse(
+			readFileSync(resolvePath(process.cwd(), `messages/${locale}.json`), 'utf-8')
+		) as MessageFile;
+	}
+
+	it.each(LOCALES)(
+		'%s: both keys exist, non-empty, carry {count}, and never bake the cap into the copy',
+		(locale) => {
+			const file = messageFile(locale);
+			for (const key of REVEAL_KEYS) {
+				expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(
+					false
+				);
+				for (const pattern of messagePatterns(file[key])) {
+					expect(pattern, `${key} in ${locale} must parameterise the count`).toContain(
+						'{count}'
+					);
+					expect(pattern, `${key} in ${locale} must never hard-code 50`).not.toMatch(/50/);
+				}
+			}
+		}
+	);
+
+	it('et/en carry the PO-ruled copy VERBATIM (partitive intact in both Estonian strings)', () => {
+		const en = messageFile('en');
+		const et = messageFile('et');
+		expect(en.series_create_show_next_label).toBe('Show next {count} events');
+		expect(en.series_create_show_all_label).toBe('Show all {count} events');
+		expect(et.series_create_show_next_label).toBe('Näita järgmisi {count} sündmust');
+		expect(et.series_create_show_all_label).toBe('Näita kõiki {count} sündmust');
+	});
+});
+
+// (*MVOX:Tallis* — #241 RED: 50-chip preview cap — cumulative show-next-50 /
+// one-step show-all-N native controls with {count}-parameterised labels
+// (next-batch size vs. skip-applied full total), the count line always at the
+// full total, view-only reveal (skips survive, toggles never collapse it),
+// set-identity reset to the first 50 on any regenerate, uncapped submit)
 
 // (*MVOX:Tallis* — #239 RED: visible <label> per control computing as the
 // accessible name (aria-labels retired with it), the time group named by a
