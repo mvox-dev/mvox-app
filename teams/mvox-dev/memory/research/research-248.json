@@ -1,0 +1,108 @@
+{
+  "summary": "Pre-RED verification for #248 — location datalist suggestions",
+  "agentCount": 1,
+  "logs": [],
+  "result": {
+    "verify": {
+      "claims": [
+        {
+          "claim": "Repo guard: workspace-app origin ends mvox-app.git",
+          "verdict": "CONFIRMED",
+          "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+        },
+        {
+          "claim": "Tree sits on a pipeline branch (#241 live), read via git show main:<path>",
+          "verdict": "CONFIRMED",
+          "evidence": "git branch --show-current -> feat/241-preview-cap; used `git show main:<path>` throughout"
+        },
+        {
+          "claim": "series-create-location input: type=text, no list attr, has visible <span> label (post-#239)",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/+page.svelte:6188-6201 (main) — <label> wraps <span>{m.series_create_location_label()}</span> then <input type=\"text\" data-testid=\"series-create-location\" ...> inside a <fieldset><legend> group; no `list` attribute present."
+        },
+        {
+          "claim": "event-create-location input: type=text, no list attr, aria-label only (NOT touched by #239's visible-label pass)",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/+page.svelte:7272-7281 (main) — bare <input type=\"text\" data-testid=\"event-create-location\" aria-label={...} ...>, no wrapping <label>/<span>; #239 commit message says 'series create: visible labels', event-create form untouched."
+        },
+        {
+          "claim": "event-edit-input-location input: type=text, no list attr, inline pencil-click-to-edit pattern, aria-label only",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/event/[id]/+page.svelte:2009-2020 (main) — <input type=\"text\" data-testid=\"event-edit-input-location\" aria-label={m.event_edit_location_aria_label()} ...> rendered only when editingField==='location'; default view is a pencil <button data-testid=\"event-edit-btn-location\">."
+        },
+        {
+          "claim": "On the event-DETAIL route (event/[id]), no AgendaItem set or multi-event location corpus is already in memory — only the single event's own location plus its parent series' default_location fallback",
+          "verdict": "CONFIRMED",
+          "evidence": "src/lib/events/eventDetail.ts:184,213,246,291 (main): loadEventDetail fetches only `entity/{eventId}?props=...,location,...` and the parent series' `default_location`, resolving `location = event.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? ''` — a single string, not a collection. src/routes/event/[id]/+page.svelte:1110-1114 comment: 'the page has no AgendaItem of its own, only EventDetail' — `agendaItemForPanel` is a derived single-item shim for AttendanceSurface, not a loaded AgendaItem[] list. `listRepertoireItems` (lines 771,834) loads repertoire/works, not agenda items or locations."
+        },
+        {
+          "claim": "Cheapest no-new-fetch datalist source on event-DETAIL route would be at most the single event's own current location + its series' default_location (0-2 values) — not a meaningful suggestion set; a real corpus would require a new fetch",
+          "verdict": "CONFIRMED",
+          "evidence": "Derived directly from the eventDetail.ts shape above: no other locations are ever fetched into that route's memory."
+        },
+        {
+          "claim": "AgendaItem.location field exists with series-inheritance documented in its doc comment",
+          "verdict": "CONFIRMED",
+          "evidence": "src/lib/agenda/types.ts:16 (main) — `location: string;` with comment 'Location — event value, else inherited from its series, else empty string.'"
+        },
+        {
+          "claim": "Agenda items live in root +page.svelte as `agendaItems` (and `recentItems`) $state, populated by the page's single existing load call — series-create and event-create forms are literal siblings in the same 7500-line component, so they can read agendaItems directly with zero prop-drilling",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/+page.svelte:143 `let agendaItems = $state<AgendaItem[]>([])`; :191 `let recentItems = $state<AgendaItem[]>([])`; :695-714 both populated from one `.then(({upcoming, recent, ...}) => { agendaItems = upcoming; recentItems = recent; ... })` load; the same file also declares seriesCreateLocation (:4378) and eventCreateLocation (:3167) in the identical module/component scope — same file, same <script> block, no cross-component boundary."
+        },
+        {
+          "claim": "Zero `datalist` precedent anywhere in the mvox-app codebase",
+          "verdict": "CONFIRMED",
+          "evidence": "`git grep -rn datalist -- '*' main` and `grep -rn datalist src/` on the worktree both returned no matches."
+        },
+        {
+          "claim": "happy-dom (the project's DOM test environment for these routes) can render and query <datalist>/<option> elements and the `list` attribute without limitation for structural assertions",
+          "verdict": "CONFIRMED",
+          "evidence": "Ran a live vitest probe (`@vitest-environment happy-dom`) asserting `input.getAttribute('list')`, `querySelectorAll('#id option').length`, and `.value` on options — all passed (1/1). Note: no DOM test environment (happy-dom or jsdom) can exercise the native browser autocomplete popup UI itself, but that's a universal DOM-testing limit, not happy-dom-specific, and irrelevant since specs only need to assert `list=` presence + `<option>` values, matching this project's existing testid/attribute assertion style."
+        },
+        {
+          "claim": "All existing specs touching these three inputs use happy-dom and assert only individual properties (tagName, type, value, placeholder, disabled, aria-label text, presence/absence) — none enumerate a closed/exhaustive attribute set, so none would break from adding a `list` attribute",
+          "verdict": "CONFIRMED",
+          "evidence": "src/routes/page.series-create.spec.ts:1 `// @vitest-environment happy-dom`, :590-591 only checks `.tagName`; src/routes/page.event-create.spec.ts:1 happy-dom, :1459/:1595 check `.placeholder` only; src/routes/event/[id]/page.event-editing.spec.ts:1 happy-dom, :1127 checks `toBeNull()` presence only; src/routes/event/[id]/page.i18n-a11y.spec.ts:1 happy-dom, :767-904 check `.textContent`/message text and click-driven presence, not attribute enumeration. Grep for `getAttributeNames|outerHTML|toMatchInlineSnapshot|toMatchSnapshot|\\.attributes\\b` across all three files returned zero hits."
+        }
+      ],
+      "risks": [
+        "The event-DETAIL route (event/[id]) genuinely has no multi-location corpus in memory — implementing datalist there per the issue's 'NO new fetch' constraint yields a near-useless 1-2-value list (current value + series default). This needs an explicit PO scope call: (a) skip the datalist on event-edit-input-location entirely, (b) ship it anyway with the trivial 0-2-value set, or (c) accept a new fetch there (which contradicts the issue's stated constraint). Flagging per the issue's own instruction.",
+        "event-create-location (root +page.svelte) never received #239's visible-<span>-label treatment — it still relies on aria-label only. Not a datalist blocker, but worth noting if PO wants label consistency addressed in the same pass.",
+        "Line numbers in the issue body (6176/7249/1950) are stale by a handful of lines vs current main (now ~6190-6201/7272-7281/2009-2020) due to intervening #238/#239/#240/#241 commits; current-tree line numbers are reported above.",
+        "Tree was on feat/241-preview-cap during this investigation; all evidence was pulled via `git show main:<path>` per the task's read-only instruction, not from the live worktree — worth a fresh double-check if #241 merges before this issue's implementation branch is cut from main."
+      ],
+      "notes": "Scratchpad copies used for grepping (not part of the repo): /tmp/claude-1000/-home-ai-teams-workspace/d0b39edd-40aa-4d37-8b1a-8e3adafb7fd4/scratchpad/root_page.svelte (main:src/routes/+page.svelte) and .../scratchpad/event_id_page.svelte (main:src/routes/event/[id]/+page.svelte). A throwaway happy-dom probe spec was created at src/routes/_probe_datalist.spec.ts, run once, then deleted (working tree left clean — verify with `git status --short` if desired, no other files were touched).\n\nSummary for the parent agent:\n1. Three input sites confirmed at (main, current line numbers): series-create-location +page.svelte:6192-6201 (labeled), event-create-location +page.svelte:7272-7281 (aria-label only), event-edit-input-location event/[id]/+page.svelte:2010-2020 (inline pencil-edit, aria-label only). None carry a `list` attribute today.\n2. THE GAP is real: event/[id] route has no AgendaItem[]/location corpus in memory — loadEventDetail (src/lib/events/eventDetail.ts) fetches only the single event's own `location` plus its parent series' `default_location` as a fallback string, never a list. Cheapest no-new-fetch source there is at most 2 trivial values (current value + series default) — recommend flagging to PO whether to skip datalist on that field or accept it's a near-empty list, rather than fetching more data.\n3. On the agenda page (root +page.svelte), `agendaItems`/`recentItems` ($state<AgendaItem[]>, :143/:191) are already loaded at page load and live in the exact same component scope as seriesCreateLocation/eventCreateLocation — a datalist sourced from `[...agendaItems, ...recentItems].map(i => i.location)` needs zero prop-drilling on the two create forms.\n4. Zero `datalist` precedent in the codebase (repo-wide grep, both main and worktree). happy-dom (the project's DOM test env for these specs) handles `list` attr + `<option>` querying fine — verified live with a throwaway vitest probe, no environment limitation.\n5. No existing spec on these three inputs asserts a closed/exhaustive attribute set — all check individual props/attrs (tagName, type, value, placeholder, disabled, aria-label, presence). Adding `list=` to any of the three inputs will not break any currently-passing assertion."
+    }
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify:248",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a19f00bfe531ac19e",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788545012168,
+      "queuedAt": 1788545012145,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Scratchpad copies used for grepping (not part of the repo):…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY; tree may sit on a pipeline branch (#241 live) — read via git show main:<path> where needed; state observed state. Terse evidence: file:line + fact.\n\nIssue mvox-app#248 (gh issue view 248): native <datalist> location suggestions on three inputs, suggestion set from already-load…",
+      "lastProgressAt": 1788545168810,
+      "tokens": 59083,
+      "toolCalls": 28,
+      "durationMs": 156642,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: workspace-app origin ends mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Tree sits on a pipeline branch (#241 live), read via git show main:<path>\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git branch --show-current -> feat/241-preview-cap; used `git show main:<path>` throughout\"},{\"claim\":\"…"
+    }
+  ],
+  "totalTokens": 59083,
+  "totalToolCalls": 28
+}
