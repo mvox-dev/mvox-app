@@ -366,7 +366,6 @@
 	"season_create_failed": "Couldn't create the season. Try again.",
 	"season_created": "{name} created.",
 	"season_manage_gear_label": "Manage season",
-	"season_manage_panel_label": "Manage season",
 	"season_manage_name_label": "Season name",
 	"season_manage_edit_name_label": "Edit season name",
 	"season_manage_start_date_label": "Start date",

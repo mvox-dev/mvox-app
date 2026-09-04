@@ -548,12 +548,42 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 
 		expect(gotoMock).not.toHaveBeenCalled();
 		expect(panel.getAttribute('role')).toBe('dialog');
-		expect(panel.getAttribute('aria-label')).toBeTruthy();
+		// #236 — the panel's own <h2> is promoted into the card header, so the
+		// dialog's accessible name now COMES FROM that visible element
+		// (aria-labelledby → season-manage-label), mirroring the #222 gear
+		// pattern: one authored string names the label, the gear AND the dialog.
+		// No separately-authored aria-label remains.
+		expect(
+			panel.getAttribute('aria-labelledby'),
+			'#236 — the dialog is named by the visible card title'
+		).toBe('season-manage-label');
+		expect(
+			panel.hasAttribute('aria-label'),
+			'no duplicated aria-label authoring on the panel'
+		).toBe(false);
+		const panelLabelEl = container.querySelector('[id="season-manage-label"]') as HTMLElement;
+		expect(panelLabelEl, 'aria-labelledby must resolve to an element').not.toBeNull();
+		expect(panelLabelEl.textContent?.trim()).toBe('season_manage_gear_label');
 
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 		});
 		expect(listEventsForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+	});
+
+	it('#236 — ONE header row: with the panel OPEN the "Manage season" phrase renders exactly once, and season_manage_panel_label is consumed NOWHERE', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+
+		// The message mock echoes keys, so occurrences of the key string count
+		// visible renderings of the copy. The card title (the promoted h2) is
+		// the ONE place the phrase appears — the panel's own header row is gone.
+		const occurrences =
+			(container.textContent ?? '').match(/season_manage_gear_label/g)?.length ?? 0;
+		expect(occurrences, 'the phrase renders exactly once in the open state').toBe(1);
+		// …and the retired duplicate key feeds NOTHING any more — no text node,
+		// no aria-label attribute (innerHTML catches both).
+		expect(container.innerHTML).not.toContain('season_manage_panel_label');
 	});
 });
 

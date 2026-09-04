@@ -366,7 +366,6 @@
 	"season_create_failed": "Hooaega ei õnnestunud luua. Proovi uuesti.",
 	"season_created": "{name} loodud.",
 	"season_manage_gear_label": "Halda hooaega",
-	"season_manage_panel_label": "Halda hooaega",
 	"season_manage_name_label": "Hooaja nimi",
 	"season_manage_edit_name_label": "Muuda hooaja nime",
 	"season_manage_start_date_label": "Alguskuupäev",

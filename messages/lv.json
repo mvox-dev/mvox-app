@@ -367,7 +367,6 @@
 	"season_create_failed": "Neizdevās izveidot sezonu. Mēģiniet vēlreiz.",
 	"season_created": "{name} izveidota.",
 	"season_manage_gear_label": "Pārvaldīt sezonu",
-	"season_manage_panel_label": "Pārvaldīt sezonu",
 	"season_manage_name_label": "Sezonas nosaukums",
 	"season_manage_edit_name_label": "Rediģēt sezonas nosaukumu",
 	"season_manage_start_date_label": "Sākuma datums",

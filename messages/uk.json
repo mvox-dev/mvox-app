@@ -368,7 +368,6 @@
 	"season_create_failed": "Не вдалося створити сезон. Спробуйте ще раз.",
 	"season_created": "{name} створено.",
 	"season_manage_gear_label": "Керувати сезоном",
-	"season_manage_panel_label": "Керувати сезоном",
 	"season_manage_name_label": "Назва сезону",
 	"season_manage_edit_name_label": "Редагувати назву сезону",
 	"season_manage_start_date_label": "Дата початку",

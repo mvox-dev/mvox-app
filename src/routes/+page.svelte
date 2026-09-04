@@ -2423,6 +2423,20 @@
 	 *  uses, so arming the season disarms a row and vice versa. Never collides
 	 *  with a real entity id. */
 	const SEASON_DELETE_ROW_ID = '__season__';
+	/** #236 — the season's display name for the header-row trashcan and its
+	 *  confirm/cancel pair, valid whether or not the panel has EVER been
+	 *  opened. `seasonManageName` itself is only seeded by `openSeasonManagePanel`
+	 *  (`seasonManageFieldsLoaded` gate), so a season whose panel has never
+	 *  opened would otherwise announce the delete with an empty name — the
+	 *  delete is now reachable from the collapsed card, so that gap is live,
+	 *  not theoretical. Falls back to the season list `loadForSelected` already
+	 *  fetched (zero extra fetch); once the panel HAS loaded its fields, this
+	 *  is byte-identical to `seasonManageName` (same source, no drift). */
+	const seasonManageDeleteName = $derived(
+		seasonManageFieldsLoaded
+			? seasonManageName
+			: (seasons.find((s) => s.id === manageableSeasonId)?.name ?? '')
+	);
 	/** #217 — the season's LIVE delete scope (`countSeasonScope`'s result),
 	 *  re-read when the season × arms, the season-level analogue of
 	 *  `seasonManageArmedSeriesCount`. `null` while that read is in flight, or
@@ -2441,10 +2455,11 @@
 	 *  A successful delete otherwise just removes a row with nothing said, the
 	 *  same gap `roster-section-remove-status` exists to close. */
 	let seasonManageDeleteStatus = $state('');
-	/** #216/#217 — the ONE progress counter shared by the series cascade and
-	 *  the season cascade that wraps it, rendered under the series list next to
-	 *  the delete-error slot (Gama's 2026-09-02 placement ruling). `null` when
-	 *  no cascade is running. */
+	/** #216/#217/#236 — the ONE progress counter shared by the series cascade
+	 *  and the season cascade that wraps it, rendered at CARD level (Gama's
+	 *  #236 G2 ruling — a season cascade can now start from the collapsed
+	 *  card, and a counter shut inside the panel would be invisible there).
+	 *  `null` when no cascade is running. */
 	let seasonManageDeleteProgress = $state<{ current: number; total: number } | null>(null);
 	/** #217 — bumped by every `resetSeasonManage` (a collective switch, or the
 	 *  agenda's own failure path), and captured by each cascade attempt at the
@@ -3674,7 +3689,10 @@
 		if (seasonManageDeletePendingId !== null) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
-		const seasonName = seasonManageName;
+		// #236 — captured from `seasonManageDeleteName`, not the raw
+		// `seasonManageName` state: the delete can now run before the panel has
+		// ever opened, when only the fallback source holds a name at all.
+		const seasonName = seasonManageDeleteName;
 		seasonManageDeleteError = null;
 		seasonManageDeleteProgress = null;
 		seasonManageDeletePendingId = SEASON_DELETE_ROW_ID;
@@ -4576,11 +4594,48 @@
 	const toolbarActiveTestid = $derived.by(() => {
 		const gearEnabled = showSeasonManageGear && !seasonManageGearDisabled;
 		const seasonEnabled = showSeasonCreate && !seasonCreateOpen && !createEntryPointsBlocked;
+		// #236 — the trashcan (idle) or its armed confirm/cancel pair occupies
+		// the toolbar's FIRST slot, under the same gate as the gear/label
+		// (`showSeasonManageGear`). The two states are mutually exclusive in
+		// the template, so each gets its own enabled-ness:
+		//
+		//  * #236 review F1 — the ARMED pair is NOT unconditionally reachable:
+		//    both halves render `disabled={seasonManageDeletePendingId !== null}`
+		//    (:5644, :5673), so for the whole length of a season cascade (many
+		//    serial deletes) neither can hold the stop. Pinning the stop on the
+		//    confirm regardless left the toolbar with ZERO focusable stops
+		//    mid-cascade — every other member was tabindex=-1 and the toolbar
+		//    itself is -1 — dropping the keyboard user at <body> with no Tab
+		//    route back in. `pairEnabled` folds the pending flag in, and the
+		//    ordinary chain below then keeps the stop on the gear (or
+		//    [+ Season]) until the run ends.
+		//  * the IDLE trashcan only exists while nothing is armed.
+		const deleteArmed = seasonManageDeleteArmed === SEASON_DELETE_ROW_ID;
+		const pairEnabled =
+			showSeasonManageGear && deleteArmed && seasonManageDeletePendingId === null;
+		const trashEnabled = showSeasonManageGear && !deleteArmed;
+		// #236 review F2 — 'LAST FOCUSED' comes first for EVERY member, the
+		// armed pair included. The armed pair used to short-circuit ahead of
+		// this chain, so focusing [+ Season] or the gear while armed never
+		// handed the single tabindex=0 over: a Tab-out/Tab-in came back to the
+		// confirm instead of the last-focused control, contradicting the #156
+		// roving contract. 'Confirm leads the pair' survives below, as the
+		// FALLBACK it always was.
+		if (
+			pairEnabled &&
+			(toolbarRoving === 'season-manage-delete-season-confirm' ||
+				toolbarRoving === 'season-manage-delete-season-cancel')
+		)
+			return toolbarRoving;
 		if (toolbarRoving === 'season-manage-gear' && gearEnabled) return toolbarRoving;
 		if (toolbarRoving === 'season-create' && seasonEnabled) return toolbarRoving;
-		// #213 review F1 — the fallback follows DOM order, and [+ Season] is the
-		// FIRST toolbar member now (the gear sits last so its `ml-auto` can push
-		// it alone to the right edge). 'last focused, else first enabled'.
+		if (toolbarRoving === 'season-manage-delete-season' && trashEnabled) return toolbarRoving;
+		// #213 review F1 — the fallback follows DOM order: #236 the trashcan is
+		// the FIRST toolbar member now, [+ Season] second, the gear LAST (its
+		// `ml-auto` pushes it alone to the right edge). 'last focused, else
+		// first enabled'.
+		if (pairEnabled) return 'season-manage-delete-season-confirm';
+		if (trashEnabled) return 'season-manage-delete-season';
 		if (seasonEnabled) return 'season-create';
 		if (gearEnabled) return 'season-manage-gear';
 		return null;
@@ -5506,17 +5561,55 @@
 						     GEAR still vanishes during that window (it did pre-#222 too),
 						     only the frame around the already-open panel now persists. -->
 						{#if showSeasonManageGear || seasonManageOpen || (showSeasonCreate && !seasonCreateOpen)}
-							<div
-								data-testid="agenda-admin-card"
-								class="mb-3 rounded-md border border-ink-4 p-1.5"
-							>
+							<!-- #236 G1 (Gama ruling, accepted as defaulted) — the season
+							     delete's armed confirm/cancel pair now lives in the header
+							     row, a SIBLING of the panel (never a toolbar descendant of
+							     it), so a keypress at the armed pair never reaches the
+							     panel's own `onSeasonManagePanelKeydown` — the exact dead
+							     zone the panel's focus `$effect` already documents (#222
+							     rendered the panel as the toolbar's sibling for the same
+							     reason). Escape at the TOOLBAR catches it: the armed pair
+							     renders INSIDE the role="toolbar" row, so the toolbar is the
+							     tightest element that sees the keypress, and it already
+							     carries a role — catching at the roleless card `<div>` one
+							     level up would demand a new ARIA role (or an ignore comment)
+							     and would also double-dispatch every panel-internal Escape,
+							     since the open panel is the card's descendant. Composed in
+							     the template, both functions unmodified:
+							     `handleAdminToolbarKeydown` returns early for Escape
+							     (rovingNextIndex doesn't claim it) without preventDefault/
+							     stopPropagation, and it only preventDefaults arrow/Home/End,
+							     which `onSeasonManagePanelKeydown` ignores — so the order is
+							     free of interference either way. Reuses
+							     `onSeasonManagePanelKeydown` verbatim — NO new disarm branch:
+							     `closeSeasonManagePanel()` already clears the armed state and
+							     returns focus to the gear (#197 review F2), which is exactly
+							     what the newly-reachable collapsed+armed case needs. The
+							     pre-existing run-refusal early return inside it (#196 review
+							     F1/F3) stays as-is; it is newly REACHABLE from here, not
+							     newly introduced. -->
+							<div data-testid="agenda-admin-card" class="mb-3 rounded-md border border-ink-4 p-1.5">
 								<div
 									data-testid="agenda-admin-toolbar"
 									role="toolbar"
 									aria-label={m.agenda_admin_toolbar_label()}
 									tabindex="-1"
 									class="flex flex-wrap items-center gap-2"
-									onkeydown={handleAdminToolbarKeydown}
+									onkeydown={(e) => {
+										handleAdminToolbarKeydown(e);
+										// #236 review F3 — the catcher is CONFINED to the states that
+										// have something to dismiss. Composed onto the whole toolbar it
+										// fired for Escape from ANY member, so Escape on [+ Season]
+										// with the panel closed and nothing armed still reached
+										// `closeSeasonManagePanel`'s tail `seasonManageGearEl?.focus()`
+										// and yanked focus off the pressed button onto the gear —
+										// Escape moving focus for no reason. The guard keeps the
+										// ruling intact (no new disarm branch;
+										// `onSeasonManagePanelKeydown` and `closeSeasonManagePanel`
+										// are both unmodified) and only narrows WHEN it routes.
+										if (seasonManageOpen || seasonManageDeleteArmed !== null)
+											onSeasonManagePanelKeydown(e);
+									}}
 								>
 								<!-- #213 review F1 — DOM ORDER carries the right-alignment:
 								     `margin-left:auto` on the FIRST flex item absorbs the free
@@ -5524,7 +5617,109 @@
 								     so the gear must come LAST for [+ Season] to sit left and the
 								     gear alone to sit hard right. The roving tabindex fallback in
 								     `toolbarActiveTestid` follows this same order, so arrow order
-								     matches visual order. -->
+								     matches visual order.
+								     #236 — slot order is now label, trashcan, [+ Season], free
+								     space, gear: the label+trashcan block below is FIRST in the
+								     template (both under `showSeasonManageGear`, the SAME gate
+								     the gear already carried — this is a placement change, not a
+								     rights change), [+ Season] second, and the gear's own
+								     `showSeasonManageGear` block below THAT stays last for its
+								     `ml-auto`. -->
+								{#if showSeasonManageGear}
+									<!-- #236 — the card's TITLE leads the row in both states: the
+									     panel's own `<h2>` (the surviving element per Gama's
+									     slot-table refinement — the OLD toolbar text-xs span is
+									     retired) is promoted up here, so the phrase renders exactly
+									     once. Keeps `id="season-manage-label"`, the gear's existing
+									     `aria-labelledby` target (#222) and, below, the panel's own
+									     `aria-labelledby` target too. -->
+									<h2
+										id="season-manage-label"
+										data-testid="season-manage-label"
+										class="font-display text-lg text-ink"
+									>
+										{m.season_manage_gear_label()}
+									</h2>
+									<!-- #217/#236 — the season's OWN delete now lives in the
+									     header row, reachable whether the panel is open or
+									     collapsed: the same two-step confirm idiom every row
+									     carries, on the ONE `seasonManageDeleteArmed` slot (arming
+									     the season disarms an armed row and vice versa — one
+									     destructive intent live at a time). Arming re-reads the live
+									     scope (`armSeasonManageSeasonDelete`) regardless of panel
+									     state — it depends on `manageableSeasonId` and `selected`,
+									     neither of which is panel-gated. -->
+									{#if seasonManageDeleteArmed === SEASON_DELETE_ROW_ID}
+										<div class="flex items-center gap-1">
+											<button
+												type="button"
+												data-testid="season-manage-delete-season-confirm"
+												aria-label={seasonManageDeleteScope !== null
+													? m.season_delete_confirm_scope({
+															name: seasonManageDeleteName,
+															series: seasonManageDeleteScope.series,
+															events: seasonManageDeleteScope.events,
+															repertoire: seasonManageDeleteScope.repertoireItems
+														})
+													: m.season_manage_delete_confirm({ name: seasonManageDeleteName })}
+												disabled={seasonManageDeletePendingId !== null}
+												aria-busy={seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
+												tabindex={toolbarActiveTestid === 'season-manage-delete-season-confirm'
+													? 0
+													: -1}
+												onfocus={() => (toolbarRoving = 'season-manage-delete-season-confirm')}
+												class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+												onclick={onSeasonManageSeasonDelete}
+											>
+												<!-- #217 review F1 — the VISIBLE text carries the scope too, not
+												     just the aria-label. Same ternary shape as the series row's rule:
+												     while the scope read is in flight (or if it failed) the button
+												     falls back to the scope-free short copy rather than quoting a
+												     number the cascade never checked. -->
+												{seasonManageDeleteScope !== null
+													? m.season_delete_confirm_scope_short({
+															series: seasonManageDeleteScope.series,
+															events: seasonManageDeleteScope.events,
+															repertoire: seasonManageDeleteScope.repertoireItems
+														})
+													: m.season_manage_delete_confirm_short()}
+											</button>
+											<button
+												type="button"
+												data-testid="season-manage-delete-season-cancel"
+												aria-label={m.season_manage_delete_cancel({ name: seasonManageDeleteName })}
+												disabled={seasonManageDeletePendingId !== null}
+												tabindex={toolbarActiveTestid === 'season-manage-delete-season-cancel'
+													? 0
+													: -1}
+												onfocus={() => (toolbarRoving = 'season-manage-delete-season-cancel')}
+												class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+												onclick={() => void disarmSeasonManageDelete('season-manage-delete-season')}
+											>
+												{m.season_manage_delete_cancel_short()}
+											</button>
+										</div>
+									{:else}
+										<!-- #217 review F3 — the panel's most destructive control gets its
+										     OWN message key rather than borrowing the EVENT row's — #236
+										     keeps testid AND aria-label byte-identical, only the location and
+										     the glyph change. #236 (Mihkel, Q1: "red trashcan maybe? lets try
+										     red trashcan icon everywhere") — a red trashcan glyph replaces the
+										     old ×; colour is the EXISTING `text-red-700` destructive token the
+										     confirm half already used, no new palette. -->
+										<button
+											type="button"
+											data-testid="season-manage-delete-season"
+											aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
+											tabindex={toolbarActiveTestid === 'season-manage-delete-season' ? 0 : -1}
+											onfocus={() => (toolbarRoving = 'season-manage-delete-season')}
+											class="flex min-h-11 min-w-11 items-center justify-center text-red-700 hover:text-red-800"
+											onclick={() => void armSeasonManageSeasonDelete()}
+										>
+											<span aria-hidden="true">🗑</span>
+										</button>
+									{/if}
+								{/if}
 								{#if showSeasonCreate && !seasonCreateOpen}
 									<button
 										type="button"
@@ -5566,102 +5761,67 @@
 									>
 										<span aria-hidden="true">⚙</span>
 									</button>
-									<!-- #222 — visible collapsed-header name for the card, reusing
-									     the gear's existing copy so it is authored once: the gear's
-									     accessible name is COMPUTED from this element via
-									     aria-labelledby above (no separately-authored aria-label). -->
-									<span id="season-manage-label" data-testid="season-manage-label" class="text-xs text-ink">
-										{m.season_manage_gear_label()}
-									</span>
 								{/if}
 							</div>
+							<!-- #217/#216/#236 — the ONE cascade progress counter, at CARD
+							     level (Gama's #236 G2 ruling): a season cascade can now start
+							     from the collapsed card, and a counter shut inside the panel
+							     would be invisible there. Renders for BOTH a series delete and
+							     a season delete — a season cascade IS a series cascade
+							     (repeated) plus standalone events and repertoire items, so
+							     there is no separate "season slot" needed. role="status"
+							     mirrors the `series-create-progress` idiom verbatim. -->
+							{#if seasonManageDeleteProgress !== null}
+								<p
+									data-testid="season-manage-delete-progress"
+									role="status"
+									class="mt-1 text-xs text-ink-2"
+								>
+									{m.season_manage_delete_progress({
+										current: seasonManageDeleteProgress.current,
+										total: seasonManageDeleteProgress.total
+									})}
+								</p>
+							{/if}
+							<!-- #236 G2 ruling (scope amendment) — ONLY the season-target
+							     branch of the shared error slot moves to card level: that
+							     target has no row of its own, and it is the only cascade that
+							     can now run collapsed. The 'series' branch stays under the
+							     series list (below) and the 'events' branch stays under the
+							     events list, unchanged — #197 review F5 stays intact. -->
+							{#if seasonManageDeleteError?.list === 'season'}
+								<p
+									data-testid="season-manage-delete-error"
+									role="alert"
+									class="mt-1 text-xs text-red-700"
+								>
+									{seasonManageDeleteErrorText(seasonManageDeleteError)}
+								</p>
+							{/if}
 							{#if seasonManageOpen}
 								<div
 									id="season-manage-panel"
 									data-testid="season-manage-panel"
 									bind:this={seasonManagePanelEl}
 									role="dialog"
-									aria-label={m.season_manage_panel_label()}
+									aria-labelledby="season-manage-label"
 									tabindex="-1"
 									class="mt-3 flex flex-col gap-3 p-3"
 									onkeydown={onSeasonManagePanelKeydown}
 								>
-									<!-- #213 — the internal close × is gone; the gear (above, in
-								     the toolbar) is the sole close control now, carrying the
-								     same refusal guard that button used to.
-								     #217 — the season's OWN delete now shares this header row:
-								     the two-step confirm idiom every row already carries, on
-								     the ONE `seasonManageDeleteArmed` slot (arming the season
-								     disarms an armed row and vice versa — one destructive
-								     intent live at a time). Arming re-reads the live scope
-								     (`armSeasonManageSeasonDelete`) the same way a series row
-								     re-reads its occurrence count. -->
-								<div class="flex items-center justify-between gap-2">
-									<h2 class="font-display text-lg text-ink">{m.season_manage_panel_label()}</h2>
-									{#if seasonManageDeleteArmed === SEASON_DELETE_ROW_ID}
-										<div class="flex items-center gap-1">
-											<button
-												type="button"
-												data-testid="season-manage-delete-season-confirm"
-												aria-label={seasonManageDeleteScope !== null
-													? m.season_delete_confirm_scope({
-															name: seasonManageName,
-															series: seasonManageDeleteScope.series,
-															events: seasonManageDeleteScope.events,
-															repertoire: seasonManageDeleteScope.repertoireItems
-														})
-													: m.season_manage_delete_confirm({ name: seasonManageName })}
-												disabled={seasonManageDeletePendingId !== null}
-												aria-busy={seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
-												class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-												onclick={onSeasonManageSeasonDelete}
-											>
-												<!-- #217 review F1 — the VISIBLE text carries the scope too, not
-												     just the aria-label: the series row's rule ("the operator must
-												     see what the delete takes with it") applies hardest to the
-												     whole-season cascade. Same ternary shape as that row: while the
-												     scope read is in flight (or if it failed) the button falls back
-												     to the scope-free short copy rather than quoting a number the
-												     cascade never checked. -->
-												{seasonManageDeleteScope !== null
-													? m.season_delete_confirm_scope_short({
-															series: seasonManageDeleteScope.series,
-															events: seasonManageDeleteScope.events,
-															repertoire: seasonManageDeleteScope.repertoireItems
-														})
-													: m.season_manage_delete_confirm_short()}
-											</button>
-											<button
-												type="button"
-												data-testid="season-manage-delete-season-cancel"
-												aria-label={m.season_manage_delete_cancel({ name: seasonManageName })}
-												disabled={seasonManageDeletePendingId !== null}
-												class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-												onclick={() => void disarmSeasonManageDelete('season-manage-delete-season')}
-											>
-												{m.season_manage_delete_cancel_short()}
-											</button>
-										</div>
-									{:else}
-										<!-- #217 review F3 — the panel's most destructive control gets its OWN
-										     message key rather than borrowing the EVENT row's. The two read the
-										     same today, so one copy edit on the event key (rewording it to
-										     "Delete event …") would have this × announcing a season as an
-										     event. -->
-										<button
-											type="button"
-											data-testid="season-manage-delete-season"
-											aria-label={m.season_manage_season_delete({ name: seasonManageName })}
-											class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-											onclick={() => void armSeasonManageSeasonDelete()}
-										>
-											&times;
-										</button>
-									{/if}
-								</div>
+									<!-- #213 — the internal close × is gone; the gear (in the
+									     toolbar) is the sole close control now, carrying the same
+									     refusal guard that button used to.
+									     #236 — the panel's OWN header row (the `<h2>` title and the
+									     season's delete) is gone entirely: both are promoted into
+									     the card's header row above, which is the panel's
+									     `aria-labelledby` target too — one authored string names the
+									     label, the gear AND the dialog (#222's authored-once
+									     pattern), so the phrase renders exactly once whether the
+									     panel is open or not. -->
 
-								<!-- name -->
-								<div>
+									<!-- name -->
+									<div>
 									{#if seasonEditingField === 'name'}
 										<input
 											type="text"
@@ -6360,34 +6520,17 @@
 											</div>
 										</div>
 									{/each}
-									<!-- #216/#217 — the ONE cascade progress counter, placed under
-									     the series list next to the delete-error slot (Gama's
-									     2026-09-02 ruling): it renders for BOTH a series delete and a
-									     season delete, since a season cascade IS a series cascade
-									     (repeated) plus standalone events and repertoire items — there
-									     is nowhere else on the panel that is "the cascade's own
-									     place" once the target can be the whole season. role="status"
-									     mirrors the `series-create-progress` idiom verbatim. -->
-									{#if seasonManageDeleteProgress !== null}
-										<p
-											data-testid="season-manage-delete-progress"
-											role="status"
-											class="mt-1 text-xs text-ink-2"
-										>
-											{m.season_manage_delete_progress({
-												current: seasonManageDeleteProgress.current,
-												total: seasonManageDeleteProgress.total
-											})}
-										</p>
-									{/if}
-									{#if seasonManageDeleteError?.list === 'series' || seasonManageDeleteError?.list === 'season'}
-										<!-- #197 review F5 — under the list that actually failed. The one
-										     shared slot used to render below the standalone-EVENTS list,
-										     so a failed SERIES delete printed its message visually
-										     detached from the row it was about.
-										     #217 — the SEASON's own failure lands here too: there is no
-										     "season row" of its own, and this is where its progress
-										     counter already renders. -->
+									<!-- #236 G2 — the progress counter that used to render here
+									     moved to CARD level (above the panel, both states) since a
+									     season cascade can now start collapsed. -->
+									{#if seasonManageDeleteError?.list === 'series'}
+										<!-- #197 review F5 — under the list that actually failed. The
+										     shared slot used to render below the standalone-EVENTS
+										     list, so a failed SERIES delete printed its message
+										     visually detached from the row it was about.
+										     #236 G2 (scope amendment) — the SEASON branch moved to
+										     card level (above); this slot now carries ONLY the
+										     'series' case, unchanged in every other respect. -->
 										<p
 											data-testid="season-manage-delete-error"
 											role="alert"

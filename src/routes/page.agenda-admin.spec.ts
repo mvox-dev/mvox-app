@@ -370,7 +370,10 @@ async function renderReady(): Promise<HTMLElement> {
 const ADMIN_TESTIDS = [
 	'agenda-admin-card', // #222 — the ONE bordered card wrapping header row + panel
 	'season-manage-gear',
-	'season-manage-label', // #222 — visible 'Manage season' text beside the gear
+	'season-manage-label', // #222/#236 — the visible 'Manage season' card title (the surviving h2)
+	'season-manage-delete-season', // #236 — the season's red trashcan, now IN the header row
+	'season-manage-delete-season-confirm', // #236 — the armed two-step's halves live in the
+	'season-manage-delete-season-cancel', //          header row too while armed
 	'season-manage-panel',
 	'season-manage-repertoire', // #234 — the panel's season-repertoire section
 	'season-create',
@@ -660,14 +663,14 @@ describe('agenda admin — #213: the gear toggles the season-manage panel', () =
 const TOOLBAR = 'agenda-admin-toolbar';
 
 describe('agenda admin — #149/#213: the entry points live in one shared admin toolbar', () => {
-	it('[⚙] and [+ Season] are DIRECT children of the same agenda-admin-toolbar element — and they are ALL of its buttons', async () => {
+	it('[⚙], [+ Season] and the #236 trashcan are DIRECT children of the same agenda-admin-toolbar element — and they are ALL of its buttons', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, TOOLBAR)).not.toBeNull();
 		});
 		const toolbar = q(container, TOOLBAR) as HTMLElement;
 
-		for (const testid of ['season-manage-gear', 'season-create']) {
+		for (const testid of ['season-manage-gear', 'season-create', 'season-manage-delete-season']) {
 			const control = q(container, testid) as HTMLElement;
 			expect(control, testid).not.toBeNull();
 			expect(
@@ -675,8 +678,9 @@ describe('agenda admin — #149/#213: the entry points live in one shared admin 
 				`${testid} must sit INSIDE the shared toolbar frame — not as a loose sibling`
 			).toBe(toolbar);
 		}
-		// #213 — no third button: the page-level [+ Event] is gone.
-		expect(toolbar.querySelectorAll('button')).toHaveLength(2);
+		// #213 — the page-level [+ Event] is gone; #236 — the season's delete
+		// trashcan joins as the THIRD member. Nothing else sneaks in.
+		expect(toolbar.querySelectorAll('button')).toHaveLength(3);
 	});
 
 	it('the gear is RIGHT-ALIGNED: it carries ml-auto, and the frame does NOT hug its content (w-fit would make ml-auto inert)', async () => {
@@ -688,6 +692,17 @@ describe('agenda admin — #149/#213: the entry points live in one shared admin 
 		const gearClasses = Array.from((q(container, 'season-manage-gear') as HTMLElement).classList);
 
 		expect(toolbarClasses, 'the toolbar must be a flex row').toContain('flex');
+		// #236 review F4 — the row now carries FOUR items (the "Manage season"
+		// label plus up to three controls, and while armed the label + the
+		// confirm/cancel pair + [+ Season] + gear). On a 375px viewport the
+		// long locales ('Pārvaldīt sezonu', 'Керувати сезоном') cannot fit that
+		// on one line; without wrapping the row overflows the card instead of
+		// breaking. The class is what keeps it breakable — happy-dom computes
+		// no layout, so the live 375px lv/uk check stays a browser-gate job.
+		expect(
+			toolbarClasses,
+			'#236 — a four-item header row must be allowed to wrap at 375px'
+		).toContain('flex-wrap');
 		expect(
 			gearClasses,
 			'#213 — the gear must be pushed to the right edge of the toolbar row (ml-auto)'
@@ -710,9 +725,21 @@ describe('agenda admin — #149/#213: the entry points live in one shared admin 
 			buttons[buttons.length - 1].getAttribute('data-testid'),
 			'ml-auto only right-aligns the gear if the gear is the LAST member of the row'
 		).toBe('season-manage-gear');
-		expect(buttons[0].getAttribute('data-testid'), '[+ Season] stays on the left').toBe(
-			'season-create'
-		);
+		// #236 slot order — label, trashcan, [+ Season], free space, gear:
+		// the trashcan sits IMMEDIATELY after the label ("right after the
+		// Manage season"), so it is the FIRST button; [+ Season] follows.
+		expect(
+			buttons.map((b) => b.getAttribute('data-testid')),
+			'#236 — DOM order carries the slot table: trashcan, [+ Season], gear'
+		).toEqual(['season-manage-delete-season', 'season-create', 'season-manage-gear']);
+		// …and the visible label comes BEFORE all of them, as the row's first
+		// member (the card's left-aligned title).
+		const label = q(container, 'season-manage-label') as HTMLElement;
+		expect(label, 'the label lives in the header row').not.toBeNull();
+		expect(
+			label.compareDocumentPosition(buttons[0]) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'#236 — the "Manage season" label precedes the trashcan (and every control) in DOM order'
+		).toBeTruthy();
 	});
 
 	it('a NON-editor gets no toolbar at all — not an empty frame', async () => {
@@ -827,18 +854,19 @@ describe('agenda admin — #222: one card — the panel opens inside the toolbar
 		).not.toContain('border');
 	});
 
-	it("panel OPEN: the role=\"toolbar\" element still holds EXACTLY its 2 header buttons — the panel's many buttons never join the roving pool", async () => {
+	it("panel OPEN: the role=\"toolbar\" element still holds EXACTLY its 3 header buttons — the panel's many buttons never join the roving pool", async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
 		const card = q(container, CARD) as HTMLElement;
 		const toolbar = q(container, TOOLBAR) as HTMLElement;
 		// Non-vacuous: the card as a whole now holds MANY buttons (the panel's)…
-		expect(card.querySelectorAll('button').length).toBeGreaterThan(2);
-		// …but the roving query's root still sees exactly the 2 header members,
-		// in the #213 order ([+ Season] left, gear last for ml-auto).
+		expect(card.querySelectorAll('button').length).toBeGreaterThan(3);
+		// …but the roving query's root still sees exactly the 3 header members,
+		// in the #236 order (trashcan, [+ Season], gear last for ml-auto).
 		const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button'));
 		expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual([
+			'season-manage-delete-season',
 			'season-create',
 			'season-manage-gear'
 		]);
@@ -959,6 +987,16 @@ describe("agenda admin — #222: visible 'Manage season' in the collapsed header
 
 		expect(label.parentElement, 'the label sits IN the header row').toBe(toolbar);
 		expect(label.tagName, 'plain text, not another control').not.toBe('BUTTON');
+		// #236 — the SURVIVING element is the old panel heading, not the old
+		// text-xs span: the card's TITLE, an <h2> with the display typography,
+		// leading the row from the left.
+		expect(label.tagName, '#236 — the label is the promoted panel <h2>').toBe('H2');
+		expect(Array.from(label.classList), '#236 — keeps the heading font').toContain('font-display');
+		expect(Array.from(label.classList), '#236 — keeps the heading size').toContain('text-lg');
+		expect(
+			toolbar.firstElementChild,
+			'#236 — the title LEADS the header row (label before every control)'
+		).toBe(label);
 		// The message mock renders keys verbatim — this pins WHICH key feeds the
 		// label (the existing gear copy, no new key). The real four-locale copy
 		// ('Manage season' / 'Halda hooaega' / …) is pinned by the i18n test below.
@@ -1010,6 +1048,9 @@ describe("agenda admin — #222: visible 'Manage season' in the collapsed header
 		expect(q(container, CARD), 'the card still mounts for its one control').not.toBeNull();
 		expect(q(container, 'season-manage-gear')).toBeNull();
 		expect(q(container, 'season-manage-label')).toBeNull();
+		// #236 — the trashcan rides the SAME gate as the gear and the label: a
+		// create-rights-only caller must never see a season delete.
+		expect(q(container, 'season-manage-delete-season')).toBeNull();
 	});
 });
 
@@ -1028,6 +1069,30 @@ describe('agenda admin — #222: season_manage_gear_label copy exists in all fou
 				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 			) as Record<string, string>;
 			expect(msgs.season_manage_gear_label, `${locale}.json season_manage_gear_label`).toBe(copy);
+		}
+	});
+});
+
+// ── #236 — the orphaned duplicate key is GONE from every locale ────────────────
+//
+// The panel's own <h2> and its aria-label were `season_manage_panel_label`'s
+// only two consumers; #236 promotes the h2 into the card header rendering
+// `season_manage_gear_label` and points the panel's accessible name at that
+// visible element (aria-labelledby). A key with zero consumers is authoring
+// debt — the same duplicate #222 already retired once for the gear — so it is
+// DELETED, not left to drift per locale. (Removing a dead key changes nothing
+// any user reads: not a copy change.)
+
+describe('agenda admin — #236: season_manage_panel_label is removed from all four locales (dead key)', () => {
+	it('the key is absent in en/et/lv/uk', () => {
+		for (const locale of ['en', 'et', 'lv', 'uk'] as const) {
+			const msgs = JSON.parse(
+				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
+			) as Record<string, string>;
+			expect(
+				'season_manage_panel_label' in msgs,
+				`${locale}.json still carries the unconsumed season_manage_panel_label`
+			).toBe(false);
 		}
 	});
 });
@@ -1840,15 +1905,22 @@ function expectTouchTarget(
 }
 
 describe('agenda admin — every admin control is a 44x44px touch target', () => {
-	it('page-level entry points (#213: two left): [⚙] (icon-only: height AND width), [+ Season]', async () => {
+	it('page-level entry points (#236: three): [⚙] and the 🗑 (icon-only: height AND width), [+ Season]', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, 'season-manage-gear')).not.toBeNull();
 			expect(q(container, 'season-create')).not.toBeNull();
+			expect(q(container, 'season-manage-delete-season')).not.toBeNull();
 		});
 
 		expectTouchTarget(container, 'season-manage-gear', { iconOnly: true });
 		expectTouchTarget(container, 'season-create');
+		// #236 review F4 — the trashcan joined the header row as a THIRD
+		// page-level entry point and is icon-only (a lone 🗑 glyph, no label to
+		// give it width). It is the most destructive control on the card, so a
+		// restyle that drops its width floor is exactly the regression this
+		// suite exists to catch.
+		expectTouchTarget(container, 'season-manage-delete-season', { iconOnly: true });
 	});
 
 	it('panel controls (#213: the internal close × is gone): [+ Series], [+ Event]', async () => {
@@ -2066,7 +2138,7 @@ describe('agenda admin — creation forms stay inside a 375px viewport (class co
 // at arity 2. Reported back on the issue per the ruling's escape clause:
 // mvox-dev/mvox-app#213 (issuecomment-5507858508).
 // ---------------------------------------------------------------------------
-describe('agenda admin toolbar — roving tabindex (#156, arity 2 after #213)', () => {
+describe('agenda admin toolbar — roving tabindex (#156; arity 3 after #236: trashcan, [+ Season], gear)', () => {
 	function toolbarButtons(container: HTMLElement): HTMLButtonElement[] {
 		return Array.from(
 			(q(container, 'agenda-admin-toolbar') as HTMLElement).querySelectorAll<HTMLButtonElement>(
@@ -2095,14 +2167,17 @@ describe('agenda admin toolbar — roving tabindex (#156, arity 2 after #213)', 
 		expect(toolbar.getAttribute('aria-label')).toBeTruthy();
 	});
 
-	it('exactly ONE control is the Tab stop, and it is the first member (of the two #213 leaves)', async () => {
+	it('exactly ONE control is the Tab stop, and it is the first member — the #236 trashcan', async () => {
 		const container = await renderToolbar();
 		const btns = toolbarButtons(container);
-		expect(btns).toHaveLength(2);
+		expect(btns).toHaveLength(3);
+		expect(btns[0].getAttribute('data-testid'), '#236 — the trashcan leads the pool').toBe(
+			'season-manage-delete-season'
+		);
 		expect(stops(container)).toEqual([btns[0]]);
 	});
 
-	it('ArrowRight moves focus forward and WRAPS; ArrowLeft wraps backwards; the stop travels along', async () => {
+	it('ArrowRight moves focus forward through ALL THREE members and WRAPS; ArrowLeft wraps backwards; the stop travels along', async () => {
 		const container = await renderToolbar();
 		const btns = toolbarButtons(container);
 
@@ -2114,21 +2189,47 @@ describe('agenda admin toolbar — roving tabindex (#156, arity 2 after #213)', 
 		});
 
 		await fireEvent.keyDown(btns[1], { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(btns[2]);
+
+		await fireEvent.keyDown(btns[2], { key: 'ArrowRight' });
 		expect(document.activeElement).toBe(btns[0]);
 
 		await fireEvent.keyDown(btns[0], { key: 'ArrowLeft' });
-		expect(document.activeElement).toBe(btns[1]);
+		expect(document.activeElement).toBe(btns[2]);
 	});
 
-	it('arrows MOVE ONLY — no form or panel opens from arrow navigation', async () => {
+	it('#236 — the trashcan is a REAL roving stop: focusing it hands the single tabindex=0 over (and back)', async () => {
+		const container = await renderToolbar();
+		const btns = toolbarButtons(container);
+		const trashcan = q(container, 'season-manage-delete-season') as HTMLButtonElement;
+		expect(btns).toContain(trashcan);
+
+		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
+		gear.focus();
+		await fireEvent.focus(gear);
+		await waitFor(() => {
+			expect(stops(container)).toEqual([gear]);
+		});
+
+		trashcan.focus();
+		await fireEvent.focus(trashcan);
+		await waitFor(() => {
+			expect(stops(container), 'one stop, and it is the trashcan now').toEqual([trashcan]);
+		});
+	});
+
+	it('arrows MOVE ONLY — no form or panel opens, and the delete never ARMS, from arrow navigation', async () => {
 		const container = await renderToolbar();
 		const btns = toolbarButtons(container);
 		btns[0].focus();
 		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });
 		await fireEvent.keyDown(btns[1], { key: 'ArrowRight' });
+		await fireEvent.keyDown(btns[2], { key: 'ArrowRight' });
 		expect(q(container, 'season-create-form')).toBeNull();
 		expect(q(container, 'event-create-form')).toBeNull();
 		expect(q(container, 'season-manage-panel')).toBeNull();
+		// #236 — roving across the trashcan is not an arming tap.
+		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
 	});
 
 	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the toolbar and the button still activates', async () => {
