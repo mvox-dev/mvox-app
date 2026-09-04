@@ -69,7 +69,7 @@
 //     - a saved edit persists across close/reopen WITHOUT re-saving and WITHOUT
 //       a full agenda refetch — local state is the truth the panel renders.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
@@ -466,7 +466,7 @@ async function pickConductor(panel: HTMLElement, personId: string): Promise<void
 // ── the entry point: gear on the season header, rights-gated ────────────────────
 
 describe('agenda — the [⚙] season-manage entry point', () => {
-	it('season editor + current season: season-manage-gear renders as a BUTTON with an accessible name, outside any agenda row; merely rendering opens no panel and writes nothing', async () => {
+	it('season editor + current season: season-manage-gear renders as a BUTTON whose accessible name says what it DOES (own aria-label), outside any agenda row; merely rendering opens no panel and writes nothing', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
@@ -475,18 +475,20 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		const gear = q(container, 'season-manage-gear') as HTMLElement;
 		expect(gear.tagName).toBe('BUTTON');
 		// Icon-only affordance MUST carry a name a screen reader can announce.
-		// #222 — the name is COMPUTED from the visible 'Manage season' text
-		// (season-manage-label) via aria-labelledby, not authored twice as a
-		// separate aria-label: one copy per locale, visible and announced alike.
-		const labelledby = gear.getAttribute('aria-labelledby');
-		expect(labelledby, 'the gear must take its name from the visible label').toBeTruthy();
-		const labelEl = container.querySelector(`[id="${labelledby}"]`) as HTMLElement;
-		expect(labelEl, 'aria-labelledby must resolve to an element').not.toBeNull();
-		expect(labelEl.getAttribute('data-testid')).toBe('season-manage-label');
-		// The message mock renders keys verbatim — the computed name IS the
-		// season_manage_gear_label copy ('Manage season' in en).
-		expect(labelEl.textContent?.trim()).toBe('season_manage_gear_label');
-		expect(gear.hasAttribute('aria-label'), 'no duplicated aria-label authoring').toBe(false);
+		// #238 — the visible h2 now carries the season's NAME, so borrowing it
+		// via aria-labelledby would announce the gear as "Season 2026" — an
+		// identity, not a function. The gear authors its OWN aria-label from the
+		// season_manage_gear_label copy instead ('Manage season' in en; the
+		// message mock renders keys verbatim).
+		expect(gear.getAttribute('aria-label')).toBe('season_manage_gear_label');
+		// aria-labelledby OUTRANKS aria-label in the accname algorithm — keeping
+		// it would silently rename the gear to the season. It must be gone.
+		expect(
+			gear.hasAttribute('aria-labelledby'),
+			'aria-labelledby would override the aria-label with the season name'
+		).toBe(false);
+		// The real accname algorithm agrees: the gear resolves BY its function.
+		expect(within(container).getByRole('button', { name: 'season_manage_gear_label' })).toBe(gear);
 		expect(gear.closest('[data-testid^="agenda-row-"]')).toBeNull();
 		expect(gear.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
 
@@ -549,13 +551,14 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		expect(gotoMock).not.toHaveBeenCalled();
 		expect(panel.getAttribute('role')).toBe('dialog');
 		// #236 — the panel's own <h2> is promoted into the card header, so the
-		// dialog's accessible name now COMES FROM that visible element
-		// (aria-labelledby → season-manage-label), mirroring the #222 gear
-		// pattern: one authored string names the label, the gear AND the dialog.
-		// No separately-authored aria-label remains.
+		// dialog's accessible name COMES FROM that visible element
+		// (aria-labelledby → season-manage-label). #238 — that h2 now renders
+		// the season's NAME, so the dialog is named by the season it manages:
+		// a region named by its subject is exactly right, so aria-labelledby
+		// STAYS (unlike the gear, whose name must say what it does).
 		expect(
 			panel.getAttribute('aria-labelledby'),
-			'#236 — the dialog is named by the visible card title'
+			'#236/#238 — the dialog is named by the visible card title'
 		).toBe('season-manage-label');
 		expect(
 			panel.hasAttribute('aria-label'),
@@ -563,7 +566,9 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		).toBe(false);
 		const panelLabelEl = container.querySelector('[id="season-manage-label"]') as HTMLElement;
 		expect(panelLabelEl, 'aria-labelledby must resolve to an element').not.toBeNull();
-		expect(panelLabelEl.textContent?.trim()).toBe('season_manage_gear_label');
+		// #238 — the h2's text is the season name (fixture: 'Season 2026'), not
+		// the gear-label copy.
+		expect(panelLabelEl.textContent?.trim()).toBe('Season 2026');
 
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
@@ -571,16 +576,23 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		expect(listEventsForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 	});
 
-	it('#236 — ONE header row: with the panel OPEN the "Manage season" phrase renders exactly once, and season_manage_panel_label is consumed NOWHERE', async () => {
+	it('#238 — the header leads with the season NAME: with the panel OPEN the h2 shows the name, the "Manage season" phrase is visible NOWHERE (announced only, on the gear), and season_manage_panel_label is consumed nowhere', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		// The message mock echoes keys, so occurrences of the key string count
-		// visible renderings of the copy. The card title (the promoted h2) is
-		// the ONE place the phrase appears — the panel's own header row is gone.
+		// #238 — the card's title IS the season now. The 'Manage season' copy
+		// moved from visible text into the gear's aria-label, so as VISIBLE
+		// text (textContent — attributes don't render) it appears ZERO times.
+		const label = q(container, 'season-manage-label') as HTMLElement;
+		expect(label, 'the promoted h2 stays mounted with the panel open').not.toBeNull();
+		expect(label.textContent?.trim(), '#238 — the h2 text is the season name').toBe('Season 2026');
 		const occurrences =
 			(container.textContent ?? '').match(/season_manage_gear_label/g)?.length ?? 0;
-		expect(occurrences, 'the phrase renders exactly once in the open state').toBe(1);
+		expect(occurrences, '#238 — the gear-label copy is never visible text now').toBe(0);
+		// …but the copy is still AUTHORED and announced: the gear's accessible
+		// name is the gear-label copy (its own aria-label), not the season name.
+		const gear = q(container, 'season-manage-gear') as HTMLElement;
+		expect(within(container).getByRole('button', { name: 'season_manage_gear_label' })).toBe(gear);
 		// …and the retired duplicate key feeds NOTHING any more — no text node,
 		// no aria-label attribute (innerHTML catches both).
 		expect(container.innerHTML).not.toContain('season_manage_panel_label');

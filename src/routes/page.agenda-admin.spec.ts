@@ -968,16 +968,18 @@ describe('agenda admin — #222: one card — the panel opens inside the toolbar
 	});
 });
 
-// ── #222 — the collapsed header NAMES the card: visible 'Manage season' ────────
+// ── #238 — the collapsed header NAMES the card by its SEASON ───────────────────
 //
-// Until the app manages more than one season (YAGNI), the collapsed header row
-// shows the 'Manage season' text beside the gear — reusing the EXISTING
-// season_manage_gear_label copy, no new key. The gear's accessible name then
-// COMES FROM that visible element (aria-labelledby), so the copy is authored
-// exactly once — no aria-label duplicate to drift per locale.
+// Mihkel's live-gate reading of the shipped #236 card: "Prügikast peaks olema
+// hooaja nime taga hoopis" — the trashcan belongs behind the season NAME. The
+// h2 (same element, same slot, same testid) now renders the season's name via
+// the seasonManageDeleteName derivation — already non-panel-gated (falls back
+// to the seasons array loadFullAgenda fetched), so the ordinary collapsed card
+// shows the name WITHOUT the panel ever having opened, at zero extra fetch.
+// The 'Manage season' copy survives as the gear's OWN aria-label (below).
 
-describe("agenda admin — #222: visible 'Manage season' in the collapsed header", () => {
-	it('season-manage-label renders the season_manage_gear_label copy as visible PLAIN TEXT in the header row — not a button, not sr-only, not aria-hidden', async () => {
+describe('agenda admin — #238: the header h2 renders the season NAME', () => {
+	it("season-manage-label renders the SEASON'S NAME as visible PLAIN TEXT in the header row — panel never opened (the seasons-array fallback), same element, same slot", async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, 'season-manage-label')).not.toBeNull();
@@ -989,7 +991,8 @@ describe("agenda admin — #222: visible 'Manage season' in the collapsed header
 		expect(label.tagName, 'plain text, not another control').not.toBe('BUTTON');
 		// #236 — the SURVIVING element is the old panel heading, not the old
 		// text-xs span: the card's TITLE, an <h2> with the display typography,
-		// leading the row from the left.
+		// leading the row from the left. #238 keeps ALL of that — only the text
+		// changes.
 		expect(label.tagName, '#236 — the label is the promoted panel <h2>').toBe('H2');
 		expect(Array.from(label.classList), '#236 — keeps the heading font').toContain('font-display');
 		expect(Array.from(label.classList), '#236 — keeps the heading size').toContain('text-lg');
@@ -997,40 +1000,49 @@ describe("agenda admin — #222: visible 'Manage season' in the collapsed header
 			toolbar.firstElementChild,
 			'#236 — the title LEADS the header row (label before every control)'
 		).toBe(label);
-		// The message mock renders keys verbatim — this pins WHICH key feeds the
-		// label (the existing gear copy, no new key). The real four-locale copy
-		// ('Manage season' / 'Halda hooaega' / …) is pinned by the i18n test below.
-		expect(label.textContent?.trim()).toBe('season_manage_gear_label');
+		// #238 — the text is the season's NAME (fixture: 'Season 2026'), served
+		// by the seasonManageDeleteName fallback: the panel has NOT been opened
+		// in this test, so a panel-gated derivation would render '' here.
+		expect(label.textContent?.trim()).toBe('Season 2026');
+		expect(
+			label.textContent,
+			'#238 — the generic gear-label copy is no longer the visible title'
+		).not.toContain('season_manage_gear_label');
 		expect(Array.from(label.classList), 'VISIBLE text — not sr-only').not.toContain('sr-only');
 		expect(label.getAttribute('aria-hidden'), 'VISIBLE to AT too').toBeNull();
 	});
 
-	it("the gear's accessible name COMES FROM the visible label — aria-labelledby → season-manage-label, no duplicated aria-label — and still resolves with the panel open", async () => {
+	it("the gear carries its OWN aria-label (the season_manage_gear_label copy) — no aria-labelledby left to rename it after the h2 became the season — and it still resolves with the panel open", async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, 'season-manage-gear')).not.toBeNull();
 		});
 		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
 		const label = q(container, 'season-manage-label') as HTMLElement;
-		expect(label, 'the visible label must exist for the gear to point at').not.toBeNull();
+		expect(label, 'the visible label (now the season name) still exists').not.toBeNull();
 
-		expect(label.id, 'the label needs an id to be pointed at').toBeTruthy();
-		expect(gear.getAttribute('aria-labelledby')).toBe(label.id);
+		// #238 — the h2 names the SEASON now; a gear named "Season 2026" says
+		// nothing about what it does. The gear authors its own aria-label from
+		// the gear copy…
+		expect(gear.getAttribute('aria-label')).toBe('season_manage_gear_label');
+		// …and drops aria-labelledby entirely: labelledby OUTRANKS aria-label
+		// in the accname algorithm, so leaving it would silently win.
 		expect(
-			gear.hasAttribute('aria-label'),
-			'ONE authored copy: aria-labelledby replaces the aria-label, no duplicate'
+			gear.hasAttribute('aria-labelledby'),
+			'#238 — aria-labelledby would override the aria-label with the season name'
 		).toBe(false);
-		// The real accname algorithm (testing-library runs it) resolves the gear
-		// BY the label's text — a dangling id or empty label cannot pass this.
+		// The real accname algorithm (testing-library runs it) agrees: the gear
+		// resolves by its FUNCTION, and by the season name it does NOT.
 		expect(within(container).getByRole('button', { name: 'season_manage_gear_label' })).toBe(gear);
+		expect(within(container).queryByRole('button', { name: 'Season 2026' })).toBeNull();
 
 		// The label is gated WITH the gear (same {#if showSeasonManageGear}), so
-		// the name cannot dangle while the panel is open either.
+		// with the panel open the gear's name still says what it does.
 		await openPanel(container);
 		expect(q(container, 'season-manage-label'), 'label stays mounted while open').not.toBeNull();
 		expect(
-			(q(container, 'season-manage-gear') as HTMLElement).getAttribute('aria-labelledby')
-		).toBe(label.id);
+			(q(container, 'season-manage-gear') as HTMLElement).getAttribute('aria-label')
+		).toBe('season_manage_gear_label');
 	});
 
 	it("create-rights-only (no manageable season): the header shows [+ Season] but NO 'Manage season' label and NO gear", async () => {
@@ -1051,6 +1063,70 @@ describe("agenda admin — #222: visible 'Manage season' in the collapsed header
 		// #236 — the trashcan rides the SAME gate as the gear and the label: a
 		// create-rights-only caller must never see a season delete.
 		expect(q(container, 'season-manage-delete-season')).toBeNull();
+	});
+});
+
+// ── #238 — the trashcan is a TINTABLE SVG, not an emoji glyph ──────────────────
+//
+// Ruling on #236 was a RED trashcan; the shipped 🗑 U+1F5D1 resolves to the
+// platform colour-emoji font, whose glyphs carry their own baked-in palette
+// and IGNORE the CSS `color` property — correctly classed text-red-700, still
+// painted vendor grey. Fix: an inline SVG on currentColor, defined ONCE as a
+// reusable component (src/lib/components/icons/TrashIcon.svelte — the #237
+// trial instance; its own contract is TrashIcon.spec.ts), used here so the
+// existing red classes actually tint it. NOT the U+FE0E text-presentation
+// selector — platform support is inconsistent, same bug on some devices.
+
+describe('agenda admin — #238: the season trashcan paints red (SVG on currentColor)', () => {
+	it('season-manage-delete-season contains an inline SVG on currentColor and NO emoji glyph; the red classes, testid, aria-label and 44px floor are unchanged', async () => {
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-season')).not.toBeNull();
+		});
+		const trashcan = q(container, 'season-manage-delete-season') as HTMLButtonElement;
+
+		// The tintable glyph: exactly one inline <svg>, hidden from AT (the
+		// button's aria-label carries the name), drawn with currentColor so the
+		// button's own text color paints it.
+		const svgs = trashcan.querySelectorAll('svg');
+		expect(svgs, 'exactly one inline SVG inside the button').toHaveLength(1);
+		const svg = svgs[0];
+		// data-icon="trash" is TrashIcon's stable marker (see its own spec):
+		// this pins that the page renders THE component — one definition the
+		// #237 sweep can reuse — not a freshly re-inlined svg copy.
+		expect(
+			svg.getAttribute('data-icon'),
+			'the glyph must come from the reusable TrashIcon component'
+		).toBe('trash');
+		expect(
+			svg.getAttribute('aria-hidden'),
+			'decorative — the BUTTON carries the accessible name'
+		).toBe('true');
+		expect(
+			svg.outerHTML,
+			'the SVG must draw with currentColor so text-red-700 tints it'
+		).toContain('currentColor');
+		expect(svg.outerHTML, 'no hard-coded fill/stroke colours').not.toMatch(/#[0-9a-fA-F]{3,8}/);
+
+		// The emoji is GONE — as rendered text (an SVG draws paths, not glyphs)…
+		expect((trashcan.textContent ?? '').trim(), 'icon-only: no text/emoji glyph').toBe('');
+		// …and specifically no 🗑 and no U+FE0E variation-selector fallback
+		// anywhere in the subtree.
+		expect(trashcan.innerHTML).not.toMatch(/[\u{1F5D1}\u{FE0E}\u{FE0F}]/u);
+
+		// The colour is the EXISTING destructive token pair — this is what the
+		// currentColor SVG inherits; no new palette entry.
+		const classes = Array.from(trashcan.classList);
+		expect(classes, 'the resting tint').toContain('text-red-700');
+		expect(classes, 'the hover tint').toContain('hover:text-red-800');
+
+		// Everything else about the control is byte-identical: name, tap target.
+		expect(trashcan.getAttribute('aria-label')).toBe('season_manage_season_delete');
+		expect(classes, '44px height floor survives the restyle').toContain('min-h-11');
+		expect(classes, '44px width floor survives the restyle (icon-only)').toContain('min-w-11');
+		// The two-step arm/confirm idiom is deliberately NOT re-pinned here —
+		// page.season-manage-delete.spec.ts owns it and must stay green
+		// UNMODIFIED through #238 (the glyph swap touches no behavior).
 	});
 });
 

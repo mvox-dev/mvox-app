@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { authStore } from '$lib/auth/session';
+	import TrashIcon from '$lib/components/icons/TrashIcon.svelte';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -5629,16 +5630,20 @@
 									<!-- #236 — the card's TITLE leads the row in both states: the
 									     panel's own `<h2>` (the surviving element per Gama's
 									     slot-table refinement — the OLD toolbar text-xs span is
-									     retired) is promoted up here, so the phrase renders exactly
-									     once. Keeps `id="season-manage-label"`, the gear's existing
-									     `aria-labelledby` target (#222) and, below, the panel's own
-									     `aria-labelledby` target too. -->
+									     retired) is promoted up here. Keeps `id="season-manage-label"`
+									     and the panel's own `aria-labelledby` target below.
+									     #238 (Mihkel, live gate) — the text is now the season's OWN
+									     NAME (`seasonManageDeleteName`, already non-panel-gated), not
+									     the generic gear-label copy: the card is titled by its
+									     season. The gear no longer borrows this element's name (its
+									     own aria-label, below) — a gear named "Season 2026" says
+									     nothing about what it does. -->
 									<h2
 										id="season-manage-label"
 										data-testid="season-manage-label"
 										class="font-display text-lg text-ink"
 									>
-										{m.season_manage_gear_label()}
+										{seasonManageDeleteName}
 									</h2>
 									<!-- #217/#236 — the season's OWN delete now lives in the
 									     header row, reachable whether the panel is open or
@@ -5706,7 +5711,15 @@
 										     the glyph change. #236 (Mihkel, Q1: "red trashcan maybe? lets try
 										     red trashcan icon everywhere") — a red trashcan glyph replaces the
 										     old ×; colour is the EXISTING `text-red-700` destructive token the
-										     confirm half already used, no new palette. -->
+										     confirm half already used, no new palette.
+										     #238 — the 🗑 emoji resolved to the platform colour-emoji font,
+										     which ignores CSS `color`, so it painted grey instead of red.
+										     Replaced with `TrashIcon`, a reusable inline-SVG on
+										     currentColor (src/lib/components/icons/TrashIcon.svelte) — the
+										     #237 icon-sweep trial instance. The gear's ⚙ glyph is NOT
+										     converted here: no gear icon exists in the new component and
+										     adding one would widen this diff beyond #238's scope — left for
+										     #237 to pick up alongside the rest of the emoji sweep. -->
 										<button
 											type="button"
 											data-testid="season-manage-delete-season"
@@ -5716,7 +5729,7 @@
 											class="flex min-h-11 min-w-11 items-center justify-center text-red-700 hover:text-red-800"
 											onclick={() => void armSeasonManageSeasonDelete()}
 										>
-											<span aria-hidden="true">🗑</span>
+											<TrashIcon class="h-5 w-5" />
 										</button>
 									{/if}
 								{/if}
@@ -5750,7 +5763,7 @@
 										type="button"
 										data-testid="season-manage-gear"
 										bind:this={seasonManageGearEl}
-										aria-labelledby="season-manage-label"
+										aria-label={m.season_manage_gear_label()}
 										aria-expanded={seasonManageOpen}
 										aria-controls="season-manage-panel"
 										disabled={seasonManageGearDisabled}
