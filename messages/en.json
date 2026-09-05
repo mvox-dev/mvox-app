@@ -1,7 +1,5 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"app_name": "mvox",
-	"placeholder_greeting": "Hello, {name}!",
 	"agenda_empty_no_events": "No upcoming events.",
 	"agenda_filter_all": "All",
 	"agenda_filter_group_label": "Filter by event type",
