@@ -74,5 +74,71 @@ export function formatTime(hhmm: string, mode: TimeFormat): string {
 	return `${hour12}:${minute} ${meridiem}`;
 }
 
+// #230 — the two-pass Tallinn DST-aware wall-clock ↔ UTC conversion, extracted
+// from src/routes/+page.svelte (eventCreateTallinnOffsetMinutes) and
+// src/routes/event/[id]/+page.svelte (tallinnOffsetMinutes) — the bodies were
+// byte-identical modulo names. AgendaList.svelte's calendar-day GROUPING
+// formatters are a structurally different use of the timezone (PRESERVED
+// VERBATIM, T5 DST guards) and stay local — deliberately not folded in here.
+
+const TALLINN_TZ = 'Europe/Tallinn';
+
+/** The Tallinn wall-clock offset (minutes, e.g. +180 in EEST) in effect AT
+ *  `date` — rendering `date`'s Tallinn wall clock, then re-reading those same
+ *  digits as if THEY were UTC and diffing against the real instant, gives
+ *  exactly the offset. DST-aware because the formatter is. */
+export function tallinnOffsetMinutes(date: Date): number {
+	const parts = new Intl.DateTimeFormat('en-US', {
+		timeZone: TALLINN_TZ,
+		hourCycle: 'h23',
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit',
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit'
+	}).formatToParts(date);
+	const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
+	const asUtc = Date.UTC(
+		get('year'),
+		get('month') - 1,
+		get('day'),
+		get('hour'),
+		get('minute'),
+		get('second')
+	);
+	return (asUtc - date.getTime()) / 60_000;
+}
+
+/** A `datetime-local` value typed AS TALLINN wall clock → the UTC instant to
+ *  write on the wire. Two passes because the Tallinn offset (EET/EEST) itself
+ *  depends on the INSTANT being converted — the first pass reads the offset
+ *  at the UTC-as-if-Tallinn guess, the second re-reads it at the instant that
+ *  guess produced. On the two DST transition days the guess sits on the far
+ *  side of the changeover (a 01:30 EET wall clock on 29 March guesses
+ *  01:30Z, still EET-side, and one pass would write 22:30Z — 00:30 Tallinn,
+ *  an hour off), so the second pass is what makes every valid wall clock in
+ *  the year round-trip. Only 03:00–03:59 on spring-forward day stays off,
+ *  and those wall clocks do not exist locally.
+ *
+ *  TOTAL on purpose — '' for an empty or unparseable draft. An empty draft
+ *  is a REACHABLE state (a timeless event's pencil seeds '', and an editor
+ *  can clear the input), and `Date.UTC(NaN, …)` would feed an Invalid Date
+ *  into `formatToParts`, which THROWS — escaping onblur handlers that
+ *  depend on this never throwing. */
+export function tallinnLocalToUtcIso(local: string): string {
+	const [datePart, timePart] = local.split('T');
+	const [y, mo, d] = (datePart ?? '').split('-').map(Number);
+	const [h, mi] = (timePart ?? '00:00').split(':').map(Number);
+	const guessUtcMs = Date.UTC(y, mo - 1, d, h, mi);
+	if (Number.isNaN(guessUtcMs)) return '';
+	const firstOffset = tallinnOffsetMinutes(new Date(guessUtcMs));
+	let instantMs = guessUtcMs - firstOffset * 60_000;
+	const secondOffset = tallinnOffsetMinutes(new Date(instantMs));
+	if (secondOffset !== firstOffset) instantMs = guessUtcMs - secondOffset * 60_000;
+	return new Date(instantMs).toISOString();
+}
+
 // (*MVOX:Palestrina* — #207 GREEN part 1: 24h default + AM/PM preference store)
 // (*MVOX:Palestrina* — #220 GREEN: tallinnHHMM + formatTime, the one shared display formatter)
+// (*MVOX:Palestrina* — #230 GREEN: tallinnOffsetMinutes + tallinnLocalToUtcIso, the shared DST-aware conversion moved from the two event-create/edit hosts)

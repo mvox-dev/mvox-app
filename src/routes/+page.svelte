@@ -5,7 +5,12 @@
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
-	import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat';
+	import {
+		tallinnHHMM,
+		formatTime,
+		timeFormatStore,
+		tallinnLocalToUtcIso
+	} from '$lib/preferences/timeFormat';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
@@ -3107,53 +3112,10 @@
 	// ── #132/T4 — event CREATION: two entry points, one inline form ───────────
 
 	/** Tallinn IANA timezone — same TE.4 wall-clock convention as
-	 *  event/[id]/+page.svelte's editor (and AgendaList's display). Duplicated
-	 *  rather than shared: neither of those two owns a module the other could
-	 *  import from without a bigger refactor, and this is the third site to
-	 *  need the SAME two-pass DST-aware conversion. */
+	 *  event/[id]/+page.svelte's editor (and AgendaList's display). Used
+	 *  locally for the display formatters below; the offset/local→UTC
+	 *  conversion itself now lives once in $lib/preferences/timeFormat (#230). */
 	const EVENT_CREATE_TZ = 'Europe/Tallinn';
-
-	/** The Tallinn wall-clock offset (minutes) in effect AT `date` — see
-	 *  event/[id]/+page.svelte's `tallinnOffsetMinutes` for the derivation. */
-	function eventCreateTallinnOffsetMinutes(date: Date): number {
-		const parts = new Intl.DateTimeFormat('en-US', {
-			timeZone: EVENT_CREATE_TZ,
-			hourCycle: 'h23',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		}).formatToParts(date);
-		const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
-		const asUtc = Date.UTC(
-			get('year'),
-			get('month') - 1,
-			get('day'),
-			get('hour'),
-			get('minute'),
-			get('second')
-		);
-		return (asUtc - date.getTime()) / 60_000;
-	}
-
-	/** A `datetime-local` value typed AS TALLINN wall clock → the UTC instant
-	 *  to write on the wire (TE.4, exactly — see event/[id]/+page.svelte's
-	 *  `tallinnLocalToUtcIso` for why this needs two passes). '' on an empty or
-	 *  unparseable draft. */
-	function tallinnLocalToUtcIso(local: string): string {
-		const [datePart, timePart] = local.split('T');
-		const [y, mo, d] = (datePart ?? '').split('-').map(Number);
-		const [h, mi] = (timePart ?? '00:00').split(':').map(Number);
-		const guessUtcMs = Date.UTC(y, mo - 1, d, h, mi);
-		if (Number.isNaN(guessUtcMs)) return '';
-		const firstOffset = eventCreateTallinnOffsetMinutes(new Date(guessUtcMs));
-		let instantMs = guessUtcMs - firstOffset * 60_000;
-		const secondOffset = eventCreateTallinnOffsetMinutes(new Date(instantMs));
-		if (secondOffset !== firstOffset) instantMs = guessUtcMs - secondOffset * 60_000;
-		return new Date(instantMs).toISOString();
-	}
 
 	/** #243 — the end pair replaces the duration number input: `endLocal` is the
 	 *  end composite's 'YYYY-MM-DDTHH:MM' Tallinn wall clock (or '' while either

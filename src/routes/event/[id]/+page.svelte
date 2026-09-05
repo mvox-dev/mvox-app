@@ -31,7 +31,12 @@
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
-	import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat';
+	import {
+		tallinnHHMM,
+		formatTime,
+		timeFormatStore,
+		tallinnLocalToUtcIso
+	} from '$lib/preferences/timeFormat';
 	// #194/#202 — the type-label map is SHARED with the agenda's per-row badge
 	// (was inline here only, #101 review F3; a second inline copy is exactly
 	// the drift class the WorkRow/AttendanceBadge cleanups already paid for).
@@ -1466,33 +1471,6 @@
 		}
 	}
 
-	/** The Tallinn wall-clock offset (minutes, e.g. +180 in EEST) in effect AT
-	 *  `date` — rendering `date`'s Tallinn wall clock, then re-reading those same
-	 *  digits as if THEY were UTC and diffing against the real instant, gives
-	 *  exactly the offset. DST-aware because the formatter is. */
-	function tallinnOffsetMinutes(date: Date): number {
-		const parts = new Intl.DateTimeFormat('en-US', {
-			timeZone: TZ,
-			hourCycle: 'h23',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit',
-			second: '2-digit'
-		}).formatToParts(date);
-		const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
-		const asUtc = Date.UTC(
-			get('year'),
-			get('month') - 1,
-			get('day'),
-			get('hour'),
-			get('minute'),
-			get('second')
-		);
-		return (asUtc - date.getTime()) / 60_000;
-	}
-
 	/** ISO instant → the `datetime-local` input value seeded from the TALLINN
 	 *  wall clock the header itself displays (never raw UTC — TE.4 contract).
 	 *  '' on an unparseable instant. */
@@ -1512,35 +1490,10 @@
 		return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
 	}
 
-	/** The inverse: a `datetime-local` value the user typed AS TALLINN wall
-	 *  clock → the UTC instant to write on the wire. Two passes because the
-	 *  Tallinn offset (EET/EEST) itself depends on the INSTANT being converted —
-	 *  the first pass reads the offset at the UTC-as-if-Tallinn guess, the second
-	 *  re-reads it at the instant that guess produced. On the two DST transition
-	 *  days the guess sits on the far side of the changeover (a 01:30 EET wall
-	 *  clock on 29 March guesses 01:30Z, still EET-side, and one pass would write
-	 *  22:30Z — 00:30 Tallinn, an hour off), so the second pass is what makes
-	 *  every valid wall clock in the year round-trip. Only 03:00–03:59 on
-	 *  spring-forward day stays off, and those wall clocks do not exist locally.
-	 *
-	 *  TOTAL on purpose — '' for an empty or unparseable draft, mirroring
-	 *  `toTallinnLocalInputValue`'s own NaN guard. An empty draft is a REACHABLE
-	 *  state (a timeless event's pencil seeds '', and an editor can clear the
-	 *  input), and `Date.UTC(NaN, …)` would feed an Invalid Date into
-	 *  `formatToParts`, which THROWS — escaping the onblur handler and stranding
-	 *  the page in edit mode with no inline error. */
-	function tallinnLocalToUtcIso(local: string): string {
-		const [datePart, timePart] = local.split('T');
-		const [y, mo, d] = (datePart ?? '').split('-').map(Number);
-		const [h, mi] = (timePart ?? '00:00').split(':').map(Number);
-		const guessUtcMs = Date.UTC(y, mo - 1, d, h, mi);
-		if (Number.isNaN(guessUtcMs)) return '';
-		const firstOffset = tallinnOffsetMinutes(new Date(guessUtcMs));
-		let instantMs = guessUtcMs - firstOffset * 60_000;
-		const secondOffset = tallinnOffsetMinutes(new Date(instantMs));
-		if (secondOffset !== firstOffset) instantMs = guessUtcMs - secondOffset * 60_000;
-		return new Date(instantMs).toISOString();
-	}
+	// tallinnLocalToUtcIso (the inverse: a `datetime-local` value the user
+	// typed AS TALLINN wall clock → the UTC instant to write on the wire) now
+	// lives in $lib/preferences/timeFormat (#230) — shared with the event-
+	// create flow in src/routes/+page.svelte, which had a byte-identical copy.
 
 	function beginFieldEdit(field: EditableEventField): void {
 		// A field whose previous write is still in flight cannot be re-opened —
