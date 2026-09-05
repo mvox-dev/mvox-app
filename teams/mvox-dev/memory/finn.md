@@ -1,5 +1,9 @@
 # Finn — Research Coordinator Scratchpad
 
+## [PATTERN] Honest [unverified] flags are the deliverable, not a hedge (2026-09-05, Gama via #258)
+
+On the empty-id sweep (#258), Gama's verbatim feedback: "the honest [unverified] flags were the most useful part of the sweep. A report that says '44 safe' is worth much less than one that says '44 safe by tracing, and here are the three assumptions I could not check' — the second is auditable and the first just asks to be trusted. Same standard as Bentham's rulable-not-persuasive." My "the invariant currently lives in callers' heads" line (44 sites SOURCE-SAFE only by tracing every real caller, no in-function guard) became the argument for the entuFetch choke-point fix — the invariant already fell out of someone's head once (the #255 root finding) and needed to be provable structurally, not just true-by-audit. My 3 flagged assumptions (sectionActions.ts's empty-`reference` assumption, inviteData.ts's unvalidated JWT `accounts` claim, eventDetail.ts's falsy-vs-literal-"undefined" gap) were recorded on #258 verbatim, deliberately left unresolved so the issue isn't misread as having cleared them. **Standing rule for future sweeps: always separate "verified" from "safe-by-tracing-with-named-assumptions" — never round the second up to the first, and name every assumption I didn't independently check rather than omitting it for a cleaner-looking report.**
+
 ## [DECISION] repo-guard now MANDATORY first line in every dispatched research prompt (2026-09-01, team-lead ruling)
 
 Second occurrence same day: #193 subagent AND 3-of-4 #206 subagents silently read `~/workspace`

@@ -7,6 +7,82 @@ metadata:
 
 # Bentham scratchpad
 
+## 2026-09-05 — #255 deactivate-a-member: proposal RULED, and the contract I review the build against
+
+I authored the engineering proposal (issue comment `5551794438`); Gama accepted all four calls
+(`5551807072`) — build as proposed. Recording only what changes a FUTURE review decision.
+
+**[GOTCHA-SELF-EDITOR-ON-OWN-PERSON] not every `_editor` a person holds is a role.**
+`src/lib/invite/inviteData.ts:262` POSTs `[{type:'_editor', reference: personId}]` onto **her own
+person entity** — "parity with entu-api's native auto-create tail; load-bearing for T4.6 lazy creates
+(the person must be in her own `_expander` closure)". So a rights-strip written as "remove her
+`_editor` grants" instead of "remove her grants ON THESE ENTITIES" silently destroys her ability to
+edit her own profile. **RED any rights-revocation code that is person-scoped rather than
+entity-scoped.** Role grants are minted at exactly one site (`roleManagement.ts:255`) against two
+entities — the database entity and the library; `revokeOwnGrant` (`:274`) is correspondingly
+entity-scoped with a `scope: 'owner+editor' | 'editor-only'` discriminator. That asymmetry is the
+whole safety mechanism; a "simplification" that collapses it is the bug.
+
+**Rights outlive membership today** — `adminStore.ts:63` gates admin on `_owner`/`_editor` against
+`personId` only, no member/status join. Gama's ruling **affirms the B2 membership-rights invariant**
+(a grant on an org-subtree entity requires an ACTIVE member) rather than carving it out, so
+`architecture-decisions.md` needs no edit and I should not re-open it. The build closes the gap by
+REFUSING deactivation while a grant is held, not by auto-stripping. `RoleLockoutError`
+(`roleManagement.ts:135,141`) is why: auto-strip on a sole owner either fails opaquely mid-action or
+bypasses the one guard against a collective locking itself out.
+
+**Three additions Gama baked into the build args — these are review checkpoints, not suggestions:**
+1. The refusal must **name the remedy** — who holds what role, and where to remove it. A bare "cannot
+   deactivate" fails this. (Whether the control is additionally pre-disabled at render is ours to
+   choose, but the build must STATE which it does.)
+2. The no-rate reasoning goes in a **comment AT THE SITE** (`attendanceSummary.ts` / its call site at
+   `+page.svelte:2104`), not only in the issue: `total` counts events occurring after she was gone, so
+   a percentage reads as a judgement about the person. There is no honest denominator — done-when #1
+   forbids a deactivation date and `_created` is private-bucket-only, unreadable cross-member
+   (`completionGate.ts:45`). Absent the in-file comment a future contributor "fixes" the missing
+   percentage. The history union is an **in-slice fix, not pin-and-defer** (Gama).
+3. Sign-in notice copy is bound to **"not active"** — never removed / deleted / deactivated — and
+   points at the **choir**, not support. Copy drift here is a YELLOW with a named source.
+
+**RESOLVED 2026-09-05 — checkpoint 5, the RSVP going-tally is a DATE-GATED join.** (Open for about
+an hour; the earlier "do not review the RSVP portion" hold is DISCHARGED.) Finn confirmed the tally
+is unscoped; Gama's ruling: **future** events join against the active roster (she is not coming —
+conductors plan around it), **past** events keep the raw tally as recorded (she said yes, she very
+likely sang; dropping her rewrites a historical number from present membership — my own no-rate
+principle applied in the other direction). A **new date-comparison path is YELLOW**; escape hatch is
+ship-future-only and Gama files the past case.
+
+Two review triggers I verified before the branch exists, both cheap to check, both the kind that pass
+tests while being wrong:
+
+- **Gate on the EVENT, not on the page's current `$derived`.** `loadTally` and both pastness
+  derivations are co-located in `src/routes/event/[id]/+page.svelte` (`loadTally:398`, `isPast:669`,
+  `isPastDetail(d):673`), so the reuse is genuinely local and the escape hatch should not be needed.
+  But `isPast` is a `$derived` off the *currently loaded* event, while `loadTally` is invoked in async
+  paths behind a generation guard (`:300`, `:430`, `:569`). A join gate reading `isPast` inside a
+  `.then()` reads pastness for whatever event is loaded AT RESOLUTION, not the one the tally was
+  requested for. Correct shape is `isPastDetail(loaded)` — the per-event form `:757` already uses — or
+  capture at call time alongside `g`. Same family as
+  `[GOTCHA-OPTIMISTIC-WRITE-NEEDS-SAME-REQUESTID-GUARD]`.
+- **The boundary is event START, not event end.** `isPast` is `startAt.getTime() < Date.now()`
+  (`:669`), so an in-progress event already counts as past and takes the raw tally. Almost certainly
+  what we want, but the ruling's "future / past" wording does not say it — so a build picking a
+  different boundary is a deliberate deviation to be stated, not an implementation detail.
+
+**Reusable, beyond #255**: `sectionActions.ts:406-418` records why `deleteSection`'s member count is
+deliberately status-UNSCOPED — Entu's delete soft-deletes every property REFERENCING the deleted
+entity, i.e. those members' section `_parent` values, silently; "the counts here are the only
+authority that is neither narrowed nor stale." Any future proposal to narrow that count, or to clear
+a member's `_parent` so sections read as empty, trades a visible refusal for silent orphaning.
+
+**[CALIBRATION-PROPOSAL-SHAPE]** What made this rulable rather than merely persuasive (Gama's words,
+worth reusing): one recommendation per question, each grounded in a read done THAT pass, each with
+the alternative stated fairly enough to be ruled against on merits rather than on framing. The
+concrete move that did the work: for every "don't do X" I named what X would actually break at a
+file:line, so the refusal was evidence, not preference.
+
+(*MVOX:Bentham*)
+
 ## 2026-09-02 — [CALIBRATION-NATIVENESS-PINNED-BY-SELECT-ONLY-API] (#213 round 4)
 
 Enforcing rule 1 / `[TRIGGER-NATIVE-CONTROLS]` at review: **a `tagName === 'SELECT'` assertion is not
@@ -502,9 +578,19 @@ checks `=== true`; absent means false).
 - **[GOTCHA-OPTIMISTIC-WRITE-NEEDS-SAME-REQUESTID-GUARD]** Whenever an optimistic-write/mutation
   handler writes state that a requestId-guarded LOAD also owns, the WRITE handler's `.then`/`.catch`
   needs the SAME generation guard (capture at handler top). Check BOTH paths. Free the pending slot
-  BEFORE the guard so nothing gets stuck. **DISPOSITION: do NOT re-RED this family under the
-  single-collective pivot — there is no picker, so the cross-collective clobber is unreachable.
-  Re-open only if multi-collective returns** (applies to YELLOW-RSVP.1, CARRY-T4.5.1, YELLOW-T4.8.1).
+  BEFORE the guard so nothing gets stuck. ~~DISPOSITION: do NOT re-RED this family under the
+  single-collective pivot — there is no picker, so the cross-collective clobber is unreachable.~~
+  **DISPOSITION REOPENED 2026-09-05 (#255 r4) — the stand-down condition it named has been MET, so
+  the note was actively misleading.** Multi-collective is live: `src/lib/collectives/store.ts:142`
+  declares a `'picker'` mode, `+layout.svelte:221` passes `hasMultipleCollectives` to nav, and
+  `selectCollective` (`store.ts:174`) `goto`s **the same pathname** with only the query param
+  changed — a soft-nav that does NOT unmount the page, so the switch happens UNDER a live component
+  and its in-flight loads. The cross-collective clobber is reachable again; judge this family on its
+  merits (window width, self-healing, blast radius), not by the old stand-down. Was applied to
+  YELLOW-RSVP.1, CARRY-T4.5.1, YELLOW-T4.8.1 — none re-audited yet.
+  **Lesson worth more than the correction**: a disposition that stands down on a *product* premise
+  needs its premise re-checked at the point of use, exactly like a "shipped as #N" claim. I nearly
+  waved off a live #255 finding on the strength of a note I wrote when the premise was true.
 
 ## Process / authorization
 
