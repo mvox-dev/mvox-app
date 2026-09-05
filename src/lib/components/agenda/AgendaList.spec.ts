@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
@@ -37,7 +37,43 @@ vi.mock('$lib/paraglide/messages.js', () => {
 	};
 });
 
+// ── #251 — the app-language source for the NARRATIVE header formatter ────────
+//
+// The mock intercepts '$lib/paraglide/runtime.js' — the exact specifier
+// LanguageSelector.svelte:41 and routes/+page.svelte:83 already use; the
+// implementation must import getLocale from the same path. The backing store
+// is a SvelteMap (a REACTIVE signal), so a formatter constructed inside the
+// component's reactive scope ($derived on getLocale() or equivalent) genuinely
+// invalidates when a test switches the locale — while today's
+// construction-time `new Intl.DateTimeFormat(undefined, …)` const cannot.
+//
+// happy-dom runs on Node's Intl, whose DEVICE default here is en-US — so every
+// non-'en' assertion in this file proves device-locale independence by
+// construction: an implementation that keeps following the device renders
+// English and fails.
+type AppLocale = 'en' | 'et' | 'lv' | 'uk';
+const localeMock = vi.hoisted(() => ({
+	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
+}));
+vi.mock('$lib/paraglide/runtime.js', async () => {
+	const { SvelteMap } = await import('svelte/reactivity');
+	localeMock.state ??= new SvelteMap<string, string>([['locale', 'en']]);
+	return {
+		getLocale: () => localeMock.state!.get('locale'),
+		setLocale: vi.fn(),
+		locales: ['en', 'et', 'lv', 'uk'],
+		overwriteGetLocale: vi.fn()
+	};
+});
+function setAppLocale(locale: AppLocale): void {
+	localeMock.state?.set('locale', locale);
+}
+
 afterEach(cleanup);
+// Every test in this file runs under app language 'en' unless it says
+// otherwise — the pre-#251 English assertions below are DELIBERATE under this
+// mock, not vacuous device-locale passes.
+afterEach(() => setAppLocale('en'));
 
 function item(id: string, startDatetime: string, overrides: Partial<AgendaItem> = {}): AgendaItem {
 	return {
@@ -584,6 +620,9 @@ describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved
 		expect(cell?.textContent?.trim()).toBe('2026-06-15');
 
 		// Narrative half — the header STAYS weekday + month name, no raw ISO.
+		// (#251: getLocale is mocked to 'en' file-wide, so the English words are
+		// the APP language's output, asserted deliberately — not a vacuous pass
+		// on the device locale.)
 		const header = container.querySelector('[data-testid="agenda-date-header"]');
 		const headerText = header?.textContent ?? '';
 		expect(headerText).toMatch(/Monday/i);
@@ -609,6 +648,97 @@ describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved
 				?.textContent?.trim();
 		expect(dateOf('spring')).toBe('2026-03-29');
 		expect(dateOf('fall')).toBe('2026-10-25');
+	});
+});
+
+// ── #251 — narrative headers follow the APP language, not the device locale ──
+//
+// `headerFmt` passed `undefined` as its locale — the RUNTIME default, i.e. the
+// phone's language. An Estonian user with an English device read
+// "TUESDAY, MARCH 23" in an otherwise fully Estonian app (Joosep's 2026-09-05
+// screenshot). The locale ARGUMENT is the only thing that may change: the T5
+// DST block's timeZone/weekday/day/month options and the noon-anchored
+// `new Date(key + 'T12:00:00')` stay byte-identical (T5 build spec §3, #101
+// F4), and the ISO producers groupKeyFmt/shortDateFmt keep their deliberate
+// 'en-CA' per the #207/#212 rulings — both pinned below.
+describe('#251 — date-group headers render in the app language', () => {
+	// done-when 1 + 4 — exact Intl output per app language for Monday
+	// 2026-06-15 (the itemSameDay fixture day). Estonian is the pilot language.
+	// Full-string equality, not /Monday/i sniffing: partial assertions hide
+	// bugs, and the exact string also pins done-when 5's natural casing (see
+	// the dedicated test below).
+	const expectedHeader: Record<AppLocale, string> = {
+		en: 'Monday, June 15',
+		et: 'esmaspäev, 15. juuni',
+		lv: 'pirmdiena, 15. jūnijs',
+		uk: 'понеділок, 15 червня'
+	};
+	for (const locale of ['et', 'en', 'lv', 'uk'] as AppLocale[]) {
+		it(`app language '${locale}': the header reads '${expectedHeader[locale]}' regardless of the device locale`, () => {
+			setAppLocale(locale);
+			const { container } = render(AgendaList, { items: itemSameDay });
+			const header = container.querySelector('[data-testid="agenda-date-header"]');
+			expect(header?.textContent?.trim()).toBe(expectedHeader[locale]);
+		});
+	}
+
+	// done-when 2 — the TRAP this issue names: `setLocale` reloads the page
+	// today, so a construction-time constant HAPPENS to work in the live app.
+	// This test is the explicit dependency: switch the app language on a
+	// MOUNTED component and the header must re-render in the new language with
+	// no remount — a formatter frozen at construction time fails here, a
+	// reactive construction ($derived on getLocale() or equivalent) passes.
+	// If whoever removes the reload breaks this, THIS test is the tripwire.
+	it('switching the app language re-renders the header WITHOUT a remount (formatter is rebuilt, not a construction-time constant)', async () => {
+		setAppLocale('en');
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const headerText = () =>
+			container.querySelector('[data-testid="agenda-date-header"]')?.textContent?.trim();
+		expect(headerText()).toBe('Monday, June 15');
+
+		setAppLocale('et');
+		await waitFor(() => {
+			expect(headerText()).toBe('esmaspäev, 15. juuni');
+		});
+	});
+
+	// done-when 3 — the ISO fence: groupKeyFmt and shortDateFmt are ISO
+	// PRODUCERS (grouping keys + tabular row dates, #207 rule 7 / #212), pinned
+	// to 'en-CA' on purpose. Under a non-English app language the grouping must
+	// still key on the Tallinn ISO day (same-day items share ONE header) and
+	// the recent row's date cell must still read YYYY-MM-DD.
+	it("app language 'et': grouping keys stay ISO — same-day items share one header and the recent-row date cell still reads '2026-06-15'", () => {
+		setAppLocale('et');
+		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+
+		const headers = container.querySelectorAll('[data-testid="agenda-date-header"]');
+		expect(headers.length).toBe(1);
+		expect(
+			container
+				.querySelector('[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]')
+				?.textContent?.trim()
+		).toBe('2026-06-15');
+		// …and the narrative header did NOT collapse to ISO (#207 rule 7).
+		expect(headers[0]?.textContent ?? '').not.toMatch(/\d{4}-\d{2}-\d{2}/);
+	});
+
+	// done-when 5 — STATED, not guessed: #250 (704c967) KEPT the CSS
+	// `uppercase` on the header line, so Estonian's mid-sentence lowercase
+	// convention does not SHOW today — the display is uppercased by CSS. What
+	// this pins is the text BENEATH the CSS: the formatter output is the
+	// natural-case Estonian ('esmaspäev', lowercase e — Intl's own 'et'
+	// output), so if the uppercase treatment is ever removed, the words are
+	// already right per Estonian convention. #250's class tokens on the line
+	// (text-base header scale, uppercase) must survive this change untouched.
+	it("app language 'et': formatter output is natural-case ('esmaspäev…') beneath #250's untouched CSS uppercase", () => {
+		setAppLocale('et');
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const header = container.querySelector('[data-testid="agenda-date-header"]');
+		expect(header?.textContent?.trim()).toMatch(/^esmaspäev/);
+		expect(header?.classList.contains('uppercase')).toBe(true);
+		expect(header?.classList.contains('text-base')).toBe(true);
+		expect(header?.classList.contains('font-semibold')).toBe(true);
 	});
 });
 
@@ -648,7 +778,8 @@ describe('#220 — AM/PM preference on agenda times', () => {
 			expect(spanTexts).toContain('9:30 AM');
 			expect(spanTexts).not.toContain('09:30');
 
-			// Rule 7 guards — ampm mode changes CLOCK TIMES only:
+			// Rule 7 guards — ampm mode changes CLOCK TIMES only (English words
+			// here are the mocked 'en' APP language — #251):
 			expect(
 				recentRow!.querySelector('[data-testid="recent-row-date"]')?.textContent?.trim()
 			).toBe('2026-06-15');

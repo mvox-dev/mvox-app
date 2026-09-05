@@ -16,6 +16,10 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
+	// #251 — the narrative date line's locale source is the APP language, not
+	// the device's. Same specifier LanguageSelector.svelte / routes/+page.svelte
+	// already import from.
+	import { getLocale } from '$lib/paraglide/runtime.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
@@ -646,12 +650,18 @@
 	// headers, which this page does not inherit: a bookmarked /event/<id> showed a
 	// time with no day at all. Same formatter options as AgendaList.svelte's
 	// `headerFmt`, so the two surfaces render a date identically.
-	const dateFmt = new Intl.DateTimeFormat(undefined, {
-		timeZone: TZ,
-		weekday: 'long',
-		day: 'numeric',
-		month: 'long'
-	});
+	// #251 — the locale argument now follows the APP language via getLocale()
+	// (was the browser/device locale), rebuilt reactively so a language switch
+	// updates the date without relying on setLocale's page reload. TZ and the
+	// weekday/day/month options are unchanged.
+	const dateFmt = $derived(
+		new Intl.DateTimeFormat(getLocale(), {
+			timeZone: TZ,
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long'
+		})
+	);
 
 	/**
 	 * The event's start INSTANT, or null when the entity carries no parseable

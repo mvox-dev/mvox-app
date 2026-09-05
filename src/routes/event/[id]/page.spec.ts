@@ -71,6 +71,34 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	})
 }));
 
+// ── #251 — the app-language source for the NARRATIVE date formatter ──────────
+//
+// Same construction as AgendaList.spec.ts: intercepts
+// '$lib/paraglide/runtime.js' (the specifier LanguageSelector.svelte:41 /
+// routes/+page.svelte:83 use — the implementation must import getLocale from
+// that path), backed by a SvelteMap so a REACTIVELY-constructed formatter
+// invalidates when a test switches the locale, while a construction-time
+// `new Intl.DateTimeFormat(undefined, …)` const cannot. happy-dom's own
+// default locale is en-US, so every non-'en' assertion proves device-locale
+// independence by construction.
+type AppLocale = 'en' | 'et' | 'lv' | 'uk';
+const localeMock = vi.hoisted(() => ({
+	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
+}));
+vi.mock('$lib/paraglide/runtime.js', async () => {
+	const { SvelteMap } = await import('svelte/reactivity');
+	localeMock.state ??= new SvelteMap<string, string>([['locale', 'en']]);
+	return {
+		getLocale: () => localeMock.state!.get('locale'),
+		setLocale: vi.fn(),
+		locales: ['en', 'et', 'lv', 'uk'],
+		overwriteGetLocale: vi.fn()
+	};
+});
+function setAppLocale(locale: AppLocale): void {
+	localeMock.state?.set('locale', locale);
+}
+
 // Mutable $app/state stub — the route param the page must read.
 const pageStub = vi.hoisted(() => ({
 	params: { id: 'ev1' } as Record<string, string>,
@@ -410,6 +438,10 @@ afterEach(() => {
 	vi.useRealTimers();
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
+	// #251 — every test runs under app language 'en' unless it says otherwise;
+	// the pre-#251 English weekday/month assertions are deliberate under this
+	// mock, not vacuous device-locale passes.
+	setAppLocale('en');
 });
 
 describe('/event/[id] — header (integration: route param → loadEventDetail → render)', () => {
@@ -668,8 +700,10 @@ describe('/event/[id] — the date', () => {
 			expect(container.querySelector('[data-testid="event-detail-date"]')).not.toBeNull();
 		});
 		// 2026-09-01T16:00Z is Tuesday 1 September in Europe/Tallinn. The formatter
-		// is locale-aware (undefined locale, same as AgendaList's headerFmt), so
-		// assert on the parts, not on one locale's word order.
+		// takes the APP language (#251 — getLocale, mocked to 'en' file-wide;
+		// it used to pass `undefined`, i.e. the device locale — same defect as
+		// AgendaList's headerFmt). English parts asserted here deliberately;
+		// the per-language pins live in the #251 describe below.
 		const date = container.querySelector('[data-testid="event-detail-date"]')!.textContent ?? '';
 		expect(date).toMatch(/Tuesday/i);
 		expect(date).toMatch(/September/i);
@@ -682,6 +716,65 @@ describe('/event/[id] — the date', () => {
 		const time = container.querySelector('[data-testid="event-detail-time"]')!.textContent ?? '';
 		expect(time).toContain('19:00');
 		expect(time).toContain('20:30');
+	});
+});
+
+// ── #251 — the event-detail date follows the APP language ────────────────────
+//
+// Second of the app's two narrative date surfaces (the other is AgendaList's
+// day-group header — same defect, same fix): `dateFmt` passed `undefined` as
+// its locale, i.e. the DEVICE language. Only the locale argument changes —
+// the timeZone/weekday/day/month options stay byte-identical to AgendaList's
+// headerFmt (#101 F4 pinned the two surfaces render a date identically), and
+// TZ/date math are untouched (done-when 6).
+describe('#251 — event-detail date renders in the app language', () => {
+	// done-when 1 + 4 — exact Intl output per app language for Tuesday
+	// 2026-09-01 (the fixture event's Tallinn day). Estonian first (pilot
+	// language). Note the natural case: 'teisipäev', lowercase — per done-when
+	// 5 the natural-case text is what the formatter emits; any uppercasing is
+	// CSS's business, not the formatter's.
+	const expectedDate: Record<AppLocale, string> = {
+		en: 'Tuesday, September 1',
+		et: 'teisipäev, 1. september',
+		lv: 'otrdiena, 1. septembris',
+		uk: 'вівторок, 1 вересня'
+	};
+	for (const locale of ['et', 'en', 'lv', 'uk'] as AppLocale[]) {
+		it(`app language '${locale}': the date line reads '${expectedDate[locale]}' regardless of the device locale`, async () => {
+			setAppLocale(locale);
+			const { container } = renderEventPage();
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="event-detail-date"]')).not.toBeNull();
+			});
+			expect(
+				container.querySelector('[data-testid="event-detail-date"]')?.textContent?.trim()
+			).toBe(expectedDate[locale]);
+			// The clock time next to it is NOT this issue's surface — still 24h ISO-ish.
+			const time = container.querySelector('[data-testid="event-detail-time"]')?.textContent ?? '';
+			expect(time).toContain('19:00');
+			expect(time).toContain('20:30');
+		});
+	}
+
+	// done-when 2 — same trap as the agenda header: setLocale reloads the page
+	// today, so a construction-time const happens to work. Switch the app
+	// language on the MOUNTED page: the date must re-render in the new
+	// language without a reload/remount. A formatter frozen at construction
+	// fails; a reactive construction ($derived on getLocale() or equivalent)
+	// passes.
+	it('switching the app language re-renders the date WITHOUT a remount (formatter is rebuilt, not a construction-time constant)', async () => {
+		setAppLocale('en');
+		const { container } = renderEventPage();
+		const dateText = () =>
+			container.querySelector('[data-testid="event-detail-date"]')?.textContent?.trim();
+		await waitFor(() => {
+			expect(dateText()).toBe('Tuesday, September 1');
+		});
+
+		setAppLocale('et');
+		await waitFor(() => {
+			expect(dateText()).toBe('teisipäev, 1. september');
+		});
 	});
 });
 

@@ -13,6 +13,10 @@
 	// #211 — the SAME color scheme the event detail badge consumes.
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
+	// #251 — the narrative header's locale source is the APP language, not the
+	// device's. Same specifier LanguageSelector.svelte / routes/+page.svelte
+	// already import from.
+	import { getLocale } from '$lib/paraglide/runtime.js';
 	import RsvpControl from './RsvpControl.svelte';
 	import RepertoireElement from './RepertoireElement.svelte';
 	// #90 TR.2 — ONE definition of the works view model, shared with
@@ -180,6 +184,10 @@
 	// PRESERVED VERBATIM from the harvested AgendaList (old mvox_v4e_web repo) — see
 	// T5 build spec §3. Do not touch the TZ constant, the three formatters below, or
 	// the `groups` derivation without re-checking the DST edge cases they guard.
+	// #251 — the ONE thing that now varies is `headerFmt`'s locale argument
+	// (below): it follows the app language via getLocale(), rebuilt reactively
+	// so a language switch updates the header without relying on setLocale's
+	// page reload. TZ, options and the noon-anchored date math are unchanged.
 	const TZ = 'Europe/Tallinn';
 
 	// Grouping key: YYYY-MM-DD in Tallinn calendar day (en-CA gives ISO date format)
@@ -190,13 +198,16 @@
 		day: '2-digit'
 	});
 
-	// Locale-aware long header text: "Monday, 15 June" (locale of the browser)
-	const headerFmt = new Intl.DateTimeFormat(undefined, {
-		timeZone: TZ,
-		weekday: 'long',
-		day: 'numeric',
-		month: 'long'
-	});
+	// Locale-aware long header text: "Monday, 15 June" (APP language, #251 —
+	// was the browser/device locale; rebuilt whenever getLocale() changes).
+	const headerFmt = $derived(
+		new Intl.DateTimeFormat(getLocale(), {
+			timeZone: TZ,
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long'
+		})
+	);
 
 	// ISO date for recent rows (e.g. "2026-06-15") — #207 rule 7 (PO standing
 	// rule, Gama's 2026-09-02 rulings): row-level dates are tabular/numeric, so
