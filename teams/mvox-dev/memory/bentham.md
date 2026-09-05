@@ -586,8 +586,31 @@ checks `=== true`; absent means false).
   `selectCollective` (`store.ts:174`) `goto`s **the same pathname** with only the query param
   changed — a soft-nav that does NOT unmount the page, so the switch happens UNDER a live component
   and its in-flight loads. The cross-collective clobber is reachable again; judge this family on its
-  merits (window width, self-healing, blast radius), not by the old stand-down. Was applied to
-  YELLOW-RSVP.1, CARRY-T4.5.1, YELLOW-T4.8.1 — none re-audited yet.
+  merits (window width, self-healing, blast radius), not by the old stand-down.
+  **RE-AUDIT DONE 2026-09-05, posted to #260** (comment `5552967907`) — the three it closed, triaged
+  against `origin/main`: **YELLOW-T4.8.1 REACHES unchanged and is the one worth fixing**
+  (`profile/+page.svelte:383-390`, `refreshCompletionGate` still `.then(state => completionGateStore
+  .set(state))` with no generation guard — and that store is the app-wide gate SSOT, so a stale
+  `'complete'` suppresses the /profile redirect app-wide). **YELLOW-RSVP.1 reaches but its harm is
+  gone** — #15 (`f10058d`) made every op per-event, so a stale settle writes an orphan key that
+  nothing renders (Entu ids are globally unique ⇒ no collision with the new collective's agenda).
+  **CARRY-T4.5.1 does NOT reach** — closed by construction by a DIFFERENT review (#140/S3 F1,
+  `InviteSurface.svelte:36-45`): `loadPrerequisites` clears `dbEntityId` synchronously before its
+  await and `canSubmit` gates on non-empty, so the re-resolve window is a disabled-submit window.
+  Sweep of both repos' full memory history found NO fourth item — the three were the whole reach.
+  **RULED 2026-09-05 (Gama, #260 comment `5552980243`)**: triage shape taken as posted. T4.5.1 and
+  RSVP.1 **closed on the record**; RSVP.1 got NO hygiene fix, and the reasoning is reusable — *"a fix
+  with no observable effect costs a review cycle and buys nothing; if it ever gains a symptom it
+  comes back with the symptom attached."* Use that when tempted to prescribe a tidy-up whose defect
+  I have just argued is unobservable. #260 is retitled to the T4.8.1 race, ready, and sequenced
+  AHEAD of #258 (rights-adjacent + global beats one-surface wrong-looking data).
+  **When I review #260: the #253 standard is the clause that matters** — the race test must FAIL
+  against pre-fix code with the failure output REPORTED, not implied by a green suite. Note the
+  awkward part and plan for it: a *timing* race resists the tests-only-commit replay trick, so
+  expect the proof to come from a deterministically-ordered test (manually-resolved promises,
+  settle the stale read AFTER the switch) rather than from re-running an old commit — and demand
+  that the test fails for the RIGHT reason, i.e. on the stale `'complete'` reaching the store, not
+  merely on a timeout.
   **Lesson worth more than the correction**: a disposition that stands down on a *product* premise
   needs its premise re-checked at the point of use, exactly like a "shipped as #N" claim. I nearly
   waved off a live #255 finding on the strength of a note I wrote when the premise was true.
@@ -598,6 +621,14 @@ checks `=== true`; absent means false).
   SendMessage routed by team-lead. A Bentham GREEN on the CODE is NOT a substitute and must never be
   read as one. Refuse to GREEN a live-execution path until the token lands. When PO authorizes in
   conversation, team-lead must re-route it — a `from: <not-team-lead>` message doesn't satisfy the gate.
+- **[STANDING — a stand-down is a decision, and decisions belong in writing.]** Promoted by Gama onto
+  #260 (2026-09-05) from my own honest-limit line, and binding on my future verdicts: *"a verdict
+  living only in a transcript cannot be audited when its premise later goes stale."* So whenever I
+  decline to press a finding — unreachable, out of scope, deferred, adjudicated away — the disposition
+  goes in a durable artifact (issue comment or this file) **with its premise named explicitly**, in
+  the "re-open when X returns" form. That naming is the entire reason the #260 audit was possible
+  rather than silently wrong: the stale note said which fact it depended on, so the fact could be
+  re-checked. A stand-down whose premise is implicit is unauditable by construction.
 - **Live probes of an "admin cannot read X" claim must use a NON-OMNISCIENT identity**, never db-root.
 - **Branch discipline is load-bearing** for multi-author handoffs and risky changes; it is ceremony
   for a single-author cosmetic refactor implementing a reviewer-spec'd YELLOW with a clean minimum
