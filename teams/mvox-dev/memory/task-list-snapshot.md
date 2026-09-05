@@ -1,26 +1,24 @@
-# Task List Snapshot — 2026-09-02 (session MVOX-13)
+# Task List Snapshot — 2026-09-05 (session MVOX-14 close, #229 seam)
 
-mvox-app main @ `66ebd9d`. Board empty, nothing in flight.
+mvox-app main @ `f36a3df`. No formal task-list rows this session (all work ran as pipeline runs); queue state below is the restore source.
 
-## COMPLETED this session (13 issues, one squash commit each)
+## PENDING QUEUE (next session, in order)
 
-| Issue | Commit | Slice |
-|---|---|---|
-| #219 | `0f98490` | link picker: unblock already-linked provider, dedupe list, same-identity noop guard |
-| #207 | `32845d6`, `8e6d014` | calendar conventions: 24h TimeSelect + 5-min steps + AM/PM pref + Monday-first; ISO date text |
-| #208 | `63033d4` | event form: descriptive placeholders + "From series" line |
-| #209 | `5788866` | five Autocomplete person pickers → native selects |
-| #211 | `e53b8e9` | event type badge colors (mvox palette) |
-| #214 | `b598a61` | event type filter chips |
-| #212 | `91b3905` | convert form start date + single action context |
-| #213 | `6cd7a72` | cogwheel toggle toolbar (manual merge after YELLOW-cap halt, Bentham r4 GREEN) |
-| #215 | `7ed4ede` | toggleable series date grid |
-| #217 (+#216) | `6814565` | season delete cascade + progress counter |
-| #218 | `c0e6d1d` | localized sign-in surface, single provider-label source |
-| #220 | `66ebd9d` | AM/PM preference on displayed times |
+1. **#253** reparent partial-write defect — research done, root-cause report with Gama, AWAIT their ruling on the proposed build shape before RED
+2. **#255** deactivate member — research done (read scoping table); sign-in experience proposal is ours
+3. **#250** agenda day header typography — research done
+4. **#251** same header locale bug — serial after #250, same element
+5. **#252** arrange indent/unindent findability — last (after #253 fixes the write)
+6. **R1 remainder**: 225→224→226→230→231→235→232 via resumeFromRunId `wf_33ae2142-06b` (227/228/229 cached)
 
-## PENDING
+Research for 1-5: `memory/research/research-pilot-b-250-255.json`. Args for 6: `pipeline-args/args-224-232.json` + amendments in the last launch (transcript).
 
-None. Live gates for Mihkel listed in `team-lead.md` [NEXT SESSION].
+## AWAITING RULINGS (not ours to start)
+
+- #229 census trio (on closed issue), #246/#256 schema shapes (+#242 no-schema verdict), #249 (not-ready), #237 (parked on #238 gate), #233 (parked, rewritten)
+
+## COMPLETED this session
+
+15 issues: #221 #222 #234 #236 #245 #238 #240 #239 #241 #243 #248 #227 #228 #229 — SHAs in team-lead.md [NEXT SESSION].
 
 (*MVOX:Palestrina*)

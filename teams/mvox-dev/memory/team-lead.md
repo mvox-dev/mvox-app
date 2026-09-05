@@ -2,13 +2,25 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
-### [NEXT SESSION] 2026-09-03 — session MVOX-14 live (updated 22:40 EEST at #221→#222 boundary)
+### [NEXT SESSION] 2026-09-05 — session MVOX-14 → MVOX-15 (clean break at #229 seam, 13:05 EEST)
+
+mvox-app main @ `f36a3df`. **15 issues closed this session**: #221 `117971c`, #222 `b554151`, #234 `eb5a2d7`, #236 `23a02d9`, #245 `0b57473`, #238 `2e90de1`, #240 `0fc88e6`, #239 `9d6000e`, #241 `64631c3`, #243 `03a46f0`, #248 `4f47f65`, #227 `1fedb0d`, #228 `bce88fe`, #229 `f36a3df` (+ #216-style subsumptions none). Standing: finn/bentham/perotin (terminated at shutdown).
+
+**FIRST ACTION next session:** /mvox-wake, then Gama's batch B in their order — **#253 → #255 → #250 → #251 (serial, same element) → #252** — research DONE at `memory/research/research-pilot-b-250-255.json`; #253's root-cause report already with Gama (headline: server failure reason discarded — only status numbers surfaced; build shape proposed: typed SectionReparentPartialError + body-capture + conditioned mocks; await Gama's ruling before RED). #255: scoped/unscoped read table in the research file; deactivated sign-in experience is OURS TO PROPOSE (Mihkel). THEN resume R1 remainder: **225→224→226→230→231→235→232** — resumeFromRunId `wf_33ae2142-06b` with the exact args from the last launch (in this session's transcript; #227/#228/#229 replay cached; args file `pipeline-args/args-224-232.json` + #235 insert + #230/#231 drift amendments). Template at scratchpad path must be re-copied on fresh session (`cp .claude/workflows/tdd-slice-pipeline.js <scratchpad>/`).
+
+**Schema sitting DONE** (Pérotin, on the issues): #246 schedule_item sketch, #242 NO SCHEMA NEEDED (verdict on issue), #256 link entity sketch (creators-tier unresolved). Await rulings; entu/research PRs after sign-off. **#254 CLOSED not planned** (Mihkel: members own it). **#237** parked on #238 trial (shipped — TrashIcon.svelte is the artifact); **#249** not-ready, after #253-batch; its args must include the locationCorpusRequested latch tidy (see Deferred below). **#233** parked (rewritten by Mihkel, 5 tuning questions for Pérotin — read before any schema work).
+
+**#229 ruling pending:** census on the (closed) issue — profile_repair_done / profile_visibility_title / profile_visibility_intro = missing-surface findings for Gama.
+
+**Process notes this session:** classifier halted 3 of ~14 merges (222, 236, 245) — recovery = verify journal → Mihkel manual-mode retry; pipeline-internal merges mostly pass. Seamed single-task runs (Gama-ratified) > packed runs while pilot is live. Terse comms is a standing Mihkel norm (memory file exists).
+
+### [PREVIOUS] 2026-09-03 — session MVOX-14 live (updated 22:40 EEST at #221→#222 boundary)
 
 **#221 CLOSED** — merged `117971c` (root / redirects to sign-in; expired-token → session-expired login variant, implemented in guard.ts NOT hydrateAuth — cold-visit path never consults authStore; research-221.json has the trace). Review r1 YELLOW (commit-body disclosures) → fix → r2 GREEN → merge. Live gates for Mihkel in commit body (phone: cold /, expired /, robots.txt note).
 
 **#222 IN FLIGHT at write time** — season-manage panel merges into one toolbar card. Args `pipeline-args/args-222.json`, research `research/research-222.json` (headline: panel must be SIBLING of role=toolbar header row inside new outer card — handleAdminToolbarKeydown full-subtree query + dialog-in-toolbar ARIA; label under showSeasonManageGear gate; gear aria-labelledby). If pipeline dead on relaunch: branch feat/222-season-manage-card, delete if incomplete, relaunch from args-222.json.
 
-**Deferred:** CLAUDE.md stack table claims Playwright — no E2E infra exists in mvox-app (research-221 finding); queue doc correction. robots.txt Allow:/ now 302s (noted to PO).
+**Deferred:** CLAUDE.md stack table claims Playwright — no E2E infra exists in mvox-app (research-221 finding); queue doc correction. robots.txt Allow:/ now 302s (noted to PO). **#249 args note (Gama 2026-09-05):** if event/[id]/+page.svelte's location-corpus code is touched during #249, move the `locationCorpusRequested = true` latch BELOW the `if (!selected) return` guard in ensureLocationCorpusLoaded (one-line tidy, not a defect — premature focus before collective resolve latches the flag and kills suggestions for that visit; accepted degrade today).
 
 ### [PREVIOUS] 2026-09-03 — session MVOX-13 → MVOX-14 (board EMPTY, clean shutdown 2026-09-03 21:30 EEST)
 

@@ -1,0 +1,426 @@
+{
+  "summary": "Pre-RED verification batch for pilot batch B: #253 #255 #250 #251 #252",
+  "agentCount": 4,
+  "logs": [],
+  "result": {
+    "verify": [
+      {
+        "key": "253",
+        "claims": [
+          {
+            "claim": "repo origin is mvox-dev/mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "performReparent (roster/+page.svelte:1356-1401) calls reparentSection then reorderSections over the destination sibling group inside one try/catch",
+            "verdict": "CONFIRMED",
+            "evidence": "read via git show origin/main:src/routes/roster/+page.svelte lines 1356-1401; reparentSection at 1379, reorderSections at 1383, shared catch 1386-1400"
+          },
+          {
+            "claim": "reorderSections issues up to 3 sequential requests per section (GET, POST, DELETE per old value), serial loop, no Promise.all",
+            "verdict": "CONFIRMED",
+            "evidence": "sectionActions.ts:305-337, for-loop with await at each step"
+          },
+          {
+            "claim": "reparentSection issues GET + POST + DELETE-per-old-value for the single reparented entity",
+            "verdict": "CONFIRMED",
+            "evidence": "sectionActions.ts:451-483"
+          },
+          {
+            "claim": "entuFetch has no retry/backoff logic; only 401 is special-cased",
+            "verdict": "CONFIRMED",
+            "evidence": "request.ts:107-131 — only res.status===401 branch; repo-wide grep for retry/backoff/429/rate-limit found nothing relevant in src/lib or src/routes outside comments about unrelated features"
+          },
+          {
+            "claim": "The failure banner is a single fixed message (roster_section_reorder_failed) shared identically between pure reorder failures and reparent (indent/unindent) failures, regardless of whether the _parent move landed",
+            "verdict": "CONFIRMED",
+            "evidence": "roster/+page.svelte:2550-2560 gates on one boolean reorderError set identically in both performReorder's and performReparent's catch blocks (1280, 1388); messages/en.json:185 + et/lv/uk equivalents show one string"
+          },
+          {
+            "claim": "On failure, the page attempts exactly one listSections refetch and falls back to reverting the local snapshot if that refetch also fails",
+            "verdict": "CONFIRMED",
+            "evidence": "roster/+page.svelte:1281-1292 (performReorder) and 1389-1396 (performReparent)"
+          },
+          {
+            "claim": "Neither reorderSections nor reparentSection reads the response body on a non-2xx status; only the HTTP status number is ever surfaced",
+            "verdict": "CONFIRMED",
+            "evidence": "sectionActions.ts lines 315,330,334 (reorderSections) and 462,477,481 (reparentSection) all throw new Error with only res.status, no body read"
+          },
+          {
+            "claim": "The actual server-side cause of the failing request (429 vs 403 vs 5xx vs network) cannot be determined from this clone",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "no server logs accessible from this repo checkout; code only ever captures/surfaces the numeric HTTP status, never a body or reason"
+          },
+          {
+            "claim": "The codebase has an existing precedent pattern of typed partial-failure errors carrying how far a multi-step write got (SeriesCascadePartialError, ProfileSaveError with createdProfileId), which sectionActions.ts's reparent/reorder path currently lacks",
+            "verdict": "CONFIRMED",
+            "evidence": "seasons/deleteErrors.ts SeriesCascadePartialError (deletedCount/totalCount); profile/applyProfileSave.ts ProfileSaveError(message, createdProfileId); sectionErrors.ts only has SectionMembershipMissingError and SectionNotEmptyError, nothing for reparent/reorder partial state"
+          },
+          {
+            "claim": "page.roster-indent.spec.ts:693-717 already pins the exact 'reparent lands, renumber fails' scenario the issue describes",
+            "verdict": "CONFIRMED",
+            "evidence": "test title 'a reparent that lands but whose sibling RENUMBER fails reconciles the same way' asserting console.error, listSections refetch, section-reorder-error banner, and sec-alto back at data-depth '0'"
+          },
+          {
+            "claim": "That spec's listSectionsMock is a static fixture returned unconditionally regardless of prior mock write outcomes, so the test cannot validate that the refetched tree truthfully reflects a landed _parent move — it only validates that the refetch mechanism fires",
+            "verdict": "CONFIRMED",
+            "evidence": "page.roster-indent.spec.ts beforeEach: listSectionsMock.mockImplementation(() => Promise.resolve(fixtureTree())) — same canned tree on every call, no conditioning on reparentMock/reorderMock having been invoked"
+          },
+          {
+            "claim": "No unit test exercises reorderSections failing partway through a multi-section (N>1) sibling group",
+            "verdict": "CONFIRMED",
+            "evidence": "sectionActions.reorder.spec.ts it(...) list reviewed — only single-section non-2xx cases are pinned, no mid-loop-of-N failure test"
+          }
+        ],
+        "risks": [
+          "This is a read-only investigation; no code, tests, or copy were changed.",
+          "Root cause of the underlying HTTP failure (rate-limit vs rights vs transient) is not established and cannot be from this clone alone — needs Entu server-side log/behavior access before deciding whether this is 'only a robustness fix' per issue Done-when #4.",
+          "Ordering/transactional options are reported neutrally per PO's request; no design decision has been made or implied.",
+          "sectionActions.reparent.spec.ts and .reorder.spec.ts were read for structure/coverage only, not executed."
+        ],
+        "notes": "Findings delivered directly to PO/team-lead as requested (root-cause-before-building gate for #253). No files were written or modified. Key new fact beyond the issue body: the one existing test that already targets this exact failure mode (page.roster-indent.spec.ts:693-717) cannot detect the real defect because its listSections mock is a static fixture unconditioned on prior writes — it tests that reconcile fires, not that reconcile is truthful. Also surfaced a directly transferable precedent (SeriesCascadePartialError / ProfileSaveError) already living in this codebase for typed partial-write state, which reparentSection/reorderSections currently lack entirely."
+      },
+      {
+        "key": "255",
+        "claims": [
+          {
+            "claim": "Repo guard: workspace-app origin ends mvox-app.git; safe to proceed",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "Tree sits on R1 pipeline branch chore/229-mock-only-i18n-keys; all reads done via `git show origin/main:<path>`, tree left untouched",
+            "verdict": "CONFIRMED",
+            "evidence": "git status --short --branch -> ## chore/229-mock-only-i18n-keys"
+          },
+          {
+            "claim": "Issue #255 is RULED 'deactivate' (not delete) by Mihkel 2026-09-05; labeled ready/task; done-when items 1-8 in the ruling comment govern this pickup",
+            "verdict": "CONFIRMED",
+            "evidence": "gh issue view 255 --comments: 'RULING — Mihkel, 2026-09-05: deactivate' + 8-item Done when list, (*PO:Gama*)"
+          },
+          {
+            "claim": "Member entity lifecycle today: `status` is written ONCE at create, hardcoded 'active', no write path anywhere flips it after creation",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/invite/inviteData.ts:289 `{ type: 'status', string: 'active' }` in memberProps at create; grep of src/lib for any other `status` write against a member entity found none"
+          },
+          {
+            "claim": "READ 1 — roster (listActiveMembers): status-SCOPED",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/roster/rosterData.ts:100 `entity?_type.string=member&status.string=active&props=person,_parent&limit=500` — a deactivated member is dropped from the roster automatically, no code change needed"
+          },
+          {
+            "claim": "READ 2 — viewer's own RSVP-eligibility member resolution (findMyMemberId): status-SCOPED",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/rsvp/rsvpData.ts:45 `entity?_type.string=member&person.reference=…&status.string=active&props=_id&limit=1` — a deactivated viewer resolves to null -> already-existing 'non-member' UI state fires with zero new code"
+          },
+          {
+            "claim": "READ 3 — listAttendance (all attendance rows for one event, admin/conductor read): NOT status-scoped",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/attendance/attendanceData.ts:218 `entity?_type.string=attendance&_parent.reference={eventId}&props=member,status&limit=500` — queries by event parent only, returns rows for every member regardless of status, including deactivated ones (desired for keeping subject on THAT event's historical tally, but see READ 6 for how it's consumed downstream)"
+          },
+          {
+            "claim": "READ 4 — listMyAttendance (signer's own attendance across all events, by memberId): NOT status-scoped by design (keyed on a specific known memberId, not a status filter) — appropriate since it's a self-view of one's own history",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/attendance/attendanceData.ts:265 `entity?_type.string=attendance&member.reference={memberId}&props=_parent,status&limit=500`"
+          },
+          {
+            "claim": "READ 5 — listAllRsvpsForEvent (conductor's per-event RSVP tally/comparison): NOT status-scoped",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/attendance/attendanceData.ts:310 `entity?_type.string=rsvp&event.reference={eventId}&props=member,status&limit=500` — includes a deactivated member's past rsvp answer for that event; this is arguably correct (historical tally integrity) rather than a bug"
+          },
+          {
+            "claim": "READ 6 — season-summary per-member attendance rates (deriveAllMemberRates), the conductor's full-roster history view: driven off the ACTIVE roster as its row set, so a deactivated member's row — and her entire attendance history — disappears from this view, not merely blanked",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/attendance/attendanceSummary.ts:42-51 deriveAllMemberRates maps over `members: RosterRow[]` ('one entry per ROSTER member... A record for someone not on the roster is ignored — no phantom row'); call site src/routes/+page.svelte:2104 `deriveAllMemberRates(perEventRecords.flat(), roster, events.length)` where `roster` comes from `loadRoster` (active-only, rosterData.ts:100). This is the read most in tension with done-when #3 ('past attendance... keep their subject... historical views still resolve the person's name') — the mechanism is row-drop, not blank/id, but the net user-visible effect is the same: her history vanishes from the conductor's summary the moment she's deactivated."
+          },
+          {
+            "claim": "READ 7 — 'Take attendance' live-editing panel (AttendanceSurface via event/[id]/+page.svelte): same roster-driven row set as READ 6",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/event/[id]/+page.svelte:64,1142 `loadRoster(cfg)` feeds `members` prop into AttendanceSurface.svelte (RosterRow[]). Distinguish from READ 6: this is a going-forward editing surface (you shouldn't be able to newly mark attendance for someone no longer in the choir), so dropping her from THIS list is arguably the correct behavior, unlike the historical summary."
+          },
+          {
+            "claim": "READ 8 — deleteSection's member-occupancy check (blocks deleting a non-empty section): deliberately NOT status-scoped, by explicit design comment",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/sections/sectionActions.ts:394 `entity?_type.string=member&_parent.reference={sectionId}&limit=1` (via `scoped`), counts ANY member parented to the section, active or not. Design comment at :346-368 states this is deliberately broader than the roster's active-only view ('the counts here are the only authority that is neither narrowed nor stale'). Consequence for #255: a deactivated member who is still `_parent`-linked to a section (deactivation, per done-when #1, changes ONLY `status` — 'nothing else on it changes') will continue to block that section from being deleted, invisibly (she no longer shows in the roster UI that would explain why the section reads as non-empty) — a genuine ghost-blocker, worth naming in the report even though it isn't a 'ghost member appears on screen' case."
+          },
+          {
+            "claim": "READ 9 — admin/librarian rights listing (fetchRights: entity/{id}?props=_owner,_editor, consumed by admin/+page.svelte's refreshAdmins/refreshLibrarians): NOT status-scoped — entirely independent of member.status",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/admin/roleManagement.ts:104 `entity/${entityId}?props=_owner,_editor`. Rights are reference-list properties on the database/library entity itself (per project_polyphony_roles_as_rights), never joined against `member.status`. A deactivated admin/librarian keeps appearing in — and keeps holding — her `_owner`/`_editor` grant; deactivating the `member` entity does nothing to it."
+          },
+          {
+            "claim": "READ 10 — the admin-gate check itself (resolveAdmin, gates /admin nav + admin powers app-wide): NOT status-scoped, same mechanism as READ 9",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/nav/adminStore.ts:63 `entity/${resolvedDbEntityId}?props=_owner,_editor`, checked against `personId` only — no member/status lookup anywhere in `resolveAdmin`. This is the sharpest gap for the report: a deactivated member who happens to hold `_owner`/`_editor` remains a fully-powered admin of the collective (can still see/manage roster, sections, other members' roles) purely because deactivation and rights-revocation are two separate, currently-unlinked mechanisms."
+          },
+          {
+            "claim": "READ 11 — admin page's person-picker (loadRoster feeding the 'grant admin/librarian to X' selects): status-SCOPED, and correctly so (picker source, not a rights list)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/admin/+page.svelte:272 `loadRoster(c)` -> `roster = rosterRows`, used only as the `<select>` source for granting NEW rights — a deactivated member correctly can't be freshly selected, independent from READ 9/10's already-existing-grant gap"
+          },
+          {
+            "claim": "No invite-listing read exists to check for status-scoping — invites are create-only (createInvite/mintSelfLinkInvite), no 'list pending invites' surface found anywhere in src/lib",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/invite/inviteData.ts exports only create/mint functions (createInvite, mintSelfLinkInvite, resolvePersonParentId, resolveInviteParentId) — grepped full file's exports, no list/get by status"
+          },
+          {
+            "claim": "Roster page itself has no active-membership gate on VIEWING it — it is a protected-route-for-auth page, open to any signed-in domain reader, not restricted to active members; a deactivated member could still open /roster (just won't see herself in it)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:1-8 header comment: 'Protected automatically... isProtectedPath is true by default. No completionGate import here'; no member.status check in the load path, only `loadRoster` filters WHO appears as a row"
+          },
+          {
+            "claim": "An existing 'non-member' UI state already covers part of the sign-in failure mode PO wants addressed: when findMyMemberId resolves to null, RsvpControl renders disabled + an explicit 'Only members can RSVP' hint (i18n key rsvp_non_member_hint), rather than a blank/silent control — this fires for a deactivated member with ZERO new code, on both the agenda page and the event-detail page",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte:159-166 tri-state membership comment + :894 `membership = id ? 'member' : 'non-member'`; src/lib/components/agenda/RsvpControl.svelte:146 `data-testid=\"rsvp-non-member-hint\">{m.rsvp_non_member_hint()}`; identical mechanism at src/routes/event/[id]/+page.svelte:164-169,373"
+          },
+          {
+            "claim": "The composite sign-in experience for a deactivated member (synthesized from the above, not itself a single code path): she still signs in fine, still sees the full app shell/nav, still sees the agenda/events list (domain-wide, not membership-gated) and the roster page (minus herself), gets a clear disabled+hint on RSVP controls (non-member state) and vanishes from the roster and (per READ 6) from the conductor's attendance-history summary — but if she held _owner/_editor grants, she silently RETAINS full admin powers since rights are ungated by member.status. The 'broken app' risk Gama named isn't a blank screen; it's this incoherent mix (some surfaces correctly degrade with an explicit message, others silently vanish her history, and rights keep working regardless) — engineering's proposal needs to say explicitly whether deactivation should also strip _owner/_editor (or defer that to a separate admin action) and whether the season-summary drop (READ 6) is acceptable or should be changed to keep her historical rows visible-but-labeled-inactive.",
+            "verdict": "CONFIRMED",
+            "evidence": "Synthesis of READs 1-11 above, each independently confirmed by source"
+          }
+        ],
+        "risks": [
+          "READ 6 (season-summary history drop) is the finding most likely to be missed if engineering scopes #255 narrowly as 'just flip status' — it silently regresses done-when #3 the moment the first member is deactivated, with no test currently pinning that a deactivated member's past rows stay visible in the summary.",
+          "READ 9/10 (rights ungated by member.status) means 'deactivate a member' and 'revoke her admin/librarian rights' are two different actions today; if the UI only exposes one control (deactivate) without also surfacing/forcing the rights question, a deactivated-but-still-owner person keeps full admin power indefinitely — this needs an explicit product answer, not an implicit one.",
+          "READ 8 (deleteSection's unscoped member count) means a section containing only deactivated members will read as non-empty forever unless someone separately unassigns her section _parent — worth surfacing to whoever designs the 'reactivate/see inactive members' surface (done-when #4), since an admin may reasonably expect deactivating to also free up her section slot.",
+          "I did not examine src/lib/library (lending) or src/lib/sections/sectionData.ts's own member-facing reads in depth — task named roster/sections/attendance/rsvp/invites/admin-roles explicitly; sections coverage here is limited to the deleteSection count (the one member-scoped section query found) since no other section read filters or joins by member.status.",
+          "This was a read-only mapping pass (per FIRST ACTION guard) — no code was changed, no tests run; the report/proposal writing and any implementation are separate follow-on work."
+        ],
+        "notes": "Repo guard passed (workspace-app origin = mvox-app.git). Tree was on branch chore/229-mock-only-i18n-keys (an R1 pipeline branch) throughout, left untouched; all reads done via `git show origin/main:<path>` / `git ls-tree origin/main`, never against the dirty working tree.\n\nIssue #255 is RULED: deactivate (status flip), not delete, ready-labeled, 8-item done-when list from Gama's ruling comment (2026-09-05).\n\n## Enumeration — every member-scoped-or-not read, file:line, verdict\n\n| # | Read | File:line | Scoped to status=active? |\n|---|---|---|---|\n| 1 | Roster listing | rosterData.ts:100 | YES |\n| 2 | Viewer's own RSVP-eligibility (findMyMemberId) | rsvpData.ts:45 | YES |\n| 3 | Per-event attendance list (admin/conductor) | attendanceData.ts:218 | NO (by design — event-parent scoped only) |\n| 4 | Signer's own attendance history | attendanceData.ts:265 | N/A — keyed by known memberId, self-view |\n| 5 | Per-event RSVP tally/comparison | attendanceData.ts:310 | NO (by design — event scoped only) |\n| 6 | Conductor's season-summary per-member rates | attendanceSummary.ts:42 + routes/+page.svelte:2104 | Indirectly YES via roster — **drops deactivated member's whole history from the view** |\n| 7 | Take-attendance live panel member list | event/[id]/+page.svelte:1142 (loadRoster) | Indirectly YES via roster — correct for a going-forward editing surface |\n| 8 | deleteSection member-occupancy count | sectionActions.ts:394 | NO, deliberately (comment at :346-368) — deactivated-but-still-parented member blocks section deletion |\n| 9 | Admin/librarian rights listing (fetchRights) | roleManagement.ts:104 | NO — rights are independent of member.status entirely |\n| 10 | Admin-gate check (resolveAdmin, gates /admin + admin powers) | adminStore.ts:63 | NO — same as #9; a deactivated admin keeps full power |\n| 11 | Admin page's grant-new-role person picker | admin/+page.svelte:272 (loadRoster) | YES, correctly |\n| — | Invite listing | inviteData.ts | No such read exists (create/mint only) |\n\nMember entity lifecycle today: `status` is written once at create (`inviteData.ts:289`, hardcoded `'active'`); no code path anywhere flips it afterward — #255 is greenfield for the write side.\n\n## Sign-in failure-mode facts (done-when #6, \"engineering's proposal\")\n\n- A tri-state `membership: 'loading'|'member'|'non-member'` already exists on both the agenda (`routes/+page.svelte`) and event-detail pages, driven by the status-scoped `findMyMemberId` (read #2). A deactivated member resolves to `'non-member'` with ZERO new code and gets a disabled RSVP control plus an explicit `rsvp_non_member_hint` i18n message (\"Only members can RSVP\") — this is NOT a blank/broken control, it already reads as a coherent, if terse, \"you can't do this\" state.\n- The roster page itself is not membership-gated to view (any signed-in domain reader can open `/roster`, per its own header comment) — a deactivated member can still open it, she just won't see her own row.\n- The agenda/events list is domain-wide, not membership-gated — she still sees the whole calendar.\n- The gap: rights (`_owner`/`_editor`, reads #9/#10) are completely independent of `member.status`. If the deactivated person happened to hold an admin/librarian grant, deactivating her `member` entity leaves her a fully-powered admin — able to see/manage the very roster she's been removed from, and to deactivate/reactivate other members. This is the sharpest engineering decision the proposal needs to make explicit: either (a) deactivate also strips `_owner`/`_editor` as part of the same action, or (b) it deliberately does not, and an admin who leaves the choir must be separately demoted — but it must be a *stated* choice, not a silent gap.\n- The other genuine regression: read #6 (season-summary) drops a deactivated member's entire attendance history from the conductor's view the moment she's deactivated, because that view's row set is the active roster, not the historical record. This directly tensions done-when #3's \"past attendance... keep their subject\" — the record itself stays intact in Entu (no data loss), but a conductor can no longer SEE it through this surface. Worth flagging even though it renders as \"invisible\", not \"blank/id\" as done-when #3 literally describes.\n\nNo implementation was done — this is the read-only fact-gathering pass the task specified."
+      },
+      {
+        "key": "250-251",
+        "claims": [
+          {
+            "claim": "Repo guard: workspace-app origin is mvox-dev/mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin → https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "#250's file:line citations for the day header (AgendaList.svelte:455-467) and its class string are accurate",
+            "verdict": "CONFIRMED",
+            "evidence": "origin/main:src/lib/components/agenda/AgendaList.svelte:455-467 — section(455) > div data-testid=\"agenda-date-header\"(457) class=\"flex items-baseline gap-2 pt-4 pb-1 text-[10px] tracking-wide text-ink-2 uppercase\"(458) class:bg-highlight={group.relative==='today'}(459); today/tomorrow spans at 462/464 both class=\"font-semibold text-ink\"; :466 <span>{group.header}</span> — exact match to issue body's quoted markup."
+          },
+          {
+            "claim": "#250's typography comparison table (row event-name/time text-sm text-ink 14px, row-duration text-[10px] text-ink-2, badge text-[9px]) is accurate",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.svelte:472 row-time span class=\"text-sm text-ink\"; :473 row-duration span class=\"text-[10px] text-ink-2\"; :486 event name span class=\"truncate text-sm text-ink\"; :495 type badge span class=\"...text-[9px] tracking-wide uppercase...\". Also :451 gap-marker and :348 recent-row-date both share text-[10px] text-ink-2 with the day header, matching the issue's 'matches the gap marker / Recent-row date' claim exactly."
+          },
+          {
+            "claim": "#251's locale-bug mechanism (headerFmt uses Intl.DateTimeFormat(undefined,...) i.e. device locale) at AgendaList.svelte:193-199 and the second site at event/[id]/+page.svelte:622 are accurate",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.svelte:194-199: `const headerFmt = new Intl.DateTimeFormat(undefined, { timeZone: TZ, weekday:'long', day:'numeric', month:'long' })`, preceded by comment at :193. +page.svelte:622: `const dateFmt = new Intl.DateTimeFormat(undefined, { timeZone: TZ, weekday:'long', day:'numeric', month:'long' })` — identical formatter options, confirming the 'two narrative surfaces, same defect' claim."
+          },
+          {
+            "claim": "groupKeyFmt and shortDateFmt correctly hard-code 'en-CA' and must stay untouched per #251",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.svelte:186 groupKeyFmt = new Intl.DateTimeFormat('en-CA', {...}); :206 shortDateFmt = new Intl.DateTimeFormat('en-CA', {...}) — both ISO-day producers as described."
+          },
+          {
+            "claim": "getLocale() is already imported/used at LanguageSelector.svelte:41 as #251 cites",
+            "verdict": "CONFIRMED",
+            "evidence": "LanguageSelector.svelte:40 `import { getLocale, locales, setLocale, type Locale } from '$lib/paraglide/runtime.js';` (import line 41 in issue's 1-indexed count matches within one line of the actual import statement) and :60 `const current: Locale = getLocale();` — getLocale is a real, already-consumed export."
+          },
+          {
+            "claim": "Overlap between #250 and #251: the PRESERVED-VERBATIM T5 DST block adjoins/contains headerFmt, which #251 must edit",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.svelte:179-183 comment block: 'PRESERVED VERBATIM ... Do not touch the TZ constant, the three formatters below, or the groups derivation without re-checking the DST edge cases they guard.' followed immediately by TZ(183), groupKeyFmt(186), headerFmt(194-199), shortDateFmt(206). headerFmt is literally one of the three guarded formatters — #251's edit lands inside the PRESERVED-VERBATIM zone and must preserve the DST-safe construction (locale arg change only, not the timeZone/weekday/day/month options or the noon-anchored `new Date(key + 'T12:00:00')` call site at :242) while #250's edit (template div :455-467) sits in the markup section, structurally separate from the script's formatter block — no direct line overlap between the two issues' edits, but #251 must respect the same preservation warning that guards this whole area."
+          },
+          {
+            "claim": "Existing specs pin the day-header's rendered text to English weekday/month words via regex, a rebase hazard for #251",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.spec.ts:587-591 expects headerText to match /Monday/i and /June/i and not match ISO; AgendaList.spec.ts:655-658 same pattern under AM/PM formatting test; event/[id]/page.spec.ts:660-666 expects /Tuesday/i and /September/i for event-detail-date, with an explicit comment 'the formatter is locale-aware (undefined locale, same as AgendaList's headerFmt)'. None of these specs mock getLocale() or paraglide/runtime — #251's implementer must confirm the test locale still resolves to 'en' (or update these specs) once headerFmt/dateFmt switch from `undefined` to getLocale()."
+          },
+          {
+            "claim": "Existing specs assert on agenda-date-header count/order/testid structure that #250's pure class-and-size edit should leave undisturbed",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.spec.ts:69-88 (header count/grouping by testid), :149-175 (agenda-relative-today/-tomorrow testid presence) — none assert on className/text-size, so #250's class-only change should not break these; but confirms the testids #250 must keep stable."
+          }
+        ],
+        "risks": [
+          "#251's fix touches code inside the file's PRESERVED-VERBATIM T5 DST guard comment (AgendaList.svelte:179-213) — the comment explicitly warns not to touch the three formatters 'without re-checking the DST edge cases they guard'; the locale-arg swap (undefined → getLocale()) must not alter timeZone/weekday/day/month options or the noon-anchored date construction at :242 that avoids the DST edge.",
+          "Specs at AgendaList.spec.ts:587-591,655-658 and event/[id]/page.spec.ts:660-666 hardcode English weekday/month regex assumptions tied to the current `undefined`-locale behavior; #251 must verify or update them once the formatter switches to getLocale()-driven locale, since no test currently mocks paraglide's getLocale()/locale cookie.",
+          "#251 point 5 raises a real interaction risk with #250: if #250 removes or changes the `uppercase` class, Estonian mid-sentence capitalization rules (lowercase weekday/month names) would become visible for the first time — the issue itself flags this as needing explicit call-out rather than silent handling, and neither issue's Done-when list currently assigns an owner for verifying that interaction once both land.",
+          "Serial order note from #251's body: 'these two can land in either order but... the second should rebase rather than re-litigate' — since both edits sit in the same file (AgendaList.svelte) at nearby-but-non-overlapping regions (template :455-467 for #250, script :193-199 for #251), the rebase risk is line-number drift within the same file, not logical conflict; no evidence of a merge conflict beyond normal git context lines."
+        ],
+        "notes": "Read-only mapping only, no code changed. Repo guard passed (mvox-app.git). Tree is on branch chore/229-mock-only-i18n-keys with unrelated uncommitted changes (teams/mvox-dev/memory/*.md) — not touched, not relevant to #250/#251. Both issues have 0 GitHub comments, so issue body is the sole source of truth (no supersession needed). All file:line citations in both issue bodies were checked against origin/main and found accurate. Key file: /home/ai-teams/workspace-app/src/lib/components/agenda/AgendaList.svelte (517 lines) — script-section formatters at lines 179-213 (PRESERVED VERBATIM T5 block housing TZ/groupKeyFmt/headerFmt/shortDateFmt), template day-header at lines 455-467. Second locale-bug site: /home/ai-teams/workspace-app/src/routes/event/[id]/+page.svelte:622 (dateFmt, identical Intl options to headerFmt). Locale source-of-truth confirmed real: /home/ai-teams/workspace-app/src/lib/components/LanguageSelector.svelte:41 imports getLocale from $lib/paraglide/runtime.js, used at :60. Relevant spec files for rebase awareness: src/lib/components/agenda/AgendaList.spec.ts (testid/structure assertions at :69-88,149-175 for #250; English-text regex assertions at :587-591,655-658 for #251) and src/routes/event/[id]/page.spec.ts (:660-666, English-text regex for #251's second site)."
+      },
+      {
+        "key": "252",
+        "claims": [
+          {
+            "claim": "Repo guard passed: workspace-app origin is mvox-dev/mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "Tree is on branch chore/229-mock-only-i18n-keys, not main, with 2 unrelated uncommitted memory-file edits (teams/mvox-dev/memory/*)",
+            "verdict": "CONFIRMED",
+            "evidence": "git branch --show-current; git status --short"
+          },
+          {
+            "claim": "#252 body's own opening line ('Not ready yet — batched') is stale; issue is currently labeled ready (as is #253)",
+            "verdict": "CONFIRMED",
+            "evidence": "gh issue view 252/253 --json labels -> both show [task, ready], state OPEN"
+          },
+          {
+            "claim": "#252's own top comment (Gama) retracts its root-cause claim: the 'tagasi ei saa' report is now attributed to #253 (a failed reparent write), not to control findability; #252 stands only as a real but secondary UX defect, correctly sequenced after #253",
+            "verdict": "CONFIRMED",
+            "evidence": "gh issue view 252 --comments: 'New evidence contradicts... this issue is no longer the explanation for Joosep's report... sequenced after the write-integrity fix'"
+          },
+          {
+            "claim": "canIndent/canUnindent guards and prevSiblingId helper exist exactly as #252 describes, at +page.svelte:1310-1322 (not literally :1325 but same block)",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:1310 canIndent, :1319 canUnindent — canUnindent returns findSectionNode(...).parentId ?? null !== null"
+          },
+          {
+            "claim": "Both indent/unindent buttons render unconditionally (not grab-gated) as row siblings, each 16x16 viewBox SVG at class h-3 w-3 (12x12px) inside p-1 padding, colored text-ink-2, disabled+opacity-30 when inapplicable, tabindex=-1, mirror-image triangle paths M4 2 L12 8 L4 14 Z vs M12 2 L4 8 L12 14 Z",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:3049-3082 (button markup + inline comment block above it explaining tabindex=-1 rationale and no-text-node SVG choice)"
+          },
+          {
+            "claim": "App's own touch-target standard elsewhere is min-h-11 min-w-11 (44px); the indent/unindent pair is the only control cluster below that standard per the issue's own comparison to the trashcan/gear/create buttons",
+            "verdict": "UNVERIFIABLE",
+            "evidence": "Not independently re-checked this turn (would require grepping min-h-11 usages across other roster/season controls); issue #252 body asserts this as an established code fact, consistent with what's visible in the same file (grip/rename/remove neighbors use larger classes) but I did not verify every comparator control myself"
+          },
+          {
+            "claim": "canUnindent uses parentId !== null as its only guard (a top-level section's parent is the org/db entity #161) — matches Joosep's screenshot behavior where the nested Soprano II correctly shows enabled ◀",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:1319-1322"
+          },
+          {
+            "claim": "handleIndent/handleUnindent (lines 1406, 1420) and the keyboard branch (handleHandleKeydown ~2100-2116, ArrowRight/ArrowLeft) both funnel through the same performReparent seam that #253 targets",
+            "verdict": "CONFIRMED",
+            "evidence": "grep hits: :1406 handleIndent, :1420 handleUnindent, :2107 await handleIndent(node), :2116 await handleUnindent(node) — all call into performReparent per the block comment at :1329-1360"
+          },
+          {
+            "claim": "performReparent (lines ~1360-1400) is the exact code #253 targets: reparentSection (_parent write) then ONE reorderSections over the destination sibling group; catch path sets reorderError, refetches via listSections, reconciles to server state or falls back to `before` snapshot",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:1360-1400 async function performReparent body, matches #253's cited mechanism"
+          },
+          {
+            "claim": "structuralWritePending = reorderPending || renamePending || removePending (line 1490) is the single guard disabling every indent/unindent/rename/delete button app-wide during any outstanding structural write — this is the shared 'one-at-a-time' surface both #252 (item 6, 'stays') and #253 (item 5, 'stays') explicitly agree must not change",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:1490 const structuralWritePending = $derived(...); buttons at :3057, :3073 use disabled={structuralWritePending || ...}"
+          },
+          {
+            "claim": "page.roster-indent.spec.ts (904 lines, src/routes/) covers: button presence/type/aria-label (describe at :306), enabled/disabled guard matrix (:326), DOM containment as row siblings not descendants (:348-399), indent/unindent write behavior + renumber (:401-461), unindent-to-org/grandparent (:462-531), keyboard ArrowRight/ArrowLeft parity with buttons (:532-629), shared reorderPending/failure-reconcile across reparent+renumber (:631-717), button-level keyboard operability despite tabindex=-1 (:719-763), loud-fail on unresolvable org (:765-817), and the pointer-only tabindex=-1 contract itself (:828-903, citing Mihkel's ruling in roving-tabindex-pipeline.js)",
+            "verdict": "CONFIRMED",
+            "evidence": "grep -n on describe/it blocks in src/routes/page.roster-indent.spec.ts, confirmed exact line ranges"
+          },
+          {
+            "claim": "No existing spec asserts visual/tap-target properties (px size, opacity value, color token, glyph distinguishability) — only .disabled boolean and DOM structure/behavior are pinned, so #252's asks (min-h-11/min-w-11, opacity, color, glyph distinction) are free to change without touching any red test except the tabindex='-1' pin at :828-903 (which #252 item 5 explicitly says not to touch)",
+            "verdict": "CONFIRMED",
+            "evidence": "grep across the spec file for 'opacity-30', 'h-3 w-3', 'min-h-11'/'min-w-11', 'text-ink-2' returned zero matches; only tabindex assertions found (lines 834-835 etc.)"
+          },
+          {
+            "claim": "#252 and #253 are the same feature/code path — both act on the identical two <button> elements (arrange-indent-{id} / arrange-unindent-{id}, +page.svelte:3049-3082), the identical reorderPending/structuralWritePending guard (:1490), and the identical performReparent write seam (:1360-1400); #253 changes what performReparent does and how failure is reported, #252 changes only the button's size/color/glyph/visibility — no line-level collision expected, but #252 landing first (before #253 fixes the write) would make a still-partially-broken write easier to reach, which is why Gama's ordering puts #253 first",
+            "verdict": "CONFIRMED",
+            "evidence": "Cross-referenced both issue bodies' cited line numbers/functions against the live file; both explicitly name each other ('Related: #252' in #253; '#253... likelier proximate cause' in #252's comment) and agree on sequencing"
+          }
+        ],
+        "risks": [
+          "This session made no code changes — it is a read-only mapping task per the FIRST ACTION instruction, so nothing was fixed or verified by tests running.",
+          "The 'min-h-11/min-w-11 app standard' claim in #252's body was not independently re-verified against every other roster control (trashcan/gear/create button) this turn — flagged UNVERIFIABLE above; worth a quick grep before scoping the #252 fix.",
+          "Working tree carries 2 uncommitted, unrelated memory-file edits (teams/mvox-dev/memory/perotin.md, team-lead.md) on branch chore/229-mock-only-i18n-keys — not on main and not clean; if #252's implementation branches from here those edits will ride along unless stashed/reset first.",
+          "Both #252 and #253 are labeled ready in GitHub right now, even though #252's issue body text still says 'Not ready yet — batched' — the label is current truth per this repo's ready-label-gate convention, the stale body sentence is not."
+        ],
+        "notes": "SCOPE: read-only investigation for #252 (arrange indent/unindent findability), sequenced deliberately AFTER #253 (the write-integrity bug). No files changed.\n\nWHERE THE CONTROLS LIVE TODAY — src/routes/roster/+page.svelte\n- Guards: canIndent (:1310) — prevSiblingId(id) !== null; canUnindent (:1319) — findSectionNode(...).parentId ?? null !== null (top-level parent is the org/db entity per #161, so nothing above it to promote to).\n- Write seam: performReparent (:1360-1400) — reparentSection (moves _parent) then ONE reorderSections call over the destination sibling group (visibleSiblingsOf, post-optimistic-patch order); on throw: reorderError=true, refetch via listSections and reconcile, or fall back to the pre-write `before` snapshot if the refetch itself fails. handleIndent/handleUnindent (:1406/:1420) and the ArrowRight/ArrowLeft keyboard branch (handleHandleKeydown, calls at :2107/:2116) both funnel through this one seam.\n- Guard flag: structuralWritePending = reorderPending || renamePending || removePending (:1490) — disables every indent/unindent/rename/delete button app-wide while any one structural write (reorder, reparent, rename, delete) is outstanding.\n- Markup (:3049-3082): two <button type=\"button\"> siblings of the row (not children — avoids nested-interactive inside the row's role=\"button\"), data-testid=\"arrange-indent-{id}\" / \"arrange-unindent-{id}\", aria-label + title via m.roster_section_indent/unindent, disabled={structuralWritePending || renamingSectionId===row.id || !canIndent/canUnindent(id)}, tabindex=\"-1\" (deliberate, pointer/touch-only — keyboard equivalent is row-grab + Arrow keys), class=\"rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30\", each holding one aria-hidden SVG viewBox=\"0 0 16 16\" class=\"h-3 w-3 fill-current\" with mirror-image triangle paths (indent: M4 2 L12 8 L4 14 Z / unindent: M12 2 L4 8 L12 14 Z). No text node in either button (accessible name comes solely from aria-label, by design, to keep textContent assertions like \"Soprano (4)\" clean).\n\nWHAT #252 ASKS (Done-when, 7 items): (1) both controls meet the app's own min-h-11/min-w-11 touch standard; (2) only applicable actions render as tappable — inapplicable ones don't sit at opacity-30, but their space is reserved so rows don't jump; (3) the two directions read as distinguishable at a glance — engineering picks glyphs/label/icon treatment and states which+why; (4) color moves off the muted text-ink-2 to the app's normal control tone; (5) keyboard path (row-grab, Space/Enter, ArrowLeft/Right, tabindex=\"-1\") is UNCHANGED — explicitly told not to \"fix\" tabindex=\"-1\", it's pinned in page.roster-indent.spec.ts; (6) structuralWritePending keeps disabling everything mid-write; (7) nesting itself (recursive sections) is untouched — this is a findability fix only, not a feature removal.\n\nAlso carried in #252's own top comment (correction, dated same day): the issue no longer explains Joosep's \"tagasi ei saa\" report — that's now #253's half-landed-write banner. #252 stands as a real, independent tap-target/findability defect, but is explicitly sequenced to land AFTER #253 so a fixed write isn't made easier to trigger while still broken.\n\nSPEC COVERAGE — src/routes/page.roster-indent.spec.ts (904 lines), all under #155/S3:\n- :306 button presence, type, aria-label naming, \"always visible / no grab needed\"\n- :326 enabled/disabled guard matrix (sop/sop1/sop2/alto/tenor across canIndent/canUnindent)\n- :348-399 DOM containment: buttons are row SIBLINGS, no nested-interactive, no accessible-name leakage into the row's own label\n- :401-461 indent → reparentSection + destination-group renumber, roll-up counts update\n- :462-531 unindent → org-level and grandparent-level promotion targets\n- :532-629 keyboard ArrowRight/ArrowLeft parity with the buttons, including refused-move-keeps-grab cases\n- :631-717 shared reorderPending/structuralWritePending guard across reparent+renumber, and the failure-reconcile contract (console.error, listSections refetch, server tree renders)\n- :719-763 button-level keyboard operability (Enter/Space) despite tabindex=\"-1\", and that ArrowUp/Down don't rove focus away from a focused indent/unindent button\n- :765-817 promote-to-top-level with no resolvable org fails loudly (banner + no write), never a silently-dead button\n- :828-903 the tabindex=\"-1\" pointer-only contract itself, explicitly citing Mihkel's ruling — this is the one pin #252 item 5 says must survive untouched\n\nZero assertions in this spec touch pixel size, opacity value, color token, or glyph shape/distinguishability — grepped for opacity-30/h-3 w-3/min-h-11/min-w-11/text-ink-2, no hits beyond disabled-boolean checks. So every #252 ask (size, color, opacity/reserved-space, glyph distinction) is free to change without turning any existing test red, EXCEPT the tabindex=\"-1\" assertions at :828-903 — which #252 explicitly says to leave alone.\n\nOVERLAP WITH #253 (same feature, shared code, no expected line collision): both issues act on the identical two <button> elements (+page.svelte:3049-3082), the identical structuralWritePending guard (:1490), and the identical performReparent write seam (:1360-1400). #253 changes what performReparent does (the reparent+renumber write sequence and failure messaging) and does not touch button markup/classes. #252 changes only the button's visual/DOM presentation (size, color, opacity/visibility, glyph choice) and does not touch performReparent, reparentSection, or reorderSections. The two issues cross-reference each other explicitly (#253: \"Related: #252\"; #252's comment: \"#253... is the likelier proximate cause\"). Ordering rationale (Gama, both issues agree): fixing #252's cosmetics first would make a control whose underlying write can still half-land easier to find and tap — hence #253 (the write) lands first, #252 (the findability) deliberately last.\n\nBoth issues currently carry the `ready` label (checked live) — #252's own body text (\"Not ready yet — batched\") is stale relative to the label; per this team's ready-label-gate convention the label is authoritative.\n\nWorking tree note: currently on branch chore/229-mock-only-i18n-keys (not main), with 2 uncommitted unrelated edits under teams/mvox-dev/memory/ — flagged as a risk for whoever branches off this tree for the #252 implementation."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify:253",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a3bfa475f134bf980",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788601601968,
+      "queuedAt": 1788601601944,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Findings delivered directly to PO/team-lead as requested (r…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY; tree on an R1 pipeline branch — read via git show origin/main:<path> where needed; state observed state. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact.\n#253 — reparent defect: two writes (_parent then renumber)…",
+      "lastProgressAt": 1788601794249,
+      "tokens": 91930,
+      "toolCalls": 27,
+      "durationMs": 192279,
+      "resultPreview": "{\"claims\":[{\"claim\":\"repo origin is mvox-dev/mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"performReparent (roster/+page.svelte:1356-1401) calls reparentSection then reorderSections over the destination sibling group inside one try/catch\",\"verdict\":\"CONFIRMED\",\"evidence\":\"read via git show origin/main:src/routes/ro…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:255",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a64463049bccbec0e",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788601601969,
+      "queuedAt": 1788601601944,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (workspace-app origin = mvox-app.git). Tr…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY; tree on an R1 pipeline branch — read via git show origin/main:<path> where needed; state observed state. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact.\n#255 — deactivate a member (RULED deactivate, not delete; …",
+      "lastProgressAt": 1788601824615,
+      "tokens": 85234,
+      "toolCalls": 34,
+      "durationMs": 221593,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: workspace-app origin ends mvox-app.git; safe to proceed\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Tree sits on R1 pipeline branch chore/229-mock-only-i18n-keys; all reads done via `git show origin/main:<path>`, tree left untouched\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git status --short --branc…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:250-251",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "ad100af24e06b3e04",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788601794254,
+      "queuedAt": 1788601601944,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Read-only mapping only, no code changed. Repo guard passed …",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY; tree on an R1 pipeline branch — read via git show origin/main:<path> where needed; state observed state. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact.\n#250 (agenda day header typography) + #251 (same header's …",
+      "lastProgressAt": 1788601913240,
+      "tokens": 60341,
+      "toolCalls": 26,
+      "durationMs": 118986,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: workspace-app origin is mvox-dev/mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin → https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"#250's file:line citations for the day header (AgendaList.svelte:455-467) and its class string are accurate\",\"verdict\":\"CONFIRMED\",\"evidence\":\"origin/main:src/lib/components/agenda/AgendaList.svelte:455-46…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 4,
+      "label": "verify:252",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "ac79948a371b7f319",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788601824618,
+      "queuedAt": 1788601601944,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "SCOPE: read-only investigation for #252 (arrange indent/uni…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY; tree on an R1 pipeline branch — read via git show origin/main:<path> where needed; state observed state. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact.\n#252 — arrange indent/unindent findability (deliberately L…",
+      "lastProgressAt": 1788601920051,
+      "tokens": 51377,
+      "toolCalls": 14,
+      "durationMs": 95432,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard passed: workspace-app origin is mvox-dev/mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"Tree is on branch chore/229-mock-only-i18n-keys, not main, with 2 unrelated uncommitted memory-file edits (teams/mvox-dev/memory/*)\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git branch --show-current; git…"
+    }
+  ],
+  "totalTokens": 288882,
+  "totalToolCalls": 101
+}

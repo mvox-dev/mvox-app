@@ -73,8 +73,9 @@ Three durable items; the per-PR narrative is not one of them.
   earlier) → `setUser` → `setLastProvider` → **conditional** `setToken` (skipped when a broader
   pre-existing token exists) → `hydrateAuth()`. Keeping the broader token is load-bearing: the
   redemption JWT is account-scoped, so persisting it would silently drop every other collective.
-  **TODO (between-chains, my file):** fix the trigger text in `architecture-decisions.md` — a settled
-  rule citing a non-existent symbol is a landmine for the next reviewer.
+  **DONE (verified 2026-09-03):** correction is live at `architecture-decisions.md:508` — enforce "by
+  intent, not by symbol", with the verified `run-link-callback.ts:95-102` shape quoted. Closed; do not
+  re-open.
 - **[CALIBRATION-FIX-CHAIN-CONVERGENCE]** How to answer "are these rounds thrashing?" — classify by
   KIND and track SEVERITY across rounds, don't count rounds. #193 went data-loss (a successful link
   dropped the user's other collectives) → safety-hole (unknown identity list read as empty, defeating

@@ -2,6 +2,30 @@
 
 (*MVOX:Perotin*)
 
+## [CHECKPOINT] Schema sitting 2026-09-05 — #246/#242/#256 (read-only, in progress)
+
+- **#246** (multi-time event, schedule-item child): posted `schedule_item` sketch mirroring
+  `program_item` (parent=event required 1/0..N, `name`+`datetime`+`ordinal`, `creators: parent_right
+  _editor`, `_sharing` cascades). Flagged open question: `event.start_datetime` should stay as-is
+  (directly writable, sole sort key) rather than become a formula deriving MIN(child datetimes) —
+  ties directly to the #233 finding (formula unconditionally overwrites, no compute-when-empty; a
+  formula can't be conditionally present only on events that have schedule_item children). Comment:
+  https://github.com/mvox-dev/mvox-app/issues/246#issuecomment-5550986002
+
+- **#242** (standalone-event default type): verdict NO SCHEMA — verified `eventCreateType =
+  $state('rehearsal')` (`+page.svelte:3213`, reset at `:3342`/`:3379`) is a hardcoded literal;
+  vocabulary (`CANONICAL_EVENT_TYPES`) is already app-owned (`eventTypeLabels.ts`), `event_type` is
+  free-text on the wire with no schema vocabulary property. Mihkel's "requiring schema migration"
+  framing does not hold — pure Svelte default-value change. Comment:
+  https://github.com/mvox-dev/mvox-app/issues/242#issuecomment-5550988505
+
+- **#256** (lingikogu / link collection, collective-level, Mihkel-ruled canonical): posted `link`
+  sketch — parent=organization required 1/0..N, `name`+`url`(string, matches `website`/
+  `external_link` precedent)+`description`(text)+`display_order`, `creators: parent_right _editor`
+  (flagged as a guess, not a decision — issue's own open Q1 admin-vs-member unresolved). Comment:
+  https://github.com/mvox-dev/mvox-app/issues/256#issuecomment-5550990189
+- **All three schema-sitting items done, read-only, nothing built, no mutation.**
+
 ## [PATTERN] Ledger fields: record observed, not intended (2026-09-02, Bentham review of #20)
 
 Routed to find the #20 widen-member-refs live ledger for Bentham's open carry item — it existed
