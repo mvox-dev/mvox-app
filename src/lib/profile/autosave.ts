@@ -1,12 +1,12 @@
 // src/lib/profile/autosave.ts
 import type { FieldKey } from './fieldMove';
 
-export interface AutosaveConfig {
+interface AutosaveConfig {
 	idleMs: number;
 	onSave: (field: FieldKey) => void;
 }
 
-export interface AutosaveController {
+interface AutosaveController {
 	keystroke(field: FieldKey): void;
 	blur(field: FieldKey): void;
 	visibilityChange(field: FieldKey): void;

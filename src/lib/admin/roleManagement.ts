@@ -39,7 +39,7 @@ export interface RolePerson {
 }
 
 /** One rights property value as the aggregated read answers it. */
-export interface RightsValue {
+interface RightsValue {
 	/** property value id — for OWN values, deletable via `DELETE property/{_id}`. */
 	_id: string;
 	/** person entity id. */
@@ -60,7 +60,7 @@ export interface RightsValue {
 }
 
 /** The entity's OWN rights, un-folded and with inherited entries dropped. */
-export interface OwnRights {
+interface OwnRights {
 	ownOwners: RightsValue[];
 	ownEditors: RightsValue[];
 	/**
@@ -76,7 +76,7 @@ export interface OwnRights {
 }
 
 /** One managed rights list plus whether the VIEWER may write to it. */
-export interface RoleListing {
+interface RoleListing {
 	persons: RolePerson[];
 	/**
 	 * The viewer holds an `_owner` value (own or inherited) on the entity, so

@@ -14,7 +14,7 @@
 
 import { decodeJwtPayload } from '$lib/auth/guard';
 
-export type ParsedInvite =
+type ParsedInvite =
 	| { status: 'ok'; db: string; entityId: string; expMs: number }
 	| { status: 'expired'; db: string; entityId: string; expMs: number }
 	| { status: 'invalid' };

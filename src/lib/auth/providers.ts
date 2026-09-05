@@ -11,7 +11,7 @@
 // is retired.
 import { m } from '$lib/paraglide/messages.js';
 
-export interface AuthProvider {
+interface AuthProvider {
 	id: string;
 	label: () => string;
 }

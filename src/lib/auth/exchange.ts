@@ -4,20 +4,20 @@ import type { EntuUser } from './storage';
 // One account entry from the Entu `/auth` exchange response. Kept as a loose shape
 // because T3 does not consume it — the db-selection (T4) reads the person-id-per-db
 // map straight off the JWT claims (`accounts`), not this response array.
-export interface EntuAccount {
+interface EntuAccount {
 	_id: string;
 	name?: string;
 	[key: string]: unknown;
 }
 
-export interface ExchangeSuccess {
+interface ExchangeSuccess {
 	ok: true;
 	token: string;
 	accounts: EntuAccount[];
 	user: EntuUser;
 }
 
-export interface ExchangeFailure {
+interface ExchangeFailure {
 	ok: false;
 	error: 'missing_session_token' | 'entu_auth_failed';
 }

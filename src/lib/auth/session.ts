@@ -9,7 +9,7 @@ import { writable } from 'svelte/store';
 import { clearAll, getToken } from './storage';
 import { decodeJwtPayload, decodeJwtExpMs } from './guard';
 
-export type AuthState =
+type AuthState =
 	| { status: 'loading' }
 	| { status: 'anonymous' }
 	| { status: 'authenticated'; personIdByDb: Record<string, string>; expMs: number };

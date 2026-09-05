@@ -11,7 +11,7 @@ import type { MyRsvp, RsvpStatus } from './rsvpData';
 // same shape as the harvested `mvox_v4e_web` `handleRsvpChange`, minus the
 // tally delta (out of scope, see epic #8).
 
-export interface ApplyRsvpChangeInput {
+interface ApplyRsvpChangeInput {
 	cfg: EntuCfg;
 	personId: string;
 	eventId: string;
@@ -21,7 +21,7 @@ export interface ApplyRsvpChangeInput {
 }
 
 /** `rsvpId: null` means the rsvp was cleared (deleted). */
-export interface ApplyRsvpChangeResult {
+interface ApplyRsvpChangeResult {
 	rsvpId: string | null;
 }
 

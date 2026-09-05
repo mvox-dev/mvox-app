@@ -8,7 +8,7 @@ import type { EventAttendance, AttendanceStatus } from './attendanceData';
 // tree. The Svelte-side optimistic SET (before calling this) and REVERT (in the
 // caller's catch) live in attendanceChangeQueue.ts / the panel's page wiring.
 
-export interface ApplyAttendanceChangeInput {
+interface ApplyAttendanceChangeInput {
 	cfg: EntuCfg;
 	eventId: string;
 	memberId: string;
@@ -17,7 +17,7 @@ export interface ApplyAttendanceChangeInput {
 }
 
 /** `attendanceId: null` means the record was cleared (deleted). */
-export interface ApplyAttendanceChangeResult {
+interface ApplyAttendanceChangeResult {
 	attendanceId: string | null;
 }
 

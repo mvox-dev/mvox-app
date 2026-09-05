@@ -27,7 +27,7 @@ import { resolveDatabaseEntityId, DatabaseEntityLookupError } from '$lib/collect
 // invitee's email is never sent to Entu.
 export const INVITE_MINT_TRIGGER = 'trigger invite token';
 
-export type InviteCreatePhase =
+type InviteCreatePhase =
 	| 'type-resolve'
 	| 'person-parent-resolve'
 	| 'org-resolve'
@@ -36,7 +36,7 @@ export type InviteCreatePhase =
 	| 'editor-grant'
 	| 'member-create';
 
-export type InviteCreateReason = 'not-visible' | 'http' | 'contract';
+type InviteCreateReason = 'not-visible' | 'http' | 'contract';
 
 export class InviteCreateError extends Error {
 	readonly phase: InviteCreatePhase;
@@ -60,7 +60,7 @@ export interface CreateInviteInput {
 	dbEntityId: string;
 }
 
-export interface CreateInviteResult {
+interface CreateInviteResult {
 	personId: string;
 	memberId: string;
 	inviteToken: string;
@@ -337,8 +337,8 @@ export async function createInvite(
 // redemption. A value carrying `uid` is a real bound identity and must NEVER be
 // touched.
 
-export type SelfLinkMintPhase = 'identity-read' | 'stale-invite-cleanup' | 'mint';
-export type SelfLinkMintReason = 'http' | 'contract' | 'missing-self-editor';
+type SelfLinkMintPhase = 'identity-read' | 'stale-invite-cleanup' | 'mint';
+type SelfLinkMintReason = 'http' | 'contract' | 'missing-self-editor';
 
 export class SelfLinkMintError extends Error {
 	readonly phase: SelfLinkMintPhase;
