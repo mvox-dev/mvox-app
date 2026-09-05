@@ -197,6 +197,17 @@ function entuFetchStub(fixtures: Fixtures = {}) {
 		}
 		if (url.includes('_type.string=season')) return json({ entities: [season] });
 		if (url.includes('_type.string=event_series')) return json({ entities: [series] });
+		// #255 (D) — the FUTURE-event going-tally join reads the active roster
+		// (listActiveMembers: `_type.string=member&status.string=active`, no
+		// `person.reference`). This suite's fixtures were all written before
+		// that read existed and don't care about membership status at all — so
+		// the active roster here is EVERY member id any rsvp fixture in this
+		// file references, keeping the join a no-op for every pre-existing
+		// test (the deactivation-specific counting is pinned separately in
+		// page.tally-deactivated.spec.ts, with its own roster mocks).
+		if (url.includes('_type.string=member') && url.includes('status.string=active')) {
+			return json({ entities: activeMemberEntitiesForEv1() });
+		}
 		if (url.includes('_type.string=event')) return json({ entities: [event] });
 		return json({ entities: [] });
 	});
@@ -826,6 +837,20 @@ function allRsvpsForEv1(): unknown[] {
 		});
 	rows.push({ _id: 'rsvp-m0', member: [{ reference: 'm-m0' }], status: [{ string: 'maybe' }] });
 	return rows;
+}
+
+/**
+ * #255 (D) — `listActiveMembers`'s answer for the future-event tally join,
+ * covering every member id `allRsvpsForEv1` (and its `mutatingTallyWire`
+ * override, which reuses `rsvp-77`/`member-1`) ever references. `person` is
+ * required (`listActiveMembers` throws without it) — the value itself is
+ * never read by the join, only `_id`.
+ */
+function activeMemberEntitiesForEv1(): unknown[] {
+	const memberIds = new Set<string>(
+		allRsvpsForEv1().map((row) => (row as { member: Array<{ reference: string }> }).member[0].reference)
+	);
+	return [...memberIds].map((id) => ({ _id: id, person: [{ reference: `p-${id}` }] }));
 }
 
 /**

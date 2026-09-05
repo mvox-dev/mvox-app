@@ -61,7 +61,7 @@
 		type EventAttendance
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
-	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import { loadRoster, listActiveMembers, type RosterRow } from '$lib/roster/rosterData';
 	import type { AgendaItem } from '$lib/agenda/types';
 	// #103 TE.3 — the works pipeline: the SAME producer the agenda uses
 	// (workRows.ts joins repertoireData's resolved items against the library
@@ -297,7 +297,10 @@
 			status = 'ready';
 			loadRsvpControl(cfg, current.personId, id, g);
 			if (canSeeTally(loaded, current.personId)) {
-				loadTally(cfg, id, g);
+				// #255 (D) stale-closure pin — pastness CAPTURED here, at request
+				// time, off the just-resolved `loaded` detail, never read live
+				// inside loadTally's own async continuation.
+				loadTally(cfg, id, g, isPastDetail(loaded));
 			}
 			loadComposeSurfaces(cfg, loaded, current.personId, g);
 		} catch (e) {
@@ -394,17 +397,41 @@
 	/** The rights-gated tally read — domain-tier listAllRsvpsForEvent (#82's
 	 *  widen), counted per status. Only ever called behind `canSeeTally` (owner
 	 *  OR editor visible on this event): on first load, and again once the
-	 *  viewer's own rsvp write lands (#102 review F4). */
-	function loadTally(cfg: EntuCfg, evId: string, g: number): void {
-		listAllRsvpsForEvent(cfg, evId)
-			.then((rows) => {
+	 *  viewer's own rsvp write lands (#102 review F4).
+	 *
+	 *  #255 (D), DATE-GATED (Gama 15:31 refinement): a FUTURE event's tally
+	 *  joins against the ACTIVE roster — a deactivated member's recorded 'yes'
+	 *  must not inflate a count the conductor plans around (same reasoning as
+	 *  the season summary's rate refusal). A PAST event keeps the tally
+	 *  EXACTLY as recorded, raw and unjoined: she very likely sang, and
+	 *  rewriting a historical number on the basis of present membership is the
+	 *  same wrong as showing her a rate. The join is necessarily CLIENT-side —
+	 *  Entu has no server-side two-hop (rsvp -> member -> status) filter.
+	 *
+	 *  `past` is CAPTURED BY THE CALLER at request time (`isPastDetail` on the
+	 *  just-loaded `EventDetail`, never the live `isPast` $derived) and passed
+	 *  in — this function's own `.then()` can resolve well after the event's
+	 *  start ticks over mid-flight, and reading pastness THEN would be the
+	 *  stale-closure trap the RED suite pins against. Her rsvp row is never
+	 *  touched either way — this is a read-side filter, not a write. */
+	function loadTally(cfg: EntuCfg, evId: string, g: number, past: boolean): void {
+		Promise.all([
+			listAllRsvpsForEvent(cfg, evId),
+			// No roster fetch is needed for a PAST tally — skip it rather than pay
+			// for a read whose answer would be thrown away.
+			past ? Promise.resolve<null>(null) : listActiveMembers(cfg)
+		])
+			.then(([rows, activeMembers]) => {
 				if (g !== generation) return;
+				const scoped = activeMembers
+					? rows.filter((r) => activeMembers.some((am) => am.memberId === r.memberId))
+					: rows;
 				tallyError = false;
 				tally = {
-					going: rows.filter((r) => r.status === 'going').length,
-					not_going: rows.filter((r) => r.status === 'not_going').length,
-					maybe: rows.filter((r) => r.status === 'maybe').length,
-					late: rows.filter((r) => r.status === 'late').length
+					going: scoped.filter((r) => r.status === 'going').length,
+					not_going: scoped.filter((r) => r.status === 'not_going').length,
+					maybe: scoped.filter((r) => r.status === 'maybe').length,
+					late: scoped.filter((r) => r.status === 'late').length
 				};
 			})
 			.catch((e) => {
@@ -427,7 +454,7 @@
 		const loaded = detail;
 		if (!current || !loaded || !canSeeTally(loaded, current.personId)) return;
 		tallyError = false;
-		loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation);
+		loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation, isPastDetail(loaded));
 	}
 
 	// ── #203 — delete: the ONE destructive action this page owns ───────────────
@@ -566,7 +593,7 @@
 			const current = selected;
 			const loaded = detail;
 			if (current && loaded && canSeeTally(loaded, current.personId)) {
-				loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation);
+				loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation, isPastDetail(loaded));
 			}
 		},
 		revert(evId, before) {

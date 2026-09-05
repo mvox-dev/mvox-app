@@ -13,6 +13,14 @@
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import {
+		deactivateMember,
+		reinstateMember,
+		loadInactiveRoster,
+		listDeactivateBlockers,
+		type DeactivateBlocker
+	} from '$lib/roster/memberLifecycle';
+	import { resolveMyLibraryId } from '$lib/library/librarianStore';
 	import { listSections, groupBySection, type SectionNode, type SectionGroup } from '$lib/sections/sectionData';
 	import {
 		assignMemberSection,
@@ -39,6 +47,10 @@
 	// exactly (never $state, so bumping it doesn't retrigger the load effect). Guards
 	// against a stale (superseded) load resolving after a collective switch.
 	let generation = 0;
+	// #255 review r3 F2 — the collective whose data is currently on screen, so
+	// `loadForSelected` can tell a SWITCH from a refresh. Non-reactive for the same
+	// reason as `generation`: it is read inside the load, never rendered.
+	let loadedDb: string | null = null;
 	let status = $state<Status>('loading');
 	let rows = $state<RosterRow[]>([]);
 	let sections = $state<SectionNode[]>([]);
@@ -90,6 +102,24 @@
 		// alongside the reorder pair, for the same reason.
 		removeError = null;
 		pendingRemoveId = null;
+		// #255 (A) — same reasoning: a half-armed deactivate confirm or a stale
+		// refusal message is about a row the next tree may not even contain.
+		pendingDeactivateId = null;
+		deactivateRefusal = null;
+		deactivateActionError = null;
+		// #255 review r3 F2 — the inactive panel is the one surface this function
+		// does NOT re-derive, so without this a switch left collective A's inactive
+		// members rendered under B's roster, each with a live Reinstate button
+		// pointing at A's member ids. Same rule `expandedIds` follows (state keyed
+		// to data that is being replaced) — but scoped to an actual SWITCH, because
+		// the deactivate/reinstate paths call this as a REFRESH and reload the panel
+		// themselves; a blanket reset here would slam it shut under them.
+		if (current?.db !== loadedDb) {
+			loadedDb = current?.db ?? null;
+			showInactive = false;
+			inactiveRows = [];
+			inactiveLoadError = false;
+		}
 		if (!current) {
 			status = 'no-collective';
 			rows = [];
@@ -677,6 +707,185 @@
 	// whose header is currently showing "confirm / cancel" instead of the ✕; only
 	// one at a time, and arming one disarms the other.
 	let pendingRemoveId = $state<string | null>(null);
+
+	// ── #255 (A) — deactivate a member: admin-only, never self, two-step
+	// confirm reusing the SAME idiom as `pendingRemoveId` above, REFUSAL while
+	// the person holds a manageable `_owner`/`_editor` grant (accepted rec 1 —
+	// deactivate refuses rather than auto-stripping rights; see
+	// memberLifecycle.ts's doc for why). GREEN's stated choice: the control is
+	// NOT pre-disabled at render for a blocker — computing `listDeactivateBlockers`
+	// for every row on every render would mean N rights reads (2 Entu calls
+	// each) on a page that already does real work just listing the roster; the
+	// refusal instead surfaces the ONE TIME it matters, at confirm, which is
+	// also the only point the rights answer needs to be fresh (a grant could
+	// be added between page-load and this tap). The trade is one wasted tap
+	// for an admin who already knows the target holds a role, against a
+	// roster-wide fan-out of rights reads most renders never need.
+	let pendingDeactivateId = $state<string | null>(null);
+	let deactivateRefusal = $state<{ memberId: string; blockers: DeactivateBlocker[] } | null>(null);
+	let deactivatePending = $state(false);
+
+	// #255 review F2 — the two lifecycle writes must fail LOUD, not just closed.
+	// Both catches previously only logged, so a rejected rights read, a 4xx on the
+	// status write or a dropped network left the control disarming itself with the
+	// row unchanged and nothing on screen — indistinguishable from a no-op or a UI
+	// bug. Modelled on `removeError` above (the page's own idiom for exactly this):
+	// carries the member id, because unlike the section alert this renders IN the
+	// row that was tapped. Copy binding still holds — neither string may say
+	// removed/deleted; both say the state is unchanged.
+	let deactivateActionError = $state<{ memberId: string; kind: 'deactivate' | 'reinstate' } | null>(
+		null
+	);
+
+	async function armDeactivate(memberId: string): Promise<void> {
+		deactivateRefusal = null;
+		deactivateActionError = null;
+		pendingDeactivateId = memberId;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-confirm-${memberId}"]`)?.focus();
+	}
+
+	async function disarmDeactivate(memberId: string): Promise<void> {
+		pendingDeactivateId = null;
+		await tick();
+		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-${memberId}"]`)?.focus();
+	}
+
+	/** Confirm branch of the two-step deactivate. FAIL-CLOSED throughout: the
+	 *  rights read (`listDeactivateBlockers`) rejecting, or any other failure,
+	 *  must never let the write proceed — caught below, nothing sent. */
+	async function handleDeactivateConfirm(row: RosterRow): Promise<void> {
+		if (deactivatePending) return;
+		const cfg = currentCfg;
+		if (!cfg) return;
+		deactivatePending = true;
+		deactivateRefusal = null;
+		deactivateActionError = null;
+		try {
+			// #255 review r3 F1 — the database entity id is the SUBJECT of both rights
+			// reads below, so an unresolvable one is a FAILED check, never "nothing to
+			// check". The `?? ''` this replaces made it the latter: an empty id turns
+			// `listAdmins`'s rights GET into entu-api's entity LIST route, which
+			// answers 200 with no `entity` key, so the blocker list came back EMPTY
+			// and the deactivate proceeded past an unverified grant — silently, on the
+			// one guard the whole refuse-don't-strip design rests on. Thrown (not
+			// returned) so the outer catch renders the same loud alert every other
+			// fail-closed path here already renders.
+			const dbEntityId = row.dbEntityId ?? currentDbEntityId;
+			if (!dbEntityId) {
+				throw new Error(`roster: cannot resolve the database entity id for member ${row.memberId}`);
+			}
+			// #255 review round 2 F1 — the library lookup is part of the FAIL-CLOSED
+			// chain, NOT a best-effort side read. `resolveMyLibraryId` THROWS on any
+			// non-2xx library list (`LibraryLookupError`) and reserves `null` for the
+			// one factual emptiness it can assert: no library entity under the
+			// database entity. Swallowing the throw into `null` would convert a
+			// transient 500 into the factual claim "this collective has no library",
+			// which makes `listDeactivateBlockers` skip the `listLibrarians` read
+			// entirely and lets the deactivate proceed past an UNVERIFIED librarian
+			// grant — exactly the grant-outlives-active-member state (invariant B2 /
+			// v4E trigger 5) that must be unreachable by construction. So it rejects
+			// into the outer catch like every other read here.
+			const libraryId = await resolveMyLibraryId(cfg, undefined, dbEntityId);
+			const blockers = await listDeactivateBlockers(cfg, row.personId, dbEntityId, libraryId);
+			if (blockers.length > 0) {
+				deactivateRefusal = { memberId: row.memberId, blockers };
+				pendingDeactivateId = null;
+				return;
+			}
+			await deactivateMember(cfg, row.memberId);
+			pendingDeactivateId = null;
+			// She drops out of every active-scoped read — re-derive from the
+			// server rather than patch a local delta (same discipline the section
+			// remove/reorder paths already follow on this page).
+			await loadForSelected();
+			// #255 review r3 F2 — and she drops INTO the inactive panel, so an open
+			// panel is stale the moment this write lands. `handleReinstate` already
+			// refreshes it for the mirror-image reason; the two lifecycle paths have
+			// to agree. Its own try/catch: a stale panel is not a failed deactivate
+			// and must not raise the deactivate's alert over a write that landed.
+			if (showInactive) {
+				try {
+					inactiveRows = await loadInactiveRoster(cfg);
+				} catch (e) {
+					console.error('roster: inactive roster reload after deactivate failed', e);
+				}
+			}
+		} catch (e) {
+			// FAIL-CLOSED (Gama binding): a rejected rights read, or a rejected
+			// write, must never leave the deactivate looking like it went through.
+			// And fail-LOUD (#255 review F2): the confirm disarms itself and the row
+			// is unchanged, so without this alert the tap reads as "nothing happened".
+			console.error('roster: deactivate failed', row.memberId, e);
+			pendingDeactivateId = null;
+			deactivateActionError = { memberId: row.memberId, kind: 'deactivate' };
+		} finally {
+			deactivatePending = false;
+		}
+	}
+
+	// ── #255 (B) — the inactive-members surface: OUT of the roster's normal
+	// flow (engineering's placement call — a collapsed, admin-only panel below
+	// the main list, closed by default and loaded lazily on first open, never
+	// preloaded alongside the active roster). Shows each inactive member's
+	// SECTION assignment (adopted binding — explains the section
+	// ghost-blocker), reinstates with ONE action and no fresh invitation.
+	let showInactive = $state(false);
+	let inactiveRows = $state<RosterRow[]>([]);
+	let inactiveLoadError = $state(false);
+
+	async function toggleInactive(): Promise<void> {
+		const opening = !showInactive;
+		showInactive = opening;
+		if (!opening) return;
+		const cfg = currentCfg;
+		if (!cfg) return;
+		try {
+			inactiveLoadError = false;
+			inactiveRows = await loadInactiveRoster(cfg);
+		} catch (e) {
+			console.error('roster: inactive roster load failed', e);
+			inactiveLoadError = true;
+			inactiveRows = [];
+		}
+	}
+
+	// #255 review round 2 F2 — mirrors `deactivatePending`. `reinstateMember` is a
+	// clear-then-set pair: two concurrent runs both GET the same status value id,
+	// the first DELETE wins and the second gets a non-2xx, so the SECOND call
+	// throws and renders "…couldn't be reinstated — they're still not active"
+	// AFTER the reinstate in fact succeeded. A false claim in copy whose whole
+	// point is truthfulness, so a second tap is refused while one is in flight.
+	let reinstatePending = $state<string | null>(null);
+
+	async function handleReinstate(memberId: string): Promise<void> {
+		if (reinstatePending) return;
+		const cfg = currentCfg;
+		if (!cfg) return;
+		reinstatePending = memberId;
+		deactivateActionError = null;
+		try {
+			await reinstateMember(cfg, memberId);
+			// Back in the active reads — the page re-reads rather than patching,
+			// same discipline as `handleDeactivateConfirm` above.
+			await loadForSelected();
+			if (showInactive) {
+				try {
+					inactiveRows = await loadInactiveRoster(cfg);
+				} catch (e) {
+					console.error('roster: inactive roster reload after reinstate failed', e);
+				}
+			}
+		} catch (e) {
+			// #255 review F2 — a failed reinstate produces NO visible change at all
+			// otherwise (the row is already in the inactive panel and stays there),
+			// so the tap is silently indistinguishable from a dead button.
+			console.error('roster: reinstate failed', memberId, e);
+			deactivateActionError = { memberId, kind: 'reinstate' };
+		} finally {
+			reinstatePending = null;
+		}
+	}
 
 	// #113 RED — arming/disarming the two-step confirm each unmount the very
 	// button that held focus (the ✕ → confirm/cancel swap, and the reverse on
@@ -2395,6 +2604,71 @@
 				</p>
 			{/if}
 		{/if}
+		{#if admin === 'admin' && row.personId !== selected?.personId}
+			<!-- #255 (A) — deactivate, admin-only and NEVER on the viewer's own row
+			     (done-when 7: a member cannot deactivate herself or anyone else via
+			     a control she can't even see for her own row). Two-step confirm
+			     reusing the page's existing destructive idiom (see `pendingRemoveId`
+			     above) rather than inventing a new shape. -->
+			<div class="flex flex-wrap items-center gap-2 pt-1">
+				{#if pendingDeactivateId === row.memberId}
+					<span class="text-xs text-ink-2">{m.roster_member_deactivate_confirm_prompt()}</span>
+					<button
+						type="button"
+						data-testid="member-deactivate-confirm-{row.memberId}"
+						class="rounded-md border border-red-700 px-2 py-1 text-xs text-red-700 hover:bg-red-700 hover:text-paper"
+						onclick={() => handleDeactivateConfirm(row)}
+					>
+						{m.roster_member_deactivate_confirm()}
+					</button>
+					<button
+						type="button"
+						data-testid="member-deactivate-cancel-{row.memberId}"
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink"
+						onclick={() => disarmDeactivate(row.memberId)}
+					>
+						{m.roster_member_deactivate_cancel()}
+					</button>
+				{:else}
+					<button
+						type="button"
+						data-testid="member-deactivate-{row.memberId}"
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink"
+						onclick={() => armDeactivate(row.memberId)}
+					>
+						{m.roster_member_deactivate()}
+					</button>
+				{/if}
+			</div>
+			{#if deactivateRefusal?.memberId === row.memberId}
+				<!-- Gama binding: the refusal NAMES THE REMEDY — who holds what role
+				     and where to remove it — never a bare "cannot deactivate" (the
+				     #252 failure in message form). -->
+				<p
+					data-testid="member-deactivate-refused-{row.memberId}"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{#each deactivateRefusal.blockers as blocker (blocker.role)}
+						{blocker.role === 'admin'
+							? m.roster_deactivate_refused_admin({ collective: selected?.name ?? '' })
+							: m.roster_deactivate_refused_librarian({ collective: selected?.name ?? '' })}
+					{/each}
+				</p>
+			{/if}
+			{#if deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'deactivate'}
+				<!-- #255 review F2 — the loud failure, mirroring `removeError`'s alert
+				     over the section groups. The row is unchanged and the confirm has
+				     disarmed itself, so the copy says exactly that: nothing moved. -->
+				<p
+					data-testid="member-deactivate-failed-{row.memberId}"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{m.roster_member_deactivate_failed({ name: row.name })}
+				</p>
+			{/if}
+		{/if}
 	</li>
 {/snippet}
 
@@ -3308,6 +3582,76 @@
 					{/each}
 				</ul>
 			{/if}
+		{/if}
+
+		{#if admin === 'admin' && status === 'ready'}
+			<!-- #255 (B) — the inactive-members surface: deliberately OUT of the
+			     normal roster flow (a collapsed, closed-by-default panel below
+			     everything else, never preloaded alongside the active roster —
+			     engineering's placement call). Shows each inactive member's SECTION
+			     assignment (adopted binding — this is what explains a section that
+			     refuses deletion while holding only inactive members, with zero
+			     write-path change) and reinstates with ONE action, no invitation. -->
+			<div class="flex flex-col gap-2 border-t border-dashed border-ink-5 pt-3">
+				<button
+					type="button"
+					data-testid="roster-inactive-toggle"
+					aria-expanded={showInactive}
+					class="self-start text-xs tracking-wide text-ink-2 uppercase underline hover:text-ink"
+					onclick={() => toggleInactive()}
+				>
+					{showInactive ? m.roster_inactive_hide() : m.roster_inactive_show()}
+				</button>
+				{#if showInactive}
+					{#if inactiveLoadError}
+						<p data-testid="roster-inactive-load-error" role="alert" class="text-sm text-red-700">
+							{m.roster_inactive_load_error()}
+						</p>
+					{:else if inactiveRows.length === 0}
+						<p data-testid="roster-inactive-empty" class="text-xs text-ink-2">{m.roster_inactive_empty()}</p>
+					{:else}
+						<ul data-testid="roster-inactive-list" class="flex flex-col">
+							{#each inactiveRows as row (row.memberId)}
+								{@const inactiveSectionNames = (row.sectionIds ?? [])
+									.map((id) => sectionNameById.get(id))
+									.filter((name): name is string => Boolean(name))}
+								<li
+									data-testid="inactive-member-row-{row.memberId}"
+									class="flex flex-col gap-0.5 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+								>
+									<span class="text-sm text-ink">{row.name}</span>
+									{#if inactiveSectionNames.length > 0}
+										<span data-testid="inactive-member-section-{row.memberId}" class="text-xs text-ink-2">
+											{inactiveSectionNames.join(', ')}
+										</span>
+									{/if}
+									<button
+										type="button"
+										data-testid="member-reinstate-{row.memberId}"
+										class="self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+										disabled={reinstatePending !== null}
+										onclick={() => handleReinstate(row.memberId)}
+									>
+										{m.roster_member_reinstate()}
+									</button>
+									{#if deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'reinstate'}
+										<!-- #255 review F2 — same loud-failure idiom as the deactivate
+										     alert above: a failed reinstate leaves this row exactly
+										     where it is, which on its own reads as a dead button. -->
+										<p
+											data-testid="member-reinstate-failed-{row.memberId}"
+											role="alert"
+											class="text-xs text-red-700"
+										>
+											{m.roster_member_reinstate_failed({ name: row.name })}
+										</p>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				{/if}
+			</div>
 		{/if}
 	</div>
 </main>

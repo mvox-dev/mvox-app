@@ -24,6 +24,10 @@
 	import { completionGateStore } from '$lib/profile/completionGate';
 	import { loadRoster } from '$lib/roster/rosterData';
 	import type { RosterRow } from '$lib/roster/rosterData';
+	// #255 done-when 3 — the season summary's history-keeps-its-subject fix
+	// reads the inactive roster ALONGSIDE the active one (see
+	// `handleExpandSeasonSummary` below).
+	import { loadInactiveRoster } from '$lib/roster/memberLifecycle';
 	import {
 		listAttendance,
 		listMyAttendance,
@@ -2098,10 +2102,27 @@
 		const thisRequestSnapshot = requestId; // guard against a collective switch mid-load
 		seasonRatesLoading = true;
 		seasonRatesError = false;
-		Promise.all([loadRoster(cfg), Promise.all(events.map((event) => listAttendance(cfg, event.id)))])
-			.then(([roster, perEventRecords]) => {
+		// #255 done-when 3 — `loadInactiveRoster` runs ALONGSIDE `loadRoster`, not
+		// instead of it: a deactivated member's history must keep its subject on
+		// this surface (the reason deactivate beat delete), so her row is unioned
+		// in below rather than silently dropping the moment she is deactivated.
+		// A failed inactive read fails the WHOLE surface loud (Promise.all, not
+		// allSettled) — the alternative (fall back to active-only) would render a
+		// roster-only list as if it were complete, exactly the silent regression
+		// this fix exists to close.
+		Promise.all([
+			loadRoster(cfg),
+			loadInactiveRoster(cfg),
+			Promise.all(events.map((event) => listAttendance(cfg, event.id)))
+		])
+			.then(([roster, inactiveRoster, perEventRecords]) => {
 				if (thisRequestSnapshot !== requestId) return;
-				seasonMemberRates = deriveAllMemberRates(perEventRecords.flat(), roster, events.length);
+				seasonMemberRates = deriveAllMemberRates(
+					perEventRecords.flat(),
+					roster,
+					events.length,
+					inactiveRoster
+				);
 				seasonRatesLoaded = true;
 				seasonRatesLoading = false;
 			})

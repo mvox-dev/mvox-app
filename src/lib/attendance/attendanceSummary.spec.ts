@@ -234,6 +234,14 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: loadRosterMock
 }));
+// #255 done-when 3 — the season-summary expand handler now unions in the
+// inactive roster too (memberLifecycle.loadInactiveRoster). This file isn't
+// exercising deactivation at all, so an empty inactive roster keeps every
+// existing assertion in this suite exactly as it was (that union is pinned
+// separately in page.season-summary-inactive.spec.ts).
+vi.mock('$lib/roster/memberLifecycle', () => ({
+	loadInactiveRoster: vi.fn().mockResolvedValue([])
+}));
 // NOTE: ./attendanceSummary is deliberately NOT mocked — the page must run the
 // REAL derive functions; these route tests cover the wiring end to end.
 vi.mock('$lib/attendance/attendanceData', () => ({

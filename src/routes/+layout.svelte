@@ -21,15 +21,18 @@
 	import {
 		hydrateCollectives,
 		urlCollectiveDbStore,
+		selectedCollectiveStore,
 		selectedCollectiveIdentityStore,
 		pickerModeStore,
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
 	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
+	import { membershipStore, resetMembership, resolveMembership } from '$lib/collective/membershipStore';
 	import NavShell from '$lib/components/nav/NavShell.svelte';
 	import { NAV_ENTRIES } from '$lib/nav/entries';
 	import { adminStore, resetAdmin, resolveAdmin } from '$lib/nav/adminStore';
 	import { getLocale } from '$lib/paraglide/runtime.js';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let { children } = $props();
 
@@ -182,6 +185,31 @@
 			if (g === adminGen) adminStore.set(state);
 		});
 	});
+
+	// ── #255 done-when 6 — the app-level "not active" membership notice, on the
+	// SAME completionGate precedent as the gate effect above: ONE app-wide
+	// answer, resolved here and consumed once, so no surface can re-derive it
+	// and open a hole. Keyed on auth + collective IDENTITY (same reasoning as
+	// the gate/admin effects — a rename must not teardown+reflip this).
+	// `resetMembership()` on every (re)selection is the no-flash discipline;
+	// `resolveMembership` itself is the fail-safe (a read failure resolves
+	// 'loading', never a false 'inactive' — see its own doc), so this effect
+	// needs no separate try/catch.
+	let membershipGen = 0;
+	$effect(() => {
+		const auth = $authStore;
+		const selected = $selectedCollectiveIdentityStore;
+		const g = ++membershipGen;
+		if (auth.status !== 'authenticated' || !selected) {
+			resetMembership();
+			return;
+		}
+		resetMembership();
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		resolveMembership(cfg, selected.personId).then((state) => {
+			if (g === membershipGen) membershipStore.set(state);
+		});
+	});
 </script>
 
 <NavShell
@@ -192,5 +220,19 @@
 	isAdmin={$adminStore === 'admin'}
 	hasMultipleCollectives={$pickerModeStore === 'picker'}
 >
+	{#if $membershipStore === 'inactive' && $selectedCollectiveStore}
+		<!-- #255 done-when 6 — the ONE app-level notice. NO redirect (nothing she
+		     can do at any destination — a redirect is a dead end) and NO nav lock
+		     (she keeps the domain-readable calendar and her own history) — both
+		     refusals PO-accepted; this is presentation only, right where every
+		     other route already renders underneath NavShell. -->
+		<p
+			data-testid="membership-inactive-notice"
+			role="status"
+			class="mx-auto w-full max-w-md px-6 pt-4 text-sm text-ink-2"
+		>
+			{m.membership_not_active_notice({ collective: $selectedCollectiveStore.name })}
+		</p>
+	{/if}
 	{@render children?.()}
 </NavShell>

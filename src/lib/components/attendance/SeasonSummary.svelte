@@ -73,16 +73,39 @@
 			{:else}
 				<div role="list" class="flex flex-col gap-1">
 					{#each memberRates as rate (rate.memberId)}
-						<div
-							data-testid="member-rate-{rate.memberId}"
-							role="listitem"
-							class="flex items-center justify-between gap-2 text-xs"
-						>
-							<span class="truncate text-ink-2">{rate.name}</span>
-							<span class="shrink-0 font-mono text-ink">
-								{m.attendance_member_rate({ attended: rate.attended, total: rate.total })}
-							</span>
-						</div>
+						{#if rate.inactive}
+							<!-- #255 done-when 3 — history keeps its subject: a deactivated
+							     member's row stays, marked, with the attended COUNT and NO
+							     rate (see attendanceSummary.ts's deriveAllMemberRates doc for
+							     why a percentage would be a false judgement about her). A
+							     DIFFERENT testid (`member-rate-inactive-*`, not
+							     `member-rate-*`) so nothing can mistake this for the
+							     rate-bearing row it deliberately is not. -->
+							<div
+								data-testid="member-rate-inactive-{rate.memberId}"
+								role="listitem"
+								class="flex items-center justify-between gap-2 text-xs text-ink-3"
+							>
+								<span class="truncate">
+									{rate.name}
+									<span class="text-[9px] tracking-wide uppercase">{m.attendance_member_inactive_badge()}</span>
+								</span>
+								<span class="shrink-0 font-mono">
+									{m.attendance_member_count_inactive({ attended: rate.attended })}
+								</span>
+							</div>
+						{:else}
+							<div
+								data-testid="member-rate-{rate.memberId}"
+								role="listitem"
+								class="flex items-center justify-between gap-2 text-xs"
+							>
+								<span class="truncate text-ink-2">{rate.name}</span>
+								<span class="shrink-0 font-mono text-ink">
+									{m.attendance_member_rate({ attended: rate.attended, total: rate.total })}
+								</span>
+							</div>
+						{/if}
 					{/each}
 				</div>
 			{/if}
