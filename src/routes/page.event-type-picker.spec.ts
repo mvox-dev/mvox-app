@@ -44,11 +44,23 @@
 //       somewhere is a product call the issue leaves open — NOT pinned here;
 //       what IS pinned is that the canonical picker exists and is the default
 //       path.)
-//     - same 8 canonical options, same localized labels, same schema order.
-//     - default selection 'rehearsal' — so the Crede flow (open form, fill
-//       time, submit) yields an event the agenda's rehearsal filter FINDS
-//       without the viewer touching the type at all.
+//     - same 8 canonical options, same localized labels, same schema order —
+//       PLUS, since #242, a leading '' placeholder option FIRST, labeled by
+//       the NEW event_create_type_placeholder message (the same idiom as the
+//       season select's '' placeholder).
+//     - #242 RULING (Mihkel, 2026-09-05) SUPERSEDES the old default pin: the
+//       standalone picker STARTS EMPTY — no preselected type, the user makes
+//       one explicit choice. The old default is why #245 had to exist (a
+//       concert entered as proov because the form had already answered). An
+//       untouched submit is REFUSED with event_create_type_required pointing
+//       at the field — #199's "defensive floor" validation becomes reachable.
+//       ALL THREE 'rehearsal' literal sites move off the default (initial
+//       $state + both form resets), or reopening the form would quietly
+//       reintroduce it.
 //     - the submitted `createEvent` input carries the canonical English key.
+//     - the SERIES form is NOT touched by #242: seriesCreateType keeps its
+//       'rehearsal' default and its select gains no placeholder (a series has
+//       a genuine dominant type — ruling done-when 4).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -364,6 +376,15 @@ function canonicalPairs(): Array<[string, string]> {
 	return CANONICAL_EVENT_TYPES.map((key) => [key, `event_type_${key}`]);
 }
 
+/** #242 — the STANDALONE event picker's pairs: a leading, non-submittable ''
+ *  placeholder labeled by the NEW event_create_type_placeholder message
+ *  (asserted via the key mock, never a hard-coded literal — same discipline
+ *  as canonicalPairs), then the 8 canonical pairs. The SERIES picker keeps
+ *  canonicalPairs() unchanged — the placeholder does NOT extend there. */
+function eventPickerPairs(): Array<[string, string]> {
+	return [['', 'event_create_type_placeholder'], ...canonicalPairs()];
+}
+
 /** The minimum a VALID series submit needs beyond the prefills. #240 —
  *  generation is always on, so a weekly submit also needs a day: Mondays,
  *  which over this fixed range generate Sep 7 / 14 / 21. */
@@ -434,6 +455,21 @@ describe('series form — series-create-type is a localized canonical picker', (
 		expect(lastSeriesInput().eventType).toBe('rehearsal');
 	});
 
+	// #242 GUARD — the ruling's done-when 4: the standalone form's empty-start
+	// change does NOT extend here. seriesCreateType is a fully separate $state
+	// and keeps its 'rehearsal' default; the series select gains NO '' option.
+	// (The two pins above already assert exactly this — this test states the
+	// guard EXPLICITLY so a future "consistency" sweep can't flip them all
+	// without meeting a named counter-pin.)
+	it('#242 guard — the series picker is UNTOUCHED by the standalone empty-start ruling: still defaults to rehearsal, still no "" placeholder option', async () => {
+		const container = await renderReady();
+		await openSeriesForm(container);
+
+		const type = q(container, 'series-create-type') as HTMLSelectElement;
+		expect(type.value).toBe('rehearsal');
+		expect(optionPairs(type)).toEqual(canonicalPairs());
+	});
+
 	it('a PICKED type stores the canonical ENGLISH key — the viewer who sees "Kontsert" writes "concert", onto the series AND every generated occurrence', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
@@ -455,35 +491,75 @@ describe('series form — series-create-type is a localized canonical picker', (
 
 // ── event form: the type field is the SAME canonical, localized <select> ────────
 
-describe('event form — event-create-type is a localized canonical picker', () => {
-	it('renders a <select> with EXACTLY the 8 canonical types, localized labels, on the real event-create form', async () => {
+describe('event form — event-create-type is a localized canonical picker that STARTS EMPTY (#242)', () => {
+	it('renders a <select> with the "" placeholder FIRST (labeled by the NEW event_create_type_placeholder message) then the 8 canonical types, localized labels, on the real event-create form — #242 flips the old exactly-8 pin', async () => {
 		const container = await renderReady();
 		await openEventFormFromPanel(container);
 
 		const type = q(container, 'event-create-type');
 		expect(type).not.toBeNull();
 		expect(type?.tagName).toBe('SELECT');
-		expect(optionPairs(type as HTMLSelectElement)).toEqual(canonicalPairs());
+		expect(optionPairs(type as HTMLSelectElement)).toEqual(eventPickerPairs());
 	});
 
-	it('defaults to rehearsal — the Crede flow needs NO type interaction to produce an agenda-findable rehearsal', async () => {
+	it('STARTS EMPTY — no preselected type (#242 ruling; the old "defaults to rehearsal / Crede needs no type interaction" pin is retired): the "" placeholder is the initial selection', async () => {
 		const container = await renderReady();
 		await openEventFormFromPanel(container);
 
-		expect((q(container, 'event-create-type') as HTMLSelectElement).value).toBe('rehearsal');
+		expect((q(container, 'event-create-type') as HTMLSelectElement).value).toBe('');
 	});
 
-	it('an untouched picker submits eventType "rehearsal" (canonical key) to createEvent', async () => {
+	it('an untouched picker REFUSES the submit (#242 flips the old "untouched submits rehearsal" pin): createEvent is NEVER called, event_create_type_required RENDERS in event-create-error, and the select is aria-invalid + aria-describedby=event-create-error — #199\'s dead "defensive floor" becomes the reachable path', async () => {
 		const container = await renderReady();
 		await openEventFormFromPanel(container);
+		// Everything ELSE valid — season prefilled by the panel, name and start
+		// filled — so the refusal below can only be the type's.
 		await fill(container, 'event-create-name', 'Tuesday rehearsal');
 		await fillDateTime(container, 'event-create-datetime', '2026-09-08', '18:30');
 		await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 
+		// The MESSAGE renders — not just the validation branch: the refusal is
+		// only real if the viewer can see it (research risk: no test exercised
+		// this rendering while the path was unreachable).
 		await waitFor(() => {
-			expect(createEventMock).toHaveBeenCalledTimes(1);
+			expect(q(container, 'event-create-error')).not.toBeNull();
 		});
-		expect(lastEventInput().eventType).toBe('rehearsal');
+		const error = q(container, 'event-create-error') as HTMLElement;
+		expect(error.textContent?.trim()).toBe('event_create_type_required');
+		expect(error.getAttribute('role')).toBe('alert');
+		const select = q(container, 'event-create-type') as HTMLSelectElement;
+		expect(select.getAttribute('aria-invalid')).toBe('true');
+		expect(select.getAttribute('aria-describedby')).toBe('event-create-error');
+		expect(createEventMock).not.toHaveBeenCalled();
+		// The form stays open with the work still in it.
+		expect(q(container, 'event-create-form')).not.toBeNull();
+	});
+
+	it('REOPENING the form after a close starts empty again — the ruling\'s "a reset will quietly reintroduce the default" hazard: all three rehearsal literal sites (initial $state + open-form reset + close reset) are flipped', async () => {
+		const container = await renderReady();
+		await openEventFormFromPanel(container);
+		await selectValue(container, 'event-create-type', 'concert');
+		expect((q(container, 'event-create-type') as HTMLSelectElement).value).toBe('concert');
+
+		// Close (exercises the closeEventCreateForm reset site)…
+		await fireEvent.click(q(container, 'event-create-cancel') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-create-form')).toBeNull();
+		});
+		// …reopen (exercises the open-form reset site): still empty, NOT
+		// 'rehearsal' and NOT the previously chosen 'concert'. The season-manage
+		// panel itself is UNTOUCHED by the form cancel (only eventCreateOpen
+		// flips), so [+ Event] is already visible again — re-clicking the gear
+		// here (as `openEventFormFromPanel` does for a FIRST open) would toggle
+		// the still-open panel SHUT instead.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-add-event')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'event-create-form')).not.toBeNull();
+		});
+		expect((q(container, 'event-create-type') as HTMLSelectElement).value).toBe('');
 	});
 
 	it('a PICKED type stores the canonical ENGLISH key: choose workshop (shown localized) → createEvent gets eventType "workshop"', async () => {
@@ -499,15 +575,43 @@ describe('event form — event-create-type is a localized canonical picker', () 
 		});
 		expect(lastEventInput().eventType).toBe('workshop');
 	});
+
+	it('choose a type, submit → succeeds with the chosen type on the wire: the FULL createEvent payload, byte-exact (partial assertions hide bugs)', async () => {
+		const container = await renderReady();
+		await openEventFormFromPanel(container);
+		await selectValue(container, 'event-create-type', 'concert');
+		await fill(container, 'event-create-name', 'Autumn concert');
+		// 18:30 Europe/Tallinn on 10 Sep 2026 (EEST, UTC+3) = 15:30Z — TE.4.
+		await fillDateTime(container, 'event-create-datetime', '2026-09-10', '18:30');
+		await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		// FULL param shape — no seriesId/duration/location/description/
+		// conductorRefs/capacity keys on an untouched standalone create.
+		expect(createEventMock).toHaveBeenCalledWith(
+			{ db: 'polyphony', token: 'jwt-abc' },
+			{
+				dbEntityId: ORG_EFK,
+				extraParentIds: [SEASON_ID],
+				eventType: 'concert',
+				startDatetime: '2026-09-10T15:30:00.000Z',
+				name: 'Autumn concert'
+			}
+		);
+	});
 });
 
 // ── review F4: the picker names itself ON SCREEN ────────────────────────────────
 //
-// The picker is never blank, so — unlike the season <select> — it has no ''
-// placeholder option to name itself with, and the aria-label it inherited from
-// the old Autocomplete is invisible. Both forms therefore carry a VISIBLE
-// label element, and the select must sit INSIDE it (implicit association: no
-// id, no `for`, nothing to drift).
+// #199 F4's original rationale ("the picker is never blank, so it has no ''
+// placeholder to name itself with") is SUPERSEDED for the STANDALONE form by
+// the #242 ruling: that picker now starts blank and carries a '' placeholder.
+// What F4 still pins — on BOTH forms — is the VISIBLE label element with the
+// select INSIDE it (implicit association: no id, no `for`, nothing to drift);
+// an aria-label alone is invisible. The series picker additionally keeps the
+// original no-placeholder shape (see the #242 series guard above).
 
 describe('both forms — the type picker carries a VISIBLE label, not an aria-label alone (review F4)', () => {
 	it('series-create-type sits inside a <label> whose visible text is the localized field name', async () => {
@@ -522,7 +626,13 @@ describe('both forms — the type picker carries a VISIBLE label, not an aria-la
 		expect((q(container, 'series-create-type') as HTMLElement).closest('label')).toBe(label);
 	});
 
-	it('event-create-type sits inside a <label> whose visible text is the localized field name — and gains NO "" option in the process', async () => {
+	// #242 DELIBERATELY INVERTS this test's old pin. Its #199-era title ended
+	// "…and gains NO '' option in the process", with the comment "The label is
+	// the fix; a blank placeholder option is NOT." — correct THEN (the fix
+	// under review was the visible label, and the picker was never blank), but
+	// the ruling now REQUIRES the '' placeholder as the initial, refusable
+	// state. The visible-label half of the pin is unchanged.
+	it('event-create-type sits inside a <label> whose visible text is the localized field name — and NOW carries the "" placeholder option first (#242 supersedes the old "gains NO empty option" pin)', async () => {
 		const container = await renderReady();
 		await openEventFormFromPanel(container);
 
@@ -533,9 +643,11 @@ describe('both forms — the type picker carries a VISIBLE label, not an aria-la
 		expect(label).not.toBeNull();
 		const select = q(container, 'event-create-type') as HTMLSelectElement;
 		expect(select.closest('label')).toBe(label);
-		// The label is the fix; a blank placeholder option is NOT.
-		expect(optionPairs(select)).toEqual(canonicalPairs());
+		// The visible label AND the placeholder are both the contract now.
+		expect(optionPairs(select)).toEqual(eventPickerPairs());
 	});
 });
 
-// (*MVOX:Tallis* — #199 RED: canonical localized event-type picker contract)
+// (*MVOX:Tallis* — #199 RED: canonical localized event-type picker contract;
+//  #242 RED: standalone picker starts empty, one explicit choice — untouched
+//  submit refused, series form untouched)

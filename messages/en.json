@@ -404,6 +404,7 @@
 	"season_manage_season_delete_partial": "Deleted {deleted} of {total}; the season is still there. Try again.",
 	"event_create_form_label": "Create event",
 	"event_create_type_label": "Event type",
+	"event_create_type_placeholder": "Choose a type",
 	"event_create_season_label": "Season",
 	"event_create_season_placeholder": "Choose a season",
 	"event_create_series_label": "Series",

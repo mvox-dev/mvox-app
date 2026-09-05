@@ -406,6 +406,7 @@
 	"season_manage_season_delete_partial": "Видалено {deleted} з {total}; сезон все ще існує. Спробуйте ще раз.",
 	"event_create_form_label": "Створити подію",
 	"event_create_type_label": "Тип події",
+	"event_create_type_placeholder": "Оберіть тип",
 	"event_create_season_label": "Сезон",
 	"event_create_season_placeholder": "Оберіть сезон",
 	"event_create_series_label": "Серія",

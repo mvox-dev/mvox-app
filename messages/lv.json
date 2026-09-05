@@ -405,6 +405,7 @@
 	"season_manage_season_delete_partial": "Dzēsti {deleted} no {total}; sezona joprojām pastāv. Mēģiniet vēlreiz.",
 	"event_create_form_label": "Izveidot notikumu",
 	"event_create_type_label": "Notikuma veids",
+	"event_create_type_placeholder": "Izvēlieties veidu",
 	"event_create_season_label": "Sezona",
 	"event_create_season_placeholder": "Izvēlieties sezonu",
 	"event_create_series_label": "Sērija",

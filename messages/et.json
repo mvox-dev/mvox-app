@@ -404,6 +404,7 @@
 	"season_manage_season_delete_partial": "Kustutatud {deleted} {total}-st; hooaeg on endiselt alles. Proovi uuesti.",
 	"event_create_form_label": "Loo sündmus",
 	"event_create_type_label": "Sündmuse tüüp",
+	"event_create_type_placeholder": "Vali tüüp",
 	"event_create_season_label": "Hooaeg",
 	"event_create_season_placeholder": "Vali hooaeg",
 	"event_create_series_label": "Seeria",

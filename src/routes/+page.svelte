@@ -3208,9 +3208,10 @@
 	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
 	// #199 — the canonical, localized <select> (CANONICAL_EVENT_TYPES); replaces
 	// the free-text Autocomplete built over prior `listEventTypes` values.
-	// Always one of the eight canonical keys — 'rehearsal' by default — so the
-	// form can never submit a blank or hand-typed type.
-	let eventCreateType = $state('rehearsal');
+	// #242 ruling — starts empty: no preselected type, one explicit choice.
+	// An untouched submit is refused (see the validation below); all three
+	// sites that assign this state (here, open-form, close-form) must agree.
+	let eventCreateType = $state('');
 	let eventCreateName = $state('');
 	// #207 rule 5 — the composite's two constituent parts. `eventCreateDatetime`
 	// stays the SAME canonical 'YYYY-MM-DDTHH:MM' string every downstream reader
@@ -3339,7 +3340,7 @@
 		eventCreateSeriesId = '';
 		eventCreateSeriesOptions = [];
 		eventCreateSeriesDefaults = null;
-		eventCreateType = 'rehearsal';
+		eventCreateType = '';
 		eventCreateName = '';
 		eventCreateDate = '';
 		eventCreateTime = '';
@@ -3376,7 +3377,7 @@
 		eventCreateSeriesId = '';
 		eventCreateSeriesOptions = [];
 		eventCreateSeriesDefaults = null;
-		eventCreateType = 'rehearsal';
+		eventCreateType = '';
 		eventCreateName = '';
 		eventCreateDate = '';
 		eventCreateTime = '';
@@ -4293,8 +4294,9 @@
 			setEventCreateError(m.event_create_season_required, 'season');
 			return;
 		}
-		// #199 — the canonical <select> can never be blank (no '' placeholder, no
-		// free text), so this is a defensive floor rather than a reachable path.
+		// #242 ruling — the picker starts on the '' placeholder and the user must
+		// make one explicit choice; this is the reachable refusal #199 built as a
+		// defensive floor before the picker could ever be blank.
 		const typeValue = eventCreateType;
 		if (!typeValue) {
 			setEventCreateError(m.event_create_type_required, 'type');
@@ -7300,13 +7302,13 @@
 								onkeydown={onEventCreateFormKeydown}
 							>
 								<!-- #199 — the canonical, localized picker: same shape as
-								     series-create-type. Always one of the eight schema types, no
-								     '' placeholder, no free text.
-								     #199 review F4 — the select is never blank, so it has no
-								     placeholder to name itself with (the way the season select
-								     does). A WRAPPING <label> gives it a VISIBLE name without
-								     reintroducing a '' option; the wrapper also keeps the
-								     association implicit, so no id is needed. -->
+								     series-create-type.
+								     #242 ruling — empty start, one explicit choice: a leading ''
+								     option (labeled by event_create_type_placeholder, same idiom
+								     as the season select's placeholder) is the initial selection
+								     and is refused on submit. The wrapping <label> still gives
+								     the select a VISIBLE name (review F4), independent of whether
+								     a placeholder option exists. -->
 								<label class="flex w-full flex-col gap-0.5">
 									<span data-testid="event-create-type-label" class="text-xs text-ink-2">
 										{m.event_create_type_label()}
@@ -7323,6 +7325,7 @@
 										}}
 										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 									>
+										<option value="">{m.event_create_type_placeholder()}</option>
 										{#each CANONICAL_EVENT_TYPES as type (type)}
 											<option value={type}>{eventTypeLabel(type)}</option>
 										{/each}
