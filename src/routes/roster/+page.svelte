@@ -3040,6 +3040,18 @@
 								     always-shown-sometimes-disabled shape. -->
 								{@const canDelete =
 									row.memberCount === 0 && node.children.length === 0 && isOwnDbEntitySection(row.id)}
+								<!-- #252 — applicability, read ONCE per row for both the `disabled`
+								     wiring below (unchanged: `structuralWritePending || renaming ||
+								     !can*`) and the presentation-only `invisible` treatment, which
+								     must key on APPLICABILITY ALONE, not the combined `disabled`
+								     value — a transient structural-write lock dims an otherwise-
+								     applicable direction (`disabled:opacity-60`, still on screen), it
+								     does not disappear it. Only "this direction does not exist here"
+								     (GH#252 item 2, Mihkel: "show only active actions") earns
+								     `invisible`, and `invisible` (not `hidden`) is what keeps the
+								     `min-h-11 min-w-11` box reserved so the row never jumps. -->
+								{@const indentApplicable = canIndent(row.id)}
+								{@const unindentApplicable = canUnindent(row.id)}
 								{#if arrangeDropHintBeforeId === row.id}
 									{@render dropIndicator()}
 								{/if}
@@ -3370,6 +3382,42 @@
 									     disables EVERY button while any structural write (reorder or
 									     reparent) is outstanding — the same one-at-a-time posture
 									     `reorderPending` already enforces on the drag handle. -->
+									<!-- #252 — findable and tappable (Joosep's report + Gama's
+									     correction: this is a real usability defect on its own merits,
+									     sequenced after #253's write-integrity fix). Four stated choices
+									     (issue demands stated, not silent, decisions):
+									     (a) TOUCH TARGET — `min-h-11 min-w-11` on the `<button>` itself,
+									     the same 44px standard the season trashcan/gear/create/close
+									     controls already keep elsewhere on this page and admin/+page;
+									     the glyph inside stays a small `h-4 w-4` — only the hit area
+									     grows, chosen over enlarging the glyph so the row doesn't visibly
+									     thicken to reach it.
+									     (b) INAPPLICABLE DIRECTION — `invisible` (not `hidden`/removed),
+									     keyed on applicability ALONE (`indentApplicable`/
+									     `unindentApplicable` above), never on the full `disabled` value:
+									     a transient `structuralWritePending` lock still shows the glyph,
+									     dimmed (`disabled:opacity-60`) — only a direction that does not
+									     exist here disappears. `invisible` keeps the `min-h-11 min-w-11`
+									     box in the layout (`display` untouched), so a row never jumps
+									     when applicability flips (e.g. unindenting Soprano 1 out from
+									     under Soprano). Picked over restyled-disabled because Mihkel's
+									     own direction on this issue is "show only active actions" — a
+									     faded-but-still-shaped triangle is still a ghost control.
+									     (c) DISTINGUISHABILITY — indent stays a SOLID triangle
+									     (`fill-current`); unindent is now an OUTLINE triangle
+									     (`fill-none stroke-current`), same geometry mirrored. Solid vs.
+									     outline is a categorical (fill/no-fill) difference on top of the
+									     existing left/right orientation, not just a mirror of one shape
+									     — at 16px that reads as "adding a level" vs. "releasing one"
+									     even before orientation is parsed, which a same-weight mirror
+									     pair cannot offer (mirror symmetry is exactly what a quick glance
+									     struggles to tell apart — the pinned defect, GH#252 item 3).
+									     (d) TONE — base `text-ink` (this page's normal control ink),
+									     not `text-ink-2`: a control the user is being asked to LOCATE
+									     must not be the quietest thing on the row (GH#252 item 4, #238
+									     finding) — even though `text-ink-2` is otherwise this page's own
+									     icon-button convention (the grip, :3258), that convention is
+									     exactly what read as invisible here. -->
 									<button
 										type="button"
 										data-testid="arrange-indent-{row.id}"
@@ -3377,12 +3425,14 @@
 										title={m.roster_section_indent({ name: row.name })}
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
-											!canIndent(row.id)}
+											!indentApplicable}
 										tabindex="-1"
-										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
+										class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {indentApplicable
+											? ''
+											: 'invisible'}"
 										onclick={() => void handleIndent(node)}
 									>
-										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3 w-3 fill-current">
+										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-4 w-4 fill-current">
 											<path d="M4 2 L12 8 L4 14 Z" />
 										</svg>
 									</button>
@@ -3393,12 +3443,20 @@
 										title={m.roster_section_unindent({ name: row.name })}
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
-											!canUnindent(row.id)}
+											!unindentApplicable}
 										tabindex="-1"
-										class="rounded p-1 text-ink-2 hover:text-ink disabled:cursor-default disabled:opacity-30"
+										class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {unindentApplicable
+											? ''
+											: 'invisible'}"
 										onclick={() => void handleUnindent(node)}
 									>
-										<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3 w-3 fill-current">
+										<svg
+											aria-hidden="true"
+											viewBox="0 0 16 16"
+											class="h-4 w-4 fill-none stroke-current"
+											stroke-width="1.5"
+											stroke-linejoin="round"
+										>
 											<path d="M12 2 L4 8 L12 14 Z" />
 										</svg>
 									</button>

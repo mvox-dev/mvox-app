@@ -1211,6 +1211,267 @@ describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the
 	});
 });
 
+// ── #252 — findable and tappable: touch target, applicability, distinctness ──
+//
+// From live pilot testing (Joosep, roster screenshot 2026-09-05, GH#252): the
+// indent/unindent pair rendered as 12×12px mirror-image triangles (`h-3 w-3`)
+// in ~20px of tap target (`p-1`), in the muted `text-ink-2` tone, with an
+// inapplicable direction presenting as a tappable-looking control at
+// `disabled:opacity-30`. The app's own icon-button standard — RE-CONFIRMED BY
+// GREP before these pins were written, because the issue's claim had been
+// flagged unverifiable — is `min-h-11 min-w-11` (44px): the season trashcans
+// (+page.svelte :5893/:6201/:6767/:6899/:7264/:7628), the wizard skip control
+// (:6585), the close button (:5936) and the library controls
+// (library/+page.svelte:834+) all carry it; on THIS page the drag grip keeps
+// the height half (`min-h-11 w-4`, :3258) and the rename activator keeps
+// `min-h-11 flex-1` (:3295). The nesting pair is the outlier.
+//
+// These pins assert the #252 CONTRACT structurally and deliberately leave the
+// MECHANISM to GREEN (which must state its choices, per the issue):
+//   - the hit-area tokens are pinned; the glyph inside may stay small;
+//   - the inapplicable-direction treatment (invisible-but-space-holding vs
+//     disabled-restyled) is GREEN's call — pinned only as "no opacity-30
+//     ghost, not interactive, slot still holds the row's box";
+//   - the distinguishability treatment is GREEN's call — pinned only as "the
+//     two controls differ by more than a reflection/rotation of one glyph";
+//   - the replacement tone is GREEN's call — pinned only as "not the muted
+//     `text-ink-2`" (#238 finding: a control the user must locate must not be
+//     the quietest thing on the row).
+// The keyboard path is OUT OF SCOPE by issue fiat (#252 item 5): the
+// tabindex="-1" pins above (Mihkel's ruling) and the row-grab Arrow parity
+// block stay byte-identical. The testids `arrange-indent-{id}` /
+// `arrange-unindent-{id}` stay on whatever element occupies each direction's
+// slot — that is what makes the space-reservation contract assertable.
+
+const TOUCH_TOKENS = ['min-h-11', 'min-w-11'];
+
+/** Class-token helpers — Tailwind classes are whitespace-separated tokens;
+ *  substring matching would confuse `text-ink` with `text-ink-2`. */
+function classTokens(el: Element): string[] {
+	return (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
+}
+function hasBareToken(el: Element, token: string): boolean {
+	return classTokens(el).includes(token);
+}
+/** TOKEN bare OR behind any variant prefix — `disabled:opacity-30` is still
+ *  the opacity-30 ghost. */
+function hasTokenAnyVariant(el: Element, token: string): boolean {
+	return classTokens(el).some((c) => c === token || c.endsWith(`:${token}`));
+}
+
+/** fixtureTree() applicability matrix — the same one the guard test above pins
+ *  via `.disabled`: Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor. */
+const APPLICABLE_252: Array<{ dir: 'indent' | 'unindent'; id: string }> = [
+	{ dir: 'indent', id: 'sec-sop2' },
+	{ dir: 'indent', id: 'sec-alto' },
+	{ dir: 'indent', id: 'sec-tenor' },
+	{ dir: 'unindent', id: 'sec-sop1' },
+	{ dir: 'unindent', id: 'sec-sop2' }
+];
+const INAPPLICABLE_252: Array<{ dir: 'indent' | 'unindent'; id: string }> = [
+	{ dir: 'indent', id: 'sec-sop' },
+	{ dir: 'indent', id: 'sec-sop1' },
+	{ dir: 'unindent', id: 'sec-sop' },
+	{ dir: 'unindent', id: 'sec-alto' },
+	{ dir: 'unindent', id: 'sec-tenor' }
+];
+const ALL_IDS_252 = ['sec-sop', 'sec-sop1', 'sec-sop2', 'sec-alto', 'sec-tenor'];
+
+function slot252(
+	container: HTMLElement,
+	dir: 'indent' | 'unindent',
+	id: string
+): HTMLElement | null {
+	return q(container, `arrange-${dir}-${id}`);
+}
+
+/** "Yields its interactivity" WITHOUT pinning how: any reasonable mechanism
+ *  satisfies this — hidden from the a11y tree, invisible (space-preserving),
+ *  pointer-inert, or disabled. What the slot may NOT be is a live control for
+ *  an action that cannot be taken. (`hidden`/display:none is deliberately NOT
+ *  accepted — it collapses the box and forfeits the reserved space.) */
+function isNonInteractive252(el: HTMLElement): boolean {
+	return (
+		el.getAttribute('aria-hidden') === 'true' ||
+		hasBareToken(el, 'invisible') ||
+		hasBareToken(el, 'pointer-events-none') ||
+		(el instanceof HTMLButtonElement && el.disabled)
+	);
+}
+
+describe("/roster — the nesting controls meet the app's own touch-target standard (#252)", () => {
+	it('every APPLICABLE direction carries `min-h-11 min-w-11` — the 44px standard the trashcan/gear/create buttons already keep (the glyph inside may stay small)', async () => {
+		const container = await renderInArrangeMode();
+		for (const { dir, id } of APPLICABLE_252) {
+			const el = slot252(container, dir, id);
+			expect(el, `${dir} control for ${id}`).not.toBeNull();
+			for (const token of TOUCH_TOKENS) {
+				expect(
+					hasBareToken(el!, token),
+					`${dir} ${id} must carry ${token} — a 12px glyph in ~20px of padding is less than half the app's own touch minimum (GH#252 item 1)`
+				).toBe(true);
+			}
+		}
+	});
+
+	it("EVERY slot holds the same hit-area box — inapplicable directions included, so a row never jumps when applicability changes (space reserved, GH#252 item 2)", async () => {
+		const container = await renderInArrangeMode();
+		for (const id of ALL_IDS_252) {
+			for (const dir of ['indent', 'unindent'] as const) {
+				const el = slot252(container, dir, id);
+				expect(
+					el,
+					`${dir} slot for ${id} must exist — reserving the space is what keeps rows from shifting`
+				).not.toBeNull();
+				for (const token of TOUCH_TOKENS) {
+					expect(
+						hasBareToken(el!, token),
+						`${dir} ${id}: the slot must hold the ${token} box whether or not the action applies`
+					).toBe(true);
+				}
+			}
+		}
+	});
+});
+
+describe('/roster — only applicable actions present as tappable; an inapplicable one yields interactivity but holds its space (#252)', () => {
+	it('no inapplicable direction renders the old opacity-30 ghost — the token is gone bare AND behind variants (`disabled:opacity-30` is still the ghost)', async () => {
+		const container = await renderInArrangeMode();
+		for (const { dir, id } of INAPPLICABLE_252) {
+			const el = slot252(container, dir, id);
+			if (el === null) continue; // slot existence is pinned above; this pin is about presentation
+			expect(
+				hasTokenAnyVariant(el, 'opacity-30'),
+				`${dir} ${id}: an action that cannot be taken must not present as a tappable control at 30% opacity (GH#252 item 2, Mihkel's direction — "show only active actions")`
+			).toBe(false);
+		}
+	});
+
+	it('an inapplicable direction is not an interactive control, and clicking its slot writes NOTHING', async () => {
+		const container = await renderInArrangeMode();
+		for (const { dir, id } of INAPPLICABLE_252) {
+			const el = slot252(container, dir, id);
+			if (el === null) continue;
+			expect(
+				isNonInteractive252(el),
+				`${dir} ${id}: hidden-from-AT, invisible, pointer-inert or disabled — GREEN's pick which, but never a live control`
+			).toBe(true);
+			await fireEvent.click(el);
+		}
+		expect(reparentMock).not.toHaveBeenCalled();
+		expect(reorderMock).not.toHaveBeenCalled();
+	});
+
+	it("space held ACROSS a state change: after unindenting Soprano 1 to top level, its now-inapplicable unindent slot still holds the row's box and is not a ghost", async () => {
+		const container = await renderInArrangeMode();
+
+		await fireEvent.click(slot252(container, 'unindent', 'sec-sop1') as HTMLElement);
+		await waitFor(() => {
+			expect(reparentMock).toHaveBeenCalledTimes(1);
+		});
+		expect(reparentMock).toHaveBeenCalledWith(CFG, 'sec-sop1', ORG);
+
+		// Soprano 1 is now top-level → unindent no longer applies. The slot must
+		// survive the flip (space reserved), yield its interactivity, and not
+		// fall back to the opacity-30 ghost.
+		await waitFor(() => {
+			const el = slot252(container, 'unindent', 'sec-sop1');
+			expect(el, 'the unindent slot survives the applicability flip').not.toBeNull();
+			expect(isNonInteractive252(el!)).toBe(true);
+		});
+		const el = slot252(container, 'unindent', 'sec-sop1') as HTMLElement;
+		for (const token of TOUCH_TOKENS) {
+			expect(
+				hasBareToken(el, token),
+				`the slot must still hold the ${token} box after the move — rows must not jump`
+			).toBe(true);
+		}
+		expect(hasTokenAnyVariant(el, 'opacity-30')).toBe(false);
+	});
+});
+
+describe('/roster — the two directions are distinguishable at a glance (#252)', () => {
+	/** Every coordinate pair in a path's `d`. Sufficient for the M/L/Z triangle
+	 *  glyphs under test; a richer glyph that defeats this parser is by
+	 *  construction "more than a mirrored triangle" and passes on other axes. */
+	function pathPoints(d: string): Array<[number, number]> {
+		const nums = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
+		const pts: Array<[number, number]> = [];
+		for (let i = 0; i + 1 < nums.length; i += 2) {
+			pts.push([nums[i]!, nums[i + 1]!]);
+		}
+		return pts;
+	}
+	function normalizePts(pts: Array<[number, number]>): string {
+		return [...pts]
+			.map(([x, y]) => `${x},${y}`)
+			.sort()
+			.join(' ');
+	}
+	function viewBoxSize(svg: Element | null): [number, number] {
+		const vb = (svg?.getAttribute('viewBox') ?? '').split(/\s+/).map(Number);
+		return vb.length === 4 ? [vb[2]!, vb[3]!] : [16, 16];
+	}
+
+	it('indent and unindent (both live on Soprano 2) differ by MORE than a reflection/rotation of one identical glyph — mirror triangles at 12px are the pinned defect (GH#252 item 3; GREEN states its treatment and why)', async () => {
+		const container = await renderInArrangeMode();
+		const a = slot252(container, 'indent', 'sec-sop2') as HTMLElement;
+		const b = slot252(container, 'unindent', 'sec-sop2') as HTMLElement;
+		expect(a).not.toBeNull();
+		expect(b).not.toBeNull();
+
+		// ANY of these axes distinguishes the pair without pinning WHICH one
+		// GREEN picks: differing visible text, differing class treatment on the
+		// control or its glyph, or genuinely different glyph geometry.
+		const textDistinguishes = (a.textContent ?? '').trim() !== (b.textContent ?? '').trim();
+		const classDistinguishes =
+			(a.getAttribute('class') ?? '') !== (b.getAttribute('class') ?? '') ||
+			(a.querySelector('svg')?.getAttribute('class') ?? '') !==
+				(b.querySelector('svg')?.getAttribute('class') ?? '');
+
+		const aPaths = [...a.querySelectorAll('path')].map((p) => p.getAttribute('d') ?? '');
+		const bPaths = [...b.querySelectorAll('path')].map((p) => p.getAttribute('d') ?? '');
+		let glyphDistinguishes: boolean;
+		if (aPaths.length === 1 && bPaths.length === 1) {
+			const [w, h] = viewBoxSize(a.querySelector('svg'));
+			const pa = pathPoints(aPaths[0]!);
+			const pb = normalizePts(pathPoints(bPaths[0]!));
+			const transforms: Array<Array<[number, number]>> = [
+				pa, // the identical glyph on both sides is no better
+				pa.map(([x, y]) => [w - x, y] as [number, number]), // horizontal mirror — today's defect
+				pa.map(([x, y]) => [x, h - y] as [number, number]), // vertical mirror
+				pa.map(([x, y]) => [w - x, h - y] as [number, number]) // 180° rotation
+			];
+			glyphDistinguishes = !transforms.some((t) => normalizePts(t) === pb);
+		} else {
+			// Different path counts, or multi-path glyphs that are not
+			// byte-identical, count as distinct geometry.
+			glyphDistinguishes =
+				aPaths.length !== bPaths.length || aPaths.join('|') !== bPaths.join('|');
+		}
+
+		expect(
+			textDistinguishes || classDistinguishes || glyphDistinguishes,
+			'side by side at phone size, ▶ and ◀ read as the same shape — the two directions must differ by more than a mirror transform (GH#252 item 3)'
+		).toBe(true);
+	});
+});
+
+describe("/roster — the controls carry the app's normal control tone, not the muted row-metadata ink (#252)", () => {
+	it('no APPLICABLE direction uses bare `text-ink-2` as its base tone — the replacement tone is GREEN\'s to pick and state (GH#252 item 4, #238 finding)', async () => {
+		const container = await renderInArrangeMode();
+		for (const { dir, id } of APPLICABLE_252) {
+			const el = slot252(container, dir, id) as HTMLElement;
+			expect(el, `${dir} control for ${id}`).not.toBeNull();
+			expect(
+				hasBareToken(el, 'text-ink-2'),
+				`${dir} ${id}: a control the user must LOCATE must not be the quietest thing on the row (GH#252 item 4)`
+			).toBe(false);
+		}
+	});
+});
+
 // (*MVOX:Tallis* — #155/S3 RED)
 // (*MVOX:Byrd* — #155/S3 review fixes F1/F2/F3)
 // (*MVOX:Tallis* — #253 RED: conditioned listSections mock + two-state banner + refusal pins)
+// (*MVOX:Tallis* — #252 RED: touch-target, reserved-space, distinguishability + tone pins)
