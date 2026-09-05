@@ -102,5 +102,70 @@ export function isSectionNotEmpty(reason: unknown): boolean {
 	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_NOT_EMPTY;
 }
 
+// ── #253 — the reparent/renumber partial-write evidence ─────────────────────
+//
+// A section indent/unindent is TWO writes (`performReparent`, roster/+page.svelte):
+// `reparentSection` moves the `_parent` reference, then `reorderSections`
+// renumbers the destination sibling group. Either can fail non-2xx, and until
+// now both discarded the response BODY — only the numeric HTTP status
+// survived (sectionActions.ts, every throw at the GET/POST/DELETE steps).
+// Every real occurrence was therefore unverifiable after the fact: no rate-
+// limit text, no rights-refusal reason, no validation message, just a status
+// number in a caught `Error` the page's catch block re-threw as one flat
+// "reorder failed" log line.
+//
+// House precedent for a typed partial-progress error: `SeriesCascadePartialError`
+// (seasons/deleteErrors.ts, deletedCount/totalCount) and `ProfileSaveError`
+// (profile/applyProfileSave.ts, createdProfileId) — both carry HOW FAR a
+// multi-step write got before it stopped. This is that shape for the
+// reparent/renumber pair, plus the status+body evidence #253 asked for.
+//
+// Duck-typed the same way as the other errors here: the roster page's
+// integration spec mocks `$lib/sections/sectionActions` wholesale, so a mocked
+// rejection crosses as a plain tagged object, never `instanceof`-checkable.
+
+/** Discriminator carried on a reparent/renumber write that stopped part-way. */
+export const SECTION_REPARENT_PARTIAL = 'section-reparent-partial';
+
+/**
+ * Thrown by `reparentSection` (step `'reparent'`) and `reorderSections`
+ * (step `'renumber'`) on any non-2xx. `renumberedCount`/`totalCount` are the
+ * renumber loop's progress — sections FULLY renumbered (POST landed AND its
+ * old value deleted) versus the sibling-group size; both are `0` for step
+ * `'reparent'` (the renumber never began). `status` is the non-2xx HTTP
+ * status; `body` is the response text, read defensively (`''` when the body
+ * itself cannot be read — a broken stream must not mask the status).
+ */
+export class SectionReparentPartialError extends Error {
+	readonly code = SECTION_REPARENT_PARTIAL;
+
+	constructor(
+		readonly step: 'reparent' | 'renumber',
+		readonly renumberedCount: number,
+		readonly totalCount: number,
+		readonly status: number,
+		readonly body: string
+	) {
+		super(
+			step === 'renumber'
+				? `reorderSections: renumber failed after ${renumberedCount} of ${totalCount} section(s): HTTP ${status}`
+				: `reparentSection: reparent failed: HTTP ${status}`
+		);
+		this.name = 'SectionReparentPartialError';
+	}
+}
+
+/**
+ * True when a rejection reason is a `SectionReparentPartialError` (or the
+ * plain tagged object a mocked write layer rejects with in its place). Duck-
+ * typed on `code`, same reason as `isSectionMembershipMissing`/`isSectionNotEmpty`.
+ */
+export function isSectionReparentPartial(
+	reason: unknown
+): reason is SectionReparentPartialError {
+	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_REPARENT_PARTIAL;
+}
+
 // (*MVOX:Palestrina* — F1 code-review fix, TS.2/#96)
 // (*MVOX:Palestrina* — #110 review F3: SectionNotEmptyError)
+// (*MVOX:Palestrina* — GREEN implementation, #253: SectionReparentPartialError)

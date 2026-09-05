@@ -183,6 +183,7 @@
 	"roster_section_picker_label": "Sections for {name}",
 	"roster_new_section_form_label": "New section",
 	"roster_section_reorder_failed": "The section order couldn't be saved — showing the order the server holds.",
+	"roster_section_reparent_partial": "The section moved, but its new position couldn't be saved — showing the order the server holds.",
 	"roster_section_moved": "{name} moved to position {position} of {total}.",
 	"roster_section_grabbed": "Grabbed {name}.",
 	"roster_section_dropped": "Dropped {name} at position {position} of {total}.",

@@ -82,8 +82,21 @@ import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-libra
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
+// #253: params are ECHOED (key + JSON) so a test can assert what a message was
+// — and was NOT — handed: the partial-failure banner must not receive the
+// renumber depth (k of N belongs in the typed error, not on screen).
 vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({}, { get: (_target, key) => () => String(key) })
+	m: new Proxy(
+		{},
+		{
+			get:
+				(_target, key) =>
+				(params?: Record<string, unknown>) =>
+					params && Object.keys(params).length > 0
+						? `${String(key)} ${JSON.stringify(params)}`
+						: String(key)
+		}
+	)
 }));
 
 const {
@@ -211,6 +224,81 @@ function fixtureRowsDeep(): RosterRow[] {
 
 const CFG = { db: 'polyphony', token: 'jwt-abc' };
 
+// ── #253 pin 1 — the refetch mock tells the TRUTH ───────────────────────────
+//
+// The original listSectionsMock returned one static fixtureTree() no matter
+// what had been written first, so the failure-reconcile tests could only prove
+// the refetch FIRES — a reconcile that rendered a lie would have passed
+// identically (and did: the 'reparent lands, renumber fails' test asserted the
+// section back at depth 0, enshrining a REVERT the real server never performs).
+// PO ruling on #253: conditioning this mock on prior writes is a first-class
+// deliverable — it is what makes every remaining assertion about the reconciled
+// DOM an assertion about server truth instead of about a fixture.
+//
+// `landedReparents` records every reparentSection call the mock RESOLVED; the
+// listSections mock re-derives the tree from those landed moves. A rejected
+// reparent records nothing → the original tree comes back, exactly like the
+// real server.
+
+let landedReparents: Array<{ id: string; newParentId: string }>;
+
+/** displayOrder-then-name — sectionData pass 5's level order, which is what the
+ *  real listSections would hand back for a landed `_parent` move whose
+ *  renumber never ran (the moved node keeps its OLD number). */
+function sortLevel(nodes: SectionNode[]): SectionNode[] {
+	return [...nodes].sort(
+		(a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name)
+	);
+}
+
+function withDepth(node: SectionNode, depth: number): SectionNode {
+	return { ...node, depth, children: node.children.map((c) => withDepth(c, depth + 1)) };
+}
+
+/** fixtureTree() with every LANDED `_parent` move applied — and nothing else:
+ *  displayOrder stays whatever the section held before (the renumber is a
+ *  separate write; when it failed, the server never saw a new number). */
+function treeWithLandedMoves(moves: Array<{ id: string; newParentId: string }>): SectionNode[] {
+	let roots = fixtureTree();
+	for (const mv of moves) {
+		let moved: SectionNode | null = null;
+		const detach = (nodes: SectionNode[]): SectionNode[] =>
+			nodes
+				.filter((n) => {
+					if (n.id === mv.id) {
+						moved = n;
+						return false;
+					}
+					return true;
+				})
+				.map((n) => ({ ...n, children: detach(n.children) }));
+		roots = detach(roots);
+		if (!moved) continue;
+		const found: SectionNode = moved;
+		if (mv.newParentId === ORG) {
+			roots = sortLevel([
+				...roots,
+				withDepth({ ...found, parentId: null, dbEntityId: ORG }, 0)
+			]);
+		} else {
+			const attach = (nodes: SectionNode[], depth: number): SectionNode[] =>
+				nodes.map((n) =>
+					n.id === mv.newParentId
+						? {
+								...n,
+								children: sortLevel([
+									...n.children,
+									withDepth({ ...found, parentId: n.id, dbEntityId: null }, depth + 1)
+								])
+							}
+						: { ...n, children: attach(n.children, depth + 1) }
+				);
+			roots = attach(roots, 0);
+		}
+	}
+	return roots;
+}
+
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
@@ -228,16 +316,23 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
+	landedReparents = [];
 	// Fresh objects per call — a reconcile REFETCH after a failed write must get
-	// a tree the optimistic patch can't have mutated.
+	// a tree the optimistic patch can't have mutated. #253: the tree ANSWERS
+	// FROM THE LANDED WRITES (see treeWithLandedMoves above) — a reparent the
+	// mock resolved is visible in the next listSections, one it rejected is not,
+	// exactly like the real server.
 	loadRosterMock.mockImplementation(() => Promise.resolve(fixtureRows()));
-	listSectionsMock.mockImplementation(() => Promise.resolve(fixtureTree()));
+	listSectionsMock.mockImplementation(() => Promise.resolve(treeWithLandedMoves(landedReparents)));
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
 	createMock.mockResolvedValue('sec-created');
 	reorderMock.mockResolvedValue(undefined);
 	deleteMock.mockResolvedValue(undefined);
-	reparentMock.mockResolvedValue(undefined);
+	reparentMock.mockImplementation((_cfg: unknown, id: string, newParentId: string) => {
+		landedReparents.push({ id, newParentId });
+		return Promise.resolve(undefined);
+	});
 });
 
 afterEach(() => {
@@ -261,6 +356,10 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 }
 
 async function renderInArrangeMode(): Promise<HTMLElement> {
+	// #253 — each render starts from the pristine server: a couple of tests
+	// render TWICE (button path, then keyboard path, same fixture both times),
+	// so moves landed under the previous render must not leak into this one.
+	landedReparents.length = 0;
 	setAuthedWithOneCollective();
 	adminStore.set('admin');
 	const { container } = render(Page);
@@ -690,11 +789,24 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 		consoleSpy.mockRestore();
 	});
 
-	it('a reparent that lands but whose sibling RENUMBER fails reconciles the same way — the partial state is re-derived from the server, not guessed at', async () => {
+	it('a reparent that LANDS but whose sibling RENUMBER fails reconciles to the TRUTH — the section renders AT ITS NEW PARENT AND DEPTH (the move happened), and the banner SAYS the move happened (#253)', async () => {
+		// The pre-#253 version of this test asserted sec-alto back at depth 0 —
+		// but only because the static listSections mock ANSWERED with the
+		// original tree. The real server holds the landed `_parent` move, so the
+		// reconcile renders Alto UNDER Soprano (keeping its old displayOrder 2,
+		// which sorts it between Soprano 1 and Soprano 2 — pass-5 name
+		// tie-break). Asserting a revert enshrined the lie #253 is about.
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const container = await renderInArrangeMode();
 		const listCallsBefore = listSectionsMock.mock.calls.length;
-		reorderMock.mockRejectedValue(new Error('renumber boom'));
+		reorderMock.mockRejectedValue({
+			code: 'section-reparent-partial',
+			step: 'renumber',
+			renumberedCount: 1,
+			totalCount: 3,
+			status: 429,
+			body: 'rate limit exceeded'
+		});
 
 		await fireEvent.click(indentBtn(container, 'sec-alto'));
 
@@ -705,11 +817,210 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 		await waitFor(() => {
 			expect(listSectionsMock.mock.calls.length).toBeGreaterThan(listCallsBefore);
 		});
+		// THE TRUTH, not a revert: the `_parent` move landed, so the reconciled
+		// DOM shows Alto nested under Soprano.
+		await waitFor(() => {
+			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
+		});
+		expect(rowOrder(container)).toEqual([
+			'arrange-row-sec-sop',
+			'arrange-row-sec-sop1',
+			'arrange-row-sec-alto',
+			'arrange-row-sec-sop2',
+			'arrange-row-sec-tenor'
+		]);
+		// And the banner tells the same truth — the LANDED-move copy (#253 pin 4b),
+		// not the "order couldn't be saved" copy that implies nothing changed.
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-error')).not.toBeNull();
 		});
-		expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('0');
+		const banner = q(container, 'section-reorder-error')?.textContent ?? '';
+		expect(banner).toContain('roster_section_reparent_partial');
+		expect(banner).not.toContain('roster_section_reorder_failed');
 		expect(consoleSpy).toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+});
+
+// ── #253 — the two truthful banner states + the pinned refusals ─────────────
+//
+// PO ruling (issue #253, Gama 2026-09-05): TWO user-facing states, not three.
+//   (a) NOTHING landed (the reparent itself failed)      → today's copy stays.
+//   (b) the move LANDED, the ordering did not            → NEW copy that says
+//       the section DID move (that is what decides what the user does next).
+// The renumber depth (k of N) is DIAGNOSIS — it lives in the typed error and
+// reaches console.error, never the banner. And two refusals, pinned as tests:
+// NO retry (the GET→POST→DELETE sequence is not idempotent) and NO automatic
+// unwind (a reverse write against a system that just failed a write).
+
+describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the evidence captured (#253)', () => {
+	const partialEvidence = {
+		code: 'section-reparent-partial',
+		step: 'renumber',
+		renumberedCount: 1,
+		totalCount: 3,
+		status: 429,
+		body: 'rate limit exceeded'
+	};
+
+	it('state (a) — the reparent ITSELF fails, nothing landed: today\'s roster_section_reorder_failed copy stays, the tree reverts (the server never saw the move), and the evidence reaches console.error', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const container = await renderInArrangeMode();
+		reparentMock.mockRejectedValue({
+			code: 'section-reparent-partial',
+			step: 'reparent',
+			renumberedCount: 0,
+			totalCount: 0,
+			status: 403,
+			body: 'forbidden by rights'
+		});
+
+		await fireEvent.click(indentBtn(container, 'sec-alto'));
+
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-error')).not.toBeNull();
+		});
+		const banner = q(container, 'section-reorder-error')?.textContent ?? '';
+		expect(banner).toContain('roster_section_reorder_failed');
+		expect(banner).not.toContain('roster_section_reparent_partial');
+		// Nothing landed → the conditioned refetch answers the ORIGINAL tree.
+		await waitFor(() => {
+			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('0');
+		});
+		expect(reorderMock).not.toHaveBeenCalled();
+		// The captured status AND body are readable post-hoc — the evidence
+		// object itself reaches console.error, not only a swallowed message.
+		expect(
+			consoleSpy.mock.calls.some((args) =>
+				args.some(
+					(a) =>
+						(a as { status?: unknown })?.status === 403 &&
+						(a as { body?: unknown })?.body === 'forbidden by rights'
+				)
+			)
+		).toBe(true);
+		consoleSpy.mockRestore();
+	});
+
+	it('state (b) — the move LANDED, the renumber did not: the NEW copy renders WITHOUT the renumber depth (k of N stays in the typed error), and the evidence reaches console.error', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const container = await renderInArrangeMode();
+		reorderMock.mockRejectedValue(partialEvidence);
+
+		await fireEvent.click(indentBtn(container, 'sec-alto'));
+
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-error')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect((q(container, 'section-reorder-error')?.textContent ?? '')).toContain(
+				'roster_section_reparent_partial'
+			);
+		});
+		const banner = q(container, 'section-reorder-error')?.textContent ?? '';
+		// The message mock echoes every param it is handed (key + JSON), so a
+		// banner that received the renumber progress would show it here. It
+		// must not: k/N is diagnosis, not user guidance (PO ruling).
+		expect(banner).not.toContain('renumbered');
+		expect(banner).not.toContain('total');
+		expect(banner).not.toMatch(/1\s*(of|\/)\s*3/);
+		// The full evidence — status AND body — is post-hoc readable.
+		expect(
+			consoleSpy.mock.calls.some((args) =>
+				args.some(
+					(a) =>
+						(a as { status?: unknown })?.status === 429 &&
+						(a as { body?: unknown })?.body === 'rate limit exceeded'
+				)
+			)
+		).toBe(true);
+		consoleSpy.mockRestore();
+	});
+
+	// #253 review F1 — the banner follows the PHASE, not the rejection's shape.
+	// `reorderSections` reaches this catch UNTYPED whenever the failure happens
+	// below the status check: `entuFetch` propagates a fetch rejection verbatim
+	// (offline / DNS / connection reset — one of the issue's own leading
+	// candidate causes), `await res.json()` throws a SyntaxError on a malformed
+	// body, and a 401 rejects with AuthExpiredError. In every one of those the
+	// `_parent` move HAS landed, so the truthful-move copy must still win.
+	for (const [label, rejection] of [
+		['a network rejection propagated verbatim by entuFetch', new TypeError('Failed to fetch')],
+		['a SyntaxError from a malformed response body', new SyntaxError('Unexpected token < in JSON')],
+		['a plain untagged Error', new Error('renumber boom')]
+	] as const) {
+		it(`state (b) with an UNTYPED rejection — ${label}: the move still landed, so the banner still says so and the section still renders at its new parent`, async () => {
+			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const container = await renderInArrangeMode();
+			reorderMock.mockRejectedValue(rejection);
+
+			await fireEvent.click(indentBtn(container, 'sec-alto'));
+
+			await waitFor(() => {
+				expect(q(container, 'section-reorder-error')).not.toBeNull();
+			});
+			await waitFor(() => {
+				expect(q(container, 'section-reorder-error')?.textContent ?? '').toContain(
+					'roster_section_reparent_partial'
+				);
+			});
+			// The mismatch #253 criterion 2 forbids: never "the order couldn't be
+			// saved" over a screen that shows the move.
+			expect(q(container, 'section-reorder-error')?.textContent ?? '').not.toContain(
+				'roster_section_reorder_failed'
+			);
+			// …and the screen DOES show the move — the refetch answers from the
+			// landed reparent, so Alto sits under Soprano at depth 1.
+			await waitFor(() => {
+				expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
+			});
+			// The reparent went out exactly once; no unwind write followed.
+			expect(reparentMock.mock.calls).toEqual([[CFG, 'sec-alto', 'sec-sop']]);
+			expect(consoleSpy.mock.calls.some((args) => args.some((a) => a === rejection))).toBe(true);
+			consoleSpy.mockRestore();
+		});
+	}
+
+	it('the reparent phase failing UNTYPED keeps the nothing-landed copy — an untyped rejection is not evidence of a landed move', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const container = await renderInArrangeMode();
+		reparentMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+		await fireEvent.click(indentBtn(container, 'sec-alto'));
+
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-error')).not.toBeNull();
+		});
+		const banner = q(container, 'section-reorder-error')?.textContent ?? '';
+		expect(banner).toContain('roster_section_reorder_failed');
+		expect(banner).not.toContain('roster_section_reparent_partial');
+		await waitFor(() => {
+			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('0');
+		});
+		expect(reorderMock).not.toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+
+	it('REFUSALS (PO #253): no retry and no automatic unwind — EXACTLY one forward reparent write, exactly one renumber attempt, and never a reverse `_parent` write after the failure', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const container = await renderInArrangeMode();
+		reorderMock.mockRejectedValue(partialEvidence);
+
+		await fireEvent.click(indentBtn(container, 'sec-alto'));
+
+		await waitFor(() => {
+			expect(q(container, 'section-reorder-error')).not.toBeNull();
+		});
+		// Let the failure path fully settle before counting writes.
+		await waitFor(() => {
+			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
+		});
+		// ONE forward reparent — no retry of a non-idempotent POST/DELETE
+		// choreography, and no compensating write back to the org: the landed
+		// move STAYS and the banner tells the truth about it.
+		expect(reparentMock.mock.calls).toEqual([[CFG, 'sec-alto', 'sec-sop']]);
+		// ONE renumber attempt — not re-issued either.
+		expect(reorderMock.mock.calls).toEqual([[CFG, ['sec-sop1', 'sec-sop2', 'sec-alto']]]);
 		consoleSpy.mockRestore();
 	});
 });
@@ -902,3 +1213,4 @@ describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the
 
 // (*MVOX:Tallis* — #155/S3 RED)
 // (*MVOX:Byrd* — #155/S3 review fixes F1/F2/F3)
+// (*MVOX:Tallis* — #253 RED: conditioned listSections mock + two-state banner + refusal pins)

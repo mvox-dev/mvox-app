@@ -1,6 +1,22 @@
 import { entuFetch } from '$lib/entu/request';
-import { SectionMembershipMissingError, SectionNotEmptyError } from './sectionErrors';
+import {
+	SectionMembershipMissingError,
+	SectionNotEmptyError,
+	SectionReparentPartialError
+} from './sectionErrors';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+
+// #253 — defensive response-body read for the reparent/renumber partial-write
+// evidence (SectionReparentPartialError, sectionErrors.ts). A broken/detached
+// stream on an ALREADY-FAILING response must not mask the status the caller
+// needs; degrade to '' rather than let a second rejection swallow the first.
+async function bodyTextOf(res: Response): Promise<string> {
+	try {
+		return await res.text();
+	} catch {
+		return '';
+	}
+}
 
 // TS.3/#97 — the section CREATE write layer. GREEN.
 // TU.1/#109 (finding #10) — top-level parent org threading + fail-loud on a
@@ -292,7 +308,10 @@ export async function unassignMemberSection(
 //   - Old value ids go to `DELETE /property/{valueId}` ONLY — never
 //     `DELETE /entity/...` (the endpoint split: that would delete the section).
 //   - `orderedIds: []` resolves without any fetch.
-//   - Throws on any non-2xx (status surfaced).
+//   - #253: throws `SectionReparentPartialError` (step `'renumber'`) on any
+//     non-2xx — status AND response body captured, plus `i` sections fully
+//     renumbered of `orderedIds.length` (see sectionErrors.ts). The loop
+//     STOPS at the failing section: no retry, nothing past the gap.
 
 interface DisplayOrderValue {
 	_id: string;
@@ -307,12 +326,26 @@ export async function reorderSections(
 	orderedIds: string[],
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	for (let i = 0; i < orderedIds.length; i++) {
+	const total = orderedIds.length;
+	for (let i = 0; i < total; i++) {
 		const id = orderedIds[i];
 		const number = i + 1;
+		// #253 — `i` sections BEFORE this one are fully renumbered (POST landed
+		// AND every old value deleted) no matter which of this section's three
+		// steps fails below; that is the `renumberedCount` the typed error
+		// carries. The loop STOPS here (no retry, no continuing past the gap —
+		// PO refusal on #253): section i+1..total-1 are never touched.
 
 		const getRes = await entuFetch(cfg.db, `entity/${id}?props=display_order`, cfg.token, {}, fetchImpl);
-		if (!getRes.ok) throw new Error(`reorderSections lookup failed: ${getRes.status}`);
+		if (!getRes.ok) {
+			throw new SectionReparentPartialError(
+				'renumber',
+				i,
+				total,
+				getRes.status,
+				await bodyTextOf(getRes)
+			);
+		}
 		const body = (await getRes.json()) as { entity?: { display_order?: DisplayOrderValue[] } };
 		const existing = body.entity?.display_order ?? [];
 
@@ -327,11 +360,27 @@ export async function reorderSections(
 			},
 			fetchImpl
 		);
-		if (!postRes.ok) throw new Error(`reorderSections POST failed: ${postRes.status}`);
+		if (!postRes.ok) {
+			throw new SectionReparentPartialError(
+				'renumber',
+				i,
+				total,
+				postRes.status,
+				await bodyTextOf(postRes)
+			);
+		}
 
 		for (const value of existing) {
 			const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-			if (!delRes.ok) throw new Error(`reorderSections delete failed: ${delRes.status}`);
+			if (!delRes.ok) {
+				throw new SectionReparentPartialError(
+					'renumber',
+					i,
+					total,
+					delRes.status,
+					await bodyTextOf(delRes)
+				);
+			}
 		}
 	}
 }
@@ -441,7 +490,9 @@ export async function deleteSection(
 //   - `newParentId === sectionId` throws WITHOUT any fetch — a section can
 //     never be its own parent, and the guard belongs in the data layer too
 //     (defense in depth; the page's sibling math should never produce it).
-//   - Throws on any non-2xx (status surfaced).
+//   - #253: throws `SectionReparentPartialError` (step `'reparent'`,
+//     renumberedCount/totalCount `0`/`0` — the renumber never begins here) on
+//     any non-2xx — status AND response body captured (see sectionErrors.ts).
 
 /**
  * Re-point a section's `_parent` reference to `newParentId` (indent/unindent —
@@ -459,7 +510,9 @@ export async function reparentSection(
 	}
 
 	const getRes = await entuFetch(cfg.db, `entity/${sectionId}?props=_parent`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`reparentSection lookup failed: ${getRes.status}`);
+	if (!getRes.ok) {
+		throw new SectionReparentPartialError('reparent', 0, 0, getRes.status, await bodyTextOf(getRes));
+	}
 	const body = (await getRes.json()) as { entity?: { _parent?: MemberParentValue[] } };
 	const existing = body.entity?._parent ?? [];
 
@@ -474,11 +527,15 @@ export async function reparentSection(
 		},
 		fetchImpl
 	);
-	if (!postRes.ok) throw new Error(`reparentSection POST failed: ${postRes.status}`);
+	if (!postRes.ok) {
+		throw new SectionReparentPartialError('reparent', 0, 0, postRes.status, await bodyTextOf(postRes));
+	}
 
 	for (const value of existing) {
 		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`reparentSection delete failed: ${delRes.status}`);
+		if (!delRes.ok) {
+			throw new SectionReparentPartialError('reparent', 0, 0, delRes.status, await bodyTextOf(delRes));
+		}
 	}
 }
 
@@ -559,3 +616,4 @@ export async function renameSection(
 // (*MVOX:Tallis* — RED reparentSection stub + contract, #155/S3)
 // (*MVOX:Palestrina* — GREEN implementation, #155/S3)
 // (*MVOX:Palestrina* — renameSection, #155/S4)
+// (*MVOX:Byrd* — GREEN: SectionReparentPartialError, body capture, #253)

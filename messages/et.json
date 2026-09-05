@@ -182,6 +182,7 @@
 	"roster_section_picker_label": "{name} hääleliigid",
 	"roster_new_section_form_label": "Uus hääleliik",
 	"roster_section_reorder_failed": "Hääleliikide järjekorda ei õnnestunud salvestada — kuvatakse serveris olevat järjekorda.",
+	"roster_section_reparent_partial": "Hääleliik liikus, kuid selle uut asukohta ei õnnestunud salvestada — kuvatakse serveris olevat järjekorda.",
 	"roster_section_moved": "{name} liigutati kohale {position} / {total}.",
 	"roster_section_grabbed": "Haarati: {name}.",
 	"roster_section_dropped": "{name} asetati kohale {position} / {total}.",

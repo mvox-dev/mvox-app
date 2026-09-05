@@ -182,6 +182,7 @@
 	"roster_section_picker_label": "Партії для {name}",
 	"roster_new_section_form_label": "Нова партія",
 	"roster_section_reorder_failed": "Не вдалося зберегти порядок партій — показано порядок, збережений на сервері.",
+	"roster_section_reparent_partial": "Партія перемістилася, але не вдалося зберегти її нову позицію — показано порядок, збережений на сервері.",
 	"roster_section_moved": "{name} переміщено на позицію {position} з {total}.",
 	"roster_section_grabbed": "Захоплено: {name}.",
 	"roster_section_dropped": "{name} розміщено на позиції {position} з {total}.",

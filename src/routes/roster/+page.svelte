@@ -1207,6 +1207,21 @@
 	// TS.4 added, had none.
 	let reorderError = $state(false);
 
+	// #253 — a reparent is TWO writes (`_parent` move, then destination-group
+	// renumber); `reorderError` alone can't say WHICH failed, and the two
+	// outcomes need DIFFERENT copy: the move itself failing means nothing
+	// landed (today's `roster_section_reorder_failed` stays exactly right),
+	// but a landed move whose renumber then fails means the section IS at its
+	// new parent — telling the user "the order couldn't be saved" as if
+	// nothing happened would be a lie. True only when `performReparent`'s
+	// `reorderSections` call (the renumber) is what rejected — never set by
+	// `performReorder`'s own pure-reorder failures, which keep today's single
+	// copy regardless (PO ruling #253: two banner states, not three). Reset at
+	// the top of every fresh attempt in both write paths so a PREVIOUS
+	// failure's state can never leak into a new one (no-cfg early-returns
+	// included).
+	let reparentPartial = $state(false);
+
 	// #99 review F3 — the reorder path had no result announcement at all: a drag
 	// moved the section, the DOM reordered silently, and a screen-reader user got
 	// no confirmation anything happened beyond the drag's own aria-grabbed/
@@ -1257,14 +1272,18 @@
 		if (!cfg) {
 			console.error('roster: section reorder with no cfg', afterIds);
 			reorderError = true;
+			reparentPartial = false;
 			return false;
 		}
 		const g = generation;
 		reorderPending = true;
 		// A fresh attempt owns both slots — a previous failure's alert must not
 		// outlive the retry that fixed it, and a stale "moved to position 2" must
-		// not sit in the live region while a new move is in flight.
+		// not sit in the live region while a new move is in flight. #253: this is
+		// the PURE-reorder path — it never sets `reparentPartial`, so it always
+		// renders today's one copy regardless of a previous reparent's state.
 		reorderError = false;
+		reparentPartial = false;
 		reorderStatus = '';
 		sections = applySiblingOrder(sections, afterIds);
 		try {
@@ -1366,17 +1385,28 @@
 		if (!cfg) {
 			console.error('roster: section reparent with no cfg', node.id);
 			reorderError = true;
+			reparentPartial = false;
 			return false;
 		}
 		const g = generation;
 		reorderPending = true;
 		reorderError = false;
+		reparentPartial = false;
 		reorderStatus = '';
 		const before = sections;
 		sections = applyReparent(sections, node.id, target, insertAfterId);
 		const newParentId = target.kind === 'org' ? target.dbEntityId : target.sectionId;
+		// #253 review F1 — the banner state is decided by WHICH PHASE we were in
+		// when the rejection arrived, NOT by the rejection's shape. `reorderSections`
+		// can reject untyped after the `_parent` move already landed (a network
+		// rejection propagated verbatim by `entuFetch`, a SyntaxError from a
+		// malformed body, an `AuthExpiredError` on a 401) — every one of those
+		// leaves the section AT ITS NEW PARENT, so a type-gated decision would show
+		// "the order couldn't be saved" over a screen that shows the move.
+		let moveLanded = false;
 		try {
 			await reparentSection(cfg, node.id, newParentId);
+			moveLanded = true;
 			// Read AFTER the optimistic patch above: this is the destination group
 			// in its new on-screen order, including the moved section itself.
 			const destinationIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [];
@@ -1384,8 +1414,22 @@
 			reorderStatus = announce();
 			return true;
 		} catch (e) {
+			// #253 — full typed-error evidence (status + response body, when the
+			// rejection carries them) logged where a human can read it after the
+			// fact; `e` itself, not a stringified summary, so the object's fields
+			// stay inspectable. Two failure phases: `reparentSection` rejecting
+			// means NOTHING landed (`moveLanded` still false — today's copy is
+			// correct); anything rejecting after it resolved means the `_parent`
+			// move ALREADY landed and only the renumber failed — the section DID
+			// move, so the banner must say so, whatever shape that rejection has.
+			// The typed fields (step, k-of-N, status, body) are DIAGNOSIS ONLY:
+			// they ride along in the logged `e` and decide nothing on screen. No
+			// retry, no automatic unwind either way (PO #253 refusals) — the catch
+			// below is the SAME single refetch-reconcile + snapshot fallback
+			// `performReorder` uses, untouched.
 			console.error('roster: section reparent failed', e);
 			reorderError = true;
+			reparentPartial = moveLanded;
 			try {
 				const fresh = await listSections(cfg);
 				if (g !== generation) return false; // superseded by a newer collective selection
@@ -1437,6 +1481,7 @@
 				// as `performReparent`'s own no-cfg path.
 				console.error('roster: unindent to top level with no known collective (database entity) id', node.id);
 				reorderError = true;
+				reparentPartial = false;
 				return;
 			}
 			await performReparent(node, { kind: 'org', dbEntityId }, parent.id, () =>
@@ -2553,9 +2598,13 @@
 				     without this the user watches the order snap to something they did
 				     not choose with no explanation. role="alert" for the same reason the
 				     create-failure paragraph carries it: nothing else on screen names the
-				     cause. -->
+				     cause. #253 — TWO states, not one: `reparentPartial` is only ever true
+				     when a reparent's `_parent` move LANDED and its renumber then failed
+				     (see `performReparent`'s catch) — that copy says the section DID move.
+				     Every other failure (pure reorder, or a reparent that never landed)
+				     keeps this original copy unchanged. -->
 				<p data-testid="section-reorder-error" role="alert" class="text-sm text-red-700">
-					{m.roster_section_reorder_failed()}
+					{reparentPartial ? m.roster_section_reparent_partial() : m.roster_section_reorder_failed()}
 				</p>
 			{/if}
 			{#if removeError}
