@@ -384,8 +384,19 @@
 		const current = selected;
 		const token = getToken();
 		if (current && token) {
-			resolveGate({ db: current.db, token }, current.personId).then((state) =>
-				completionGateStore.set(state)
+			// #260 — capture the load generation the SAME way loadForSelected does, so a
+			// resolveGate settle answering a collective the user has since switched away
+			// from can never overwrite the app-wide gate SSOT with stale-context state.
+			const g = generation;
+			resolveGate({ db: current.db, token }, current.personId).then(
+				(state) => {
+					if (g !== generation) return;
+					completionGateStore.set(state);
+				},
+				() => {
+					// A stale settle's rejection must not surface either — swallow it here
+					// rather than let it escape as an unhandled promise rejection.
+				}
 			);
 		}
 	}
