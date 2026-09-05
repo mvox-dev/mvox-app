@@ -8,7 +8,7 @@
 
 ## Project
 
-**Mvox** — web application for choral music sharing, built on the v4E schema (see `entu/research` repo `docs/schema/v4E/`).
+**Mvox** — web application for choral music sharing. Schema is mvox's own (independent since Mihkel's 2026-09-06 ruling), with v4E heritage — the `entu/research` repo's `docs/schema/v4E/` is historical reference, not a sync target.
 
 Backed by Entu (entity-property database platform); no own database. Acts as a BFF in front of Entu's API. Successor to the polyphony prototype, with refined data model and federation-ready design.
 
@@ -19,14 +19,14 @@ mvox-dev runs on a Linux substrate. Two anchor paths apply across prompts and me
 | Anchor | Resolves to | Default |
 |---|---|---|
 | `$REPO` | This repo's working tree | `~/workspace-app/` (resolve via `git rev-parse --show-toplevel` or the current working directory) |
-| `$ENTU_RESEARCH` | Your local clone of [`entu/research`](https://github.com/entu/research) | `~/projects/entu-research/`. Override via shell env var if cloned elsewhere. |
+| `$ENTU_RESEARCH` | Your local clone of [`entu/research`](https://github.com/entu/research) — READ-ONLY historical reference since 2026-09-06, never a PR target | `~/projects/entu-research/`. Override via shell env var if cloned elsewhere. |
 
 When prompts or memory cite `$REPO/...` or `$ENTU_RESEARCH/...`, resolve relative to those anchors. Avoid baking absolute home paths into new content.
 
 ## Key References
 
 - `CLAUDE.md` — project overview, architecture, commands, conventions
-- `entu/research` repo, `docs/schema/v4E/` — canonical schema (typed `schema.ts`, narrative `README.md`, diagram editor `editor.html`)
+- Schema authority: the commissioning GitHub issue per type (see "Schema Evolution" below); schema-of-record home pending. `entu/research` `docs/schema/v4E/` is HISTORICAL REFERENCE only (retired as canonical 2026-09-06)
 - GitHub Issues — check open issues for task context
 
 ## Communication Rule
@@ -46,7 +46,7 @@ Landed 2026-05-18 session 2. See `memory/architecture-decisions.md` for the rati
 | --------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Framework       | SvelteKit 2 + Svelte 5         | Runes ONLY (`$state`, `$derived`, `$effect`, `$props`, `$bindable`) — never legacy `export let` / `$:`                                                                 |
 | Platform        | Cloudflare Pages + Workers     | `@sveltejs/adapter-cloudflare`. Env vars only — NO D1, R2, KV, or Durable Objects                                                                                      |
-| Backend         | Entu API                       | MongoDB + S3 under the hood; mvox has no own DB. v4E schema source-of-truth: `entu/research` repo, `docs/schema/v4E/`                                                  |
+| Backend         | Entu API                       | MongoDB + S3 under the hood; mvox has no own DB. Schema: mvox-independent (v4E-heritage; `entu/research` docs are historical reference only, 2026-09-06)               |
 | File storage    | S3 via Entu signed URLs        | 60-second TTL; client uploads direct to S3 after BFF requests the URL from Entu                                                                                        |
 | Auth            | Entu OAuth + BFF JWT cookie    | OAuth providers via Entu (Google, Apple, Smart-ID, Mobile-ID, ID-card, e-mail). SvelteKit server stores Entu JWT (48h, no refresh) in httpOnly cookie; proxies all API |
 | i18n            | Paraglide                      | 4 locales: en, et, lv, uk. Messages at `messages/{locale}.json`; generated TS at `src/lib/paraglide/`; usage `import * as m from '$lib/paraglide/messages.js'`         |
@@ -186,21 +186,15 @@ git push origin --delete <feature-branch>
 - Prefer new commits over amending
 - Only commit to your assigned story branch
 
-### v4E Schema Mutations
+### Schema Evolution (mvox-independent)
 
-The v4E schema lives in `entu/research` (`docs/schema/v4E/`), outside this repo, but as of 2026-05-22 it is ours to maintain — team-lead authors + opens the upstream PR directly (no PO relay). When a mvox feature requires a schema change:
+**Ruled by Mihkel 2026-09-06** (supersedes the 2026-05-22 "v4E ours to maintain" convention and the entire upstream-first flow): **mvox is independent — the `entu/research` upstream flow is retired entirely.** v4E in `entu/research` is historical reference and design heritage, not a sync target; mvox evolves its own schema. First application: `schedule_item` (#246 — upstream PR entu/research#54 withdrawn on this ruling).
 
-1. **Team-lead** opens a PR against `entu/research` first. Procedure: branch in `~/projects/entu-research/`, edit `docs/schema/v4E/schema.ts`, run `pnpm build-schema` to regenerate `schema.json`, sweep `docs/schema/v4E/README.md` for narrative refs, commit, push, `gh pr create`. PO reviews + merges upstream.
-2. After it lands, open the mvox PR with a commit trailer citing the change:
-   ```
-   Schema-Change: entu/research@<sha> "<short title>"
-   PO-Approved: <date> <PO handle or "verbal in session, logged by team-lead">
-   ```
-3. Bentham REDs any mvox PR whose diff references new/changed v4E entity types, properties, formulas, or rights defaults without both trailers.
-
-**Structural changes** (new entity types, new rights model, new sharing semantics) still consult PO **before** the upstream PR opens. Mechanical changes (renames, note clarifications, regenerated artifacts) are team-lead's to execute end-to-end.
-
-See `memory/architecture-decisions.md` for full rationale + the schema-alignment carve-out (drift-closing PRs don't need the trailer).
+1. **PO sign-off before build is unchanged**: new entity types, property shapes, rights or sharing semantics still require an explicit PO ruling, recorded on the commissioning GitHub issue. That issue thread is the type's design record.
+2. The mvox PR carries `PO-Approved: <date> <issue/comment ref or "verbal in session, logged by team-lead">`. The `Schema-Change: entu/research@…` trailer is **retired** — do not point new work at the upstream repo.
+3. Bentham REDs any mvox PR whose diff references a new/changed entity type, property, formula, or rights default without a `PO-Approved:` trailer.
+4. Type creation on live databases lands via seed/setup scripts, Pérotin's domain, with the usual authorization gate. Precision (Pérotin premise-check 2026-09-06): the `mvox_collective` "precedent" covers only *skipping schema.ts/PR/trailers* — its definition actually lives inline in entu-research's `setup-entity-types.ts` (foreign team, foreign repo). Do NOT add new types there; new definitions live workspace-app-side (home per the pending schema-of-record decision).
+5. The durable **schema-of-record home** (a mvox-side schema doc vs seed-script-as-definition vs other) is pending Pérotin's proposal + PO decision; until settled, commissioning issues are the record.
 
 ## Research Support
 

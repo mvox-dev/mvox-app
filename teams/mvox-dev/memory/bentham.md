@@ -533,10 +533,26 @@ All of these are "the test/mock and the code agreed on a lie." Treat as one fami
 6. Client code calling `https://entu.app` outside the documented Path-C call paths.
 7. Flipping an `_inheritrights: false` boundary without a v4E schema change.
 
-**Schema-mutation gate**: a PR touching v4E entity types/properties/formulas/rights defaults needs
-`Schema-Change: entu/research@<sha>` + `PO-Approved:` trailers. **Carve-out**: schema-ALIGNMENT PRs
-(live data → already-landed schema) do not. Per-value `_sharing` warning DROPPED per PO calibration.
-mvox-app-specific marker/config types are app extensions, not canonical v4E — they skip the flow.
+**Schema-mutation gate — REPOINTED 2026-09-06 (Mihkel, schema independence; canonical text at
+`architecture-decisions.md` "Schema independence: entu/research upstream flow retired").**
+mvox owns its own schema. **`Schema-Change: entu/research@<sha>` is DEAD** — never require it, and
+never read one as pointing anywhere meaningful if it shows up in a diff. The upstream-first procedure
+and the schema-ALIGNMENT carve-out die with it (there is no upstream left to align *to*).
+
+**The surviving gate, and it is the whole gate**: a new/changed entity type, property, formula or
+rights default without a **`PO-Approved: <date> <issue/comment ref>`** trailer = **RED**. Verify
+against the **commissioning GitHub issue** as the design record — the durable schema-of-record home is
+pending Pérotin's proposal + PO decision, so until that settles the issue IS the record, and "which
+issue commissioned this?" is a question I must be able to answer before GREENing a type change.
+
+Unchanged: PO sign-off before build; per-value `_sharing` warning still DROPPED; mvox-app-specific
+marker/config types are app extensions created via seed/setup scripts per the `mvox_collective`
+precedent; all B2 / rights calibrations above stand untouched.
+
+⚠ **Do not resurrect the old trigger from muscle memory** — 7 of the triggers above still say "without
+a v4E schema change" as their escape clause (e.g. trigger 7, `_inheritrights` flips). Read those as
+"without a PO-approved schema decision on the commissioning issue", NOT as "without an entu/research
+PR". The substance of each trigger is unchanged; only where the approval lives has moved.
 
 **Entities created directly under an organization must set `_inheritrights: true` explicitly** (Entu
 checks `=== true`; absent means false).

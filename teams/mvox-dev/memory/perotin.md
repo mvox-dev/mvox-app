@@ -2,6 +2,83 @@
 
 (*MVOX:Perotin*)
 
+## [WIP] #246 schedule_item — mvox-side home proposal, DRAFT ONLY, parked on PO wake (2026-09-06)
+
+Ruling change: Mihkel — "the PR at entu/research is out of place — we shouldn't bother to adjust
+the upstream V4E schema." entu/research#54 closed (branch `feat/v4e-schedule-item` kept). No
+mutation, no issue post — this is queued for team-lead to relay once PO confirms.
+
+**Premise-check before drafting (same-turn read, not recall)**: team-lead's framing cited
+`mvox_collective` as an "already skips entu/research" precedent for a mvox-side home. Verified this
+is only half true. `mvox_collective`'s definition lives INLINE in
+`~/projects/entu-research/scripts/setup-entity-types.ts` (authored `(*ER:Codd*)`, lines ~3097-3106,
+self-disclosed via its own description: "App-level marker entity... not part of the canonical v4E
+schema" / "ei kuulu v4E baasstruktuuri hulka"). "Skips the entu/research flow" has only ever meant
+skips `schema.ts` + PR + `Schema-Change`/`PO-Approved` trailers — not "lives outside entu-research."
+The literal precedent is still a foreign-repo, foreign-team-owned file. Flagged this to team-lead
+as the crux of (a) below rather than silently following the precedent as stated.
+
+**(a) Where the definition lives as record — recommend workspace-app-native, not the literal
+mvox_collective route.** New file, e.g. `scripts/migrations/lib/mvox-schema-extensions.ts` (or a
+docs-flavored `docs/architecture/mvox-schema-extensions.ts` if that reads better to team-lead),
+holding the `schedule_item` object literal in the same `EntityDef`-shaped vocabulary the team
+already reviewed on #246 (`parents`/`properties`/`creators`/`notes`) — reused as familiar
+documentation shape, not imported from `schema.ts` as a real dependency (`creators`/`parentCard`
+are pure documentation even in real v4E, per `entu-api` source — nothing is lost by not binding to
+the actual module). **Alternative, stated fairly**: add `schedule_item` as a second inline entry
+next to `mvox_collective` in entu-research's `setup-entity-types.ts`. Real advantage — reuses the
+ALREADY-proven, single, idempotent provisioning pipeline (3963 lines, battle-tested across
+polyphony + the 2026-08-27 crede provisioning) instead of building a second type-creation capability
+from scratch; one operator script instead of two. Real cost — still touches a different team's file
+in a different repo, the same cross-repo dependency shape the PO just called out, just via a side
+door instead of the `schema.ts` front door. Recommending against it given today's explicit
+"mvox evolves its own schema" framing, but naming the cost honestly since it's not a slam dunk.
+
+**(b) Seeding flow for polyphony/mvox_crede.** Correcting the dispatch's premise: I have no "usual
+setup-entity-types.ts pattern" — that tool is Codd's/entu-research's, not mine; I've never authored
+one. Every script I've shipped in `workspace-app` is instance-level (widen sharing, seed rows,
+retire/delete) — full type-def + prop-def creation from scratch isn't something I've built here.
+The one prior tool that DID do this (`lib/v4e-translator.ts`) exists only in the legacy `~/workspace`
+repo (Phase B/C/D era), never migrated to `workspace-app`. If (a) lands workspace-app-native, the
+live-creation capability is new work: a type-def CREATE (`_type.reference` → the "entity" meta-type
+`69bcfd8e9c031ab8e6ce8034`) + two prop-def CREATEs (`_type.reference` → the "property" meta-type
+`69bcfd8e9c031ab8e6ce8048`, each carrying its own `entity`/`name`/`type`/`sharing`), idempotent
+check-then-create — same discipline as every seed script I've shipped, just a new primitive (type
+level, not instance level). Run independently per db (Entu type catalogs are per-db — confirmed by
+`setup-entity-types.ts`'s own design, "run against the new database"): once against polyphony, and
+against mvox_crede only if PO actually wants the type there — real-pilot collectives don't
+automatically inherit every schema addition, flagging not deciding. A second use of the
+type+prop-def CREATE primitive would trigger my standing toolkit-extraction practice — propose to
+Josquin then, not build into his lib pre-emptively.
+
+**(c) Shape changes, app-extension vs canonical v4E.** None functional: same 2 required properties
+(`name`, `datetime`), same rights posture (`parent_right _editor`), same `_sharing` cascade, no
+`ordinal` — all survives untouched. Only the documentation layer changes: mirror `mvox_collective`'s
+own self-disclosure convention — description states outright "mvox app extension, not canonical
+v4E" (bilingual EN+ET, matching the established description convention). Side effect worth flagging:
+the closed branch's README diff also drafted a full narrative section (entity-catalog entry, org
+tree line, rights-matrix row, bucket-exposure row — all written, see (d)) that has no natural
+canonical home once this leaves `schema.ts`. Not required for the type to function; worth a
+deliberate call on whether an equivalent narrative belongs in `docs/architecture/` rather than
+silently dropping it.
+
+**(d) Closed branch's text — salvage plan.** `feat/v4e-schedule-item` @ `e460fb7` (entu-research)
+already carries the FULLY UPDATED object literal with my ordinal-drop ruling baked in verbatim
+(verified via `git diff main..feat/v4e-schedule-item` — the note already reads "no `ordinal`
+(mvox-app#246 ruling: ...)"), so no further editing needed before lifting it. Salvage: (i) the
+`schema.ts` diff's `schedule_item: EntityDef` object literal (~32 lines, drop only the surrounding
+`SCHEMA`-array wiring, which is `schema.ts`-specific) → lands verbatim in whichever home (a)
+settles on; (ii) the `README.md` diff's prose (entity-catalog `#### schedule_item` section, org-tree
+line, rights-matrix row, bucket-exposure-table row — all already written) → candidate content for
+the (c) narrative-home decision if PO wants one; (iii) `schema.json` diff is a generated artifact of
+`schema.ts`, not needed if `schema.ts` stays untouched. Once both diffs are copied out, the branch
+has no remaining utility — delete it (team-lead's call/access, not mine; no entu-research write
+scope here and this is draft-only).
+
+## [DECISION] #246 schedule_item — ordinal conceded/dropped (2026-09-05)
+
+Gama's named challenge: "name a case where display order must diverge from chronological order, or concede." Tested 4 candidates (simultaneous items, whole-day/no-time items, retrospective reorder-after-time-change, multi-day) — all either resolve via the `name` tie-break already on offer or don't apply to `schedule_item`'s semantics. Conceded. Settled shape: `schedule_item{name: string required, datetime: datetime required}` — no `ordinal`, sort by datetime + name tie-break. Two required props (was three), converges with Mihkel's minimal-change steer independently of the #253-renumbering argument. `event.start_datetime` unchanged (required, directly writable, sole sort key) — formula-over-children route stays disqualified per #233 (formula overwrites unconditionally + silently drops POSTs). Comment: https://github.com/mvox-dev/mvox-app/issues/246#issuecomment-5554613242. Schema not yet landed — `entu/research` PR is team-lead's to author next; no seed until it merges.
+
 ## [CHECKPOINT] Schema sitting 2026-09-05 — #246/#242/#256 (read-only, in progress)
 
 - **#246** (multi-time event, schedule-item child): posted `schedule_item` sketch mirroring

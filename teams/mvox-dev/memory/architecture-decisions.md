@@ -370,7 +370,12 @@ Companion call-out: **prop-def DELETE** also uses `DELETE /entity/{prop-def-id}`
 
 ---
 
-## v4E schema ownership — schema-as-contract (2026-05-18, session 2)
+## v4E schema ownership — schema-as-contract (2026-05-18, session 2) — ⚠ SUPERSEDED 2026-09-06
+
+> **DEAD CONTRACT — do not act on this entry.** Superseded in full by "Schema independence: entu/research
+> upstream flow retired" (2026-09-06, at the end of this file). **mvox now owns its own schema**; v4E in
+> `entu/research` is historical reference, not a canonical source and not a sync target. Kept for
+> audit-trail fidelity only. (*MVOX:Bentham*, steward)
 
 **Decision**: mvox does not own v4E. The schema lives in `entu/research` at `docs/schema/v4E/` and is the single canonical source. mvox consumes v4E as a contract (option b of the four-option matrix surfaced in session 2). entu-research's editor.html + case study stay accurate as living docs.
 
@@ -380,7 +385,23 @@ Companion call-out: **prop-def DELETE** also uses `DELETE /entity/{prop-def-id}`
 
 ---
 
-## v4E schema mutation gate — commit trailer convention (2026-05-18, session 2)
+## v4E schema mutation gate — commit trailer convention (2026-05-18, session 2) — ⚠ SUPERSEDED 2026-09-06
+
+> **The gate survives; its upstream half is DEAD.** Superseded by "Schema independence: entu/research
+> upstream flow retired" (2026-09-06, end of file). Concretely, for reviewers:
+>
+> - **RETIRED** — step 1 (open an `entu/research` PR first), the `Schema-Change: entu/research@<sha>`
+>   trailer, the 2026-05-22 upstream-PR ownership shift, and the schema-ALIGNMENT carve-out below
+>   (there is no upstream to align *to* any more). Do not require the trailer, and do not read one as
+>   pointing anywhere meaningful if it appears.
+> - **STILL BINDING** — PO sign-off BEFORE the build, and `PO-Approved: <date> <issue/comment ref>` on
+>   the mvox PR as the **sole** schema trailer. A new/changed entity type, property, formula or rights
+>   default without it is RED. The design record you verify against is the **commissioning GitHub
+>   issue** (the durable schema-of-record home is pending Pérotin's proposal + PO decision).
+> - **UNCHANGED** — mvox-app-specific marker/config types are app extensions created via seed/setup
+>   scripts per the `mvox_collective` precedent.
+>
+> Kept for audit-trail fidelity. (*MVOX:Bentham*, steward)
 
 **Decision**: When a mvox feature requires a v4E schema change:
 
@@ -854,3 +875,17 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 **Source**: PO standing rules relayed via Gama, 2026-09-01. Rules 1–3 recorded the same day by team-lead (`bd3cd48`); rule 4 relayed after that commit. Consolidated into a single section by Bentham as steward, at team-lead's request, so the four rules read as one decision rather than an entry plus an append.
 
 (*MVOX:Bentham*, consolidating team-lead's original entry)
+
+## 2026-09-06 — Schema independence: entu/research upstream flow retired
+
+**Decision (Mihkel, verbatim then confirmed broad in session):** "the PR at entu/research is out of place — we shouldnt bother to adjust the upstream V4E schema" → confirmed reading 2: **mvox is independent and the upstream flow is retired entirely.** v4E in `entu/research` is historical reference/design heritage, not a sync target.
+
+**Supersedes:** the 2026-05-22 "v4E ours to maintain" convention (team-lead authoring upstream PRs), the `Schema-Change: entu/research@…` commit trailer, and the upstream-first procedure that stood in common-prompt.md until today.
+
+**What replaces it:** PO ruling on the commissioning issue before any new entity type/shape/rights change (unchanged); `PO-Approved:` trailer on the mvox PR (sole schema trailer now); Bentham REDs new-type PRs without it; live type creation via seed/setup scripts per the `mvox_collective` app-extension precedent; the durable schema-of-record home is pending Pérotin's proposal + PO decision (until then, commissioning issues are the record).
+
+**First application:** #246 `schedule_item` — entu/research#54 withdrawn/closed; shape, ordinal adjudication and rights posture survive unchanged, only the home moved.
+
+**Rationale:** mvox stopped being a polyphony-successor prototype syncing a shared research schema and became its own product; keeping a foreign repo in the write path for every entity type bought review latency and a false sharing story, not correctness.
+
+(*MVOX:Palestrina*)
