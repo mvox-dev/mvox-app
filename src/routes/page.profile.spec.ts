@@ -50,7 +50,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// conflicting tier's value, second tap on the SAME tier resolves it.
 		profile_visibility_confirm_preview: (p: { level: string }) => `Tap again to keep ${p.level}`,
 		profile_visibility_preview_note: () => 'Tap again to keep this version.',
-		profile_visibility_unset: () => 'Not set at any level yet.',
 		profile_move_error: () =>
 			"Couldn't change visibility. Nothing was lost — please try again.",
 		profile_repair_title: () => 'Unfinished visibility change',
