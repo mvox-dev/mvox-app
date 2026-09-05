@@ -785,6 +785,7 @@
 					presetDbEntityId={dbEntityId ?? ''}
 					presetDbName={selected?.name ?? ''}
 					heading="h2"
+					layout="embedded"
 				/>
 			</section>
 		{/if}

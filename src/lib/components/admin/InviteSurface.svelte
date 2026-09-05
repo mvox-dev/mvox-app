@@ -47,17 +47,31 @@
 	//
 	// `heading` — the standalone route needs the page-level <h1>; embedded under
 	// /admin's own <h1> it must be an <h2> (heading hierarchy, review F2).
+	//
+	// `layout` — #235: the standalone /admin/invite route is full-bleed, so the
+	// component's own `mx-auto`/`max-w-md` are the SOLE centering mechanism
+	// there ('standalone', default — today's classes, byte-identical). The
+	// /admin embed already sits inside its own centered `max-w-2xl` column
+	// whose sibling sections are plain `flex flex-col gap-3`; re-centering
+	// AGAIN inside that column double-constrains the width and renders the
+	// invite section visibly narrower/indented vs. its siblings. `'embedded'`
+	// drops exactly those two tokens so it fills the column flush like them.
 	let {
 		presetDb = '',
 		presetDbEntityId = '',
 		presetDbName = '',
-		heading = 'h1'
+		heading = 'h1',
+		layout = 'standalone'
 	}: {
 		presetDb?: string;
 		presetDbEntityId?: string;
 		presetDbName?: string;
 		heading?: 'h1' | 'h2';
+		layout?: 'standalone' | 'embedded';
 	} = $props();
+	const rootClasses = $derived(
+		layout === 'embedded' ? 'flex w-full flex-col gap-4' : 'mx-auto flex w-full max-w-md flex-col gap-4'
+	);
 	// Deliberate ONE-TIME snapshot for seeding local $state below — the
 	// controlled-mode sync effect (further down) is what stays reactive to
 	// LATER prop changes; `untrack` here just tells the compiler this initial
@@ -279,7 +293,7 @@
 	}
 </script>
 
-<div class="mx-auto flex w-full max-w-md flex-col gap-4">
+<div class={rootClasses}>
 	<!-- #140/S3 review F2 — heading LEVEL follows the embedding context: the
 	     standalone /admin/invite route is the page itself (h1, text-2xl, as it
 	     was before the extraction), the embedded section sits under /admin's own
