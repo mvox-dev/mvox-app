@@ -9,7 +9,8 @@
 		tallinnHHMM,
 		formatTime,
 		timeFormatStore,
-		tallinnLocalToUtcIso
+		tallinnLocalToUtcIso,
+		isoDateFormatter
 	} from '$lib/preferences/timeFormat';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
@@ -2656,12 +2657,7 @@
 	 *  ISO calendar date itself, `YYYY-MM-DD` (en-CA gives ISO date format). Still
 	 *  UTC-anchored — the same guard that keeps a date-only value from sliding to
 	 *  the previous day in a negative offset, now the identity for an ISO input. */
-	const seasonDateFmt = new Intl.DateTimeFormat('en-CA', {
-		timeZone: 'UTC',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
+	const seasonDateFmt = isoDateFormatter('UTC');
 
 	/** The displayable form of a season bound, or '' when the bound is unset —
 	 *  `Intl.DateTimeFormat.format` THROWS `RangeError: Invalid time value` on an
@@ -3165,12 +3161,7 @@
 	 *  AM/PM. Composed as two formatters — a single combined Intl format
 	 *  would insert a locale comma between date and time instead of the
 	 *  required plain space. */
-	const eventCreateStatusDateFmt = new Intl.DateTimeFormat('en-CA', {
-		timeZone: EVENT_CREATE_TZ,
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
+	const eventCreateStatusDateFmt = isoDateFormatter(EVENT_CREATE_TZ);
 	function eventCreateStatusFmt(at: Date): string {
 		return `${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
 	}

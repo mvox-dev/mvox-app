@@ -42,6 +42,7 @@
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -52,12 +53,7 @@
 	// full ISO timestamps (e.g. "2026-07-01T00:00:00.000Z"); this still keeps
 	// the raw timestamp's TIME component out of the UI. Forces UTC timezone so
 	// date-only values never shift to the previous day in negative offsets.
-	const _dateFmt = new Intl.DateTimeFormat('en-CA', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		timeZone: 'UTC'
-	});
+	const _dateFmt = isoDateFormatter('UTC');
 	function formatDate(isoDate: string): string {
 		if (!isoDate) return '';
 		return _dateFmt.format(new Date(isoDate));

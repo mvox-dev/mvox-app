@@ -6,7 +6,12 @@
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
-	import { tallinnHHMM, formatTime, timeFormatStore } from '$lib/preferences/timeFormat';
+	import {
+		tallinnHHMM,
+		formatTime,
+		timeFormatStore,
+		isoDateFormatter
+	} from '$lib/preferences/timeFormat';
 	// #194/#202 — the SHARED type-label map (same one the event detail page
 	// uses, #101 F3 taught us what an unlocalized type string costs).
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
@@ -190,13 +195,10 @@
 	// page reload. TZ, options and the noon-anchored date math are unchanged.
 	const TZ = 'Europe/Tallinn';
 
-	// Grouping key: YYYY-MM-DD in Tallinn calendar day (en-CA gives ISO date format)
-	const groupKeyFmt = new Intl.DateTimeFormat('en-CA', {
-		timeZone: TZ,
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
+	// Grouping key: YYYY-MM-DD in Tallinn calendar day (en-CA gives ISO date
+	// format) — #231: the shared factory (timeFormat.iso-date.spec.ts pins
+	// this stays byte-identical to today's construction).
+	const groupKeyFmt = isoDateFormatter(TZ);
 
 	// Locale-aware long header text: "Monday, 15 June" (APP language, #251 —
 	// was the browser/device locale; rebuilt whenever getLocale() changes).
@@ -214,12 +216,7 @@
 	// they render as the Tallinn ISO calendar day (en-CA gives ISO date format).
 	// Recent rows lack day-group headers, so each row still needs its own date
 	// label to be distinguishable.
-	const shortDateFmt = new Intl.DateTimeFormat('en-CA', {
-		timeZone: TZ,
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
+	const shortDateFmt = isoDateFormatter(TZ);
 
 	/**
 	 * Accessible name for a row's event-detail link. #101 review fix (F2): the

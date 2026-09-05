@@ -16,6 +16,7 @@
 	import { OAUTH_STATE_KEY } from '$lib/auth/state';
 	import { buildInviteProviderHref } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
+	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 
 	// Stale-blob hygiene: an ABANDONED OAuth initiation (CTA clicked, provider
 	// never completed) leaves the state blob — for invite intent including the
@@ -32,11 +33,7 @@
 	// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — numeric date
 	// text renders as the ISO calendar date, `YYYY-MM-DD` (en-CA gives ISO date
 	// format), never a browser-locale rendering.
-	const expiryDateFmt = new Intl.DateTimeFormat('en-CA', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
+	const expiryDateFmt = isoDateFormatter();
 	const expiryDate = $derived(
 		parsed.status === 'invalid' ? '' : expiryDateFmt.format(new Date(parsed.expMs))
 	);

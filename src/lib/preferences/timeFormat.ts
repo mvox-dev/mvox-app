@@ -139,6 +139,29 @@ export function tallinnLocalToUtcIso(local: string): string {
 	return new Date(instantMs).toISOString();
 }
 
+// #231 — the ISO date-only (`YYYY-MM-DD`) en-CA formatter, rebuilt at seven
+// production sites (AgendaList's groupKeyFmt/shortDateFmt, +page.svelte's
+// seasonDateFmt/eventCreateStatusDateFmt, InviteSurface/invite-landing's
+// expiry formatters, library's date formatter) — now built once here.
+// `timeZone` is OPTIONAL: two sites (the invite-expiry ones) legitimately
+// construct with no timeZone key at all, i.e. process-local, and passing
+// `undefined` through to `Intl.DateTimeFormat` reproduces that exactly —
+// there is no "normalize to UTC" here, only preserve-what-was-there.
+
+/** The shared en-CA ISO-date (`YYYY-MM-DD`) formatter factory. `timeZone`
+ *  omitted or explicitly `undefined` behaves exactly like Intl's own
+ *  no-timeZone-key default (process-local) — the two invite-expiry sites
+ *  depend on that being load-bearing, not merely a fallback value. */
+export function isoDateFormatter(timeZone?: string): Intl.DateTimeFormat {
+	return new Intl.DateTimeFormat('en-CA', {
+		timeZone,
+		year: 'numeric',
+		month: '2-digit',
+		day: '2-digit'
+	});
+}
+
 // (*MVOX:Palestrina* — #207 GREEN part 1: 24h default + AM/PM preference store)
 // (*MVOX:Palestrina* — #220 GREEN: tallinnHHMM + formatTime, the one shared display formatter)
 // (*MVOX:Palestrina* — #230 GREEN: tallinnOffsetMinutes + tallinnLocalToUtcIso, the shared DST-aware conversion moved from the two event-create/edit hosts)
+// (*MVOX:Palestrina* — #231 GREEN: isoDateFormatter, the shared en-CA ISO-date factory replacing seven duplicate constructions)

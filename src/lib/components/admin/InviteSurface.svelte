@@ -20,6 +20,7 @@
 	// path, in 'create-error'. Both are misleading: the session is gone.
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 
 	// #140/S3 — CONTROLLED MODE: the merged /admin page has ALREADY resolved a
 	// db + org (resolveDatabaseEntityId, same underlying "the collective"
@@ -105,11 +106,7 @@
 	// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — numeric date
 	// text renders as the ISO calendar date, `YYYY-MM-DD` (en-CA gives ISO date
 	// format), never a browser-locale rendering.
-	const inviteExpiryDateFmt = new Intl.DateTimeFormat('en-CA', {
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit'
-	});
+	const inviteExpiryDateFmt = isoDateFormatter();
 
 	let inviteLink = $state('');
 	let inviteExpiryDate = $state('');
