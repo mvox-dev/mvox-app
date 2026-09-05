@@ -21,6 +21,11 @@
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
+	// #232 — the base 5-state union comes from the shared route-load machine's
+	// type (no generation/loadForSelected sequencing extracted here: this
+	// surface's load-prerequisites flow has no staleness counter today, and
+	// grafting one on would be a behavior change, not an extraction).
+	import type { RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	// #140/S3 — CONTROLLED MODE: the merged /admin page has ALREADY resolved a
 	// db + org (resolveDatabaseEntityId, same underlying "the collective"
@@ -79,16 +84,7 @@
 	const initialPresetDb = untrack(() => presetDb);
 	const initialPresetDbEntityId = untrack(() => presetDbEntityId);
 
-	type Status =
-		| 'loading'
-		| 'no-collective'
-		| 'no-access'
-		| 'load-error'
-		| 'session-expired'
-		| 'ready'
-		| 'creating'
-		| 'done'
-		| 'create-error';
+	type Status = RouteLoadStatus | 'no-access' | 'creating' | 'done' | 'create-error';
 
 	// The enumerable set: mvox collectives (databases) this account has a person
 	// in — NOT organization entities. Today that's exactly one (polyphony).

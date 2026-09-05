@@ -37,21 +37,12 @@
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	const selected = $derived($selectedCollectiveStore);
 	const admin = $derived($adminStore);
 
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';
-
-	// Non-reactive generation guard — mirrors profile/+page.svelte's `let generation`
-	// exactly (never $state, so bumping it doesn't retrigger the load effect). Guards
-	// against a stale (superseded) load resolving after a collective switch.
-	let generation = 0;
-	// #255 review r3 F2 — the collective whose data is currently on screen, so
-	// `loadForSelected` can tell a SWITCH from a refresh. Non-reactive for the same
-	// reason as `generation`: it is read inside the load, never rendered.
-	let loadedDb: string | null = null;
-	let status = $state<Status>('loading');
+	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<RosterRow[]>([]);
 	let sections = $state<SectionNode[]>([]);
 	// F3 code-review fix: the two loads are DECOUPLED (Promise.allSettled, not
@@ -86,42 +77,53 @@
 	// `$state` — writes read it at tap time, it never needs to drive a render).
 	let currentCfg: EntuCfg | null = null;
 
-	async function loadForSelected(): Promise<void> {
-		const current = selected;
-		const g = ++generation;
-		// #99 review F2/F3 — a reload re-derives the tree from scratch, so neither a
-		// previous reorder's alert nor its "moved to position 2" announcement is
-		// about anything on screen any more (a collective switch replaces the tree
-		// outright).
-		reorderError = false;
-		reorderStatus = '';
-		// #110 review F1/F4 — the remove path's two pieces of transient state are
-		// about a tree that is being replaced: a failure message naming a section
-		// the next tree may not even contain, and a half-armed confirm on a header
-		// that is about to be re-rendered from different data. Both drop here,
-		// alongside the reorder pair, for the same reason.
-		removeError = null;
-		pendingRemoveId = null;
-		// #255 (A) — same reasoning: a half-armed deactivate confirm or a stale
-		// refusal message is about a row the next tree may not even contain.
-		pendingDeactivateId = null;
-		deactivateRefusal = null;
-		deactivateActionError = null;
-		// #255 review r3 F2 — the inactive panel is the one surface this function
-		// does NOT re-derive, so without this a switch left collective A's inactive
-		// members rendered under B's roster, each with a live Reinstate button
-		// pointing at A's member ids. Same rule `expandedIds` follows (state keyed
-		// to data that is being replaced) — but scoped to an actual SWITCH, because
-		// the deactivate/reinstate paths call this as a REFRESH and reload the panel
-		// themselves; a blanket reset here would slam it shut under them.
-		if (current?.db !== loadedDb) {
-			loadedDb = current?.db ?? null;
-			showInactive = false;
-			inactiveRows = [];
-			inactiveLoadError = false;
-		}
-		if (!current) {
-			status = 'no-collective';
+	// #232 — the shared route-load machine owns the Status union, the
+	// generation guard and the loadForSelected sequencing (reset →
+	// no-collective → token check → 'loading' → this page's fetch body →
+	// 4-branch error classification). `reset`'s `isSwitch` replaces the old
+	// `current?.db !== loadedDb` comparison (#255 review r3 F2 semantics,
+	// unchanged): the inactive panel is scoped-reset only on an actual
+	// collective switch, never on a same-db refresh (the deactivate/reinstate
+	// paths call this as a refresh and reload the panel themselves).
+	const routeLoad = createRouteLoadMachine({
+		name: 'roster',
+		selected: () => selected,
+		setStatus: (s) => {
+			status = s;
+		},
+		reset: ({ isSwitch }) => {
+			// #99 review F2/F3 — a reload re-derives the tree from scratch, so neither a
+			// previous reorder's alert nor its "moved to position 2" announcement is
+			// about anything on screen any more (a collective switch replaces the tree
+			// outright).
+			reorderError = false;
+			reorderStatus = '';
+			// #110 review F1/F4 — the remove path's two pieces of transient state are
+			// about a tree that is being replaced: a failure message naming a section
+			// the next tree may not even contain, and a half-armed confirm on a header
+			// that is about to be re-rendered from different data. Both drop here,
+			// alongside the reorder pair, for the same reason.
+			removeError = null;
+			pendingRemoveId = null;
+			// #255 (A) — same reasoning: a half-armed deactivate confirm or a stale
+			// refusal message is about a row the next tree may not even contain.
+			pendingDeactivateId = null;
+			deactivateRefusal = null;
+			deactivateActionError = null;
+			// #255 review r3 F2 — the inactive panel is the one surface this function
+			// does NOT re-derive, so without this a switch left collective A's inactive
+			// members rendered under B's roster, each with a live Reinstate button
+			// pointing at A's member ids. Same rule `expandedIds` follows (state keyed
+			// to data that is being replaced) — but scoped to an actual SWITCH, because
+			// the deactivate/reinstate paths call this as a REFRESH and reload the panel
+			// themselves; a blanket reset here would slam it shut under them.
+			if (isSwitch) {
+				showInactive = false;
+				inactiveRows = [];
+				inactiveLoadError = false;
+			}
+		},
+		onNoCollective: () => {
 			rows = [];
 			sections = [];
 			// #110 review F3 — collapse state is keyed by section id, so it must never
@@ -132,60 +134,58 @@
 			expandedIds = new Set();
 			sectionsError = false;
 			currentCfg = null;
-			return;
-		}
-		const token = getToken();
-		if (!token) {
-			// Inconsistency on a protected route — fail loud as a load error, never a
-			// silent empty list. F3 code-review fix: drop `currentCfg` too — a write
-			// cfg must never outlive the load state that produced it (otherwise a
-			// stale token from a previous collective could still back picker writes
-			// on an errored page).
-			console.error('roster: no auth token in storage on a protected route');
+		},
+		onNoToken: () => {
+			// F3 code-review fix: drop `currentCfg` too — a write cfg must never
+			// outlive the load state that produced it (otherwise a stale token from
+			// a previous collective could still back picker writes on an errored
+			// page).
 			currentCfg = null;
-			status = 'load-error';
-			return;
-		}
-		status = 'loading';
-		const cfg = { db: current.db, token };
-		currentCfg = cfg;
-		const [rowResult, sectionResult] = await Promise.allSettled([loadRoster(cfg), listSections(cfg)]);
-		if (g !== generation) return; // superseded by a newer collective selection
+		},
+		async load({ cfg, isCurrent }) {
+			currentCfg = cfg;
+			const [rowResult, sectionResult] = await Promise.allSettled([loadRoster(cfg), listSections(cfg)]);
+			if (!isCurrent()) return; // superseded by a newer collective selection
 
-		if (rowResult.status === 'rejected') {
-			// #107 — a dead token kills BOTH parallel reads uniformly; say so
-			// truthfully instead of the generic load error (whose Retry can never
-			// succeed against a dead token).
-			if (isAuthExpiredError(rowResult.reason)) {
-				status = 'session-expired';
+			if (rowResult.status === 'rejected') {
+				// #107 — a dead token kills BOTH parallel reads uniformly; say so
+				// truthfully instead of the generic load error (whose Retry can never
+				// succeed against a dead token).
+				if (isAuthExpiredError(rowResult.reason)) {
+					status = 'session-expired';
+					return;
+				}
+				// The roster itself couldn't be read — nothing presentable regardless of
+				// how the section load went. Full loud error, matching pre-F3 behavior.
+				console.error('roster: load failed', rowResult.reason);
+				status = 'load-error';
 				return;
 			}
-			// The roster itself couldn't be read — nothing presentable regardless of
-			// how the section load went. Full loud error, matching pre-F3 behavior.
-			console.error('roster: load failed', rowResult.reason);
-			status = 'load-error';
-			return;
-		}
-		rows = rowResult.value;
+			rows = rowResult.value;
 
-		if (sectionResult.status === 'rejected') {
-			if (isAuthExpiredError(sectionResult.reason)) {
-				status = 'session-expired';
-				return;
+			if (sectionResult.status === 'rejected') {
+				if (isAuthExpiredError(sectionResult.reason)) {
+					status = 'session-expired';
+					return;
+				}
+				console.error('roster: section tree load failed', sectionResult.reason);
+				sections = [];
+				expandedIds = new Set();
+				sectionsError = true;
+				// Grouping is meaningless without a tree — fall back to the flat view so
+				// the toggle button's label stays truthful about what's on screen.
+				view = 'flat';
+			} else {
+				sections = sectionResult.value;
+				expandedIds = new Set();
+				sectionsError = false;
 			}
-			console.error('roster: section tree load failed', sectionResult.reason);
-			sections = [];
-			expandedIds = new Set();
-			sectionsError = true;
-			// Grouping is meaningless without a tree — fall back to the flat view so
-			// the toggle button's label stays truthful about what's on screen.
-			view = 'flat';
-		} else {
-			sections = sectionResult.value;
-			expandedIds = new Set();
-			sectionsError = false;
+			status = 'ready';
 		}
-		status = 'ready';
+	});
+
+	function loadForSelected(): Promise<void> {
+		return routeLoad.loadForSelected();
 	}
 
 	$effect(() => {
@@ -1044,7 +1044,7 @@
 		// #155/S4 review F1 — the same collective-switch guard `performReorder`/
 		// `performReparent` carry: a reconcile resolving after the user switched
 		// collectives must not clobber the newer collective's tree.
-		const g = generation;
+		const g = routeLoad.generation;
 		const before = sections;
 		// #155/S4 review F1 (follow-up) — the failure landing is DEFERRED to the
 		// `finally`, because the ✕ it wants to land on is
@@ -1088,11 +1088,11 @@
 			// survives only as the fallback for when the refetch ALSO fails.
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== generation) return; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed remove failed', refetchError);
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				sections = before;
 			}
 			// #110 review F1/F3 — say it, don't just log it. `section-not-empty` is
@@ -1484,7 +1484,7 @@
 			reparentPartial = false;
 			return false;
 		}
-		const g = generation;
+		const g = routeLoad.generation;
 		reorderPending = true;
 		// A fresh attempt owns both slots — a previous failure's alert must not
 		// outlive the retry that fixed it, and a stale "moved to position 2" must
@@ -1508,11 +1508,11 @@
 			reorderError = true;
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== generation) return false; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed reorder failed', refetchError);
-				if (g === generation) sections = applySiblingOrder(sections, beforeIds);
+				if (g === routeLoad.generation) sections = applySiblingOrder(sections, beforeIds);
 			}
 		} finally {
 			reorderPending = false;
@@ -1597,7 +1597,7 @@
 			reparentPartial = false;
 			return false;
 		}
-		const g = generation;
+		const g = routeLoad.generation;
 		reorderPending = true;
 		reorderError = false;
 		reparentPartial = false;
@@ -1641,11 +1641,11 @@
 			reparentPartial = moveLanded;
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== generation) return false; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed reparent failed', refetchError);
-				if (g === generation) sections = before;
+				if (g === routeLoad.generation) sections = before;
 			}
 		} finally {
 			reorderPending = false;
@@ -1783,7 +1783,7 @@
 		// #155/S4 review F1 — the collective-switch guard `performReparent` carries,
 		// for the same reason: a reconcile resolving after a switch must not clobber
 		// the newer collective's tree.
-		const g = generation;
+		const g = routeLoad.generation;
 		const before = sections;
 		renamePending = true;
 		renamingSectionId = null;
@@ -1802,11 +1802,11 @@
 			// fails.
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== generation) return; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed rename failed', refetchError);
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				sections = before;
 			}
 			renameError = { id, name };

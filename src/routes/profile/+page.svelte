@@ -27,6 +27,7 @@
 	import { timeFormatStore, setTimeFormat, type TimeFormat } from '$lib/preferences/timeFormat';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	// #193 — linked auth providers + "Link another account".
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
@@ -47,10 +48,7 @@
 
 	const selected = $derived($selectedCollectiveStore);
 
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';
-
-	let generation = 0;
-	let status = $state<Status>('loading');
+	let status = $state<RouteLoadStatus>('loading');
 
 	// Unified draft: one value per field (not per level).
 	let draft = $state<{ name: string; email: string }>({ name: '', email: '' });
@@ -289,11 +287,11 @@
 	): Promise<void> {
 		try {
 			const linked = await listLinkedIdentities(cfg, personId);
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			linkedIdentities = linked.identities;
 			linkedLoadFailed = false;
 		} catch (linkedErr) {
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			if (isAuthExpiredError(linkedErr)) {
 				status = 'session-expired';
 				return;
@@ -308,31 +306,29 @@
 	function retryLinkedIdentities(): void {
 		const ctx = activeContext();
 		if (!ctx) return;
-		void loadLinkedIdentities(ctx.cfg, ctx.personId, generation);
+		void loadLinkedIdentities(ctx.cfg, ctx.personId, routeLoad.generation);
 	}
 
-	async function loadForSelected(): Promise<void> {
-		const current = selected;
-		const g = ++generation;
-		resetState();
-		queue.reset();
-		moveQueue.reset();
-		if (!current) {
-			status = 'no-collective';
-			return;
-		}
-		const token = getToken();
-		if (!token) {
-			console.error('profile: no auth token in storage on a protected route');
-			status = 'load-error';
-			return;
-		}
-		status = 'loading';
-		const cfg = { db: current.db, token };
-		const personId = current.personId;
-		try {
+	// #232 — the shared route-load machine (Status union, generation guard,
+	// loadForSelected sequencing) extracted into $lib/loading/routeLoad; this
+	// page's fetch BODY (below, `load`) and its page-specific `resetState` stay
+	// verbatim. The machine never invents 'ready' — `load` writes it itself,
+	// mid-body, before its linked-identities tail (unchanged from before).
+	const routeLoad = createRouteLoadMachine({
+		name: 'profile',
+		selected: () => selected,
+		setStatus: (s) => {
+			status = s;
+		},
+		reset: () => {
+			resetState();
+			queue.reset();
+			moveQueue.reset();
+		},
+		async load({ cfg, selected: current, g, isCurrent }) {
+			const personId = current.personId;
 			const profiles = await listMyProfiles(cfg, personId);
-			if (g !== generation) return;
+			if (!isCurrent()) return;
 			loadedProfiles = profiles;
 			const byLevel = profilesByLevel(profiles);
 			const nextConfirmed = emptyConfirmed();
@@ -366,18 +362,11 @@
 			// #193 — linked-identities read, own failure handling: a hiccup here must
 			// not take down the name/email editing surface above (already 'ready').
 			await loadLinkedIdentities(cfg, personId, g);
-		} catch (e) {
-			if (g !== generation) return;
-			// #107 — a session-expired rejection is a DIFFERENT failure class than
-			// a generic load error: the entuFetch layer already cleared the stale
-			// session and fired the sign-in redirect, so this just says why.
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('profile: load failed', e);
-			status = 'load-error';
 		}
+	});
+
+	function loadForSelected(): Promise<void> {
+		return routeLoad.loadForSelected();
 	}
 
 	function refreshCompletionGate(): void {
@@ -387,10 +376,10 @@
 			// #260 — capture the load generation the SAME way loadForSelected does, so a
 			// resolveGate settle answering a collective the user has since switched away
 			// from can never overwrite the app-wide gate SSOT with stale-context state.
-			const g = generation;
+			const g = routeLoad.generation;
 			resolveGate({ db: current.db, token }, current.personId).then(
 				(state) => {
-					if (g !== generation) return;
+					if (g !== routeLoad.generation) return;
 					completionGateStore.set(state);
 				},
 				() => {
@@ -453,7 +442,7 @@
 				}
 			}
 		},
-		() => generation
+		() => routeLoad.generation
 	);
 
 	const moveQueue = createFieldMoveQueue(
@@ -495,7 +484,7 @@
 				repairFailed = withFieldSet(repairFailed, field, true);
 			}
 		},
-		() => generation
+		() => routeLoad.generation
 	);
 
 	function activeContext(): { cfg: { db: string; token: string }; personId: string } | null {

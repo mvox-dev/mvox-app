@@ -43,6 +43,7 @@
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
+	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	const selected = $derived($selectedCollectiveStore);
 
@@ -59,11 +60,9 @@
 		return _dateFmt.format(new Date(isoDate));
 	}
 
-	type Status = 'loading' | 'no-collective' | 'load-error' | 'session-expired' | 'ready';
 	type NodeStatus = 'idle' | 'loading' | 'error';
 
-	let generation = 0;
-	let status = $state<Status>('loading');
+	let status = $state<RouteLoadStatus>('loading');
 	let works = $state<Work[]>([]);
 	let lendings = $state<Lending[]>([]);
 	let borrowerNames = $state<Map<string, string>>(new Map());
@@ -297,33 +296,32 @@
 		if (createWorkOpen && createWorkNameInput) createWorkNameInput.focus();
 	});
 
-	async function loadForSelected(): Promise<void> {
-		const current = selected;
-		const g = ++generation;
-		if (!current) {
-			status = 'no-collective';
+	// #232 — the shared route-load machine owns the Status union, the
+	// generation guard and the loadForSelected sequencing. The per-load node
+	// caches (`reset`) always cleared unconditionally here, same as before —
+	// they are never rendered except behind `status === 'ready'`.
+	const routeLoad = createRouteLoadMachine({
+		name: 'library',
+		selected: () => selected,
+		setStatus: (s) => {
+			status = s;
+		},
+		reset: () => {
+			expandedWorks = new Set();
+			expandedEditions = new Set();
+			editionsByWork = new Map();
+			copiesByEdition = new Map();
+			repertoireByWorkId = new Map();
+		},
+		onNoCollective: () => {
 			works = [];
-			return;
-		}
-		const token = getToken();
-		if (!token) {
-			console.error('library: no auth token in storage on a protected route');
-			status = 'load-error';
-			return;
-		}
-		status = 'loading';
-		expandedWorks = new Set();
-		expandedEditions = new Set();
-		editionsByWork = new Map();
-		copiesByEdition = new Map();
-		repertoireByWorkId = new Map();
-		try {
-			const cfg = { db: current.db, token };
+		},
+		async load({ cfg, selected: current, isCurrent }) {
 			const [workList, lendingList] = await Promise.all([listWorks(cfg), listLendings(cfg)]);
-			if (g !== generation) return;
+			if (!isCurrent()) return;
 			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
 			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			if (g !== generation) return;
+			if (!isCurrent()) return;
 			works = workList;
 			lendings = lendingList;
 			borrowerNames = names;
@@ -331,7 +329,7 @@
 
 			// #73 — resolve current member for my-loans
 			findMyMemberId(cfg, current.personId).then((id) => {
-				if (g === generation) myMemberId = id;
+				if (isCurrent()) myMemberId = id;
 			});
 
 			// #92 TR.4 — season-scoped repertoire read, once: resolve the CURRENT
@@ -339,11 +337,11 @@
 			// listRepertoireItems. No current season -> no badges, no second fetch.
 			listSeasons(cfg)
 				.then((seasons) => {
-					if (g !== generation) return;
+					if (!isCurrent()) return;
 					const season = currentSeason(seasons, new Date());
 					if (!season) return;
 					return listRepertoireItems(cfg, season.id).then((items) => {
-						if (g !== generation) return;
+						if (!isCurrent()) return;
 						const byWorkId = new Map<string, RepertoireItem>();
 						for (const item of items) {
 							if (item.status === 'active' || item.status === 'learning') {
@@ -358,18 +356,11 @@
 					// down the (already-successful) library browse tree with it.
 					console.error('library: repertoire badge load failed', e);
 				});
-		} catch (e) {
-			if (g !== generation) return;
-			// #107 — a session-expired rejection is a DIFFERENT failure class than
-			// a generic load error: the entuFetch layer already cleared the stale
-			// session and fired the sign-in redirect, so this just says why.
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('library: load failed', e);
-			status = 'load-error';
 		}
+	});
+
+	function loadForSelected(): Promise<void> {
+		return routeLoad.loadForSelected();
 	}
 
 	// Fetch-only (does not touch expandedWorks) — called both when a work is first
