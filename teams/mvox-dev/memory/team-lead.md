@@ -2,7 +2,23 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
-### [NEXT SESSION] 2026-09-05 — session MVOX-14 → MVOX-15 (clean break at #229 seam, 13:05 EEST)
+### [LIVE] 2026-09-05 — session MVOX-15 (woke 13:17 EEST)
+
+Wake done: finn/bentham/perotin respawned, mail drained (nothing new; 13:07 courier delivery = Gama's #253-ruling ping, ruling read from issue), tree clean on main @ `33170e4` (args-253 commit).
+
+**Gama's #253 ruling landed (on issue):** build shape approved; amendments: conditioned mock = FIRST-CLASS deliverable with fail-against-prefix proof; body capture SHIPPED not probed; typed SectionReparentPartialError (house precedent); TWO banner states (k/N in error only, not banner); REFUSED retry/backoff + automatic unwind. All baked into args-253.json (committed).
+
+**IN FLIGHT:** #253 pipeline run `wf_82faf9c4-bce`, args `pipeline-args/args-253.json` — if dead on relaunch: branch fix/253-reparent-partial-write, delete if incomplete, relaunch from args.
+
+**research-257-242 DONE** → saved `memory/research/research-257-242.json`. **args-242.json AUTHORED, seam-ready** (uncommitted — commit both at seam). #242 headline: #199 already built the refusal plumbing (EventCreateErrorField 'type' variant + event_create_type_required in 4 locales, dead code); real deltas = empty option + NEW event_create_type_placeholder key (4 locales), flip 3 literals (:3213/:3342/:3379), rewrite stale #199 'never blank' comment (~:7296-7304), flip 3-4 tests in page.event-type-picker.spec.ts deliberately. DRIFT: entityCreate.ts moved to src/lib/entity/ (not server/). #211/#214 interaction REFUTED (motivational only). #257 findings also in file (verify[0]): all claims confirmed; precedent to match = persistent role=status region text-set imperatively (event-create-status/roster-reorder-status); NO setTimeout pattern exists in app — 'clears on next attempt' not timer; profile page has h1 + one h2 (Linked Accounts :880), new heading slots as sibling h2 before :848; no unmount-on-success test exists to break.
+
+**#255 directive DONE:** census table + ghost surfaces posted on issue (comment 5551136048).
+
+**QUEUE (Gama-corrected 13:23): #253 → #242 → #255 → #250 → #251 (serial, same element) → #252**, then R1 remainder 225→224→226→230→231→235→232 (resume from cached run — see snapshot; args `pipeline-args/args-224-232.json` + amendments), then **#257 (explicitly NOT pulled forward)**. #242 launches AT the #253 seam (Gama: three lines, every standalone event Joosep creates meanwhile gets the wrong default; #245 makes mis-types fixable but not free). Gama's #253 emphasis: the conditioned-mock-fails-pre-fix proof must be REPORTED explicitly, not implied by a passing suite — check the RED report for it at the seam and surface it in the completion report.
+
+**#242 note:** deferral LIFTED (Mihkel ruling on issue): empty start, 3 sites (+page.svelte:3213/:3342/:3379 pre-drift), refuse submit without type via existing field-error idiom, series form untouched.
+
+### [PREVIOUS] 2026-09-05 — session MVOX-14 → MVOX-15 (clean break at #229 seam, 13:05 EEST)
 
 mvox-app main @ `f36a3df`. **15 issues closed this session**: #221 `117971c`, #222 `b554151`, #234 `eb5a2d7`, #236 `23a02d9`, #245 `0b57473`, #238 `2e90de1`, #240 `0fc88e6`, #239 `9d6000e`, #241 `64631c3`, #243 `03a46f0`, #248 `4f47f65`, #227 `1fedb0d`, #228 `bce88fe`, #229 `f36a3df` (+ #216-style subsumptions none). Standing: finn/bentham/perotin (terminated at shutdown).
 

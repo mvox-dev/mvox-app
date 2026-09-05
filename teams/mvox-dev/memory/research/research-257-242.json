@@ -1,0 +1,160 @@
+{
+  "summary": "Pre-RED verification for #257 (wire three profile keys) and #242 (event type empty default)",
+  "agentCount": 2,
+  "logs": [],
+  "result": {
+    "summary": "Pre-RED verification for #257 + #242",
+    "verify": [
+      {
+        "claims": [
+          {
+            "claim": "VisibilityRepairBanner.svelte is rendered from profile/+page.svelte:836-845 and has no success state; repairPlans is $derived so a successful repair drops the field out of the list and the banner unmounts silently.",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/profile/+page.svelte lines 836-845 show `{#each repairPlans as plan (plan.field)}<VisibilityRepairBanner .../>{/each}`. Line 202: `const repairPlans = $derived(planLoadedDuplicateRepairs(loadedProfiles));`. VisibilityRepairBanner.svelte (origin/main) has zero success-path markup — only a title, body, a 'Finish now'/'Finishing…' button, and a conditional error `<span>`; no success text/branch anywhere. The repair-confirm handler `onRepairConfirmed(field)` at +page.svelte:472-476 calls `void loadForSelected()`, which reloads `loadedProfiles`, which recomputes `repairPlans` and drops the fixed field — the each-block's keyed entry disappears, unmounting the banner with no announcement."
+          },
+          {
+            "claim": "The per-field visibility picker list at profile/+page.svelte:848-869 has no heading/explanation; profile_intro is the only prose above it.",
+            "verdict": "CONFIRMED",
+            "evidence": "Lines 824-825 render `<p class=\"text-sm text-ink-2\">{m.profile_intro()}</p>` as the sole prose before the (conditional) completion-required banner and repair banners; the field-list `{#each FIELDS as field}` block runs 848-869 with no heading/section wrapper of its own. First heading after the page h1 is the Linked Accounts `<h2>` at line 880, which comes AFTER the field list."
+          },
+          {
+            "claim": "The three keys profile_repair_done / profile_visibility_title / profile_visibility_intro exist, UNREFERENCED in production source, in all four locale files with the copy quoted in the issue.",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/{en,et,lv,uk}.json all contain the three keys with exactly the quoted strings (et: 'Nähtavuse muudatus lõpetatud.' / 'Kes näeb iga välja' / 'Iga väli on nähtav täpselt ühel tasemel. Selle liigutamiseks vali ikoon.' — verbatim match). `git grep` for the three key names across `src/` (excluding paraglide) finds them ONLY inside spec-file `m` mock objects (page.profile.spec.ts, page.profile-linked-accounts.spec.ts) — never called from any .svelte component."
+          },
+          {
+            "claim": "#229's merge (commit f36a3df) kept the three keys intact.",
+            "verdict": "CONFIRMED",
+            "evidence": "`git show f36a3df` commit message: 'profile_repair_done, profile_visibility_title and profile_visibility_intro left intact and reported on the issue for a PO ruling (live surfaces exist).' Diff touches messages/*.json and several spec files but not these three keys."
+          },
+          {
+            "claim": "The cited role=\"status\" idioms (roster-reorder-status, series-create progress line, created-event toast) exist as precedents.",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/roster/+page.svelte:2437 — `<div data-testid=\"roster-reorder-status\" role=\"status\" aria-live=\"polite\" class=\"sr-only\">{reorderStatus}</div>`. src/routes/+page.svelte:6616 — `<p data-testid=\"series-create-progress\" role=\"status\" class=\"text-xs text-ink-2\">`. src/routes/+page.svelte:7290 — `<div data-testid=\"event-create-status\" role=\"status\" aria-live=\"polite\" class=\"sr-only\">{eventCreateStatus}</div>` (this is the 'created-event toast'). All three are sr-only/visible live regions bound to a plain `$state` string, not a component with its own unmount lifecycle — the strongest structural precedent for GREEN to match is `event-create-status`/`roster-reorder-status`: a persistent `role=\"status\"` region whose text is set imperatively, not a conditionally-mounted node."
+          },
+          {
+            "claim": "profile_repair_error's current failure path and its ARIA semantics.",
+            "verdict": "CONFIRMED",
+            "evidence": "VisibilityRepairBanner.svelte:51-54 — the OUTER `<div>` carries `role=\"alert\"` UNCONDITIONALLY (not gated on `failed`). Inside, lines 68-74 render `profile_repair_error` in a plain `<p><span data-testid=\"...-error\">` only `{#if failed}` — the span itself carries no independent ARIA role; it relies entirely on the always-present outer `role=\"alert\"`. This means the alert role is live from first render (when the banner appears for an unfinished move) regardless of failure state, and error text is just conditionally-shown content inside it, not a live-region announcement of a NEW event."
+          },
+          {
+            "claim": "Profile page heading hierarchy — which h-levels exist, to place the new section heading correctly.",
+            "verdict": "CONFIRMED",
+            "evidence": "Only two headings exist on the page: `<h1>` at +page.svelte:755 (page title, `profile_title`) and one `<h2>` at line 880 (`profile_linked_accounts_title`), which is the LAST section on the page (after the field list, gated by a `border-t`). No other h2/h3 exists between the intro and the field list. The new visibility-section heading is a direct sibling of the Linked Accounts h2 in the same h1>h2 hierarchy, so it slots in as `<h2>` immediately above the field-list block (before line 848), matching the one existing sectioning precedent on this page."
+          }
+        ],
+        "risks": [
+          "Blast radius — unmount-on-success assertions: searched every spec referencing VisibilityRepairBanner/repairPlans/repairWorking/repairFailed (page.profile.spec.ts, page.profile-first-save-tier-reactivity.spec.ts). Found two 'banner is absent' assertions (page.profile.spec.ts:689 and tier-reactivity.spec.ts:448) but BOTH are 'banner never mounted for this scenario' (a distinct-value conflict, and a same-value re-save that never created a duplicate) — neither actually drives a repair to completion and then asserts the DOM node is gone afterward. No spec currently exercises click-'Finish now'-then-assert-unmount. [unverified as exhaustive — grep-based, but covers every file referencing the relevant identifiers] This means GREEN has no existing test actively pinning 'unmount is the confirmation', but also no test to update/break on this exact path — the two found tests should keep passing unchanged since they hit an unrelated branch (repairPlans stays empty at conflict/no-duplicate, not populated-then-cleared).",
+          "No standing i18n unreferenced-key checker/lint exists in the repo (`scripts/`, no CI grep-and-decide automation found) — #229's 'R1 key census' was a one-off manual sweep per its commit message, not a script that will flag or re-flag these keys' status automatically. So wiring the keys carries no CI-gate risk from that angle, but also means nothing will re-catch a future regression if the surfaces get removed again. [speculative: absence-of-evidence from a scripts/ + repo-wide filename grep, not a certainty no such tool exists elsewhere e.g. a paraglide build-time check]",
+          "Transient-confirmation precedent: EVERY role=\"status\" confirmation found in this codebase (roster-reorder-status, event-create-status, and by extension season-create-status) clears itself by being overwritten at the START of the next write attempt (e.g. `eventCreateStatus = ''` at the top of `submitEventCreate`, `reorderStatus = ''` at the top of each reorder action) — none use `setTimeout`/auto-dismiss (grep for `setTimeout` in both +page.svelte files returns zero hits). If GREEN implements profile_repair_done with a timer-based auto-clear, it would be the FIRST such pattern in the app and diverges from 'do not invent a second confirmation shape' in the issue's own AC2 wording — the safer read of the precedent is 'persists until superseded by the next repair/reload', not 'times out'.",
+          "lv/uk phone-width risk: profile_visibility_title/intro are the same styling family (`<p class=\"text-sm\">`-like, no `truncate`/`whitespace-nowrap`/`overflow-hidden` found anywhere in profile/+page.svelte) as the existing `profile_intro`, inside a `max-w-md` (28rem) column — uk intro is the longest of the four locales (~84 chars) but nothing in the current CSS would clip it; this is a reasonably strong inference from the absence of any clipping class, not a rendered/visual confirmation (no browser/screenshot check was run). [speculative-light: layout math from source, not a live render]",
+          "Did not inspect the shared working tree for an in-flight branch state — per FIRST ACTION instructions all source claims were verified against `origin/main` via `git show`, not the possibly-mutated working directory, so if a pipeline is mid-flight on a different branch with newer profile-page changes, line numbers there could differ from what's reported here (though they matched the issue's own cited line numbers exactly, which is corroborating evidence origin/main is the right base)."
+        ],
+        "notes": "Repo confirmed as mvox-app.git before any read. All source claims verified via `git show origin/main:<path>` (read-only, no working-tree reliance) per the read-only pipeline-safety instruction. Issue #257 has zero comments — body is the sole source, no supersession to apply. Key files/lines for GREEN to target: src/routes/profile/+page.svelte:836-845 (repair banner loop), :848-869 (field list, insert h2 section immediately above), :880 (existing h2 precedent for heading level), src/lib/components/profile/VisibilityRepairBanner.svelte (no success branch; role=\\\"alert\\\" is unconditional on the outer div), messages/{en,et,lv,uk}.json (keys already correct, no locale work needed). Strongest structural precedent for the transient status announcement is src/routes/+page.svelte:7290 (`event-create-status`) and src/routes/roster/+page.svelte:2437 (`roster-reorder-status`): both are a permanent sr-only `role=\\\"status\\\"` region bound to a `$state` string that's cleared at the top of the next action, not a conditionally-mounted/timer-based node — this is the shape most consistent with the issue's own AC2 ('do not invent a second confirmation shape')."
+      },
+      {
+        "claims": [
+          {
+            "claim": "Repo guard: cwd ~/workspace-app origin remote ends mvox-app.git",
+            "verdict": "CONFIRMED",
+            "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git"
+          },
+          {
+            "claim": "(a) eventCreateType $state('rehearsal') at +page.svelte:3213, reset sites at :3342 and :3379, exactly three sites total",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/+page.svelte | grep -n eventCreateType -> line 3213 `let eventCreateType = $state('rehearsal');`, line 3342 `eventCreateType = 'rehearsal';` (inside the open-form function, right after clearing eventCreateSeriesDefaults), line 3379 `eventCreateType = 'rehearsal';` (inside closeEventCreateForm). Grep of the whole file for 'eventCreateType' returns 6 hits total; only these 3 assign the literal 'rehearsal' — the other 3 (4298, 7319, 7321) read/bind it. Line numbers match the ruling exactly, unchanged despite subsequent merges."
+          },
+          {
+            "claim": "(b) standalone select at +page.svelte:7326 iterates CANONICAL_EVENT_TYPES (all 8); does it already have an empty/placeholder option",
+            "verdict": "DRIFTED",
+            "evidence": "Line number confirmed exact: `{#each CANONICAL_EVENT_TYPES as type (type)}` is at line 7326 on origin/main. But the select has NO empty/placeholder option today, and this is not an oversight — a code comment directly above it (lines ~7296-7304) explicitly documents the #199 review decision: 'no \\'\\' placeholder, no free text' and 'the select is never blank, so it has no placeholder to name itself with (the way the season select does)'. So one must be ADDED, and that comment block is now stale and needs correcting/removing as part of this change. The season select (`event-create-season`, line 7333) shows the idiom to copy: a plain `<option value=\"\">{m.event_create_season_placeholder()}</option>` first in the list, non-disabled — 'non-submittable' is enforced purely by JS validation (`if (!seasonId) {...}`), not HTML disabling. No `event_create_type_placeholder` i18n key exists yet in any locale (checked en/et/lv/uk) — this is a genuinely NEW key needed, following the `event_create_season_placeholder` naming pattern."
+          },
+          {
+            "claim": "(c) event_type required at create, entityCreate.ts:240-248 current shape; what error surfaces today if missing",
+            "verdict": "DRIFTED",
+            "evidence": "File has moved: `src/lib/server/entityCreate.ts` no longer exists; current path is `src/lib/entity/entityCreate.ts`. The eventType field for the standalone CreateEventInput interface sits at ~line 248 (JSDoc block starting ~238) — close to but not exactly matching the cited 240-248 range (off by ~2 lines, likely from intervening edits), semantics unchanged: 'required and non-blank HERE though v4E calls it inheritable'. Enforcement is `const eventType = requireText(fn, 'eventType', input.eventType)` (lines 468 and 500, two call sites — one per create-event vs create-series-occurrence path). `requireText` (line 322) throws a generic `Error(\\`${fn}: ${field} must not be empty\\`)` if missing — a raw server-side throw, not a field-pointing UX message. In practice this path is defensive/unreachable today: the frontend already validates BEFORE calling entityCreate (`+page.svelte` ~4293-4331), and for `type` specifically there is already a live check at line ~4297-4301: `if (!typeValue) { setEventCreateError(m.event_create_type_required, 'type'); return; }`, annotated '#199 — the canonical <select> can never be blank ... so this is a defensive floor rather than a reachable path.' So the field-pointing refusal message (Done-when #3) is ALREADY IMPLEMENTED and dormant, only unreachable because the select can't currently go blank — this substantially shrinks the actual work for #242's item 3."
+          },
+          {
+            "claim": "(d) existing field-error idiom (key naming, aria-describedby, testids) from #239/#243; is a new i18n key needed for the refusal message",
+            "verdict": "CONFIRMED",
+            "evidence": "Idiom: `EventCreateErrorField` union type (+page.svelte:3174) already includes 'type' as a valid value alongside season/datetime/name/end/null. `setEventCreateError(msg, field)` sets `eventCreateError`+`eventCreateErrorField`; `eventCreateDescribedBy(field)` returns the single shared id `'event-create-error'` when that field owns the error; `eventCreateInvalid(field)` returns `true`/undefined for `aria-invalid`. The type select already wires all three: `aria-invalid={eventCreateInvalid('type')}`, `aria-describedby={eventCreateDescribedBy('type')}`, `data-testid=\"event-create-type\"`. The error itself renders once, shared, at `id=\"event-create-error\" data-testid=\"event-create-error\"` (line ~7616). The refusal-message i18n key `event_create_type_required` ALREADY EXISTS in all four locales (en/et/lv/uk, verified via git show on messages/*.json) and is already wired to the dormant validation check — no new key needed for the refusal message. (A different, new key IS needed for the placeholder option's visible text — see (b).)"
+          },
+          {
+            "claim": "(e) series-create form's own type default lives separately and stays untouched",
+            "verdict": "CONFIRMED",
+            "evidence": "Series form uses an entirely separate state variable: `let seriesCreateType = $state('rehearsal')` (+page.svelte:4461), reset at :5013 (close/new-form reset), and populated from an existing series at :5112 (`seriesCreateType = form.type`) when editing. No code path shares state between `eventCreateType` and `seriesCreateType` — grep for `eventCreateType` shows zero references inside the series-create block. Ruling's Done-when #4 (series form untouched) requires no defensive action; isolation is structural."
+          },
+          {
+            "claim": "Blast radius: tests asserting the current 'rehearsal' default or an untouched-submit-succeeds behavior will flip",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/page.event-type-picker.spec.ts has (line numbers on origin/main): line 468 'defaults to rehearsal — the Crede flow needs NO type interaction...' asserting `.value` toBe 'rehearsal' — WILL FLIP to expect ''. Line 475-486 'an untouched picker submits eventType \"rehearsal\"...to createEvent' — WILL FLIP: an untouched submit must now be REFUSED, not succeed. Line 458-466 'renders a <select> with EXACTLY the 8 canonical types' asserts `optionPairs(select) toEqual canonicalPairs()` (8 pairs) — WILL FLIP once a 9th empty option is added, unless `canonicalPairs()`/test is updated to include it. Line 525-540 explicit F4 regression test titled '...and gains NO \"\" option in the process' with comment 'The label is the fix; a blank placeholder option is NOT.' directly asserts the OPPOSITE of the new ruling and must be rewritten/retitled, not just have its expectation flipped. By contrast, other event-create-type test sites (page.agenda-admin.spec.ts:468, page.event-create.spec.ts:565, page.location-datalist.spec.ts:555) all call `selectValue(container, 'event-create-type', <explicit type>)` and are unaffected by the default change."
+          },
+          {
+            "claim": "Blast radius: #211 agenda badge / #214 filter chips interact with an unset type mid-form",
+            "verdict": "REFUTED",
+            "evidence": "grep of +page.svelte for 'eventCreateType' shows only 6 uses total: the $state decl, the two resets, the validation read (line ~4298), and the select's value binding + onchange (7319/7321). No badge-color preview or filter-chip code reads eventCreateType while the form is open, and since submission is refused until a type is chosen (per (c)/(d)), no unset-type event can ever reach `listEvents`/the agenda badge (#211) or filter chips (#214) post-creation. This blast-radius concern named in the ruling is about motivation (why the old default was harmful), not an actual code interaction to guard against in this change."
+          }
+        ],
+        "risks": [
+          "The empty-option addition breaks 3-4 existing tests in page.event-type-picker.spec.ts by design (default-value assertion, untouched-submit-succeeds assertion, exact-8-options assertion, and the explicit 'gains NO empty option' regression test with its own title/comment) — these are RED-phase updates the TDD chain must make deliberately, not incidental breakage to explain away.",
+          "The stale #199-era code comment directly above the select (approx +page.svelte:7296-7304) asserts the now-superseded design rationale ('no placeholder needed because never blank') and should be corrected/removed in the same change, or it will actively mislead the next reader.",
+          "A new i18n key is required for the placeholder option's visible label text (e.g. event_create_type_placeholder) in all four locales — distinct from event_create_type_required, which already exists and needs no change. Missing this in even one locale would leave that locale showing a blank/undefined placeholder string.",
+          "entityCreate.ts's actual location and eventType field line numbers have drifted slightly from the issue's citation (file moved from src/lib/server/ to src/lib/entity/; field JSDoc near but not exactly 240-248) — worth a quick correction note to whoever picks up the ticket so they don't search the wrong path.",
+          "No test currently exercises the actual refusal-message rendering (event_create_type_required / aria-describedby wiring) for the type field, since that code path is presently unreachable (defensive floor) — the RED phase should add a real regression test that submits with the new blank state and asserts the message appears, not just re-derive it from the existing dormant validation."
+        ],
+        "notes": "Repo guard passed (mvox-app.git). All verification done read-only against origin/main via `git show origin/main:<path>` per instructions — working tree never touched, no risk from a concurrently-live pipeline. Issue #242 read via gh issue view --comments; the RULING comment (Mihkel, 2026-09-05, last comment) is the operative spec quoted throughout.\\n\\nHeadline finding for whoever picks this up: the actual remaining work is smaller than Done-when items 1-3 imply, because #199's original build already laid nearly all the plumbing for a blank-then-refuse pattern (the 'type' EventCreateErrorField variant, its aria-invalid/aria-describedby wiring, and the event_create_type_required message in all 4 locales all already exist and are simply unreachable dead code today, explicitly flagged in a comment as 'a defensive floor rather than a reachable path'). The real 3 deltas are: (1) add the '' <option> to the select (needs one NEW i18n key for its label, in all 4 locales, following event_create_season_placeholder's pattern), (2) flip the three 'rehearsal' literals at :3213/:3342/:3379 to '', (3) delete/rewrite the now-false #199-era comment claiming the select is never blank — plus fix the 3-4 tests in page.event-type-picker.spec.ts that currently assert the old behavior (including one whose title/comment directly contradicts the new ruling). Series-create form (seriesCreateType) is a fully separate $state and needs zero changes. The #211/#214 blast-radius concern named in the ruling is motivational, not an implementation risk — verified no code path lets an unset type reach the agenda badge or filter chips."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify:257",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "ae7ab5b0e5fdbacc7",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788603849560,
+      "queuedAt": 1788603847712,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo confirmed as mvox-app.git before any read. All source …",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY — a TDD pipeline may be live on the shared tree; read via git show origin/main:<path> for anything source, never rely on the working tree. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact. AXES SWEEP (mandatory lay…",
+      "lastProgressAt": 1788604130986,
+      "tokens": 69205,
+      "toolCalls": 35,
+      "durationMs": 281424,
+      "resultPreview": "{\"claims\":[{\"claim\":\"VisibilityRepairBanner.svelte is rendered from profile/+page.svelte:836-845 and has no success state; repairPlans is $derived so a successful repair drops the field out of the list and the banner unmounts silently.\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git show origin/main:src/routes/profile/+page.svelte lines 836-845 show `{#each repairPlans as plan (plan.field)}<VisibilityRepai…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:242",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "aef98f226f92e0bf4",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788603849594,
+      "queuedAt": 1788603847712,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (mvox-app.git). All verification done rea…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY — a TDD pipeline may be live on the shared tree; read via git show origin/main:<path> for anything source, never rely on the working tree. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact. AXES SWEEP (mandatory lay…",
+      "lastProgressAt": 1788604082589,
+      "tokens": 62476,
+      "toolCalls": 30,
+      "durationMs": 230826,
+      "resultPreview": "{\"claims\":[{\"claim\":\"Repo guard: cwd ~/workspace-app origin remote ends mvox-app.git\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git\"},{\"claim\":\"(a) eventCreateType $state('rehearsal') at +page.svelte:3213, reset sites at :3342 and :3379, exactly three sites total\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git show origin/main:src/routes/+page.svelt…"
+    }
+  ],
+  "totalTokens": 131681,
+  "totalToolCalls": 65
+}
