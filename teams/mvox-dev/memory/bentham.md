@@ -604,13 +604,29 @@ checks `=== true`; absent means false).
   comes back with the symptom attached."* Use that when tempted to prescribe a tidy-up whose defect
   I have just argued is unobservable. #260 is retitled to the T4.8.1 race, ready, and sequenced
   AHEAD of #258 (rights-adjacent + global beats one-surface wrong-looking data).
-  **When I review #260: the #253 standard is the clause that matters** — the race test must FAIL
-  against pre-fix code with the failure output REPORTED, not implied by a green suite. Note the
-  awkward part and plan for it: a *timing* race resists the tests-only-commit replay trick, so
-  expect the proof to come from a deterministically-ordered test (manually-resolved promises,
-  settle the stale read AFTER the switch) rather than from re-running an old commit — and demand
-  that the test fails for the RIGHT reason, i.e. on the stale `'complete'` reaching the store, not
-  merely on a timeout.
+  **SHIPPED 2026-09-05 — merged `01ed068`, GREEN round 1** (completion comment `5553702580`). Fix was
+  +15/−2 in `refreshCompletionGate`, reusing the page's EXISTING generation counter; stale settles
+  write neither value nor error; store shape and consumers untouched.
+
+- **[METHOD-PROVING-A-TIMING-RACE-PRE-FIX]** (#260, 2026-09-05 — supersedes my own prediction, which
+  was half wrong and worth correcting rather than quietly dropping.) I predicted a timing race would
+  RESIST the #253 tests-only-replay proof and would need a deterministic test *instead*. In fact the
+  two **compose**, and the pair is stronger than either:
+  1. **Make the interleaving deterministic by construction** — mock ONLY the async boundary under
+     test (here `resolveGate`) with test-held deferred promises, then *hold → switch → settle*. The
+     race stops being a race; it is an ordering the test dictates. Everything else stays real: #260's
+     spec rendered the real `/profile` route and initiated the re-read through the real edit-queue →
+     reconcile path, so the test could not pass against a fake path.
+  2. **THEN replay it against pre-fix code** — and the replay trick I thought unavailable does work,
+     at FILE granularity: check out `main`'s `+page.svelte` over the branch and re-run. No worktree,
+     no old-commit checkout, so it is legal under the single-tree protocol.
+  Why the order matters: replay alone on a timing race measures scheduling luck, so a pre-fix failure
+  proves nothing. Once step 1 makes the ordering deterministic, step 2 measures *the fix's absence*
+  and nothing else — which is why #260 could report an IDENTICAL verbatim failure across 3 runs, and
+  why the reviewer's independent 3× replay was decisive rather than corroborative theatre.
+  **Always also demand the failure be for the RIGHT reason** — #260's tripped on
+  `get(completionGateStore)` itself, not on a timeout. A timeout failure is indistinguishable from a
+  broken test and must never be accepted as race proof.
   **Lesson worth more than the correction**: a disposition that stands down on a *product* premise
   needs its premise re-checked at the point of use, exactly like a "shipped as #N" claim. I nearly
   waved off a live #255 finding on the strength of a note I wrote when the premise was true.

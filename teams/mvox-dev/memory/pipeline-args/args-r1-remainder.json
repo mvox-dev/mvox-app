@@ -1,0 +1,91 @@
+{
+  "repoPath": "/home/ai-teams/workspace-app",
+  "coAuthor": "Co-authored-by: Mihkel Putrinš <mihkel.putrinsh@gmail.com>",
+  "_shared": "Every prompt below implies: REPO GUARD cd /home/ai-teams/workspace-app && git remote get-url origin must end mvox-app.git; read the issue (gh issue view N — zero comments, body authoritative) + epic #223 + research digest teams/mvox-dev/memory/research/research-224-232.json; RE-GREP every cited target before editing (epic mandates it; lines drift); PATH: export PATH=\"$HOME/.local/share/pnpm:$PATH\"; gates = pnpm test -- --run ALL green + pnpm check 0 errors; stage explicit paths, never add -A; be terse: verdict, SHA, gate numbers. DRIFT ADDENDUM (2026-09-05 evening — EIGHT merges landed after this epic's research: #253 b0cf6e2, #242 65b8be9, #250 704c967, #255 e099364, #251 ee2e1a2, #252 f4abbb2, #260 01ed068, #258 bdc1dba): roster/+page.svelte heavily changed (#255 deactivate+inactive panel+loadedDb reset, #252 arrange buttons, #253 reparent errors); profile/+page.svelte changed (#255 sign-in notice + membership store, #260 generation-guard in refreshCompletionGate); AgendaList.svelte changed (#250 header classes, #251 headerFmt now $derived(getLocale()) — only groupKeyFmt/shortDateFmt remain en-CA, and NEW spec page.agenda-header-locale.spec.ts + updated AgendaList.spec.ts pin locale behavior); event/[id]/+page.svelte changed (#251 dateFmt reactive, #255 date-gated tally + isPastDetail captures); request.ts has #258's empty-id guard in entuUrl; libraryData.ts has #258's lending-row filter. RE-GREP IS NOT OPTIONAL — every cited line number predates these.",
+  "tasks": [
+    {
+      "issueNumber": 225,
+      "branch": "chore/225-unexport-types-a",
+      "title": "un-export dead-signature types (admin/auth/invite/profile/rsvp/attendance)",
+      "commitPrefix": "chore(#225)",
+      "skipRed": true,
+      "redPrompt": "",
+      "greenPrompt": "Implement #225 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first). Un-export only — implementations stay. Research: all targets confirmed dead externally; NO test breaks (the 'tests would break' worry was REFUTED); inviteData.ts line cites drifted slightly and CreateInviteResult's line is missing from the issue's list — locate all 5 inviteData symbols by NAME. Note #224 (later in this run) touches roleManagement.ts lines 131-132; your targets there are :42/:63/:79 — disjoint, no coordination needed. Zero behavior change.",
+      "reviewChecklist": "1. Export keyword removed on exactly the issue's symbols, located by name not stale line; implementations untouched. 2. Repo-wide grep per symbol: zero external importers remain (and none existed). 3. Gates green — pnpm check especially (TS fallout). Be terse.",
+      "commitBody": "R1 slice: dead-signature type exports un-exported across\nadmin/auth/invite/profile/rsvp/attendance modules; implementations\nunchanged, zero external consumers (re-verified by grep).",
+      "probeGates": false
+    },
+    {
+      "issueNumber": 224,
+      "branch": "chore/224-dead-reexports",
+      "title": "remove dead re-exports and reason-code constants",
+      "commitPrefix": "chore(#224)",
+      "skipRed": true,
+      "redPrompt": "",
+      "greenPrompt": "Implement #224 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first). Research: all 7 findings CONFIRMED, zero external consumers, zero spec impact. Specifics: request.ts:51 — delete ONLY the AuthExpiredError half of the re-export line, isAuthExpiredError has 7 live importers and STAYS; the three EntuCfg re-export lines (entityCreate.ts ~137, eventConvert.ts :59, seasonManage.ts :35) go, the sibling import lines stay where locally used; ROLE_LOCKOUT/ROLE_GRANT_MISSING (roleManagement.ts:131-132), four deleteErrors constants, SECTION_NOT_EMPTY: un-export/delete per issue — in-file uses (class code fields) stay working. seasonManage.ts is post-#222 now — re-grep lines. Zero behavior change.",
+      "reviewChecklist": "1. isAuthExpiredError export intact with all 7 importers green. 2. Three EntuCfg re-export lines gone; all ~83 EntuCfg imports still resolve via entuSeasons. 3. Constants un-exported/deleted per issue with in-file class code fields still functional. 4. Repo-wide grep per symbol: zero external references. 5. Gates green. Be terse.",
+      "commitBody": "R1 slice: dead re-exports removed (EntuCfg x3, AuthExpiredError\nre-export half) and dead reason-code constant exports dropped;\nisAuthExpiredError and all in-file uses preserved (re-verified).",
+      "probeGates": false
+    },
+    {
+      "issueNumber": 226,
+      "branch": "chore/226-unexport-types-b",
+      "title": "un-export dead-signature types (event/season/entity domain)",
+      "commitPrefix": "chore(#226)",
+      "skipRed": true,
+      "redPrompt": "",
+      "greenPrompt": "Implement #226 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first). Un-export only. CORRECTIONS from research: CreateWorkInput is at entityCreate.ts:523 (issue's :201 is stale — line 201 is now CreateEventInput, which is NOT a target); seasonManage.ts targets (:496-519 CascadeProgressKind/CascadeOnProgress/CascadeOptions/SeasonScope) — note seasonManage.delete.spec.ts locally redeclares CascadeOptions/SeasonScope (:67/:70) AND ProgressKind/OnProgress (:63-64): eng call per the issue = either plain un-export (spec keeps its local redecls) or switch the spec to import the originals — state your choice in the report. This file is post-#222 and post-#224 in this run — re-grep everything. Zero behavior change.",
+      "reviewChecklist": "1. Symbols located by name; CreateEventInput NOT touched. 2. CascadeOptions/SeasonScope choice stated and consistent; spec green either way. 3. Repo-wide grep per symbol: zero external importers. 4. Gates green. Be terse.",
+      "commitBody": "R1 slice: dead-signature type exports un-exported in the\nevent/season/entity domain (CreateWorkInput located at its current\nline; CreateEventInput untouched). Spec-local redeclarations\nhandled per the choice stated in the review trail.",
+      "probeGates": false
+    },
+    {
+      "issueNumber": 230,
+      "branch": "refactor/230-tallinn-conversion",
+      "title": "extract shared Tallinn DST-aware conversion into timeFormat.ts",
+      "commitPrefix": "refactor(#230)",
+      "skipRed": false,
+      "redPrompt": "RED for #230 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first): failing tests for the shared Tallinn DST-aware conversion helpers to be extracted into src/lib/preferences/timeFormat.ts. Research corrections: both host files (+page.svelte, event/[id]/+page.svelte) ALREADY import timeFormat.ts; +page.svelte drifted from the #222 merge — re-grep the duplicated functions (eventCreateTallinnOffsetMinutes ~:2787, tallinnLocalToUtcIso ~:2814; event/[id] tallinnOffsetMinutes :1393, tallinnLocalToUtcIso :1452). SCOPE CALL: AgendaList.svelte's TZ usage is structurally DIFFERENT (calendar-day grouping formatters, guarded by a PRESERVED-VERBATIM comment citing T5 DST edge cases) — do NOT fold it in; the slice covers the two-pass offset/local→UTC-ISO helpers only, state this in the report. Tests: DST boundary cases (spring-forward/fall-back, offset 120 vs 180), exact round-trip shapes, toEqual. Note timeFormat.no-hardcoded-render.spec.ts fingerprint-excludes the offset converters — keep that exclusion coherent after the move. New tests must FAIL (helpers absent). POST-DRIFT NOTE: +page.svelte and event/[id]/+page.svelte both moved again (#242/#255/#251) — locate the duplicated helpers strictly by NAME; event/[id] now also has #255's isPastDetail capture sites nearby, OFF-LIMITS.",
+      "greenPrompt": "GREEN for #230 (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first): move the duplicated Tallinn offset/conversion helpers into timeFormat.ts, point both host files at the shared ones, delete the copies. Behavior-preserving: existing suites define the contract; RED tests define the helper shapes. AgendaList untouched. State in the report that AgendaList was deliberately excluded.",
+      "reviewChecklist": "1. One shared implementation in timeFormat.ts; both hosts consume it; zero remaining duplicate bodies (grep). 2. AgendaList PRESERVED-VERBATIM block untouched. 3. DST edge tests present and full-shape; no-hardcoded-render spec still coherent. 4. Behavior-preserving: no output change on existing suites. 5. Gates green. Be terse.",
+      "commitBody": "R1 slice: the two-pass Tallinn DST-aware conversion helpers\n(offset-minutes + local→UTC ISO) now live once in timeFormat.ts;\nboth event-create surfaces consume the shared copy. AgendaList's\ncalendar-day grouping formatters are deliberately out of scope\n(structurally different, T5 DST guards).",
+      "probeGates": false
+    },
+    {
+      "issueNumber": 231,
+      "branch": "refactor/231-iso-date-formatter",
+      "title": "extract shared ISO-date (en-CA) formatter into timeFormat.ts",
+      "commitPrefix": "refactor(#231)",
+      "skipRed": false,
+      "redPrompt": "RED for #231 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first): failing tests for a shared en-CA ISO-date formatter factory in timeFormat.ts. Research corrections: 8 sites, not 7 (AgendaList.svelte:186/206, +page.svelte ~:2388/~:2844 — post-#222/#230 drift, re-grep —, InviteSurface.svelte:108, invite/[token]/+page.svelte:35, library/+page.svelte:55). CRITICAL: two sites (InviteSurface:108, invite/[token]:35) construct WITHOUT timeZone (process-local TZ) — the factory MUST accept an optional/undefined timeZone so replacing them is behavior-preserving; a required-TZ factory silently changes their output. Do NOT absorb event/[id]/+page.svelte:1421 (en-CA but adds hour/minute/hourCycle + formatToParts — near-miss, out of scope, note it). Tests: factory with and without TZ, exact formats, toEqual. POST-DRIFT NOTE (#251 landed): AgendaList's headerFmt is now $derived(getLocale()) and NOT an en-CA site — the en-CA sites there are groupKeyFmt/shortDateFmt only, and #251's specs PIN their en-CA byte-identity plus ISO grouping keys under every locale; the factory swap must keep those pins green untouched. The 8-site count predates #251 — re-grep decides the real count; state it.",
+      "greenPrompt": "GREEN for #231 (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first): add the factory to timeFormat.ts (optional timeZone), replace all 8 duplicate constructions, delete the local copies. event/[id]:1421 near-miss untouched. Behavior-preserving; this runs after #230 — same target file, keep it coherent.",
+      "reviewChecklist": "1. One factory; 8 sites converted (grep: zero remaining bare en-CA date-only DateTimeFormat constructions outside timeFormat.ts); event/[id] near-miss untouched. 2. Optional-TZ semantics preserved for the two no-TZ sites (behavior identical — this is the trap). 3. Full-shape tests incl. no-TZ path. 4. Gates green. Be terse.",
+      "commitBody": "R1 slice: the en-CA ISO-date formatter is now a single factory in\ntimeFormat.ts (timeZone optional — two call sites legitimately run\nprocess-local and keep doing so); eight duplicate constructions\nreplaced. The event-detail en-CA+time formatter is a different\nanimal and stays.",
+      "probeGates": false
+    },
+    {
+      "issueNumber": 235,
+      "branch": "fix/235-invite-surface-alignment",
+      "title": "InviteSurface alignment on /admin — stop double-centering when embedded",
+      "commitPrefix": "fix(#235)",
+      "skipRed": false,
+      "redPrompt": "RED for #235 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first); research: teams/mvox-dev/memory/research/research-235.json. VERIFIED: root div InviteSurface.svelte:285 'mx-auto flex w-full max-w-md flex-col gap-4'; exactly TWO mounts — standalone admin/invite/+page.svelte:16 (<InviteSurface /> in a full-bleed main, no props; the component's own classes are the sole centering there) and /admin embed at admin/+page.svelte:783-788 (heading=\"h2\", inside max-w-2xl column whose sibling sections are plain 'flex flex-col gap-3'); NO existing spec pins these classes. Mechanism (matches the existing heading prop pattern): a variant/embedded prop gating mx-auto+max-w-md off in embedded mode, default = today's exact standalone classes. Tests (new): embedded mount root has NO mx-auto/max-w-md (aligns full column width like sibling sections); standalone mount root class list EXACTLY today's string (pixel-identity pin); both mounts pass their existing suites untouched. Full-string class assertions. Verify new tests FAIL.",
+      "greenPrompt": "GREEN for #235 (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first): add the prop (default preserving standalone classes byte-identical), pass it at the /admin embed only. Two files max (+ the component). State the mechanism in the report per done-when 3.",
+      "reviewChecklist": "1. Standalone /admin/invite pixel-identical (default path byte-identical class string, no props added there). 2. Embedded mount aligns flush with admin-roles sections (no mx-auto/max-w-md in embedded mode); class-contract specs full-string. 3. Mechanism stated; only InviteSurface.svelte + admin/+page.svelte (+specs) touched. 4. Note for #232 (next task): this touched InviteSurface — its Status-union regions untouched. 5. Gates green. Be terse.",
+      "commitBody": "InviteSurface no longer re-centers itself when embedded: a layout\nprop (same pattern as the existing heading prop) gates the\nmx-auto/max-w-md root classes off in the /admin embed, so the\ninvite section aligns flush with the Administrators/Librarians\nsections; the standalone /admin/invite route keeps the default\nclasses byte-identical. New class-contract specs pin both modes\n(nothing pinned them before).",
+      "probeGates": false
+    },
+    {
+      "issueNumber": 232,
+      "branch": "refactor/232-route-load-machine",
+      "title": "extract shared route-load state machine (Status/generation/loadForSelected)",
+      "commitPrefix": "refactor(#232)",
+      "skipRed": false,
+      "redPrompt": "RED for #232 per its body (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first) — LAST slice of the epic. Research corrections that shape the design: PRIMARY targets are profile/roster/library +page.svelte (identical 5-state Status union + generation guard + loadForSelected); InviteSurface.svelte's union is a SUPERSET (4 extra states) — the shared type/helper must accommodate extension or InviteSurface keeps a local extension; event/[id]/+page.svelte duplicates the FULL pattern with an extra 'not-available' state (issue under-describes it — include only if the design absorbs it cleanly, else note); +layout.svelte guards use POSITIVE-form (g === X), root +page.svelte composes TWO counters (requestId + worksLoadId) — both are OPTIONAL follow-through, exclude unless trivially clean and SAY SO. Tests: the shared machine's transitions (loading/no-collective/load-error/session-expired/ready), stale-generation drop, collective-switch reset — full-shape, real stores. This is the epic's riskiest slice; keep scope tight to the three primary routes + a defensible InviteSurface call. POST-DRIFT NOTE (CRITICAL, #260+#255 landed): profile/+page.svelte's generation counter now ALSO guards refreshCompletionGate (#260's race fix — its deterministic spec page.profile-completion-gate-race.spec.ts pins hold→switch→settle semantics and MUST stay green untouched); roster/+page.svelte's loadForSelected now carries #255's loadedDb-scoped panel resets. The extracted machine must preserve both behaviors — either expose the counter for co-guards like #260's, or absorb them explicitly; a machine that breaks the #260 spec or the #255 reset semantics = RED. State how each is handled.",
+      "greenPrompt": "GREEN for #232 (shared rules: _shared field of teams/mvox-dev/memory/pipeline-args/args-224-232.json — read it first): extract the shared machine (suggested src/lib/loading/ or per RED's chosen home), convert the three primary routes, handle InviteSurface per RED's design, note every deliberate exclusion (event/[id], +layout, root +page.svelte composed guard) in the report. Behavior-preserving: all existing route specs stay green untouched.",
+      "reviewChecklist": "1. Three primary routes on the shared machine; behavior identical (their full spec suites green UNTOUCHED). 2. InviteSurface superset handled without state loss; extension mechanism sound. 3. Exclusions explicit and defensible; no half-converted guard left ambiguous. 4. Stale-generation + collective-switch semantics pinned by new tests, full-shape. 5. No rights/data changes. 6. #260's completion-gate race spec and #255's panel-reset/deactivate specs green UNTOUCHED (the machine preserved or cleanly absorbed their guard semantics — stated). 7. Gates green. Be terse.",
+      "commitBody": "R1 slice (last): the triplicated route-load state machine\n(Status union, generation guard, loadForSelected) extracted into a\nshared module; profile, roster and library routes converted with\nbehavior pinned by their untouched existing suites. InviteSurface\nconsumes the shared core with its superset states preserved.\nDeliberate exclusions (event-detail variant, layout positive-form\nguards, root page composed counter) noted in the review trail.",
+      "probeGates": false
+    }
+  ]
+}
