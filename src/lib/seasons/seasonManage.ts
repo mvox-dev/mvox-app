@@ -491,13 +491,13 @@ export async function deleteEvent(
  *  ruled denominator counts. A child (attendance / program_item) delete is
  *  real work the cascade still does, but it is outside the promised scope and
  *  never produces one of these. */
-export type CascadeProgressKind = 'series' | 'event' | 'repertoire';
+type CascadeProgressKind = 'series' | 'event' | 'repertoire';
 
 /** `current`/`total` are 1-based over the WHOLE cascade's ruled denominator —
  *  `deleteEventSeries` alone (occurrences + itself) or `deleteSeason`'s wider
  *  one (every series' occurrences + itself, every standalone event, every
  *  repertoire item). */
-export type CascadeOnProgress = (
+type CascadeOnProgress = (
 	current: number,
 	total: number,
 	kind: CascadeProgressKind
@@ -506,7 +506,7 @@ export type CascadeOnProgress = (
 /** Trailing, optional options object — added AFTER the existing `fetchImpl`
  *  seam on `deleteEventSeries` so every pre-#216 positional caller (three
  *  positional args) keeps working unchanged. */
-export interface CascadeOptions {
+interface CascadeOptions {
 	onProgress?: CascadeOnProgress;
 }
 
@@ -514,7 +514,7 @@ export interface CascadeOptions {
  *  season's cascade destroys, summing to the progress counter's denominator.
  *  `events` is EVERY event the season holds — series occurrences AND
  *  standalone — because the cascade deletes all of them. */
-export interface SeasonScope {
+interface SeasonScope {
 	series: number;
 	events: number;
 	repertoireItems: number;

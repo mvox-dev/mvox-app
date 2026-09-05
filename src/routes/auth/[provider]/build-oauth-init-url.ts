@@ -2,7 +2,7 @@ import { ENTU_API_BASE } from '$lib/entu-config';
 import { getUser } from '$lib/auth/storage';
 import { encodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 
-export interface OAuthInitArgs {
+interface OAuthInitArgs {
 	provider: string;
 	origin: string;
 	returnTo: string;

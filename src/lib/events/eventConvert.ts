@@ -64,7 +64,7 @@ import { type EntuCfg } from '$lib/seasons/entuSeasons';
  *  duck-typing the step off the rejection fell back to naming 'read-event' — a
  *  step that had not run — for what was really a blank form field. Every
  *  rejection this module produces now names a step that genuinely failed. */
-export type EventConvertStep =
+type EventConvertStep =
 	| 'validate'
 	| 'read-event'
 	| 'create-series'
@@ -78,7 +78,7 @@ export type EventConvertStep =
  * different from a transient HTTP failure at the same step, and the operator
  * has to be told which: a retry fixes one and never fixes the other.
  */
-export type EventConvertReason = 'missing-name' | 'missing-event-type';
+type EventConvertReason = 'missing-name' | 'missing-event-type';
 
 /**
  * A conversion step failed. `step` names WHICH one (and appears verbatim in the
@@ -128,7 +128,7 @@ export interface ConvertEventToSeriesInput {
 	// standalone-name validation because it never creates an event at all.
 }
 
-export interface ConvertEventToSeriesResult {
+interface ConvertEventToSeriesResult {
 	/** The freshly created `event_series` entity id. */
 	seriesId: string;
 	/**

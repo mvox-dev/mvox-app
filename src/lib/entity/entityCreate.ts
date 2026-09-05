@@ -134,7 +134,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
-export interface CreateSeasonInput {
+interface CreateSeasonInput {
 	/** Season name (v4E required, non-blank). */
 	name: string;
 	/**
@@ -518,7 +518,7 @@ export async function createEvent(
 	return postCreate(cfg, 'event', parentIds, props, fetchImpl);
 }
 
-export interface CreateWorkInput {
+interface CreateWorkInput {
 	/** Work title (v4E required, non-blank). */
 	name: string;
 	/**
