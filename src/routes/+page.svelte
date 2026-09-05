@@ -259,6 +259,35 @@
 		}
 	});
 
+	// #248 — location suggestions for the two agenda-page create forms
+	// (series + event). ONE shared derivation, no new fetch: the corpus is
+	// whatever the page already holds in memory (recentItems + agendaItems).
+	// Deduped, blanks dropped. Ordering: most-recently-used first — recentItems
+	// is already reverse-chronological (recentEvents in conductorLogic.ts) and
+	// agendaItems is chronological-ascending (soonest upcoming), so walking
+	// recent-then-upcoming and keeping first-seen surfaces the venue actually
+	// used most recently at the top, which is the most useful default for a
+	// "suggest previously used venues" affordance. The SET is what #248 pins;
+	// this ordering is the free choice the issue leaves to engineering.
+	const LOCATION_SUGGESTIONS_ID = 'agenda-location-suggestions';
+	const locationSuggestions = $derived.by(() => {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const it of recentItems) {
+			if (it.location && !seen.has(it.location)) {
+				seen.add(it.location);
+				out.push(it.location);
+			}
+		}
+		for (const it of agendaItems) {
+			if (it.location && !seen.has(it.location)) {
+				seen.add(it.location);
+				out.push(it.location);
+			}
+		}
+		return out;
+	});
+
 	// #90 TR.2 — the works view model per event id (upcoming AND recent rows),
 	// resolved once the agenda itself has loaded (it needs the event ids and the
 	// current season). Same supplementary-data posture as rsvpByEventId: a
@@ -5536,6 +5565,13 @@
 	{#if collectives.status === 'ready' && selected}
 		<DeskSurface>
 			<div class="mx-auto flex min-h-screen w-full max-w-md flex-col gap-2 px-4 py-6">
+				<!-- #248 -- shared suggestion source for series-create-location and
+				     event-create-location (native <datalist>, no custom dropdown). -->
+				<datalist id={LOCATION_SUGGESTIONS_ID}>
+					{#each locationSuggestions as loc (loc)}
+						<option value={loc}></option>
+					{/each}
+				</datalist>
 				<header class="flex items-center justify-between pb-2">
 					<p class="font-display text-xl text-ink" data-testid="selected-collective">{selected.name}</p>
 					<nav class="flex items-center gap-3 text-xs text-ink-3">
@@ -6332,6 +6368,7 @@
 													<input
 														type="text"
 														data-testid="series-create-location"
+														list={LOCATION_SUGGESTIONS_ID}
 														placeholder={m.series_create_location_placeholder()}
 														disabled={seriesCreateLocked}
 														value={seriesCreateLocation}
@@ -7477,6 +7514,7 @@
 								<input
 									type="text"
 									data-testid="event-create-location"
+									list={LOCATION_SUGGESTIONS_ID}
 									aria-label={m.event_create_location_label()}
 									placeholder={m.event_create_location_placeholder()}
 									value={eventCreateLocation}

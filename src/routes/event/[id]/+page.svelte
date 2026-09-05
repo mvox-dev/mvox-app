@@ -18,7 +18,12 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
+	import {
+		loadEventDetail,
+		listEventLocations,
+		EventDetailLoadError,
+		type EventDetail
+	} from '$lib/events/eventDetail';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -1264,6 +1269,32 @@
 
 	let editingField = $state<EditableEventField | null>(null);
 	let editDraft = $state('');
+
+	// #248 — location suggestions on this detail route, PO ruling (option c):
+	// this page holds no multi-event location corpus in memory (unlike the
+	// agenda page's agendaItems/recentItems), so the corpus is fetched, but
+	// LAZILY — only on the first focus of event-edit-input-location, never on
+	// page load. `locationCorpusRequested` is the single-flight guard: it is
+	// plain page state (NOT reset when the edit closes/reopens), so a second
+	// focus after cancel-then-reopen does not re-fetch. Failure degrades
+	// silently — `locationSuggestions` simply stays empty; suggestions are
+	// never load-bearing for the edit/save path.
+	const LOCATION_SUGGESTIONS_ID = 'event-edit-location-suggestions';
+	let locationSuggestions = $state<string[]>([]);
+	let locationCorpusRequested = false;
+	function ensureLocationCorpusLoaded(): void {
+		if (locationCorpusRequested) return;
+		locationCorpusRequested = true;
+		if (!selected) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		listEventLocations(cfg)
+			.then((locs) => {
+				locationSuggestions = locs;
+			})
+			.catch((e) => {
+				console.error('event detail: loading location suggestions failed', e);
+			});
+	}
 	// #207 rule 5 — start_datetime's own composite draft: the native date input
 	// and the TimeSelect hour/minute keep their own pieces here, combined into
 	// the SAME `editDraft` 'YYYY-MM-DDTHH:MM' string (or '' while either part is
@@ -2138,12 +2169,19 @@
 						data-testid="event-edit-input-location"
 						aria-label={m.event_edit_location_aria_label()}
 						class="border-b border-ink bg-transparent text-ink-2"
+						list={LOCATION_SUGGESTIONS_ID}
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
+						onfocus={ensureLocationCorpusLoaded}
 						onblur={() => confirmFieldEdit('location', false)}
 						onkeydown={(e) => handleFieldKeydown(e, 'location', false)}
 					/>
+					<datalist id={LOCATION_SUGGESTIONS_ID}>
+						{#each locationSuggestions as loc (loc)}
+							<option value={loc}></option>
+						{/each}
+					</datalist>
 				{:else if detail.location || isEditor}
 					{#if isEditor}
 						<!-- #157 — whole-field tap target, see the `name` field above. -->

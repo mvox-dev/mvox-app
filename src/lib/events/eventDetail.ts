@@ -281,6 +281,49 @@ async function fetchSeason(
 	return body.entity;
 }
 
+/**
+ * #248 — the detail route's location-suggestion corpus. This route holds no
+ * multi-event location list in memory (unlike the agenda page's
+ * agendaItems/recentItems — see page.location-datalist.spec.ts's header), so
+ * per the PO ruling (option c) the corpus is fetched, but the CALLER decides
+ * when: this function itself fires unconditionally on every call — the
+ * lazy-on-first-focus / single-flight discipline lives in the page (a request
+ * a caller never makes is the only kind that never happens on page load).
+ *
+ * Collective-scoped (db-scoped — "collective = database", databaseEntity.ts —
+ * a single-collective db has no narrower org to filter by), existing entu list
+ * shape (Path C: entuFetch only), smallest projection (`location` alone).
+ * De-duplicated and blank-dropped HERE (not left to the caller) since a
+ * suggestion corpus is the only thing this read is for. Ordering is whatever
+ * the wire returns — not pinned, matching the spec's SORTED-comparison-only
+ * assertions.
+ */
+export async function listEventLocations(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<string[]> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=event&props=location&limit=1000`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listEventLocations failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: Array<{ location?: Array<{ string: string }> }> };
+	const entities = body.entities ?? [];
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const e of entities) {
+		const loc = e.location?.[0]?.string ?? '';
+		if (loc && !seen.has(loc)) {
+			seen.add(loc);
+			out.push(loc);
+		}
+	}
+	return out;
+}
+
 async function fetchSeries(
 	cfg: EntuCfg,
 	seriesId: string,
