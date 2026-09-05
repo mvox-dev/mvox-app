@@ -128,8 +128,8 @@ export async function fetchRights(
 	return { ownOwners, ownEditors, allOwners: owner };
 }
 
-export const ROLE_LOCKOUT = 'role-lockout' as const;
-export const ROLE_GRANT_MISSING = 'role-grant-missing' as const;
+const ROLE_LOCKOUT = 'role-lockout' as const;
+const ROLE_GRANT_MISSING = 'role-grant-missing' as const;
 
 /** Refusal to remove the LAST `_owner` of the organization (lockout prevention). */
 export class RoleLockoutError extends Error {

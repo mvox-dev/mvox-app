@@ -56,8 +56,6 @@ import { entuFetch } from '$lib/entu/request';
 import { createEventSeries } from '$lib/entity/entityCreate';
 import { type EntuCfg } from '$lib/seasons/entuSeasons';
 
-export type { EntuCfg };
-
 /** The conversion steps, in choreography order — the vocabulary every
  *  EventConvertError names its failure with.
  *

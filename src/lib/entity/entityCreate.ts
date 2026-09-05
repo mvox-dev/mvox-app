@@ -134,8 +134,6 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
-export type { EntuCfg };
-
 export interface CreateSeasonInput {
 	/** Season name (v4E required, non-blank). */
 	name: string;

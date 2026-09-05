@@ -32,8 +32,6 @@ import {
 } from './deleteErrors';
 import type { EntuCfg } from './entuSeasons';
 
-export type { EntuCfg } from './entuSeasons';
-
 export interface SeriesListItem {
 	id: string;
 	name: string;

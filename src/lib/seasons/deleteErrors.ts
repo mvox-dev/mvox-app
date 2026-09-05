@@ -9,7 +9,7 @@
 // no mock-shaped coupling.
 
 /** Discriminator carried on a 403-refused delete. */
-export const DELETE_FORBIDDEN = 'entity-delete-forbidden';
+const DELETE_FORBIDDEN = 'entity-delete-forbidden';
 
 /**
  * Thrown when Entu refuses a `DELETE /entity/{id}` with 403. Verified in the
@@ -34,7 +34,7 @@ export class EntityDeleteForbiddenError extends Error {
 }
 
 /** Discriminator carried on a series cascade that stopped part-way. */
-export const SERIES_CASCADE_PARTIAL = 'series-cascade-partial';
+const SERIES_CASCADE_PARTIAL = 'series-cascade-partial';
 
 /**
  * Thrown by `deleteEventSeries` when one of the series' OCCURRENCE deletes
@@ -64,7 +64,7 @@ export class SeriesCascadePartialError extends Error {
 }
 
 /** Discriminator carried on an event cascade that stopped part-way. */
-export const EVENT_CASCADE_PARTIAL = 'event-cascade-partial';
+const EVENT_CASCADE_PARTIAL = 'event-cascade-partial';
 
 /**
  * Thrown by `deleteEvent` when one of the event's CHILD deletes (attendance /
@@ -129,7 +129,7 @@ export function isEventCascadePartial(reason: unknown): boolean {
 }
 
 /** Discriminator carried on a season cascade that stopped part-way (#217). */
-export const SEASON_CASCADE_PARTIAL = 'season-cascade-partial';
+const SEASON_CASCADE_PARTIAL = 'season-cascade-partial';
 
 /**
  * Thrown by `deleteSeason` when one of the season's children (a series, a

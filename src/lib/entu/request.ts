@@ -48,7 +48,7 @@ import { AuthExpiredError } from './auth-expired';
 // to RECOGNISE an expired session don't inherit this module's `$lib/entu-config`
 // -> `$env/dynamic/public` chain. Re-exported so every existing
 // `from '$lib/entu/request'` call site is unaffected.
-export { AuthExpiredError, isAuthExpiredError } from './auth-expired';
+export { isAuthExpiredError } from './auth-expired';
 
 // Module-scope single-flight guard: a fanned-out load (agenda et al.) can hit
 // 401 on every concurrent request. Only the FIRST one ends the session and

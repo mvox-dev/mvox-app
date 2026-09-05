@@ -70,7 +70,7 @@ export function isSectionMembershipMissing(reason: unknown): boolean {
 // "that section is not empty" instead of the generic write-failed message.
 
 /** Discriminator carried on the fail-loud "section still has children" rejection. */
-export const SECTION_NOT_EMPTY = 'section-not-empty';
+const SECTION_NOT_EMPTY = 'section-not-empty';
 
 /**
  * Thrown by `deleteSection` when the server still reports members and/or
