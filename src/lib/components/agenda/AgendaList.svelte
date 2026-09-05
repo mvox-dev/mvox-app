@@ -455,13 +455,32 @@
 			<section data-testid="agenda-day-group" class="flex flex-col">
 				<div
 					data-testid="agenda-date-header"
-					class="flex items-baseline gap-2 pt-4 pb-1 text-[10px] tracking-wide text-ink-2 uppercase"
+					class="flex items-baseline gap-2 pt-6 pb-2 text-base font-semibold tracking-wide text-ink uppercase"
 					class:bg-highlight={group.relative === 'today'}
 				>
+					<!-- #250 done-when 4 — TÄNA/HOMME must stay tellable apart from the date
+					     beside them. MECHANISM: an outlined pill (`rounded-full border
+					     border-ink px-2`), deliberately NOT a size or weight step.
+					     Why chrome and not type: before this issue the differentiator was
+					     `font-semibold text-ink` on the span against a lighter, non-semibold
+					     date. The header line itself is now semibold full ink, so those two
+					     tokens on the span became inherited no-ops — they differentiate
+					     nothing. A size step (text-lg) is the other obvious reach and is
+					     wrong here: the DATE is the section title this issue is making
+					     bigger, and the relative marker only qualifies WHICH section it is,
+					     so out-sizing the date re-inverts the very hierarchy #250 came to
+					     fix. An enclosed pill differentiates by SHAPE instead of by rank: it
+					     survives at the line's own size, weight and ink, and reads as the
+					     app's established marker idiom (the rounded-full small-caps chips on
+					     type badges and repertoire) rather than as a louder heading.
+					     Outline and not fill: on today's header this pill sits inside the
+					     bg-highlight band, where a bg-ink-5 fill would have carried only
+					     ~1.4:1 against that yellow; an ink border reads at any backdrop the
+					     header takes. -->
 					{#if group.relative === 'today'}
-						<span data-testid="agenda-relative-today" class="font-semibold text-ink">{m.agenda_today()}</span>
+						<span data-testid="agenda-relative-today" class="rounded-full border border-ink px-2">{m.agenda_today()}</span>
 					{:else if group.relative === 'tomorrow'}
-						<span data-testid="agenda-relative-tomorrow" class="font-semibold text-ink">{m.agenda_tomorrow()}</span>
+						<span data-testid="agenda-relative-tomorrow" class="rounded-full border border-ink px-2">{m.agenda_tomorrow()}</span>
 					{/if}
 					<span>{group.header}</span>
 				</div>
