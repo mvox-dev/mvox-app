@@ -100,6 +100,19 @@ function handleAuthExpired401(): never {
 export function entuUrl(db: string, pathAndQuery: string): string {
 	if (!db) throw new Error('entuUrl: db (collective) is required — no default db exists');
 	const path = pathAndQuery.replace(/^\/+/, '');
+	// #258 — a path whose `entity` segment ends with NO id ('entity/' terminal,
+	// or 'entity/?query') is never legitimate: entu-api resolves it to the
+	// entity LIST route, which answers 200 with a plausible-looking
+	// `{ entities: [...] }` body — an empty id silently becomes a wrong answer
+	// instead of an error. This exact shape shipped twice: #255's B2 fail-open
+	// rights read, and the library's blank copy names/chains from lending rows
+	// with '' copy/member refs. Refuse it HERE, at the single composition
+	// point, before any caller can even obtain the URL, let alone send it. Do
+	// NOT "simplify" this away — the intentional list query ('entity?...',
+	// no trailing slash) is a distinct, legitimate shape and must keep working.
+	if (/^entity\/(\?|$)/.test(path)) {
+		throw new Error(`entuUrl: empty entity id composed into path '${pathAndQuery}' (#258)`);
+	}
 	return `${ENTU_API_BASE}${db}/${path}`;
 }
 

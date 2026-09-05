@@ -206,14 +206,39 @@ export async function listLendings(cfg: EntuCfg, fetchImpl: typeof fetch = fetch
 			returned_at?: Array<{ date: string }>;
 		}>;
 	};
-	return (body.entities ?? []).map((raw) => ({
-		id: raw._id,
-		copyId: raw.copy?.[0]?.reference ?? '',
-		memberId: raw.member?.[0]?.reference ?? '',
-		assignedAt: raw.assigned_at?.[0]?.date ?? '',
-		assignedUntil: raw.assigned_until?.[0]?.date ?? '',
-		returnedAt: raw.returned_at?.[0]?.date ?? ''
-	}));
+	// #258 — a lending row is created ONLY by createLending (lendingActions.ts),
+	// which always POSTs copy + member together in one entity create. There is
+	// no in-app path that produces a lending with just one of the two refs, so
+	// a row missing either is corrupt data, not a legitimate intermediate
+	// state — same read as the concurrent-active-lending anomaly already
+	// handled below (deriveCopyAvailability): warn and keep serving the rest
+	// of the page rather than letting one dirty row take the whole library
+	// read down for everyone (Promise.all in +page.svelte would otherwise turn
+	// one bad row into a hard load-error for every collective member). Coercing
+	// the missing ref to '' — the old behaviour — is what let '' silently
+	// compose an `entity/` (LIST route) request downstream; dropping the row
+	// here means resolveCopyName/resolveBorrowerName/resolveCopyChains never
+	// see an empty id from a real lending row at all.
+	return (body.entities ?? []).flatMap((raw) => {
+		const copyId = raw.copy?.[0]?.reference;
+		const memberId = raw.member?.[0]?.reference;
+		if (!copyId || !memberId) {
+			console.warn(
+				`listLendings: dropping malformed lending row ${raw._id} — missing ${!copyId ? 'copy' : 'member'} reference (#258)`
+			);
+			return [];
+		}
+		return [
+			{
+				id: raw._id,
+				copyId,
+				memberId,
+				assignedAt: raw.assigned_at?.[0]?.date ?? '',
+				assignedUntil: raw.assigned_until?.[0]?.date ?? '',
+				returnedAt: raw.returned_at?.[0]?.date ?? ''
+			}
+		];
+	});
 }
 
 export type CopyAvailability =
