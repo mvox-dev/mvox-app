@@ -2,6 +2,34 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #265 provisioning definitions settled — DRY-RUN CLEAN both dbs, 7/7, live authorization next (2026-09-06)
+
+Team-lead's ruling interpretation (reported to PO): "same as the collective's other properties"
+means the EMPIRICAL sibling pattern (`domain`, established by my own check), not the type-level cap
+my omission mechanism accidentally read (`public`). Explicit `domain` IS the ruling correctly
+implemented; the earlier omission was an implementation error against it, not an alternative
+reading. Applied: `roster_show_real_names.property.sharing = 'domain'` explicit, dropped the
+inherit-via-omission mechanism entirely for this property, removed the now-dead
+`resolveTypeSharing` helper from both seed scripts (its only call site). Committed `a70a2d1`.
+Re-ran both dry-runs: **7/7 steps, 0 failures, on both polyphony and mvox_crede**, toggle now shows
+`(expected sharing, explicit: domain)`. Superseded the pre-fix ledgers per artifact-hygiene
+discipline (`edf3ae7`) rather than leaving both versions committed side by side.
+
+**Two gotchas now on record for future mixed-sharing work** (both folded into
+`PropertySpec.sharing`'s own docblock + `roster_show_real_names`'s docblock, so future-me doesn't
+re-derive either):
+1. Omitting `_sharing` on a prop-def does NOT default to private — it inherits the PARENT TYPE's
+   own tier. (admin_member_record's own fields — the original #265 probe finding.)
+2. "Inherit the type's tier" and "match the sibling properties' actual posture" are DIFFERENT
+   questions that can look interchangeable — the type-level cap can be a platform-generic constant
+   unrelated to what the actual sibling prop-defs carry. When the intent is "same as the others,"
+   establish it EMPIRICALLY (read the siblings) and assert it explicitly; never assume omission
+   answers that question. (The R2 toggle — this session's finding.)
+
+**Status**: definition + both provisioning scripts settled, dry-run clean on both dbs. Live
+authorization is team-lead's separately, per the standing two-step gate — not run yet, not asked
+for yet in this thread.
+
 ## [CHECKPOINT] #265 correction applied+committed (`948acba`), dry-run clean for admin_member_record — but the R2 toggle's sharing-inherit design has a bug, flagged not fixed (2026-09-06)
 
 Correction (organization→database parent, per team-lead routing + Mihkel comment 5561836364)
