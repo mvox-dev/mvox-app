@@ -157,10 +157,12 @@ async function main(): Promise<void> {
 	);
 	console.log(`  database.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, inherited: ${databaseSharing})`);
 	if (togglePropId) {
+		// null only happens on DRY_RUN + not-yet-existing, and ensurePropDef has
+		// already pushed the correct dry-run ledger entry itself in that case —
+		// no separate push needed here (a prior version of this script double-
+		// logged this exact step; fixed after the polyphony dry-run surfaced it).
 		await assertPropDefSharing(cfg, togglePropId, `database.${roster_show_real_names.property.name}`, databaseSharing as 'private' | 'domain' | 'public', ledger);
 		console.log(`    read-back-asserted: ${databaseSharing} ✓`);
-	} else {
-		ledger.push({ action: 'ensure-propdef', target: `database.${roster_show_real_names.property.name}`, outcome: 'dry-run', after: { type: roster_show_real_names.property.type, sharing: databaseSharing, mandatory: false } });
 	}
 
 	const failures = ledger.filter((e) => e.outcome === 'failed');
