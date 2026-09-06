@@ -46,6 +46,11 @@
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import { loadWorksByEventId, collectSources, buildWorkRows } from '$lib/repertoire/workRows';
+	// #262 — the agenda's compact schedule-times line: the SAME bulk-read
+	// producer the event-detail page uses, mirroring `loadWorksByEventId`'s own
+	// seam (one GET per visible event id, upcoming AND recent — no per-row
+	// refetch storm, no family left out per Gama's ruling 5558026158).
+	import { listScheduleItemsByEventId, type ScheduleItem } from '$lib/schedule/scheduleData';
 	import { signFileUrl } from '$lib/repertoire/fileUrls';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import type {
@@ -308,6 +313,10 @@
 	// current season). Same supplementary-data posture as rsvpByEventId: a
 	// failure here leaves every row work-free rather than breaking the agenda.
 	let worksByEventId = $state<Record<string, WorkRow[]>>({});
+	// #262 — the schedule_item bulk read per event id (upcoming AND recent),
+	// mirroring `worksByEventId`'s own seam exactly. Supplementary data: a
+	// failure leaves every row schedule-free rather than breaking the agenda.
+	let scheduleByEventId = $state<Record<string, ScheduleItem[]>>({});
 	// A PDF whose click-time signing rejected — surfaced inline rather than
 	// leaving the member staring at a tab that never navigated.
 	let pdfError = $state(false);
@@ -598,6 +607,12 @@
 	 * completion order.
 	 */
 	let worksLoadId = 0;
+	// #262 — the SAME per-read ticket idiom, for the schedule bulk read. Its
+	// own counter (not reusing `worksLoadId`): a schedule read and a works
+	// read issued in the same agenda load are independent races, and
+	// conflating their tickets would let one's staleness rule wrongly gate
+	// the other.
+	let scheduleLoadId = 0;
 	/**
 	 * `keepSeasonManage` (#132/T4 review F2): this reload is a SAME-COLLECTIVE
 	 * refresh after a write made from inside the season-manage panel, not a
@@ -624,6 +639,7 @@
 			// #214 — no collective, no agenda, no filter to be stale.
 			agendaTypeFilter = 'all';
 			worksByEventId = {};
+			scheduleByEventId = {};
 			pdfError = false;
 			resetManagement();
 			resetConductor();
@@ -674,6 +690,7 @@
 		membership = 'loading';
 		failedEventIds = new Set();
 		worksByEventId = {};
+		scheduleByEventId = {};
 		pdfError = false;
 		resetManagement();
 		if (!keepSeasonManage) {
@@ -811,6 +828,7 @@
 						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
 					);
 					loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
+					loadScheduleItems(worksCfg, eventIds, thisRequest);
 					// ── the DATABASE-entity rights fallback (#167 review F2/F3) ────
 					//
 					// Rights props live in the private bucket (#91): a viewer with no
@@ -891,6 +909,7 @@
 				recentItems = [];
 				conductorEventIds = new Set();
 				worksByEventId = {};
+				scheduleByEventId = {};
 				resetManagement();
 				resetConductor();
 				// #196 review F2 — NO `dropConvertRun`: this is the SAME collective and
@@ -1210,6 +1229,29 @@
 			.catch(() => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = {};
+			});
+	}
+
+	/**
+	 * #262 — the schedule_item bulk read for the agenda's compact times line
+	 * (Gama's amendment + row-family ruling 5558026158): ONE
+	 * `listScheduleItemsByEventId` pass over every VISIBLE event id — upcoming
+	 * AND recent, exactly like `loadWorksAndManagement`'s own `eventIds` — under
+	 * its own load-id ticket composed with the shared `requestId` (the same
+	 * `worksLoadId` idiom, its own counter so this read's staleness rule never
+	 * gates the unrelated works read racing it). Supplementary: a rejection
+	 * leaves every row schedule-free rather than failing the agenda.
+	 */
+	function loadScheduleItems(cfg: ManageCfg, eventIds: string[], thisRequest: number) {
+		const thisScheduleLoad = ++scheduleLoadId;
+		listScheduleItemsByEventId(cfg, eventIds, fetch)
+			.then((byEvent) => {
+				if (thisRequest !== requestId || thisScheduleLoad !== scheduleLoadId) return;
+				scheduleByEventId = byEvent;
+			})
+			.catch(() => {
+				if (thisRequest !== requestId || thisScheduleLoad !== scheduleLoadId) return;
+				scheduleByEventId = {};
 			});
 	}
 
@@ -7758,6 +7800,7 @@
 								{myAttendanceByEventId}
 								{worksByEventId}
 								{worksManage}
+								scheduleItemsByEventId={scheduleByEventId}
 								{attendancePanel}
 								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 								recentEmptyState={agendaTypeFilter !== 'all' && recentItems.length > 0

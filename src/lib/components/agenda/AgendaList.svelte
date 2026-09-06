@@ -39,6 +39,12 @@
 	// own type now — #85 TA.4's four states, 'not-recorded' among them.
 	import AttendanceBadge, { type BadgeStatus } from '$lib/components/attendance/AttendanceBadge.svelte';
 	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
+	// #262 — the schedule_item type + its sort rule. Imported from the
+	// dependency-free scheduleSort.ts (NOT scheduleData.ts, which pulls in
+	// entuFetch's `$env/dynamic/public` chain — dead weight for a pure
+	// component with no fetch of its own, and fatal in this component's
+	// import-time-only test harness — see scheduleSort.ts's header).
+	import { compareScheduleItems, type ScheduleItem } from '$lib/schedule/scheduleSort';
 
 	interface Props {
 		items: AgendaItem[];
@@ -131,6 +137,17 @@
 		// empty recentItems means no Recent section at all — so an early-season
 		// agenda with no past events still renders nothing here.
 		recentEmptyState?: Snippet;
+		// #262 (Mihkel 2026-09-06 11:12 + Gama's row-family ruling 5558026158) —
+		// the agenda's compact schedule-times line, per event id, mirroring
+		// `worksByEventId`'s seam exactly: the page resolves the schedule_item
+		// read (scheduleData.listScheduleItemsByEventId) and hands it in keyed
+		// by event id. An id absent from the map (or mapped to an EMPTY array)
+		// renders NO line at all — most events have none, and the fence stays
+		// byte-unchanged for them. Deliberately a SEPARATE prop, not a field
+		// added to `AgendaItem`: folding schedule rows into the shared item type
+		// would put the #247 month view one naive edit away from rendering them
+		// too, which Mihkel's own grooming ruling keeps four-elements-per-row.
+		scheduleItemsByEventId?: Record<string, ScheduleItem[]>;
 	}
 	const {
 		items,
@@ -150,8 +167,25 @@
 		onpdfclick,
 		worksManage,
 		emptyState,
-		recentEmptyState
+		recentEmptyState,
+		scheduleItemsByEventId = {}
 	}: Props = $props();
+
+	/** The compact times line's full text — computed as ONE string (never a
+	 *  nested per-pair span: AgendaList.spec.ts's row-span containment checks
+	 *  run over EVERY span in a row, and a bare clock-only span would be one
+	 *  fixture away from tripping them). Sorted datetime asc, name tie-break
+	 *  (#246: no ordinal) via the ONE shared comparator; time via the ONE
+	 *  legal formatTime(tallinnHHMM(...), $timeFormatStore) combo. '' when the
+	 *  event has no schedule items — the caller renders nothing at all then. */
+	function scheduleLineText(eventId: string): string {
+		const rows = scheduleItemsByEventId[eventId];
+		if (!rows || rows.length === 0) return '';
+		return [...rows]
+			.sort(compareScheduleItems)
+			.map((row) => `${formatTime(tallinnHHMM(new Date(row.datetime)), $timeFormatStore)} ${row.name}`)
+			.join(' · ');
+	}
 
 	/**
 	 * Which management surface an event row shows, from the PROVENANCE of its
@@ -317,6 +351,19 @@
 	{/if}
 {/snippet}
 
+<!-- #262 — the compact schedule-times line, shared by BOTH row families (PO
+     ruling 5558026158: upcoming AND Recent both carry it, the Recent line
+     inheriting that family's dimmer tone via the row-duration `text-[10px]
+     text-ink-2` treatment — no special styling of its own). Absent entirely
+     when the event has no schedule items. -->
+{#snippet scheduleLine(item: AgendaItem)}
+	{#if scheduleItemsByEventId[item.id]?.length}
+		<span data-testid="agenda-schedule-line-{item.id}" class="text-[10px] text-ink-2"
+			>{scheduleLineText(item.id)}</span
+		>
+	{/if}
+{/snippet}
+
 {#if recentItems.length > 0 || recentEmptyState}
 	<!-- #83 — 'Recent': ALL past events of the current season, reverse-chron (order
 	     as given, no re-sort here). Sits ABOVE the upcoming list (Byrd's brief).
@@ -383,6 +430,7 @@
 						<span class="truncate text-xs text-ink-2">{item.location}</span>
 					{/if}
 					{@render worksElement(item)}
+					{@render scheduleLine(item)}
 					<!-- Past event → the singer's own RsvpControl is read-only (always the
 					     'pending'/disabled reason — there is nothing left to answer, and no
 					     write is in flight either; reusing 'pending' keeps this a silent
@@ -528,6 +576,7 @@
 								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
 							{/if}
 							{@render worksElement(item)}
+							{@render scheduleLine(item)}
 							<RsvpControl
 								status={rsvpByEventId[item.id]?.status ?? null}
 								nonMember={membership === 'non-member'}

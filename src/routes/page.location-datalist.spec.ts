@@ -150,6 +150,15 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
 }));
+// #262 — the agenda's new schedule_item bulk read, stubbed like every other
+// data seam this route touches (workRows/library/repertoireData above): the
+// #248 "ZERO new fetch" pin is about the LOCATION-SUGGESTION derivation
+// staying in-memory, not a ban on every other feature this route legitimately
+// reads — mirrors `loadWorksByEventId`'s own treatment exactly.
+vi.mock('$lib/schedule/scheduleData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/schedule/scheduleData')>()),
+	listScheduleItemsByEventId: vi.fn().mockResolvedValue({})
+}));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: vi.fn().mockResolvedValue([]),
