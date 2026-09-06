@@ -5,7 +5,7 @@ mvox-app main @ `3b29cee` (final; between it and 59f71a0: Pérotin's 0a6e946+1d0
 ## PENDING (next session)
 
 1. **#247 correction round** — merged `3b29cee` (upcoming-only per Gama's ruling); Mihkel's live review is the issue's own acceptance gate; reviewer's visually-uncertain flags are in the pipeline journal + review record.
-2. **#262** schedule-item app UI — NOT ready; needs product shape (surface/edit affordances) → Victoria/Gama then Mihkel's nod. #246 left open for PO lifecycle (schema half done, both dbs seeded).
+2. **#262** schedule-item app UI — NOT ready; **product shape IS on the issue (Gama comment 05:30) and SUPERSEDES the starting shape in my #246 cut comment**: parent-event EDITORS edit (NOT conductor/admin — conductor is a person chip, not a rights role; roles→rights question stays parked), display event-detail-only in v1, agenda untouched. Promotes on ONE Mihkel nod (the agenda-surface question). Read the issue, not the cut comment. #246 open for PO lifecycle (schema half done, both dbs seeded).
 3. **#261** season-card header rework — NOT ready; promotes on Mihkel's nod.
 
 ## COMPLETED this session
