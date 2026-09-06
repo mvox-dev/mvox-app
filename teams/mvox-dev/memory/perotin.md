@@ -2,6 +2,25 @@
 
 (*MVOX:Perotin*)
 
+## [CHECKPOINT] #265 provisioning scripts written+committed (`452dfd8`) — DRY-RUN HALTED on premise mismatch (2026-09-06)
+
+Wrote `seed-265-admin-member-record-type-{polyphony,crede}-2026-09-06.ts`, composing `ensure-
+schema-type.ts` primitives incl. the new `assertPropDefSharing` read-back-then-assert on every
+prop-def. Committed with the `PO-Approved` trailer, `pnpm check` clean. **Dry-run on polyphony
+threw before touching anything**: `resolveTypeIdByName(..., 'organization')` — polyphony has NO
+`organization` type-def live (confirmed via the full type catalog, not a query miss — 25 types
+listed, no organization). Checked mvox_crede too before reporting: **also has no `organization`
+type-def** (23 types listed) — this is a shared premise mismatch, not db-specific drift. `member`'s
+own type-def description ("membership record within one organization") is now aspirational/stale —
+`member`'s ACTUAL live `_parent` on both dbs points straight at the DATABASE ENTITY instance, not
+an organization type instance (matches my earlier #265 proposal research, but I hadn't checked
+whether `organization` the TYPE-DEF itself still exists, only that live instances were 0). Ruled
+shape names 'organization' as the parent explicitly (Mihkel-approved) — not mine to silently swap
+for 'database' without a ruling, since that changes the approved shape's parent entity, not just an
+implementation detail. Halted, no write attempted beyond the failed resolve, reported to team-lead
+with the exact evidence. Scripts themselves are a faithful implementation of what was ruled — the
+mismatch is a live-schema-state fact, not a bug in the provisioning code.
+
 ## [DONE] #265 admin_member_record definition committed — `cb43a29` (2026-09-06)
 
 Shape review APPROVED (Mihkel, comment 5561754737) with 4 corrections + a standing ruling: **branch
