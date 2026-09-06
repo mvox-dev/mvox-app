@@ -804,10 +804,28 @@
 			// refreshes it for the mirror-image reason; the two lifecycle paths have
 			// to agree. Its own try/catch: a stale panel is not a failed deactivate
 			// and must not raise the deactivate's alert over a write that landed.
+			//
+			// #259 (filed from #255 r4 review) — this reload's cfg was captured
+			// well before this await, and the await can outlive a mid-flight
+			// collective switch: the #255 switch-reset above closes and empties
+			// the panel, then this stale settle would silently repopulate
+			// `inactiveRows` with the OLD collective's members, so the next open
+			// on the NEW collective renders foreign rows with live Reinstate
+			// buttons. Guarded via the route-load machine's external co-guard
+			// seam (`generation`/`isCurrent` — same shape as this page's four
+			// structural-write reconciles). Captured HERE, after
+			// `loadForSelected()` above, not at function entry: that call bumps
+			// the generation unconditionally, so an entry-captured guard would
+			// already read stale and silently skip this refresh on every
+			// ORDINARY deactivate with the panel open.
+			const g = routeLoad.generation;
 			if (showInactive) {
 				try {
-					inactiveRows = await loadInactiveRoster(cfg);
+					const rows = await loadInactiveRoster(cfg);
+					if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
+					inactiveRows = rows;
 				} catch (e) {
+					if (!routeLoad.isCurrent(g)) return;
 					console.error('roster: inactive roster reload after deactivate failed', e);
 				}
 			}
@@ -840,10 +858,24 @@
 		if (!opening) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
+		// #259 (filed from #255 r4 review) — this load's await can outlive a
+		// mid-flight collective switch: a stale settle would silently write
+		// `inactiveRows` for a collective that is no longer selected, so the
+		// next open renders the wrong collective's members with live
+		// Reinstate buttons aimed at foreign ids. Guarded via the route-load
+		// machine's external co-guard seam (`generation`/`isCurrent`). This
+		// function never calls `loadForSelected()` itself, so entry-capture
+		// is correct here — contrast `handleDeactivateConfirm`/
+		// `handleReinstate` below, which must capture AFTER their own
+		// `loadForSelected()` call because that call bumps the generation.
+		const g = routeLoad.generation;
 		try {
 			inactiveLoadError = false;
-			inactiveRows = await loadInactiveRoster(cfg);
+			const rows = await loadInactiveRoster(cfg);
+			if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
+			inactiveRows = rows;
 		} catch (e) {
+			if (!routeLoad.isCurrent(g)) return;
 			console.error('roster: inactive roster load failed', e);
 			inactiveLoadError = true;
 			inactiveRows = [];
@@ -869,10 +901,21 @@
 			// Back in the active reads — the page re-reads rather than patching,
 			// same discipline as `handleDeactivateConfirm` above.
 			await loadForSelected();
+			// #259 (filed from #255 r4 review) — same guard as
+			// `handleDeactivateConfirm`'s mirror-image reload above: captured
+			// AFTER `loadForSelected()`, not at function entry, because that
+			// call bumps the route-load machine's generation unconditionally
+			// and an entry-captured guard would already read stale and
+			// silently skip this refresh on every ORDINARY reinstate with the
+			// panel open.
+			const g = routeLoad.generation;
 			if (showInactive) {
 				try {
-					inactiveRows = await loadInactiveRoster(cfg);
+					const rows = await loadInactiveRoster(cfg);
+					if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
+					inactiveRows = rows;
 				} catch (e) {
+					if (!routeLoad.isCurrent(g)) return;
 					console.error('roster: inactive roster reload after reinstate failed', e);
 				}
 			}

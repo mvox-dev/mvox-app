@@ -628,5 +628,259 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 	});
 });
 
+// #259 RED — filed from #255's round-4 review. The three inactive-panel
+// loads (panel open, post-deactivate refresh, post-reinstate refresh) each
+// await `loadInactiveRoster(cfg)` with cfg captured EARLIER and assign
+// `inactiveRows` with no check that the selected collective is still the one
+// the load was started for. The #255 switch-reset (pinned above by 'switching
+// collectives clears the panel' — a POST-settle switch, a different case)
+// closes and empties the panel; then the stale promise settles and silently
+// repopulates `inactiveRows` while the panel is CLOSED, so the next open on
+// the NEW collective renders the OLD collective's members — each with a live
+// Reinstate button aimed at a member id that does not exist here.
+//
+// The race tests are deterministic (house method for timing proofs): the
+// loadInactiveRoster mock is release-controlled (same shape as the 'second
+// tap while the reinstate is in flight' test above), so the ordering is
+// hold → switch → settle-stale → reopen, and the failure trips on the
+// panel-content assertion — never on a timeout.
+//
+// The NON-race test is the trap detector: `loadForSelected()` bumps the
+// route-load machine's generation unconditionally, and both lifecycle
+// handlers call it BEFORE their panel reload — so a guard generation captured
+// at function ENTRY is already stale by the vulnerable await and would
+// silently skip the reload on EVERY ordinary deactivate/reinstate with the
+// panel open (a broken normal path, worse than the race). The
+// ordinary-reinstate refresh below and the existing 'a deactivate with the
+// panel OPEN refreshes the panel too' above fail under exactly that
+// mis-capture; the guard must be captured AFTER each handler's own
+// loadForSelected() call (entry-capture is only correct in toggleInactive,
+// which never self-refreshes).
+describe('(B) #259 — in-flight inactive-panel loads must not outlive a collective switch', () => {
+	type InactiveRow = {
+		memberId: string;
+		personId: string;
+		name: string;
+		email: string;
+		sectionIds: string[];
+		dbEntityId: string;
+	};
+
+	// Collective A's (polyphony's) inactive member — the rows a stale settle
+	// tries to smuggle under collective B's roster.
+	const goneGirl: InactiveRow = {
+		memberId: 'm9',
+		personId: 'pp-9',
+		name: 'Gone Girl',
+		email: 'gone@example.com',
+		sectionIds: [],
+		dbEntityId: 'db-1'
+	};
+
+	function setAuthedWithTwoCollectives() {
+		setToken('jwt-abc');
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
+			],
+			erroredDbs: []
+		});
+		urlCollectiveDbStore.set(null);
+		selectedCollectiveDbStore.set('polyphony');
+	}
+
+	// Every loadInactiveRoster call is HELD until the test releases it — the
+	// deterministic race construction needs the settle order in the test's
+	// hands, call by call.
+	function holdInactiveLoads(): Array<(rows: InactiveRow[]) => void> {
+		const settlers: Array<(rows: InactiveRow[]) => void> = [];
+		loadInactiveRosterMock.mockImplementation(
+			() =>
+				new Promise<InactiveRow[]>((resolve) => {
+					settlers.push(resolve);
+				})
+		);
+		return settlers;
+	}
+
+	async function renderTwoCollectiveRoster() {
+		const utils = render(Page);
+		setAuthedWithTwoCollectives();
+		adminStore.set('admin');
+		await waitFor(() =>
+			expect(utils.container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
+		);
+		return utils;
+	}
+
+	async function switchToOtherChoir(container: HTMLElement) {
+		selectedCollectiveDbStore.set('other-choir');
+		// Wait for the NEW collective's roster to be on screen with the panel
+		// reset (#255 r3 F2: switch closes it) before settling anything stale.
+		await waitFor(() => {
+			const toggle = container.querySelector('[data-testid="roster-inactive-toggle"]');
+			expect(toggle).not.toBeNull();
+			expect(toggle!.getAttribute('aria-expanded')).toBe('false');
+		});
+	}
+
+	const flush = () => new Promise((r) => setTimeout(r, 0));
+
+	it("a PANEL-OPEN load that settles after a switch writes NOTHING — reopening on the new collective never renders the old one's rows", async () => {
+		const settlers = holdInactiveLoads();
+		const { container } = await renderTwoCollectiveRoster();
+
+		// Start collective A's panel load and leave it in flight.
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
+
+		// Switch mid-flight; the #255 reset closes and empties the panel.
+		await switchToOtherChoir(container);
+
+		// The STALE promise settles with A's rows — a guarded site discards it.
+		settlers[0]!([goneGirl]);
+		await flush();
+
+		// Reopen on B with B's OWN load still in flight: the template renders
+		// whatever `inactiveRows` holds right now. Pre-fix the stale settle
+		// repopulated it, so A's member renders here with a live Reinstate
+		// button aimed at an id that does not exist in this collective.
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
+		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
+
+		// B's genuine load lands empty — the panel shows B's own truth.
+		settlers[1]!([]);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
+		);
+		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
+	});
+
+	it('a POST-DEACTIVATE panel reload that settles after a switch writes NOTHING', async () => {
+		const settlers = holdInactiveLoads();
+		const { container } = await renderTwoCollectiveRoster();
+		// Rows live in the collapsed Unassigned group — expand to reach m2.
+		await fireEvent.click(container.querySelector('[data-testid="section-toggle-unassigned"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-row-m2"]')).not.toBeNull()
+		);
+
+		// Panel open and idle on A (its own load settles empty, cleanly).
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
+		settlers[0]!([]);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
+		);
+
+		// Deactivate m2 with the panel open — the write lands, the roster
+		// refetches, and the panel reload (the vulnerable await) goes in flight.
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
+
+		// Switch mid-flight, then settle the stale reload with A's view of her.
+		await switchToOtherChoir(container);
+		settlers[1]!([
+			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
+		]);
+		await flush();
+
+		// Reopen on B: A's freshly-deactivated member must NOT be here.
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(3));
+		expect(container.querySelector('[data-testid="inactive-member-row-m2"]')).toBeNull();
+
+		settlers[2]!([]);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
+		);
+	});
+
+	it('a POST-REINSTATE panel reload that settles after a switch writes NOTHING', async () => {
+		const settlers = holdInactiveLoads();
+		const { container } = await renderTwoCollectiveRoster();
+
+		// Panel open on A, showing her inactive member.
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
+		settlers[0]!([goneGirl]);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-reinstate-m9"]')).not.toBeNull()
+		);
+
+		// Reinstate her — the write lands and the panel reload goes in flight.
+		await fireEvent.click(container.querySelector('[data-testid="member-reinstate-m9"]')!);
+		await waitFor(() => expect(reinstateMemberMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
+
+		// Switch mid-flight, then settle the stale reload with A's rows.
+		await switchToOtherChoir(container);
+		settlers[1]!([goneGirl]);
+		await flush();
+
+		// Reopen on B: A's rows must not have been smuggled in.
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(3));
+		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
+
+		settlers[2]!([]);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
+		);
+	});
+
+	// TRAP DETECTOR — must stay green through the fix. `handleReinstate` calls
+	// `await loadForSelected()` (which bumps the generation) BEFORE its panel
+	// reload, so a guard generation captured at function ENTRY reads stale on
+	// every ORDINARY reinstate and silently skips this refresh: her row would
+	// stay in the open panel after she went active. Together with the existing
+	// 'a deactivate with the panel OPEN refreshes the panel too' (the
+	// deactivate-side mirror, above), this pins the correct capture point:
+	// AFTER each handler's own loadForSelected() call.
+	it('NON-RACE: an ordinary reinstate with the panel open still refreshes it — she leaves the panel', async () => {
+		loadInactiveRosterMock.mockResolvedValue([goneGirl]);
+		const { container } = render(Page);
+		setAuthedWithOneCollective();
+		adminStore.set('admin');
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-reinstate-m9"]')).not.toBeNull()
+		);
+
+		// From the write onward she is back in the ACTIVE reads only.
+		loadInactiveRosterMock.mockResolvedValue([]);
+		await fireEvent.click(container.querySelector('[data-testid="member-reinstate-m9"]')!);
+		await waitFor(() => expect(reinstateMemberMock).toHaveBeenCalledTimes(1));
+
+		// The panel REFRESHES (row gone, empty copy in) and STAYS OPEN — a
+		// mis-captured guard would skip the reload and leave her row standing.
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull()
+		);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
+		);
+		expect(
+			container.querySelector('[data-testid="roster-inactive-toggle"]')?.getAttribute('aria-expanded')
+		).toBe('true');
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Josquin* — fail-LOUD regression block, #255 review F2)
+// (*MVOX:Tallis* — #259 in-flight-guard RED block)
