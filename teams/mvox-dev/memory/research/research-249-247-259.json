@@ -1,0 +1,224 @@
+{
+  "summary": "Pre-RED verification for #249 (field labels), #247 (month overview), #259 (in-flight guard)",
+  "agentCount": 3,
+  "logs": [],
+  "result": {
+    "summary": "Pre-RED verification for #249 + #247 + #259",
+    "verify": [
+      {
+        "claims": [
+          {
+            "claim": "(a) The event-create form (src/routes/+page.svelte) has exactly 10 controls; 3 already have visible labels (type, start-group, end-group) and 7 are aria-only, matching #249's table exactly (Season, Series, Name, Capacity, Location, Description, Conductor)",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/+page.svelte lines 7266-7623 (event-create-form block). Visible: event-create-type (7286-7307, wrapping <label>+<span data-testid=event-create-type-label>), event-create-datetime start group (7389-7427, visible <span id=event-create-start-label> + aria-labelledby), event-create-end group (7434-7469, same pattern). Aria-only (aria-label attr, no wrapping <label>, no visible sibling span): event-create-season (7309-7323), event-create-series (7325-7338), event-create-name (7358-7372), event-create-capacity (7480-7489), event-create-location (7491-7501), event-create-description (7510-7518), event-create-conductor-select (7532-7558). No numeric duration input exists (only event-create-duration-inherited hint, 7470-7478) — confirms #243 replaced it as #249 states."
+          },
+          {
+            "claim": "(b) #239's precedent label idiom: for plain inputs/selects/textareas, wrap in <label class=\"flex w-full flex-col gap-0.5\"> containing a visible <span class=\"text-xs text-ink-2\">{label}</span> sibling before the control, and drop the control's aria-label entirely (single-name rule); for role=\"group\" composites (date+time pairs), use a visible sibling <span id=...> associated via aria-labelledby on the group wrapper, never an aria-label on the wrapper; groups of fields use <fieldset>+<legend>",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/+page.svelte series-create-form block lines 6253-6486: name (6257-6274), description (6299-6314), duration (6321-6339), location (6340-6355), repeat (6363-6380), day (6384-6412), from (6453-6468), until (6469-6484) all use bare <label><span class=\"text-xs text-ink-2\">…</span><input/select…/></label> with NO aria-label on the control. series-create-time group (6428-6450) uses visible <span id=series-create-time-label> + role=group + aria-labelledby, no aria-label on wrapper. Fieldsets at 6253, 6317, 6358, 6488 with <legend class=\"mb-0.5 text-xs tracking-wide text-ink-2 uppercase\">. The event-create form's already-shipped start/end groups (post-#243) already follow the group half of this idiom exactly."
+          },
+          {
+            "claim": "(c)(i) The ensureLocationCorpusLoaded latch-position tidy (locationCorpusRequested=true set before the if(!selected) return guard) exists in src/routes/event/[id]/+page.svelte, a different route from #249's scope (src/routes/+page.svelte); #249 does not plausibly touch this code",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/event/[id]/+page.svelte lines 1326-1339: `let locationCorpusRequested = false; function ensureLocationCorpusLoaded(): void { if (locationCorpusRequested) return; locationCorpusRequested = true; if (!selected) return; ... }` — latch is set BEFORE the !selected guard, confirming the described one-line ordering issue exists as stated. But this is the event-DETAIL page's #248-scoped location-suggestion lazy-load (comment at line 1315-1323 explicitly attributes it to #248, 'PO ruling (option c)'). #249's issue body (fetched via gh) discusses only src/routes/+page.svelte (the agenda page's inline event-create form) and never mentions location-corpus loading, latches, or the event/[id] route. No overlap in files, functions, or issue text — #249 does not touch this code."
+          },
+          {
+            "claim": "(c)(ii) event-create-type currently carries BOTH a visible label wrapper (span testid event-create-type-label inside a wrapping <label>) AND a same-key aria-label on the <select> — the #205 F1 double-naming shape is still present post-#242; removing it means deleting the aria-label attribute (line 7292), since the wrapping label already supplies the accessible name",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/+page.svelte lines 7286-7306: <label>...<span data-testid=\"event-create-type-label\">{m.event_create_type_label()}</span><select data-testid=\"event-create-type\" aria-label={m.event_create_type_label()} .../></label> — both naming mechanisms target the same key. Contrast with the shipped #239 fix on series-create-type (lines 6278-6297) and on the event-create start/end groups (7389-7469), both of which have NO aria-label alongside the visible label/span. Removing line 7292's aria-label attribute does not break any current test — page.event-type-picker.spec.ts:635-648 only asserts the visible <label>/span and the select's placement inside it, never asserts aria-label presence or absence for event-create-type."
+          },
+          {
+            "claim": "(d) Exactly one existing spec assertion pins current aria-only structure and will flip: page.event-create.spec.ts:766 asserts conductorSelect.getAttribute('aria-label') === 'event_create_conductor_label'. No other spec pins aria-label values for season/series/name/capacity/location/description in the event-create form.",
+            "verdict": "CONFIRMED",
+            "evidence": "Searched all 102 route spec files (extracted from origin/main) for aria-label assertions touching event-create-season/series/name/capacity/location/description/conductor testids; only page.event-create.spec.ts:766 matched (`expect(conductors.getAttribute('aria-label')).toBe('event_create_conductor_label')`). The group-related aria-label-null pins at lines 1295, 1885, 1906 already cover the shipped start/end groups, not the seven fields in scope. No a11y/axe spec (page.attendance-a11y, page.library.a11y, page.repertoire-a11y, page.sections-a11y — none targets the agenda/event-create page) and no e2e/Playwright suite exists in the repo to add further exposure."
+          },
+          {
+            "claim": "(e) No new i18n keys are needed for the seven labels — event_create_season_label, event_create_series_label, event_create_name_label, event_create_capacity_label, event_create_location_label, event_create_description_label, event_create_conductor_label all already exist with translated values in en/et/lv/uk",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:messages/{en,et,lv,uk}.json — all seven keys present with non-empty translated strings in all four locales (e.g. et: 'Mahutavus', lv: 'Vietu skaits', uk: 'Місткість' for capacity). These are currently consumed only via aria-label/placeholder; #249 requires rendering the same keys visibly, not adding copy. New keys would only be needed if a fieldset-grouping with new legends is separately proposed and approved (issue explicitly defers grouping as optional, done-when #5)."
+          }
+        ],
+        "risks": [
+          "page.event-create.spec.ts:766 must be updated (aria-label removed/changed) when the conductor select gains a visible label and drops its aria-label per rule 3 — this is the one RED-to-expect test flip for this issue.",
+          "lv label lengths were not measured pixel-for-pixel on a real phone viewport; longest candidate is lv 'Notikuma nosaukums' (~19 chars) for name and uk/lv equivalents for other fields — visually these are short single-word/short-phrase labels similar in length to what #239 already shipped without incident, but issue done-when #6 still calls for an explicit phone-width check.",
+          "The #205 F1 double-naming redundancy on event-create-type (aria-label at line 7292) is in scope per Gama's scope note but is easy to miss since no failing test currently forces its removal — a RED test asserting aria-label is null there (mirroring the start/end group tests) would need to be authored, not just fixed against an existing failure.",
+          "This was a read-only investigation per the FIRST ACTION guard; no working-tree edits were made, and the one place a working-tree grep was used (finding other callers of the testids) was cross-checked against content already pulled from origin/main and produced an identical file set, so it should not reflect any uncommitted drift — but it was not re-verified via git show for every line."
+        ],
+        "notes": "Repo guard passed (origin=mvox-app.git). All source claims verified via `git show origin/main:<path>` against a fresh `git fetch origin main` (HEAD a8d5ba2, 'chore: seam state — R1 epic #223 closed, args-257 seam-ready'). #249 is OPEN/ready; its body already states the sequencing gate (#243, #248) cleared 2026-09-06 and the field inventory was refreshed against the post-#243/#248 form — my independent enumeration matches that inventory exactly. #239 is CLOSED/shipped (squash-merged 9d6000e), used here purely as the precedent pattern. No standalone event-create route exists — the form lives inline in src/routes/+page.svelte (the agenda page), gated by {#if eventCreateOpen}. Files consulted: /home/ai-teams/workspace-app (src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/routes/page.event-create.spec.ts, src/routes/page.event-type-picker.spec.ts, messages/{en,et,lv,uk}.json), all via git show origin/main."
+      },
+      {
+        "claims": [
+          {
+            "claim": "(a) Issue #247 body facts vs origin/main today: 'no single-letter weekday keys exist, series_create_day_0…6 hold full names' in en/et/lv/uk",
+            "verdict": "CONFIRMED",
+            "evidence": "messages/{en,et,lv,uk}.json all define series_create_day_0..6 as full weekday names ('Sunday'/'Pühapäev'/'Svētdiena'/'Неділя' etc.), no short/narrow variant exists anywhere (grep for weekday_short/short_weekday/day_letter/weekday_narrow across messages+src is empty)."
+          },
+          {
+            "claim": "(a) The month-grouping idiom 'already exists' via seriesCreateMonthGroups in +page.svelte, groups YYYY-MM",
+            "verdict": "DRIFTED",
+            "evidence": "The function exists and does exactly what's described (git show origin/main:src/routes/+page.svelte, `const seriesCreateMonthGroups = $derived.by(...)` at line 4943, groups by date.slice(0,7) 'YYYY-MM', run-length grouping in ascending order) — but the issue's citations are stale: it cites ':4801-4814' (actual: 4943-4955) and template use '+page.svelte:6340-6347' (actual `{#each seriesCreateMonthGroups as group}` is at line 6517, block starting ~6492). Also minor naming slip: issue calls it 'seasonCreateMonthGroups', the real identifier is 'seriesCreateMonthGroups'. This matches exactly what the dispatch brief warned about (main moved a lot today) — a pre-#241 snapshot (teams/mvox-dev/memory/research/research-pilot-238-243.json) shows the same code was at line ~4801 before other work shifted it down ~140 lines. The reuse claim itself is sound; only the pinpoint line numbers are wrong."
+          },
+          {
+            "claim": "(b) AgendaList.svelte facts: single `items` prop, groups by day, one agenda-day-group section per day with a rich row (time/duration/type/location/works/RSVP/attendance)",
+            "verdict": "DRIFTED",
+            "evidence": "Shape and content fully confirmed live: `items: AgendaItem[]` prop, `const groups = $derived.by(...)` groups by Tallinn-day key via groupKeyFmt/headerFmt (#251), `decoratedGroups` layers TODAY/TOMORROW + gap markers, `<section data-testid=\"agenda-day-group\">` renders one per day with the full row (RsvpControl, RepertoireElement/works, AttendanceSurface, etc.). BUT every cited line number is off by roughly the same +8 offset: prop at :44 not :34-35, groups at :236 not :228, decoratedGroups at :281 not :273, agenda-day-group section at :463 not :455. Consistent, minor drift — same file/shape, just line-shifted by recent unrelated edits."
+          },
+          {
+            "claim": "(b) AgendaList also receives a separate `recentItems` prop, and the parent (+page.svelte) passes it `filteredAgendaItems`/`filteredRecentItems` (post-#214-filter) rather than the raw arrays",
+            "verdict": "CONFIRMED",
+            "evidence": "src/routes/+page.svelte call site (~line 7687): `<AgendaList items={filteredAgendaItems} ... recentItems={filteredRecentItems} ...>`. Load-bearing for Done-when #6/#7: because the #214 filter already happens upstream in +page.svelte before either items or recentItems reaches AgendaList, a month-overview mode consuming the SAME items/recentItems prop(s) gets filter-chip compliance for free — no new filter-wiring needed."
+          },
+          {
+            "claim": "(c) Intl weekday:narrow collision table for en/et/lv/uk (Sun→Sat) as given in the issue",
+            "verdict": "CONFIRMED",
+            "evidence": "Ran Node `Intl.DateTimeFormat(locale,{weekday:'narrow',timeZone:'UTC'})` over Sun 2026-01-04 through Sat 2026-01-10 (date verified as Sunday via toUTCString): en -> S M T W T F S (collides Sun/Sat, Tue/Thu); et -> P E T K N R L (no collision); lv -> S P O T C P S (collides Sv/Se, Pr/Pk); uk -> Н П В С Ч П С (collides Пн/Пт, Ср/Сб). Matches the issue's table exactly, letter-for-letter."
+          },
+          {
+            "claim": "(d) Event-type display reuses eventTypeLabel + eventTypeBadgeClass (#211 hues) which the compact row would consume for its 'type' cell",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/events/eventTypeStyles.ts exports EVENT_TYPE_BADGE_CLASS (rehearsal/concert/festival/retreat/workshop/meeting each a distinct mvox hue token, social/other/unknown fall to DEFAULT_CLASS) and eventTypeBadgeClass(type) guarded against prototype-pollution keys; already the shared source for the agenda row badge, the event-detail badge, and the #214 filter chips (agendaTypeChipClass in +page.svelte calls eventTypeBadgeClass directly). A compact month row can call the same function/label pair with no new color logic."
+          },
+          {
+            "claim": "(e) Existing specs pin the current day-grouped agenda structure tightly enough that a new view/mode must be additive, not a rewrite of the existing render path",
+            "verdict": "CONFIRMED",
+            "evidence": "AgendaList.spec.ts alone has ~9 describe blocks / 40+ its covering date-group headers, TODAY/TOMORROW labels, multi-week gap markers, empty/loading states, RSVP-per-row, pending/failed indicators, works line, and event-detail links — plus AgendaList.day-header-typography.spec.ts and AgendaList.event-type.spec.ts, plus routes-level page.agenda-filter.spec.ts/page.agenda-event-types.spec.ts/page.agenda-header-locale.spec.ts. Large, still-green pinned surface; the safe path is a new sibling component/mode consuming the same items/recentItems (or filteredAgendaItems) rather than touching `groups`/`decoratedGroups`/the day-group template."
+          },
+          {
+            "claim": "(f) Navigation/toggle shape is unclear from the issue and left to engineering",
+            "verdict": "REFUTED",
+            "evidence": "The issue's own 'Ruled 2026-09-06 (Mihkel, live in PO session)' section settles this explicitly, not leaving it to engineering: item 9 — a small view toggle sitting with the #214 filter chips (not a new route, not a permanent extra section), default stays the day list, choice persists per-device via the #207 idiom; item 10 — a two-state segmented control reading 'Nimekiri' | 'Kuu' (new locale keys en/lv/uk); item 11 — each month row reads short-weekday-key + day-of-month only (e.g. 'N 15'), no full date, as a deliberate #251-ISO-convention exception. Only sub-widget CSS/DOM detail is left open ('widget-level detail beyond that is engineering's')."
+          },
+          {
+            "claim": "(f, supporting) The #207 per-device persisted-preference idiom (cited for the toggle) is a real, reusable pattern",
+            "verdict": "CONFIRMED",
+            "evidence": "src/lib/preferences/timeFormat.ts: TIME_FORMAT_KEY localStorage key, sanitize() never trusts raw storage, readStoredTimeFormat() is SSR-safe (typeof localStorage undefined guard), timeFormatStore is a Svelte writable seeded from it, setTimeFormat() updates store + persists synchronously. Directly transplantable for a view-mode preference."
+          },
+          {
+            "claim": "(g) Rough size: this is a single-slice pipeline, not requiring a further Gama scope conversation",
+            "verdict": "DRIFTED",
+            "evidence": "Judgment call, not a checkable fact, but evidence points one way: every previously-open design question (toggle placement/widget/labels, row date format, filter-chip interaction, persistence mechanism) is already resolved inside the issue's own 'Ruled' section — nothing left for Gama to scope. Remaining work is additive engineering reusing three already-shipped idioms verbatim (seriesCreateMonthGroups grouping shape, #211 eventTypeBadgeClass, #207 localStorage-preference pattern) plus new locale keys (7 short-weekday keys x4 locales + 2 toggle-label keys x4 locales) and a new compact-row component/mode with its own spec file — comparable in shape/size to already-shipped single-slice work like #211/#214/#215. Marked DRIFTED (not CONFIRMED/REFUTED) because it is a sizing recommendation rather than a fact — flagging as well-supported but ultimately the dispatcher's judgment call."
+          },
+          {
+            "claim": "No existing branch, PR, or spec file already covers issue #247 — clean pickup, no in-flight collision",
+            "verdict": "CONFIRMED",
+            "evidence": "`git branch -a` has no 247/month branch; `gh pr list --search 247` empty; `gh issue list --search 247` shows only #247 itself (open, labels task+ready) and an unrelated closed #20. Current shared working tree is on branch feat/257-profile-keys-wired (not main) with one modified file (teams/mvox-dev/memory/team-lead.md) — untouched by this investigation, which read only via `git show origin/main:<path>`."
+          }
+        ],
+        "risks": [
+          "All line-number citations in the issue body (AgendaList.svelte and +page.svelte) are stale by a small, consistent offset (~+8 to +140 lines) due to today's 16 merges on main — implementer must re-grep for identifiers (seriesCreateMonthGroups, groups, decoratedGroups, agenda-day-group, filteredAgendaItems) rather than trusting the cited line numbers.",
+          "The issue never states whether the month overview should merge `items` (upcoming) and `recentItems` (past) into one combined month-ordered list, or only cover `items` (upcoming) — 'the same event set the agenda already shows' is ambiguous between 'upcoming agenda' and 'upcoming+recent agenda'; worth a one-line confirmation with Gama/Mihkel before or during build rather than an engineering guess, since it changes the derived-array shape.",
+          "Short-weekday key length is deliberately not fully pinned ('engineering may refine, but not down to one character') — the two-character-tolerant column requirement (Done-when #8) needs a real design pass (e.g. lv 'Pk' for Piektdiena vs the issue's illustrative letters) rather than literally copy-pasting the issue's example strings, since those are explicitly marked as engineering-refinable, not final.",
+          "This is the only PO-facing acceptance gate that explicitly includes a live human review after first delivery ('Acceptance gate includes Mihkel's live review... Expect a correction round') — the pipeline plan should budget for a second small round rather than treating first-delivery GREEN as done."
+        ],
+        "notes": "Repo guard passed (origin=github.com/mvox-dev/mvox-app.git). All reads done via `git show origin/main:<path>` against origin/main @ a8d5ba2 (2026-09-06T02:46:29+03:00); the shared working tree (currently on branch feat/257-profile-keys-wired, one locally modified file teams/mvox-dev/memory/team-lead.md) was never relied on for any source fact — read-only investigation only. Overall verdict: issue #247's technical claims are substantively accurate (idiom reuse, component shape, badge/color reuse, weekday-collision math all check out against live code/Intl), with only line-number citations drifted from today's churn — not a re-scope trigger, just a note for whoever builds it to re-grep rather than trust :NNN references. All previously-open design questions were ruled on live by Mihkel and folded into 'Done when' before the issue was labeled ready, so navigation/toggle shape is NOT left to engineering discretion the way dispatch-brief open question (f) worried it might be. Recommend: single-slice TDD pipeline, standard chain (Tallis RED -> Byrd/Josquin GREEN -> Comenius i18n for the ~36 new locale keys -> Bentham review -> Josquin merge), with the one open ambiguity (items-only vs items+recentItems for the month's event set) flagged to Gama as a fast pre-build check rather than a blocking scope conversation. Files consulted: src/lib/components/agenda/AgendaList.svelte, AgendaList.spec.ts (+2 sibling spec files), src/routes/+page.svelte, src/lib/events/eventTypeStyles.ts, src/lib/preferences/timeFormat.ts, src/lib/agenda/types.ts, messages/{en,et,lv,uk}.json, teams/mvox-dev/memory/research/research-pilot-238-243.json."
+      },
+      {
+        "claims": [
+          {
+            "claim": "(a) The three unguarded inactiveRows-writing awaits from the #255 r4 finding still exist at the same locations: handleDeactivateConfirm (line 809), toggleInactive (line 845), handleReinstate (line 874) in src/routes/roster/+page.svelte on origin/main.",
+            "verdict": "CONFIRMED",
+            "evidence": "git show origin/main:src/routes/roster/+page.svelte, grep -n inactiveRows: hits at 809, 834 (decl), 845, 874, plus 122/849 (resets/error paths, already guarded by isSwitch or in-place). None of the three sites re-check the selected collective between the await and the assignment — each reads cfg captured earlier (currentCfg at function entry, or the deactivate/reinstate's own cfg param) with no generation/db comparison before writing inactiveRows. Line numbers match the issue text exactly (809/845/874) — no drift despite main having moved 16 merges today."
+          },
+          {
+            "claim": "(b) #232's createRouteLoadMachine (src/lib/loading/routeLoad.ts) exposes exactly the seam the fix needs: a plain non-mutating generation getter and isCurrent(g), explicitly documented as the external co-guard idiom for page-owned reconciles that capture generation without bumping it and compare later.",
+            "verdict": "CONFIRMED",
+            "evidence": "routeLoad.ts header comment: 'machine.generation / machine.isCurrent(g) are the EXTERNAL co-guard seam: #260's refreshCompletionGate and roster's several structural-write reconciles capture the generation WITHOUT bumping it, then compare later.' The same page already uses this exact idiom four times for section writes (const g = routeLoad.generation; ... if (g !== routeLoad.generation) return;) at lines 1047/1091/1095, 1487/1511, 1600/1644, 1786/1805/1809 — so the fix is 'use the established idiom at 3 more sites,' not new machinery."
+          },
+          {
+            "claim": "(c) The finding is still reachable post-#232 exactly as described; the panel-reset path (isSwitch-gated clear of showInactive/inactiveRows/inactiveLoadError) was preserved from #255 into the new reset() callback, and none of the three sites were absorbed into the machine.",
+            "verdict": "CONFIRMED",
+            "evidence": "reset callback in +page.svelte lines 113-124 clears the panel only 'if (isSwitch)', citing '#255 review r3 F2' verbatim and explaining the refresh-vs-switch distinction is unchanged. The template gates rendering on {#if showInactive} (line 3663) — a stale write while the panel is closed silently repopulates inactiveRows, then the NEXT toggleInactive open on the new collective flips showInactive=true synchronously while the old loadInactiveRoster await for that same reopen is still in flight, so stale rows render until it settles — matching the issue's repro shape verbatim. Unrelated to routeLoad internals except that all three sites read currentCfg/cfg, which routeLoad's own load() callback sets (line 146)."
+          },
+          {
+            "claim": "(d) page.roster-deactivate.spec.ts's '(B) inactive surface' describe block (lines 337-542) pins the panel behavior; its two closest tests ('switching collectives clears the panel', line 437; 'a deactivate with the panel OPEN refreshes the panel too', line 485) exercise the reset-on-switch and refresh-not-switch paths but NOT the actual race window (a switch landing while one of the three loadInactiveRoster awaits is still unresolved) — so a new guard test can be added without touching those two.",
+            "verdict": "CONFIRMED",
+            "evidence": "The 'switching collectives clears the panel' test switches selectedCollectiveDbStore only after waitFor confirms the panel is already populated (post-settle), never during an in-flight loadInactiveRoster call. The 'deactivate refreshes panel' test never switches collectives at all (pure refresh). Neither leaves loadInactiveRoster's mock unresolved across a switch. A guard test needs: open panel (or trigger deactivate/reinstate) with loadInactiveRosterMock pending (unresolved promise), switch collective mid-flight, resolve the stale promise, assert its stale rows never land in inactiveRows/render under the new collective."
+          },
+          {
+            "claim": "(e) The fix is still the ~3-lines-x-3-sites shape Bentham estimated in scale, but NOT a uniform 'capture routeLoad.generation at function entry' copy-paste across all three sites — handleDeactivateConfirm and handleReinstate call await loadForSelected() themselves (lines 801, 871) before their own loadInactiveRoster reload, and loadForSelected() unconditionally bumps routeLoad's generation counter even on a same-db refresh, so capturing g before that self-triggered call would make isCurrent(g) spuriously false on every ordinary (non-race) run.",
+            "verdict": "CONFIRMED",
+            "evidence": "routeLoad.ts loadForSelected(): 'const g = ++generation;' runs unconditionally, before isSwitch is even computed and independent of it. In +page.svelte, handleDeactivateConfirm/handleReinstate each call await loadForSelected() (lines 801/871) THEN inactiveRows = await loadInactiveRoster(cfg) (lines 809/874) — so a naive const g = routeLoad.generation at the top of these two functions would already be stale by the time of the vulnerable await, always short-circuiting the legitimate write. Correct placement is to capture g AFTER the await loadForSelected() line in those two sites; toggleInactive has no such self-refresh call, so capturing at its function entry (before its single await) is correct as-is. All four existing routeLoad.generation precedent sites on this page (renameSection/removeSection/reorder/reparent handlers) never call loadForSelected() themselves, so none of them hit this nuance — it is specific to these two lifecycle handlers and not covered by rote pattern-matching the existing idiom."
+          }
+        ],
+        "risks": [
+          "Capturing g at the wrong point in handleDeactivateConfirm/handleReinstate (top-of-function instead of right after their own await loadForSelected()) would silently break the normal case: isCurrent(g) would read false on every deactivate/reinstate with the panel open, even with no collective switch, so the inactiveRows reload would be skipped and the panel would go stale after every ordinary deactivate/reinstate. This is easy to get wrong by pattern-matching the four existing routeLoad.generation sites without noticing they don't call loadForSelected() themselves.",
+          "The new guard test needs an unresolved-promise mock (release-controlled, like the existing 'second tap while reinstate in flight' test at line 403 already does for reinstateMemberMock) combined with a mid-flight collective switch — no existing test in the file does both together, so this is genuinely new test infrastructure, not a copy of an existing case.",
+          "Not verified in this pass: whether fix-255/merge-255 (agents listed as active in this session) have already started work on this issue — worth a SendMessage check before dispatching, to avoid duplicate work on the same three sites."
+        ],
+        "notes": "Repo guard passed (origin=mvox-app.git, https://github.com/mvox-dev/mvox-app.git). All reads were via `git show origin/main:<path>` per instructions, no working-tree reliance (origin/main HEAD at the time: a8d5ba2). Issue #259 has no comments (body only), labels: task + ready. Confirmed via `gh issue view 259 --json`. Summary for dispatch: finding is real, unchanged in shape/location, correctly diagnosed as ~3 sites x a few lines each using the page's own established routeLoad.generation/isCurrent idiom — but the fix-writer must capture the guard generation AFTER each function's own loadForSelected() call in the two write-path sites (handleDeactivateConfirm, handleReinstate), not at function entry, or the guard will misfire on the non-race path. toggleInactive is the one site where entry-capture is correct as-is. A new race-window test (mid-flight switch, not post-settle switch) is needed alongside the fix; existing #255 panel specs (page.roster-deactivate.spec.ts) are unaffected. Relevant files: /home/ai-teams/workspace-app/src/routes/roster/+page.svelte (lines 88-124, 145-160, 801-888, 1786-1815, 3645-3679), /home/ai-teams/workspace-app/src/lib/loading/routeLoad.ts, /home/ai-teams/workspace-app/src/routes/page.roster-deactivate.spec.ts (lines 337-542)."
+      }
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Verify"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "verify:249",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "a3e782c6ca6b699b8",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788652055715,
+      "queuedAt": 1788652053213,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (origin=mvox-app.git). All source claims …",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY — a TDD pipeline may be live on the shared tree; read via git show origin/main:<path> for anything source, never rely on the working tree. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact. AXES SWEEP (mandatory lay…",
+      "lastProgressAt": 1788652317330,
+      "tokens": 84217,
+      "toolCalls": 33,
+      "durationMs": 259953,
+      "resultPreview": "{\"claims\":[{\"claim\":\"(a) The event-create form (src/routes/+page.svelte) has exactly 10 controls; 3 already have visible labels (type, start-group, end-group) and 7 are aria-only, matching #249's table exactly (Season, Series, Name, Capacity, Location, Description, Conductor)\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git show origin/main:src/routes/+page.svelte lines 7266-7623 (event-create-form block). …"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 2,
+      "label": "verify:247",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "aa8fb7a1897b4d699",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788652055452,
+      "queuedAt": 1788652053213,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (origin=github.com/mvox-dev/mvox-app.git)…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY — a TDD pipeline may be live on the shared tree; read via git show origin/main:<path> for anything source, never rely on the working tree. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact. AXES SWEEP (mandatory lay…",
+      "lastProgressAt": 1788652365929,
+      "tokens": 75276,
+      "toolCalls": 36,
+      "durationMs": 310477,
+      "resultPreview": "{\"claims\":[{\"claim\":\"(a) Issue #247 body facts vs origin/main today: 'no single-letter weekday keys exist, series_create_day_0…6 hold full names' in en/et/lv/uk\",\"verdict\":\"CONFIRMED\",\"evidence\":\"messages/{en,et,lv,uk}.json all define series_create_day_0..6 as full weekday names ('Sunday'/'Pühapäev'/'Svētdiena'/'Неділя' etc.), no short/narrow variant exists anywhere (grep for weekday_short/short_w…"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 3,
+      "label": "verify:259",
+      "phaseIndex": 1,
+      "phaseTitle": "Verify",
+      "agentId": "ae9f5c6a4fc7d402a",
+      "model": "claude-sonnet-5[1m]",
+      "state": "done",
+      "startedAt": 1788652321859,
+      "queuedAt": 1788652053213,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Repo guard passed (origin=mvox-app.git, https://github.com/…",
+      "promptPreview": "FIRST ACTION (repo guard): cd ~/workspace-app && git remote get-url origin — ABORT unless it ends mvox-app.git. READ-ONLY — a TDD pipeline may be live on the shared tree; read via git show origin/main:<path> for anything source, never rely on the working tree. Read the issue with gh issue view N --comments (later comments supersede body). Terse evidence: file:line + fact. AXES SWEEP (mandatory lay…",
+      "lastProgressAt": 1788652548410,
+      "tokens": 71465,
+      "toolCalls": 20,
+      "durationMs": 226548,
+      "resultPreview": "{\"claims\":[{\"claim\":\"(a) The three unguarded inactiveRows-writing awaits from the #255 r4 finding still exist at the same locations: handleDeactivateConfirm (line 809), toggleInactive (line 845), handleReinstate (line 874) in src/routes/roster/+page.svelte on origin/main.\",\"verdict\":\"CONFIRMED\",\"evidence\":\"git show origin/main:src/routes/roster/+page.svelte, grep -n inactiveRows: hits at 809, 834 …"
+    }
+  ],
+  "totalTokens": 230958,
+  "totalToolCalls": 89
+}
