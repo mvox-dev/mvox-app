@@ -7287,9 +7287,11 @@
 									<span data-testid="event-create-type-label" class="text-xs text-ink-2">
 										{m.event_create_type_label()}
 									</span>
+									<!-- #205 F1 / #249 — the wrapping <label> above already names
+									     this select; a same-key aria-label is a redundant second
+									     name (the single-name rule the house has settled on). -->
 									<select
 										data-testid="event-create-type"
-										aria-label={m.event_create_type_label()}
 										aria-invalid={eventCreateInvalid('type')}
 										aria-describedby={eventCreateDescribedBy('type')}
 										value={eventCreateType}
@@ -7306,36 +7308,40 @@
 									</select>
 								</label>
 
-								<select
-									data-testid="event-create-season"
-									aria-label={m.event_create_season_label()}
-									aria-invalid={eventCreateInvalid('season')}
-									aria-describedby={eventCreateDescribedBy('season')}
-									value={eventCreateSeasonId}
-									onchange={(e) =>
-										handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								>
-									<option value="">{m.event_create_season_placeholder()}</option>
-									{#each seasons as season (season.id)}
-										<option value={season.id}>{season.name}</option>
-									{/each}
-								</select>
-								
-								<select
-									data-testid="event-create-series"
-									aria-label={m.event_create_series_label()}
-									value={eventCreateSeriesId}
-									disabled={eventCreateSeasonId === ''}
-									onchange={(e) =>
-										handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-								>
-									<option value="">{m.event_create_series_none()}</option>
-									{#each eventCreateSeriesOptions as series (series.id)}
-										<option value={series.id}>{series.name}</option>
-									{/each}
-								</select>
+								<label class="flex w-full flex-col gap-0.5">
+									<span class="text-xs text-ink-2">{m.event_create_season_label()}</span>
+									<select
+										data-testid="event-create-season"
+										aria-invalid={eventCreateInvalid('season')}
+										aria-describedby={eventCreateDescribedBy('season')}
+										value={eventCreateSeasonId}
+										onchange={(e) =>
+											handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									>
+										<option value="">{m.event_create_season_placeholder()}</option>
+										{#each seasons as season (season.id)}
+											<option value={season.id}>{season.name}</option>
+										{/each}
+									</select>
+								</label>
+
+								<label class="flex w-full flex-col gap-0.5">
+									<span class="text-xs text-ink-2">{m.event_create_series_label()}</span>
+									<select
+										data-testid="event-create-series"
+										value={eventCreateSeriesId}
+										disabled={eventCreateSeasonId === ''}
+										onchange={(e) =>
+											handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+									>
+										<option value="">{m.event_create_series_none()}</option>
+										{#each eventCreateSeriesOptions as series (series.id)}
+											<option value={series.id}>{series.name}</option>
+										{/each}
+									</select>
+								</label>
 
 								<!-- #196 — the "wasted a standalone event, wanted it recurring"
 								     dead-end this hint heads off (Joosep, Crede pilot): visible only
@@ -7355,21 +7361,23 @@
 								     provides one, renders instead as a muted "From series: …" line
 								     directly under the field (event-create-name-inherited below) —
 								     presentation only, so what gets sent on submit is unaffected. -->
-								<input
-									type="text"
-									data-testid="event-create-name"
-									bind:this={eventCreateNameInput}
-									aria-label={m.event_create_name_label()}
-									aria-invalid={eventCreateInvalid('name')}
-									aria-describedby={eventCreateDescribedBy('name')}
-									placeholder={m.event_create_name_placeholder()}
-									value={eventCreateName}
-									oninput={(e) => {
-										eventCreateName = (e.currentTarget as HTMLInputElement).value;
-										clearEventCreateError();
-									}}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								/>
+								<label class="flex w-full flex-col gap-0.5">
+									<span class="text-xs text-ink-2">{m.event_create_name_label()}</span>
+									<input
+										type="text"
+										data-testid="event-create-name"
+										bind:this={eventCreateNameInput}
+										aria-invalid={eventCreateInvalid('name')}
+										aria-describedby={eventCreateDescribedBy('name')}
+										placeholder={m.event_create_name_placeholder()}
+										value={eventCreateName}
+										oninput={(e) => {
+											eventCreateName = (e.currentTarget as HTMLInputElement).value;
+											clearEventCreateError();
+										}}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+								</label>
 								{#if eventCreateSeriesDefaults?.name}
 									<p data-testid="event-create-name-inherited" class="text-xs text-ink-2">
 										{m.event_create_inherited_from_series({ value: eventCreateSeriesDefaults.name })}
@@ -7477,28 +7485,32 @@
 									</p>
 								{/if}
 
-								<input
-									type="number"
-									data-testid="event-create-capacity"
-									aria-label={m.event_create_capacity_label()}
-									placeholder={m.event_create_capacity_placeholder()}
-									value={eventCreateCapacity}
-									oninput={(e) =>
-										(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								/>
+								<label class="flex w-full flex-col gap-0.5">
+									<span class="text-xs text-ink-2">{m.event_create_capacity_label()}</span>
+									<input
+										type="number"
+										data-testid="event-create-capacity"
+										placeholder={m.event_create_capacity_placeholder()}
+										value={eventCreateCapacity}
+										oninput={(e) =>
+											(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+								</label>
 
-								<input
-									type="text"
-									data-testid="event-create-location"
-									list={LOCATION_SUGGESTIONS_ID}
-									aria-label={m.event_create_location_label()}
-									placeholder={m.event_create_location_placeholder()}
-									value={eventCreateLocation}
-									oninput={(e) =>
-										(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								/>
+								<label class="flex w-full flex-col gap-0.5">
+									<span class="text-xs text-ink-2">{m.event_create_location_label()}</span>
+									<input
+										type="text"
+										data-testid="event-create-location"
+										list={LOCATION_SUGGESTIONS_ID}
+										placeholder={m.event_create_location_placeholder()}
+										value={eventCreateLocation}
+										oninput={(e) =>
+											(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									/>
+								</label>
 								{#if eventCreateSeriesDefaults?.defaultLocation}
 									<p data-testid="event-create-location-inherited" class="text-xs text-ink-2">
 										{m.event_create_inherited_from_series({
@@ -7507,15 +7519,17 @@
 									</p>
 								{/if}
 
-								<textarea
-									data-testid="event-create-description"
-									aria-label={m.event_create_description_label()}
-									placeholder={m.event_create_description_placeholder()}
-									value={eventCreateDescription}
-									oninput={(e) =>
-										(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-								></textarea>
+								<label class="flex w-full flex-col gap-0.5">
+									<span class="text-xs text-ink-2">{m.event_create_description_label()}</span>
+									<textarea
+										data-testid="event-create-description"
+										placeholder={m.event_create_description_placeholder()}
+										value={eventCreateDescription}
+										oninput={(e) =>
+											(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
+										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+									></textarea>
+								</label>
 								{#if eventCreateSeriesDefaults?.defaultDescription}
 									<p data-testid="event-create-description-inherited" class="text-xs text-ink-2">
 										{m.event_create_inherited_from_series({
@@ -7529,33 +7543,35 @@
 									     (value '') is `disabled selected hidden` (Gama ruling 1);
 									     everyone-picked stays MOUNTED-but-disabled with the shared
 									     exhausted-state prompt (Gama ruling 2), never hidden. -->
-									<select
-										data-testid="event-create-conductor-select"
-										aria-label={m.event_create_conductor_label()}
-										disabled={eventCreateConductorOptions.length === 0}
-										value=""
-										onchange={(e) => {
-											const target = e.currentTarget as HTMLSelectElement;
-											const personId = target.value;
-											target.value = '';
-											if (!personId) return;
-											const label =
-												eventCreateConductorOptions.find((o) => o.id === personId)?.label ??
-												'';
-											handleEventCreateConductorSelect({ id: personId, label });
-										}}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-									>
-										<option value="" disabled selected hidden>
-											{pickerPromptText(
-												eventCreateConductorOptions.length,
-												m.event_create_conductor_placeholder()
-											)}
-										</option>
-										{#each eventCreateConductorOptions as option (option.id)}
-											<option value={option.id}>{option.label}</option>
-										{/each}
+									<label class="flex w-full flex-col gap-0.5">
+										<span class="text-xs text-ink-2">{m.event_create_conductor_label()}</span>
+										<select
+											data-testid="event-create-conductor-select"
+											disabled={eventCreateConductorOptions.length === 0}
+											value=""
+											onchange={(e) => {
+												const target = e.currentTarget as HTMLSelectElement;
+												const personId = target.value;
+												target.value = '';
+												if (!personId) return;
+												const label =
+													eventCreateConductorOptions.find((o) => o.id === personId)?.label ??
+													'';
+												handleEventCreateConductorSelect({ id: personId, label });
+											}}
+											class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+										>
+											<option value="" disabled selected hidden>
+												{pickerPromptText(
+													eventCreateConductorOptions.length,
+													m.event_create_conductor_placeholder()
+												)}
+											</option>
+											{#each eventCreateConductorOptions as option (option.id)}
+												<option value={option.id}>{option.label}</option>
+											{/each}
 									</select>
+									</label>
 									<!-- #209 review F2 — the SECTION read behind roster order failed: the
 									     picker still works off the roster's own name order, and says so
 									     rather than passing a different order off as the roster's. -->

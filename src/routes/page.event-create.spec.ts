@@ -760,10 +760,20 @@ describe('agenda — the event creation form carries every sketch-C field', () =
 		expect(description.tagName).toBe('TEXTAREA');
 
 		expect(typeSelect(container).tagName).toBe('SELECT');
-		// #209 — the conductor picker is a NATIVE select (rule 1), named by the
-		// existing label key, resting on its non-committable prompt option.
+		// #209 — the conductor picker is a NATIVE select (rule 1), resting on its
+		// non-committable prompt option. #249 DELIBERATELY flips the naming half
+		// of the old pin: the accessible name now comes from a visible wrapping
+		// <label> (single-name rule — the aria-label is GONE; the full labeling
+		// contract lives in the #249 block at the end of this file).
 		const conductors = conductorSelect(container);
-		expect(conductors.getAttribute('aria-label')).toBe('event_create_conductor_label');
+		expect(
+			conductors.getAttribute('aria-label'),
+			'#249 — the visible label replaced the aria-label'
+		).toBeNull();
+		expect(
+			conductors.closest('label'),
+			'#249 — the conductor select is named by a wrapping visible <label>'
+		).not.toBeNull();
 		expect(promptOption(conductors).textContent?.trim()).toBe(
 			'event_create_conductor_placeholder'
 		);
@@ -2243,3 +2253,220 @@ describe('#243 — locale coverage for the start/end labels and the range error'
 // mirror; DST-safe two-endpoint derivation with exact fall-back/spring-forward
 // minutes; end<=start refusal on one new shared key; blank end = inheritance
 // preserved; wire discipline — no end prop of any spelling)
+
+// ── #249 — visible labels on every event-create field (label parity with #239) ──
+//
+// The event-create form has the same defect #239 just fixed on the series
+// form: SEVEN controls a user must identify with no visible name — season,
+// series, name, capacity, location, description, conductor. The three selects
+// are the sharpest cases (no placeholder to fall back on): the exact failure
+// Joosep reported on the series form's time selects ("Ma eeldan, et siin on
+// kellaaeg…"), sitting unfixed on the commoner form.
+//
+// Naming contract (the #205 review F1 trap, generalized — same as the #239
+// block in page.series-create.spec.ts): when a control gains a visible label
+// the old aria-label GOES — two authored names on one control drift apart.
+// These tests assert the COMPUTED accessible name (accname precedence:
+// aria-labelledby > aria-label > associated <label>), not aria-label
+// truthiness, AND that no aria-label remains on the control. Placeholders may
+// stay (rule 4 — descriptive, #208's ruling) but are deliberately NOT
+// consulted by the computation: a control whose only name is its placeholder
+// computes '' here, which is exactly the bug.
+//
+// Folded in per Gama's scope note on the #242 verification: event-create-type
+// carried BOTH its visible label AND a same-key aria-label (the #205 F1
+// double-naming shape, predating #242) — no existing test forced its removal,
+// so the null pin is authored here.
+describe('#249 — every event-create control carries a visible label that IS its accessible name', () => {
+	/** The visible label element that names `el`: a `label[for]` match when the
+	 *  control has an id, else a wrapping <label> ancestor. */
+	function labelElementOf(container: HTMLElement, el: HTMLElement): HTMLLabelElement | null {
+		const id = el.getAttribute('id');
+		if (id) {
+			const forLabel = container.querySelector<HTMLLabelElement>(`label[for="${id}"]`);
+			if (forLabel) return forLabel;
+		}
+		return el.closest('label');
+	}
+
+	/** A label's naming text: its subtree text MINUS any embedded controls (a
+	 *  wrapping label names the control with its OTHER text, never the
+	 *  control's own options/value — the accname embedded-control rule). */
+	function labelText(label: HTMLElement): string {
+		const clone = label.cloneNode(true) as HTMLElement;
+		for (const embedded of clone.querySelectorAll('input, select, textarea')) embedded.remove();
+		return clone.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+	}
+
+	/** The slice of the accname algorithm these pins need, in precedence order:
+	 *  aria-labelledby > aria-label > associated <label>. NO placeholder step. */
+	function computedName(container: HTMLElement, el: HTMLElement): string {
+		const labelledby = el.getAttribute('aria-labelledby');
+		if (labelledby) {
+			return labelledby
+				.split(/\s+/)
+				.map((id) => container.querySelector(`[id="${id}"]`)?.textContent?.trim() ?? '')
+				.join(' ')
+				.trim();
+		}
+		const ariaLabel = el.getAttribute('aria-label');
+		if (ariaLabel !== null) return ariaLabel.trim();
+		const label = labelElementOf(container, el);
+		return label ? labelText(label) : '';
+	}
+
+	/** Visible = actually on screen for Joosep: rendered text, not hidden away. */
+	function expectVisibleText(el: HTMLElement, what: string): void {
+		expect(el.hasAttribute('hidden'), `${what} must not be [hidden]`).toBe(false);
+		expect(el.getAttribute('aria-hidden'), `${what} must not be aria-hidden`).not.toBe('true');
+		expect(
+			Array.from(el.classList),
+			`${what} must be visibly rendered, not screen-reader-only`
+		).not.toContain('sr-only');
+	}
+
+	// The seven aria-only controls, each paired with the label key it ALREADY
+	// owns (all four locales carry translated values — currently consumed only
+	// via aria-label/placeholder; #249 renders them, zero new copy).
+	const FIELD_LABEL_KEYS: ReadonlyArray<readonly [testid: string, key: string]> = [
+		['event-create-season', 'event_create_season_label'],
+		['event-create-series', 'event_create_series_label'],
+		['event-create-name', 'event_create_name_label'],
+		['event-create-capacity', 'event_create_capacity_label'],
+		['event-create-location', 'event_create_location_label'],
+		['event-create-description', 'event_create_description_label'],
+		['event-create-conductor-select', 'event_create_conductor_label']
+	];
+
+	async function openReadyForm(): Promise<HTMLElement> {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		return container;
+	}
+
+	it('all seven aria-only controls: a visible <label> (for= or wrapping) computes as the accessible name, and the old aria-label is GONE — never a placeholder as the only name', async () => {
+		const container = await openReadyForm();
+
+		for (const [testid, key] of FIELD_LABEL_KEYS) {
+			const control = q(container, testid) as HTMLElement;
+			expect(control, testid).not.toBeNull();
+
+			// No double-authoring: the name must COME FROM the label element.
+			expect(
+				control.getAttribute('aria-label'),
+				`${testid}: aria-label must be dropped once the visible label names it`
+			).toBeNull();
+
+			const label = labelElementOf(container, control);
+			expect(label, `${testid}: needs a label[for] or wrapping <label>`).not.toBeNull();
+			expectVisibleText(label as HTMLElement, `${testid}'s label`);
+
+			// The lenient message mock renders every key as its own name, so the
+			// EXISTING i18n key is pinned as the label text — no new copy.
+			expect(
+				computedName(container, control),
+				`${testid}: computed accessible name must be the visible label's text`
+			).toBe(key);
+		}
+	});
+
+	it("event-create-type sheds its redundant aria-label (the #205 F1 double-naming shape, Gama's scope note on #242): the visible label STAYS and is the only authored name", async () => {
+		const container = await openReadyForm();
+
+		const type = q(container, 'event-create-type') as HTMLSelectElement;
+		expect(type).not.toBeNull();
+		expect(
+			type.getAttribute('aria-label'),
+			'the wrapping label already names the select — the same-key aria-label is redundant'
+		).toBeNull();
+
+		// The visible half is UNCHANGED (page.event-type-picker.spec.ts owns its
+		// full contract) — re-pinned here so the aria-label removal cannot be
+		// "satisfied" by deleting the visible label instead.
+		const caption = q(container, 'event-create-type-label') as HTMLElement;
+		expect(caption).not.toBeNull();
+		expect(caption.textContent?.trim()).toBe('event_create_type_label');
+		expectVisibleText(caption, "event-create-type's label");
+		expect(type.closest('label')).toBe(caption.closest('label'));
+		expect(computedName(container, type)).toBe('event_create_type_label');
+	});
+
+	it('the already-labeled start/end groups are UNTOUCHED: still named by their visible spans via aria-labelledby, still no aria-label (done-when 7)', async () => {
+		const container = await openReadyForm();
+
+		for (const [testid, key] of [
+			['event-create-datetime', 'event_create_start_label'],
+			['event-create-end', 'event_create_end_label']
+		] as const) {
+			const group = q(container, testid) as HTMLElement;
+			expect(group, testid).not.toBeNull();
+			expect(group.getAttribute('role'), testid).toBe('group');
+			expect(group.getAttribute('aria-label'), `${testid}: #205 F1 trap stays fixed`).toBeNull();
+			expect(computedName(container, group), testid).toBe(key);
+		}
+	});
+
+	it('labels are ADDITIVE (rule 4): every placeholder/prompt survives exactly as it was', async () => {
+		const container = await openReadyForm();
+
+		// Text-entry placeholders: the label says WHAT the field is, the
+		// placeholder shows an example — both render, on the same keys as before.
+		expect((q(container, 'event-create-name') as HTMLInputElement).placeholder).toBe(
+			'event_create_name_placeholder'
+		);
+		expect((q(container, 'event-create-capacity') as HTMLInputElement).placeholder).toBe(
+			'event_create_capacity_placeholder'
+		);
+		expect((q(container, 'event-create-location') as HTMLInputElement).placeholder).toBe(
+			'event_create_location_placeholder'
+		);
+		expect((q(container, 'event-create-description') as HTMLTextAreaElement).placeholder).toBe(
+			'event_create_description_placeholder'
+		);
+
+		// Selects: the ''-valued prompt options keep doing their in-list work.
+		const season = q(container, 'event-create-season') as HTMLSelectElement;
+		expect(season.querySelector('option[value=""]')?.textContent?.trim()).toBe(
+			'event_create_season_placeholder'
+		);
+		const series = q(container, 'event-create-series') as HTMLSelectElement;
+		expect(series.querySelector('option[value=""]')?.textContent?.trim()).toBe(
+			'event_create_series_none'
+		);
+		const conductors = conductorSelect(container);
+		expect(promptOption(conductors).textContent?.trim()).toBe(
+			'event_create_conductor_placeholder'
+		);
+	});
+
+	it("#248's location datalist wiring is untouched: the location input keeps list= resolving to a real <datalist>, INSIDE its new label", async () => {
+		const container = await openReadyForm();
+
+		const location = q(container, 'event-create-location') as HTMLInputElement;
+		const listId = location.getAttribute('list');
+		expect(listId, 'the location input must keep its list= attribute').toBeTruthy();
+		expect(
+			document.querySelector(`datalist[id="${listId}"]`),
+			`<datalist id="${listId}"> must still exist in the page`
+		).not.toBeNull();
+	});
+
+	it('NO fieldsets/legends: grouping is explicitly deferred (done-when 5) — labels ship alone', async () => {
+		const container = await openReadyForm();
+
+		const form = q(container, 'event-create-form') as HTMLElement;
+		expect(form).not.toBeNull();
+		expect(
+			form.querySelectorAll('fieldset').length,
+			"#239's four legends must NOT be copied across mechanically"
+		).toBe(0);
+		expect(form.querySelectorAll('legend').length).toBe(0);
+	});
+});
+
+// (*MVOX:Tallis* — #249 RED: visible label on every event-create field in the
+// #239 idiom — seven aria-only controls gain a wrapping visible <label> whose
+// text IS the computed accessible name, eight aria-label null pins (the seven
+// + event-create-type's #205-F1 redundancy per Gama's scope note), the :766
+// conductor aria-label pin deliberately flipped, placeholders/datalist/groups
+// pinned untouched, fieldset grouping pinned ABSENT per done-when 5)
