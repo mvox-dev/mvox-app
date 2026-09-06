@@ -2,6 +2,32 @@
 
 (*MVOX:Perotin*)
 
+## [CHECKPOINT] #265 correction applied+committed (`948acba`), dry-run clean for admin_member_record — but the R2 toggle's sharing-inherit design has a bug, flagged not fixed (2026-09-06)
+
+Correction (organization→database parent, per team-lead routing + Mihkel comment 5561836364)
+committed `948acba`. Dry-run on polyphony surfaced a SECOND, smaller bug of my own: the seed
+scripts double-logged the R2 toggle's dry-run ledger entry (`ensurePropDef` already pushes one
+internally on dry-run-not-found; my own `else` branch pushed a redundant duplicate). Fixed +
+committed `1260d31`, re-ran, confirmed 7 steps (not 8) on both dbs, 0 failures either way.
+
+**admin_member_record itself: clean on both dbs, 7/7 steps, matches intent exactly.** Not the R2
+toggle though — a genuine design flaw surfaced, not yet fixed:
+
+**`resolveTypeSharing` reads the WRONG level for "inherit the collective's posture."** My design
+had the toggle's prop-def OMIT `sharing`, falling back to the "database" TYPE-DEF's own `_sharing`
+(gate 2, the type-level CAP) — which resolved to **`public`** on BOTH polyphony and mvox_crede.
+But Mihkel's correction 4 ("readable as all other properties of collective entity") means the
+PROP-DEF-level sharing PATTERN among sibling properties (gate 1), not the type's cap. Checked
+empirically on both dbs: of the "database" type's existing prop-defs, 11-12 of 12-13 are
+`domain` (address/add_user/email/name/photo/price/billing_*), only `billing_tokens_limit` is
+`public`, `entu_user` has none. **The type-level cap (`public`) is a platform/generic constant,
+not representative of the actual sibling-property posture (overwhelmingly `domain`).** My
+inherit-via-omission mechanism picked up the wrong value — the SAME class of trap the whole
+explicit-sharing discipline exists to prevent, just at the toggle's own design level instead of at
+the create-time-write level. Flagged to team-lead with full evidence, recommending
+`roster_show_real_names.property.sharing = 'domain'` explicitly (dropping the inherit-via-omission
+mechanism for this property entirely) rather than silently fixing a ruled design element myself.
+
 ## [CHECKPOINT] #265 provisioning scripts written+committed (`452dfd8`) — DRY-RUN HALTED on premise mismatch (2026-09-06)
 
 Wrote `seed-265-admin-member-record-type-{polyphony,crede}-2026-09-06.ts`, composing `ensure-
