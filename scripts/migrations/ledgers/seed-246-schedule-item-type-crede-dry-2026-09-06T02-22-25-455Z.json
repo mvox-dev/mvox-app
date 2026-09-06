@@ -1,0 +1,47 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "authorization": "PO-Approved 2026-09-06 mvox-app#246 (Gama settle comment)",
+  "entityMetaTypeId": "6a8f471a5eb2498f434e50cc",
+  "propertyMetaTypeId": "6a8f471a5eb2498f434e50e0",
+  "eventTypeId": "6a92a333ca67df980f415039",
+  "scheduleItemTypeId": "<dry-run-unresolved>",
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "schedule_item",
+      "outcome": "dry-run",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "schedule_item.name",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "schedule_item.datetime",
+      "outcome": "dry-run",
+      "after": {
+        "type": "datetime",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-add-from",
+      "target": "schedule_item.add_from",
+      "outcome": "dry-run",
+      "after": "6a92a333ca67df980f415039"
+    }
+  ],
+  "exitCode": 0
+}

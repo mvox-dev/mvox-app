@@ -1,0 +1,51 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "authorization": "PO-Approved 2026-09-06 mvox-app#246 (Gama settle comment)",
+  "entityMetaTypeId": "6a8f471a5eb2498f434e50cc",
+  "propertyMetaTypeId": "6a8f471a5eb2498f434e50e0",
+  "eventTypeId": "6a92a333ca67df980f415039",
+  "scheduleItemTypeId": "6a9cceabca67df980f4173ee",
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "schedule_item",
+      "id": "6a9cceabca67df980f4173ee",
+      "outcome": "created",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "schedule_item.name",
+      "id": "6a9cceabca67df980f4173f9",
+      "outcome": "created",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "schedule_item.datetime",
+      "id": "6a9cceabca67df980f417408",
+      "outcome": "created",
+      "after": {
+        "type": "datetime",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-add-from",
+      "target": "schedule_item.add_from",
+      "id": "6a9cceabca67df980f4173ee",
+      "outcome": "created",
+      "after": "6a92a333ca67df980f415039"
+    }
+  ],
+  "exitCode": 0
+}

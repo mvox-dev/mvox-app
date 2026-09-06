@@ -1,0 +1,47 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "authorization": "PO-Approved 2026-09-06 mvox-app#246 (Gama settle comment)",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "eventTypeId": "69c7ea548489bfcb0e81a0a2",
+  "scheduleItemTypeId": "<dry-run-unresolved>",
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "schedule_item",
+      "outcome": "dry-run",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "schedule_item.name",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "schedule_item.datetime",
+      "outcome": "dry-run",
+      "after": {
+        "type": "datetime",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-add-from",
+      "target": "schedule_item.add_from",
+      "outcome": "dry-run",
+      "after": "69c7ea548489bfcb0e81a0a2"
+    }
+  ],
+  "exitCode": 0
+}
