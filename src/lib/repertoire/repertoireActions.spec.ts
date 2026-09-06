@@ -38,12 +38,13 @@ import {
 //     (inherited from the uniformly-domain season parent). program_item KEEPS
 //     an explicit `_sharing: domain` — its parent (event) is not uniformly
 //     domain, so the tier must be pinned rather than inherited.
-//   - UPDATE = GET current value-ids → POST the new value → DELETE
-//     /property/{value-id} for each OLD id (Entu POST APPENDS to implicitly
-//     multi-valued props, so replace semantics need both calls, and the GET must
-//     precede the POST so the delete targets only pre-existing values).
-//     POST-before-DELETE is the #91 review F5 fix: DELETE-first turned a failed
-//     POST into an EMPTY property, which reads back as the schema default.
+//   - UPDATE = the shared ATOMIC overwrite (#264 PO ruling, branch (i)):
+//     `replaceEntityProperty` — GET current value-id(s), then ONE POST whose
+//     entry pairs the FIRST existing id with the new value (Entu's native
+//     overwrite; `setEntity` soft-deletes the old value in the SAME call). NO
+//     DELETE round-trip remains on the normal (≤1-value) path — superseding
+//     the #91 review F5 POST-before-DELETE choreography, which had a separate
+//     DELETE step to order.
 //   - per-tap immediate writes — NOT batch. Each control tap is one round-trip;
 //     there is no "save all" payload shape anywhere in this module's API.
 //   - rights: management controls render iff the current person holds `_editor`
@@ -151,9 +152,12 @@ describe('createRepertoireItem', () => {
 });
 
 // ── updateRepertoireStatus ────────────────────────────────────────────────────
-// GET current status value-ids → DELETE /property/{id} each → POST the new
-// status string. NO sentinels here (unlike attendance) — status is a bare
-// string prop. The delete-first is what gives POST-appends replace semantics.
+// #264 RED (PO ruling, branch (i), item 6 audit-convert): ATOMIC overwrite —
+// GET current status value-ids → ONE POST whose entry carries the OLD value's
+// `_id` (Entu's native overwrite; setEntity soft-deletes it in the same call).
+// NO sentinels here (unlike attendance) — status is a bare string prop. No
+// DELETE round-trip remains on the normal (≤1-value) path; corrupted EXTRA
+// values are swept at /property/{id} strictly AFTER the POST.
 
 describe('updateRepertoireStatus', () => {
 	type Call = { url: string; method: string; body?: unknown };
@@ -178,38 +182,31 @@ describe('updateRepertoireStatus', () => {
 	}
 
 	it.each(['learning', 'active', 'retired', 'dropped'] as const)(
-		"status '%s' → POST body is exactly [{ type: 'status', string: '%s' }]",
+		"status '%s' → POST body is exactly [{ _id: 'sv-1', type: 'status', string: <that status> }] — the old id rides the overwrite (#264)",
 		async (status: RepertoireStatus) => {
 			const { fetchImpl, calls } = makeMockFetch();
 			await updateRepertoireStatus(cfg, 'rep-item-1', status, fetchImpl);
 			const postBodies = calls
 				.filter((c) => c.method === 'POST')
 				.flatMap((c) => c.body as Array<{ type: string; string?: string }>);
-			expect(postBodies).toEqual([{ type: 'status', string: status }]);
+			expect(postBodies).toEqual([{ _id: 'sv-1', type: 'status', string: status }]);
 		}
 	);
 
-	// #91 review F5 — POST BEFORE DELETE. DELETE-first meant a failed POST left
-	// the property EMPTY, and listRepertoireItems reads an absent status back as
-	// the schema default 'active' — a value the editor never chose. The GET still
-	// comes first: the delete must target only the PRE-EXISTING value ids.
-	it('order: GET current entity → POST new status → DELETE old value(s)', async () => {
+	it('order (#264): GET current entity → ONE atomic POST — no DELETE round-trip remains', async () => {
 		const { fetchImpl, calls } = makeMockFetch();
 		await updateRepertoireStatus(cfg, 'rep-item-1', 'retired', fetchImpl);
 		expect(calls[0].method).toBe('GET');
 		expect(calls[0].url).toContain('rep-item-1');
 		expect(calls[0].url).toContain('status');
-		const postIdx = calls.findIndex((c) => c.method === 'POST');
-		const deleteIdx = calls.findIndex((c) => c.method === 'DELETE');
-		expect(postIdx).toBeGreaterThan(0);
-		expect(deleteIdx).toBeGreaterThan(postIdx);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
-	it('a FAILED POST leaves the old value intact — no DELETE is issued at all', async () => {
+	it('a FAILED POST leaves the old value intact — the overwrite never committed, no DELETE is issued at all (an absent status would read back as the schema default, a value the editor never chose)', async () => {
 		const calls: Call[] = [];
 		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 			const method = init?.method ?? 'GET';
-			calls.push({ url, method });
+			calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
 			if (method === 'POST') return Promise.resolve(json({}, 500));
 			if (method === 'DELETE') return Promise.resolve(json({}));
 			return Promise.resolve(json({ entity: { _id: 'rep-item-1', status: [{ _id: 'sv-1' }] } }));
@@ -218,23 +215,25 @@ describe('updateRepertoireStatus', () => {
 			/500/
 		);
 		expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
+		expect(calls.filter((c) => c.method === 'POST')[0]?.body).toEqual([
+			{ _id: 'sv-1', type: 'status', string: 'retired' }
+		]);
 	});
 
-	it('DELETE targets /property/{value-id} (NOT /entity/{id}) — the wire-shape split', async () => {
-		const { fetchImpl, calls } = makeMockFetch(['sv-old']);
-		await updateRepertoireStatus(cfg, 'rep-item-1', 'dropped', fetchImpl);
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-old') && u.includes('property'))).toBe(true);
-		expect(deleteUrls.some((u) => /entity\/sv-old/.test(u))).toBe(false);
-	});
-
-	it('deletes EVERY existing status value-id, not just the first (POST-appends means corrupted multi-value state must be cleared generically)', async () => {
+	it('CORRUPTED multi-value state: the overwrite pairs the FIRST old id; ONLY the extra is deleted, at /property/{id}, strictly AFTER the POST', async () => {
 		const { fetchImpl, calls } = makeMockFetch(['sv-a', 'sv-b']);
 		await updateRepertoireStatus(cfg, 'rep-item-1', 'learning', fetchImpl);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([{ _id: 'sv-a', type: 'status', string: 'learning' }]);
 		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-a'))).toBe(true);
-		expect(deleteUrls.some((u) => u.includes('sv-b'))).toBe(true);
-		expect(deleteUrls).toHaveLength(2);
+		expect(deleteUrls).toHaveLength(1);
+		expect(deleteUrls[0]).toContain('property');
+		expect(deleteUrls[0]).toContain('sv-b');
+		expect(deleteUrls.some((u) => /entity\/sv-/.test(u))).toBe(false);
+		expect(calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(
+			calls.findIndex((c) => c.method === 'POST')
+		);
 	});
 
 	it('no existing status value (schema-default entity) → NO DELETE calls, straight to POST', async () => {
@@ -252,9 +251,9 @@ describe('updateRepertoireStatus', () => {
 
 // ── pinEdition ────────────────────────────────────────────────────────────────
 // Sets repertoire_item.edition (the pinned edition, #91 "Pin edition" control).
-// Same GET → POST new value → DELETE old value(s) shape: `edition` is a
-// reference prop and POST appends, so a re-pin without the delete would leave
-// TWO edition refs on the item.
+// Same ATOMIC overwrite shape as updateRepertoireStatus (#264): `edition` is a
+// reference prop and a bare POST appends, so the old value's `_id` rides the
+// POST entry — a re-pin can no longer half-land as TWO edition refs.
 
 describe('pinEdition', () => {
 	type Call = { url: string; method: string; body?: unknown };
@@ -294,18 +293,16 @@ describe('pinEdition', () => {
 		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
 	});
 
-	it('re-pin: DELETEs every existing edition value-id at /property/{id} AFTER the POST — POST appends, so skipping the delete leaves two refs', async () => {
+	it('re-pin (#264): ONE atomic POST — body exactly [{ _id: <old value id>, type: "edition", reference: <new> }], and NO DELETE round-trip remains', async () => {
 		const { fetchImpl, calls } = makeMockFetch(['ev-old']);
 		await pinEdition(cfg, 'rep-item-1', 'edition-new', fetchImpl);
-		const deleteCalls = calls.filter((c) => c.method === 'DELETE');
-		expect(deleteCalls).toHaveLength(1);
-		expect(deleteCalls[0].url).toContain('property');
-		expect(deleteCalls[0].url).toContain('ev-old');
-		// F5: the new ref lands BEFORE the old one is removed, so a failed POST
-		// leaves the existing pin rather than an unpinned item.
-		const postIdx = calls.findIndex((c) => c.method === 'POST');
-		const deleteIdx = calls.findIndex((c) => c.method === 'DELETE');
-		expect(deleteIdx).toBeGreaterThan(postIdx);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([{ _id: 'ev-old', type: 'edition', reference: 'edition-new' }]);
+		// The overwrite replaced the old ref in the same call — a separate
+		// delete would reopen the two-refs half-landing window.
+		expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
 	it('throws on a non-2xx GET response', async () => {
@@ -429,8 +426,8 @@ describe('createProgramItem', () => {
 });
 
 // ── updateProgramItemOrdinal ──────────────────────────────────────────────────
-// #91 reorder: up/down buttons set program_item.ordinal. Same GET → DELETE old
-// value-id(s) → POST shape as updateRepertoireStatus, with a number prop.
+// #91 reorder: up/down buttons set program_item.ordinal. Same ATOMIC overwrite
+// shape as updateRepertoireStatus (#264), with a number prop.
 
 describe('updateProgramItemOrdinal', () => {
 	type Call = { url: string; method: string; body?: unknown };
@@ -454,30 +451,23 @@ describe('updateProgramItemOrdinal', () => {
 		return { fetchImpl, calls };
 	}
 
-	it("POST body is exactly [{ type: 'ordinal', number: <n> }]", async () => {
+	it("POST body is exactly [{ _id: 'ov-1', type: 'ordinal', number: <n> }] — the old id rides the overwrite (#264)", async () => {
 		const { fetchImpl, calls } = makeMockFetch();
 		await updateProgramItemOrdinal(cfg, 'prog-item-1', 5, fetchImpl);
 		const postBodies = calls
 			.filter((c) => c.method === 'POST')
 			.flatMap((c) => c.body as Array<{ type: string; number?: number; string?: string }>);
-		expect(postBodies).toEqual([{ type: 'ordinal', number: 5 }]);
+		expect(postBodies).toEqual([{ _id: 'ov-1', type: 'ordinal', number: 5 }]);
 	});
 
-	it('order: GET → POST → DELETE old ordinal value-id(s) at /property/{id}', async () => {
+	it('order (#264): GET → ONE atomic POST — no DELETE round-trip remains (a mid-reorder failure can never leave a program_item with NO ordinal)', async () => {
 		const { fetchImpl, calls } = makeMockFetch(['ov-old']);
 		await updateProgramItemOrdinal(cfg, 'prog-item-1', 4, fetchImpl);
 		expect(calls[0].method).toBe('GET');
 		expect(calls[0].url).toContain('prog-item-1');
 		expect(calls[0].url).toContain('ordinal');
-		const deleteCalls = calls.filter((c) => c.method === 'DELETE');
-		expect(deleteCalls).toHaveLength(1);
-		expect(deleteCalls[0].url).toContain('property');
-		expect(deleteCalls[0].url).toContain('ov-old');
-		// F5: POST first, so a mid-reorder failure never leaves a program_item with
-		// NO ordinal (which listProgramItems reads back as 0 — a duplicate at the
-		// head of the programme).
-		const postIdx = calls.findIndex((c) => c.method === 'POST');
-		expect(calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(postIdx);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
+		expect(calls[1].body).toEqual([{ _id: 'ov-old', type: 'ordinal', number: 4 }]);
 	});
 
 	it('ordinal 0 is a legal target (move to opening slot) — POST still carries { number: 0 }', async () => {
@@ -486,7 +476,7 @@ describe('updateProgramItemOrdinal', () => {
 		const postBodies = calls
 			.filter((c) => c.method === 'POST')
 			.flatMap((c) => c.body as Array<{ type: string; number?: number }>);
-		expect(postBodies).toEqual([{ type: 'ordinal', number: 0 }]);
+		expect(postBodies).toEqual([{ _id: 'ov-1', type: 'ordinal', number: 0 }]);
 	});
 
 	it('throws on a non-2xx GET response', async () => {
@@ -750,12 +740,15 @@ describe('planProgramMove', () => {
 });
 
 describe('reorderProgramItems', () => {
-	it('POSTs the swapped numbers for BOTH items — one move, two ordinal writes', async () => {
+	it('POSTs the swapped numbers for BOTH items — one move, two ATOMIC overwrite-POSTs carrying the old value ids (#264), no DELETE', async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string | URL | Request, init?: RequestInit) => {
 			const s = String(url);
 			if (!init || init.method === undefined) {
-				// the pre-write lookup of existing ordinal value ids
-				return Promise.resolve(json({ entity: { ordinal: [{ _id: `val-${s.split('/').pop()}` }] } }));
+				// the pre-write lookup of existing ordinal value ids — the clean
+				// entity id (query string stripped), since #264 reads this `_id`
+				// back INTO the write, not just as a DELETE target.
+				const itemId = s.split('/').pop()?.split('?')[0];
+				return Promise.resolve(json({ entity: { ordinal: [{ _id: `val-${itemId}` }] } }));
 			}
 			return Promise.resolve(json({}));
 		});
@@ -775,12 +768,15 @@ describe('reorderProgramItems', () => {
 		expect(posts.length).toBe(2);
 		expect(String(posts[0][0])).toContain('entity/pi-b');
 		expect(JSON.parse(String((posts[0][1] as RequestInit).body))).toEqual([
-			{ type: 'ordinal', number: 0 }
+			{ _id: 'val-pi-b', type: 'ordinal', number: 0 }
 		]);
 		expect(String(posts[1][0])).toContain('entity/pi-a');
 		expect(JSON.parse(String((posts[1][1] as RequestInit).body))).toEqual([
-			{ type: 'ordinal', number: 1 }
+			{ _id: 'val-pi-a', type: 'ordinal', number: 1 }
 		]);
+		expect(fetchImpl.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')).toEqual(
+			[]
+		);
 	});
 
 	it('an empty plan writes nothing at all', async () => {

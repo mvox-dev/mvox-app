@@ -162,7 +162,11 @@ function installWorld(options: WorldOptions = {}) {
 		if (url.includes('?props=status')) return json({ entity: { status: [{ _id: 'val-status' }] } });
 		if (url.includes('?props=edition')) return json({ entity: { edition: [] } });
 		if (url.includes('?props=ordinal')) {
-			return json({ entity: { ordinal: [{ _id: `val-${url.split('/').pop()}` }] } });
+			// #264 — the atomic overwrite now reads this `_id` back INTO the write
+			// (not just as a DELETE target), so it must be the clean entity id, not
+			// the tail of the URL WITH its query string glued on.
+			const itemId = url.split('/').pop()?.split('?')[0];
+			return json({ entity: { ordinal: [{ _id: `val-${itemId}` }] } });
 		}
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-1' }] });
 		if (url.includes('_type.string=work')) {
@@ -307,11 +311,11 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			expect(postsTo(fetchMock, 'entity/ri-2').length).toBe(1);
 		});
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-2')[0][1]!.body))).toEqual([
-			{ type: 'status', string: 'active' }
+			{ _id: 'val-status', type: 'status', string: 'active' }
 		]);
 	});
 
-	it('changing a status writes it through: value-id lookup, DELETE of the old value, POST of the new one', async () => {
+	it('changing a status writes it through: value-id lookup, ONE atomic overwrite-POST carrying the old id (#264) — no DELETE round-trip', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
@@ -326,9 +330,11 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		});
 		const urls = fetchMock.mock.calls.map(([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`);
 		expect(urls).toContain('GET https://api.entu-test.invalid/polyphony/entity/ri-1?props=status');
-		expect(urls).toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
+		// #264 — the atomic overwrite replaces the old value IN the POST (its
+		// `_id` rides the entry); no separate DELETE remains on this path.
+		expect(urls).not.toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-1')[0][1]!.body))).toEqual([
-			{ type: 'status', string: 'learning' }
+			{ _id: 'val-status', type: 'status', string: 'learning' }
 		]);
 	});
 
@@ -417,9 +423,12 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		).toBe(worksReadsBefore);
 	});
 
-	// #91 review F5 — POST before DELETE, so a failed POST cannot leave the
-	// status property EMPTY (which reads back as the schema default 'active').
-	it('the status write POSTs the new value BEFORE deleting the old value-id', async () => {
+	// #264 (PO ruling, branch (i)) — the status write is now an ATOMIC
+	// overwrite-POST: the old value's `_id` rides the SAME call that writes the
+	// new one, so a failed POST cannot leave the status property EMPTY (the old
+	// value was never touched) — superseding the #91 review F5 POST-before-
+	// DELETE choreography, which had a separate DELETE step to order.
+	it('the status write is ONE atomic overwrite-POST carrying the old value id — no DELETE round-trip remains', async () => {
 		const fetchMock = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
@@ -429,19 +438,15 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		});
 		await fireEvent.click(container.querySelector('[data-testid="work-status-learning"]')!);
 		await vi.waitFor(() => {
-			const calls = fetchMock.mock.calls.map(
-				([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`
-			);
-			expect(calls).toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
+			expect(postsTo(fetchMock, 'entity/ri-1').length).toBe(1);
 		});
 		const calls = fetchMock.mock.calls.map(
 			([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`
 		);
-		const postIdx = calls.findIndex((c) => c === 'POST https://api.entu-test.invalid/polyphony/entity/ri-1');
-		const deleteIdx = calls.findIndex(
-			(c) => c === 'DELETE https://api.entu-test.invalid/polyphony/property/val-status'
-		);
-		expect(deleteIdx).toBeGreaterThan(postIdx);
+		expect(calls).not.toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
+		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-1')[0][1]!.body))).toEqual([
+			{ _id: 'val-status', type: 'status', string: 'learning' }
+		]);
 	});
 
 	// #91 review F2 — the refetch a CREATE triggers must not roll back a write
@@ -565,10 +570,10 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 			expect(postsTo(fetchMock, 'entity/pi-a').length).toBe(1);
 		});
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/pi-b')[0][1]!.body))).toEqual([
-			{ type: 'ordinal', number: 0 }
+			{ _id: 'val-pi-b', type: 'ordinal', number: 0 }
 		]);
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/pi-a')[0][1]!.body))).toEqual([
-			{ type: 'ordinal', number: 1 }
+			{ _id: 'val-pi-a', type: 'ordinal', number: 1 }
 		]);
 	});
 

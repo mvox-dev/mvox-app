@@ -117,6 +117,19 @@ export async function createAttendance(
  * (attendance's parent IS the event) — this function only ever receives a status
  * change, not an event.
  */
+/**
+ * #264 (PO ruling, branch (i), item 3) — ATOMIC overwrite, superseding the old
+ * clear-then-set choreography (delete BEFORE posting — a rejected POST left
+ * the attendance with NO status, an EMPTY half-landing). Exact mirror of
+ * `updateRsvpStatus`'s #264 treatment (rsvpData.ts) with the attendance
+ * structural differences: three sentinels, event id sourced from `_parent`.
+ * ONE POST pairs the FIRST existing status id with the new status, and the
+ * FIRST existing sentinel id (across `present_ref, absent_ref, late_ref`
+ * order) with the new `<status>_ref` — cross-type pairing is platform-legal
+ * (`setEntity` matches by `_id`). Corrupted-state extras are swept at
+ * `/property/{id}` strictly AFTER the POST; the normal path issues ZERO
+ * deletes.
+ */
 export async function updateAttendanceStatus(
 	cfg: EntuCfg,
 	attendanceId: string,
@@ -146,16 +159,39 @@ export async function updateAttendanceStatus(
 	const eventId = entity._parent?.[0]?.reference;
 	if (!eventId) throw new Error('updateAttendanceStatus: _parent reference missing — cannot write sentinel');
 
-	// GENERIC delete: the old status value AND every sentinel value-id that exists,
-	// not just the one we expect. If corrupted state left two sentinels set, both go
-	// — otherwise an orphan would survive as a phantom count.
-	const toDelete = [
-		...(entity.status ?? []),
+	const [oldStatus, ...extraStatus] = entity.status ?? [];
+	// GENERIC across all three sentinel props, in fixed order — corrupted state
+	// (two sentinels set at once) should never happen, but the sweep stays
+	// generic rather than assuming only the expected one exists.
+	const allSentinels = [
 		...(entity.present_ref ?? []),
 		...(entity.absent_ref ?? []),
 		...(entity.late_ref ?? [])
 	];
-	for (const value of toDelete) {
+	const [oldSentinel, ...extraSentinels] = allSentinels;
+
+	const statusEntry = oldStatus
+		? { _id: oldStatus._id, type: 'status', string: status }
+		: { type: 'status', string: status };
+	const sentinelEntry = oldSentinel
+		? { _id: oldSentinel._id, type: `${status}_ref`, reference: eventId }
+		: { type: `${status}_ref`, reference: eventId };
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${attendanceId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([statusEntry, sentinelEntry])
+		},
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`updateAttendanceStatus POST failed: ${postRes.status}`);
+
+	// EXTRA-sweep — corrupted multi-value state only, strictly AFTER the POST.
+	for (const value of [...extraStatus, ...extraSentinels]) {
 		const delRes = await entuFetch(
 			cfg.db,
 			`property/${value._id}`,
@@ -165,22 +201,6 @@ export async function updateAttendanceStatus(
 		);
 		if (!delRes.ok) throw new Error(`updateAttendanceStatus delete failed: ${delRes.status}`);
 	}
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${attendanceId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([
-				{ type: 'status', string: status },
-				{ type: `${status}_ref`, reference: eventId }
-			])
-		},
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`updateAttendanceStatus POST failed: ${postRes.status}`);
 }
 
 /**

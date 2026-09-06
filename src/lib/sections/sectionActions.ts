@@ -2,6 +2,7 @@ import { entuFetch } from '$lib/entu/request';
 import {
 	SectionMembershipMissingError,
 	SectionNotEmptyError,
+	SectionParentDamagedError,
 	SectionReparentPartialError
 } from './sectionErrors';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
@@ -54,9 +55,17 @@ async function bodyTextOf(res: Response): Promise<string> {
 //   - `name` sent trimmed; an empty/whitespace-only name throws WITHOUT any
 //     fetch (defense in depth — the form validates too, but the data layer must
 //     not create a nameless section).
-//   - Full create body is EXACTLY: _type + _parent + name + _sharing — no
-//     display_order (v4E marks it optional; ordering-by-name is the fallback),
-//     no voice, no description.
+//   - Full create body is EXACTLY: _type + _parent + name + _sharing +
+//     _inheritrights — no display_order (v4E marks it optional; ordering-by-name
+//     is the fallback), no voice, no description.
+//   - `_inheritrights: true` EXPLICIT (#264 item 6, PO nod 2026-09-06): asserts
+//     the rights-cascade dependency this create body was silently relying on
+//     (entu-api's create-time auto-fill happened to rescue every live section
+//     because they're all created directly under the db entity, which is
+//     `true` by the platform's own bootstrap default) — matches
+//     inviteData.ts's member-create practice. No live behavior change; DO NOT
+//     remove as "redundant" — see sectionActions.create-inheritrights.spec.ts
+//     for the full rider on why this line must stay asserted.
 //   - Duplicate-name detection is NOT here — the picker already holds the full
 //     section tree, so the duplicate check is a LOCAL compare in the component
 //     (see SectionPicker.create.spec.ts); the data layer stays one POST.
@@ -145,11 +154,14 @@ export async function createSection(
 	// authenticated member. `public` is presently counterproductive in practice,
 	// but the fix is widening the section TYPE entity (a data change), not
 	// deleting this line.
-	const props: Array<{ type: string; reference?: string; string?: string }> = [
+	const props: Array<{ type: string; reference?: string; string?: string; boolean?: boolean }> = [
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: parentRef },
 		{ type: 'name', string: name },
-		{ type: '_sharing', string: 'public' }
+		{ type: '_sharing', string: 'public' },
+		// #264 item 6 (PO nod) — asserts the rights-cascade dependency explicitly;
+		// see the module contract above and sectionActions.create-inheritrights.spec.ts.
+		{ type: '_inheritrights', boolean: true }
 	];
 
 	const createRes = await entuFetch(
@@ -286,6 +298,7 @@ export async function unassignMemberSection(
 }
 
 // TS.4/#98 — the section REORDER write layer. GREEN.
+// #264 (PO ruling, branch (i)) — the per-section replace goes ATOMIC. GREEN.
 //
 // CONTRACT (pinned by sectionActions.reorder.spec.ts):
 //
@@ -295,16 +308,23 @@ export async function unassignMemberSection(
 //     the top-level sections, or one parent's sub-sections — never a mix
 //     (display_order sorts within a parent; the UI enforces the sibling
 //     constraint, see page.roster-reorder.spec.ts).
-//   - Per section, the same replace shape as repertoireActions'
-//     `updateProgramItemOrdinal`: GET `entity/{id}?props=display_order` →
-//     POST `entity/{id}` body EXACTLY `[{ type: 'display_order', number: n }]`
-//     → DELETE `property/{valueId}` for EVERY old value id (Entu POST APPENDS
-//     to implicitly multi-valued props; duplicates from corrupted state all
-//     go). POST-BEFORE-DELETE is deliberate: a failed POST leaves the old
-//     value untouched (no DELETE fires for that section); a failed DELETE
-//     leaves a duplicate the next renumber sweeps — either beats an EMPTY
-//     display_order (which sorts the section to the end as Infinity).
-//   - A section with NO existing display_order value → POST only, no DELETE.
+//   - Per section: GET `entity/{id}?props=display_order` (the existing value
+//     id(s)) → ONE `POST entity/{id}` carrying Entu's native atomic overwrite
+//     — the entry pairs the FIRST existing value's `_id` with the new number,
+//     `setEntity` soft-deleting the old value in the SAME call (entu-www docs,
+//     "Overwriting a Property Value"). NO `DELETE /property/{id}` round-trip
+//     remains on the normal (≤1-value) path — a failed POST leaves the old
+//     value untouched (an empty display_order would sort the section to the
+//     end as Infinity, see sectionData.listSections), and a landed POST has
+//     already replaced it atomically.
+//   - A section with NO existing display_order value → plain POST
+//     `[{ type: 'display_order', number: n }]` (nothing to overwrite).
+//   - CORRUPTED duplicate state (2+ existing values): the overwrite pairs the
+//     FIRST old id; every EXTRA stale id is deleted at `DELETE
+//     /property/{valueId}` strictly AFTER the POST landed — the only DELETEs
+//     left on this path, unreachable from clean data, ordered so a failure
+//     can never leave the property empty (a stale duplicate survives instead,
+//     swept by the next renumber).
 //   - Old value ids go to `DELETE /property/{valueId}` ONLY — never
 //     `DELETE /entity/...` (the endpoint split: that would delete the section).
 //   - `orderedIds: []` resolves without any fetch.
@@ -348,6 +368,13 @@ export async function reorderSections(
 		}
 		const body = (await getRes.json()) as { entity?: { display_order?: DisplayOrderValue[] } };
 		const existing = body.entity?.display_order ?? [];
+		const [oldValue, ...extras] = existing;
+
+		// #264 — the atomic overwrite: pair the FIRST existing value's `_id` with
+		// the new number (or send it bare when there's nothing to overwrite).
+		const entry = oldValue
+			? { _id: oldValue._id, type: 'display_order', number }
+			: { type: 'display_order', number };
 
 		const postRes = await entuFetch(
 			cfg.db,
@@ -356,7 +383,7 @@ export async function reorderSections(
 			{
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify([{ type: 'display_order', number }])
+				body: JSON.stringify([entry])
 			},
 			fetchImpl
 		);
@@ -370,7 +397,8 @@ export async function reorderSections(
 			);
 		}
 
-		for (const value of existing) {
+		// EXTRA-sweep — corrupted multi-value state only, strictly AFTER the POST.
+		for (const value of extras) {
 			const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
 			if (!delRes.ok) {
 				throw new SectionReparentPartialError(
@@ -458,7 +486,10 @@ export async function deleteSection(
 	if (!res.ok) throw new Error(`deleteSection failed: ${res.status}`);
 }
 
-// #155/S3 — the section REPARENT write layer (indent/unindent). RED: stub only.
+// #155/S3 — the section REPARENT write layer (indent/unindent).
+// #264 (PO ruling, branch (i)) — the write goes ATOMIC, and the old
+// GET → POST-new → DELETE-old choreography is RETIRED (superseded, not merely
+// updated — see the platform facts below).
 //
 // CONTRACT (pinned by sectionActions.reparent.spec.ts):
 //
@@ -469,35 +500,50 @@ export async function deleteSection(
 //     ORGANIZATION id when promoting to top level — v4E `parentConstraint:
 //     'exactly_one_of'` means a section always has exactly one parent, org or
 //     section, so the caller resolves WHICH id; this layer just re-points).
-//   - Replace semantics per the pinned Entu wire contract (POST APPENDS to
-//     implicitly multi-valued props — a naive POST would leave the section
-//     with TWO parents), same choreography as eventFieldEdit/reorderSections:
-//       1. GET `entity/{sectionId}?props=_parent` — the existing value id(s),
-//          captured BEFORE the POST so the deletes can never target the value
-//          we are about to write;
-//       2. POST `entity/{sectionId}` with body EXACTLY
-//          `[{ type: '_parent', reference: newParentId }]`;
-//       3. DELETE `/property/{valueId}` for EVERY id from step 1 — not just
-//          the first (duplicates from corrupted state all go; a leftover
-//          `_parent` value would violate `exactly_one_of` as a phantom
-//          second parent).
-//     POST-BEFORE-DELETE: a failed POST leaves the old parent untouched (the
-//     section never dangles parentless); a failed DELETE leaves a recoverable
-//     duplicate the next reparent's GET-then-delete-all sweeps.
-//   - Old value ids go to `DELETE /property/{valueId}` ONLY — never
-//     `DELETE /entity/...` (the endpoint split: that would delete the section
-//     or its parent, not the reference between them).
+//
+//   Platform facts (stage-1 report on #264, source-verified): `POST
+//   entity/{id}` writing `_parent` is EDITOR-gated (entu-api's POST
+//   rightTypes list excludes `_parent`), but `DELETE property/{id}` on a
+//   `_parent` value is OWNER-gated (the delete route's rightTypes list
+//   INCLUDES `_parent`). The old POST-new-then-DELETE-old choreography
+//   therefore half-landed for an editor-tier user: the POST committed, the
+//   owner-only DELETE 403'd, and the section was left with TWO `_parent`
+//   values (live-confirmed on mvox_crede — Soprano II). Entu's native atomic
+//   overwrite closes that window: a POST entry carrying the OLD value's `_id`
+//   makes `setEntity` soft-delete it in the SAME call, entirely under the
+//   editor gate — the owner-only DELETE route is NEVER touched.
+//
+//   - GET `entity/{sectionId}?props=_parent` FIRST — the existing value id(s).
+//   - EXACTLY ONE existing value → ONE `POST entity/{sectionId}` with body
+//     EXACTLY `[{ _id: <old value id>, type: '_parent', reference:
+//     newParentId }]`. NO `DELETE /property/{id}` request exists anywhere in
+//     this path, in any scenario — the atomic overwrite IS the replace.
+//   - ZERO or MORE-THAN-ONE existing values → NO writes at all (the GET is the
+//     only request) — throws `SectionParentDamagedError` (code
+//     'section-parent-damaged', sectionId + valueCount carried, see
+//     sectionErrors.ts). v4E `parentConstraint: 'exactly_one_of'` means ≠1
+//     values is DAMAGED DATA (ruling item 5 — the #258 fail-open class);
+//     writing an atomic overwrite over a state that cannot pick ONE old id to
+//     pair would be a guess, and this layer refuses to guess. The tree
+//     builder (`sectionData.listSections`) surfaces the same damage; see its
+//     module header.
+//   - A REJECTED POST leaves exactly the old state — the atomic entry carried
+//     the old value's `_id`, so a rejection means the server changed NOTHING
+//     (the old value was never soft-deleted). Still throws
+//     `SectionReparentPartialError` (step 'reparent', status + body captured,
+//     #253 evidence shape unchanged; renumberedCount/totalCount `0`/`0` — the
+//     renumber never begins here).
 //   - `newParentId === sectionId` throws WITHOUT any fetch — a section can
 //     never be its own parent, and the guard belongs in the data layer too
 //     (defense in depth; the page's sibling math should never produce it).
-//   - #253: throws `SectionReparentPartialError` (step `'reparent'`,
-//     renumberedCount/totalCount `0`/`0` — the renumber never begins here) on
-//     any non-2xx — status AND response body captured (see sectionErrors.ts).
 
 /**
  * Re-point a section's `_parent` reference to `newParentId` (indent/unindent —
- * #155/S3). Replace semantics: GET old `_parent` value ids → POST the new
- * reference → DELETE every old value id. See module contract above.
+ * #155/S3) via Entu's ATOMIC overwrite (#264): GET the one existing `_parent`
+ * value id → ONE POST carrying it alongside the new reference. NO DELETE
+ * exists on this path — a section holding anything other than exactly one
+ * `_parent` value is damaged data and refuses the write entirely. See module
+ * contract above.
  */
 export async function reparentSection(
 	cfg: EntuCfg,
@@ -516,6 +562,13 @@ export async function reparentSection(
 	const body = (await getRes.json()) as { entity?: { _parent?: MemberParentValue[] } };
 	const existing = body.entity?._parent ?? [];
 
+	// #264 ruling item 5 — ≠1 existing values is damaged data: the atomic
+	// overwrite cannot pick ONE old id to pair without guessing, so this
+	// refuses BEFORE any write (GET was the only request).
+	if (existing.length !== 1) {
+		throw new SectionParentDamagedError(sectionId, existing.length);
+	}
+
 	const postRes = await entuFetch(
 		cfg.db,
 		`entity/${sectionId}`,
@@ -523,39 +576,35 @@ export async function reparentSection(
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ type: '_parent', reference: newParentId }])
+			body: JSON.stringify([{ _id: existing[0]._id, type: '_parent', reference: newParentId }])
 		},
 		fetchImpl
 	);
 	if (!postRes.ok) {
 		throw new SectionReparentPartialError('reparent', 0, 0, postRes.status, await bodyTextOf(postRes));
 	}
-
-	for (const value of existing) {
-		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) {
-			throw new SectionReparentPartialError('reparent', 0, 0, delRes.status, await bodyTextOf(delRes));
-		}
-	}
+	// #264 — no DELETE: the atomic overwrite-POST above already soft-deleted
+	// the old `_parent` value in the same call.
 }
 
 // #155/S4 — the section RENAME write layer.
+// #264 (PO ruling, branch (i)) — the replace goes ATOMIC. GREEN.
 //
 // CONTRACT (pinned by sectionActions.rename.spec.ts):
 //
 //   - `renameSection(cfg, sectionId, name)` replaces the section's `name`
-//     property. Replace semantics per the pinned Entu wire contract (POST
-//     APPENDS to implicitly multi-valued props), same choreography as
-//     eventFieldEdit/reorderSections/reparentSection:
-//       1. GET `entity/{sectionId}?props=name` — the existing value id(s),
-//          captured BEFORE the POST so the deletes can only ever target
-//          PRE-EXISTING ids;
-//       2. POST `entity/{sectionId}` with body EXACTLY
-//          `[{ type: 'name', string: <trimmed name> }]`;
-//       3. DELETE `/property/{valueId}` for EVERY id from step 1 (not just
-//          the first — corrupted duplicate state all goes).
-//     POST-BEFORE-DELETE: a failed POST leaves the old name untouched; a
-//     failed DELETE leaves a recoverable duplicate the next rename sweeps.
+//     property via Entu's native atomic overwrite (entu-www docs,
+//     "Overwriting a Property Value"):
+//       1. GET `entity/{sectionId}?props=name` — the existing value id(s);
+//       2. ONE `POST entity/{sectionId}` — the entry pairs the FIRST existing
+//          value's `_id` with the new string (`setEntity` soft-deletes the old
+//          value in the SAME call), or sends the value bare when nothing
+//          exists to overwrite;
+//       3. EXTRA stale ids (corrupted 2+-value state ONLY) →
+//          `DELETE /property/{valueId}` each, strictly AFTER the POST landed.
+//     NO `DELETE /property/{id}` round-trip remains on the normal (≤1-value)
+//     path. A failed POST leaves the old name untouched (nothing committed);
+//     a failed extra-sweep leaves a recoverable stale duplicate.
 //   - `name` sent TRIMMED; an empty/whitespace-only name throws WITHOUT any
 //     fetch (defense in depth — the inline form validates too, but the data
 //     layer must not rename a section to blank).
@@ -565,9 +614,10 @@ export async function reparentSection(
 //   - Throws on any non-2xx (status surfaced).
 
 /**
- * Rename a `section` entity — replace its `name` property. Replace
- * semantics: GET old `name` value ids → POST the new value → DELETE every
- * old value id. See module contract above.
+ * Rename a `section` entity — atomic overwrite of its `name` property (#264):
+ * GET the old value id(s) → ONE POST pairing the FIRST with the new string →
+ * (corrupted state only) DELETE every EXTRA id, strictly after the POST. See
+ * module contract above.
  */
 export async function renameSection(
 	cfg: EntuCfg,
@@ -584,6 +634,9 @@ export async function renameSection(
 	if (!getRes.ok) throw new Error(`renameSection lookup failed: ${getRes.status}`);
 	const body = (await getRes.json()) as { entity?: { name?: Array<{ _id: string }> } };
 	const existing = body.entity?.name ?? [];
+	const [oldValue, ...extras] = existing;
+
+	const entry = oldValue ? { _id: oldValue._id, type: 'name', string: trimmed } : { type: 'name', string: trimmed };
 
 	const postRes = await entuFetch(
 		cfg.db,
@@ -592,13 +645,13 @@ export async function renameSection(
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ type: 'name', string: trimmed }])
+			body: JSON.stringify([entry])
 		},
 		fetchImpl
 	);
 	if (!postRes.ok) throw new Error(`renameSection POST failed: ${postRes.status}`);
 
-	for (const value of existing) {
+	for (const value of extras) {
 		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
 		if (!delRes.ok) throw new Error(`renameSection delete failed: ${delRes.status}`);
 	}

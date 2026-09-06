@@ -1,4 +1,5 @@
 import { entuFetch } from '$lib/entu/request';
+import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Work } from '$lib/library/libraryData';
 import type { RepertoireItem } from './repertoireData';
@@ -24,11 +25,13 @@ import type { ManageRightsState, RepertoireStatus } from './types';
 //     `_sharing: domain` — its parent (event) is NOT uniformly domain (one live
 //     event is `public`), so inherit would be variable; the explicit cap pins
 //     the intended tier regardless of the parent event's own tier.
-//   - UPDATE = GET current value-ids → POST the new value → DELETE
-//     /property/{value-id} for each OLD id (Entu POST APPENDS to implicitly
-//     multi-valued props, so replace semantics require both calls; the GET must
-//     precede the POST so the delete targets only the pre-existing values).
-//     POST-before-DELETE is deliberate — see updateRepertoireStatus.
+//   - UPDATE = the shared ATOMIC overwrite (#264 PO ruling, branch (i)):
+//     `replaceEntityProperty` (entu/replaceProperty.ts) — GET the current
+//     value-id(s), then ONE POST whose entry pairs the FIRST existing id with
+//     the new value (Entu's native overwrite; `setEntity` soft-deletes the old
+//     value in the SAME call). Corrupted-state extras are swept at
+//     `/property/{id}` strictly AFTER the POST; the normal (≤1-value) path
+//     issues ZERO deletes.
 //   - per-tap immediate writes — NOT batch. Each control tap is one round-trip;
 //     there is no "save all" payload shape anywhere in this module's API.
 //   - rights: management controls render iff the current person holds `_editor`
@@ -84,19 +87,9 @@ export async function createRepertoireItem(
 }
 
 /**
- * Change a repertoire_item's status. GET current status value-id(s) → POST the
- * new bare status string → DELETE each old value at `/property/{id}`. Unlike
- * attendance, status here carries NO sentinel companion prop.
- *
- * POST BEFORE DELETE (#91 review F5). Entu's POST APPENDS to an implicitly
- * multi-valued prop, so replace semantics still need both calls and still need
- * the GET first (to know which value-ids are the OLD ones — deleting after the
- * POST must not take the value we just wrote). The ORDER is what changed: with
- * DELETE first, a POST that fails leaves the property EMPTY, and
- * `listRepertoireItems` then reads an absent status back as the schema default
- * 'active' — a value the editor never chose, silently. Posting first means a
- * failed POST leaves the old value untouched, and a failed DELETE leaves a
- * recoverable duplicate that the NEXT update's GET-then-delete-all cleans up.
+ * Change a repertoire_item's status — the shared ATOMIC overwrite (#264,
+ * `replaceEntityProperty`). Unlike attendance, status here carries NO
+ * sentinel companion prop, so this is a bare single-property replace.
  */
 export async function updateRepertoireStatus(
 	cfg: EntuCfg,
@@ -104,35 +97,13 @@ export async function updateRepertoireStatus(
 	status: RepertoireStatus,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const getRes = await entuFetch(cfg.db, `entity/${itemId}?props=status`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`updateRepertoireStatus lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as { entity?: { status?: Array<{ _id: string }> } };
-	const existing = body.entity?.status ?? [];
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${itemId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ type: 'status', string: status }])
-		},
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`updateRepertoireStatus POST failed: ${postRes.status}`);
-
-	for (const value of existing) {
-		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`updateRepertoireStatus delete failed: ${delRes.status}`);
-	}
+	await replaceEntityProperty(cfg, itemId, { type: 'status', string: status }, fetchImpl, 'updateRepertoireStatus');
 }
 
 /**
- * Set/replace a repertoire_item's pinned edition. Same GET → POST new value →
- * DELETE old value(s) shape as updateRepertoireStatus (see its note on why the
- * POST goes first) — `edition` is a reference prop and POST appends, so an
- * unpinned re-pin without the delete would leave TWO edition refs.
+ * Set/replace a repertoire_item's pinned edition — the shared ATOMIC overwrite
+ * (#264, `replaceEntityProperty`). `edition` is a reference prop; a re-pin
+ * without the atomic `_id` pairing would leave TWO edition refs.
  */
 export async function pinEdition(
 	cfg: EntuCfg,
@@ -140,28 +111,7 @@ export async function pinEdition(
 	editionId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const getRes = await entuFetch(cfg.db, `entity/${itemId}?props=edition`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`pinEdition lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as { entity?: { edition?: Array<{ _id: string }> } };
-	const existing = body.entity?.edition ?? [];
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${itemId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ type: 'edition', reference: editionId }])
-		},
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`pinEdition POST failed: ${postRes.status}`);
-
-	for (const value of existing) {
-		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`pinEdition delete failed: ${delRes.status}`);
-	}
+	await replaceEntityProperty(cfg, itemId, { type: 'edition', reference: editionId }, fetchImpl, 'pinEdition');
 }
 
 /** Delete a repertoire_item entity ("Remove" — #91). The work itself is untouched. */
@@ -217,9 +167,11 @@ export async function createProgramItem(
 }
 
 /**
- * Reorder: set a program_item's ordinal. Same GET → POST new value → DELETE old
- * value-id(s) shape as updateRepertoireStatus (see its note on why the POST goes
- * first), with a number prop. `0` is a legal target (move to the opening slot).
+ * Reorder: set a program_item's ordinal — the shared ATOMIC overwrite (#264,
+ * `replaceEntityProperty`), with a number prop. `0` is a legal target (move to
+ * the opening slot); a mid-reorder failure can never leave a program_item
+ * with NO ordinal (the atomic entry carries the old `_id`, so a rejected POST
+ * changes nothing).
  */
 export async function updateProgramItemOrdinal(
 	cfg: EntuCfg,
@@ -227,28 +179,13 @@ export async function updateProgramItemOrdinal(
 	ordinal: number,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const getRes = await entuFetch(cfg.db, `entity/${itemId}?props=ordinal`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`updateProgramItemOrdinal lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as { entity?: { ordinal?: Array<{ _id: string }> } };
-	const existing = body.entity?.ordinal ?? [];
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${itemId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ type: 'ordinal', number: ordinal }])
-		},
-		fetchImpl
+	await replaceEntityProperty(
+		cfg,
+		itemId,
+		{ type: 'ordinal', number: ordinal },
+		fetchImpl,
+		'updateProgramItemOrdinal'
 	);
-	if (!postRes.ok) throw new Error(`updateProgramItemOrdinal POST failed: ${postRes.status}`);
-
-	for (const value of existing) {
-		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`updateProgramItemOrdinal delete failed: ${delRes.status}`);
-	}
 }
 
 /** One program_item's position, as read off the rendered programme. */
@@ -301,7 +238,9 @@ export function planProgramMove(
 
 /**
  * Apply a `planProgramMove` result. Sequential, not `Promise.all`: each write
- * is itself a GET → DELETE → POST triple, and a deterministic order makes a
+ * is itself a GET existing id(s) → ONE POST pairing the first old `_id` with
+ * the new value (corrupted extras only are swept after the POST; the normal
+ * ≤1-value path issues zero deletes), and a deterministic order makes a
  * partial failure diagnosable (the writes that landed are a prefix of the plan)
  * instead of an arbitrary half-state. Fails loud on the first rejection — the
  * caller reverts its optimistic reorder and surfaces the error.

@@ -17,7 +17,7 @@
 //       assignment (adopted binding — it explains the section ghost-blocker),
 //       reinstates with ONE action and NO invitation.
 //
-// Data mechanics (clear-then-set wire, status-only write, _parent untouched)
+// Data mechanics (atomic overwrite (#264), status-only write, _parent untouched)
 // are pinned in memberLifecycle.spec.ts; this file pins the page wiring.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -395,11 +395,13 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		);
 	});
 
-	// #255 review round 2 F2 — `reinstateMember` is a clear-then-set pair, so two
-	// concurrent runs both read the same status value id, the first DELETE wins,
-	// the second gets a non-2xx and throws — rendering "couldn't be reinstated —
-	// they're still not active" over a reinstate that DID happen. The in-flight
-	// guard (the deactivate path already has one) makes that unreachable.
+	// #255 review round 2 F2 / #264 — `reinstateMember` is an atomic overwrite
+	// (#264): two concurrent runs both GET the same status value id, the first
+	// POST's atomic overwrite consumes it, and the second POST still carries
+	// that now-stale `_id` — it returns 200 and silently leaves the member
+	// holding TWO `status` values, with nothing shown. The in-flight guard
+	// (the deactivate path already has one) is the ONLY protection here — the
+	// wire no longer complains.
 	it('a second tap while the reinstate is in flight is refused — one write, no false failure alert', async () => {
 		let release: () => void = () => {};
 		reinstateMemberMock.mockImplementation(

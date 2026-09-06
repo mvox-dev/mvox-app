@@ -380,7 +380,9 @@ describe('#248 — corpus fetch failure degrades silently', () => {
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			expect(postedProps(posts[0])).toEqual([{ type: 'location', string: NEW_VENUE }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-loc-1', type: 'location', string: NEW_VENUE }
+			]);
 		});
 		await waitFor(() => {
 			expect(
@@ -417,7 +419,9 @@ describe('#248 — a brand-new venue saves exactly as typed even with suggestion
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts).toHaveLength(1);
-			expect(postedProps(posts[0])).toEqual([{ type: 'location', string: NEW_VENUE }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-loc-1', type: 'location', string: NEW_VENUE }
+			]);
 		});
 		await waitFor(() => {
 			expect(

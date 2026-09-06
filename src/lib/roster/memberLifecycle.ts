@@ -9,11 +9,12 @@ import { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterData
 // Contract (issue #255 — Gama ruling + Bentham proposal, all four recs accepted):
 //
 //   - `deactivateMember` / `reinstateMember`: the SAME mechanism in two
-//     directions — a `status` flip via the house clear-then-set wire
-//     (precedent: updateRsvpStatus, rsvpData.ts:148 — POST appends on Entu, so
-//     replace = GET value-ids, DELETE property/{id} each, POST the new value).
-//     Done-when 1: `status` is the ONLY thing that changes — no other property
-//     write, no `_parent` change, no rights change, ever.
+//     directions — a `status` flip via the ATOMIC overwrite wire (#264 PO
+//     ruling, branch (i): GET value-id(s) → ONE POST pairing the old id with
+//     the new value, Entu's native overwrite — supersedes the old clear-then-
+//     set choreography, which half-landed EMPTY on a rejected POST). Done-when
+//     1: `status` is the ONLY thing that changes — no other property write,
+//     no `_parent` change, no rights change, ever.
 //   - The off-'active' value is `'archived'` — canonical v4E member.status is
 //     noted `active | archived` (schema.ts:323), so no schema change and no
 //     invented value. User-facing copy NEVER says "archived" (Gama copy
@@ -38,9 +39,10 @@ import { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterData
 export type MemberLifecycleStatus = 'active' | 'archived';
 
 /**
- * Flip `status` to 'archived' via clear-then-set. Writes NOTHING else — the
- * member entity survives whole (history keeps its subject; `_parent` keeps the
- * reinstatement context and the section ghost-blocker explanation).
+ * Flip `status` to 'archived' via the atomic overwrite (#264). Writes NOTHING
+ * else — the member entity survives whole (history keeps its subject;
+ * `_parent` keeps the reinstatement context and the section ghost-blocker
+ * explanation).
  */
 export async function deactivateMember(
 	cfg: EntuCfg,
@@ -51,9 +53,9 @@ export async function deactivateMember(
 }
 
 /**
- * Flip `status` back to 'active' via the SAME clear-then-set wire — reinstate
- * WITHOUT a fresh invitation (done-when 4). No invite machinery anywhere near
- * this path.
+ * Flip `status` back to 'active' via the SAME atomic-overwrite wire (#264) —
+ * reinstate WITHOUT a fresh invitation (done-when 4). No invite machinery
+ * anywhere near this path.
  */
 export async function reinstateMember(
 	cfg: EntuCfg,
@@ -64,11 +66,19 @@ export async function reinstateMember(
 }
 
 /**
- * The shared clear-then-set wire (precedent: updateRsvpStatus, rsvpData.ts:148).
- * GET the member's current `status` value-id(s), DELETE every one found (generic
- * — a corrupted double-value defense, not just the one expected value), then POST
- * a body containing ONLY `{type:'status', string:newStatus}` — done-when 1: no
- * other property is ever read, cleared or written by this function.
+ * The shared ATOMIC-overwrite wire (#264 PO ruling, branch (i), item 3 —
+ * supersedes the old clear-then-set choreography named in the module header
+ * above). GET the member's current `status` value-id(s) → ONE POST whose
+ * entry pairs the FIRST existing value's `_id` with `newStatus` (`setEntity`
+ * soft-deletes the old value in the SAME call — entu-www docs, "Overwriting a
+ * Property Value"), or sends the value bare when none exists. NO property
+ * DELETE fires on this path — the old clear-first wire deleted BEFORE
+ * posting, so a rejected POST left the member with NO status at all (worse
+ * than a stranded duplicate); the atomic overwrite makes that half-landing
+ * structurally impossible: a rejected POST changes nothing server-side.
+ * Corrupted 2+-value state (should never happen) still gets an EXTRA-sweep
+ * DELETE, strictly AFTER the POST. Done-when 1 unchanged: no other property is
+ * ever read, cleared or written by this function.
  */
 async function flipMemberStatus(
 	cfg: EntuCfg,
@@ -80,8 +90,27 @@ async function flipMemberStatus(
 	if (!getRes.ok) throw new Error(`memberLifecycle: status lookup failed: ${getRes.status}`);
 	const body = (await getRes.json()) as { entity?: { status?: Array<{ _id: string }> } };
 	const statusValues = body.entity?.status ?? [];
+	const [oldValue, ...extras] = statusValues;
 
-	for (const value of statusValues) {
+	const entry = oldValue
+		? { _id: oldValue._id, type: 'status', string: newStatus }
+		: { type: 'status', string: newStatus };
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${memberId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([entry])
+		},
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`memberLifecycle: status write failed: ${postRes.status}`);
+
+	// EXTRA-sweep — corrupted multi-value state only, strictly AFTER the POST.
+	for (const value of extras) {
 		const delRes = await entuFetch(
 			cfg.db,
 			`property/${value._id}`,
@@ -91,19 +120,6 @@ async function flipMemberStatus(
 		);
 		if (!delRes.ok) throw new Error(`memberLifecycle: status clear failed: ${delRes.status}`);
 	}
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${memberId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ type: 'status', string: newStatus }])
-		},
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`memberLifecycle: status write failed: ${postRes.status}`);
 }
 
 /** Mirror of `ActiveMember` for the status.string=archived read. */

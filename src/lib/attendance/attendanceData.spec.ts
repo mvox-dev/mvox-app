@@ -204,50 +204,77 @@ describe('updateAttendanceStatus', () => {
 		}
 	});
 
-	it('order: GET → DELETE(s) → POST', async () => {
+	// #264 RED (PO ruling, branch (i), item 3): the old clear-then-set wire
+	// deleted status + sentinel BEFORE posting — a rejected POST left the
+	// attendance with NO status (empty half-landing). The atomic overwrite
+	// (POST entries carrying the OLD value ids) replaces both in ONE call.
+	// Exact mirror of updateRsvpStatus's #264 block (rsvpData.spec.ts) with the
+	// attendance structural differences: three sentinels, event id from
+	// `_parent`. Corrupted EXTRA sentinels are deleted strictly AFTER the POST.
+
+	it('order: GET → ONE atomic POST — no DELETE anywhere on the normal (one status + one sentinel) path', async () => {
 		const { fetchImpl, calls } = makeMockFetch({});
 		await updateAttendanceStatus(cfg, 'attendance-1', 'absent', fetchImpl);
-		expect(calls[0].method).toBe('GET');
-		const deleteIdx = calls.findIndex((c) => c.method === 'DELETE');
-		const postIdx = calls.findIndex((c) => c.method === 'POST');
-		expect(deleteIdx).toBeGreaterThan(0);
-		expect(postIdx).toBeGreaterThan(deleteIdx);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
-	it('DELETE targets /property/{value-id} (NOT /entity/{id}) — the wire-shape split', async () => {
-		const { fetchImpl, calls } = makeMockFetch({ statusValueId: 'sv-old' });
-		await updateAttendanceStatus(cfg, 'attendance-1', 'late', fetchImpl);
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-old') && u.includes('property'))).toBe(true);
-		expect(deleteUrls.some((u) => /entity\/sv-old/.test(u))).toBe(false);
+	it('FULL SHAPE (#264): the POST pairs the old status id with the new status AND the old sentinel id with the new sentinel — toEqual, both _ids present, no DELETE', async () => {
+		const { fetchImpl, calls } = makeMockFetch({ statusValueId: 'sv-1', sentinels: { present_ref: 'sent-1' } });
+		await updateAttendanceStatus(cfg, 'attendance-1', 'absent', fetchImpl);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([
+			{ _id: 'sv-1', type: 'status', string: 'absent' },
+			{ _id: 'sent-1', type: 'absent_ref', reference: 'event-abc' }
+		]);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
-	it('FULL SET: DELETEs the old status value-id AND every existing sentinel value-id, even when more than one is present (corrupted-state defense)', async () => {
+	it('#264 — a REJECTED POST leaves the OLD status and sentinel intact: no DELETE was ever issued (the empty-attendance half-landing is structurally impossible)', async () => {
+		const calls: Call[] = [];
+		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+			const method = init?.method ?? 'GET';
+			calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+			if (method === 'POST') return Promise.resolve(json({}, 500));
+			if (method === 'DELETE') return Promise.resolve(json({}));
+			return Promise.resolve(
+				json({
+					entity: {
+						_id: 'attendance-1',
+						status: [{ _id: 'sv-1', string: 'present' }],
+						_parent: [{ reference: 'event-abc' }],
+						present_ref: [{ _id: 'sent-1' }]
+					}
+				})
+			);
+		});
+		await expect(updateAttendanceStatus(cfg, 'attendance-1', 'late', fetchImpl)).rejects.toThrow(
+			/500/
+		);
+		// Under the old wire this log held property DELETEs before the failing
+		// POST — the attendance was left empty. Now: none.
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+	});
+
+	it('CORRUPTED extra sentinel (two present at once): the POST pairs the FIRST existing sentinel id; ONLY the extra is deleted, strictly AFTER the POST', async () => {
 		const { fetchImpl, calls } = makeMockFetch({
 			statusValueId: 'sv-old',
-			sentinels: { present_ref: 'sent-present', late_ref: 'sent-late' } // two at once — should never happen; the delete must be generic
+			sentinels: { present_ref: 'sent-present', late_ref: 'sent-late' } // should never happen; the sweep must stay generic
 		});
 		await updateAttendanceStatus(cfg, 'attendance-1', 'absent', fetchImpl);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([
+			{ _id: 'sv-old', type: 'status', string: 'absent' },
+			{ _id: 'sent-present', type: 'absent_ref', reference: 'event-abc' }
+		]);
 		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-old'))).toBe(true);
-		expect(deleteUrls.some((u) => u.includes('sent-present'))).toBe(true);
-		expect(deleteUrls.some((u) => u.includes('sent-late'))).toBe(true);
-		expect(deleteUrls).toHaveLength(3);
-	});
-
-	it('FULL SET: after update, POST carries exactly the new status + its matching sentinel — no other status/_ref prop', async () => {
-		const { fetchImpl, calls } = makeMockFetch({ sentinels: { present_ref: 'sent-1' } });
-		await updateAttendanceStatus(cfg, 'attendance-1', 'absent', fetchImpl);
-		const postBodies = calls
-			.filter((c) => c.method === 'POST')
-			.flatMap((c) => c.body as Array<{ type: string; string?: string; reference?: string }>);
-		expect(postBodies).toEqual(
-			expect.arrayContaining([
-				{ type: 'status', string: 'absent' },
-				{ type: 'absent_ref', reference: 'event-abc' }
-			])
+		expect(deleteUrls).toHaveLength(1);
+		expect(deleteUrls[0]).toContain('property');
+		expect(deleteUrls[0]).toContain('sent-late');
+		expect(calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(
+			calls.findIndex((c) => c.method === 'POST')
 		);
-		expect(postBodies).toHaveLength(2); // exactly these two props, nothing else
 	});
 
 	it('sentinel reference = the event id read from the GET `_parent` (not from caller input — updateAttendanceStatus takes no eventId)', async () => {

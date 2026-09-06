@@ -166,6 +166,53 @@ export function isSectionReparentPartial(
 	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_REPARENT_PARTIAL;
 }
 
+// ── #264 — damaged `_parent` data (the fail-loud ≠1-values refusal) ──────────
+//
+// PO ruling on #264 (branch (i), stage-2 item 5): a section holding anything
+// other than EXACTLY ONE `_parent` value is DAMAGED DATA (v4E
+// `parentConstraint: 'exactly_one_of'`). Live precedent: Soprano II on
+// mvox_crede held TWO `_parent` values after a half-landed reparent, and
+// `sectionData.ts`'s `.find()` silently picked one — the #258 fail-open class.
+//
+// `reparentSection` REFUSES to write over damaged state: the atomic
+// overwrite-POST (the entry carrying the old value's `_id`) is only
+// well-defined against exactly one old value, so ≠1 existing values throw
+// this error BEFORE any write goes out (GET only — no POST, no DELETE).
+// The tree builder (`listSections`) marks the damaged node instead of
+// guessing; the roster page renders the damage loudly (see
+// sectionData.damaged.spec.ts + page.roster-damaged-parent.spec.ts).
+
+/** Discriminator carried on the fail-loud "≠1 `_parent` values" refusal. */
+export const SECTION_PARENT_DAMAGED = 'section-parent-damaged';
+
+/**
+ * Thrown by `reparentSection` when the section holds anything other than
+ * exactly one `_parent` value. NOTHING has been written when this throws —
+ * the lookup GET is the only request that went out.
+ */
+export class SectionParentDamagedError extends Error {
+	readonly code = SECTION_PARENT_DAMAGED;
+
+	constructor(
+		readonly sectionId: string,
+		readonly valueCount: number
+	) {
+		super(
+			`reparentSection: section ${sectionId} holds ${valueCount} _parent value(s) — exactly one required (damaged data); nothing was written`
+		);
+		this.name = 'SectionParentDamagedError';
+	}
+}
+
+/**
+ * True when a rejection reason means the section's `_parent` data is damaged
+ * (≠1 values; nothing was written). Duck-typed on `code`, same reason as the
+ * other helpers here — mocked write layers reject with plain tagged objects.
+ */
+export function isSectionParentDamaged(reason: unknown): reason is SectionParentDamagedError {
+	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_PARENT_DAMAGED;
+}
+
 // (*MVOX:Palestrina* — F1 code-review fix, TS.2/#96)
 // (*MVOX:Palestrina* — #110 review F3: SectionNotEmptyError)
 // (*MVOX:Palestrina* — GREEN implementation, #253: SectionReparentPartialError)

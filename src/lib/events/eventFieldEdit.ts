@@ -5,10 +5,11 @@
 // same posture as attendanceData/repertoireActions — there is no "save all"
 // payload anywhere in this module's API.
 //
-// The GET-existing → POST-one → DELETE-stale replace choreography (and the
-// POST-BEFORE-DELETE house rule, #91 review F5) lives in ONE place:
-// $lib/entu/replaceProperty — see that module's header for the full rationale.
-// This module only decides WHICH wire slot each field is written under.
+// The ATOMIC overwrite choreography (#264 PO ruling, branch (i): GET existing
+// value-id(s) → ONE POST pairing the old id with the new value, Entu's native
+// overwrite) lives in ONE place: $lib/entu/replaceProperty — see that module's
+// header for the full rationale. This module only decides WHICH wire slot
+// each field is written under.
 //
 // Non-2xx anywhere throws (fail loud, no silent success) — the caller
 // (+page.svelte) is what turns that into an optimistic-revert + inline error.

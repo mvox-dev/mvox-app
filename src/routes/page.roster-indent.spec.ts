@@ -842,16 +842,28 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 	});
 });
 
-// ── #253 — the two truthful banner states + the pinned refusals ─────────────
+// ── #253/#264 — the two truthful banner states + the pinned refusals ────────
 //
 // PO ruling (issue #253, Gama 2026-09-05): TWO user-facing states, not three.
 //   (a) NOTHING landed (the reparent itself failed)      → today's copy stays.
 //   (b) the move LANDED, the ordering did not            → NEW copy that says
 //       the section DID move (that is what decides what the user does next).
+//
+// #264 (PO ruling, branch (i)) makes state (a) HONEST at last: the data layer
+// now reparents via ONE atomic overwrite-POST (the old `_parent` value id
+// rides the POST body; sectionActions.reparent.spec.ts pins the wire). A
+// rejected reparent therefore means NOTHING landed — the revert these tests
+// pin is now the truth, not a hopeful guess. The pre-#264 inner half-landing
+// (POST committed, owner-gated DELETE 403'd, section left with TWO parents)
+// NO LONGER EXISTS to lie about: a `step: 'reparent'` rejection can only be
+// produced by a POST that the server refused whole. State (b) — reparent
+// landed, renumber failed — remains real and keeps its truthful pin above
+// (the `:792` test), unchanged.
+//
 // The renumber depth (k of N) is DIAGNOSIS — it lives in the typed error and
 // reaches console.error, never the banner. And two refusals, pinned as tests:
-// NO retry (the GET→POST→DELETE sequence is not idempotent) and NO automatic
-// unwind (a reverse write against a system that just failed a write).
+// NO retry (the write sequence is not idempotent) and NO automatic unwind (a
+// reverse write against a system that just failed a write).
 
 describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the evidence captured (#253)', () => {
 	const partialEvidence = {
@@ -863,7 +875,7 @@ describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the e
 		body: 'rate limit exceeded'
 	};
 
-	it('state (a) — the reparent ITSELF fails, nothing landed: today\'s roster_section_reorder_failed copy stays, the tree reverts (the server never saw the move), and the evidence reaches console.error', async () => {
+	it('state (a) — the reparent ITSELF fails: under the #264 atomic contract this NOW MEANS nothing landed (the rejected POST carried the old value id, so the server changed nothing) — roster_section_reorder_failed is HONEST, the tree reverts truthfully, and the evidence reaches console.error', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const container = await renderInArrangeMode();
 		reparentMock.mockRejectedValue({

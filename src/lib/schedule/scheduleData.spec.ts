@@ -40,9 +40,10 @@
 //     repertoireActions.ts:188-205: parent events are not uniformly domain,
 //     omitting it can land a public schedule_item whose domain-tier prop-defs
 //     drop out of ordinary reads).
-//   • edit = the replaceEntityProperty choreography (replaceProperty.ts):
-//     GET existing value ids FIRST, POST exactly one new value, DELETE every
-//     pre-existing id — POST before DELETE, the house rule.
+//   • edit = the replaceEntityProperty choreography (replaceProperty.ts): GET
+//     existing id(s) FIRST → ONE POST pairing the first old `_id` with the new
+//     value (Entu's native atomic overwrite); corrupted extras only are swept
+//     after the POST — the normal ≤1-value path issues zero deletes.
 //   • remove = DELETE `entity/{id}` (the ENTITY endpoint — property DELETEs
 //     are for value ids only; conflating the two 404s and pollutes).
 //   • NO ordinal: no read asks for it, no write sends it.
@@ -290,21 +291,24 @@ function editWireStub(existingValueIds: string[]) {
 	return stub;
 }
 
-describe('updateScheduleItemField — GET existing ids, POST exactly one value, DELETE every old id, in that order', () => {
-	it("name edit: POST body is exactly [{type:'name', string}], and BOTH pre-existing value ids are deleted AFTER the POST", async () => {
+// #264 — the shared replaceEntityProperty helper went ATOMIC (the POST entry
+// carries the first old value's `_id`; only corrupted EXTRA ids are swept,
+// after the POST). This caller inherits that wire; the shapes below track it.
+describe('updateScheduleItemField — atomic overwrite via replaceEntityProperty (#264)', () => {
+	it("name edit with a corrupted phantom: POST body is exactly [{_id:'v-old', type:'name', string}], and ONLY the phantom is deleted, AFTER the POST", async () => {
 		const stub = editWireStub(['v-old', 'v-phantom']);
 		await updateScheduleItemField(cfg, 'si1', 'name', 'kutse', stub as unknown as typeof fetch);
-		expect(methods(stub)).toEqual(['GET', 'POST', 'DELETE', 'DELETE']);
+		expect(methods(stub)).toEqual(['GET', 'POST', 'DELETE']);
 		const postCall = stub.mock.calls[1];
 		expect(JSON.parse(String((postCall[1] as RequestInit).body))).toEqual([
-			{ type: 'name', string: 'kutse' }
+			{ _id: 'v-old', type: 'name', string: 'kutse' }
 		]);
 		const deleteUrls = urls(stub).slice(2);
-		expect(deleteUrls.some((u) => u.includes('/property/v-old'))).toBe(true);
 		expect(deleteUrls.some((u) => u.includes('/property/v-phantom'))).toBe(true);
+		expect(deleteUrls.some((u) => u.includes('/property/v-old'))).toBe(false);
 	});
 
-	it("datetime edit: the value rides the `datetime` slot ({type:'datetime', datetime: iso}), never `string`", async () => {
+	it("datetime edit: the value rides the `datetime` slot ({_id, type:'datetime', datetime: iso}), never `string` — and the single old value needs NO delete", async () => {
 		const stub = editWireStub(['v-dt-old']);
 		await updateScheduleItemField(
 			cfg,
@@ -313,10 +317,10 @@ describe('updateScheduleItemField — GET existing ids, POST exactly one value, 
 			'2026-09-01T15:00:00.000Z',
 			stub as unknown as typeof fetch
 		);
-		expect(methods(stub)).toEqual(['GET', 'POST', 'DELETE']);
+		expect(methods(stub)).toEqual(['GET', 'POST']);
 		const postCall = stub.mock.calls[1];
 		expect(JSON.parse(String((postCall[1] as RequestInit).body))).toEqual([
-			{ type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
+			{ _id: 'v-dt-old', type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
 		]);
 	});
 });

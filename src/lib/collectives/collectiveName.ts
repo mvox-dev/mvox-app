@@ -13,15 +13,14 @@
 //     `entity?_type.string=mvox_collective&props=name&limit=1`. First hit →
 //     { markerId, name } (name trimmed, '' when absent). No hit → null.
 //     Non-2xx → throw (fail loud).
-//   - `updateCollectiveName` — replace semantics per the pinned Entu wire
-//     contract (POST APPENDS to implicitly multi-valued props): GET the
-//     PRE-EXISTING value ids → POST exactly ONE value
-//     ([{ type: 'name', string: name }]) → DELETE every id from the GET.
-//     POST BEFORE DELETE (house rule — #91 review F5). Non-2xx anywhere →
-//     throw (fail loud, no silent success). That choreography is NOT
-//     re-implemented here — it lives once in $lib/entu/replaceProperty (#165
-//     review F5), shared with eventFieldEdit.ts; see that module's header for
-//     the full rationale.
+//   - `updateCollectiveName` — the ATOMIC overwrite (#264 PO ruling, branch
+//     (i)): GET the pre-existing value id(s) → ONE POST pairing the FIRST
+//     with the new name (Entu's native overwrite; `setEntity` soft-deletes
+//     the old value in the SAME call). Non-2xx anywhere → throw (fail loud,
+//     no silent success). That choreography is NOT re-implemented here — it
+//     lives once in $lib/entu/replaceProperty (#165 review F5, atomic since
+//     #264), shared with eventFieldEdit.ts; see that module's header for the
+//     full rationale.
 import { entuFetch } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -62,9 +61,11 @@ export async function resolveCollectiveNameMarker(
 }
 
 /**
- * Rewrite the marker's `name` to `name` — the shared GET-existing →
- * POST-one-value → DELETE-stale replace choreography ($lib/entu/replaceProperty).
- * Non-2xx anywhere throws.
+ * Rewrite the marker's `name` to `name` — the shared GET existing id(s) → ONE
+ * POST pairing the first old `_id` with the new value choreography
+ * ($lib/entu/replaceProperty); corrupted extras only are swept after the
+ * POST, and the normal ≤1-value path issues zero deletes. Non-2xx anywhere
+ * throws.
  */
 export async function updateCollectiveName(
 	cfg: EntuCfg,

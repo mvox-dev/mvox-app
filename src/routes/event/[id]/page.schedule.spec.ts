@@ -668,7 +668,7 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 		);
 	});
 
-	it('committing a name change runs the replace choreography: GET existing ids FIRST, POST exactly one value, THEN delete the old id', async () => {
+	it('committing a name change runs the ATOMIC overwrite (#264): GET existing ids FIRST, ONE POST carrying the old id — no DELETE round-trip remains', async () => {
 		const { container, fetchStub } = renderSchedulePage({ event: editorEvent() });
 		await waitReady(container);
 		await waitFor(() => {
@@ -698,12 +698,14 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			const del = calls.find((c) => c.method === 'DELETE');
 			expect(lookup, 'the pre-write value-id lookup must run').not.toBeUndefined();
 			expect(post, 'the new value must be POSTed').not.toBeUndefined();
-			expect(del, 'the old value id must be DELETEd').not.toBeUndefined();
-			expect(JSON.parse(String(post!.body))).toEqual([{ type: 'name', string: 'kutse' }]);
-			expect(del!.url).toContain('/property/val-si1-name');
-			// ORDER: GET before POST before DELETE (POST-before-DELETE house rule).
+			// #264 — the atomic overwrite replaces the old value IN the POST (its
+			// `_id` rides the entry); a separate DELETE would reopen the
+			// half-landing window the atomic overwrite closed.
+			expect(del, 'no DELETE round-trip remains on the atomic path').toBeUndefined();
+			expect(JSON.parse(String(post!.body))).toEqual([
+				{ _id: 'val-si1-name', type: 'name', string: 'kutse' }
+			]);
 			expect(lookup!.i).toBeLessThan(post!.i);
-			expect(post!.i).toBeLessThan(del!.i);
 		});
 	});
 
@@ -736,7 +738,7 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			);
 			expect(post).not.toBeUndefined();
 			expect(JSON.parse(String((post![1] as RequestInit).body))).toEqual([
-				{ type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
+				{ _id: 'val-si1-dt', type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
 			]);
 		});
 	});
@@ -789,10 +791,10 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 				)
 				.map((c) => JSON.parse(String((c[1] as RequestInit).body)));
 			expect(bodies, 'the name commit still wrote').toContainEqual([
-				{ type: 'name', string: 'kutse' }
+				{ _id: 'val-si1-name', type: 'name', string: 'kutse' }
 			]);
 			expect(bodies, 'the datetime the editor reached for must write too').toContainEqual([
-				{ type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
+				{ _id: 'val-si1-dt', type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
 			]);
 		});
 	});
@@ -833,7 +835,7 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			);
 			expect(post).not.toBeUndefined();
 			expect(JSON.parse(String((post![1] as RequestInit).body))).toEqual([
-				{ type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
+				{ _id: 'val-si1-dt', type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
 			]);
 		});
 	});

@@ -294,7 +294,8 @@ describe('/roster #124 F1 — section creation end-to-end: real tap timing, real
 			{ type: '_type', reference: TYPE_SECTION },
 			{ type: '_parent', reference: ORG_EFK },
 			{ type: 'name', string: 'Tenor' },
-			{ type: '_sharing', string: 'public' }
+			{ type: '_sharing', string: 'public' },
+			{ type: '_inheritrights', boolean: true }
 		]);
 		// The page knows the org — the data layer must never fall back to the
 		// `_type.string=organization&limit=1` guess (umbrella-federation trap).
@@ -368,7 +369,8 @@ describe('/roster #124 F2 — sub-section creation under a parent section (unblo
 			{ type: '_type', reference: TYPE_SECTION },
 			{ type: '_parent', reference: EFK_SOPRANO },
 			{ type: 'name', string: 'Soprano II' },
-			{ type: '_sharing', string: 'public' }
+			{ type: '_sharing', string: 'public' },
+			{ type: '_inheritrights', boolean: true }
 		]);
 
 		// …and it RENDERS as a sub-section: nested inside Soprano's group, WITH the

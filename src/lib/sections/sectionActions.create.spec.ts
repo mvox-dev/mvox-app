@@ -77,7 +77,7 @@ function createCallBody(fetchImpl: ReturnType<typeof makeFetchMock>) {
 }
 
 describe('createSection — top level (parentId absent): child of the resolved database entity', () => {
-	it('POST body FULL SHAPE: _type ref (resolved) + _parent=org + name string + _sharing:public — and NOTHING else (no display_order, no voice, no current_section)', async () => {
+	it('POST body FULL SHAPE: _type ref (resolved) + _parent=org + name string + _sharing:public + _inheritrights:true (#264 item 6) — and NOTHING else (no display_order, no voice, no current_section)', async () => {
 		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
 		await createSection(cfg, { name: 'Tenor' }, fetchImpl);
 
@@ -90,7 +90,8 @@ describe('createSection — top level (parentId absent): child of the resolved d
 				{ type: '_type', reference: 'section-type-42' },
 				{ type: '_parent', reference: 'org-1' },
 				{ type: 'name', string: 'Tenor' },
-				{ type: '_sharing', string: 'public' }
+				{ type: '_sharing', string: 'public' },
+				{ type: '_inheritrights', boolean: true }
 			].sort((a, b) => a.type.localeCompare(b.type))
 		);
 	});

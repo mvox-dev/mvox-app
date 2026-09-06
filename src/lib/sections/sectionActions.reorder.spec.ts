@@ -2,24 +2,35 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { reorderSections } from './sectionActions';
 
-// TS.4/#98 RED — the section REORDER write layer. `reorderSections` in
-// `sectionActions.ts` is a stub that throws 'not implemented', so every
-// assertion below FAILS until GREEN.
+// TS.4/#98 — the section REORDER write layer.
+// #264 RED — the per-section replace goes ATOMIC (PO ruling, branch (i)):
+// Entu's native overwrite (the POST entry carries the OLD value's `_id`;
+// setEntity soft-deletes it in the same call — entu-www docs "Overwriting a
+// Property Value") replaces the GET → POST-new → DELETE-old choreography.
 //
-// Contract under test (see sectionActions.ts module header):
+// Contract under test:
 //
 //   - `reorderSections(cfg, orderedIds)` renumbers `display_order` on EVERY id
 //     to its 1-BASED position in the array (index 0 → 1). `orderedIds` is one
 //     SIBLING GROUP in its new order — the caller (the roster page) enforces
 //     the same-parent constraint; this layer just renumbers what it's given.
-//   - Per section, the replace shape pinned by repertoireActions'
-//     updateProgramItemOrdinal: GET `entity/{id}?props=display_order` → POST
-//     the new value → DELETE every OLD value id at `/property/{valueId}`.
-//     POST-BEFORE-DELETE: a failed POST must leave the old value untouched
-//     (an empty display_order would sort the section to the END as Infinity —
-//     see sectionData.listSections).
-//   - Never `DELETE /entity/...` — the endpoint split (property-VALUE ids go
-//     to /property/{id}; an /entity DELETE would delete the section itself).
+//   - Per section: GET `entity/{id}?props=display_order` (the existing value
+//     id) → ONE `POST entity/{id}` with body EXACTLY
+//     `[{ _id: <old value id>, type: 'display_order', number: n }]`.
+//     NO `DELETE /property/{id}` round-trip remains on this path — a failed
+//     POST leaves the old value untouched (an empty display_order would sort
+//     the section to the END as Infinity — see sectionData.listSections), and
+//     a landed POST has already replaced it atomically.
+//   - A section with NO existing display_order value → plain POST
+//     `[{ type: 'display_order', number: n }]` (nothing to overwrite).
+//   - CORRUPTED duplicate state (2+ existing values): the overwrite entry
+//     pairs the FIRST old id; every EXTRA stale id is deleted at
+//     `/property/{id}` strictly AFTER the POST landed — the only DELETEs left
+//     on this path, unreachable from clean data, and ordered so a failure can
+//     never leave the property empty (a stale duplicate survives instead,
+//     swept by the next renumber).
+//   - #253 unchanged: any non-2xx throws `SectionReparentPartialError`
+//     (step 'renumber', progress + status + body) and the loop STOPS.
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
@@ -55,8 +66,8 @@ function callsOf(fetchImpl: ReturnType<typeof vi.fn>): Call[] {
 	}));
 }
 
-describe('reorderSections — renumbers display_order to the 1-based array position (GET → POST new → DELETE old per section)', () => {
-	it('POSTs entity/{id} with body EXACTLY [{ type: "display_order", number: <1-based position> }] for EVERY id, in the given order', async () => {
+describe('reorderSections — ATOMIC overwrite per section (#264): GET old id → ONE POST carrying it, no DELETE round-trip', () => {
+	it('POSTs entity/{id} with body EXACTLY [{ _id: <old value id>, type: "display_order", number: <1-based position> }] for EVERY id, and the call log holds ZERO property DELETEs', async () => {
 		const fetchImpl = makeFetchMock({
 			'sec-alto': [{ _id: 'pv-alto' }],
 			'sec-sop': [{ _id: 'pv-sop' }],
@@ -64,17 +75,23 @@ describe('reorderSections — renumbers display_order to the 1-based array posit
 		});
 		await reorderSections(cfg, ['sec-alto', 'sec-sop', 'sec-tenor'], fetchImpl);
 
-		const posts = callsOf(fetchImpl).filter((c) => c.method === 'POST');
+		const calls = callsOf(fetchImpl);
+		const posts = calls.filter((c) => c.method === 'POST');
 		const bodyFor = (id: string) => posts.find((c) => c.url.includes(`/testdb/entity/${id}`))?.body;
-		// FULL-shape toEqual — a stray extra prop (a `_sharing`, a name, a second
-		// value) or a 0-based number is a bug this must catch.
-		expect(bodyFor('sec-alto')).toEqual([{ type: 'display_order', number: 1 }]);
-		expect(bodyFor('sec-sop')).toEqual([{ type: 'display_order', number: 2 }]);
-		expect(bodyFor('sec-tenor')).toEqual([{ type: 'display_order', number: 3 }]);
+		// FULL-shape toEqual — the `_id` IS the atomic replace; without it the
+		// POST appends a duplicate value. A 0-based number or a stray extra prop
+		// is equally a bug this must catch.
+		expect(bodyFor('sec-alto')).toEqual([{ _id: 'pv-alto', type: 'display_order', number: 1 }]);
+		expect(bodyFor('sec-sop')).toEqual([{ _id: 'pv-sop', type: 'display_order', number: 2 }]);
+		expect(bodyFor('sec-tenor')).toEqual([{ _id: 'pv-tenor', type: 'display_order', number: 3 }]);
 		expect(posts).toHaveLength(3);
+
+		// No DELETE round-trip remains — the overwrite replaced each old value
+		// in the same call that wrote the new one.
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
-	it('reads each section\'s OLD value ids (GET entity/{id} projecting display_order) and DELETEs each at /property/{valueId} — never /entity/', async () => {
+	it('reads each section\'s old value ids first (GET entity/{id} projecting display_order) — the overwrite entry cannot be built blind', async () => {
 		const fetchImpl = makeFetchMock({
 			'sec-alto': [{ _id: 'pv-alto' }],
 			'sec-sop': [{ _id: 'pv-sop' }]
@@ -85,63 +102,58 @@ describe('reorderSections — renumbers display_order to the 1-based array posit
 		const gets = calls.filter((c) => c.method === 'GET');
 		expect(gets.some((c) => c.url.includes('/testdb/entity/sec-alto') && c.url.includes('props=display_order'))).toBe(true);
 		expect(gets.some((c) => c.url.includes('/testdb/entity/sec-sop') && c.url.includes('props=display_order'))).toBe(true);
-
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url).sort();
-		expect(deleteUrls).toEqual([
-			expect.stringContaining('/testdb/property/pv-alto'),
-			expect.stringContaining('/testdb/property/pv-sop')
-		]);
-		// The endpoint split, pinned: an /entity DELETE here would delete the
-		// SECTION, not a property value.
-		for (const u of deleteUrls) expect(u).not.toContain('/entity/');
+		// Per section: the GET precedes the POST that carries its old id.
+		const getIdx = calls.findIndex((c) => c.method === 'GET' && c.url.includes('sec-alto'));
+		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('sec-alto'));
+		expect(getIdx).toBeGreaterThanOrEqual(0);
+		expect(postIdx).toBeGreaterThan(getIdx);
 	});
 
-	it('POST lands BEFORE the DELETE of the same section\'s old value — a failed POST must leave the old value in place', async () => {
-		const fetchImpl = makeFetchMock({ 'sec-sop': [{ _id: 'pv-sop' }] });
-		await reorderSections(cfg, ['sec-sop'], fetchImpl);
-
-		const calls = callsOf(fetchImpl);
-		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('/entity/sec-sop'));
-		const delIdx = calls.findIndex((c) => c.method === 'DELETE' && c.url.includes('/property/pv-sop'));
-		expect(postIdx).toBeGreaterThanOrEqual(0);
-		expect(delIdx).toBeGreaterThan(postIdx);
-	});
-
-	it('a failed POST really does leave the old value untouched — no DELETE fires for that section, and the status surfaces', async () => {
+	it('a failed POST leaves the old value untouched — the overwrite never committed, and NO delete of any kind fires', async () => {
+		const bodies: unknown[] = [];
 		const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
-			if (init?.method === 'POST') return Promise.resolve(json({ error: 'nope' }, 500));
+			if (init?.method === 'POST') {
+				bodies.push(JSON.parse(String(init.body)));
+				return Promise.resolve(json({ error: 'nope' }, 500));
+			}
 			if (init?.method === 'DELETE') return Promise.resolve(json({ deleted: true }));
 			return Promise.resolve(json({ entity: { display_order: [{ _id: 'pv-sop' }] } }));
 		});
 		await expect(reorderSections(cfg, ['sec-sop'], fetchImpl)).rejects.toThrow(/500/);
-		const deletes = callsOf(fetchImpl).filter((c) => c.method === 'DELETE');
-		expect(deletes).toEqual([]);
+		expect(callsOf(fetchImpl).filter((c) => c.method === 'DELETE')).toEqual([]);
+		// The failing POST WAS the atomic shape — its rejection changed nothing.
+		expect(bodies).toEqual([[{ _id: 'pv-sop', type: 'display_order', number: 1 }]]);
 	});
 
-	it('sweeps DUPLICATE old values — corrupted state with two display_order values on one section deletes BOTH (no stray value left to fight the new one)', async () => {
+	it('CORRUPTED duplicate state (two existing values): the overwrite pairs the FIRST old id; the EXTRA stale id is deleted at /property/{id} strictly AFTER the POST', async () => {
 		const fetchImpl = makeFetchMock({ 'sec-sop': [{ _id: 'pv-a' }, { _id: 'pv-b' }] });
 		await reorderSections(cfg, ['sec-sop'], fetchImpl);
 
-		const deleteUrls = callsOf(fetchImpl)
-			.filter((c) => c.method === 'DELETE')
-			.map((c) => c.url)
-			.sort();
-		expect(deleteUrls).toEqual([
-			expect.stringContaining('/property/pv-a'),
-			expect.stringContaining('/property/pv-b')
-		]);
+		const calls = callsOf(fetchImpl);
+		const posts = calls.filter((c) => c.method === 'POST');
+		expect(posts).toHaveLength(1);
+		expect(posts[0].body).toEqual([{ _id: 'pv-a', type: 'display_order', number: 1 }]);
+
+		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
+		// ONLY the extra — pv-a was replaced by the overwrite itself.
+		expect(deleteUrls).toEqual([expect.stringContaining('/testdb/property/pv-b')]);
+		for (const u of deleteUrls) expect(u).not.toContain('/entity/');
+		// POST first: a failed extra-sweep leaves a stale duplicate (recoverable),
+		// never an empty display_order.
+		const postIdx = calls.findIndex((c) => c.method === 'POST');
+		const delIdx = calls.findIndex((c) => c.method === 'DELETE');
+		expect(delIdx).toBeGreaterThan(postIdx);
 	});
 
-	it('a section with NO existing display_order value gets the POST only — nothing to delete, no DELETE call for it', async () => {
+	it('a section with NO existing display_order value gets a PLAIN POST — body EXACTLY [{ type: "display_order", number: n }], and no DELETE anywhere in the run', async () => {
 		const fetchImpl = makeFetchMock({ 'sec-sop': [{ _id: 'pv-sop' }], 'sec-new': [] });
 		await reorderSections(cfg, ['sec-sop', 'sec-new'], fetchImpl);
 
 		const calls = callsOf(fetchImpl);
-		expect(
-			calls.some((c) => c.method === 'POST' && c.url.includes('/entity/sec-new'))
-		).toBe(true);
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls).toEqual([expect.stringContaining('/property/pv-sop')]);
+		const newPost = calls.find((c) => c.method === 'POST' && c.url.includes('/entity/sec-new'));
+		expect(newPost?.body).toEqual([{ type: 'display_order', number: 2 }]);
+		// sec-sop's single old value rode its own overwrite-POST — zero DELETEs.
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
 	it('orderedIds: [] resolves WITHOUT any fetch — nothing to renumber is not an error and not a stray write', async () => {
@@ -155,14 +167,21 @@ describe('reorderSections — renumbers display_order to the 1-based array posit
 		await expect(reorderSections(cfg, ['sec-sop'], fetchImpl)).rejects.toThrow(/500/);
 	});
 
-	it('throws on a non-2xx old-value DELETE (status surfaced)', async () => {
+	it('a failed EXTRA-stale-value DELETE (corrupted state only) throws — and it fired AFTER the POST, against the extra id only, never the replaced one', async () => {
 		const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
 			if (init?.method === 'DELETE') return Promise.resolve(json({ error: 'nope' }, 403));
 			if (init?.method === 'POST') return Promise.resolve(json({}));
-			return Promise.resolve(json({ entity: { display_order: [{ _id: 'pv-sop' }] } }));
+			return Promise.resolve(json({ entity: { display_order: [{ _id: 'pv-a' }, { _id: 'pv-b' }] } }));
 		});
 		await expect(reorderSections(cfg, ['sec-sop'], fetchImpl)).rejects.toThrow(/403/);
+		const calls = callsOf(fetchImpl);
+		const deletes = calls.filter((c) => c.method === 'DELETE');
+		expect(deletes.map((c) => c.url)).toEqual([expect.stringContaining('/property/pv-b')]);
+		expect(calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(
+			calls.findIndex((c) => c.method === 'POST')
+		);
 	});
 });
 
 // (*MVOX:Tallis* — TS.4/#98 RED)
+// (*MVOX:Tallis* — #264 RED: atomic overwrite-POST, extras-only sweep)

@@ -31,7 +31,11 @@
 		reparentSection,
 		renameSection
 	} from '$lib/sections/sectionActions';
-	import { isSectionMembershipMissing, isSectionNotEmpty } from '$lib/sections/sectionErrors';
+	import {
+		isSectionMembershipMissing,
+		isSectionNotEmpty,
+		isSectionParentDamaged
+	} from '$lib/sections/sectionErrors';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
 	import { adminStore } from '$lib/nav/adminStore';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -253,9 +257,28 @@
 	 *  investigation-verdict fixture) is meant to surface as the data defect it
 	 *  is, not be masked by keeping a foreign-org group on screen for her sake —
 	 *  the fix for that is the data fix (reparent to a REAL sub-section),
-	 *  tracked separately, not a rendering carve-out here. */
+	 *  tracked separately, not a rendering carve-out here.
+	 *
+	 *  #264 review F1 — DAMAGED nodes (`parentDamaged`, ≠1 `_parent` values) are
+	 *  EXEMPT from this filter. `listSections` forces a damaged node to a root
+	 *  while still reading `dbEntityId` off a `database` `_parent` value — which
+	 *  the shapes that carry none (all values SECTION refs, e.g. a half-landed
+	 *  sub-section indent/unindent; or ZERO values) simply do not have. Those
+	 *  resolved `dbEntityId: null`, failed this filter and VANISHED from the
+	 *  render entirely: no marker, no name, no trace — the same #258 fail-open
+	 *  class item 5 exists to close, trading a silent wrong placement for a
+	 *  silent disappearance. Safe under #161 (one collective per database, and
+	 *  `listSections` queries `cfg.db`), so every returned section already
+	 *  belongs to this collective; this filter guards only the legacy
+	 *  multi-org-within-one-db case. An unattributable damaged section is
+	 *  ANNOUNCED by name (the marker) rather than guessed at or swallowed, and
+	 *  it carries no arrange affordances either way. */
 	const visibleSections = $derived(
-		currentDbEntityId === null ? sections : sections.filter((n) => (n.dbEntityId ?? null) === currentDbEntityId)
+		currentDbEntityId === null
+			? sections
+			: sections.filter(
+					(n) => n.parentDamaged === true || (n.dbEntityId ?? null) === currentDbEntityId
+				)
 	);
 
 	const groups = $derived(groupBySection(rows, visibleSections));
@@ -882,12 +905,18 @@
 		}
 	}
 
-	// #255 review round 2 F2 — mirrors `deactivatePending`. `reinstateMember` is a
-	// clear-then-set pair: two concurrent runs both GET the same status value id,
-	// the first DELETE wins and the second gets a non-2xx, so the SECOND call
-	// throws and renders "…couldn't be reinstated — they're still not active"
-	// AFTER the reinstate in fact succeeded. A false claim in copy whose whole
-	// point is truthfulness, so a second tap is refused while one is in flight.
+	// #255 review round 2 F2 / #264 review F2 — mirrors `deactivatePending`.
+	// `reinstateMember` is an atomic overwrite (#264): two concurrent runs both
+	// GET the same status value id, the first POST's atomic overwrite consumes
+	// it, and the second POST still carries that now-stale `_id`. That second
+	// POST does NOT fail — `_id` names the value to soft-delete, it is not a
+	// precondition, so entu-api inserts the new value and its unchecked
+	// `markPropertiesDeleted` matches nothing: HTTP 200, and the member is left
+	// holding TWO `status` values. Nothing throws, nothing is shown, and the
+	// next read picks whichever value comes back first — a member whose status
+	// is decided by list order. So a second tap is refused while one is in
+	// flight, and this guard is the ONLY thing refusing it: the wire is silent
+	// here.
 	let reinstatePending = $state<string | null>(null);
 
 	async function handleReinstate(memberId: string): Promise<void> {
@@ -1431,14 +1460,20 @@
 
 	// F2 code-review fix (#98 review): an IN-FLIGHT GUARD on the reorder write.
 	// `reorderSections` renumbers the WHOLE sibling group, so two overlapping
-	// runs write the same entities: both GET a section's display_order before
-	// either DELETEs, both then POST a new value and DELETE the same stale value
-	// id — the second DELETE 404s, the section is left holding TWO display_order
-	// values (the POST-appends multi-value trap), `listSections` reads
-	// `display_order[0]`, and the order on next load is whichever value Entu
-	// returns first. The throw also reverts the UI to a `beforeIds` that parts of
-	// the second write already invalidated server-side, so the screen lies — and
-	// this page never refetches, so both are permanent.
+	// runs write the same entities: both GET a section's display_order value id,
+	// the first run's atomic overwrite-POST consumes it, and the second POST —
+	// still carrying that now-stale `_id` — matches nothing to soft-delete.
+	//
+	// #264 review F2: that second POST does NOT fail. The `_id` is a
+	// soft-delete target, not a precondition (entu-api `insertProperties` +
+	// `markPropertiesDeleted`, an unchecked `updateMany`), so it returns 200 and
+	// silently APPENDS a SECOND display_order value. `listSections` reads
+	// `display_order[0]`, so the order on next load is whichever value Entu
+	// returns first — and this page never refetches, so it is permanent and
+	// completely silent. The old GET→POST→DELETE wire at least 404'd here; the
+	// atomic wire does not, which makes THIS FLAG — both the UI disable it
+	// drives and the early return below — the ONLY protection, rather than a
+	// belt over a wire that also complained.
 	//
 	// Same fix as the programme reorder one slice earlier (#91 review F4, see
 	// `handleMoveItem` in routes/+page.svelte): the key is the SIBLING GROUP, not
@@ -1540,6 +1575,11 @@
 		sections = applySiblingOrder(sections, afterIds);
 		try {
 			await reorderSections(cfg, afterIds);
+			// #264 item 4 — a SUCCESS settling after a collective switch must write
+			// NOTHING for the stale collective: no announcement, no banner, no tree
+			// state. Mirrors the failure/refetch branches' own `g` check below,
+			// which this success branch was missing (the #259/#260 class).
+			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
 			reorderStatus = m.roster_section_moved({
 				name: findSectionNode(sections, movedId)?.name ?? movedId,
 				position: afterIds.indexOf(movedId) + 1,
@@ -1598,8 +1638,13 @@
 	}
 
 	/** The one write seam both `handleIndent`/`handleUnindent` and the
-	 *  ArrowRight/ArrowLeft keyboard branch funnel through — GET-POST-DELETE via
-	 *  `reparentSection`, local tree patched optimistically first, reconciled
+	 *  ArrowRight/ArrowLeft keyboard branch funnel through — the ATOMIC
+	 *  overwrite-POST via `reparentSection` (#264: GET the existing `_parent`
+	 *  value id, then ONE POST whose entry pairs that `_id` with the new
+	 *  reference so Entu soft-deletes the old value in the SAME call; zero
+	 *  property DELETEs, and a ≠1-value section is REFUSED outright with
+	 *  `SectionParentDamagedError` rather than guessed at), local tree patched
+	 *  optimistically first, reconciled
 	 *  against the server (refetch via `listSections`) on failure exactly like
 	 *  `performReorder` (#98 AC-8). Returns whether the write landed, same
 	 *  contract as `performReorder`.
@@ -1659,10 +1704,17 @@
 		try {
 			await reparentSection(cfg, node.id, newParentId);
 			moveLanded = true;
+			// #264 item 4 — a SUCCESS settling after a collective switch must write
+			// NOTHING for the stale collective: no follow-up renumber fired against
+			// whatever tree is now CURRENT, no announcement, no banner (the
+			// #259/#260 class — mirrors the failure/refetch branches' own `g` check
+			// below, which this success branch was missing).
+			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
 			// Read AFTER the optimistic patch above: this is the destination group
 			// in its new on-screen order, including the moved section itself.
 			const destinationIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [];
 			if (destinationIds.length > 0) await reorderSections(cfg, destinationIds);
+			if (g !== routeLoad.generation) return false; // superseded mid-renumber
 			reorderStatus = announce();
 			return true;
 		} catch (e) {
@@ -1679,7 +1731,20 @@
 			// retry, no automatic unwind either way (PO #253 refusals) — the catch
 			// below is the SAME single refetch-reconcile + snapshot fallback
 			// `performReorder` uses, untouched.
-			console.error('roster: section reparent failed', e);
+			// #264 item 5 — a `SectionParentDamagedError` rejection is a REFUSAL
+			// (the lookup GET was the only request; nothing was written), not a
+			// failed write like every other rejection this catch handles. The
+			// banner stays the pinned TWO-state contract above (PO ruling #253:
+			// "two states, not three") — the damaged-data marker (sectionData's
+			// `parentDamaged`, rendered from the refetch below) is what tells the
+			// user WHY. This only sharpens the diagnostic log line so the refusal
+			// is not misread as an ordinary write failure after the fact.
+			console.error(
+				isSectionParentDamaged(e)
+					? 'roster: section reparent refused — parent data damaged, nothing written'
+					: 'roster: section reparent failed',
+				e
+			);
 			reorderError = true;
 			reparentPartial = moveLanded;
 			try {
@@ -2396,6 +2461,28 @@
 		// commit — same guards as the buttons (`prevSiblingId`/`node.parentId`),
 		// and a refused move (no previous sibling / already top-level) writes
 		// nothing and LEAVES the grab exactly as Up/Down's own clamp does.
+		//
+		// #264 review F3 — the DAMAGED guard belongs here too, not only on the
+		// buttons and `draggable`. The stated choice is "no arrange affordance on
+		// the damaged node", and this keyboard seam funnels into the SAME
+		// `performReparent`. Without it, ArrowRight on a damaged row that has any
+		// preceding top-level sibling (a damaged node is forced to `parentId:
+		// null`, so it always sits at top level and `prevSiblingId` alone does not
+		// refuse it) reaches `reparentSection`, which correctly throws
+		// `SectionParentDamagedError` and writes nothing — but the user has
+		// already been given the optimistic patch, the generic "couldn't be
+		// saved" banner and a refetch, i.e. a failed-write experience where the
+		// promise was a disabled control. ArrowLeft is refused for the same
+		// reason ASSERTED rather than left safe-by-accident (its `parentId ===
+		// null` guard happens to cover every damaged node today; that is a
+		// property of the forcing, not of this branch).
+		if (key === 'ArrowRight' || key === 'ArrowLeft') {
+			if (findSectionNode(sections, node.id)?.parentDamaged === true) {
+				event.preventDefault();
+				return; // damaged data — no reparent affordance at all; grab stays
+			}
+		}
+
 		if (key === 'ArrowRight') {
 			event.preventDefault();
 			if (prevSiblingId(node.id) === null) return; // guard — grab stays
@@ -2767,6 +2854,14 @@
 				</span>
 			</button>
 		</div>
+		{#if node.parentDamaged}
+			<!-- #264 item 5 — DAMAGED `_parent` data (≠1 value; sectionData's
+			     detection) surfaces here loudly, never a silent `.find()` guess. The
+			     rest of the tree still renders (siblings/children untouched). -->
+			<p data-testid="section-parent-damaged-{node.id}" role="alert" class="text-sm text-red-700">
+				{m.roster_section_parent_damaged({ name: node.name })}
+			</p>
+		{/if}
 		{#if isExpanded}
 			<!-- #99/TS.5 — the id the toggle's aria-controls points at. `display:
 			     contents` (Tailwind `contents`) keeps this wrapper invisible to
@@ -3095,8 +3190,30 @@
 								     `min-h-11 min-w-11` box reserved so the row never jumps. -->
 								{@const indentApplicable = canIndent(row.id)}
 								{@const unindentApplicable = canUnindent(row.id)}
+								<!-- #264 item 5 — a section whose raw `_parent` held ≠1 values
+								     (sectionData.listSections' detection) is DAMAGED DATA, never a
+								     silent `.find()` guess: it surfaces here with NO arrange
+								     affordances (no enabled indent/unindent, nothing draggable) —
+								     the marker below names it, and `damaged` guards every control
+								     that would otherwise let the page write over an unknowable
+								     parent reference. #264 review F3: the KEYBOARD reparent path is
+								     not a control this `@const` can disable (the handle's
+								     `onkeydown` is bound unconditionally so grab/rove keep working),
+								     so ArrowRight/ArrowLeft are refused inside
+								     `handleHandleKeydown` itself, from the same `parentDamaged`
+								     flag. -->
+								{@const damaged = node?.parentDamaged === true}
 								{#if arrangeDropHintBeforeId === row.id}
 									{@render dropIndicator()}
+								{/if}
+								{#if damaged}
+									<p
+										data-testid="section-parent-damaged-{row.id}"
+										role="alert"
+										class="text-sm text-red-700 {arrangeIndentClass(row.depth)}"
+									>
+										{m.roster_section_parent_damaged({ name: row.name })}
+									</p>
 								{/if}
 								<!-- #155/S2 review F1 / #205 review F2 — the row's `aria-label` is
 								     "{name} ({count})". S2 named this role="button" from its own CONTENTS
@@ -3255,11 +3372,11 @@
 												: 'false'}
 											aria-dropeffect={acceptsDrop ? 'move' : undefined}
 											aria-describedby="section-reorder-instructions"
-											draggable={structuralWritePending ? 'false' : 'true'}
+											draggable={structuralWritePending || damaged ? 'false' : 'true'}
 											style="touch-action: pan-y"
 											class="flex shrink-0 items-center gap-2 py-1.5 pr-2 {arrangeIndentClass(
 												row.depth
-											)} focus:outline-none select-none {structuralWritePending
+											)} focus:outline-none select-none {structuralWritePending || damaged
 												? 'cursor-default'
 												: 'cursor-grab'}"
 											ondragstart={(event: DragEvent) => handleDragStart(row.id, event)}
@@ -3468,6 +3585,7 @@
 										title={m.roster_section_indent({ name: row.name })}
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
+											damaged ||
 											!indentApplicable}
 										tabindex="-1"
 										class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {indentApplicable
@@ -3486,6 +3604,7 @@
 										title={m.roster_section_unindent({ name: row.name })}
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
+											damaged ||
 											!unindentApplicable}
 										tabindex="-1"
 										class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {unindentApplicable

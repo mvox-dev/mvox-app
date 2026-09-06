@@ -201,50 +201,82 @@ describe('updateRsvpStatus', () => {
 		}
 	});
 
-	it('order: GET → DELETE(s) → POST', async () => {
+	// #264 RED (PO ruling, branch (i), item 3): the old clear-then-set wire
+	// deleted the status + sentinel values BEFORE posting the new ones — a
+	// rejected POST left the rsvp with NO status at all (empty half-landing,
+	// worse than a duplicate). The atomic overwrite (POST entries carrying the
+	// OLD value ids — entu-www "Overwriting a Property Value") replaces both in
+	// ONE call. Status/sentinels are not rightTypes props — pure atomicity.
+	//
+	// New pinned wire: GET (unchanged) → ONE POST:
+	//   [{ _id: <old status id>, type:'status', string:<new> },
+	//    { _id: <old sentinel id>, type:'<new>_ref', reference:<event> }]
+	// (an entry drops its `_id` when no old value exists to pair). Cross-type
+	// pairing is platform-legal: setEntity soft-deletes by `_id` regardless of
+	// the new entry's type. Corrupted EXTRA sentinel values are deleted at
+	// /property/{id} strictly AFTER the POST — never before.
+
+	it('order: GET → ONE atomic POST — no DELETE anywhere on the normal (one status + one sentinel) path', async () => {
 		const { fetchImpl, calls } = makeMockFetch({});
 		await updateRsvpStatus(cfg, 'rsvp-1', 'not_going', fetchImpl);
-		expect(calls[0].method).toBe('GET');
-		const deleteIdx = calls.findIndex((c) => c.method === 'DELETE');
-		const postIdx = calls.findIndex((c) => c.method === 'POST');
-		expect(deleteIdx).toBeGreaterThan(0);
-		expect(postIdx).toBeGreaterThan(deleteIdx);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
-	it('DELETE targets /property/{value-id} (NOT /entity/{id})', async () => {
-		const { fetchImpl, calls } = makeMockFetch({ statusValueId: 'sv-old' });
-		await updateRsvpStatus(cfg, 'rsvp-1', 'late', fetchImpl);
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-old') && u.includes('property'))).toBe(true);
-		expect(deleteUrls.some((u) => /entity\/sv-old/.test(u))).toBe(false);
+	it('FULL SHAPE (#264): the POST pairs the old status id with the new status AND the old sentinel id with the new sentinel — toEqual, both _ids present, no DELETE', async () => {
+		const { fetchImpl, calls } = makeMockFetch({ statusValueId: 'sv-1', sentinels: { going_ref: 'sent-1' } });
+		await updateRsvpStatus(cfg, 'rsvp-1', 'maybe', fetchImpl);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([
+			{ _id: 'sv-1', type: 'status', string: 'maybe' },
+			{ _id: 'sent-1', type: 'maybe_ref', reference: 'event-abc' }
+		]);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
-	it('FULL SET: DELETEs the old status value-id AND every existing sentinel value-id, even when more than one is present (corrupted-state defense)', async () => {
+	it('#264 — a REJECTED POST leaves the OLD status and sentinel intact: no DELETE was ever issued (the empty-rsvp half-landing is structurally impossible)', async () => {
+		const calls: Call[] = [];
+		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+			const method = init?.method ?? 'GET';
+			calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+			if (method === 'POST') return Promise.resolve(json({}, 500));
+			if (method === 'DELETE') return Promise.resolve(json({}));
+			return Promise.resolve(
+				json({
+					entity: {
+						_id: 'rsvp-1',
+						status: [{ _id: 'sv-1', string: 'going' }],
+						event: [{ reference: 'event-abc' }],
+						going_ref: [{ _id: 'sent-1' }]
+					}
+				})
+			);
+		});
+		await expect(updateRsvpStatus(cfg, 'rsvp-1', 'late', fetchImpl)).rejects.toThrow(/500/);
+		// THE pin: under the old wire this log held THREE property DELETEs
+		// before the failing POST — the rsvp was left empty. Now: none.
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+	});
+
+	it('CORRUPTED extra sentinel (two present at once): the POST pairs the FIRST existing sentinel id; ONLY the extra is deleted, strictly AFTER the POST', async () => {
 		const { fetchImpl, calls } = makeMockFetch({
 			statusValueId: 'sv-old',
-			sentinels: { going_ref: 'sent-going', late_ref: 'sent-late' } // two present at once — should never happen, but the delete must be generic
+			sentinels: { going_ref: 'sent-going', late_ref: 'sent-late' } // should never happen; the sweep must stay generic
 		});
 		await updateRsvpStatus(cfg, 'rsvp-1', 'maybe', fetchImpl);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([
+			{ _id: 'sv-old', type: 'status', string: 'maybe' },
+			{ _id: 'sent-going', type: 'maybe_ref', reference: 'event-abc' }
+		]);
 		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-old'))).toBe(true);
-		expect(deleteUrls.some((u) => u.includes('sent-going'))).toBe(true);
-		expect(deleteUrls.some((u) => u.includes('sent-late'))).toBe(true);
-		expect(deleteUrls).toHaveLength(3);
-	});
-
-	it('FULL SET: after update, POST carries exactly the new status + its matching sentinel — no other status/_ref prop', async () => {
-		const { fetchImpl, calls } = makeMockFetch({ sentinels: { going_ref: 'sent-1' } });
-		await updateRsvpStatus(cfg, 'rsvp-1', 'maybe', fetchImpl);
-		const postBodies = calls
-			.filter((c) => c.method === 'POST')
-			.flatMap((c) => c.body as Array<{ type: string; string?: string; reference?: string }>);
-		expect(postBodies).toEqual(
-			expect.arrayContaining([
-				{ type: 'status', string: 'maybe' },
-				{ type: 'maybe_ref', reference: 'event-abc' }
-			])
+		expect(deleteUrls).toHaveLength(1);
+		expect(deleteUrls[0]).toContain('property');
+		expect(deleteUrls[0]).toContain('sent-late');
+		expect(calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(
+			calls.findIndex((c) => c.method === 'POST')
 		);
-		expect(postBodies).toHaveLength(2); // exactly these two props, nothing else
 	});
 
 	it('sentinel reference = event id read from the GET (not from caller input — updateRsvpStatus takes no eventId)', async () => {

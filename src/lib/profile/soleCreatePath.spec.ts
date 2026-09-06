@@ -9,16 +9,23 @@ import { findSourceFiles, isSoleCreatePathViolation } from '$lib/testing/soleLit
 // — instead this is a STANDING structural guard: `_inheritrights` is the literal
 // that only an explicit entity-create payload ever needs to set, so the set of
 // files carrying it must equal an ENUMERATED allowlist. As of T4.5 that
-// allowlist is exactly two entries:
-// - lib/profile/profileData.ts — the sole profile-create path (T4.4)
-// - lib/invite/inviteData.ts   — the sole invite person+member create path
+// allowlist was exactly two entries (profileData.ts + inviteData.ts); #264
+// item 6 (PO nod 2026-09-06) added a THIRD, non-profile entry — createSection
+// asserting the same rights-cascade dependency inviteData.ts already asserts,
+// not a new profile-adjacent create path, so the guard's PROFILE invariant
+// (AC4) is untouched:
+// - lib/profile/profileData.ts   — the sole profile-create path (T4.4)
+// - lib/invite/inviteData.ts     — the sole invite person+member create path
 //   (T4.5/#31; its own sole-mechanism guard lives in
 //   lib/invite/singleInviteMechanism.spec.ts)
+// - lib/sections/sectionActions.ts — createSection's explicit
+//   `_inheritrights: true` (#264 item 6); a section is not a profile, and this
+//   entry does not touch profileData.ts's sole-create-path guarantee.
 // The predicate/walker now live in $lib/testing/soleLiteralGuard (shared with the
 // T4.5 guard — never import one spec file from another).
 
 const NEEDLE = '_inheritrights';
-const EXEMPT = ['lib/profile/profileData.ts', 'lib/invite/inviteData.ts'];
+const EXEMPT = ['lib/profile/profileData.ts', 'lib/invite/inviteData.ts', 'lib/sections/sectionActions.ts'];
 
 describe('isSoleCreatePathViolation (guard predicate)', () => {
 	it('flags a non-exempt, non-spec file that contains the needle', () => {
@@ -84,8 +91,12 @@ describe('T4.7/#27 — the visibility-move modules compose on the sole create pa
 		});
 	}
 
-	it("the allowlist is still exactly the two T4.4/T4.5 entries — T4.7 added NO new create site", () => {
-		expect(EXEMPT).toEqual(['lib/profile/profileData.ts', 'lib/invite/inviteData.ts']);
+	it("the allowlist is still exactly the T4.4/T4.5/#264-item-6 entries — T4.7 added NO new create site", () => {
+		expect(EXEMPT).toEqual([
+			'lib/profile/profileData.ts',
+			'lib/invite/inviteData.ts',
+			'lib/sections/sectionActions.ts'
+		]);
 	});
 });
 

@@ -108,7 +108,9 @@ export async function createScheduleItem(
 
 /**
  * Edit one field via the replaceEntityProperty choreography (GET existing
- * value ids, POST exactly one new value, DELETE every pre-existing id).
+ * id(s) → ONE POST pairing the first old `_id` with the new value; corrupted
+ * extras only are swept after the POST; the normal ≤1-value path issues zero
+ * deletes).
  */
 export async function updateScheduleItemField(
 	cfg: EntuCfg,

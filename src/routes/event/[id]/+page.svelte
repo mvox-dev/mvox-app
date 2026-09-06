@@ -1683,17 +1683,26 @@
 	// queue on this page — and literally the same primitive: the write goes
 	// through `createRepertoireWriteQueue` keyed on the FIELD NAME.
 	//
-	// #104 review F1 — `editingField` is NOT a write guard. It guards concurrent
-	// EDITING (one input open at a time), but it is cleared synchronously on
-	// confirm, so the pencil is back before the write it fired has landed. A
-	// second edit of the same field while the first is still in flight would run
-	// a second GET-POST-DELETE against the SAME pre-existing value id: both GETs
-	// see the old value, both POST (the entity ends with two values for the
-	// field), and whichever DELETE loses the race 404s — surfacing a false inline
-	// error over a value the server actually accepted. The queue's per-key
-	// pending set drops the second write exactly like every other control here,
-	// and `editWritePending` disables the pencil while it is in flight (the
-	// primary guard; the queue's own set is the backstop).
+	// #104 review F1 / #264 review F2 — `editingField` is NOT a write guard. It
+	// guards concurrent EDITING (one input open at a time), but it is cleared
+	// synchronously on confirm, so the pencil is back before the write it fired
+	// has landed. A second edit of the same field while the first is still in
+	// flight would run a second atomic overwrite (#264: GET the existing value
+	// id → ONE POST pairing that `_id` with the new value) against the SAME
+	// pre-existing value id: both GETs see the old value, the first POST
+	// consumes it, and the second POST carries an `_id` that no longer names a
+	// live value.
+	//
+	// That second POST SUCCEEDS. `_id` is the soft-delete target, not a
+	// precondition — entu-api inserts the new value and its `markPropertiesDeleted`
+	// `updateMany` matches nothing without complaining — so it returns 200 and
+	// the entity ends up with TWO values for the field, silently. (The old
+	// GET-POST-DELETE wire failed loudly here: the losing DELETE 404'd. The
+	// atomic wire trades that noise away, so the guards below are now the only
+	// protection, not a second one.) The queue's per-key pending set drops the
+	// second write exactly like every other control here, and `editWritePending`
+	// disables the pencil while it is in flight (the primary guard; the queue's
+	// own set is the backstop).
 
 	let editingField = $state<EditableEventField | null>(null);
 	let editDraft = $state('');

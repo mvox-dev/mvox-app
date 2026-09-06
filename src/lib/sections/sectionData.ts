@@ -52,6 +52,17 @@ export interface SectionNode {
 	 * pre-#161 fixtures stay type-clean (same convention as `RosterRow.dbEntityId`).
 	 */
 	dbEntityId?: string | null;
+	/**
+	 * #264 (ruling item 5 — the #258 fail-open class): `true` when the raw
+	 * section held anything other than EXACTLY ONE `_parent` value (zero, or
+	 * two-plus — the live Soprano II duplicate). A damaged node must never be
+	 * silently placed by `.find()`'s guess: it surfaces at TOP LEVEL carrying
+	 * this flag, the UI renders an explicit damaged-data marker naming it and
+	 * offers NO arrange affordances, and the rest of the roster still renders.
+	 * ABSENT (not `false`) on clean nodes, so existing full-shape fixture pins
+	 * stay valid.
+	 */
+	parentDamaged?: boolean;
 	/** Indentation level: 0 for top-level, 1 for sub-sections, 2 for sub-sub, … */
 	depth: number;
 	/** Child sections, sorted by displayOrder (ties by name). */
@@ -109,13 +120,38 @@ export async function listSections(
 	for (const r of raw) {
 		const name = r.name?.[0]?.string ?? '';
 		const displayOrder = r.display_order?.[0]?.number ?? Number.POSITIVE_INFINITY;
-		const parentId = (r._parent ?? []).find((p) => p.entity_type === 'section')?.reference ?? null;
+		const parentValues = r._parent ?? [];
+		// #264 item 5 (ruling — the #258 fail-open class): v4E `parentConstraint:
+		// 'exactly_one_of'` means anything other than EXACTLY ONE `_parent` value
+		// is DAMAGED DATA (zero, or the live Soprano II two-plus duplicate).
+		// NEVER placed by a `.find()` guess — forced to TOP LEVEL (parentId null)
+		// and flagged, so the marker can render it and the rest of the tree still
+		// builds. entity_type does not matter for detection (the live duplicate
+		// was two `database` refs).
+		const parentDamaged = parentValues.length !== 1;
+		const parentId = parentDamaged
+			? null
+			: (parentValues.find((p) => p.entity_type === 'section')?.reference ?? null);
 		// #161 — keep the DATABASE entity, don't discard it (see SectionNode.dbEntityId):
 		// roots of different databases are not siblings, and the picker needs to
 		// know. A legacy `organization` `_parent` is never the collective anymore.
-		const dbEntityId =
-			(r._parent ?? []).find((p) => p.entity_type === 'database')?.reference ?? null;
-		nodes.set(r._id, { id: r._id, name, displayOrder, parentId, dbEntityId, depth: 0, children: [] });
+		// #264 item 5 — computed the SAME WAY regardless of damage: a damaged
+		// node (e.g. the live Soprano II duplicate — two `database` refs) still
+		// belongs to a real collective, and the roster page's org-scoped
+		// `visibleSections` filter (roster/+page.svelte) needs this id to keep
+		// rendering the damaged node for its own viewers rather than filtering it
+		// off screen as a foreign org's section.
+		const dbEntityId = parentValues.find((p) => p.entity_type === 'database')?.reference ?? null;
+		nodes.set(r._id, {
+			id: r._id,
+			name,
+			displayOrder,
+			parentId,
+			dbEntityId,
+			depth: 0,
+			children: [],
+			...(parentDamaged ? { parentDamaged: true } : {})
+		});
 	}
 
 	// Pass 2 — every non-null parent ref must resolve within the fetched set.

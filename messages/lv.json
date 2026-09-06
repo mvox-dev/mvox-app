@@ -186,6 +186,7 @@
 	"roster_new_section_form_label": "Jauna balss grupa",
 	"roster_section_reorder_failed": "Neizdevās saglabāt balss grupu secību — tiek rādīta serverī saglabātā secība.",
 	"roster_section_reparent_partial": "Balss grupa pārvietojās, bet tās jauno vietu neizdevās saglabāt — tiek rādīta serverī saglabātā secība.",
+	"roster_section_parent_damaged": "Balss grupas {name} dati ir bojāti — tai nav tieši viena vecākā ieraksta. Šīs grupas kārtošana ir atspējota.",
 	"roster_section_moved": "{name} pārvietots uz {position}. vietu no {total}.",
 	"roster_section_grabbed": "Sagrābts: {name}.",
 	"roster_section_dropped": "{name} novietots {position}. vietā no {total}.",

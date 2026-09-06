@@ -1,7 +1,9 @@
-// #255 RED — the member lifecycle data layer: deactivate/reinstate status flip
-// (house clear-then-set wire, precedent updateRsvpStatus rsvpData.spec.ts),
+// #255 RED — the member lifecycle data layer: deactivate/reinstate status flip,
 // the inactive-members read (done-when 4), and the refusal read (accepted
 // rec 1: deactivate REFUSES while a manageable grant is held).
+// #264 RED — the flip's wire goes ATOMIC (see the deactivateMember block
+// header): one overwrite-POST carrying the old value's `_id`, no clear-first
+// DELETE, empty-status half-landing structurally impossible.
 //
 // Done-when 1 is pinned HARD here: `status` is the ONLY property the flip
 // touches — the POST body is asserted with toEqual (full shape), and the whole
@@ -49,7 +51,7 @@ type Call = { url: string; method: string; body?: unknown };
 /**
  * GET answers the member entity with whichever status value-ids the caller
  * passes; DELETE/POST succeed; all calls recorded in order — the same harness
- * shape updateRsvpStatus's clear-then-set tests use (rsvpData.spec.ts:167).
+ * shape updateRsvpStatus's atomic overwrite (#264) tests use (rsvpData.spec.ts:167).
  */
 function makeStatusFlipFetch(statusValues: Array<{ _id: string; string: string }>) {
 	const calls: Call[] = [];
@@ -74,17 +76,29 @@ function makeStatusFlipFetch(statusValues: Array<{ _id: string; string: string }
 	return { fetchImpl, calls };
 }
 
-// ── deactivateMember — the clear-then-set status flip ─────────────────────────
+// ── deactivateMember — the status flip, now ATOMIC (#264) ─────────────────────
+//
+// #264 RED (PO ruling, branch (i), item 3): the old clear-then-set wire
+// (GET → DELETE old value(s) → POST new) half-lands EMPTY — the DELETE fires
+// BEFORE the POST, so a rejected POST leaves the member with NO status at all,
+// worse than a stranded duplicate. Entu's native atomic overwrite (the POST
+// entry carrying the old value's `_id` — entu-www "Overwriting a Property
+// Value") replaces the value in ONE call: a rejected POST leaves the OLD value
+// intact. `status` is not a rightTypes prop, so there is no rights dimension —
+// this is pure atomicity.
+//
+// New pinned wire: GET status value-ids → ONE POST:
+//   - one existing value → body EXACTLY [{ _id: <old id>, type:'status', string:<new> }]
+//   - no existing value  → body EXACTLY [{ type:'status', string:<new> }]
+//   - corrupted 2+ values → the overwrite pairs the FIRST id; extras are
+//     deleted at /property/{id} strictly AFTER the POST (never before).
+// NO property DELETE is issued anywhere on the normal (≤1-value) path.
 
 describe('deactivateMember', () => {
-	it('order: GET → DELETE(s) → POST (POST appends on Entu; replace = clear existing value then set)', async () => {
+	it('order: GET → ONE atomic POST — no DELETE anywhere (the overwrite replaces the old value in the same call)', async () => {
 		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-1', string: 'active' }]);
 		await deactivateMember(cfg, 'member-1', fetchImpl);
-		expect(calls[0].method).toBe('GET');
-		const deleteIdx = calls.findIndex((c) => c.method === 'DELETE');
-		const postIdx = calls.findIndex((c) => c.method === 'POST');
-		expect(deleteIdx).toBeGreaterThan(0);
-		expect(postIdx).toBeGreaterThan(deleteIdx);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
 	it('GET targets the member entity and asks for status', async () => {
@@ -94,33 +108,52 @@ describe('deactivateMember', () => {
 		expect(calls[0].url).toContain('status');
 	});
 
-	it('DELETE targets /property/{status-value-id} (NOT /entity/{id} — endpoint split)', async () => {
-		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-old', string: 'active' }]);
-		await deactivateMember(cfg, 'member-1', fetchImpl);
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('property') && u.includes('sv-old'))).toBe(true);
-		expect(deleteUrls.some((u) => /entity\/sv-old/.test(u))).toBe(false);
-	});
-
-	it('clears EVERY existing status value (generic delete — corrupted double-value defense)', async () => {
+	it('corrupted double-value state: the overwrite pairs the FIRST old id; ONLY the extra is deleted, strictly AFTER the POST (never before — an empty status must be unreachable)', async () => {
 		const { fetchImpl, calls } = makeStatusFlipFetch([
 			{ _id: 'sv-a', string: 'active' },
 			{ _id: 'sv-b', string: 'active' }
 		]);
 		await deactivateMember(cfg, 'member-1', fetchImpl);
+		const postCalls = calls.filter((c) => c.method === 'POST');
+		expect(postCalls).toHaveLength(1);
+		expect(postCalls[0].body).toEqual([{ _id: 'sv-a', type: 'status', string: 'archived' }]);
 		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-a'))).toBe(true);
-		expect(deleteUrls.some((u) => u.includes('sv-b'))).toBe(true);
-		expect(deleteUrls).toHaveLength(2);
+		expect(deleteUrls).toHaveLength(1);
+		expect(deleteUrls[0]).toContain('property');
+		expect(deleteUrls[0]).toContain('sv-b');
+		expect(calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(
+			calls.findIndex((c) => c.method === 'POST')
+		);
 	});
 
-	it("DONE-WHEN 1: POST body is EXACTLY [{type:'status', string:'archived'}] — no other property write (toEqual, not arrayContaining)", async () => {
+	it("DONE-WHEN 1 (#255) + #264: POST body is EXACTLY [{_id:'sv-1', type:'status', string:'archived'}] — the old value id rides the write, and no other property is touched (toEqual, not arrayContaining)", async () => {
 		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-1', string: 'active' }]);
 		await deactivateMember(cfg, 'member-1', fetchImpl);
 		const postCalls = calls.filter((c) => c.method === 'POST');
 		expect(postCalls).toHaveLength(1);
 		expect(postCalls[0].url).toContain('entity/member-1');
-		expect(postCalls[0].body).toEqual([{ type: 'status', string: 'archived' }]);
+		expect(postCalls[0].body).toEqual([{ _id: 'sv-1', type: 'status', string: 'archived' }]);
+	});
+
+	it('#264 — a REJECTED POST leaves the OLD value intact: no DELETE was ever issued, so the empty-status half-landing is structurally impossible', async () => {
+		const calls: Call[] = [];
+		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+			const method = init?.method ?? 'GET';
+			calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+			if (method === 'POST') return Promise.resolve(json({}, 500));
+			if (method === 'DELETE') return Promise.resolve(json({}));
+			return Promise.resolve(
+				json({ entity: { _id: 'member-1', status: [{ _id: 'sv-1', string: 'active' }] } })
+			);
+		});
+		await expect(deactivateMember(cfg, 'member-1', fetchImpl)).rejects.toThrow(/500/);
+		// THE pin: nothing was cleared before the write failed. Under the old
+		// DELETE-then-POST wire this log held a DELETE of sv-1 — the member was
+		// left status-LESS. Now the rejected overwrite changed nothing.
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+		expect(calls.filter((c) => c.method === 'POST')[0]?.body).toEqual([
+			{ _id: 'sv-1', type: 'status', string: 'archived' }
+		]);
 	});
 
 	it('DONE-WHEN 1: nothing in the entire call log touches _parent, _owner or _editor — no property but status is cleared, no rights change, no reparent', async () => {
@@ -137,15 +170,33 @@ describe('deactivateMember', () => {
 		}
 	});
 
+	it('NO existing status value (corrupted state) → plain POST, body EXACTLY [{type:"status", string:"archived"}], and still no DELETE', async () => {
+		const { fetchImpl, calls } = makeStatusFlipFetch([]);
+		await deactivateMember(cfg, 'member-1', fetchImpl);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
+		expect(calls[1].body).toEqual([{ type: 'status', string: 'archived' }]);
+	});
+
 	it('throws on a non-2xx GET', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
 		await expect(deactivateMember(cfg, 'member-1', fetchImpl)).rejects.toThrow(/403/);
 	});
 
-	it('throws on a non-2xx DELETE (no silent half-flip)', async () => {
+	it('throws on a non-2xx EXTRA-sweep DELETE (corrupted 2+ state only — no silent half-flip)', async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 			if (init?.method === 'DELETE') return Promise.resolve(json({}, 500));
-			return Promise.resolve(json({ entity: { _id: 'member-1', status: [{ _id: 'sv-1', string: 'active' }] } }));
+			if (init?.method === 'POST') return Promise.resolve(json({}));
+			return Promise.resolve(
+				json({
+					entity: {
+						_id: 'member-1',
+						status: [
+							{ _id: 'sv-a', string: 'active' },
+							{ _id: 'sv-b', string: 'active' }
+						]
+					}
+				})
+			);
 		});
 		await expect(deactivateMember(cfg, 'member-1', fetchImpl)).rejects.toThrow(/500/);
 	});
@@ -154,20 +205,19 @@ describe('deactivateMember', () => {
 // ── reinstateMember — the SAME mechanism, other direction (done-when 4) ───────
 
 describe('reinstateMember', () => {
-	it("POST body is EXACTLY [{type:'status', string:'active'}] after clearing the archived value", async () => {
+	it("#264: POST body is EXACTLY [{_id:'sv-arch', type:'status', string:'active'}] — the archived value is replaced atomically, never cleared first", async () => {
 		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-arch', string: 'archived' }]);
 		await reinstateMember(cfg, 'member-1', fetchImpl);
-		const deleteUrls = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-		expect(deleteUrls.some((u) => u.includes('sv-arch'))).toBe(true);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 		const postCalls = calls.filter((c) => c.method === 'POST');
 		expect(postCalls).toHaveLength(1);
-		expect(postCalls[0].body).toEqual([{ type: 'status', string: 'active' }]);
+		expect(postCalls[0].body).toEqual([{ _id: 'sv-arch', type: 'status', string: 'active' }]);
 	});
 
-	it('order: GET → DELETE → POST, same clear-then-set wire as deactivate', async () => {
+	it('order: GET → ONE atomic POST, same wire as deactivate — no DELETE', async () => {
 		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-arch', string: 'archived' }]);
 		await reinstateMember(cfg, 'member-1', fetchImpl);
-		expect(calls.map((c) => c.method)).toEqual(['GET', 'DELETE', 'POST']);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
 	it('touches no invite machinery: no call URL mentions invite (reinstate WITHOUT a fresh invitation)', async () => {

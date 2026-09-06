@@ -671,7 +671,7 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 		});
 		const [, init] = postsTo(fetchMock, '/entity/ri-b1')[0];
 		expect(JSON.parse(String((init as RequestInit).body))).toEqual([
-			{ type: 'status', string: 'learning' }
+			{ _id: 'val-status', type: 'status', string: 'learning' }
 		]);
 	});
 });

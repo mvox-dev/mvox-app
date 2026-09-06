@@ -33,19 +33,16 @@ import { resolveCollectiveNameMarker, updateCollectiveName } from './collectiveN
 //   edit here). Non-2xx → throw (fail loud — a broken read must never render
 //   as "no marker").
 //
-//   updateCollectiveName — replace semantics per the pinned Entu wire contract
-//   (POST APPENDS to implicitly multi-valued props; a naive POST would leave
-//   the OLD name standing beside the new one), the exact choreography
-//   eventFieldEdit.ts runs:
-//     1. GET entity/{markerId}?props=name → the PRE-EXISTING value ids (FIRST,
-//        so the deletes can never target the value we are about to write);
+//   updateCollectiveName — the shared replaceEntityProperty choreography,
+//   ATOMIC since #264 (the POST entry carries the first old value's `_id`;
+//   Entu's native overwrite replaces it in the same call — a rejected POST
+//   leaves the old name intact, so the marker can never go NAMELESS):
+//     1. GET entity/{markerId}?props=name → the PRE-EXISTING value ids;
 //     2. POST entity/{markerId} with exactly ONE value:
-//        [{ type: 'name', string: name }];
-//     3. DELETE property/{valueId} for EVERY id from step 1 (not just the
-//        first — a phantom double-value must not survive on the marker).
-//   POST BEFORE DELETE (house rule — #91 review F5): with DELETE first, a
-//   failed POST leaves the marker NAMELESS server-side, which would blank the
-//   collective picker label for every member on next discovery.
+//        [{ _id: <first existing id>, type: 'name', string: name }]
+//        (the `_id` is dropped when no value exists yet);
+//     3. corrupted EXTRA ids only → DELETE property/{valueId}, strictly AFTER
+//        the POST (a phantom double-value must not survive on the marker).
 //   Non-2xx anywhere → throw (fail loud, no silent success).
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
@@ -129,7 +126,7 @@ function markerWithNames(): Response {
 }
 
 describe('updateCollectiveName', () => {
-	it('GET existing ids → POST exactly one new value → DELETE every pre-existing id, in that order', async () => {
+	it('#264 atomic overwrite: GET existing ids → ONE POST carrying the first old id; only the corrupted phantom is deleted, strictly after the POST', async () => {
 		const fetchImpl = vi
 			.fn()
 			.mockResolvedValueOnce(markerWithNames())
@@ -137,27 +134,25 @@ describe('updateCollectiveName', () => {
 
 		await updateCollectiveName(cfg, 'marker-1', 'Uus Nimi', fetchImpl);
 
-		expect(fetchImpl).toHaveBeenCalledTimes(4);
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
 		const urls = callUrls(fetchImpl);
 		const methods = callMethods(fetchImpl);
 
-		// 1. the lookup — FIRST, so the deletes can only target pre-existing ids
+		// 1. the lookup — FIRST: the overwrite entry cannot be built blind
 		expect(urls[0]).toContain('/testdb/entity/marker-1?props=name');
 		expect(methods[0] === undefined || methods[0] === 'GET').toBe(true);
 
-		// 2. the POST — before any delete (POST-BEFORE-DELETE house rule)
+		// 2. the POST — the old value's `_id` rides the entry (Entu's native
+		// overwrite replaces it in the same call). FULL body shape (toEqual,
+		// never objectContaining) — exactly ONE value, no stray keys.
 		expect(urls[1]).toContain('/testdb/entity/marker-1');
 		expect(methods[1]).toBe('POST');
 		const postBody = JSON.parse(String((fetchImpl.mock.calls[1][1] as RequestInit).body));
-		// FULL body shape (toEqual, never objectContaining) — exactly ONE value,
-		// written under `string`, no stray keys.
-		expect(postBody).toEqual([{ type: 'name', string: 'Uus Nimi' }]);
+		expect(postBody).toEqual([{ _id: 'nv-old', type: 'name', string: 'Uus Nimi' }]);
 
-		// 3. EVERY pre-existing value id dies — property endpoint, never entity
-		expect(urls[2]).toContain('/testdb/property/nv-old');
+		// 3. only the corrupted EXTRA dies — property endpoint, never entity
+		expect(urls[2]).toContain('/testdb/property/nv-phantom');
 		expect(methods[2]).toBe('DELETE');
-		expect(urls[3]).toContain('/testdb/property/nv-phantom');
-		expect(methods[3]).toBe('DELETE');
 	});
 
 	it('a failed POST throws and DELETES NOTHING — the old name must survive a failed write', async () => {

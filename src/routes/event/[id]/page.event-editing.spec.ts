@@ -21,19 +21,16 @@
 //       fetchImpl?: typeof fetch
 //     ): Promise<void>;
 //
-//     Replace semantics per the pinned Entu wire contract — POST APPENDS to
-//     implicitly multi-valued props, so a naive POST would leave the OLD value
-//     standing beside the new one:
-//       1. GET entity/{eventId}?props={field} → the existing value ids (FIRST,
-//          so the deletes can only ever target PRE-EXISTING ids);
-//       2. POST entity/{eventId} with exactly ONE new value;
-//       3. DELETE property/{valueId} for EVERY id from step 1 (not just the
-//          first — corrupted double-values must not survive as phantoms).
-//     POST BEFORE DELETE (#91 review F5, the house rule repertoireActions and
-//     sectionActions run): with DELETE first, a POST that fails leaves the
-//     property EMPTY server-side while the page reverts the header to the old
-//     value — the UI would misrepresent server state, and eventDetail would
-//     fall the field back to the parent series default (or '') next load.
+//     #264 (PO ruling, branch (i)) — ATOMIC overwrite via the shared
+//     `replaceEntityProperty` (entu/replaceProperty.ts): GET
+//     entity/{eventId}?props={field} → the existing value id(s) → ONE POST
+//     whose entry pairs the FIRST existing id with the new value (Entu's
+//     native overwrite; `setEntity` soft-deletes the old value in the SAME
+//     call). NO DELETE round-trip remains on the normal (≤1-value) path — a
+//     rejected POST leaves the old value untouched, closing the half-landing
+//     window the old GET→POST-new→DELETE-old choreography left open.
+//     Corrupted-state extras (2+ existing values) are swept at
+//     `/property/{id}` strictly AFTER the POST.
 //     Wire value key by field type: name/location/description → `string`;
 //     start_datetime → `datetime` (ISO instant, UTC); duration_minutes →
 //     `number` (a NUMBER on the wire, never a numeric string).
@@ -393,8 +390,8 @@ function fieldWireStub(
 	});
 }
 
-describe('updateEventField — replace semantics (GET value-ids → POST the new value → DELETE each old)', () => {
-	it('replaces an existing string value: posts exactly one new value BEFORE deleting the old value id', async () => {
+describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)', () => {
+	it('replaces an existing string value ATOMICALLY: the POST entry carries the old value id, and no DELETE round-trip remains', async () => {
 		const fetchImpl = fieldWireStub('name', [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }]);
 		await updateEventField(cfg, 'ev1', 'name', 'Autumn Sing', fetchImpl as unknown as typeof fetch);
 
@@ -408,27 +405,18 @@ describe('updateEventField — replace semantics (GET value-ids → POST the new
 		expect(lookup, 'no lookup GET of the event').not.toBeUndefined();
 		expect(lookup!.url).toContain('props=');
 		expect(lookup!.url).toContain('name');
-		// The old value was deleted — POST appends, so skipping this leaves BOTH
-		// values on the entity (the pinned Entu multi-value trap).
-		const deleteIdx = calls.findIndex(
-			(c) => c.method === 'DELETE' && c.url.includes('/property/val-name-1')
-		);
-		expect(deleteIdx, 'old value id was never deleted').toBeGreaterThan(-1);
+		// #264 — the old value is replaced IN the POST (its `_id` rides the
+		// entry; setEntity soft-deletes it in the same call). A separate DELETE
+		// would reopen the half-landing window the atomic overwrite closed.
 		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('/entity/ev1'));
 		expect(postIdx, 'no POST of the new value').toBeGreaterThan(-1);
-		// POST BEFORE DELETE (#91 review F5, mirrored from repertoireActions):
-		// with DELETE first, a failed POST leaves the property EMPTY and the
-		// event silently falls back to the series default on the next load.
-		expect(postIdx, 'the new value must land before the old one is deleted').toBeLessThan(
-			deleteIdx
-		);
-		// Exactly ONE new value, exactly this shape.
 		expect(JSON.parse(String(calls[postIdx].body))).toEqual([
-			{ type: 'name', string: 'Autumn Sing' }
+			{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }
 		]);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
-	it('deletes EVERY existing value id, not just the first (a leftover value survives as a phantom)', async () => {
+	it('a corrupted SECOND value: the overwrite pairs the first id; only the phantom is deleted, after the POST', async () => {
 		const fetchImpl = fieldWireStub('location', [
 			{ _id: 'val-loc-1', string: 'Rehearsal Hall' },
 			{ _id: 'val-loc-2', string: 'Old Hall' }
@@ -440,10 +428,11 @@ describe('updateEventField — replace semantics (GET value-ids → POST the new
 		const deletedIds = fetchImpl.mock.calls
 			.filter((c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'DELETE')
 			.map((c) => String(c[0]));
-		expect(deletedIds.some((u) => u.includes('val-loc-1'))).toBe(true);
+		// val-loc-1 was replaced by the overwrite itself; only the phantom dies.
+		expect(deletedIds.some((u) => u.includes('val-loc-1'))).toBe(false);
 		expect(deletedIds.some((u) => u.includes('val-loc-2'))).toBe(true);
-		// …and EVERY one of them after the POST — the ids came from the GET, so a
-		// delete can never take the value just written.
+		expect(deletedIds).toHaveLength(1);
+		// …and strictly after the POST — the sweep can never precede the write.
 		expect(methods.indexOf('POST')).toBeLessThan(methods.indexOf('DELETE'));
 	});
 
@@ -489,7 +478,7 @@ describe('updateEventField — replace semantics (GET value-ids → POST the new
 			(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
 		);
 		expect(postedProps(dtPost!)).toEqual([
-			{ type: 'start_datetime', datetime: '2026-09-02T17:00:00.000Z' }
+			{ _id: 'val-start-1', type: 'start_datetime', datetime: '2026-09-02T17:00:00.000Z' }
 		]);
 
 		const numFetch = fieldWireStub('duration_minutes', [{ _id: 'val-dur-1', number: 90 }]);
@@ -498,7 +487,7 @@ describe('updateEventField — replace semantics (GET value-ids → POST the new
 			(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
 		);
 		const numProps = postedProps(numPost!);
-		expect(numProps).toEqual([{ type: 'duration_minutes', number: 120 }]);
+		expect(numProps).toEqual([{ _id: 'val-dur-1', type: 'duration_minutes', number: 120 }]);
 		expect(typeof numProps[0].number, 'wire number must be a JSON number').toBe('number');
 	});
 
@@ -727,7 +716,9 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			expect(postedProps(posts[0])).toEqual([{ type: 'name', string: 'Autumn Sing' }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }
+			]);
 		});
 	});
 
@@ -754,7 +745,7 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		const posts = editPosts(fetchStub);
 		expect(posts.length).toBeGreaterThan(0);
 		expect(postedProps(posts[0])).toEqual([
-			{ type: 'location', string: 'Song Festival Grounds' }
+			{ _id: 'val-loc-1', type: 'location', string: 'Song Festival Grounds' }
 		]);
 	});
 
@@ -767,7 +758,7 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
 			expect(postedProps(posts[0])).toEqual([
-				{ type: 'description', string: 'Bring black folders.\nDoors at 18:30.' }
+				{ _id: 'val-desc-1', type: 'description', string: 'Bring black folders.\nDoors at 18:30.' }
 			]);
 		});
 		const desc = container.querySelector('[data-testid="event-detail-description"]');
@@ -785,7 +776,7 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
 			const props = postedProps(posts[0]);
-			expect(props).toEqual([{ type: 'duration_minutes', number: 120 }]);
+			expect(props).toEqual([{ _id: 'val-dur-1', type: 'duration_minutes', number: 120 }]);
 			expect(typeof props[0].number).toBe('number');
 		});
 		await waitFor(() => {
@@ -798,7 +789,7 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		// end prop of any spelling invented.
 		await new Promise((r) => setTimeout(r, 30));
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
-		expect(allProps).toEqual([{ type: 'duration_minutes', number: 120 }]);
+		expect(allProps).toEqual([{ _id: 'val-dur-1', type: 'duration_minutes', number: 120 }]);
 	});
 
 	it('#243 — a MULTI-DAY end across the October fall-back writes the real elapsed minutes: 10:00 EEST → next-day 15:00 EET = 1800, not 1740', async () => {
@@ -813,7 +804,9 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			expect(postedProps(posts[0])).toEqual([{ type: 'duration_minutes', number: 1800 }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-dur-1', type: 'duration_minutes', number: 1800 }
+			]);
 		});
 	});
 
@@ -829,7 +822,9 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			expect(postedProps(posts[0])).toEqual([{ type: 'duration_minutes', number: 1680 }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-dur-1', type: 'duration_minutes', number: 1680 }
+			]);
 		});
 	});
 
@@ -985,7 +980,7 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 		await new Promise((r) => setTimeout(r, 30));
 		// FULL shape of everything written: the name, and ONLY the name.
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
-		expect(allProps).toEqual([{ type: 'name', string: 'Renamed rehearsal' }]);
+		expect(allProps).toEqual([{ _id: 'val-name-1', type: 'name', string: 'Renamed rehearsal' }]);
 	});
 });
 
@@ -1407,9 +1402,12 @@ describe('/event/[id] — integration: the edit surface is wired to the REAL pag
 			// updateEventField — not a hardcoded db, not a bypassed data layer.
 			expect(String(posts[0][0])).toContain('/polyphony/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
-			expect(postedProps(posts[0])).toEqual([{ type: 'name', string: 'Autumn Sing' }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }
+			]);
 		});
 	});
 });
 
 // (*MVOX:Tallis*)
+// (*MVOX:Palestrina* — #264 GREEN: downstream integration pins updated to the atomic wire shape)

@@ -139,9 +139,21 @@ export async function createRsvp(
 }
 
 /**
- * Change an existing rsvp's status. Reads the current entity (status + event +
- * all four sentinel value-ids), deletes the old status value AND every existing
- * sentinel value found, then writes the new status + its matching sentinel. The
+ * Change an existing rsvp's status. #264 (PO ruling, branch (i), item 3) —
+ * ATOMIC overwrite, superseding the old clear-then-set choreography (which
+ * deleted the status + sentinel values BEFORE posting the new ones — a
+ * rejected POST left the rsvp with NO status at all, an EMPTY half-landing
+ * worse than a stranded duplicate). Reads the current entity (status + event +
+ * all four sentinel value-ids), then issues ONE POST whose two entries pair
+ * the FIRST existing status id with the new status, and the FIRST existing
+ * sentinel id (across all four sentinel props, in `going_ref, not_going_ref,
+ * maybe_ref, late_ref` order) with the new `<status>_ref` — Entu's native
+ * overwrite soft-deletes both old values in that SAME call, cross-type pairing
+ * being platform-legal (`setEntity` matches by `_id` regardless of the new
+ * entry's `type`). An entry drops its `_id` when no old value exists to pair.
+ * Any REMAINING corrupted-state values (a second status, or sentinels beyond
+ * the first) are swept at `/property/{id}` strictly AFTER the POST — never
+ * before, so the normal (≤1 status, ≤1 sentinel) path issues ZERO deletes. The
  * sentinel's event reference is sourced from the GET, not the caller — this
  * function only ever receives a status change, not an event.
  */
@@ -174,17 +186,40 @@ export async function updateRsvpStatus(
 	// function only ever takes a status change.
 	const eventId = entity.event?.[0]?.reference ?? '';
 
-	// GENERIC delete: the old status value AND every sentinel value-id that exists,
-	// not just the one we expect. If corrupted state left two sentinels set, both go
-	// — otherwise an orphan would survive as a phantom count.
-	const toDelete = [
-		...(entity.status ?? []),
+	const [oldStatus, ...extraStatus] = entity.status ?? [];
+	// GENERIC across all four sentinel props, in fixed order — corrupted state
+	// (two sentinels set at once) should never happen, but the sweep stays
+	// generic rather than assuming only the expected one exists.
+	const allSentinels = [
 		...(entity.going_ref ?? []),
 		...(entity.not_going_ref ?? []),
 		...(entity.maybe_ref ?? []),
 		...(entity.late_ref ?? [])
 	];
-	for (const value of toDelete) {
+	const [oldSentinel, ...extraSentinels] = allSentinels;
+
+	const statusEntry = oldStatus
+		? { _id: oldStatus._id, type: 'status', string: status }
+		: { type: 'status', string: status };
+	const sentinelEntry = oldSentinel
+		? { _id: oldSentinel._id, type: `${status}_ref`, reference: eventId }
+		: { type: `${status}_ref`, reference: eventId };
+
+	const postRes = await entuFetch(
+		cfg.db,
+		`entity/${rsvpId}`,
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify([statusEntry, sentinelEntry])
+		},
+		fetchImpl
+	);
+	if (!postRes.ok) throw new Error(`updateRsvpStatus POST failed: ${postRes.status}`);
+
+	// EXTRA-sweep — corrupted multi-value state only, strictly AFTER the POST.
+	for (const value of [...extraStatus, ...extraSentinels]) {
 		const delRes = await entuFetch(
 			cfg.db,
 			`property/${value._id}`,
@@ -194,22 +229,6 @@ export async function updateRsvpStatus(
 		);
 		if (!delRes.ok) throw new Error(`updateRsvpStatus delete failed: ${delRes.status}`);
 	}
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${rsvpId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([
-				{ type: 'status', string: status },
-				{ type: `${status}_ref`, reference: eventId }
-			])
-		},
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`updateRsvpStatus POST failed: ${postRes.status}`);
 }
 
 /**

@@ -311,7 +311,7 @@ function fieldWireStub(existing: Array<Record<string, unknown>>) {
 }
 
 describe("updateEventField('event_type') — the existing replace choreography, no new machinery", () => {
-	it('replaces the existing type: lookup asks for event_type, POSTs exactly one string value BEFORE deleting the old value id', async () => {
+	it('replaces the existing type ATOMICALLY (#264): lookup asks for event_type, then ONE POST whose entry carries the old value id — no DELETE round-trip', async () => {
 		const fetchImpl = fieldWireStub([{ _id: 'val-type-1', string: 'rehearsal' }]);
 		await updateEventField(cfg, 'ev1', FIELD, 'concert', fetchImpl as unknown as typeof fetch);
 
@@ -325,17 +325,13 @@ describe("updateEventField('event_type') — the existing replace choreography, 
 		expect(lookup!.url).toContain('props=');
 		expect(lookup!.url).toContain('event_type');
 		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('/entity/ev1'));
-		const deleteIdx = calls.findIndex(
-			(c) => c.method === 'DELETE' && c.url.includes('/property/val-type-1')
-		);
 		expect(postIdx, 'no POST of the new value').toBeGreaterThan(-1);
-		expect(deleteIdx, 'old value id was never deleted (POST appends!)').toBeGreaterThan(-1);
-		expect(postIdx, 'POST before DELETE (#91 house rule)').toBeLessThan(deleteIdx);
-		// FULL wire shape: a `string` value — the same default: branch the other
-		// string fields use.
+		// FULL wire shape: the old id + a `string` value — the same default:
+		// branch the other string fields use, atomically replacing val-type-1.
 		expect(JSON.parse(String(calls[postIdx].body))).toEqual([
-			{ type: 'event_type', string: 'concert' }
+			{ _id: 'val-type-1', type: 'event_type', string: 'concert' }
 		]);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
 	it('a type set from EMPTY skips the deletes and just POSTs the one value', async () => {
@@ -469,11 +465,13 @@ describe('/event/[id] — Enter and blur save; the badge re-renders in the new c
 			// through the real data layer — not a hardcoded db, not a bypass.
 			expect(String(posts[0][0])).toContain('/polyphony/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
-			expect(postedProps(posts[0])).toEqual([{ type: 'event_type', string: 'concert' }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-type-1', type: 'event_type', string: 'concert' }
+			]);
 		});
 		// FULL shape of everything written anywhere: exactly this one prop.
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
-		expect(allProps).toEqual([{ type: 'event_type', string: 'concert' }]);
+		expect(allProps).toEqual([{ _id: 'val-type-1', type: 'event_type', string: 'concert' }]);
 
 		// The badge re-renders in place — new label, new #211 color, old color
 		// gone, editor closed. No navigation, no reload.
@@ -498,7 +496,9 @@ describe('/event/[id] — Enter and blur save; the badge re-renders in the new c
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			expect(postedProps(posts[0])).toEqual([{ type: 'event_type', string: 'festival' }]);
+			expect(postedProps(posts[0])).toEqual([
+				{ _id: 'val-type-1', type: 'event_type', string: 'festival' }
+			]);
 		});
 		expect(editPosts(fetchStub), 'exactly ONE write per confirm').toHaveLength(1);
 	});
@@ -576,14 +576,20 @@ describe('/event/[id] — changing a series child’s type touches that event al
 			allPosts(fetchStub).some((c) => String(c[0]).includes('series1')),
 			'the parent series must never be written'
 		).toBe(false);
-		// The replace choreography deleted the CHILD's old value id — never the
-		// series' own event_type value.
-		const deletes = deletedPropertyUrls(fetchStub);
-		expect(deletes.length).toBeGreaterThan(0);
-		for (const url of deletes) {
-			expect(url).toContain('val-type-1');
-			expect(url).not.toContain('val-series-type-1');
-		}
+		// #264 — the atomic overwrite replaced the CHILD's old value id inside
+		// the POST body (no property DELETE goes out at all); the series' own
+		// event_type value is never named anywhere on the wire.
+		expect(deletedPropertyUrls(fetchStub)).toEqual([]);
+		const postBodies = editPosts(fetchStub).map((c) =>
+			JSON.parse(String((c[1] as RequestInit).body))
+		);
+		expect(
+			postBodies.some((body: Array<{ _id?: string }>) =>
+				body.some((entry) => entry._id === 'val-type-1')
+			),
+			"the child's own old value id must ride the overwrite POST"
+		).toBe(true);
+		expect(JSON.stringify(postBodies)).not.toContain('val-series-type-1');
 	});
 });
 

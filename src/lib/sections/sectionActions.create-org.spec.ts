@@ -101,7 +101,7 @@ describe('createSection — caller-supplied dbEntityId is the top-level parent (
 		});
 	});
 
-	it('dbEntityId present: FULL create body is exactly _type ref + _parent=dbEntityId + name + _sharing:public — nothing else (#partial-assertions-hide-bugs)', async () => {
+	it('dbEntityId present: FULL create body is exactly _type ref + _parent=dbEntityId + name + _sharing:public + _inheritrights:true (#264 item 6) — nothing else (#partial-assertions-hide-bugs)', async () => {
 		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
 		const id = await createSection(cfg, { name: 'Tenor', dbEntityId: 'org-efk' }, fetchImpl);
 		expect(id).toBe('sec-new-1');
@@ -115,7 +115,8 @@ describe('createSection — caller-supplied dbEntityId is the top-level parent (
 				{ type: '_type', reference: 'section-type-42' },
 				{ type: '_parent', reference: 'org-efk' },
 				{ type: 'name', string: 'Tenor' },
-				{ type: '_sharing', string: 'public' }
+				{ type: '_sharing', string: 'public' },
+				{ type: '_inheritrights', boolean: true }
 			].sort((a, b) => a.type.localeCompare(b.type))
 		);
 	});
