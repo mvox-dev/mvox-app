@@ -1,0 +1,144 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "authorization": "PO-Approved 2026-09-06 mvox-app#265 comment 5561754737 (Mihkel shape review)",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "databaseTypeId": "69bcfd8e9c031ab8e6ce8027",
+  "toggleExpectedSharing": "domain",
+  "adminMemberRecordTypeId": "6a9dcbc9ca67df980f417470",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "admin_member_record",
+      "id": "6a9dcbc9ca67df980f417470",
+      "outcome": "created",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.person",
+      "id": "6a9dcbcaca67df980f41747b",
+      "outcome": "created",
+      "after": {
+        "type": "reference",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.person.sharing-readback",
+      "id": "6a9dcbcaca67df980f41747b",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.name",
+      "id": "6a9dcbcaca67df980f417488",
+      "outcome": "created",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.name.sharing-readback",
+      "id": "6a9dcbcaca67df980f417488",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.phone",
+      "id": "6a9dcbcbca67df980f417496",
+      "outcome": "created",
+      "after": {
+        "type": "string",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.phone.sharing-readback",
+      "id": "6a9dcbcbca67df980f417496",
+      "outcome": "found",
+      "after": {
+        "sharing": "private"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.email",
+      "id": "6a9dcbcbca67df980f4174a2",
+      "outcome": "created",
+      "after": {
+        "type": "string",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.email.sharing-readback",
+      "id": "6a9dcbcbca67df980f4174a2",
+      "outcome": "found",
+      "after": {
+        "sharing": "private"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.birthdate",
+      "id": "6a9dcbccca67df980f4174ae",
+      "outcome": "created",
+      "after": {
+        "type": "datetime",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.birthdate.sharing-readback",
+      "id": "6a9dcbccca67df980f4174ae",
+      "outcome": "found",
+      "after": {
+        "sharing": "private"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "database.roster_show_real_names",
+      "id": "6a9dcbccca67df980f4174ba",
+      "outcome": "created",
+      "after": {
+        "type": "boolean",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "database.roster_show_real_names.sharing-readback",
+      "id": "6a9dcbccca67df980f4174ba",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    }
+  ],
+  "exitCode": 0
+}
