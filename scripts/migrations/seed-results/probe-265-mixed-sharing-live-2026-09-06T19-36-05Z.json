@@ -1,0 +1,47 @@
+{
+  "issue": "#265",
+  "purpose": "Establish whether Entu supports per-property sharing on ONE entity (branch i) vs requiring the two-entity fallback ruled in advance",
+  "db": "polyphony",
+  "method": "throwaway _probe_ type with two prop-defs at different sharing tiers on one entity; verified via a genuinely non-privileged read (anonymous, no Authorization header) as a stand-in for a domain-tier caller with no specific grant on the instance \u2014 same code path (cleanupEntity tier selection), one tier further out; source-read confirms the mechanism is identical across domain/public",
+  "sourceEvidence": {
+    "aggregateJs": "utils/aggregate.js:112-120 resolves `sharing` PER PROPERTY DEFINITION inside the per-property loop (not per-type); only downgrades public->domain when the type itself is domain-capped (gate 2); a prop-def's own sharing value is otherwise untouched regardless of sibling prop-defs on the same type",
+    "cleanupEntityJs": "utils/entity.js:569-612 selects private/domain/public bucket to serve based on the CALLER's own tier (owner-or-editor-or-viewer -> private; authenticated no-grant + entity.access includes domain -> domain bucket; access includes public -> public bucket); the domain/public buckets are the per-property-filtered objects aggregate.js built",
+    "accessArrayJs": "utils/rights.js:76-97 getAccessArray: instance's own _sharing string plus every _viewer/_expander/_editor/_owner reference feed the access array cleanupEntity checks"
+  },
+  "liveSteps": [
+    {
+      "step": "CREATE type _probe_mixed_sharing_265, _sharing=public",
+      "result": "created 6a9dbf9bca67df980f41744e"
+    },
+    {
+      "step": "CREATE prop-def probe_public_field, _sharing=public",
+      "result": "created 6a9dbfa8ca67df980f417454"
+    },
+    {
+      "step": "CREATE prop-def probe_private_field, _sharing omitted",
+      "result": "GOTCHA: server auto-inherited _sharing=public from the parent TYPE (create-time inheritParentProperties), NOT private-by-default; corrected with an explicit DELETE-old-value then POST _sharing=private"
+    },
+    {
+      "step": "CREATE one instance, _sharing=public, both fields populated",
+      "result": "created 6a9dbfcaca67df980f417465"
+    },
+    {
+      "step": "GET as db-root",
+      "result": "both fields present (expected, db-root sees the private bucket)"
+    },
+    {
+      "step": "GET as ANONYMOUS (no Authorization header)",
+      "result": "probe_public_field PRESENT with its value; probe_private_field COMPLETELY ABSENT from the response (not null, not empty \u2014 the key does not exist)"
+    },
+    {
+      "step": "teardown: DELETE instance, both prop-defs, type (in that order)",
+      "result": "all 200 {deleted:true}; re-GET of the type confirmed 404"
+    }
+  ],
+  "conclusion": "Per-property sharing on ONE entity is fully supported and empirically confirmed. A prop-def's own sharing tier is honored independently of sibling prop-defs on the same type, at both the aggregation (write) side and the tier-selection (read) side. Branch (i), single admin_member_record-shaped entity with name=domain / phone,email,birthdate=private, is the correct choice; the two-entity fallback is not needed.",
+  "correctionCarriedIntoTheShapeProposal": "Every admin-only prop-def on a domain-shared type MUST explicitly declare _sharing:private at create time \u2014 omitting it does not default to private, it inherits the PARENT's (type's) own sharing, which would silently expose it",
+  "cleanupVerified": true,
+  "liveMutationsOutsideProbe": "none",
+  "executedBy": "Perotin",
+  "timestampUtc": "2026-09-06T19-36-05Z"
+}

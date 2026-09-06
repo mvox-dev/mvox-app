@@ -2,6 +2,42 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #265 roster_record shape proposal — posted, awaiting Mihkel's shape review (2026-09-06)
+
+Full proposal posted: https://github.com/mvox-dev/mvox-app/issues/265#issuecomment-5561658869.
+Condensed for future-me:
+
+- **Branch (i) confirmed, not the two-entity fallback.** Source-read `entu-api` proves per-property
+  `sharing` is resolved inside the per-property loop (`aggregate.js:112-120`), independent of
+  sibling prop-defs on the same type; `cleanupEntity` (`entity.js:569-612`) serves the caller's
+  tier-appropriate bucket. Live-corroborated on polyphony with a throwaway `_probe_mixed_sharing_265`
+  type (one prop-def public, one private, one instance) — a genuinely ANONYMOUS read (no auth
+  header, standing in for "domain-tier caller with no specific grant," since I can't authenticate
+  as a real second member solo) showed the public field present and the private field COMPLETELY
+  ABSENT. Full teardown confirmed (type re-GET 404). Ledger: `scripts/migrations/seed-results/
+  probe-265-mixed-sharing-live-2026-09-06T19-36-05Z.json`.
+- **[GOTCHA] surfaced by the probe, now load-bearing for every future mixed-sharing type**:
+  omitting `_sharing` on a prop-def does NOT default to private — it auto-INHERITS the parent
+  TYPE's own sharing at create time (`inheritParentProperties`). My first private-tier prop-def
+  attempt silently came back `public` until corrected with an explicit write. Every admin-only
+  prop-def on a domain-shared type MUST set `_sharing:private` explicitly, never omit it.
+- **Shape**: new type `roster_record` (name echoes Mihkel's own "nimekirjakiht"), parent =
+  `organization` (matches `member`'s own canonical shape, live-verified — on mvox_crede's
+  single-collective model this resolves to the db entity itself, same as the R2 toggle's home),
+  `person` reference + `name`(domain, required) + `phone`(private, required) + `email`(private,
+  optional) + `birthdate`(private, optional, `type:datetime`). Type `_sharing:domain`,
+  `inheritsRights:true`, `creators: parent_right _editor` — reuses the existing org owner/editor=
+  admin rights model with zero new mechanism (verified against `entity.js`'s `_parent`-reference
+  create-time check + `aggregate.js`'s rights-combine step, both already read for #264).
+- **R2 toggle**: `roster_show_real_names` (boolean) on the organization/collective entity,
+  `_sharing:domain` (every member's client needs to read it to render the roster; write needs no
+  new mechanism, existing org rights already gate writes to the collective entity).
+- **Provisioning**: type + both new properties may land on BOTH dbs (empty structure); real
+  personal data blocked from mvox_crede pending Mihkel's all-test-data answer — restated verbatim,
+  not assumed.
+- **R4/R3**: design notes only (prefill = one-time plain-value copy at create, never a formula —
+  formulas can't "compute once then freeze"; R3 = documented future contract, nothing built).
+
 ## [PROBE-RESULT] #264 item 6 — `_inheritrights` absence ≡ false, not inherit-by-default (2026-09-06)
 
 Read-only, source-verified (`~/projects/entu-api`), reported to team-lead. **Corrects my own
