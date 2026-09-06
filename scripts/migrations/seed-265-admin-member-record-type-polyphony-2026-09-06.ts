@@ -1,6 +1,6 @@
 // mvox-app#265 — provision the `admin_member_record` type-def + its 5
 // prop-defs (person, name, phone, email, birthdate) on polyphony, plus the
-// `roster_show_real_names` property addition on the existing `organization`
+// `roster_show_real_names` property addition on the existing `database`
 // type, using the idempotent CREATE primitive (scripts/migrations/lib/ensure-
 // schema-type.ts) against the mvox-side definitions (scripts/migrations/lib/
 // mvox-schema-extensions.ts).
@@ -11,7 +11,7 @@
 // `person`/`name` -> domain, `phone`/`email`/`birthdate` -> private, set
 // EXPLICITLY via `PropertySpec.sharing` on every admin_member_record
 // prop-def. `roster_show_real_names` deliberately carries NO explicit
-// override — it inherits `organization`'s own current `_sharing`, resolved
+// override — it inherits `database`'s own current `_sharing`, resolved
 // live below rather than assumed, per Mihkel's correction 4 ("no special
 // case"). After every prop-def is ensured, its effective `_sharing` is read
 // back and asserted against intent (PO addition, same comment) — Entu's own
@@ -55,7 +55,7 @@ const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
 
 /** One-off read of an existing type-def's own `_sharing` — used only for
  * property additions to a type this file doesn't own the definition of
- * (organization is canonical, not an mvox-schema-extensions.ts entry). Not
+ * (database is canonical, not an mvox-schema-extensions.ts entry). Not
  * promoted to the shared primitive yet: one use doesn't earn it. */
 async function resolveTypeSharing(cfg: EntuCfg, typeId: string, fetchImpl: typeof fetch = fetch): Promise<string> {
 	const res = await entuFetch(cfg.db, `entity/${typeId}?props=_sharing`, cfg.token, {}, fetchImpl);
@@ -86,10 +86,10 @@ async function main(): Promise<void> {
 	console.log(`entity meta-type: ${entityMetaTypeId}`);
 	console.log(`property meta-type: ${propertyMetaTypeId}`);
 
-	const organizationTypeId = await resolveTypeIdByName(cfg, entityMetaTypeId, admin_member_record.parents[0].entity);
-	console.log(`organization type-def: ${organizationTypeId}`);
-	const organizationSharing = await resolveTypeSharing(cfg, organizationTypeId);
-	console.log(`organization type-def _sharing (live, resolved for the R2 toggle fallback): ${organizationSharing}`);
+	const databaseTypeId = await resolveTypeIdByName(cfg, entityMetaTypeId, admin_member_record.parents[0].entity);
+	console.log(`database type-def: ${databaseTypeId}`);
+	const databaseSharing = await resolveTypeSharing(cfg, databaseTypeId);
+	console.log(`database type-def _sharing (live, resolved for the R2 toggle fallback): ${databaseSharing}`);
 
 	// --- admin_member_record type + prop-defs ---
 
@@ -129,24 +129,24 @@ async function main(): Promise<void> {
 		}
 	}
 
-	// --- roster_show_real_names property addition on organization ---
+	// --- roster_show_real_names property addition on database (the collective root) ---
 
 	const togglePropId = await ensurePropDef(
 		cfg,
 		propertyMetaTypeId,
-		organizationTypeId,
-		'organization',
-		organizationSharing as 'private' | 'domain' | 'public',
+		databaseTypeId,
+		'database',
+		databaseSharing as 'private' | 'domain' | 'public',
 		roster_show_real_names.property,
 		DRY_RUN,
 		ledger
 	);
-	console.log(`  organization.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, inherited: ${organizationSharing})`);
+	console.log(`  database.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, inherited: ${databaseSharing})`);
 	if (togglePropId) {
-		await assertPropDefSharing(cfg, togglePropId, `organization.${roster_show_real_names.property.name}`, organizationSharing as 'private' | 'domain' | 'public', ledger);
-		console.log(`    read-back-asserted: ${organizationSharing} ✓`);
+		await assertPropDefSharing(cfg, togglePropId, `database.${roster_show_real_names.property.name}`, databaseSharing as 'private' | 'domain' | 'public', ledger);
+		console.log(`    read-back-asserted: ${databaseSharing} ✓`);
 	} else {
-		ledger.push({ action: 'ensure-propdef', target: `organization.${roster_show_real_names.property.name}`, outcome: 'dry-run', after: { type: roster_show_real_names.property.type, sharing: organizationSharing, mandatory: false } });
+		ledger.push({ action: 'ensure-propdef', target: `database.${roster_show_real_names.property.name}`, outcome: 'dry-run', after: { type: roster_show_real_names.property.type, sharing: databaseSharing, mandatory: false } });
 	}
 
 	const failures = ledger.filter((e) => e.outcome === 'failed');
@@ -161,8 +161,8 @@ async function main(): Promise<void> {
 		authorization: 'PO-Approved 2026-09-06 mvox-app#265 comment 5561754737 (Mihkel shape review)',
 		entityMetaTypeId,
 		propertyMetaTypeId,
-		organizationTypeId,
-		organizationSharingResolvedLive: organizationSharing,
+		databaseTypeId,
+		databaseSharingResolvedLive: databaseSharing,
 		adminMemberRecordTypeId: typeId ?? '<dry-run-unresolved>',
 		instancesCreated: 0,
 		ledger,

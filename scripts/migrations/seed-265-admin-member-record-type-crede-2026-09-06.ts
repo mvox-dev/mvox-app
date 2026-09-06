@@ -1,6 +1,6 @@
 // mvox-app#265 — provision the `admin_member_record` type-def + its 5
 // prop-defs (person, name, phone, email, birthdate) on mvox_crede, plus the
-// `roster_show_real_names` property addition on the existing `organization`
+// `roster_show_real_names` property addition on the existing `database`
 // type, using the same idempotent CREATE primitive as the polyphony runner
 // (scripts/migrations/seed-265-admin-member-record-type-polyphony-2026-09-06.ts)
 // against the mvox-side definitions (scripts/migrations/lib/mvox-schema-
@@ -69,7 +69,7 @@ async function loadCredeCfg(): Promise<EntuCfg> {
 
 /** One-off read of an existing type-def's own `_sharing` — used only for
  * property additions to a type this file doesn't own the definition of
- * (organization is canonical, not an mvox-schema-extensions.ts entry). Not
+ * (database is canonical, not an mvox-schema-extensions.ts entry). Not
  * promoted to the shared primitive yet: one use doesn't earn it. */
 async function resolveTypeSharing(cfg: EntuCfg, typeId: string, fetchImpl: typeof fetch = fetch): Promise<string> {
 	const res = await entuFetch(cfg.db, `entity/${typeId}?props=_sharing`, cfg.token, {}, fetchImpl);
@@ -100,10 +100,10 @@ async function main(): Promise<void> {
 	console.log(`entity meta-type: ${entityMetaTypeId}`);
 	console.log(`property meta-type: ${propertyMetaTypeId}`);
 
-	const organizationTypeId = await resolveTypeIdByName(cfg, entityMetaTypeId, admin_member_record.parents[0].entity);
-	console.log(`organization type-def: ${organizationTypeId}`);
-	const organizationSharing = await resolveTypeSharing(cfg, organizationTypeId);
-	console.log(`organization type-def _sharing (live, resolved for the R2 toggle fallback): ${organizationSharing}`);
+	const databaseTypeId = await resolveTypeIdByName(cfg, entityMetaTypeId, admin_member_record.parents[0].entity);
+	console.log(`database type-def: ${databaseTypeId}`);
+	const databaseSharing = await resolveTypeSharing(cfg, databaseTypeId);
+	console.log(`database type-def _sharing (live, resolved for the R2 toggle fallback): ${databaseSharing}`);
 
 	// --- admin_member_record type + prop-defs ---
 
@@ -143,24 +143,24 @@ async function main(): Promise<void> {
 		}
 	}
 
-	// --- roster_show_real_names property addition on organization ---
+	// --- roster_show_real_names property addition on database (the collective root) ---
 
 	const togglePropId = await ensurePropDef(
 		cfg,
 		propertyMetaTypeId,
-		organizationTypeId,
-		'organization',
-		organizationSharing as 'private' | 'domain' | 'public',
+		databaseTypeId,
+		'database',
+		databaseSharing as 'private' | 'domain' | 'public',
 		roster_show_real_names.property,
 		DRY_RUN,
 		ledger
 	);
-	console.log(`  organization.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, inherited: ${organizationSharing})`);
+	console.log(`  database.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, inherited: ${databaseSharing})`);
 	if (togglePropId) {
-		await assertPropDefSharing(cfg, togglePropId, `organization.${roster_show_real_names.property.name}`, organizationSharing as 'private' | 'domain' | 'public', ledger);
-		console.log(`    read-back-asserted: ${organizationSharing} ✓`);
+		await assertPropDefSharing(cfg, togglePropId, `database.${roster_show_real_names.property.name}`, databaseSharing as 'private' | 'domain' | 'public', ledger);
+		console.log(`    read-back-asserted: ${databaseSharing} ✓`);
 	} else {
-		ledger.push({ action: 'ensure-propdef', target: `organization.${roster_show_real_names.property.name}`, outcome: 'dry-run', after: { type: roster_show_real_names.property.type, sharing: organizationSharing, mandatory: false } });
+		ledger.push({ action: 'ensure-propdef', target: `database.${roster_show_real_names.property.name}`, outcome: 'dry-run', after: { type: roster_show_real_names.property.type, sharing: databaseSharing, mandatory: false } });
 	}
 
 	const failures = ledger.filter((e) => e.outcome === 'failed');
@@ -176,8 +176,8 @@ async function main(): Promise<void> {
 		privacyPosture: 'mvox_crede confirmed real-PII (comment 5561632474) — empty structure only, zero instances for real people, this script creates none',
 		entityMetaTypeId,
 		propertyMetaTypeId,
-		organizationTypeId,
-		organizationSharingResolvedLive: organizationSharing,
+		databaseTypeId,
+		databaseSharingResolvedLive: databaseSharing,
 		adminMemberRecordTypeId: typeId ?? '<dry-run-unresolved>',
 		instancesCreated: 0,
 		ledger,

@@ -95,9 +95,10 @@ export interface MvoxEntityDef {
 /**
  * A single property added to an EXISTING type (canonical v4E or another
  * extension) — distinct from `MvoxEntityDef`, which defines a whole new type.
- * First use: mvox-app#265's R2 toggle, added to the canonical `organization`
- * type. Same commissioning/PO-Approved discipline applies; this is just a
- * lighter shape for the "one more field on something that already exists" case.
+ * First use: mvox-app#265's R2 toggle, added to the canonical `database`
+ * type (the collective root, post-#161 org→db-entity migration). Same
+ * commissioning/PO-Approved discipline applies; this is just a lighter shape
+ * for the "one more field on something that already exists" case.
  */
 export interface PropertyAdditionDef {
 	/** Name of the type this property is added to (canonical or extension). */
@@ -182,6 +183,17 @@ export const schedule_item: MvoxEntityDef = {
  * `name` required (not `phone` too), R2 toggle default `false`, R2 toggle
  * takes the collective's existing sharing posture (no special case — see
  * `roster_show_real_names` below).
+ *
+ * **Parent corrected post-review** (team-lead routing, 2026-09-06, following a
+ * dry-run halt): the shape review approved `organization` as the parent, but
+ * neither polyphony nor mvox_crede has an `organization` type-def live —
+ * `organization` was RETIRED in the #161 org→db-entity migration (2026-08,
+ * MVOX-11). The collective root has been the database entity itself since
+ * then; `member`'s type-def description ("membership record within one
+ * organization") is aspirational leftover predating #161, not the current
+ * shape. `member`'s own actual live `_parent` on both databases already
+ * points at the database entity — this definition now matches that, the
+ * post-#161 canonical shape, not a workaround.
  */
 export const admin_member_record: MvoxEntityDef = {
 	name: 'admin_member_record',
@@ -193,8 +205,8 @@ export const admin_member_record: MvoxEntityDef = {
 	inheritsRights: true,
 	parents: [
 		{
-			entity: 'organization', required: true, parentCard: '1', childCard: '0..N', verb: 'has',
-			note: 'same attachment point as member — reuses the existing org owner/editor=admin rights cascade, no new rights mechanism; on a single-collective db (e.g. mvox_crede) this resolves to the database entity itself, the same entity the R2 toggle lives on'
+			entity: 'database', required: true, parentCard: '1', childCard: '0..N', verb: 'has',
+			note: "same attachment point as member — reuses the existing collective owner/editor=admin rights cascade, no new rights mechanism. The collective root IS the database entity (post-#161 migration, both databases) — this is not a single-collective-db special case, it's the universal current shape. `entity: 'database'` here resolves the 'database' TYPE-DEF (for the toggle's own attachment + sharing fallback), not a specific database instance — provisioning this file's type/prop-defs never needs to name a specific instance."
 		}
 	],
 	properties: [
@@ -262,9 +274,10 @@ export const admin_member_record: MvoxEntityDef = {
 
 /**
  * R2 toggle: whether the roster shows real names (from `admin_member_record`)
- * or profile names. Lives on the collective entity, per design input 3 — on a
- * single-collective db (mvox_crede) that's the database entity itself, the
- * same entity `admin_member_record.parents` resolves `organization` to there.
+ * or profile names. Lives on the collective entity, per design input 3 — the
+ * collective root IS the database entity (post-#161 org→db-entity migration,
+ * both databases), the same entity `admin_member_record.parents` resolves
+ * `database` to there.
  *
  * Settled mvox-app#265, corrections 3+4 (Mihkel, comment 5561754737): default
  * `false` (profile names until an admin opts in); sharing takes the SAME
@@ -272,15 +285,19 @@ export const admin_member_record: MvoxEntityDef = {
  * one place in this file where OMITTING `PropertySpec.sharing` is correct:
  * the whole point is inheriting the collective's existing tier, not asserting
  * an independent one.
+ *
+ * `onType: 'database'` corrected post-review (team-lead routing, 2026-09-06):
+ * see `admin_member_record`'s doc comment above for the #161 root-cause detail
+ * — `organization` no longer exists as a type on either database.
  */
 export const roster_show_real_names: PropertyAdditionDef = {
-	onType: 'organization',
+	onType: 'database',
 	property: {
 		name: 'roster_show_real_names',
 		type: 'boolean',
 		required: false,
 		// No `sharing` set, deliberately — see the doc comment above. Inherits
-		// whatever tier the organization/collective type already carries.
+		// whatever tier the database/collective type already carries.
 		descriptionEn: "Admin roster display setting: true shows members' real names (admin_member_record.name); false (default) shows profile names.",
 		descriptionEt: 'Admini rosteri kuvamisseade: tõene väärtus näitab liikmete pärisnimesid (admin_member_record.name); väär (vaikimisi) näitab profiilinimesid.',
 		ordinal: 90
@@ -288,7 +305,7 @@ export const roster_show_real_names: PropertyAdditionDef = {
 	commissionedBy: 'mvox-app#265',
 	notes: [
 		'Default false (Mihkel correction 3): roster shows profile names until an admin explicitly turns real names on.',
-		'Sharing takes the same posture as the collective/organization entity\'s OTHER properties — no special case (Mihkel correction 4). Do not set an explicit `sharing` override on this prop-def.',
+		'Sharing takes the same posture as the database/collective entity\'s OTHER properties — no special case (Mihkel correction 4). Do not set an explicit `sharing` override on this prop-def.',
 		'Read by every member\'s client (Path C, browser-direct) to decide what the roster renders for each row — broad READ, admin-only WRITE. Write access needs no new mechanism: whoever already holds `_owner`/`_editor` on the collective can already write any of its existing properties.'
 	]
 };

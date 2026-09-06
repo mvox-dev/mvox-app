@@ -23,7 +23,7 @@ precedent (skip `schema.ts`/PR/trailers), never a *location* one. `schedule_item
 is the first type to land with its definition here, mvox-side, front door.
 `admin_member_record` (mvox-app#265) is the second, and the first to use
 per-property sharing and the `PropertyAdditionDef` shape (for the R2 toggle,
-added to the existing `organization` type rather than a new type of its own).
+added to the existing `database` type rather than a new type of its own).
 
 ---
 
@@ -70,11 +70,17 @@ from a live discussion between Mihkel and Joosep: members may play with their
 own profile, but the admin needs the real name and phone on file, with a
 roster-wide toggle for whether members see real or profile names.
 
-**Parent**: `organization` (single, required) — the same attachment point as
-`member`, reusing the existing org owner/editor = admin rights cascade with no
-new rights mechanism. On a single-collective database (e.g. `mvox_crede`)
-`organization` resolves to the database entity itself — the same entity the
-R2 toggle below lives on.
+**Parent**: `database` (single, required) — the same attachment point as
+`member`, reusing the existing collective owner/editor = admin rights cascade
+with no new rights mechanism. **Corrected post-shape-review**: the review
+approved `organization` as the parent, but neither polyphony nor mvox_crede
+has an `organization` type-def live — it was retired in the #161
+org→db-entity migration (2026-08, MVOX-11). The collective root has been the
+database entity itself since then, on both databases uniformly, not as a
+single-collective special case; `member`'s own type-def description
+("membership record within one organization") is aspirational leftover
+predating #161, while its actual live `_parent` already points at the
+database entity. This is the same entity the R2 toggle below lives on.
 
 **One per person** is an app-level invariant (check-then-create at
 provisioning/seed time) — Entu has no native uniqueness constraint, same
@@ -142,14 +148,12 @@ this commit) is what calls it.
 ### Org tree (excerpt)
 
 ```
-polyphony database root
-        ...
-        ├── organization
-        │     ├── member
-        │     ├── admin_member_record    ← mvox extension, one per person
-        │     └── roster_show_real_names  (property on organization itself, not a child type)
+polyphony database root (= the collective root, post-#161: organization retired)
+        ├── member
+        ├── admin_member_record    ← mvox extension, one per person
+        ├── roster_show_real_names  (property on the database entity itself, not a child type)
         ├── event_series
-        ├── event (multi-parent: org + season + section(s) + event_series)
+        ├── event (multi-parent: db + season + section(s) + event_series)
         │     ├── program_item
         │     ├── schedule_item          ← mvox extension
         │     └── attendance
@@ -192,26 +196,27 @@ Not every schema change is a new type — `PropertyAdditionDef` in
 already exists (canonical v4E or another extension). Same commissioning /
 `PO-Approved` discipline; lighter shape.
 
-### `roster_show_real_names` (on `organization`)
+### `roster_show_real_names` (on `database`)
 
 Boolean toggle, commissioned [mvox-app#265](https://github.com/mvox-dev/mvox-app/issues/265)
 design input 3: whether the roster shows members' real names
 (`admin_member_record.name`) or profile names. Lives on the collective entity
-— on a single-collective database that's the database entity itself, the same
+— which, since the #161 org→db-entity migration, is the database entity
+itself on both databases (not a single-collective special case) — the same
 entity `admin_member_record` is parented to.
 
 - **Default `false`** (Mihkel correction 3): roster shows profile names until
   an admin explicitly turns real names on.
 - **Sharing: no special case** (Mihkel correction 4) — takes the SAME posture
-  as the collective/organization entity's other properties. This is the one
-  place in this schema surface where OMITTING an explicit `sharing` override
-  is correct: the whole point is inheriting whatever tier `organization`
-  already carries, not asserting an independent one. `ensurePropDef`'s tooling
+  as the database/collective entity's other properties. This is the one place
+  in this schema surface where OMITTING an explicit `sharing` override is
+  correct: the whole point is inheriting whatever tier `database` already
+  carries, not asserting an independent one. `ensurePropDef`'s tooling
   extension resolves this by having the provisioning script read the LIVE
-  `organization` type's own current `_sharing` and pass it as the fallback —
-  not by relying on Entu's own create-time inherit-on-omission behavior (the
-  same behavior flagged as a trap above), so the intended inheritance is
-  asserted by our own code, not left to chance.
+  `database` type's own current `_sharing` and pass it as the fallback — not
+  by relying on Entu's own create-time inherit-on-omission behavior (the same
+  behavior flagged as a trap above), so the intended inheritance is asserted
+  by our own code, not left to chance.
 - **Read-broad, write-admin-only**: every member's client (Path C,
   browser-direct) needs to read this to render the roster correctly — that's
   a read concern, not a write one. Write access needs no new mechanism:
