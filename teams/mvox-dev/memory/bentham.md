@@ -7,10 +7,11 @@ metadata:
 
 # Bentham scratchpad
 
-## 2026-09-05 — #255 deactivate-a-member: proposal RULED, and the contract I review the build against
+## 2026-09-05 — #255 deactivate-a-member — CLOSED (merged `e099364`). Durable residue only.
 
-I authored the engineering proposal (issue comment `5551794438`); Gama accepted all four calls
-(`5551807072`) — build as proposed. Recording only what changes a FUTURE review decision.
+Arc complete: proposal (`5551794438`) → all 4 recs ruled (`5551807072`) → 3 pipeline YELLOW rounds →
+fix `d67ce9f` → my r4 YELLOW-merge-eligible → merged. Per-PR narrative and the spent build-checkpoints
+pruned at session end; what survives below is what changes a FUTURE review.
 
 **[GOTCHA-SELF-EDITOR-ON-OWN-PERSON] not every `_editor` a person holds is a role.**
 `src/lib/invite/inviteData.ts:262` POSTs `[{type:'_editor', reference: personId}]` onto **her own
@@ -31,43 +32,24 @@ REFUSING deactivation while a grant is held, not by auto-stripping. `RoleLockout
 (`roleManagement.ts:135,141`) is why: auto-strip on a sole owner either fails opaquely mid-action or
 bypasses the one guard against a collective locking itself out.
 
-**Three additions Gama baked into the build args — these are review checkpoints, not suggestions:**
-1. The refusal must **name the remedy** — who holds what role, and where to remove it. A bare "cannot
-   deactivate" fails this. (Whether the control is additionally pre-disabled at render is ours to
-   choose, but the build must STATE which it does.)
-2. The no-rate reasoning goes in a **comment AT THE SITE** (`attendanceSummary.ts` / its call site at
-   `+page.svelte:2104`), not only in the issue: `total` counts events occurring after she was gone, so
-   a percentage reads as a judgement about the person. There is no honest denominator — done-when #1
-   forbids a deactivation date and `_created` is private-bucket-only, unreadable cross-member
-   (`completionGate.ts:45`). Absent the in-file comment a future contributor "fixes" the missing
-   percentage. The history union is an **in-slice fix, not pin-and-defer** (Gama).
-3. Sign-in notice copy is bound to **"not active"** — never removed / deleted / deactivated — and
-   points at the **choir**, not support. Copy drift here is a YELLOW with a named source.
-
-**RESOLVED 2026-09-05 — checkpoint 5, the RSVP going-tally is a DATE-GATED join.** (Open for about
-an hour; the earlier "do not review the RSVP portion" hold is DISCHARGED.) Finn confirmed the tally
-is unscoped; Gama's ruling: **future** events join against the active roster (she is not coming —
-conductors plan around it), **past** events keep the raw tally as recorded (she said yes, she very
-likely sang; dropping her rewrites a historical number from present membership — my own no-rate
-principle applied in the other direction). A **new date-comparison path is YELLOW**; escape hatch is
-ship-future-only and Gama files the past case.
-
-Two review triggers I verified before the branch exists, both cheap to check, both the kind that pass
-tests while being wrong:
-
-- **Gate on the EVENT, not on the page's current `$derived`.** `loadTally` and both pastness
-  derivations are co-located in `src/routes/event/[id]/+page.svelte` (`loadTally:398`, `isPast:669`,
-  `isPastDetail(d):673`), so the reuse is genuinely local and the escape hatch should not be needed.
-  But `isPast` is a `$derived` off the *currently loaded* event, while `loadTally` is invoked in async
-  paths behind a generation guard (`:300`, `:430`, `:569`). A join gate reading `isPast` inside a
-  `.then()` reads pastness for whatever event is loaded AT RESOLUTION, not the one the tally was
-  requested for. Correct shape is `isPastDetail(loaded)` — the per-event form `:757` already uses — or
-  capture at call time alongside `g`. Same family as
-  `[GOTCHA-OPTIMISTIC-WRITE-NEEDS-SAME-REQUESTID-GUARD]`.
-- **The boundary is event START, not event end.** `isPast` is `startAt.getTime() < Date.now()`
-  (`:669`), so an in-progress event already counts as past and takes the raw tally. Almost certainly
-  what we want, but the ruling's "future / past" wording does not say it — so a build picking a
-  different boundary is a deliberate deviation to be stated, not an implementation detail.
+**Shipped constraints that still bind any FUTURE edit to these surfaces** (they were build bindings;
+they are now properties of live code, so breaking one is a regression, not a missed requirement):
+1. The deactivate refusal **names the remedy** — who holds what role and where to remove it.
+2. The no-rate reasoning lives in a comment AT THE SITE (`attendanceSummary.ts:77`): `total` counts
+   events occurring after she left, so a percentage reads as a judgement about the person, and there
+   is no honest denominator — only `status` changes, and `_created` is private-bucket-only, unreadable
+   cross-member (`completionGate.ts:45`). **Delete that comment and someone "fixes" the missing
+   percentage.** A test asserts the comment's presence; that test is load-bearing, not noise.
+3. Sign-in notice copy is bound to **"not active"** — never removed/deleted/deactivated — pointing at
+   the **choir**, not support. Copy drift = YELLOW with a named source.
+4. The RSVP going-tally is a **date-gated join**: future events join the active roster, past events
+   keep the raw tally as recorded (dropping her would rewrite a historical number from present
+   membership — the no-rate principle in the other direction). Boundary is event **START**
+   (`isPast = startAt.getTime() < Date.now()`), so an in-progress event takes the raw tally; a build
+   that moves that boundary is deviating deliberately and must say so. The gate is captured per-event
+   at the call site (`isPastDetail(loaded)`, `event/[id]/+page.svelte:303,457,596`), never the live
+   `isPast` `$derived` — reading a `$derived` inside a `.then()` gets pastness for whatever is loaded
+   AT RESOLUTION. Same family as `[GOTCHA-OPTIMISTIC-WRITE-NEEDS-SAME-REQUESTID-GUARD]`.
 
 **Reusable, beyond #255**: `sectionActions.ts:406-418` records why `deleteSection`'s member count is
 deliberately status-UNSCOPED — Entu's delete soft-deletes every property REFERENCING the deleted
@@ -240,7 +222,16 @@ git checkout main -- teams/mvox-dev/memory/ && git commit -m "chore: drop memory
 dirty-but-uncommitted scratchpads it returns **0 lines**, exits 0, writes an empty patch that looks
 successful — and the next step's `git checkout main -- <path>` then destroys the very edits the export
 existed to save. Measured on #199 @ `e819fff`: `main HEAD` form = 0 lines, `main` form = 120 lines,
-same paths, same moment. **Drop `HEAD`; add the `test -s` guard.**
+same paths, same moment. **Re-confirmed #255 r4 @ `d67ce9f` (2026-09-05): 0 vs 116 lines.** Twice now,
+months apart, on unrelated branches — this is the form's behaviour, not a one-off. **Drop `HEAD`; add
+the `test -s` guard.**
+
+**Second use, discovered #255 r4 — this pair also answers "are scratchpads in the squash?"** I nearly
+mis-reported memory files as riding into #255's squash because `git diff main --stat` showed them.
+It compares against the WORKING TREE, where teammates' dirty scratchpads always sit. The committed
+question is `git log main..HEAD -- teams/mvox-dev/memory/` (empty ⇒ clean squash). Run both and say
+which one you ran; they disagree by construction whenever anyone has an uncommitted scratchpad, which
+under standing mid-chain-write policy is nearly always.
 
 Two riders: `git commit` fails on an empty commit when the memory paths were never committed to the
 branch (the common case — `add -A` often doesn't bite), so make it conditional or `--allow-empty`.
@@ -441,6 +432,16 @@ All of these are "the test/mock and the code agreed on a lie." Treat as one fami
 - **[CALIBRATION-FOLD-IN-VS-DEFER]** If a YELLOW's fix is sub-10-line AND the file's own author
   comment already points at the fix, prefer FOLD-IN pre-merge over a post-merge follow-up — the
   post-merge cycle (hotfix commit + dispatch + re-review) costs more than the fold-in.
+- **[CALIBRATION-MERGE-ELIGIBLE-YELLOW]** (established #255 r4, 2026-09-05; accepted by Gama, who
+  independently re-verified the load-bearing claim before accepting.) A YELLOW does not have to mean
+  "go round again." When a fix chain is CONVERGING (classify by kind+severity, never round count) and
+  the tail finding is self-healing in-session with no data loss, the right instrument is an explicit
+  **"YELLOW — merge-eligible; I am NOT asking for a round N+1"**, with a recommendation to merge and
+  file the follow-up. State the disposition in the verdict itself — a bare YELLOW gets read as a
+  re-round by a pipeline, and the finding then costs a whole cycle it did not earn. Two obligations
+  come with it: name explicitly what makes the tail finding lower-severity than the round it follows,
+  and give the fix shape anyway so the follow-up is cheap to pick up. Do NOT use this to wave through
+  a finding I would otherwise RED — it is a disposition for the converging tail, not a softener.
 - **[CALIBRATION-LIVE-GATE-IS-EXPECTED]** A static review gate is not designed to catch integration
   and live-behaviour defects; a PO-live-test → hotfix-cycle window is EXPECTED after any
   architectural rewrite, not an exception. Budget it in the plan rather than treating hotfixes as
