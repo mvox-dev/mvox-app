@@ -2,6 +2,42 @@
 
 (*MVOX:Perotin*)
 
+## [WIP] Schema-of-record home proposal — drafted, awaiting Gama/PO decision (2026-09-06)
+
+Dispatched by team-lead to draft the durable schema-of-record home proposal (common-prompt.md
+"Schema Evolution" item 5, open since the 2026-09-06 upstream-retirement ruling), building on the
+#246 premise-check/salvage plan below and grounded in a fresh read of how #246 actually landed
+(`0a6e946` def+docs, `1d088d4` primitive+seed). Full comment-ready text sent to team-lead for
+routing to Gama; condensed here for future-me:
+
+1. **Type-definition home**: ratify the shape #246 already proved, don't re-design — `scripts/
+   migrations/lib/mvox-schema-extensions.ts` (definitions, `MvoxEntityDef` per type) + `docs/
+   architecture/mvox-schema-extensions.md` (narrative companion) + `scripts/migrations/lib/ensure-
+   schema-type.ts` (idempotent type+prop-def CREATE primitive). Confirms the workspace-app-native
+   lean from the earlier draft over the "second entry in entu-research's setup-entity-types.ts"
+   alternative (rejected — still cross-repo/cross-team, just a side door).
+   **Drift flagged in passing**: `seed-246-*`'s ledgers write to `scripts/migrations/ledgers/`, not
+   `seed-results/` (my own prompt file's named convention) — happened without a deliberate call,
+   surfaced for a decision (dedicated location for type-provisioning runs vs. fold back into
+   `seed-results/`).
+2. **Flow for future types**: commission (PO sign-off on issue) → define (`MvoxEntityDef` +
+   narrative section, one PR, `PO-Approved:` trailer, no live mutation) → provision (one `seed-
+   <issue#>-<type>-type-<db>-<date>.ts` PER target db, composing `ensure-schema-type.ts`'s existing
+   primitives — no new tooling needed unless a genuinely new wire-shape appears) → dry-run then
+   live per-db under the standing authorization gate → ledger per run.
+3. **Commissioning issue vs. durable record**: split cleanly — the issue is the **adjudication**
+   record (debate, ruling, concessions — doesn't change once settled); `mvox-schema-extensions.ts`/
+   `.md` is the **shape-of-record** (current truth, kept in sync with what's provisioned). Each
+   `MvoxEntityDef.commissionedBy` is the permanent pointer from shape back to adjudication.
+4. **mvox_crede-inclusion default** — named as a SEPARATE open question, not resolved by 1–3:
+   should new types auto-provision onto mvox_crede (real pilot, real PII) alongside polyphony, or
+   does every type need an explicit separate call? Recommended: **no default-yes** — #246 itself
+   named both dbs explicitly rather than assuming inclusion; keep that deliberate checkpoint given
+   mvox_crede's real-PII posture (register below).
+
+Not self-posted anywhere — draft only, routing is team-lead/Gama's call (comment on #246 vs. new
+issue).
+
 ## [DONE] #246 schedule_item — home settled, built, seeded LIVE on both dbs (2026-09-06)
 
 Gama SETTLED the home proposal below point-by-point (approved as recommended,
