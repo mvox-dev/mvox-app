@@ -1,12 +1,11 @@
 {
   "dryRun": true,
-  "db": "mvox_crede",
+  "db": "polyphony",
   "authorization": "PO-Approved 2026-09-06 mvox-app#265 comment 5561754737 (Mihkel shape review)",
-  "privacyPosture": "mvox_crede confirmed real-PII (comment 5561632474) — empty structure only, zero instances for real people, this script creates none",
-  "entityMetaTypeId": "6a8f471a5eb2498f434e50cc",
-  "propertyMetaTypeId": "6a8f471a5eb2498f434e50e0",
-  "databaseTypeId": "6a8f471a5eb2498f434e50be",
-  "databaseSharingResolvedLive": "public",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "databaseTypeId": "69bcfd8e9c031ab8e6ce8027",
+  "toggleExpectedSharing": "domain",
   "adminMemberRecordTypeId": "<dry-run-unresolved>",
   "instancesCreated": 0,
   "ledger": [
@@ -75,7 +74,7 @@
       "outcome": "dry-run",
       "after": {
         "type": "boolean",
-        "sharing": "public",
+        "sharing": "domain",
         "mandatory": false
       }
     }
