@@ -74,8 +74,21 @@ const CO_AUTHOR = _args.coAuthor
 const tasks = _args.tasks
 
 const STRUCT_FINAL = '\n\nCRITICAL: your FINAL action MUST be calling the StructuredOutput tool with your result object. A prior run lost a completed GREEN because the agent ended with plain text instead.'
-// All template agents are schema-forced; agentS appends the StructuredOutput guard uniformly.
-const agentS = (prompt, opts) => agent(prompt + STRUCT_FINAL, opts)
+
+// FINAL-RESULT DISCIPLINE (baked 2026-09-06 after two premature-WIP halts on MVOX-15, both
+// recovered only via manual continuation prompts): an agent's result must describe a FINISHED
+// state, never work-in-progress.
+const FINAL_DISCIPLINE = '\n\nFINAL-RESULT DISCIPLINE: never end your turn with work in progress. Your StructuredOutput must report either (a) the deliverable COMPLETE and verified, or (b) success=false with the precise blocker and the exact state you left the tree in. "I will continue with..." / partial checklists are failure modes — finish the work or report the stop honestly. Do not stop because your transcript is long.'
+
+// GIT SAFETY (baked 2026-09-06; validated live on MVOX-15 — turned a would-be `reset --hard`
+// incident into a clean stop-and-report): destructive git is never self-service recovery.
+const GIT_SAFETY = '\n\nGIT SAFETY (absolute): NEVER run `git reset --hard`, `git checkout -- <path>`, `git clean`, `git stash` (in any form), force-push, or any other command that discards working-tree state — the tree is SHARED and may hold other agents\' and team-memory edits that are not yours to destroy. Dirty files you did not create are normal: leave them alone; they do not block branch checkout or `merge --squash`, and you stage explicitly by path so they cannot ride into your commit. If you find the repo in a state you did not expect (wrong branch, your branch missing, conflicting edits), STOP: commit nothing, run no recovery, and report the exact observed state in your StructuredOutput (success=false). A prior agent ran `reset --hard` on shared main to recover from its own confusion and destroyed teammates\' work.'
+
+// All template agents are schema-forced; agentS appends the guards uniformly.
+// NOTE (baked 2026-09-06): a `_shared` key in the LAUNCH args object is NOT read by agents —
+// they read only their own prompts and any args JSON file those prompts name. Put per-run rules
+// in that args file (or in the prompts themselves), never in launch-args `_shared`.
+const agentS = (prompt, opts) => agent(prompt + GIT_SAFETY + FINAL_DISCIPLINE + STRUCT_FINAL, opts)
 
 const VERDICT_SCHEMA = {
   type: 'object',
@@ -344,7 +357,7 @@ for (let i = 0; i < tasks.length; i++) {
   log('MERGE: ' + taskLabel)
 
   const merge = await agentS(
-    'REVIEW GATE — this merge is authorized by the pipeline review chain: final verdict GREEN on review round ' + reviewAttempts + ' for branch ' + task.branch + '. Reviewer summary: ' + String(verdict.summary || '').replace(/\s+/g, ' ').slice(0, 600) + '\n\nSquash-merge ' + task.branch + ' to main for issue #' + task.issueNumber + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\ncd ' + REPO + ' && git checkout main && git pull && git merge --squash ' + task.branch + " && git commit -m \"$(cat <<'EOF'\n" + task.commitPrefix + ': ' + task.title + '\n\n' + task.commitBody + '\n\nReview: pipeline GREEN, round ' + reviewAttempts + '\n\nCloses #' + task.issueNumber + '\n\n' + CO_AUTHOR + "\nEOF\n)\" && git push && git branch -d " + task.branch + ' && git push origin --delete ' + task.branch + ' 2>/dev/null || true\n\nReport the merge commit SHA.',
+    'REVIEW GATE — this merge is authorized by the pipeline review chain: final verdict GREEN on review round ' + reviewAttempts + ' for branch ' + task.branch + '. Reviewer summary: ' + String(verdict.summary || '').replace(/\s+/g, ' ').slice(0, 600) + '\n\nSquash-merge ' + task.branch + ' to main for issue #' + task.issueNumber + '.\n\nWORKING DIRECTORY: ' + REPO + '\n\nDIRTY-TREE RULE: if the tree holds dirty files (team memory files are common), LEAVE THEM ALONE — do NOT stash. `git merge --squash` stages only branch content and unrelated dirty files do not block it; a prior merge agent\'s stash cycle restored stale snapshots over teammates\' live edits.\n\ncd ' + REPO + ' && git checkout main && git pull && git merge --squash ' + task.branch + " && git commit -m \"$(cat <<'EOF'\n" + task.commitPrefix + ': ' + task.title + '\n\n' + task.commitBody + '\n\nReview: pipeline GREEN, round ' + reviewAttempts + '\n\nCloses #' + task.issueNumber + '\n\n' + CO_AUTHOR + "\nEOF\n)\" && git push && git branch -d " + task.branch + ' && git push origin --delete ' + task.branch + ' 2>/dev/null || true\n\nReport the merge commit SHA.',
     { label: 'merge-' + task.issueNumber, phase: 'MERGE', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
 
