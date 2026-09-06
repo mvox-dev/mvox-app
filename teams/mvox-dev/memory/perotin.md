@@ -2,6 +2,46 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #265 admin_member_record definition committed — `cb43a29` (2026-09-06)
+
+Shape review APPROVED (Mihkel, comment 5561754737) with 4 corrections + a standing ruling: **branch
+(i) stands, no further probe** — "entu has really great official documentation... we should consult
+and believe" (his words) settles the branch on the documented model + my source reads + the live
+partition probe; the on-request stronger probe is explicitly NOT to be run. Corrections applied
+verbatim: type name **`admin_member_record`** (not my `roster_record` proposal); **only `name`
+required** (not phone too); R2 toggle default **false**; R2 toggle sharing **no special case**
+(inherits the collective's existing posture, doesn't get its own explicit tier).
+
+Definition-only commit, no live mutation, `pnpm check` clean:
+- `mvox-schema-extensions.ts`: `PropertySpec.sharing?: Sharing` (per-property override, falls back
+  to type-level — closes Finn's found tooling gap), `admin_member_record: MvoxEntityDef` (person+name
+  →domain explicit, phone/email/birthdate→private explicit — every prop-def sets it, none omitted),
+  new `PropertyAdditionDef` shape (for adding one property to an EXISTING type rather than defining
+  a whole new one) + `roster_show_real_names: PropertyAdditionDef` on `organization` (deliberately NO
+  `sharing` override — the one place omitting it is correct, since inheriting the collective's tier
+  IS the intent).
+- `ensure-schema-type.ts`: `ensurePropDef` now resolves `effectiveSharing = prop.sharing ?? sharing`
+  — our own code always asserts an explicit value, never relies on Entu's own create-time
+  inherit-from-parent quirk (the same one my #265 probe caught). New `assertPropDefSharing` primitive
+  — read-back-then-assert a prop-def's effective `_sharing`, per the PO's read-back requirement
+  (comment 5561754737, same discipline class as #264 item 6) — for the NEXT-phase provisioning
+  script to call, not run in this commit.
+- `docs/architecture/mvox-schema-extensions.md`: full entity-catalog entry incl. a per-property
+  bucket-exposure table (first entry needing property-level, not type-level, granularity), the
+  property-addition section, org-tree/rights-matrix updates, provenance citing both the real-PII
+  posture ruling (5561632474) and the consult-Entu's-docs standing ruling (5561754737).
+
+**Standing ruling worth remembering broadly, not just for #265**: Mihkel wants platform-behavior
+questions settled by consulting Entu's own official docs and believing them — divergence discovered
+later is a bug report, not grounds to have over-verified up front. Don't reach for another live probe
+on a platform-behavior question the docs already answer; my #265 probe was justified because it
+corroborated a MECHANISM (per-property partition), not because doubt alone earns a probe.
+
+**Next (not mine to trigger)**: team-lead authorizes the provisioning run separately (dry-run → live,
+BOTH dbs, empty structure only) — that's when a NEW seed script gets written calling
+`assertPropDefSharing`. Still binding: no real personal data into mvox_crede without Mihkel's
+explicit per-decision say-so.
+
 ## [DONE] #265 roster_record shape proposal — posted, awaiting Mihkel's shape review (2026-09-06)
 
 Full proposal posted: https://github.com/mvox-dev/mvox-app/issues/265#issuecomment-5561658869.
