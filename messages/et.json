@@ -535,5 +535,15 @@
 	"auth_provider_id_card": "ID-kaart",
 	"auth_provider_e_mail": "E-post",
 	"auth_provider_google": "Google",
-	"auth_provider_apple": "Apple"
+	"auth_provider_apple": "Apple",
+	"agenda_view_toggle_label": "Vaate valik",
+	"agenda_view_list": "Nimekiri",
+	"agenda_view_month": "Kuu",
+	"agenda_weekday_short_0": "P",
+	"agenda_weekday_short_1": "E",
+	"agenda_weekday_short_2": "T",
+	"agenda_weekday_short_3": "K",
+	"agenda_weekday_short_4": "N",
+	"agenda_weekday_short_5": "R",
+	"agenda_weekday_short_6": "L"
 }

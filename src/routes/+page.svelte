@@ -89,6 +89,11 @@
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
+	// #247 — the month overview sibling, rendered instead of AgendaList when
+	// the view-mode toggle is set to 'month'; the day-list branch above stays
+	// byte-unchanged.
+	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
+	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	// #209 (PO standing rule 1) — the three conductor pickers are NATIVE
 	// <select> elements, fed in ROSTER ORDER (Gama ruling 3) by the SAME
@@ -7643,36 +7648,72 @@
 						     events at all (nothing to filter). Native role="group" of
 						     native buttons per standing rules 1/2 — no hand-rolled widget. -->
 						{#if agendaFilterChips.length > 0}
-							<div
-								role="group"
-								aria-label={m.agenda_filter_group_label()}
-								class="flex flex-wrap gap-2 pb-3"
-							>
-								<button
-									type="button"
-									data-testid="agenda-filter-all"
-									aria-pressed={agendaTypeFilter === 'all' ? 'true' : 'false'}
-									class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeFilter ===
-									'all'
-										? 'border-ink bg-ink text-paper'
-										: 'border-ink-4 text-ink-2'}"
-									onclick={() => selectAgendaTypeFilter('all')}
+							<div class="flex flex-wrap items-center justify-between gap-2 pb-3">
+								<div
+									role="group"
+									aria-label={m.agenda_filter_group_label()}
+									class="flex flex-wrap gap-2"
 								>
-									{m.agenda_filter_all()}
-								</button>
-								{#each agendaFilterChips as type (type)}
 									<button
 										type="button"
-										data-testid="agenda-filter-{type}"
-										aria-pressed={agendaTypeFilter === type ? 'true' : 'false'}
-										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeChipClass(
-											type
-										)}"
-										onclick={() => selectAgendaTypeFilter(type)}
+										data-testid="agenda-filter-all"
+										aria-pressed={agendaTypeFilter === 'all' ? 'true' : 'false'}
+										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeFilter ===
+										'all'
+											? 'border-ink bg-ink text-paper'
+											: 'border-ink-4 text-ink-2'}"
+										onclick={() => selectAgendaTypeFilter('all')}
 									>
-										{eventTypeLabel(type)}
+										{m.agenda_filter_all()}
 									</button>
-								{/each}
+									{#each agendaFilterChips as type (type)}
+										<button
+											type="button"
+											data-testid="agenda-filter-{type}"
+											aria-pressed={agendaTypeFilter === type ? 'true' : 'false'}
+											class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeChipClass(
+												type
+											)}"
+											onclick={() => selectAgendaTypeFilter(type)}
+										>
+											{eventTypeLabel(type)}
+										</button>
+									{/each}
+								</div>
+								<!-- #247 — the Nimekiri|Kuu view toggle, sitting WITH the chips
+								     (Ruled 2026-09-06, item 9): a two-state segmented control of
+								     native buttons — day list is the default, the choice persists
+								     per-device via the #207-shaped agendaView preference store. -->
+								<div
+									role="group"
+									aria-label={m.agenda_view_toggle_label()}
+									class="flex gap-1"
+								>
+									<button
+										type="button"
+										data-testid="agenda-view-list"
+										aria-pressed={$agendaViewStore === 'list' ? 'true' : 'false'}
+										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {$agendaViewStore ===
+										'list'
+											? 'border-ink bg-ink text-paper'
+											: 'border-ink-4 text-ink-2'}"
+										onclick={() => setAgendaView('list')}
+									>
+										{m.agenda_view_list()}
+									</button>
+									<button
+										type="button"
+										data-testid="agenda-view-month"
+										aria-pressed={$agendaViewStore === 'month' ? 'true' : 'false'}
+										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {$agendaViewStore ===
+										'month'
+											? 'border-ink bg-ink text-paper'
+											: 'border-ink-4 text-ink-2'}"
+										onclick={() => setAgendaView('month')}
+									>
+										{m.agenda_view_month()}
+									</button>
+								</div>
 							</div>
 						{/if}
 						<!-- #214 — a filter yielding zero upcoming rows is a DIFFERENT truth
@@ -7700,39 +7741,58 @@
 								{m.agenda_filter_recent_empty()}
 							</p>
 						{/snippet}
-						<AgendaList
-							items={filteredAgendaItems}
-							loading={agendaLoading}
-							{rsvpByEventId}
-							membership={gatedMembership}
-							{pendingEventIds}
-							{failedEventIds}
-							recentItems={filteredRecentItems}
-							{conductorEventIds}
-							{myAttendanceByEventId}
-							{worksByEventId}
-							{worksManage}
-							{attendancePanel}
-							emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
-							recentEmptyState={agendaTypeFilter !== 'all' && recentItems.length > 0
-								? agendaRecentFilterEmptyState
-								: undefined}
-							onpdfclick={handlePdfClick}
-							onrsvpchange={handleRsvpChange}
-							ontakeattendance={openAttendancePanel}
-						>
-							{#snippet seasonSummary()}
-								<SeasonSummary
-									myRate={mySeasonRate}
-									canExpand={$isConductor === 'conductor'}
-									expanded={seasonSummaryExpanded}
-									memberRates={seasonMemberRates}
-									loading={seasonRatesLoading}
-									error={seasonRatesError}
-									onexpand={handleExpandSeasonSummary}
-								/>
-							{/snippet}
-						</AgendaList>
+						<!-- #247 — the day list stays the untouched default branch; month
+						     mode is a wholly separate sibling component consuming
+						     `filteredAgendaItems` ONLY (Gama's scope ruling: upcoming
+						     only, `recentItems` never reaches month mode). -->
+						{#if $agendaViewStore === 'list'}
+							<AgendaList
+								items={filteredAgendaItems}
+								loading={agendaLoading}
+								{rsvpByEventId}
+								membership={gatedMembership}
+								{pendingEventIds}
+								{failedEventIds}
+								recentItems={filteredRecentItems}
+								{conductorEventIds}
+								{myAttendanceByEventId}
+								{worksByEventId}
+								{worksManage}
+								{attendancePanel}
+								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
+								recentEmptyState={agendaTypeFilter !== 'all' && recentItems.length > 0
+									? agendaRecentFilterEmptyState
+									: undefined}
+								onpdfclick={handlePdfClick}
+								onrsvpchange={handleRsvpChange}
+								ontakeattendance={openAttendancePanel}
+							>
+								{#snippet seasonSummary()}
+									<SeasonSummary
+										myRate={mySeasonRate}
+										canExpand={$isConductor === 'conductor'}
+										expanded={seasonSummaryExpanded}
+										memberRates={seasonMemberRates}
+										loading={seasonRatesLoading}
+										error={seasonRatesError}
+										onexpand={handleExpandSeasonSummary}
+									/>
+								{/snippet}
+							</AgendaList>
+						{:else}
+							<!-- #214 applies to BOTH views: the same snippet, handed over under
+							     the identical `agendaTypeFilter !== 'all'` condition as the day
+							     list's. Without it, a chip that empties the upcoming set in
+							     month mode showed "no upcoming events" — the wrong-truth
+							     conflation #214 exists to prevent. (No recentEmptyState twin:
+							     month mode consumes upcoming ONLY, per Gama's #247 scope
+							     ruling — there is no Recent section here to keep on screen.) -->
+							<AgendaMonthView
+								items={filteredAgendaItems}
+								loading={agendaLoading}
+								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
+							/>
+						{/if}
 						{#if pdfError}
 							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red-700" role="alert">
 								{m.repertoire_pdf_error()}

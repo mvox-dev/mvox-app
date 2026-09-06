@@ -21,6 +21,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
+		// #247 — the view toggle sits WITH the filter chips, so it renders
+		// whenever the chip row does; same "every mock needs it" rule as #214.
+		agenda_view_toggle_label: () => 'Agenda view',
+		agenda_view_list: () => 'List',
+		agenda_view_month: () => 'Month',
 		agenda_filter_empty: () => 'No events match this filter.',
 		// #113 review F3 — the page header's collectives link is a paraglide key
 		// now (it was hardcoded English); this spec renders that header.

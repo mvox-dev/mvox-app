@@ -536,5 +536,15 @@
 	"auth_provider_id_card": "ID-karte",
 	"auth_provider_e_mail": "E-pasts",
 	"auth_provider_google": "Google",
-	"auth_provider_apple": "Apple"
+	"auth_provider_apple": "Apple",
+	"agenda_view_toggle_label": "Skata izvēle",
+	"agenda_view_list": "Saraksts",
+	"agenda_view_month": "Mēnesis",
+	"agenda_weekday_short_0": "Sv",
+	"agenda_weekday_short_1": "Pr",
+	"agenda_weekday_short_2": "Ot",
+	"agenda_weekday_short_3": "Tr",
+	"agenda_weekday_short_4": "Ce",
+	"agenda_weekday_short_5": "Pk",
+	"agenda_weekday_short_6": "Se"
 }
