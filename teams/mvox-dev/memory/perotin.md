@@ -2,6 +2,41 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #246 schedule_item — home settled, built, seeded LIVE on both dbs (2026-09-06)
+
+Gama SETTLED the home proposal below point-by-point (approved as recommended,
+`(a)` workspace-app-native / definition-in-this-repo). Executed end-to-end same
+session: `scripts/migrations/lib/mvox-schema-extensions.ts` (definition, local
+`MvoxEntityDef` vocabulary, no schema.ts import) + `docs/architecture/mvox-
+schema-extensions.md` (narrative, salvaged README prose adapted) + NEW
+`scripts/migrations/lib/ensure-schema-type.ts` (idempotent type+prop-def CREATE
+primitive — meta-type ids resolved PER-DB via query, never hardcoded; confirmed
+live that polyphony (`69bcfd8e...8034`/`...8048`) and mvox_crede
+(`6a8f471a...50cc`/`...50e0`) genuinely differ, as expected for distinct dbs).
+
+Dry-run clean on both dbs → team-lead's dispatch itself carried the explicit
+"I authorize this run" (both dbs named) → live 4/4 clean on both:
+- polyphony: type `6a9ccea4ca67df980f4173c5`, name `...73d0`, datetime `...73df`
+- mvox_crede: type `6a9cceabca67df980f4173ee`, name `...73f9`, datetime `...417408`
+Both `add_from: event` wired. Independently read-back verified (fresh GETs, not
+script self-report) + idempotency re-confirmed (post-live dry-run reports
+found/already-wired on both, no dupes).
+
+**One correction against the salvaged draft**: schema.ts's literal declared
+`sharing: 'public'` (aspirational). Live-probed `program_item` (the sibling
+"identical rights posture" is measured against) — its actual type-def
+`_sharing` is `domain`, not `public`. Created schedule_item at `domain` to
+genuinely match the ruling's intent over the stale literal field. Also set
+`add_from: event` live for schedule_item even though live `program_item`
+itself lacks that wiring (observed gap in the sibling, not replicated).
+
+2 commits (`0a6e946` def+docs, `1d088d4` primitive+seed+ledgers), both pushed,
+both `PO-Approved: 2026-09-06 mvox-app#246`. Completion comment:
+https://github.com/mvox-dev/mvox-app/issues/246#issuecomment-5556340832
+
+Superseded the [WIP] draft below (kept for the premise-check + salvage-plan
+reasoning, which held up unchanged through execution).
+
 ## [WIP] #246 schedule_item — mvox-side home proposal, DRAFT ONLY, parked on PO wake (2026-09-06)
 
 Ruling change: Mihkel — "the PR at entu/research is out of place — we shouldn't bother to adjust

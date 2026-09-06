@@ -2,7 +2,9 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
-### [NEXT SESSION] 2026-09-06 — session MVOX-15 → MVOX-16 (clean close 05:15 EEST)
+### [NEXT SESSION] 2026-09-06 — session MVOX-15 → MVOX-16 (closed 05:15, REOPENED 05:25 on po-team doorbell)
+
+**REOPENED SESSION COMPLETE (06:55 — final close):** the doorbell items both shipped. **#246 schema half DONE** — Pérotin executed end-to-end (commits 0a6e946 definition+narrative, 1d088d4 primitive+seeds; 4/4 clean on BOTH polyphony and mvox_crede with read-back verification; type-def ids in his completion comment; entu-research salvage branch DELETED after copy-out). One surfaced deviation on the record: built at _sharing DOMAIN matching live program_item (the ruling's baseline), not the draft's stale 'public'; add_from wired though live program_item lacks it (sibling gap noted, not repeated). **App-side UI = #262, deliberately UNREADY** (needs product shape: surface/edit affordances — proposal is event-detail display + conductor/admin editing; Victoria/Gama shape then Mihkel's nod). #246 left open for PO lifecycle. **#247 CLOSED** — merged `3b29cee`, r1 YELLOW (filter-empty rule not carried to month mode → emptyState snippet seam; weekday column overflow → widened) → r2 GREEN; completion comment 5556715820; **Mihkel's live correction round is the next step on it per its own gate**. Session totals: **20 issues + epic #223** (the 18 from the first close + #259-era #246-schema-half counted under #246 still open + #247; strictly: 19 closed issues + epic + #246 schema half). Board: EMPTY of ready; #261 (Mihkel's nod) + #262 (product shape) not-ready. NEW args/research committed; final state commit follows teammate shutdown.
 
 mvox-app main @ `59f71a0`. **18 issues + epic #223 closed this session** (SHAs in the [SESSION LOG] below): batch B (#253 #242 #250 #255 #251 #252) → #260 → #258 → R1 remainder (#225 #224 #226 #230 #231 #235 #232, epic closed) → #257 #259 #249. Standing finn/bentham/perotin terminated at shutdown.
 
