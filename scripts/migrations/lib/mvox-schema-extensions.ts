@@ -51,6 +51,16 @@ export interface PropertySpec {
 	ordinal?: number;
 	table?: boolean;
 	search?: boolean;
+	/** Per-property sharing override (gate 1 of the 3-gate-AND bucket model). Falls
+	 * back to the type's own `sharing` when omitted — but see mvox-app#265's live
+	 * finding: omitting `_sharing` on a prop-def at Entu's own create time does NOT
+	 * default to private, it silently INHERITS the parent type's tier
+	 * (`inheritParentProperties`, confirmed via a live probe whose first private-tier
+	 * field silently came back `public`). Set this EXPLICITLY on every prop-def of a
+	 * mixed-sharing entity — never omit it to "get private." Omitting it is only
+	 * correct when inheriting the type's tier is the actual intent (see
+	 * `roster_show_real_names` below, where Mihkel ruled no special-case sharing). */
+	sharing?: Sharing;
 }
 
 export type CreatorRule =
@@ -80,6 +90,21 @@ export interface MvoxEntityDef {
 	 * lives there until a durable schema-of-record home is chosen (pending,
 	 * per the #246 settle §5; commissioning issues are the record until then). */
 	commissionedBy: string;
+}
+
+/**
+ * A single property added to an EXISTING type (canonical v4E or another
+ * extension) — distinct from `MvoxEntityDef`, which defines a whole new type.
+ * First use: mvox-app#265's R2 toggle, added to the canonical `organization`
+ * type. Same commissioning/PO-Approved discipline applies; this is just a
+ * lighter shape for the "one more field on something that already exists" case.
+ */
+export interface PropertyAdditionDef {
+	/** Name of the type this property is added to (canonical or extension). */
+	onType: string;
+	property: PropertySpec;
+	commissionedBy: string;
+	notes: string[];
 }
 
 /**
@@ -140,6 +165,132 @@ export const schedule_item: MvoxEntityDef = {
 		'Entu UI `add_from`: `event`. (Live `program_item` currently lacks this wiring — an observed gap in the sibling, not a reason to repeat it here.)'
 	],
 	commissionedBy: 'mvox-app#246'
+};
+
+/**
+ * Admin-owned record of a member's real identity — real name, phone, email,
+ * birth date — independent of and never overwriting the member's own profile.
+ *
+ * Settled mvox-app#265 (Mihkel shape review, 2026-09-06, comment 5561754737,
+ * following Mihkel's own posture ruling on the same issue, comment 5561632474):
+ * branch (i), ONE entity with per-property sharing, confirmed live — see
+ * `docs/architecture/mvox-schema-extensions.md` for the full evidence chain
+ * (source read + live partition probe + Mihkel's standing ruling to consult
+ * and believe Entu's own documentation on platform behaviour, rather than
+ * building further verification ladders). Four corrections applied verbatim
+ * from the review: type name (not the proposal's `roster_record`), only
+ * `name` required (not `phone` too), R2 toggle default `false`, R2 toggle
+ * takes the collective's existing sharing posture (no special case — see
+ * `roster_show_real_names` below).
+ */
+export const admin_member_record: MvoxEntityDef = {
+	name: 'admin_member_record',
+	blurb: "Admin-owned record of a member's real identity — real name, phone, email, birth date — independent of the member's own profile.",
+	// Type-level (gate 2): must be domain-or-above or nothing on this type ever
+	// reaches a non-owner reader. The admin-only fields stay invisible anyway —
+	// that's gate 1 (each prop-def's own sharing below), not this gate.
+	sharing: 'domain',
+	inheritsRights: true,
+	parents: [
+		{
+			entity: 'organization', required: true, parentCard: '1', childCard: '0..N', verb: 'has',
+			note: 'same attachment point as member — reuses the existing org owner/editor=admin rights cascade, no new rights mechanism; on a single-collective db (e.g. mvox_crede) this resolves to the database entity itself, the same entity the R2 toggle lives on'
+		}
+	],
+	properties: [
+		{
+			name: 'person',
+			type: 'reference',
+			required: true,
+			sharing: 'domain',
+			note: 'domain, not private: a domain-tier roster reader must be able to resolve which admin_member_record belongs to which person to render per-member rows at all — R2 cannot function if this reference is invisible to the readers R2 is for',
+			descriptionEn: 'The person this record belongs to.',
+			descriptionEt: 'Isik, kelle kohta see kirje käib.',
+			ordinal: 1
+		},
+		{
+			name: 'name',
+			type: 'string',
+			required: true,
+			sharing: 'domain',
+			descriptionEn: "The member's real, correct name — always used on outputs of record (R3) regardless of the R2 toggle.",
+			descriptionEt: 'Liikme pärisnimi — kasutatakse alati ametlikel väljunditel (R3), sõltumata R2 seadest.',
+			ordinal: 2,
+			table: true
+		},
+		{
+			name: 'phone',
+			type: 'string',
+			required: false,
+			sharing: 'private',
+			descriptionEn: 'Real phone number, admin-managed. Not readable by members.',
+			descriptionEt: 'Pärisnumber, admini hallatud. Liikmetele mitte nähtav.',
+			ordinal: 3
+		},
+		{
+			name: 'email',
+			type: 'string',
+			required: false,
+			sharing: 'private',
+			descriptionEn: 'Real email, admin-managed. Not readable by members.',
+			descriptionEt: 'Pärisaadress, admini hallatud. Liikmetele mitte nähtav.',
+			ordinal: 4
+		},
+		{
+			name: 'birthdate',
+			type: 'datetime',
+			required: false,
+			sharing: 'private',
+			note: 'stored as a full datetime (no distinct date-only wire type observed elsewhere in this schema) — UI renders the date portion only',
+			descriptionEn: 'Date of birth, admin-managed. Not readable by members.',
+			descriptionEt: 'Sünnikuupäev, admini hallatud. Liikmetele mitte nähtav.',
+			ordinal: 5
+		}
+	],
+	creators: [{ kind: 'parent_right', right: '_editor' }],
+	notes: [
+		'Per-property sharing is a PRIVACY control here, not style (Mihkel, comment 5561632474): name -> domain, person -> domain (required for R2 to resolve rows at all), phone/email/birthdate -> private. Set EXPLICITLY on every prop-def, never left to inherit — omitting `_sharing` on a prop-def inherits the parent TYPE\'s tier (domain), which would silently widen the personal fields (mvox-app#265 live-probe finding).',
+		'One admin_member_record per person is an APP-level invariant (check-then-create) — Entu has no native uniqueness constraint. Same discipline as `profile`/`member`.',
+		'Instance `_sharing` asserted explicitly as `domain` at create time (not left to inherit) — matches `member`\'s own established pattern of asserting its tier rather than relying on parent inheritance.',
+		'R3 (outputs-of-record rule, e.g. a future concert programme): always reads `admin_member_record.name`, never `profile`, unconditionally regardless of the R2 toggle. No such output exists yet — documented contract only, nothing built for it in this commission.',
+		'R4 (prefill without dependency): an admin creating a record MAY prefill `name` from the person\'s existing profile display name as a ONE-TIME plain-value copy at creation time — never a formula or live reference. Formula properties cannot "compute once then freeze" (they always live-recompute), so a formula-based prefill would violate "drawing on, but not depending on" profile data the moment it changed.',
+		'Provisioning requirement (PO addition, comment 5561754737): after creating each prop-def, read back its effective `_sharing` and assert it matches the intent above, failing loudly on mismatch — the same unasserted-dependency discipline as mvox-app#264 item 6. Result goes in the seed-results ledger. This belongs to the provisioning script (next phase), not this definition.',
+		'mvox app extension — not part of the canonical v4E schema (upstream flow retired 2026-09-06; entu/research is historical reference only).'
+	],
+	commissionedBy: 'mvox-app#265'
+};
+
+/**
+ * R2 toggle: whether the roster shows real names (from `admin_member_record`)
+ * or profile names. Lives on the collective entity, per design input 3 — on a
+ * single-collective db (mvox_crede) that's the database entity itself, the
+ * same entity `admin_member_record.parents` resolves `organization` to there.
+ *
+ * Settled mvox-app#265, corrections 3+4 (Mihkel, comment 5561754737): default
+ * `false` (profile names until an admin opts in); sharing takes the SAME
+ * posture as the collective's other properties — no special case. This is the
+ * one place in this file where OMITTING `PropertySpec.sharing` is correct:
+ * the whole point is inheriting the collective's existing tier, not asserting
+ * an independent one.
+ */
+export const roster_show_real_names: PropertyAdditionDef = {
+	onType: 'organization',
+	property: {
+		name: 'roster_show_real_names',
+		type: 'boolean',
+		required: false,
+		// No `sharing` set, deliberately — see the doc comment above. Inherits
+		// whatever tier the organization/collective type already carries.
+		descriptionEn: "Admin roster display setting: true shows members' real names (admin_member_record.name); false (default) shows profile names.",
+		descriptionEt: 'Admini rosteri kuvamisseade: tõene väärtus näitab liikmete pärisnimesid (admin_member_record.name); väär (vaikimisi) näitab profiilinimesid.',
+		ordinal: 90
+	},
+	commissionedBy: 'mvox-app#265',
+	notes: [
+		'Default false (Mihkel correction 3): roster shows profile names until an admin explicitly turns real names on.',
+		'Sharing takes the same posture as the collective/organization entity\'s OTHER properties — no special case (Mihkel correction 4). Do not set an explicit `sharing` override on this prop-def.',
+		'Read by every member\'s client (Path C, browser-direct) to decide what the roster renders for each row — broad READ, admin-only WRITE. Write access needs no new mechanism: whoever already holds `_owner`/`_editor` on the collective can already write any of its existing properties.'
+	]
 };
 
 // (*MVOX:Perotin*)

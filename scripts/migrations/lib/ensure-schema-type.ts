@@ -170,7 +170,23 @@ export async function ensureEntityType(
 	return body._id;
 }
 
-/** Check-then-create one prop-def under an existing type-def. */
+/**
+ * Check-then-create one prop-def under an existing type-def.
+ *
+ * `sharing` is the TYPE-LEVEL default (gate 2's tier, or — for a property
+ * addition to an existing type like mvox-app#265's R2 toggle — the live
+ * type's own current `_sharing`, resolved by the caller before this is
+ * invoked). `prop.sharing`, when present, OVERRIDES it for this one property
+ * (mvox-app#265's per-property-sharing tooling extension). Our own code
+ * always writes an explicit `_sharing` value into the CREATE payload either
+ * way — we never rely on Entu's own create-time inherit-from-parent behavior
+ * to fill it in, precisely because that behavior is the surprise a live probe
+ * surfaced (omitting `_sharing` inherits the PARENT's tier, not private-by-
+ * default). When the intent genuinely IS "inherit the type's tier" (the R2
+ * toggle), the caller passes that resolved tier as `sharing` and leaves
+ * `prop.sharing` unset — the fallback below computes the identical value our
+ * own code asserts, rather than leaving it to chance.
+ */
 export async function ensurePropDef(
 	cfg: EntuCfg,
 	propertyMetaTypeId: string,
@@ -182,6 +198,7 @@ export async function ensurePropDef(
 	ledger: LedgerStep[],
 	fetchImpl: typeof fetch = fetch
 ): Promise<string | null> {
+	const effectiveSharing = prop.sharing ?? sharing;
 	const label = `${typeName}.${prop.name}`;
 	const existing = await entuFetch(
 		cfg.db,
@@ -199,7 +216,7 @@ export async function ensurePropDef(
 	}
 
 	if (dryRun) {
-		ledger.push({ action: 'ensure-propdef', target: label, outcome: 'dry-run', after: { type: prop.type, sharing, mandatory: prop.required ?? false } });
+		ledger.push({ action: 'ensure-propdef', target: label, outcome: 'dry-run', after: { type: prop.type, sharing: effectiveSharing, mandatory: prop.required ?? false } });
 		return null;
 	}
 
@@ -208,7 +225,7 @@ export async function ensurePropDef(
 		{ type: '_parent', reference: parentTypeId },
 		{ type: 'name', string: prop.name },
 		{ type: 'type', string: prop.type },
-		{ type: '_sharing', string: sharing },
+		{ type: '_sharing', string: effectiveSharing },
 		{ type: 'description', language: 'en', string: prop.descriptionEn },
 		{ type: 'description', language: 'et', string: prop.descriptionEt }
 	];
@@ -236,8 +253,39 @@ export async function ensurePropDef(
 		ledger.push({ action: 'ensure-propdef', target: label, outcome: 'failed', error: msg });
 		throw new Error(msg);
 	}
-	ledger.push({ action: 'ensure-propdef', target: label, id: body._id, outcome: 'created', after: { type: prop.type, sharing, mandatory: prop.required ?? false } });
+	ledger.push({ action: 'ensure-propdef', target: label, id: body._id, outcome: 'created', after: { type: prop.type, sharing: effectiveSharing, mandatory: prop.required ?? false } });
 	return body._id;
+}
+
+/**
+ * Read back a prop-def's effective `_sharing` and assert it matches intent —
+ * PO-required provisioning discipline (mvox-app#265, comment 5561754737,
+ * citing #264 item 6's same unasserted-dependency class): a create-time write
+ * landing is not proof it landed AS WRITTEN, given Entu's own create-time
+ * inherit-from-parent behavior can silently substitute a different value when
+ * `_sharing` is omitted. Fails loudly (throws) on mismatch rather than
+ * recording a false 'created' outcome.
+ */
+export async function assertPropDefSharing(
+	cfg: EntuCfg,
+	propDefId: string,
+	label: string,
+	expectedSharing: Sharing,
+	ledger: LedgerStep[],
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	const res = await entuFetch(cfg.db, `entity/${propDefId}?props=_sharing`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`assertPropDefSharing('${label}'): read-back GET failed: ${res.status}`);
+	const body = (await res.json()) as { entity?: { _sharing?: Array<{ string?: string }> } };
+	const actualSharing = body.entity?._sharing?.at(0)?.string;
+
+	if (actualSharing !== expectedSharing) {
+		const msg = `assertPropDefSharing('${label}'): READ-BACK MISMATCH — expected '${expectedSharing}', got '${actualSharing ?? '(absent)'}'. This is exactly the mvox-app#265 inherit-from-parent trap; do not proceed.`;
+		ledger.push({ action: 'ensure-propdef', target: `${label}.sharing-readback`, outcome: 'failed', error: msg });
+		throw new Error(msg);
+	}
+
+	ledger.push({ action: 'ensure-propdef', target: `${label}.sharing-readback`, id: propDefId, outcome: 'found', after: { sharing: actualSharing } });
 }
 
 /** Wire `add_from` on a type-def → another type-def's id, append-only and
