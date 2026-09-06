@@ -8,16 +8,19 @@
 // Per-property sharing (the load-bearing part, per Mihkel's shape-review
 // ruling comment 5561754737 + posture ruling comment 5561632474 — mvox_crede
 // is a real-life pilot, not synthetic, so this is a genuine privacy control):
-// `person`/`name` -> domain, `phone`/`email`/`birthdate` -> private, set
+// `person`/`name` -> domain, `phone`/`email`/`birthdate` -> private, ALL set
 // EXPLICITLY via `PropertySpec.sharing` on every admin_member_record
-// prop-def. `roster_show_real_names` deliberately carries NO explicit
-// override — it inherits `database`'s own current `_sharing`, resolved
-// live below rather than assumed, per Mihkel's correction 4 ("no special
-// case"). After every prop-def is ensured, its effective `_sharing` is read
-// back and asserted against intent (PO addition, same comment) — Entu's own
-// create-time inherit-from-parent behavior can silently substitute a
-// different value when `_sharing` is omitted (mvox-app#265 live-probe
-// finding), so a create landing is not proof it landed AS WRITTEN.
+// prop-def, INCLUDING `roster_show_real_names` (`domain`, also explicit) —
+// see that definition's doc comment for why an earlier omit-and-inherit
+// version was wrong: the `database` type's own `_sharing` (what omission
+// inherits) is `public` on both databases, a platform-generic constant, NOT
+// representative of the sibling prop-defs' actual posture (empirically
+// `domain`, checked live). After every prop-def is ensured, its effective
+// `_sharing` is read back and asserted against intent (PO addition, same
+// comment) — Entu's own create-time inherit-from-parent behavior can
+// silently substitute a different value when `_sharing` is omitted
+// (mvox-app#265 live-probe finding), so a create landing is not proof it
+// landed AS WRITTEN.
 //
 // Empty structure ONLY — this script creates zero admin_member_record
 // instances. Real names/phones/emails/birthdates are a separate, later
@@ -38,7 +41,6 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { entuFetch } from '$lib/entu/request';
 import { loadCfg } from './lib/creds';
 import {
 	resolveMetaTypeIds,
@@ -49,22 +51,8 @@ import {
 	type LedgerStep
 } from './lib/ensure-schema-type';
 import { admin_member_record, roster_show_real_names } from './lib/mvox-schema-extensions';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
-
-/** One-off read of an existing type-def's own `_sharing` — used only for
- * property additions to a type this file doesn't own the definition of
- * (database is canonical, not an mvox-schema-extensions.ts entry). Not
- * promoted to the shared primitive yet: one use doesn't earn it. */
-async function resolveTypeSharing(cfg: EntuCfg, typeId: string, fetchImpl: typeof fetch = fetch): Promise<string> {
-	const res = await entuFetch(cfg.db, `entity/${typeId}?props=_sharing`, cfg.token, {}, fetchImpl);
-	if (!res.ok) throw new Error(`resolveTypeSharing(${typeId}): GET failed: ${res.status}`);
-	const body = (await res.json()) as { entity?: { _sharing?: Array<{ string?: string }> } };
-	const sharing = body.entity?._sharing?.at(0)?.string;
-	if (!sharing) throw new Error(`resolveTypeSharing(${typeId}): type has no _sharing set — cannot resolve a fallback for a property that inherits it`);
-	return sharing;
-}
 
 function writeLedger(payload: Record<string, unknown>): string {
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -87,9 +75,7 @@ async function main(): Promise<void> {
 	console.log(`property meta-type: ${propertyMetaTypeId}`);
 
 	const databaseTypeId = await resolveTypeIdByName(cfg, entityMetaTypeId, admin_member_record.parents[0].entity);
-	console.log(`database type-def: ${databaseTypeId}`);
-	const databaseSharing = await resolveTypeSharing(cfg, databaseTypeId);
-	console.log(`database type-def _sharing (live, resolved for the R2 toggle fallback): ${databaseSharing}`);
+	console.log(`database type-def: ${databaseTypeId} (attachment point for roster_show_real_names; its sharing is explicit on the property itself, not resolved from this type — see mvox-schema-extensions.ts)`);
 
 	// --- admin_member_record type + prop-defs ---
 
@@ -130,25 +116,33 @@ async function main(): Promise<void> {
 	}
 
 	// --- roster_show_real_names property addition on database (the collective root) ---
-
+	// Sharing is explicit on the property (`domain`) — NOT resolved from the
+	// `database` type's own `_sharing` (which is `public`, a platform-generic
+	// constant, not the sibling prop-defs' actual posture). See the doc
+	// comment on `roster_show_real_names` in mvox-schema-extensions.ts for the
+	// dry-run finding that corrected this from an earlier inherit-via-omission
+	// design. The `sharing` parameter below is the ensurePropDef type-level
+	// fallback; it's inert here since `prop.sharing` is always set, but a
+	// value is still required by the function signature.
+	const toggleExpectedSharing = roster_show_real_names.property.sharing ?? 'domain';
 	const togglePropId = await ensurePropDef(
 		cfg,
 		propertyMetaTypeId,
 		databaseTypeId,
 		'database',
-		databaseSharing as 'private' | 'domain' | 'public',
+		toggleExpectedSharing,
 		roster_show_real_names.property,
 		DRY_RUN,
 		ledger
 	);
-	console.log(`  database.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, inherited: ${databaseSharing})`);
+	console.log(`  database.${roster_show_real_names.property.name}: ${togglePropId ?? '(would create — dry-run)'} (expected sharing, explicit: ${toggleExpectedSharing})`);
 	if (togglePropId) {
 		// null only happens on DRY_RUN + not-yet-existing, and ensurePropDef has
 		// already pushed the correct dry-run ledger entry itself in that case —
 		// no separate push needed here (a prior version of this script double-
 		// logged this exact step; fixed after the polyphony dry-run surfaced it).
-		await assertPropDefSharing(cfg, togglePropId, `database.${roster_show_real_names.property.name}`, databaseSharing as 'private' | 'domain' | 'public', ledger);
-		console.log(`    read-back-asserted: ${databaseSharing} ✓`);
+		await assertPropDefSharing(cfg, togglePropId, `database.${roster_show_real_names.property.name}`, toggleExpectedSharing, ledger);
+		console.log(`    read-back-asserted: ${toggleExpectedSharing} ✓`);
 	}
 
 	const failures = ledger.filter((e) => e.outcome === 'failed');
@@ -164,7 +158,7 @@ async function main(): Promise<void> {
 		entityMetaTypeId,
 		propertyMetaTypeId,
 		databaseTypeId,
-		databaseSharingResolvedLive: databaseSharing,
+		toggleExpectedSharing,
 		adminMemberRecordTypeId: typeId ?? '<dry-run-unresolved>',
 		instancesCreated: 0,
 		ledger,

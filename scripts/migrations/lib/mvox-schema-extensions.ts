@@ -57,9 +57,22 @@ export interface PropertySpec {
 	 * default to private, it silently INHERITS the parent type's tier
 	 * (`inheritParentProperties`, confirmed via a live probe whose first private-tier
 	 * field silently came back `public`). Set this EXPLICITLY on every prop-def of a
-	 * mixed-sharing entity — never omit it to "get private." Omitting it is only
-	 * correct when inheriting the type's tier is the actual intent (see
-	 * `roster_show_real_names` below, where Mihkel ruled no special-case sharing). */
+	 * mixed-sharing entity — never omit it to "get private."
+	 *
+	 * **The same trap has a second pole, also from mvox-app#265**: "inherit the
+	 * type's tier" is not the same question as "match the sibling properties'
+	 * actual posture." `roster_show_real_names` first tried the omit-and-inherit
+	 * route on the reasoning that Mihkel's "no special case, same as the
+	 * collective's other properties" meant exactly that — but the TYPE's own
+	 * `_sharing` (what omission actually inherits) resolved to `public`, a
+	 * platform-generic constant, while the sibling PROP-DEFS on that same type
+	 * were empirically 11-12 of 12-13 `domain`. Omission answered a different
+	 * question than the one being asked. **When "same as the others" is the
+	 * actual intent, establish it empirically (read the sibling prop-defs'
+	 * OWN sharing) and set the match EXPLICITLY — never rely on omission's
+	 * inherit-from-TYPE behavior to stand in for "matches its siblings."**
+	 * Omission is for "no opinion, take whatever the type declares" — a
+	 * different, rarer intent than either of the above. */
 	sharing?: Sharing;
 }
 
@@ -281,14 +294,22 @@ export const admin_member_record: MvoxEntityDef = {
  *
  * Settled mvox-app#265, corrections 3+4 (Mihkel, comment 5561754737): default
  * `false` (profile names until an admin opts in); sharing takes the SAME
- * posture as the collective's other properties — no special case. This is the
- * one place in this file where OMITTING `PropertySpec.sharing` is correct:
- * the whole point is inheriting the collective's existing tier, not asserting
- * an independent one.
+ * posture as the collective's other properties — no special case.
  *
- * `onType: 'database'` corrected post-review (team-lead routing, 2026-09-06):
- * see `admin_member_record`'s doc comment above for the #161 root-cause detail
- * — `organization` no longer exists as a type on either database.
+ * **Sharing corrected post-dry-run (team-lead ruling interpretation, 2026-09-06,
+ * reported to PO)**: the first version of this definition OMITTED `sharing`,
+ * reading "no special case" as "inherit the `database` type's own `_sharing`."
+ * Dry-run surfaced that the TYPE's own `_sharing` is `public` on both
+ * databases — a platform-generic constant — while the `database` type's
+ * EXISTING sibling prop-defs are empirically `domain` (11-12 of 12-13,
+ * checked live on both dbs; only `billing_tokens_limit` is `public`). "Same
+ * as the collective's other properties" means the empirical sibling PATTERN
+ * (`domain`), not the type-level cap omission actually inherits — those are
+ * different questions that happened to look interchangeable until checked.
+ * **Explicit `domain` below is Mihkel's ruling correctly implemented; the
+ * earlier omission was an implementation error against it, not an
+ * alternative reading of it.** See `PropertySpec.sharing`'s doc comment above
+ * for the general lesson this leaves behind.
  */
 export const roster_show_real_names: PropertyAdditionDef = {
 	onType: 'database',
@@ -296,8 +317,7 @@ export const roster_show_real_names: PropertyAdditionDef = {
 		name: 'roster_show_real_names',
 		type: 'boolean',
 		required: false,
-		// No `sharing` set, deliberately — see the doc comment above. Inherits
-		// whatever tier the database/collective type already carries.
+		sharing: 'domain', // explicit — see the doc comment above; matches the empirical sibling pattern, NOT the database type's own _sharing (public)
 		descriptionEn: "Admin roster display setting: true shows members' real names (admin_member_record.name); false (default) shows profile names.",
 		descriptionEt: 'Admini rosteri kuvamisseade: tõene väärtus näitab liikmete pärisnimesid (admin_member_record.name); väär (vaikimisi) näitab profiilinimesid.',
 		ordinal: 90
@@ -305,7 +325,7 @@ export const roster_show_real_names: PropertyAdditionDef = {
 	commissionedBy: 'mvox-app#265',
 	notes: [
 		'Default false (Mihkel correction 3): roster shows profile names until an admin explicitly turns real names on.',
-		'Sharing takes the same posture as the database/collective entity\'s OTHER properties — no special case (Mihkel correction 4). Do not set an explicit `sharing` override on this prop-def.',
+		'Sharing is `domain`, set EXPLICITLY (Mihkel correction 4, "same posture as the collective\'s other properties" — established empirically, not inherited via omission; see the doc comment above for why omission gave the wrong answer here).',
 		'Read by every member\'s client (Path C, browser-direct) to decide what the roster renders for each row — broad READ, admin-only WRITE. Write access needs no new mechanism: whoever already holds `_owner`/`_editor` on the collective can already write any of its existing properties.'
 	]
 };

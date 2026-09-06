@@ -207,16 +207,27 @@ entity `admin_member_record` is parented to.
 
 - **Default `false`** (Mihkel correction 3): roster shows profile names until
   an admin explicitly turns real names on.
-- **Sharing: no special case** (Mihkel correction 4) — takes the SAME posture
-  as the database/collective entity's other properties. This is the one place
-  in this schema surface where OMITTING an explicit `sharing` override is
-  correct: the whole point is inheriting whatever tier `database` already
-  carries, not asserting an independent one. `ensurePropDef`'s tooling
-  extension resolves this by having the provisioning script read the LIVE
-  `database` type's own current `_sharing` and pass it as the fallback — not
-  by relying on Entu's own create-time inherit-on-omission behavior (the same
-  behavior flagged as a trap above), so the intended inheritance is asserted
-  by our own code, not left to chance.
+- **Sharing: `domain`, set EXPLICITLY** (Mihkel correction 4 — "same posture
+  as the collective's other properties"). **This was corrected once already,
+  post-dry-run, and the correction is worth keeping visible**: the first
+  version of this property OMITTED `sharing`, reading "no special case" as
+  "inherit the `database` type's own `_sharing`." Dry-run on both databases
+  showed that value is `public` — a platform-generic constant shared by every
+  Entu database's system type-def — while the `database` type's EXISTING
+  sibling prop-defs (`name`, `email`, `address`, the `billing_*` family, …)
+  are empirically `domain` on both databases (11–12 of 12–13 checked; only
+  `billing_tokens_limit` is `public`). "Same as the other properties" meant
+  the sibling PATTERN, not the type-level cap that omission actually
+  inherits — two different questions that looked interchangeable until
+  checked. The fix: `domain` is set explicitly on this prop-def, same
+  discipline as every field on `admin_member_record` above, and the
+  inherit-via-omission mechanism was dropped for this property entirely
+  (the now-unused type-sharing-resolution helper was removed from both
+  seed scripts). **The general lesson, stated once for future extensions**:
+  omission is for "no opinion, take whatever the type declares" — a
+  different, rarer intent than "match the siblings," which must be
+  established empirically and then asserted explicitly, never assumed to be
+  the same thing as the type's own cap.
 - **Read-broad, write-admin-only**: every member's client (Path C,
   browser-direct) needs to read this to render the roster correctly — that's
   a read concern, not a write one. Write access needs no new mechanism:
