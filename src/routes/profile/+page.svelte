@@ -74,6 +74,11 @@
 	let moveFailed = $state(new Set<FieldKey>());
 	let repairWorking = $state(new Set<FieldKey>());
 	let repairFailed = $state(new Set<FieldKey>());
+	// #257 — the repair confirmation announcement, house idiom (event-create-status /
+	// roster-reorder-status): a PERSISTENT sr-only role="status" region driven by plain
+	// state, set imperatively on success, cleared at the START of the next repair
+	// attempt (never a timer — the app has zero auto-dismiss patterns).
+	let repairStatus = $state('');
 	let busy = $state(false);
 	let pendingMoveTo: Record<FieldKey, Level | null> = { name: null, email: null };
 
@@ -262,6 +267,7 @@
 		moveFailed = new Set();
 		repairWorking = new Set();
 		repairFailed = new Set();
+		repairStatus = '';
 		busy = false;
 		pendingMoveTo = { name: null, email: null };
 		linkedIdentities = [];
@@ -382,9 +388,13 @@
 					if (g !== routeLoad.generation) return;
 					completionGateStore.set(state);
 				},
-				() => {
-					// A stale settle's rejection must not surface either — swallow it here
-					// rather than let it escape as an unhandled promise rejection.
+				(err) => {
+					// #260/#257 — a stale settle's rejection must not surface (the race
+					// fix); a LIVE rejection is a real failure to resolve membership
+					// standing and must not vanish, so it gets the same console.error
+					// every other failure in this file gets.
+					if (g !== routeLoad.generation) return;
+					console.error('profile: completion gate refresh failed', err);
 				}
 			);
 		}
@@ -476,7 +486,22 @@
 				busy = false;
 				repairWorking = withFieldSet(repairWorking, field, false);
 				repairFailed = withFieldSet(repairFailed, field, false);
-				void loadForSelected();
+				// #257 — set AFTER the reload, not before: loadForSelected()'s reset
+				// runs on every call (including this one) and would wipe an
+				// eagerly-set repairStatus straight back to ''.
+				// #257 review F2 — and gated on the load generation, the same way
+				// refreshCompletionGate is (#260). loadForSelected() bumps the
+				// generation synchronously at its top and RESOLVES on every branch,
+				// superseded ones included; without this guard a repair on
+				// collective A whose reload is still in flight when the user
+				// switches to B would announce A's confirmation over B's profile,
+				// after B's own load already cleared repairStatus.
+				const reload = loadForSelected();
+				const g = routeLoad.generation;
+				void reload.then(() => {
+					if (g !== routeLoad.generation) return;
+					repairStatus = m.profile_repair_done();
+				});
 			},
 			onRepairFailed(field) {
 				busy = false;
@@ -668,6 +693,11 @@
 		if (!ctx) return;
 		repairFailed = withFieldSet(repairFailed, field, false);
 		repairWorking = withFieldSet(repairWorking, field, true);
+		// #257 — cleared at the START of the attempt, house pattern
+		// (eventCreateStatus/reorderStatus): a stale confirmation must not linger
+		// through a new attempt, and clearing here (not on settle) means a failed
+		// retry shows no confirmation at all rather than a stale one.
+		repairStatus = '';
 		busy = true;
 		moveQueue.repair({ cfg: ctx.cfg, field, clear: plan.clear });
 	}
@@ -803,6 +833,26 @@
 			</p>
 		</div>
 
+		<!-- #257 — the repair confirmation announcement. House idiom
+			(event-create-status / roster-reorder-status): a PERSISTENT sr-only
+			role="status" live region whose text is set imperatively.
+			#257 review F1 — it sits ABOVE the `status` gate, exactly like
+			roster-reorder-status sits above roster's gate, and for the reason
+			roster's comment states: a live region announces only CHANGES to its
+			contents, so one mounted alongside its own text is announced by nothing.
+			Inside the ready branch it would be DESTROYED and remounted on every
+			repair success, because the success path calls loadForSelected(), whose
+			machine writes 'loading' synchronously — the region would only ever
+			appear with the text already in it. `sr-only` is absolutely positioned,
+			so it takes no slot in this flex column, and it renders harmlessly in
+			the no-collective / error states (resetState() clears `repairStatus`, so
+			nothing stale can sit there). VisibilityRepairBanner itself stays
+			untouched — its unmount on success is unchanged; the announcement is the
+			PAGE's job. -->
+		<div data-testid="profile-repair-status" role="status" aria-live="polite" class="sr-only">
+			{repairStatus}
+		</div>
+
 		{#if status === 'no-collective'}
 			<p data-testid="profile-no-collective" class="text-sm">{m.profile_no_collective()}</p>
 		{:else if status === 'loading'}
@@ -843,6 +893,13 @@
 					{onrepair}
 				/>
 			{/each}
+
+			<!-- #257 — the field list's missing title + operating instruction, a real
+				sectioning heading matching the Linked Accounts h2 below (the page's
+				only other sectioning precedent). profile_intro above stays as the
+				page's own introduction; this is the control's own explanation. -->
+			<h2 class="text-sm font-semibold">{m.profile_visibility_title()}</h2>
+			<p class="text-sm text-ink-2">{m.profile_visibility_intro()}</p>
 
 			<div class="flex flex-col gap-6">
 				{#each FIELDS as field (field)}
