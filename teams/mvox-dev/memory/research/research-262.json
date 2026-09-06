@@ -1,0 +1,396 @@
+{
+ "issue": 262,
+ "agents": [
+  {
+   "key": "detail-page",
+   "findings": [
+    {
+     "claim": "Repo guard passed: ~/workspace-app origin is mvox-app.git",
+     "evidence": "Bash `git remote get-url origin` -> https://github.com/mvox-dev/mvox-app.git"
+    },
+    {
+     "claim": "The event detail route is a single-file client component with NO +page.ts/+page.server.ts — no SvelteKit load fn, no server proxy route for this page.",
+     "evidence": "src/routes/event/[id]/ contains only +page.svelte plus *.spec.ts files (`ls` output); the app is confirmed a pure client SPA in src/lib/entu/request.ts:8-11: 'this app is a pure client-side SPA (ssr = false, localStorage JWT, no BFF/cookie/server load...)' and :4 'Calls are browser-direct and carry the localStorage Entu JWT'."
+    },
+    {
+     "claim": "Data load path: route param -> $effect -> loadForSelected() -> loadEventDetail(cfg, id) (from $lib/events/eventDetail.ts) sets `detail`, then fires loadRsvpControl/loadTally/loadComposeSurfaces, all under a non-reactive `generation` counter guard.",
+     "evidence": "+page.svelte:633-647 ($effect depends on `selected`/`eventId`, calls loadForSelected); :284-334 (loadForSelected: `const g = ++generation`, `const loaded = await loadEventDetail(cfg, id)`, `if (g !== generation) return`, then dispatches loadRsvpControl/loadTally/loadComposeSurfaces, all passed `g`)."
+    },
+    {
+     "claim": "A schedule-item child-entity fetch would attach inside `loadComposeSurfaces`, the function that already fetches other per-event child entities (program/repertoire works, attendance), keyed by `loaded.id` and guarded by the same `g !== generation` check.",
+     "evidence": "+page.svelte:770-811 `loadComposeSurfaces(cfg, loaded, personId, g)` calls `loadWorksByEventId(cfg, [loaded.id], sid, fetch, {...})` (:783) and, for past events, `listAttendance(cfg, loaded.id)` (:800), both `.then(byEvent => { if (g !== generation) return; ... })` — the exact shape a new `loadScheduleItems(cfg, loaded.id, ...)` call would follow, populating a new `$state` array (analogous to `workRows` at :237)."
+    },
+    {
+     "claim": "loadEventDetail (eventDetail.ts) makes one GET for the event plus best-effort parallel GETs for parent season/series; it does NOT fetch children (program_items, schedule_items) itself — child entities are fetched separately by the page after `detail` resolves.",
+     "evidence": "src/lib/events/eventDetail.ts:177-257 `loadEventDetail` fetches only `entity/${eventId}?props=name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent,capacity,_owner,_editor` (:182-188) plus `fetchSeason`/`fetchSeries` (:205-208, :267-282, :327-341); no schedule_item/program_item read appears in this file."
+    },
+    {
+     "claim": "The event's own date/time block (name, start_datetime, duration_minutes/end, location, conductors, description) renders as an ordered field stack in the template, terminating right before the RSVP section — this is the natural insertion boundary for a chronological schedule-item list living 'with the event's own date/time block'.",
+     "evidence": "+page.svelte:1959 (`<h1 data-testid=\"event-detail-name\">`), :1971-2065 (start_datetime block, `data-testid=\"event-detail-time\"`/`event-detail-date`), :2089-2152 (duration_minutes/end block, `event-detail-duration`), :2156-2202 (location, `event-detail-location`), :2204-2211 (conductors, `event-detail-conductors`), :2213-2254 (description, `event-detail-description`) — then :2256 `<section data-testid=\"event-detail-rsvp\">` begins the next surface, :2342 `{#if showWorksSection}` (Works), :2377 `{#if showAttendanceSection}` (Attendance), :2451 delete zone."
+    },
+    {
+     "claim": "In-situ edit idiom for the event's OWN scalar fields (the #157/#245-family pencil pattern): tap a visible-label pencil button -> field swaps to a native input/composite seeded with the current value -> blur/Enter commits an optimistic write through a per-field write queue -> Escape/no-op cancels -> a failed write reverts + shows an inline `role=\"alert\"` error. Concrete functions: `beginFieldEdit`, `confirmFieldEdit`, `cancelFieldEdit`, `handleFieldKeydown`, `updateCompositeDraft`, state `editingField`/`editDraft`/`editErrors`/`editWritePending`/`pencilRefs`.",
+     "evidence": "+page.svelte:1290-1311 (doc: 'tap a pencil, the field becomes an input seeded with the CURRENT value, blur/Enter confirms with an immediate optimistic write... Escape cancels writing nothing'); :1498-1531 (`beginFieldEdit`); :1694-1757 (`confirmFieldEdit`, uses `editWriteQueue.request(field, ..., {apply, rollback})`); :1589-1595 (`cancelFieldEdit`); example instance at :2016-2035 (`event-edit-btn-start_datetime` button with `<span class=\"sr-only\">` accessible name + visible value span `event-detail-time`)."
+    },
+    {
+     "claim": "The visible-label pattern cited as #239/#249 is a house rule that form controls get a real, VISIBLE `<label>`/`<span>` naming them (not only an `aria-label`) — a single-name discipline (no redundant aria-label duplicating a visible label).",
+     "evidence": "src/routes/+page.svelte:7291-7297 comment: '#205 F1 / #249 — the wrapping <label> above already names this select; a same-key aria-label is a redundant second name (the single-name rule the house has settled on)', wrapping a `<label>` containing a visible `<span data-testid=\"event-create-type-label\">` plus the bare `<select>`; :6253 references '#239 — four native <fieldset>/<legend> groups (PO ruling...)'."
+    },
+    {
+     "claim": "The red-trashcan two-step remove idiom (#238) is: `TrashIcon.svelte` (a decorative, `aria-hidden`, `currentColor` inline-SVG icon — never itself carrying the accessible name) used INSIDE an icon-only trigger button that ARMS a row-local confirm state; arming swaps the trigger for a confirm/cancel text-button pair (`*-confirm`/`*-cancel`, `text-red-700`/`underline` styling), and only the confirm button performs the destructive write.",
+     "evidence": "src/lib/components/icons/TrashIcon.svelte:1-33 (component: `let { class }= $props()`, `aria-hidden=\"true\"` svg, doc at :12-13 'Decorative ALWAYS... the accessible name belongs to the wrapping control'); usage in src/routes/+page.svelte:5845-5855 (`<button data-testid=\"season-manage-delete-season\" aria-label=... onclick={() => void armSeasonManageSeasonDelete()}><TrashIcon class=\"h-5 w-5\" /></button>`) which the armed state (:5780-5828) replaces with a `season-manage-delete-season-confirm` / `-cancel` button pair."
+    },
+    {
+     "claim": "The event detail page's OWN delete affordance (#203) predates #238's TrashIcon sweep and still uses a plain aria-hidden `&times;` glyph + visible label rather than TrashIcon, but follows the identical arm/confirm/cancel two-step shape.",
+     "evidence": "+page.svelte:2451-2502: `deleteArmed` gates between a `event-detail-delete-confirm`/`event-detail-delete-cancel` pair (:2456-2479) and the idle trigger `event-detail-delete` (:2486-2494) whose content is `<span aria-hidden=\"true\">&times;</span>{m.event_detail_delete_label()}` — no `TrashIcon` import found in this file (`grep -n \"TrashIcon\"` over +page.svelte returned no matches)."
+    },
+    {
+     "claim": "Parent-event editor rights are gated by a single derived boolean `isEditor`, computed purely from data already loaded on `detail` (owner/editor reference lists in Entu's private-bucket rights props) — no separate rights fetch.",
+     "evidence": "+page.svelte:276-282: `function canSeeTally(d, personId) { return manageRightsFrom(d.ownerIds, d.editorIds, personId) === 'editor'; }` and `const isEditor = $derived(detail !== null && selected !== null && canSeeTally(detail, selected.personId));` — every pencil/tally/delete-zone conditional in the template branches on this one `isEditor` (16 occurrences of `isEditor` counted via grep, e.g. :1854, :1904, :2014, :2047, :2116, :2176, :2228, :2289, :2451)."
+    },
+    {
+     "claim": "`ownerIds`/`editorIds` themselves come from `loadEventDetail`'s single event GET requesting `_owner,_editor` props, which Entu returns populated only to a caller who already holds those rights (private-bucket visibility) — an unauthorized reader gets `[]`, read as 'not-editor' by construction, never a separate boolean fetch.",
+     "evidence": "eventDetail.ts:184 (`props=...,_owner,_editor`), :126-130 (EventRaw doc: '_owner?/_editor?... visible only to a caller with rights on this event'), :235-236 (`ownerIds = (event._owner ?? []).flatMap(...)`, `editorIds = (event._editor ?? []).flatMap(...)`)."
+    },
+    {
+     "claim": "Section visibility for optional child-entity surfaces (Works) is computed as: show if there are rows already OR the viewer holds editor rights at either the season or event level — never an empty placeholder for a non-editor with nothing to show. A schedule_item section would plausibly follow the identical `rows.length>0 || isEditor`-shaped derivation.",
+     "evidence": "+page.svelte:1085-1087: `const showWorksSection = $derived(workRows.length > 0 || seasonManageRights === 'editor' || eventManageRights === 'editor');` and the template comment at :2337-2341 'Absent entirely when the event resolves no works and the viewer has no rights to add any (never an empty \"Works\" placeholder).'"
+    },
+    {
+     "claim": "page.spec.ts (111KB, 135 `event-detail-*` testid occurrences) is the primary spec pinning this page's current DOM/testid surface and would need new/adjusted assertions for a schedule-item section; page.i18n-a11y.spec.ts additionally pins heading-level continuity and single-`<h1>`/single-`<main>` structure, which a new section's heading level must respect but does not otherwise forbid a new h2 section.",
+     "evidence": "`grep -c 'data-testid=\"event-detail'` per spec file: page.spec.ts=135, page.i18n-a11y.spec.ts=6, page.event-type-edit.spec.ts=14, page.event-editing.spec.ts=24, page.location-datalist.spec.ts=3, page.session-expired.spec.ts=6, page.tally-deactivated.spec.ts=0, page.event-delete.spec.ts=0; page.i18n-a11y.spec.ts:497-511 test 'heading levels never skip (h1 → h2 → h3, no jumps)' walks every heading in the fully-rendered editor view and asserts no level jump, and :406-417/:634 assert exactly one `<main>` and exactly one `<h1>`."
+    },
+    {
+     "claim": "No DOM-order/position-sensitive assertions (e.g. `compareDocumentPosition`, `nextElementSibling`, `nth-child`) were found in page.spec.ts guarding the exact sibling order of the header field stack, meaning inserting a new section there is not blocked by an order-pinning test in this file specifically — though testid-presence/content assertions throughout page.spec.ts still pin the surface generally.",
+     "evidence": "`grep -n \"compareDocumentPosition\\|nextElementSibling\\|previousElementSibling\\|children\\[\\|:nth-child\\|order\\b\" src/routes/event/[id]/page.spec.ts` returned only prose/comment matches (lines 21, 382, 487, 1007, 1213), none of them structural DOM-order assertions."
+    }
+   ],
+   "risks": [
+    "[speculative] The exact insertion point for the schedule-item list (inside the header field stack immediately after description/conductors and before the RSVP section, vs. as its own `<section>` after RSVP like Works/Attendance) is not specified anywhere in code — the PO note ('with the event's own date/time block') is directional, not a pinned location; either placement is structurally possible today.",
+    "[speculative] Whether a new schedule-item section should follow the Works-section visibility rule (`rows.length>0 || isEditor`) exactly, or always render when the event has any schedule items regardless of rights (since v1 scope only asks for a *list*, not necessarily an empty-state Add affordance framing) is a product decision not resolved by any code read this turn.",
+    "[unverified] I did not read $lib/repertoire/repertoireActions.ts's `manageRightsFrom` implementation directly this turn (only its call sites) — its owner-OR-editor semantics are inferred from call-site doc comments, not the function body.",
+    "[unverified] I did not open scripts/migrations/lib/mvox-schema-extensions.ts or docs/architecture/mvox-schema-extensions.md in this session (out of scope for the assigned page-mapping task, but they are the schema definition-of-record per the task brief and were not re-verified here).",
+    "The task brief describes 'the existing in-situ idiom family' as covering both (a) the scalar-field pencil idiom (#157/#245) for EDITING the event's own properties, and (b) a red-trashcan two-step remove (#238) — but these two idioms currently live in different code locations (this page's own field pencils vs. routes/+page.svelte's season-manage panel) and are not yet composed together anywhere for a CHILD-ENTITY list with add/edit/remove all three; RepertoireElement.svelte (the closest existing child-list manager, used for Works) does its own item-remove WITHOUT a two-step confirm (no TrashIcon, no arm/confirm/cancel), so schedule_item's add/edit/remove will be a genuinely new composition, not a drop-in reuse of one existing component.",
+    "[unverified] Whether `manageRightsFrom`/`ManageRightsState` types already export everything needed to gate a schedule_item CRUD surface identically to the Works section (event_editor-only, since schedule_item rights are stated as program_item-identical, i.e. parent-event editor only, no season-level rights) was inferred from eventManageRights (:756) but not independently cross-checked against a program_item write-gating call site in this turn."
+   ]
+  },
+  {
+   "key": "agenda",
+   "findings": [
+    {
+     "claim": "Day-list row markup hierarchy (AgendaList.svelte, upcoming rows): a 2-col grid row (60px time column | 1fr content column); left column holds mono time+duration, right column holds name-link, badge, location, works, RSVP.",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:496 grid row div (grid-cols-[60px_1fr]); :500-503 decorative time link with row-time (line 501, class text-sm text-ink) and row-duration (line 502, class text-[10px] text-ink-2); :504 content-column div; :509-516 name link; :519-526 event-type badge; :527-529 row-location; :530 worksElement render; :531-537 RsvpControl.",
+     "verified": true
+    },
+    {
+     "claim": "The row's secondary text style, where a compact times line would sit, is text-[10px] text-ink-2 (same as row-duration) -- the day-header-typography spec calls this style 'the exact treatment of the row DURATION, the least significant text on the rows'.",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:502 span row-duration class text-[10px] text-ink-2. src/lib/components/agenda/AgendaList.day-header-typography.spec.ts lines 2-6 describe that exact class pair as the row's least-significant-text treatment. A slightly less muted alternative in the same row is row-location at line 528, class truncate text-xs text-ink-2.",
+     "verified": true
+    },
+    {
+     "claim": "AgendaItem carries only the event's own scalar props -- no child-entity/schedule_item data at all -- true at both the type contract and the fetch layer.",
+     "evidence": "src/lib/agenda/types.ts:5-32 fields are id,name,startDatetime,durationMinutes,location,conductors,owners,editors,eventType?; no children field. src/lib/seasons/entuSeasons.ts:132-138 the only entity fetch is entity?_type.string=event with a fixed props list (name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor); no child-entity fetch. Lines 166-193 map raw event + cached parent series into AgendaItem; nothing else attached.",
+     "verified": true
+    },
+    {
+     "claim": "Row data assembly happens in listEvents() (entuSeasons.ts) then listFullAgenda() (agendaData.ts) combines upcoming/recent -- both layers only ever carry flat AgendaItem objects, never a child collection.",
+     "evidence": "src/lib/seasons/entuSeasons.ts:166-193 (raw-to-AgendaItem map). src/lib/agenda/agendaData.ts:75-85 (paired.map listEvents call, then flatMap+filter+sort, same AgendaItem[] shape) and :99-100 (recentEvents(seasonData?.items ?? [], now)).",
+     "verified": true
+    },
+    {
+     "claim": "The byte-unchanged constraint for no-item rows is not a DOM snapshot test; it is stated as an explicit textual ruling in the #247 spec/component and is enforced in practice by the existing granular per-testid/class/text assertions across AgendaList.spec.ts staying green.",
+     "evidence": "src/routes/page.agenda-month-view.spec.ts:36-39 states day-list mode is BYTE-UNCHANGED and every pre-existing agenda/AgendaList spec is the fence. Same ruling echoed in src/lib/components/agenda/AgendaMonthView.svelte:4-8. Pinning assertions constituting the fence: AgendaList.spec.ts:135-141 (row-time exact text 12:00), :143-147 (row-duration text contains 90 min), :150-153 (row textContent contains name), :156-168 (row-location present/absent by data). No toMatchSnapshot/outerHTML/innerHTML full-DOM comparison exists anywhere under src/lib/components/agenda/ (grep confirmed empty).",
+     "verified": true
+    },
+    {
+     "claim": "AgendaMonthView.svelte (#247) is a structurally separate sibling component, not a branch inside AgendaList, and shares no row component with the day list.",
+     "evidence": "src/lib/components/agenda/AgendaMonthView.svelte:1-25 file header states it is a sibling of AgendaList, AgendaList stays byte-unchanged. Imports at :14-25 pull only from lib/agenda/types, events/eventTypeLabels, events/eventTypeStyles, paraglide/runtime, preferences/timeFormat -- no import of AgendaList.svelte or any shared row snippet. Full own template at :114-190 with its own testids.",
+     "verified": true
+    },
+    {
+     "claim": "The month row's pinned contract is EXACTLY four pieces of information (short-weekday key, day-of-month number, event title, type badge); the weekday+day pair renders as one combined span, title a second span, badge a third conditional span.",
+     "evidence": "src/routes/page.agenda-month-view.spec.ts:21-25 states the compact row is exactly four things: short-weekday key + day-of-month number, event title, type badge; no time/duration/location/works/RSVP/attendance. Matches DOM at AgendaMonthView.svelte:149-185: row div > anchor > month-row-date span combining weekday+day (:168-172) + title span (:173) + conditional event-type-badge span (:174-183).",
+     "verified": true
+    },
+    {
+     "claim": "Day-grouping and chronological order key off item.startDatetime at every layer (fetch sort, agenda-level sort, day-list group derivation), so display-additive schedule_item children cannot disturb grouping/sort.",
+     "evidence": "src/lib/seasons/entuSeasons.ts:193 sorts by startDatetime.localeCompare. src/lib/agenda/agendaData.ts:84-85 filters and sorts by startDatetime. src/lib/components/agenda/AgendaList.svelte:236-253 groups derivation, line 240 builds the Tallinn group key directly and only from item.startDatetime; no other AgendaItem field participates.",
+     "verified": true
+    }
+   ],
+   "risks": [
+    "The PO brief's 'byte-unchanged' is stronger than what the current test suite structurally guarantees: existing assertions are querySelector-scoped to specific testids/classes/text, not full-DOM comparisons. A new times-line span inserted in the content column would not be caught by any existing assertion unless it collides with an existing testid or shifts a textContent check. True byte-unchanged-for-no-item-rows will need a NEW spec assertion (e.g. asserting a compact-times-line testid is absent on ordinary rows) added in #262's RED phase -- it does not exist yet.",
+    "No AgendaItem field for schedule_item children exists today (confirmed). #262 V1 scope item (b) requires either extending AgendaItem with a per-event schedule_item array populated by a new fetch in listEvents/listFullAgenda, or a separate keyed map prop into AgendaList analogous to worksByEventId (AgendaList.svelte:106,149) -- that per-event-map idiom is the closest existing precedent but choosing it is a design decision for the implementing agent, not something already wired. [speculative]",
+    "The task's phrase 'four elements per row' is ambiguous against the DOM: the spec's 'four things' (page.agenda-month-view.spec.ts:21-25) is an information count, not a DOM node count -- weekday+day is a single span. Treating '4' as '4 DOM elements' will miscount (actual: 2 unconditional spans + 1 conditional span inside 1 anchor inside 1 row div).",
+    "AgendaList.svelte's Recent-section rows (lines 347-424) have separate markup from the upcoming-row markup (lines 495-540), with their own secondary-style precedent (recent-row-date at line 356, text-[10px] text-ink-2). If schedule_item times-lines are ever needed on Recent rows too, they need their own equivalent slot mapping -- not covered by this pass since PO scope (V1 item a/b) is day-list-row focused."
+   ]
+  },
+  {
+   "key": "data-wire",
+   "findings": [
+    {
+     "claim": "REPO GUARD passed: ~/workspace-app origin is https://github.com/mvox-dev/mvox-app.git",
+     "evidence": "Bash `git remote get-url origin` -> https://github.com/mvox-dev/mvox-app.git",
+     "verified": true
+    },
+    {
+     "claim": "(1) schedule_item MvoxEntityDef as landed: name='schedule_item', sharing='domain', inheritsRights=true, single required parent 'event' (parentCard '1', childCard '0..N', verb 'in'), addFrom='event', two required properties — name (string, table+search, ordinal 1) and datetime (datetime, table, ordinal 2, no `ordinal` property at all — deliberate), creators=[{kind:'parent_right', right:'_editor'}], commissionedBy='mvox-app#246'.",
+     "evidence": "scripts/migrations/lib/mvox-schema-extensions.ts:94-143 — full object literal quoted: `sharing: 'domain'`, `inheritsRights: true`, `parents: [{ entity: 'event', required: true, parentCard: '1', childCard: '0..N', verb: 'in' }]`, `addFrom: 'event'`, properties name(string,required,ordinal1,table,search) + datetime(datetime,required,ordinal2,table), `creators: [{ kind: 'parent_right', right: '_editor' }]`, `commissionedBy: 'mvox-app#246'`. Cross-confirmed in docs/architecture/mvox-schema-extensions.md:29-55 (property table, rights posture 'identical to program_item').",
+     "verified": true
+    },
+    {
+     "claim": "Per-db live type-def and prop-def ids from the #246 seed ledgers: polyphony scheduleItemTypeId=6a9ccea4ca67df980f4173c5 (name propdef id 6a9ccea4ca67df980f4173d0, datetime propdef id 6a9ccea5ca67df980f4173df, eventTypeId 69c7ea548489bfcb0e81a0a2); mvox_crede scheduleItemTypeId=6a9cceabca67df980f4173ee (name propdef id 6a9cceabca67df980f4173f9, datetime propdef id 6a9cceabca67df980f417408, eventTypeId 6a92a333ca67df980f415039). Both live ledgers show outcome 'created', exitCode 0, add_from wired to the event type id.",
+     "evidence": "scripts/migrations/seed-results/seed-246-schedule-item-type-polyphony-live-2026-09-06T02-23-33-703Z.json (full JSON read) and seed-results/seed-246-schedule-item-type-crede-live-2026-09-06T02-23-41-578Z.json (full JSON read) — both authorization='PO-Approved 2026-09-06 mvox-app#246 (Gama settle comment)'.",
+     "verified": true
+    },
+    {
+     "claim": "(2) Closest existing pattern for reading an event's children is `listProgramItems` in src/lib/repertoire/repertoireData.ts, a plain browser-direct entuFetch GET filtered by `_type.string=<name>&_parent.reference=<eventId>`, no server proxy route involved anywhere in the app.",
+     "evidence": "src/lib/repertoire/repertoireData.ts:88-110 — `listProgramItems` calls `entuFetch(cfg.db, 'entity?_type.string=program_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,edition,ordinal,notes&limit=500', cfg.token, {}, fetchImpl)`, then sorts client-side by ordinal (schedule_item would sort by datetime then name instead, per the schema note). `find src/routes -iname '*+server*'` and `find src/routes -type d -iname api` both returned empty — confirms no BFF/API route layer exists in this repo; every call is a direct browser fetch against Entu carrying the user's own Bearer JWT.",
+     "verified": true
+    },
+    {
+     "claim": "(3) Create wire mechanics: `_type` is always resolved to a reference id via `resolveTypeId` and sent as `{ type: '_type', reference: typeId }` (never a string); `_parent` sent as `{ type: '_parent', reference: <parentId> }`; a single POST to `entity` with the full prop array; the endpoint returns `{_id}`.",
+     "evidence": "src/lib/repertoire/repertoireActions.ts:64-83 (createRepertoireItem) and :194-217 (createProgramItem) — e.g. line 201-206: `const props = [{ type: '_type', reference: typeId }, { type: '_parent', reference: input.eventId }, { type: 'edition', reference: input.editionId }, { type: 'ordinal', number: input.ordinal }, { type: '_sharing', string: 'domain' }]` then `entuFetch(cfg.db, 'entity', cfg.token, { method: 'POST', ... body: JSON.stringify(props) }, fetchImpl)`.",
+     "verified": true
+    },
+    {
+     "claim": "(3) datetime property wire format is a full ISO-8601 UTC instant string sent as `{ type: '<prop>', datetime: <isoString> }`; the app converts a Tallinn-local wall-clock draft to that UTC ISO string via `tallinnLocalToUtcIso`, which ends in `new Date(instantMs).toISOString()`.",
+     "evidence": "src/lib/events/eventFieldEdit.ts:28-29: `case 'start_datetime': return { type: field, datetime: value };`; src/lib/entity/entityCreate.ts:511: `{ type: 'start_datetime', datetime: startDatetime }` where startDatetime is required non-blank text (entityCreate.ts:248 comment: 'ISO datetime'); src/lib/preferences/timeFormat.ts:129-139 `tallinnLocalToUtcIso` returns `new Date(instantMs).toISOString()` (full ISO string, e.g. `2026-09-06T02:23:33.703Z` shape) or `''` for an empty/unparseable draft.",
+     "verified": true
+    },
+    {
+     "claim": "(3) Replace/update semantics for a single-valued prop: GET current value id(s) first, then POST the one new value, THEN DELETE each pre-existing value id at `/property/{id}` — POST strictly BEFORE delete (a deliberate house rule, not the naive delete-then-post order). A shared helper `replaceEntityProperty` in src/lib/entu/replaceProperty.ts implements this once; repertoireActions.ts/attendanceData.ts have their own earlier hand-rolled copies of the identical GET->POST->DELETE-all shape predating the extraction. Clearing a property (not replacing) is a POST with an empty list — not used in the schedule_item props shown here but documented as the general Entu convention.",
+     "evidence": "src/lib/entu/replaceProperty.ts:40-74 full function body — comment block lines 8-24 states the GET-then-POST-then-DELETE-all order explicitly and why POST precedes DELETE; src/lib/repertoire/repertoireActions.ts:101-129 (updateRepertoireStatus) and :224-252 (updateProgramItemOrdinal) show the same pre-extraction shape, each doing GET `entity/${itemId}?props=<prop>` -> POST `entity/${itemId}` with `[{ type, ... }]` -> loop DELETE `property/${id}` per stale value.",
+     "verified": true
+    },
+    {
+     "claim": "(3) Delete a child entity: a single `DELETE entity/{itemId}` call (entity-id delete, distinct from `/property/{id}` value-delete used for prop replacement).",
+     "evidence": "src/lib/repertoire/repertoireActions.ts:168-175 (deleteRepertoireItem) and :325-332 (deleteProgramItem): `entuFetch(cfg.db, 'entity/${itemId}', cfg.token, { method: 'DELETE' }, fetchImpl)`.",
+     "verified": true
+    },
+    {
+     "claim": "(3) `_sharing` handling: program_item sends an EXPLICIT `{ type: '_sharing', string: 'domain' }` on create because its parent event's `_sharing` is not uniformly domain (one live event is `public`); repertoire_item sends NO explicit `_sharing` because its parent (season) IS uniformly domain and Entu's create-time cascade already lands `domain`. Since schedule_item's parent is also `event` (the same non-uniform-sharing parent as program_item), the explicit `{ type: '_sharing', string: 'domain' }` prop is the applicable precedent for schedule_item creates, not the inherited-only repertoire_item path.",
+     "evidence": "src/lib/repertoire/repertoireActions.ts:16-26 (module header) and :188-192 (createProgramItem doc comment) explaining why program_item pins `_sharing: domain` explicitly vs. repertoire_item's reliance on inherit; line 205 `{ type: '_sharing', string: 'domain' }` in the actual create props array.",
+     "verified": true
+    },
+    {
+     "claim": "(3) Rights are NOT passed through a BFF at all — there is no server proxy route in this codebase (`find src/routes -iname '*+server*'` and `-type d -iname api` both empty). The app is a pure client-side SPA (`ssr = false`, JWT in localStorage) that calls Entu directly with the signed-in user's own Bearer token; Entu itself enforces write rights server-side, and the app only reads back `_owner`/`_editor` reference lists on the entity to decide whether to SHOW management controls (`manageRightsFrom`/`resolveManageRights`). A parent-event editor creating a schedule_item is therefore just that user's own JWT hitting Entu's create endpoint directly — no elevated/service-account or BFF-mediated write path exists for this.",
+     "evidence": "src/lib/entu/request.ts:7-46 (module header, explicitly states 'This app is a pure client-side SPA (ssr = false, localStorage JWT, no BFF/cookie/server load ...)'); src/lib/repertoire/repertoireActions.ts:338-396 (manageRightsFrom / resolveManageRights) — reads `_owner`/`_editor` off the entity itself, gates UI only; `entuFetch` (request.ts:124-145) sends `Authorization: Bearer ${token}` where token is the caller's own stored JWT, no separate service-account path visible.",
+     "verified": true
+    },
+    {
+     "claim": "(4) Per-db type ids are resolved AT RUNTIME by name, never hardcoded in app code: `resolveTypeId(cfg, typeName)` queries `entity?_type.string=entity&name.string=<typeName>&props=_id&limit=1` against the CURRENT db (`cfg.db`), and memoizes the result in an in-memory Map keyed `${db}:${typeName}` for the life of the session (no persistence, no config file of ids).",
+     "evidence": "src/lib/seasons/entuSeasons.ts:26-50 `resolveTypeId` full body: builds `key = ${cfg.db}:${typeName}`, checks `typeIdCache`, else GETs `entity?_type.string=entity&name.string=${encodeURIComponent(typeName)}&props=_id&limit=1`, reads `body.entities?.[0]?._id`, throws if not found, else caches and returns.",
+     "verified": true
+    },
+    {
+     "claim": "(5) No existing schedule_item references in application code (src/) — grep across the repo shows schedule_item mentioned ONLY in the two migration seed scripts (scripts/migrations/seed-246-schedule-item-type-{polyphony,crede}-2026-09-06.ts), the schema-extensions .ts/.md definition files, the seed-results ledgers, and team memory/common-prompt docs. Zero hits in src/.",
+     "evidence": "`grep -rn schedule_item` over the whole repo (node_modules excluded) — all matches are under scripts/migrations/**, docs/architecture/mvox-schema-extensions.md, or teams/mvox-dev/{common-prompt.md,memory/*}; none under src/.",
+     "verified": true
+    }
+   ],
+   "risks": [
+    "The task brief frames the app as having a 'server proxy route/BFF' passing through rights — this codebase has none: it's confirmed a pure client-side SPA hitting Entu directly with the user's own JWT (src/lib/entu/request.ts:7-46). Any V1 implementation plan that assumes a BFF-mediated create/delete path for schedule_item would be building against a layer that doesn't exist in mvox-app; the write pattern must follow the direct-entuFetch-with-resolved-type-id shape program_item/repertoire_item already use.",
+    "schedule_item's parent (event) has non-uniform `_sharing` (one live event is `public`, per repertoireActions.ts:188-192) — this is the SAME situation as program_item, not repertoire_item. An implementer who copies repertoire_item's 'no explicit _sharing, rely on inherit' shortcut instead of program_item's explicit `{ type: '_sharing', string: 'domain' }' would risk a schedule_item silently landing `public` sharing under a public event, which per the same comment causes Entu's aggregate.js to drop domain-tier prop-defs from ordinary reads (a real functional bug, not just a policy nicety).",
+    "No `resolveTypeId` calls for 'schedule_item' exist anywhere in app code yet — this will be a NEW call site; the type name string used must exactly match the seeded type-def name ('schedule_item', confirmed lowercase-underscore in both seed ledgers and mvox-schema-extensions.ts:95).",
+    "schedule_item deliberately has NO `ordinal` property (conceded per #246 adjudication) — sort is `datetime` then `name` tie-break, done CLIENT-SIDE after fetch (mirroring `listProgramItems`'s `.sort((a,b)=>a.ordinal-b.ordinal)` pattern at repertoireData.ts:109) since Entu itself does not sort query results server-side in the patterns observed. A future editor pattern that tries to reuse `updateProgramItemOrdinal`/`planProgramMove`/`reorderProgramItems` verbatim would be reusing dead machinery for a type that structurally has no ordinal to reorder — renumbering is out of scope for schedule_item by design.",
+    "[unverified] I did not locate or read the actual AgendaList.svelte component or its 'secondary text style' CSS class that requirement (b) of the V1 scope references (byte-unchanged rows for events without items, compact chronological line for events with items) — this was out of strict scope for 'data/wire layer' but a UI-layer follow-up task should confirm the exact component/selector before implementing.",
+    "[unverified] #207 (time-format preference) and #251 (language rules) referenced in the V1 scope were not read this turn — only tallinnLocalToUtcIso (the write-side wall-clock conversion) was inspected. The display-side formatter obeying #207/#251 for rendering schedule_item.datetime was not located/verified."
+   ]
+  },
+  {
+   "key": "formatting",
+   "findings": [
+    {
+     "claim": "#207 preference storage: '24h'|'ampm', localStorage key 'mvox.time_format', sanitizing read, Writable store, setTimeFormat setter.",
+     "evidence": "src/lib/preferences/timeFormat.ts:8-34 — type TimeFormat='24h'|'ampm'; TIME_FORMAT_KEY='mvox.time_format'; sanitize() defaults anything not exactly 'ampm' to '24h'; readStoredTimeFormat() SSR-guards typeof localStorage; timeFormatStore=writable(readStoredTimeFormat()); setTimeFormat(value) does timeFormatStore.set(value) + localStorage.setItem."
+    },
+    {
+     "claim": "The ONE shared display formatter pair is tallinnHHMM(date)->'HH:MM' (Europe/Tallinn, en-GB, hour12:false) fed through formatTime(hhmm, mode).",
+     "evidence": "src/lib/preferences/timeFormat.ts:47-56 (tallinnHHMM, const tallinnHHMMFmt Intl.DateTimeFormat en-GB timeZone Europe/Tallinn hour/minute 2-digit hour12:false) and :65-75 (formatTime: '24h' passthrough; 'ampm' -> `${h%12||12}:${minute} ${AM/PM}`; malformed input returned unchanged in both modes)."
+    },
+    {
+     "claim": "A structural lint spec enforces that formatTime(tallinnHHMM(d), mode) is the ONLY place any 24h-rendering Intl formatter may exist outside timeFormat.ts (except TimeSelect.svelte, an input not a display surface).",
+     "evidence": "src/lib/preferences/timeFormat.no-hardcoded-render.spec.ts:38-46 ALLOWLIST=['lib/preferences/timeFormat.ts','lib/components/TimeSelect.svelte']; comment lines 26-31 name the three GREEN display sites: AgendaList row/recent times, event-detail timeRange, event-created toast."
+    },
+    {
+     "claim": "Three production surfaces currently consume formatTime(tallinnHHMM(...), $timeFormatStore): AgendaList upcoming row-time, AgendaList recent row time, event-detail timeRange(), and the event-create-toast time half.",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:357 and :501 (`formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)`); src/routes/event/[id]/+page.svelte:731,733 inside timeRange(start,minutes); src/routes/+page.svelte:3171 (`${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`)."
+    },
+    {
+     "claim": "A 'time only, no date' rendering already exists as the raw combo formatTime(tallinnHHMM(date), mode) — it is what AgendaList's row-time spans call directly, and it is also what timeRange() falls back to when minutes<=0 (start time alone, no range, no date). No new time-only formatter needs to be built; a schedule-item display reuses this exact two-call combo directly (not `timeRange`, which is range-specific and event-detail-local).",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:357,501 call the combo directly for a lone time (no date, no range); src/routes/event/[id]/+page.svelte:726-735 timeRange() degenerates to `startStr` alone (line 732 `if (minutes <= 0) return startStr;`) which is itself just `formatTime(tallinnHHMM(start), mode)` (line 731) — i.e. the underlying single-time formatter is the reusable primitive, timeRange is a page-local range wrapper around it, not exported."
+    },
+    {
+     "claim": "formatTime/tallinnHHMM take no locale argument — clock-time HH:MM digits are locale-independent by design; only DATE text (weekday/month names) varies by app language.",
+     "evidence": "src/lib/preferences/timeFormat.ts:43-56 tallinnHHMMFmt is constructed once at module scope with fixed locale 'en-GB' (only used for numeric HH:MM shape, not language-sensitive); contrast with the $derived Intl.DateTimeFormat(getLocale(),...) date formatters below, which DO take getLocale()."
+    },
+    {
+     "claim": "#251's app-language pattern for locale-sensitive (date/weekday) formatters is `$derived(new Intl.DateTimeFormat(getLocale(), {...}))`, rebuilt reactively per render scope, replacing a construction-time `undefined`/device-locale constant.",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:205-212 `const headerFmt = $derived(new Intl.DateTimeFormat(getLocale(), { timeZone: TZ, weekday:'long', day:'numeric', month:'long' }));` with comment block at :192-195 and :203-204 explicitly citing #251; identical pattern at src/routes/event/[id]/+page.svelte:662-669 (dateFmt) and src/lib/components/agenda/AgendaMonthView.svelte:46-49."
+    },
+    {
+     "claim": "getLocale is imported from '$lib/paraglide/runtime.js' in every #251-updated component.",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:24 `import { getLocale } from '$lib/paraglide/runtime.js';`; src/routes/event/[id]/+page.svelte:22 same import; src/routes/+layout.svelte:34 and src/lib/components/LanguageSelector.svelte:41 same specifier."
+    },
+    {
+     "claim": "The reload trap: Paraglide `m.foo()` message functions read non-reactive module state (`_locale` in runtime.js) and never re-evaluate on their own — LanguageSelector's setLocale defaults to `reload:true` (a full document reload) specifically because `reload:false` would change the locale while the screen stayed in the old language; runtime.js itself warns against `reload:false` for normal locale pickers. #251 components sidestep this only for the Intl-based date/weekday text by wrapping construction in `$derived(...)` so it rebuilds when getLocale()'s underlying reactive source changes, independent of relying on the page reload.",
+     "evidence": "src/lib/components/LanguageSelector.svelte:12-19 (`It calls setLocale(locale) with Paraglide's DEFAULT reload:true... with reload:false the locale would change while the screen stayed in the old language. runtime.js says as much: reload:false 'does not re-render the UI [...] Do not use it for normal locale pickers.'`); src/lib/paraglide/runtime.js:381,386-388 (default reload:true; forced true with a console.warn if false attempted against a statically built locale); src/lib/components/agenda/AgendaList.svelte:192-195 / src/routes/event/[id]/+page.svelte:658-661 (comments: '...rebuilt reactively so a language switch updates the header without relying on setLocale's page reload')."
+    },
+    {
+     "claim": "The tripwire test proving the reload-independent reactivity is a live locale-switch-on-a-mounted-component test, both at the unit (AgendaList) and integration (real +page.svelte route) level.",
+     "evidence": "src/lib/components/agenda/AgendaList.spec.ts:685-702 ('switching the app language re-renders the header WITHOUT a remount...formatter is rebuilt, not a construction-time constant' — asserts headerText() 'Monday, June 15' -> after setAppLocale('et') -> 'esmaspäev, 15. juuni'); src/routes/page.agenda-header-locale.spec.ts:168-188 same pattern at the real-route level with a SvelteMap-backed reactive getLocale mock (lines 38-47)."
+    },
+    {
+     "claim": "The exact 4-locale exact-text pins for a locale-aware narrative date/weekday header (Monday 2026-06-15) that a new schedule-item display imitating #251 rules should match in style (weekday/month formatting per Intl per-locale, natural case, not forced uppercase in source text).",
+     "evidence": "src/lib/components/agenda/AgendaList.spec.ts:670-675 `const expectedHeader: Record<AppLocale,string> = { en:'Monday, June 15', et:'esmaspäev, 15. juuni', lv:'pirmdiena, 15. jūnijs', uk:'понеділок, 15 червня' };` looped per-locale at :676-683; also src/routes/page.agenda-header-locale.spec.ts:165 ('esmaspäev, 10. juuni') and :181 ('Monday, June 10') at the integration level."
+    },
+    {
+     "claim": "The 'ISO fence' pin: grouping-key/tabular-date producers (groupKeyFmt, shortDateFmt, isoDateFormatter) are deliberately pinned to locale 'en-CA' regardless of app language — they must NOT follow getLocale(); only narrative weekday/month text follows the app language.",
+     "evidence": "src/lib/components/agenda/AgendaList.spec.ts:654-663 (block comment: 'the ISO producers groupKeyFmt/shortDateFmt keep their deliberate en-CA per the #207/#212 rulings'); test at :705-722 ('grouping keys stay ISO... recent-row date cell still reads 2026-06-15' under setAppLocale('et')); src/lib/preferences/timeFormat.ts:151-162 isoDateFormatter() hardcodes 'en-CA'."
+    },
+    {
+     "claim": "AM/PM mode changes clock TIMES only — dates/day-headers stay untouched (rule 7) — pinned together with the AM/PM exact-text pin '12:00 PM' / '9:30 AM'.",
+     "evidence": "src/lib/components/agenda/AgendaList.spec.ts:759-790 test \"'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — dates untouched (rule 7)\": asserts rowTime '12:00 PM', recent-row span '9:30 AM' present and '09:30' absent, and header still matches /Monday/i /June/i and not /\\b(AM|PM)\\b/."
+    },
+    {
+     "claim": "i18n messages live in messages/{en,et,lv,uk}.json as a flat key->string map; #249's sibling idiom for a visible field label is a wrapping <label> with a <span class=\"text-xs text-ink-2\">{m.key()}</span> above the control, deleting any redundant same-key aria-label ('single-name rule'); no new translation keys were needed for #249 because the keys already existed (only their visible-vs-aria-only usage changed).",
+     "evidence": "messages/en.json (flat keys, e.g. lines 421-439 event_create_* keys); git show 59f71a0 diff on src/routes/+page.svelte: `<label class=\"flex w-full flex-col gap-0.5\"><span class=\"text-xs text-ink-2\">{m.event_create_season_label()}</span><select ...>` replacing a bare `<select aria-label={m.event_create_season_label()}>`; commit message states 'No new copy: all seven keys existed, translated, in four locales'."
+    },
+    {
+     "claim": "The closest sibling to schedule_item's add/edit/remove-with-red-trashcan-two-step idiom is event_detail's own delete control on the SAME page (event/[id]/+page.svelte): a delete button that flips to a confirm/cancel pair, each carrying both a full aria-label and a short visible label, using key convention `<domain>_<action>_<confirm|cancel>_aria_label` / `<domain>_<action>_<confirm|cancel>_short`.",
+     "evidence": "messages/en.json:350-354 `event_detail_delete_label`, `event_detail_delete_confirm_aria_label`, `event_detail_delete_confirm_short`(\"Delete?\"), `event_detail_delete_cancel_aria_label`, `event_detail_delete_cancel_short`(\"Cancel\"); src/routes/event/[id]/+page.svelte:2460-2493 wires these to `data-testid=\"event-detail-delete-confirm\"`/`\"event-detail-delete-cancel\"`/`\"event-detail-delete\"`, with focus-management at lines 490,499. A second, list-row-scoped sibling with the same shape (name-parameterised, one entry per removable row) is roster_section_remove_confirm_short/roster_section_remove_confirm/roster_section_remove_cancel_short/roster_section_remove_cancel at messages/en.json:197-201, consumed in src/routes/roster/+page.svelte and src/lib/components/agenda/RepertoireElement.svelte."
+    },
+    {
+     "claim": "schedule_item's live schema is v4E-independent (Mihkel 2026-09-06 ruling), child of event, 1->0..N, rights domain-sharing identical to program_item, defined at scripts/migrations/lib/mvox-schema-extensions.ts.",
+     "evidence": "scripts/migrations/lib/mvox-schema-extensions.ts:94-106 `export const schedule_item: MvoxEntityDef = { name:'schedule_item', ..., sharing:'domain', inheritsRights:true, parents:[{entity:'event', required:true, parentCard:'1', childCard:'0..N', verb:'in'}], addFrom:'event', ... }` with comment confirming domain sharing was verified against the LIVE program_item type-def, not the aspirational v4E draft."
+    }
+   ],
+   "risks": [
+    "[speculative] No dedicated 'time only, no date' EXPORTED function exists in timeFormat.ts under that name — the primitive is the two-call combo `formatTime(tallinnHHMM(date), mode)` used inline at call sites (AgendaList.svelte:357,501) rather than a named single-purpose export; a schedule-item implementer should call the combo directly (as AgendaList already does for its row-time) rather than introduce a new wrapper, to stay inside the timeFormat.no-hardcoded-render.spec.ts allowlist fence — but nothing currently prevents someone from wrapping it in a new named local helper per-component (as event-detail's `timeRange` does), which is also acceptable precedent.",
+    "The task brief asks for '#251 amendment' at 11:11 and PO comments at 05:30 on #262 — I did not fetch #262's GitHub comment thread itself (no network access used in this read-only repo-only task); the V1 scope description was taken verbatim from the orchestrator's CONTEXT block, not independently re-verified against GitHub. [unverified]",
+    "The agenda DAY-LIST compact line 'time name · time name' (scope item b) has no existing sibling implementation in the codebase I could find — AgendaList.svelte's row-time span shows a single time per row, not a multi-item chronological line; the new compact-line format is genuinely novel UI, not a direct copy of an existing pattern, though it must reuse the same time-formatting primitive.",
+    "i18n key-naming convention for schedule_item's own new keys was inferred from the two closest siblings (event_detail_delete_* and roster_section_remove_*) — no schedule_item-prefixed keys exist yet in messages/en.json, so exact key names (e.g. `event_detail_schedule_add_label` vs `schedule_item_add_label`) are a design choice not yet made by any prior commit. [speculative]",
+    "Only messages/en.json was inspected directly for key text; et/lv/uk.json were not individually opened this turn to confirm they mirror the same keys 1:1 (though the #249 commit message asserts 'all seven keys existed, translated, in four locales', which is evidence but not this-turn verification of et/lv/uk.json content). [unverified]"
+   ]
+  },
+  {
+   "key": "blast-radius",
+   "findings": [
+    {
+     "claim": "Repo guard passed: ~/workspace-app origin is mvox-dev/mvox-app.git.",
+     "evidence": "Bash `git remote get-url origin` → https://github.com/mvox-dev/mvox-app.git",
+     "verified": true
+    },
+    {
+     "claim": "schedule_item has NO code consumers yet anywhere in src/ — only the two schema-seed scripts and the doc reference it. This is a greenfield UI build, not a modification of existing schedule_item-aware code.",
+     "evidence": "grep -rn \"schedule_item\" src scripts docs → hits only in scripts/migrations/seed-246-schedule-item-type-{crede,polyphony}-2026-09-06.ts, scripts/migrations/lib/mvox-schema-extensions.ts, scripts/migrations/lib/ensure-schema-type.ts, seed-results/*.json, docs/architecture/mvox-schema-extensions.md. Zero hits under src/.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL(1) — event detail page spec files that assert current DOM/behavior and could be affected by additive schedule-list elements: page.spec.ts, page.event-delete.spec.ts, page.event-editing.spec.ts, page.event-type-edit.spec.ts, page.i18n-a11y.spec.ts, page.location-datalist.spec.ts, page.session-expired.spec.ts, page.tally-deactivated.spec.ts.",
+     "evidence": "find ./src/routes/event/[id] -type f: 8 spec files listed alongside +page.svelte.",
+     "verified": true
+    },
+    {
+     "claim": "page.i18n-a11y.spec.ts pins exactly ONE <main> and ONE <h1> on the event detail page — a new 'Schedule' section must not introduce a second landmark/h1.",
+     "evidence": "src/routes/event/[id]/page.i18n-a11y.spec.ts:406-407 `const mains = container.querySelectorAll('main'); expect(mains).toHaveLength(1);` and :417 `expect(container.querySelectorAll('h1')).toHaveLength(1);` (also :634).",
+     "verified": true
+    },
+    {
+     "claim": "The event-detail header time block is exact-count regex-tested against the CONTENTS of the single `[data-testid=\"event-detail-time\"]` element; a schedule list must render OUTSIDE that element (its own container/testid), or a schedule item sharing the same clock reading as event start would break these tests.",
+     "evidence": "src/routes/event/[id]/page.spec.ts:637 `expect(time.match(/19:00/g)).toHaveLength(1);` and :2414 `expect(time.match(/7:00 PM/g)).toHaveLength(1);`, both computed from `container.querySelector('[data-testid=\"event-detail-time\"]')!.textContent` (page.spec.ts:2379-2414 region) — scoped to that one element, not the whole page.",
+     "verified": true
+    },
+    {
+     "claim": "There is an EXISTING, exact precedent on this same page for 'member-visible list with editor-only affordances': the Works section (`event-detail-works`), gated by `showWorksSection`, always-expanded, feeding `RepertoireElement` with `seasonRights`/`eventRights` so add/remove/move controls render only for an editor.",
+     "evidence": "src/routes/event/[id]/+page.svelte:2334-2367 — `{#if showWorksSection}` … `<section data-testid=\"event-detail-works\" …>` … `<RepertoireElement rows={workRows} expanded={true} … manageRights={seasonManageRights} seasonRights={seasonManageRights} eventRights={eventManageRights} … onremoveitem={handleRemoveItem} …/>`.",
+     "verified": true
+    },
+    {
+     "claim": "The 'red-trashcan two-step remove' idiom the task references is this page's own event-delete control: idle × swaps to red-700 confirm/cancel text (`deleteArmed`), single scalar state (not per-row), same shape the season-manage delete rows use.",
+     "evidence": "src/routes/event/[id]/+page.svelte:204-210 comment + state (`deleteArmed`/`deletePending`/`deleteError`), rendered at :2456-2497 (`data-testid=\"event-detail-delete-confirm\"`/`-cancel`/`-delete`, class `text-red-700`).",
+     "verified": true
+    },
+    {
+     "claim": "#239/#249 'visible labels' is a cross-form convention (event-create/series-create), not a component on the event detail page itself — any new schedule_item name/datetime inputs must follow the same visible-<label>-is-the-accessible-name rule those issues established, not aria-label-only.",
+     "evidence": "src/routes/page.event-create.spec.ts:2280 `describe('#249 — every event-create control carries a visible label…')`; src/routes/page.series-create.spec.ts:2383 `describe('#239 — every control carries a visible label…')`. No hits of #239/#249 inside event/[id]/+page.svelte.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL(2) — the works line is the closest live analogue of a per-event child-fetch feeding the agenda: it is a BULK fetch across all upcoming event ids in one call (`loadWorksByEventId(cfg, eventIds, seasonId, …)`), keyed by event id into `worksByEventId`, guarded by its own request/load-id pair distinct from the page's overall `requestId`.",
+     "evidence": "src/routes/+page.svelte:1195-1212 `loadWorksAndManagement(...)`: `const thisWorksLoad = ++worksLoadId; loadWorksByEventId(cfg, eventIds, seasonId, fetch, {...}).then((byEvent) => { if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return; worksByEventId = byEvent; })`. Producer: src/lib/repertoire/workRows.ts:172-192 `loadWorksByEventId` fans out `resolveEventWorksBatch(cfg, eventIds, seasonId, …)` for ALL eventIds at once, not per-row.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL(2) risk — a schedule_item agenda-line implementation must replicate this SAME bulk-fetch + own-guard shape (its own `scheduleLoadId` vs the shared `requestId`) rather than adding a new per-row fetch; the AgendaItem/listEvents producer itself carries no child data today, so 'other consumers of the event child-fetch path' are exactly these worksByEventId call sites and the analogous rsvp/attendance bulk loads on the same page — none of them currently reference schedule_item and none will unexpectedly receive it unless a new fetch is wired in.",
+     "evidence": "src/lib/seasons/entuSeasons.ts:127-140 `listEvents` query string (`props=name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor`) carries no program_item/schedule_item fields; src/lib/agenda/types.ts's `AgendaItem` type has no children field.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL(3) — AgendaList.svelte (day-list) and AgendaMonthView.svelte (#247 month view) are template-disjoint SIBLING components with NO shared row-rendering snippet; both consume the exact same `items={filteredAgendaItems}` array from routes/+page.svelte but render it through entirely separate `{#each}` blocks.",
+     "evidence": "src/routes/+page.svelte:7749 `<AgendaList items={filteredAgendaItems} …>` vs :7788 `<AgendaMonthView items={filteredAgendaItems} … />` — AgendaMonthView receives ONLY `items`/`loading`/`emptyState` (AgendaMonthView.svelte:27-38 Props), never `worksByEventId`/`worksManage`/rsvp/attendance props that AgendaList gets.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL(3) — #247's month-row contract is an explicit, testable 'exactly four things, no time' fence; any schedule_item wiring must keep AgendaMonthView.svelte and its prop list byte-unchanged, and must NOT extend the shared `AgendaItem` type with schedule data that a future edit to AgendaMonthView could naively render.",
+     "evidence": "src/routes/page.agenda-month-view.spec.ts:21-23 '`The compact row (done-when 3 + ruling 11): EXACTLY four things — short-weekday key + day-of-month number …, event title, type badge. No time, no duration, no location, no works, no RSVP, no attendance.`' and :36-38 '`Day-list mode is BYTE-UNCHANGED … every pre-existing agenda/AgendaList spec is the fence`'. AgendaMonthView.svelte's own header comment (lines 1-13) restates the same scope ruling.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(4) — the event detail page's `loadForSelected` uses the SAME stale-response generation-guard idiom as profile/+page.svelte's `refreshCompletionGate`/#260, but as its OWN hand-rolled non-reactive `generation` counter (not via the shared `routeLoad.ts` machine that profile/roster/library use) — any new schedule_item load on this page must thread through this SAME `g !== generation` guard.",
+     "evidence": "src/routes/event/[id]/+page.svelte:138-140 `let generation = 0;` (comment: 'Non-reactive generation guard — same pattern as roster/+page.svelte's `generation`'), :287 `const g = ++generation;`, :304/:316 `if (g !== generation) return;`. Compare src/lib/loading/routeLoad.ts:1-20 header, which names only 'profile/roster/library' as routeLoad.ts consumers — the event detail page is a FOURTH hand-rolled copy of the idiom, not consolidated into routeLoad.ts.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(4) — schedule_item's type-def id genuinely DIFFERS per db (polyphony vs mvox_crede), confirming the stated risk is real in principle.",
+     "evidence": "scripts/migrations/seed-results/seed-246-schedule-item-type-polyphony-live-2026-09-06T02-23-33-703Z.json: `\"scheduleItemTypeId\": \"6a9ccea4ca67df980f4173c5\"`; seed-246-schedule-item-type-crede-live-…json: `\"scheduleItemTypeId\": \"6a9cceabca67df980f4173ee\"`.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(4) — but the codebase's established mitigation already exists and is followed everywhere: every entity list query in the app is issued via `_type.string=<name>` (name-based, not raw type id), so a per-db-differing type id is a non-issue AS LONG AS a schedule_item fetch follows the same convention as its sibling program_item.",
+     "evidence": "src/lib/repertoire/repertoireData.ts:95 `entity?_type.string=program_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,edition,ordinal,notes&limit=500`; src/lib/seasons/entuSeasons.ts:85,134 likewise use `_type.string=season`/`_type.string=event`. No raw type-id literal appears in any query in src/.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(5) — the day-group header's CSS `uppercase` (the #250 TÄNA/HOMME mechanism) is scoped to the header `<div>` only, not to row content; a times-line added inside a row's content column (siblings of `row-time`) is structurally isolated from that uppercase treatment, so no Estonian-caps collision from CSS is expected there.",
+     "evidence": "src/lib/components/agenda/AgendaList.svelte:464-467 header div carries `uppercase` class; the day-list row div at :496 (`agenda-row-{item.id}`) carries no `uppercase` class and is a SIBLING <section> child, not a descendant of the header div.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(5) — a '·' middle-dot separator already has a live precedent on the event detail page's tally line with no known locale collision issue raised against it, and all four locale files (en/et/lv/uk) exist under messages/.",
+     "evidence": "src/routes/event/[id]/+page.svelte:2298-2306 uses a bare `·` between tally `<span>`s (`{m.event_detail_tally_maybe(...)}` … `·` … `{m.event_detail_tally_late(...)}`); `ls messages` → en.json, et.json, lv.json, uk.json.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(5)/spec-fragility — AgendaList.spec.ts's existing time assertions use `querySelectorAll('span').map(textContent).toContain/not.toContain(...)` (containment, not exhaustive-count), so an ADDITIONAL span for a times-line is not structurally forbidden by these specific assertions — but a future schedule-item render that emits a bare clock-only span (e.g. a schedule item whose own time renders as a standalone '09:30' span rather than folded into one 'time name' string) could collide with the existing `.not.toContain('09:30')` / `.not.toContain('19:00')`-style negative assertions.",
+     "evidence": "src/lib/components/agenda/AgendaList.spec.ts:775,807 `const spanTexts = [...recentRow!.querySelectorAll('span')].map((s) => s.textContent?.trim()); expect(spanTexts).toContain('9:30 AM'); expect(spanTexts).not.toContain('09:30');` — this is a containment check over ALL spans in the row, so a new span's exact text matters.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(6) — no auth/protected-route gate exists on the event detail route itself; token absence is passed through to Entu as `''` and Entu's own `_sharing` rules are the actual authority, so an anonymous caller hitting schedule_item (domain-shared, same as program_item) will get the same 401/403→session-expired/load-error classification the page already applies uniformly — no new rights branch is needed for anonymous handling.",
+     "evidence": "src/routes/event/[id]/+page.svelte:10-12 comment ('No `getToken()`-missing gate … the token is threaded straight through to Entu, which is the actual authority on whether it's valid') and :302 `const cfg = { db: current.db, token: getToken() ?? '' };`.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(6) — the single rights predicate `manageRightsFrom(ownerIds, editorIds, personId)` (owner-OR-editor) already drives BOTH the tally visibility and the Works-section editor controls on this page; schedule_item's identical rights posture (per docs/architecture/mvox-schema-extensions.md:53-55, 76-79) means it should reuse this SAME predicate/`isEditor` derivation rather than invent a parallel rights check.",
+     "evidence": "src/routes/event/[id]/+page.svelte:262-268 `function canSeeTally(d, personId) { return manageRightsFrom(d.ownerIds, d.editorIds, personId) === 'editor'; }` and :270-272 `const isEditor = $derived(...)`; docs/architecture/mvox-schema-extensions.md:53-55 '`Rights posture: identical to program_item — whoever holds _editor+ on the parent event … can create/edit schedule items.`'",
+     "verified": true
+    },
+    {
+     "claim": "AXIS(7) — no code branch distinguishing invite-created vs auto-provisioned persons was found affecting EVENT rights resolution; event/schedule_item rights derive purely from `_owner`/`_editor` refs on the event/season entities (conductor/admin roles) plus domain `_sharing`, independent of how the person/member entity was created.",
+     "evidence": "Searched src/lib/roster/memberLifecycle.ts, src/lib/invite/{redeem,inviteData}.ts existence (grep -rln 'auto-provision|invitation' found these three non-spec files) but did not find any conditional in eventDetail.ts, entuSeasons.ts, or rosterData.ts keyed on invite-vs-auto-provisioned provenance for event/schedule_item read/write rights.",
+     "verified": false
+    }
+   ],
+   "risks": [
+    "The event detail page's `loadForSelected` generation guard is hand-rolled inline (not routeLoad.ts) — a schedule_item load added carelessly (e.g. fired from a different function without capturing `g` at call time, mirroring the `writeGenerations`/tally pattern) could re-introduce a stale-collective-switch race even though the surrounding page already has the idiom to copy correctly.",
+    "schedule_item's per-db type id genuinely differs (polyphony 6a9ccea4ca67df980f4173c5 vs mvox_crede 6a9cceabca67df980f4173ee) — ANY hardcoded id literal (copy-pasted from a seed-result JSON during dev/testing) would silently work on one collective and 403/404 on the other; the fix is strict adherence to the existing `_type.string=schedule_item` query convention, with no exception review found that permits raw ids in src/.",
+    "AgendaMonthView.svelte and AgendaList.svelte share the exact same `filteredAgendaItems` array from one producer; if a future implementer adds schedule-item data onto the shared `AgendaItem` type (rather than a separate `scheduleItemsByEventId` record passed ONLY to `<AgendaList>`, mirroring how `worksByEventId`/`worksManage` are already NOT passed to `<AgendaMonthView>`), the #247 'exactly four things, no time' fence becomes only a template-level guarantee, not a data-level one — a later edit to AgendaMonthView.svelte would then have the schedule data sitting right there to accidentally render.",
+    "The event-detail-time regex assertions (`.match(/19:00/g)).toHaveLength(1)`, `.match(/7:00 PM/g)).toHaveLength(1)`) are scoped to the `event-detail-time` element specifically — this is SAFE only if the new schedule-item list is NOT nested inside that same element/testid; if an implementer folds the chronological list into the existing time block instead of giving it its own section/testid, these exact tests break the first time a schedule item's own clock reading matches the event's start time (a very likely fixture case, e.g. a 'Performance' item at the event's own start_datetime).",
+    "No evidence was found (nor explicitly ruled out) of a distinct rights path for invite-created vs auto-provisioned persons on event/schedule_item visibility — this axis is reported as 'not found' rather than 'confirmed absent'; memberLifecycle.ts/inviteData.ts/redeem.ts were not read in full and could still hold a provenance-conditional branch relevant to event rights that this sweep did not surface.",
+    "The full battery of agenda +page.svelte specs that render AgendaList/AgendaMonthView end-to-end (page.agenda-filter.spec.ts, page.agenda-admin.spec.ts, page.agenda-event-types.spec.ts, page.works-wiring.spec.ts, page.attendance-*.spec.ts, page.conductor-wiring.spec.ts, page.season-manage.spec.ts, page.season-create.spec.ts) were located but NOT individually inspected for exact-count/snapshot assertions that additive schedule elements could break — listed as candidates for the mechanical(1) sweep but unverified beyond their existence."
+   ]
+  }
+ ]
+}
