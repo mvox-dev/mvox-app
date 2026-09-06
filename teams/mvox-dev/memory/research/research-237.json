@@ -1,0 +1,156 @@
+{
+ "issue": 237,
+ "agents": [
+  {
+   "key": "sites",
+   "findings": [
+    {
+     "claim": "REPO GUARD passed: origin=mvox-app.git; HEAD=46be1b6b main.",
+     "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; git rev-parse HEAD -> 46be1b6bb5bbc3856d67877513efb63a0da28a52, 2026-09-06 23:26:32 +0300",
+     "verified": true
+    },
+    {
+     "claim": "SITE1 season-manage-series-delete idle trigger + armed pair, glyph &times;, shared scalar arm-state.",
+     "evidence": "src/routes/+page.svelte:6763-6771 idle button data-testid=season-manage-series-delete-{series.id}, class min-h-11 min-w-11 text-ink-2 hover:text-ink, body '&times;'; :6726-6761 confirm data-testid=season-manage-series-delete-confirm-{series.id} (text-red-700 underline, disabled/aria-busy on seasonManageDeletePendingId) + cancel data-testid=season-manage-series-delete-cancel-{series.id}; arm condition seasonManageDeleteArmed===series.id, seasonManageDeleteArmed declared $state<string|null>(null) at :2514",
+     "verified": true
+    },
+    {
+     "claim": "SITE2 season-manage-event-delete idle trigger + armed pair, glyph &times;, SAME shared scalar as site1.",
+     "evidence": "src/routes/+page.svelte:6895-6907 idle button data-testid=season-manage-event-delete-{event.id}, same classes/glyph; :6867-6893 confirm data-testid=season-manage-event-delete-confirm-{event.id} + cancel data-testid=season-manage-event-delete-cancel-{event.id}; arm condition seasonManageDeleteArmed===event.id (same variable as site1, one arm slot shared across both lists)",
+     "verified": true
+    },
+    {
+     "claim": "SITE3 event-detail-delete: icon-hidden inside a VISIBLE-label button (not icon-only), boolean arm-state, predates TrashIcon.",
+     "evidence": "src/routes/event/[id]/+page.svelte:3208-3216 idle button data-testid=event-detail-delete, no aria-label (name-from-contents), body <span aria-hidden=true>&times;</span>{m.event_detail_delete_label()}; :3178-3201 confirm data-testid=event-detail-delete-confirm + cancel data-testid=event-detail-delete-cancel; arm var `deleteArmed` = $state(false) at :222 (boolean, single control on page); raw &times; span (not <TrashIcon>) corroborates contract's 'predates TrashIcon shape' claim",
+     "verified": true
+    },
+    {
+     "claim": "SITE4 roster section-delete: literal Unicode X glyph (different char from other 3 sites), no 44x44 hit-area class, scalar per-row arm-state.",
+     "evidence": "src/routes/roster/+page.svelte:3651-3663 idle button data-testid=section-remove-{row.id}, aria-label+title=m.roster_section_remove, disabled={structuralWritePending||renamingSectionId===row.id||!canDelete}, class='rounded p-1 text-xs text-ink-2 hover:text-red-700...' (no min-h-11/min-w-11), body literal '✕' (U+2715, not &times; U+00D7); :3631-3649 confirm data-testid=section-remove-confirm-{row.id} (no disabled/aria-busy wiring) + cancel data-testid=section-remove-cancel-{row.id}; arm var pendingRemoveId=$state<string|null>(null) at :732; canDelete computed at :3179-3180 = memberCount===0 && children.length===0 && isOwnDbEntitySection(row.id)",
+     "verified": true
+    },
+    {
+     "claim": "#264 did not alter the section-delete control's gating; only indent/unindent/drag got new `damaged` gating; commit message confirms no gating/rights/schema change.",
+     "evidence": "git show 1170286 -- src/routes/roster/+page.svelte: diff adds `damaged` checks only to arrange-indent/arrange-unindent disabled lists and draggable attr (file lines ~3588,3607,3375,3379) plus new section-parent-damaged-{id} alert; section-remove-{row.id}'s disabled list unchanged (structuralWritePending||renamingSectionId===row.id||!canDelete, no damaged); commit body states verbatim 'No gating change, no rights change, no schema change.'",
+     "verified": true
+    },
+    {
+     "claim": "The #110 F1/F4 creator-only _owner rights-gap doc (Entu 403 for non-creating admin) is preserved verbatim near the section-delete control, untouched by #264 or later.",
+     "evidence": "src/routes/roster/+page.svelte:703-732 comment block, present unchanged at current HEAD; not touched in #264 diff (git show 1170286 above touches only arrange affordances, not this comment or the delete gating)",
+     "verified": true
+    },
+    {
+     "claim": "TrashIcon.svelte contract: single `class` prop, always aria-hidden, colour via inherited currentColor only.",
+     "evidence": "src/lib/components/icons/TrashIcon.svelte:1-33 — props: `let { class: className = undefined }: { class?: string|undefined } = $props()`; renders <svg data-icon=trash aria-hidden=true viewBox='0 0 24 24' fill=none stroke=currentColor stroke-width=2 ...> fixed trash path, class={className}; no size/title/onclick props",
+     "verified": true
+    },
+    {
+     "claim": "TrashIcon has exactly 2 live usages, both OUTSIDE the 4 Table-A sites: season-delete (#236, done) and schedule-item-remove (#262); both compose icon-aria-hidden-inside-button-with-aria-label identically, colour from the wrapping button's text-red-700/hover:text-red-800.",
+     "evidence": "grep -rn TrashIcon src --include=*.svelte -> only src/routes/+page.svelte:5896 (<TrashIcon class='h-5 w-5'/> inside button data-testid=season-manage-delete-season, class '...text-red-700 hover:text-red-800', armed via armSeasonManageSeasonDelete) and src/routes/event/[id]/+page.svelte:2843 (<TrashIcon class='h-4 w-4'/> inside button data-testid=`event-schedule-remove-${row.id}`, same red classes, armed via per-row scalar scheduleRemoveArmedId===row.id)",
+     "verified": true
+    },
+    {
+     "claim": "No shared delete-button component/snippet exists anywhere; every site hand-rolls button+glyph/TrashIcon+classes+arm-wiring. 'Defined once and reused' currently means only the icon SVG.",
+     "evidence": "find src/lib/components -iname '*delete*' -o -iname '*confirm*' -o -iname '*remove*' -> no output (empty); the 4 Table-A sites plus the 2 existing TrashIcon sites each declare their own button markup/classes/arm-state variable independently, as shown in findings 2-4 and 8",
+     "verified": true
+    },
+    {
+     "claim": "Arm-state shapes across the 4 sites are genuinely heterogeneous: sites1+2 share ONE scalar across two lists, site3 is an independent boolean, site4 is an independent scalar; a workable one-definition unit given this is a thin icon+button-class contract (each site keeps its own arm variable), not a single global arm-state.",
+     "evidence": "seasonManageDeleteArmed ($state<string|null>, :2514, shared by series+event rows per findings2-3) vs deleteArmed ($state(false), :222, site3) vs pendingRemoveId ($state<string|null>, :732, site4) — three independently-declared variables of two different shapes (boolean vs string|null), confirming no shared arm-state hook exists to unify beyond the icon component itself",
+     "verified": true
+    },
+    {
+     "claim": "TABLE B site1 — season-manage-conductor-remove (persisted unlink): single-click, no confirm step, non-red colour, glyph &times;.",
+     "evidence": "src/routes/+page.svelte:6193-6205, <li data-testid=season-manage-conductor-{personId}> ... <button data-testid=season-manage-conductor-remove-{personId} aria-label={m.season_conductor_remove(...)} class='flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink' onclick={() => onSeasonManageConductorRemove(personId)}>&times;</button>",
+     "verified": true
+    },
+    {
+     "claim": "TABLE B site2 — season-create-conductor-remove (draft list, season-create form): identical shape/glyph to site1, no confirm step.",
+     "evidence": "src/routes/+page.svelte:7259-7267, button data-testid=season-create-conductor-remove-{conductor.id}, same classes/glyph &times;, onclick={() => removeSeasonConductor(conductor.id)}",
+     "verified": true
+    },
+    {
+     "claim": "TABLE B site3 — event-create-conductor-remove (draft list, event-create form): identical shape/glyph, no confirm step.",
+     "evidence": "src/routes/+page.svelte:7639-7647, button data-testid=event-create-conductor-remove-{conductor.id}, same classes/glyph &times;, onclick={() => removeEventCreateConductor(conductor.id)}",
+     "verified": true
+    },
+    {
+     "claim": "Issue #261 (season-card header rework) is OPEN and NOT ready at current HEAD; not yet implemented.",
+     "evidence": "gh issue view 261 --json title,state -> state=OPEN; body opens 'Not `ready` — direction awaits Mihkel's nod'",
+     "verified": true
+    },
+    {
+     "claim": "#261's own scope statement places panel internals (series list, standalone events, etc.) OUT OF SCOPE, and its assessed region is the collapsed card HEADER ROW only (h2 title, the #236 TrashIcon season-delete button, +Hooaeg, gear) — a different region of the same file than Table-A sites 1+2.",
+     "evidence": "gh issue view 261 body: 'Explicitly out of scope: The open panel's internals (series list, standalone events, repertoire section, season fields) — not assessed in this pass.'; and 'Assessment...src/routes/+page.svelte ~5690–5940' vs sites 1/2 located at lines 6726-6907 in this sweep (well below that range)",
+     "verified": true
+    },
+    {
+     "claim": "[unverified as a forward guarantee] Sites 1+2 are therefore likely outside #261's landed blast zone, but #261 hasn't landed and the shared page-level state (seasonManageDeleteArmed, seasonManageDeletePendingId, seasonManageArmedSeriesCount) declared once for the whole page could still be touched by a #261 refactor even if the visual rows are untouched.",
+     "evidence": "seasonManageDeleteArmed/seasonManageDeletePendingId/seasonManageArmedSeriesCount declared at :2514/:2557/:2523, read by both the header row's season-delete button area (~5690-5940, #261's target) and by sites 1/2 (~6726-6907); no #261 diff exists yet to confirm either way",
+     "verified": false
+    },
+    {
+     "claim": "Sites 3 (event/[id]/+page.svelte) and 4 (roster/+page.svelte) are in different files entirely and structurally unreachable by #261's filed scope (which only touches +page.svelte's season-manage card header).",
+     "evidence": "file paths differ: event/[id]/+page.svelte and roster/+page.svelte vs #261's target src/routes/+page.svelte header region; confirmed by grep locations for each site's testids",
+     "verified": true
+    }
+   ],
+   "risks": [
+    "[speculative] #261 is unimplemented and not `ready`; its filed scope excludes panel internals so sites 1+2 SHOULD sit outside its blast zone, but shared page-level arm-state variables (seasonManageDeleteArmed, seasonManageDeletePendingId, seasonManageArmedSeriesCount) are declared once and read by both the header row (#261's target) and panel rows (sites 1+2) — a #261 refactor touching that shared state could still ripple into sites 1+2 even though the visual rows are out of #261's stated scope. Re-check site1/2 line numbers and variable names after #261 actually lands, before this sweep executes.",
+    "Glyph inconsistency going INTO the sweep: sites 1,2,3 use the HTML entity `&times;` (× U+00D7); site 4 (roster) uses the literal Unicode character `✕` (U+2715, MULTIPLICATION X) typed directly in the template — two different source representations, not one string to find/replace.",
+    "Site 4's idle trigger lacks the min-h-11/min-w-11 44×44 hit-area class the other three carry by explicit review precedent (#132/T6 F2); it uses `p-1` only. A glyph/colour-only swap should not silently add or omit sizing — flag for whoever authors the diff, though the contract scopes this sweep to glyph+colour only.",
+    "Site 4's armed confirm/cancel pair lacks the disabled/aria-busy wiring on pending-write state that sites 1-3 all have — a pre-existing gap orthogonal to this glyph sweep, noted for completeness.",
+    "No shared delete-button component exists; 'defined once and reused' currently describes only the icon SVG (TrashIcon.svelte). Any PR description claiming a fully shared control should scope itself to the icon only, unless the sweep is also expected to introduce a new shared button wrapper (not asked for in the contract).",
+    "TrashIcon's two current call sites use different icon sizes (h-5 w-5 vs h-4 w-4); the four Table-A sites will need a size decision per site, especially site3 which currently is NOT icon-only (has a visible text label beside the ×) unlike the icon-only rows at sites 1/2/4 — converting it to TrashIcon needs a decision on whether the visible label stays.",
+    "Table B's three conductor/draft-chip sites also currently render `&times;` — identical glyph text to sites 1/2/3's Table-A instances — so any broad text-based find/replace on `&times;` must be scoped by data-testid/site, not by matching the glyph string alone, or it will over-match Table B."
+   ]
+  },
+  {
+   "key": "blast-axes",
+   "findings": [
+    {
+     "claim": "REPO GUARD passed: origin is mvox-dev/mvox-app.git; main HEAD = 46be1b6bb5bbc3856d67877513efb63a0da28a52 at time of this research. #261 has NOT landed at this HEAD (no #261 commit in git log) — all line numbers/structure below are PRE-#261. Per #237's own release comment (\"Sequencing note for the build\": #261 should land before this sweep — same region, restructure before sweep) the #237 build must re-read the season-card region after #261 merges; every +page.svelte line number cited here will drift once #261 lands.",
+     "evidence": "git remote get-url origin -> https://github.com/mvox-dev/mvox-app.git; git rev-parse HEAD -> 46be1b6...; git log --oneline --all | grep -i 261 shows no #261 commit (only #262's args-262 commit matches '261' substring via SHA, not an issue commit)."
+    },
+    {
+     "claim": "(1) The four Table-A sites' CURRENT rendering, verbatim, at this HEAD:\n- season-manage-series-delete-{id} unarmed trigger: +page.svelte:6763-6771, class `flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink`, content `&times;` (bare glyph, name via aria-label at :6766). Armed confirm at :6727-6748 (text-red-700, testid `season-manage-series-delete-confirm-{id}`), cancel at :6749-6761.\n- season-manage-event-delete-{id} unarmed trigger: +page.svelte:6895-6907, same class shape (`text-ink-2 hover:text-ink`), `&times;`. Armed confirm :6868-6880 (text-red-700), cancel :6881-6893.\n- event-detail-delete unarmed trigger: event/[id]/+page.svelte:3208-3216, class `flex min-h-11 min-w-11 items-center gap-1 px-1 text-xs text-red-700 underline hover:text-red-800` — ALREADY red (differs from the other three, which are grey text-ink-2). Content: visible label `{m.event_detail_delete_label()}` + `<span aria-hidden=\"true\">&times;</span>` (name-from-contents, no aria-label per #157 rule) at :3214-3215. Armed confirm/cancel at :3180-3200.\n- roster section-remove-{row.id}: roster/+page.svelte:3651-3663, class `rounded p-1 text-xs text-ink-2 hover:text-red-700 disabled:cursor-default disabled:opacity-30 disabled:hover:text-ink-2`, content `✕` bare glyph, aria-label at :3654. NO min-h-11/min-w-11 (uses `p-1` only). Armed confirm :3632-3640 (text-red-700), cancel :3641-3649.\nSpec flips found: EXACTLY ONE literal glyph-content assertion exists across all four sites' own spec files — event/[id]/page.event-delete.spec.ts:296-309, test \"the delete NAMES itself...\", which does `[...btn.querySelectorAll('span')].find(el => el.textContent.includes('×'))` then asserts that span is non-undefined and `aria-hidden==='true'` (lines 305-309). This FLIPS: TrashIcon renders as an `<svg data-icon=\"trash\">`, not a `<span>` containing '×', so the querySelectorAll('span') search will find nothing — the assertion must be rewritten to look for `svg[data-icon=\"trash\"]` instead. The rest of that same test (aria-label null at :302, textContent contains the visible label at :303) STAYS unchanged. No other file among page.season-manage-delete.spec.ts, page.roster-arrange-crud.spec.ts, page.roster-empty-remove.spec.ts, page.roster-arrange.spec.ts, page.roster-indent.spec.ts, page.event-convert.spec.ts, page.season-repertoire.spec.ts contains a literal '×'/'✕' textContent/toContain assertion or a classList/getAttribute('class') assertion against any of the four Table-A testids (grep confirmed zero hits) — meaning testid-based flows, aria-label assertions, and the arm→confirm two-step assertions all STAY as-is; only the one span-vs-svg glyph-shape assertion above flips. (The ONE other literal '×'-glyph + classList pin in the codebase, page.season-manage-delete.spec.ts:1150-1153/1912-1926, targets `season-manage-delete-season` — the #236-done season control, explicitly NOT in #237's Table A — so it does not flip under this issue.)",
+     "evidence": "Read +page.svelte:6680-6919 and event/[id]/+page.svelte:3160-3229 and roster/+page.svelte:3595-3665 this turn for the four sites' current markup; grep across all season-manage/event-delete/roster spec files for '×'/'✕'/classList/toContain literal assertions this turn; Read event/[id]/page.event-delete.spec.ts:265-330 this turn for the one flip found."
+    },
+    {
+     "claim": "(2) Table-B negative fence: season-manage-conductor-remove-{personId} (+page.svelte:6195-6204, class `text-ink-2 hover:text-ink`, `&times;`), season-create-conductor-remove-{id} (+page.svelte:7262+), event-create-conductor-remove-{id} (+page.svelte:7642+) are referenced in page.season-create.spec.ts, page.event-create.spec.ts, page.agenda-admin.spec.ts, but NONE of those files contain a literal '×' textContent assertion or a class assertion pinning these three controls' current glyph/colour (grep for conductor-remove + '×'/classList/toContain across all three files returned zero hits). There is currently NO automated negative-fence test that would fail if a future change accidentally converted a Table-B control to a trashcan — the only protection is the #237 issue text itself and (per its own \"Done when\" list) a code comment #237 is supposed to add at one B site recording why it stays unswept; that comment does not exist yet at any of the three B sites (grep for '#237' in +page.svelte finds it only at :5883/:5886, a note about the ⚙ gear icon, not at any conductor-remove site).",
+     "evidence": "grep -n conductor-remove + '×'/classList/toContain across page.season-create.spec.ts, page.event-create.spec.ts, page.agenda-admin.spec.ts this turn (no hits); grep '#237' src/routes/+page.svelte this turn (only :5883/:5886)."
+    },
+    {
+     "claim": "(3) #261 collision zone, confirmed against #261's actual ruling comment (fetched via gh issue view 261, posted 2026-09-06T20:53:24Z, PO:Henry acting for Gama): '#261 restructures the season-card TITLE ROW / collapse-expand shell (relocates \"+ Hooaeg\" above the cards, makes the whole collapsed card the click target, moves the season-delete trashcan onto the opened title row, removes the gear) and explicitly states \"Panel internals stay out of scope\" for #261.' The season-manage-series-delete and season-manage-event-delete rows (Table-A sites #1/#2) live INSIDE the panel body (+page.svelte:6691-6776 and :6832-6911, both nested under the `{#if showSeasonManageGear}` panel block, itself gated by the gear/panel-open toggle #261 is removing/restructuring) — i.e. they sit inside the season-card region #261 touches, but as PANEL INTERNALS, which #261's own contract text says explicitly stay OUT of its scope. They are not part of the title row #261 rewrites. event-detail-delete (event/[id]/+page.svelte, a separate route entirely) and roster section-remove (roster/+page.svelte, a separate route entirely) are OUTSIDE #261's blast zone altogether — different files, different components. One adjacency note: the code comment at +page.svelte:5883-5886 says the gear's ⚙ glyph conversion was \"left for #237 to pick up alongside the rest of the emoji sweep\" — but #261's ruling says \"The gear is removed... The gear's deferred icon conversion, which rode with #237, dies with it,\" meaning that comment (and the implied gear-icon task) becomes moot once #261 lands; #237 should not attempt to icon-convert a gear that #261 deletes.",
+     "evidence": "gh issue view 261 --json comments fetched this turn (ruling text: 'Panel internals stay out of scope (a separate commission if he wants the same treatment there)'); Read +page.svelte:6680-6919 this turn showing series/event rows nested inside the season-manage panel body; +page.svelte:5883-5886 read this turn for the gear-conversion comment; #261's own text ('The gear is removed... dies with it') read this turn via gh."
+    },
+    {
+     "claim": "(4) TrashIcon.svelte (src/lib/components/icons/TrashIcon.svelte) is the one-definition currentColor SVG mechanism already built by #238 and already reused at two sites: season-manage-delete-season (+page.svelte:5887-5897, class `text-red-700 hover:text-red-800`, `<TrashIcon class=\"h-5 w-5\" />`) and event-schedule-remove-{id} on the event detail page's schedule panel (event/[id]/+page.svelte:2843, a DIFFERENT control from event-detail-delete, already converted by #262/#238 — not one of Table A's four sites, not touched by #237). The component is `aria-hidden=\"true\"` by construction, draws with `stroke=\"currentColor\"`, and exposes only a `class` prop for sizing — confirming the 'one-edit-colour-change' requirement's mechanism is real and already proven at two live call sites; #237's task is purely to add three more call sites (series-delete, event-delete-panel, roster section-remove) plus swap the span in event-detail-delete, no new component work needed. Colour reality per site: event-detail-delete is ALREADY `text-red-700 hover:text-red-800` (only the glyph needs swapping, not the colour); the other three (series-delete, event-delete-panel, roster section-remove) are currently grey/muted (`text-ink-2` base) and need BOTH the glyph AND the colour class changed to the destructive-red token pair.",
+     "evidence": "Read TrashIcon.svelte in full this turn; read +page.svelte:5855-5897 (season delete, done) and event/[id]/+page.svelte:2799-2843 (schedule-remove, already TrashIcon, not in Table A) this turn; compared class strings across all four Table-A sites read in finding (1)."
+    },
+    {
+     "claim": "(5) Locales: all four controls' accessible names come from parameterised message keys (`season_manage_series_delete`, `season_manage_event_delete`, `event_detail_delete_label`, `roster_section_remove` — verified present in messages/en.json at lines 419, 418, 353, 197 respectively), none of which reference the glyph itself; they are name-carrying strings (\"Delete {name}\" / \"Delete event\" / \"Remove {name}\") independent of whether the visual marker is `×`/`✕` or an SVG. No new key is needed and the issue's own contract states this explicitly (\"No message keys are added, removed or edited — this is a purely visual sweep\").",
+     "evidence": "grep messages/en.json for the four keys this turn; confirmed values are glyph-independent text."
+    },
+    {
+     "claim": "(6) Rights gates, one per site, none altered by a glyph swap: series-delete + event-delete-panel both render only inside the season-manage panel, gated by `showSeasonManageGear = manageableSeasonId !== null && manageableSeasonRights === 'editor'` (+page.svelte:2463-2465) — an editor-only gate. event-detail-delete renders only under `{#if isEditor}` (event/[id]/+page.svelte:3173), where `isEditor = manageRightsFrom(detail.ownerIds, detail.editorIds, selected.personId) === 'editor'` (event/[id]/+page.svelte:334-340, owner-or-editor). roster section-remove renders only inside the arrange view-mode chip, gated by `{#if admin === 'admin'}` at roster/+page.svelte:3124 (the arrange chip itself; section-remove-{id} sits inside that mode's row template at :3651). None of these four gate expressions are touched by swapping `&times;`/`✕` text content for a `<TrashIcon>` component and a colour class — the swap is inside the same conditionally-rendered button element, the gate wraps the button, not its content.",
+     "evidence": "Read +page.svelte:2455-2465 (showSeasonManageGear); event/[id]/+page.svelte:321-340 (isEditor/canSeeTally); roster/+page.svelte:3080-3130 (admin==='admin' gate on arrange chip) this turn."
+    },
+    {
+     "claim": "(7) Touch targets: series-delete unarmed (min-h-11 min-w-11, 44px, met), event-delete-panel unarmed (min-h-11 min-w-11, met), event-detail-delete unarmed (min-h-11 min-w-11, met) all already satisfy the house 44px minimum. roster section-remove-{row.id} does NOT — its class is `rounded p-1 text-xs ...` with no min-h-11/min-w-11 token, i.e. roughly a 20px hit area (matching #237's own 2026-09-05 scope-addition comment quoting the same class string and the #252 defect shape). This is the exact standing note from #252 (\"roster delete ✕ below touch standard, untouched\") — #237's issue body was explicitly amended (2026-09-05 comment, folded into the issue) to fix this in the SAME pass as the glyph swap: 'section-remove-{row.id} gets the comparator-exact hit area — flex min-h-11 min-w-11 items-center justify-center' plus 'tone follows #252's precedent: text-ink-2 -> the destructive-red treatment'. So the glyph swap and the #252 touch-target/tone fix are BOTH now in #237's scope for this one site, per the issue's own text — not something to flag-don't-fix; the issue already folded it in. Checked: no existing spec in page.roster-arrange-crud.spec.ts / page.roster-indent.spec.ts pins section-remove's current class/size (only pins indent/unindent's #252 fix, a different control pair), so this fix is free to land without flipping any existing assertion.",
+     "evidence": "Read roster/+page.svelte:3651-3663 this turn (current class string, no min-h/min-w tokens); gh issue view 237 comments (2026-09-05T17:19:46Z) fetched this turn quoting the identical class string and folding the fix into #237's scope; grep for classList/min-h-11/min-w-11 against section-remove in page.roster-arrange-crud.spec.ts and page.roster-indent.spec.ts this turn (zero hits — indent/unindent #252 pins at page.roster-indent.spec.ts:1258-1327 are a separate control, not section-remove)."
+    },
+    {
+     "claim": "(8) Multi-collective: none expected and none found — all four onclick handlers (`armSeasonManageSeriesDelete`, `armSeasonManageDelete`, `armDelete`, `armRemove`) are pre-existing functions unchanged by a glyph/colour swap; the swap touches only the button's child markup (text node -> `<TrashIcon>`) and its class string, not any data-fetch, state variable, or org/collective-scoping logic.",
+     "evidence": "grep onclick handlers for the four unarmed triggers across +page.svelte/event/[id]/+page.svelte/roster/+page.svelte this turn — all wired to already-existing arm* functions, none newly touched by this finding set."
+    }
+   ],
+   "risks": [
+    "Every +page.svelte line number cited for the season-manage panel (series-delete, event-delete-panel, season delete, gear comment, conductor-remove chips) is PRE-#261 — since #261 has not landed at HEAD 46be1b6, #261's restructure (relocating '+ Hooaeg', moving the season trashcan to the opened title row, removing the gear) will shift every one of these line numbers before #237 actually builds; the #237 dev slice must re-grep by testid at #261's post-merge HEAD rather than trusting these line numbers.",
+    "No automated negative-fence test currently exists for Table B (conductor-remove sites) — a future GREEN pass could accidentally sweep them into trashcans without any spec failing; worth either adding one negative assertion as part of #237's own GREEN work or relying purely on code-review discipline plus the required code comment the issue's 'Done when' list already asks for.",
+    "The one confirmed spec flip (event/[id]/page.event-delete.spec.ts:296-309) is a `querySelectorAll('span')` search for a '×'-containing span; if GREEN implements the swap with the glyph wrapped differently (e.g. still inside a span around the TrashIcon) the exact rewrite needed may differ slightly from 'search for svg[data-icon=\"trash\"]' — RED should restate the assertion against the actual TrashIcon usage pattern already proven at +page.svelte:5887-5897 (svg data-icon=\"trash\", aria-hidden, currentColor, no hex colours) rather than assume the exact DOM shape without re-checking after implementation.",
+    "The stale code comment at +page.svelte:5883-5886 (gear icon conversion 'left for #237') will become misleading dead guidance once #261 removes the gear entirely — flagging so the #237 dev slice does not attempt to action it (harmless if simply ignored, but worth a one-line comment cleanup when #261's diff is being reviewed)."
+   ]
+  }
+ ]
+}
