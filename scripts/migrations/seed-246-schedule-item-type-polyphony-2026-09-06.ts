@@ -26,7 +26,7 @@ const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
 
 function writeLedger(payload: Record<string, unknown>): string {
 	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const dir = join('scripts', 'migrations', 'ledgers');
+	const dir = join('scripts', 'migrations', 'seed-results');
 	const filename = `seed-246-schedule-item-type-polyphony-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`;
 	const filePath = join(dir, filename);
 	mkdirSync(dir, { recursive: true });

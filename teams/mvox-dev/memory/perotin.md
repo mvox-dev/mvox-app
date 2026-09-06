@@ -2,7 +2,7 @@
 
 (*MVOX:Perotin*)
 
-## [WIP] Schema-of-record home proposal — drafted, awaiting Gama/PO decision (2026-09-06)
+## [DONE] Schema-of-record home proposal — filed as #263, ruled, follow-ups landed (2026-09-06)
 
 Dispatched by team-lead to draft the durable schema-of-record home proposal (common-prompt.md
 "Schema Evolution" item 5, open since the 2026-09-06 upstream-retirement ruling), building on the
@@ -30,13 +30,21 @@ routing to Gama; condensed here for future-me:
    `.md` is the **shape-of-record** (current truth, kept in sync with what's provisioned). Each
    `MvoxEntityDef.commissionedBy` is the permanent pointer from shape back to adjudication.
 4. **mvox_crede-inclusion default** — named as a SEPARATE open question, not resolved by 1–3:
-   should new types auto-provision onto mvox_crede (real pilot, real PII) alongside polyphony, or
-   does every type need an explicit separate call? Recommended: **no default-yes** — #246 itself
-   named both dbs explicitly rather than assuming inclusion; keep that deliberate checkpoint given
-   mvox_crede's real-PII posture (register below).
+   should new types auto-provision onto mvox_crede alongside polyphony, or does every type need an
+   explicit separate call? Recommended: **no default-yes** — #246 itself named both dbs explicitly
+   rather than assuming inclusion; keep that deliberate checkpoint.
+   ~~given mvox_crede's real-PII posture~~ **[CORRECTED 2026-09-06]**: my original grounds cited
+   mvox_crede's real-PII posture — #263's ruling on this point explicitly declined that premise
+   (unconfirmed-pending-Mihkel, see the register + Session MVOX-12 correction below). The
+   no-default-yes recommendation still stands, ratified, but on **commission-audience grounds**
+   instead (every new type getting a deliberate per-db call is good practice for a distinct
+   real-world pilot deployment regardless of its data-sensitivity status) — not on an unconfirmed
+   PII claim.
 
-Not self-posted anywhere — draft only, routing is team-lead/Gama's call (comment on #246 vs. new
-issue).
+Not self-posted anywhere — draft only, routing is team-lead/Gama's call. **[RULED 2026-09-06,
+#263]**: all four points approved, home proposal ratified as #246 proved it. Two follow-ups
+landed: ledger fold-back (#246's 4 ledger files moved `ledgers/` → `seed-results/`, path refs in
+both seed-246 scripts updated) and this privacy-register correction.
 
 ## [DONE] #246 schedule_item — home settled, built, seeded LIVE on both dbs (2026-09-06)
 
@@ -197,9 +205,21 @@ reader can tell which without reading the source — e.g. `propDefTargets` (inte
 
 ## [CHECKPOINT] Session MVOX-12 startup (2026-09-01) — mvox_crede gap surfaced
 
+> **[CORRECTION 2026-09-06, #263 PO ruling]**: the bullet below asserts "mvox_crede is real, not
+> synthetic" / "real member names + real emails" as settled fact. Gama's #263 ruling explicitly
+> did NOT ratify that premise — the standing record is Mihkel's all-test-data correction; a
+> posture change (declaring mvox_crede's data real) is his to make, surfaced through the PO
+> channel, not something I should treat as confirmed off a runbook read. Read this entry (and the
+> "CREDE PII audit" entry below it) as **unconfirmed-pending-Mihkel**, not asserted fact, until his
+> word lands. The precautionary actions taken under the old premise (externalizing seed-186's
+> name/email fields, gitignoring `seed-results/` for CREDE runs) stay in place — caution costs
+> little and reversing it isn't urgent — but don't cite "mvox_crede holds real PII" as settled
+> going forward. (*MVOX:Perotin*)
+
 Fresh spawn. Standing-concerns scan found two things not yet in this scratchpad:
 
-- **mvox_crede is real, not synthetic.** Per `docs/runbook/provisioning.md` + team-lead.md:
+- **mvox_crede is real, not synthetic** [now: unconfirmed-pending-Mihkel, see correction above].
+  Per `docs/runbook/provisioning.md` + team-lead.md:
   a second live Entu database, "Kammerkoor Crede" (real choir pilot), provisioned 2026-08-27,
   re-seeded clean 2026-08-29 — 21/21/21 person/member/profile, 7 sections, 19 menus, 1 library,
   41 events. Migrated from polyphony.uk (their prior Cloudflare/D1 system) — **real member names
@@ -610,6 +630,13 @@ artifacts + #37/#54 issue comments ARE the audit trail. Standing patterns worth 
   (`6a2fc05e...5ddc`), Test User (`6a097dcc...d6dd`, no OAuth link, pre-add_user-reversibility
   fixture), fixture "B" (`6a7591cc...8de`, real T4.9-walkthrough OAuth signup). All real,
   team-owned, out of the synthetic-seed population.
+- **mvox_crede — unconfirmed-pending-Mihkel (corrected 2026-09-06, #263 PO ruling).** The
+  2026-09-01 "real choir pilot, real member names + real emails" call (see the [CORRECTION] on
+  the Session MVOX-12 checkpoint below) was NOT ratified by #263 — Gama's ruling on point 4
+  explicitly declined the real-PII premise as grounds; a posture change is Mihkel's to declare.
+  Do not assert mvox_crede holds real PII as settled fact until his word lands through the PO
+  channel. The existing precautionary handling (redacted seed-186, gitignored CREDE result
+  artifacts) stays as-is — low-cost caution, not a claim.
 
 ## Authorization gate — canonical statement (cross-ref `[[feedback_authorization_gate]]`)
 
