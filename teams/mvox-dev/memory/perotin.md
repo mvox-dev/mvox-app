@@ -166,7 +166,10 @@ routing to Gama; condensed here for future-me:
    no-default-yes recommendation still stands, ratified, but on **commission-audience grounds**
    instead (every new type getting a deliberate per-db call is good practice for a distinct
    real-world pilot deployment regardless of its data-sensitivity status) — not on an unconfirmed
-   PII claim.
+   PII claim. **[UPDATE 2026-09-06 later same day]**: the PII claim is no longer unconfirmed — see
+   the privacy boundary register below, Mihkel confirmed crede real-PII on #265. Doesn't change
+   this recommendation's grounds (still commission-audience, now also independently reinforced by
+   the confirmed-real-PII fact rather than resting on it).
 
 Not self-posted anywhere — draft only, routing is team-lead/Gama's call. **[RULED 2026-09-06,
 #263]**: all four points approved, home proposal ratified as #246 proved it. Two follow-ups
@@ -343,10 +346,19 @@ reader can tell which without reading the source — e.g. `propDefTargets` (inte
 > little and reversing it isn't urgent — but don't cite "mvox_crede holds real PII" as settled
 > going forward. (*MVOX:Perotin*)
 
+> **[SECOND CORRECTION 2026-09-06, later same day — Mihkel ruling on #265, comment 5561632474]**:
+> the correction immediately above is itself superseded. Mihkel's word landed: "we are operating
+> in entu's 'crede' database. and its a reallife pilot, PII is real. sysnthetic data were in entu's
+> 'polyphony' database." The bullet below was RIGHT all along on the facts, WRONG only in citing
+> them as settled before the PO channel had confirmed them — a timing/process gap, not a factual
+> one. Current state: **mvox_crede = real PII, confirmed; polyphony = synthetic, confirmed.** See
+> the privacy boundary register for the canonical statement. (*MVOX:Perotin*)
+
 Fresh spawn. Standing-concerns scan found two things not yet in this scratchpad:
 
-- **mvox_crede is real, not synthetic** [now: unconfirmed-pending-Mihkel, see correction above].
-  Per `docs/runbook/provisioning.md` + team-lead.md:
+- **mvox_crede is real, not synthetic** [CONFIRMED 2026-09-06, see second correction above — this
+  read the facts right the first time, just ahead of PO confirmation]. Per `docs/runbook/
+  provisioning.md` + team-lead.md:
   a second live Entu database, "Kammerkoor Crede" (real choir pilot), provisioned 2026-08-27,
   re-seeded clean 2026-08-29 — 21/21/21 person/member/profile, 7 sections, 19 menus, 1 library,
   41 events. Migrated from polyphony.uk (their prior Cloudflare/D1 system) — **real member names
@@ -766,13 +778,24 @@ artifacts + #37/#54 issue comments ARE the audit trail. Standing patterns worth 
   (`6a2fc05e...5ddc`), Test User (`6a097dcc...d6dd`, no OAuth link, pre-add_user-reversibility
   fixture), fixture "B" (`6a7591cc...8de`, real T4.9-walkthrough OAuth signup). All real,
   team-owned, out of the synthetic-seed population.
-- **mvox_crede — unconfirmed-pending-Mihkel (corrected 2026-09-06, #263 PO ruling).** The
+- **mvox_crede — CONFIRMED real PII (2026-09-06, Mihkel ruling on #265, comment 5561632474,
+  22:32).** Verbatim: "we are operating in entu's 'crede' database. and its a reallife pilot, PII
+  is real. sysnthetic data were in entu's 'polyphony' database." This SETTLES what the entry below
+  had marked unconfirmed-pending-Mihkel — the posture flips the other way from the #263-era
+  reading: **polyphony is the synthetic one; mvox_crede is real, real members, real PII.** The
+  2026-08-05 routine-ops pre-authorization applies to polyphony ONLY, explicitly. Precautionary
+  handling already in place for CREDE (redacted seed-186, gitignored CREDE result artifacts) was
+  the right call all along — now confirmed necessary, not just cautious. **My own probe scoping
+  throughout has stayed polyphony-only** (#265's mixed-sharing probe, all #264 read-only work) —
+  unaffected by this correction. Superseded entry, kept below for the dated audit trail:
+
+  ~~mvox_crede — unconfirmed-pending-Mihkel (corrected 2026-09-06, #263 PO ruling). The
   2026-09-01 "real choir pilot, real member names + real emails" call (see the [CORRECTION] on
   the Session MVOX-12 checkpoint below) was NOT ratified by #263 — Gama's ruling on point 4
   explicitly declined the real-PII premise as grounds; a posture change is Mihkel's to declare.
   Do not assert mvox_crede holds real PII as settled fact until his word lands through the PO
   channel. The existing precautionary handling (redacted seed-186, gitignored CREDE result
-  artifacts) stays as-is — low-cost caution, not a claim.
+  artifacts) stays as-is — low-cost caution, not a claim.~~
 
 ## Authorization gate — canonical statement (cross-ref `[[feedback_authorization_gate]]`)
 
