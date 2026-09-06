@@ -1,0 +1,83 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "authorization": "PO-Approved 2026-09-06 mvox-app#265 comment 5561754737 (Mihkel shape review)",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "databaseTypeId": "69bcfd8e9c031ab8e6ce8027",
+  "databaseSharingResolvedLive": "public",
+  "adminMemberRecordTypeId": "<dry-run-unresolved>",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "admin_member_record",
+      "outcome": "dry-run",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.person",
+      "outcome": "dry-run",
+      "after": {
+        "type": "reference",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.name",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.phone",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.email",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.birthdate",
+      "outcome": "dry-run",
+      "after": {
+        "type": "datetime",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "database.roster_show_real_names",
+      "outcome": "dry-run",
+      "after": {
+        "type": "boolean",
+        "sharing": "public",
+        "mandatory": false
+      }
+    }
+  ],
+  "exitCode": 0
+}
