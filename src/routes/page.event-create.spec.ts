@@ -286,6 +286,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { HOURS_24, MINUTES_5, fillDateTime, fillTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
@@ -526,12 +527,10 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Open the season-manage panel (T3's gear), then its [+ Event]. */
+/** Open the season-manage panel (#261: expand the season card — routed
+ *  through the ONE shared helper), then its [+ Event]. */
 async function openFormFromPanel(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-add-event')).not.toBeNull();
 	});
@@ -607,15 +606,15 @@ function lastCreateInput(): CreateEventInput {
 // ── the entry points: rights-gated agenda button + the panel's [+ Event] ────────
 
 describe('agenda — the event-creation entry point (rights gate — #213: the gear + the panel [+ Event])', () => {
-	it('season editor + current season: the GEAR renders (page-level, never inside an agenda row); the page-level event-create is GONE; merely rendering writes nothing', async () => {
+	it('season editor + current season: the season CARD renders (page-level, never inside an agenda row); the page-level event-create is GONE; merely rendering writes nothing', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		// #213 — event creation moved INSIDE the panel; no standalone button.
 		expect(q(container, 'event-create')).toBeNull();
-		const control = q(container, 'season-manage-gear') as HTMLElement;
+		const control = q(container, 'season-card-expand') as HTMLElement;
 		expect(control.closest('[data-testid^="agenda-row-"]')).toBeNull();
 		expect(control.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
 
@@ -623,15 +622,15 @@ describe('agenda — the event-creation entry point (rights gate — #213: the g
 		expect(q(container, 'event-create-form')).toBeNull();
 	});
 
-	it('NON-editor: the gear does NOT render — fail-closed, same as every other rights gate', async () => {
+	it('NON-editor: the card does NOT render — fail-closed, same as every other rights gate', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
 		const container = await renderReady();
 
-		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-card-expand')).toBeNull();
 		expect(q(container, 'event-create')).toBeNull();
 	});
 
-	it('the only season LAPSED yesterday and nothing is queued behind it: the gear RENDERS — `manageableSeason` falls back to that season, and it is still where a new event belongs', async () => {
+	it('the only season LAPSED yesterday and nothing is queued behind it: the card RENDERS — `manageableSeason` falls back to that season, and it is still where a new event belongs', async () => {
 		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(true));
 		const container = await renderReady();
 
@@ -639,13 +638,13 @@ describe('agenda — the event-creation entry point (rights gate — #213: the g
 			expect(q(container, 'agenda-empty')).not.toBeNull();
 		});
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		// The rights rode along on the season list — no database-entity round-trip.
 		expect(resolveManageRightsMock).not.toHaveBeenCalled();
 	});
 
-	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the gear', async () => {
+	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the card', async () => {
 		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(false));
 		const container = await renderReady();
 
@@ -657,15 +656,15 @@ describe('agenda — the event-creation entry point (rights gate — #213: the g
 		await waitFor(() => {
 			expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
 		});
-		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-card-expand')).toBeNull();
 	});
 
-	it('an upcoming season hides [+ Season] (T2) but NOT the gear — the two gates are independent', async () => {
+	it('an upcoming season hides [+ Season] (T2) but NOT the card — the two gates are independent', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		expect(q(container, 'season-create')).toBeNull();
 	});

@@ -38,9 +38,10 @@
 //                                        announcement (review F5).
 //
 //   BEHAVIOR
-//     - the affordances live INSIDE the rights-gated panel: no gear for a
-//       non-editor → no panel → no delete buttons anywhere (fail-closed, same
-//       as every other rights gate).
+//     - the affordances live INSIDE the rights-gated panel: no season card for
+//       a non-editor → no panel → no delete buttons anywhere (fail-closed,
+//       same as every other rights gate; #261 — the gear is gone, the card
+//       itself is the way in).
 //     - merely rendering the panel deletes nothing.
 //     - #197 review F2: the × ARMS a two-step confirm and writes nothing; only
 //       the confirm button calls the data layer. Cancel disarms. Closing the
@@ -207,6 +208,12 @@ import {
 	EventCascadePartialError,
 	SeriesCascadePartialError
 } from '$lib/seasons/deleteErrors';
+import {
+	openSeasonCardPanel,
+	collapseSeasonCard,
+	SEASON_CARD_EXPAND,
+	SEASON_CARD_COLLAPSE
+} from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
@@ -400,15 +407,10 @@ async function armAndConfirmDelete(
 	);
 }
 
-/** Click the gear, wait for the panel AND its two lists. */
+/** #261 — expand the season card (the gear is gone; routed through the ONE
+ *  shared helper), wait for the panel AND its two lists. */
 async function openPanelWithRows(container: HTMLElement): Promise<HTMLElement> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-panel')).not.toBeNull();
-	});
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
 	});
@@ -421,7 +423,7 @@ async function openPanelWithRows(container: HTMLElement): Promise<HTMLElement> {
 // ── #197: the delete affordances exist, inside the rights-gated panel ───────────
 
 describe('agenda — #197 delete buttons render in the season-manage panel (integration: real route)', () => {
-	it('editor opens the gear panel: EVERY series row and EVERY standalone-event row carries its own delete BUTTON with an accessible name, inside the panel; merely rendering deletes nothing', async () => {
+	it('editor expands the season card: EVERY series row and EVERY standalone-event row carries its own delete BUTTON with an accessible name, inside the panel; merely rendering deletes nothing', async () => {
 		const container = await renderReady();
 		const panel = await openPanelWithRows(container);
 
@@ -449,10 +451,11 @@ describe('agenda — #197 delete buttons render in the season-manage panel (inte
 		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
 	});
 
-	it('NON-editor: no gear, no panel — and no delete affordance ANYWHERE on the page (fail-closed)', async () => {
+	it('NON-editor: no card, no panel — and no delete affordance ANYWHERE on the page (fail-closed)', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
 		const container = await renderReady();
 
+		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
 		expect(q(container, 'season-manage-gear')).toBeNull();
 		expect(container.querySelector('[data-testid^="season-manage-series-delete-"]')).toBeNull();
 		expect(container.querySelector('[data-testid^="season-manage-event-delete-"]')).toBeNull();
@@ -538,13 +541,10 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 			expect(q(container, 'season-manage-series-series-1')).toBeNull();
 		});
 
-		// #213 — the panel has no internal close; the gear toggles it shut.
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-panel')).toBeNull();
-		});
+		// #261 — the panel has no internal close; the title row folds it shut.
+		await collapseSeasonCard(container);
 
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await openSeasonCardPanel(container);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 		});
@@ -715,18 +715,15 @@ describe('agenda — #197 delete is a TWO-step confirm, never a single tap', () 
 		expect(q(container, 'season-manage-series-delete-confirm-series-1')).toBeNull();
 	});
 
-	it('closing the panel (via the gear, #213) disarms — reopening does not present a primed Delete where the row’s × was', async () => {
+	it('closing the panel (via the title row, #261) disarms — reopening does not present a primed Delete where the row’s × was', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
 		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
-		// #213 — the panel has no internal close; the gear toggles it shut.
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-panel')).toBeNull();
-		});
+		// #261 — the panel has no internal close; the title row folds it shut.
+		await collapseSeasonCard(container);
 
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await openSeasonCardPanel(container);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
 		});
@@ -1086,8 +1083,10 @@ interface PageScope {
 	repertoireItems: number;
 }
 
-/** Tap the season's own ×, wait for the confirm that replaces it. */
+/** Tap the season's own trashcan (#261: it lives on the OPENED title row, so
+ *  expand the card first), wait for the confirm that replaces it. */
 async function armSeasonDelete(container: HTMLElement): Promise<void> {
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-delete-season')).not.toBeNull();
 	});
@@ -1125,54 +1124,58 @@ function hangingDeleteSeason() {
 	};
 }
 
-describe("agenda — #217/#236 the SEASON's delete control lives in the card HEADER row", () => {
-	it('editor, panel COLLAPSED: season-manage-delete-season renders in the header row as a real RED-trashcan button with the same accessible name; merely rendering writes and reads nothing', async () => {
+describe("agenda — #261 the SEASON's delete control lives on the OPENED title row", () => {
+	it('editor, card COLLAPSED: NO season-manage-delete-season anywhere — the collapsed face carries no controls beyond the expand target (#261 reverses #236’s collapsed reachability)', async () => {
 		const container = await renderReady();
 
-		// #236 — no panel open: the delete is reachable from the collapsed card.
 		await waitFor(() => {
-			expect(q(container, 'season-manage-delete-season')).not.toBeNull();
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
 		});
 		expect(q(container, 'season-manage-panel'), 'the panel stays closed').toBeNull();
-
-		const btn = q(container, 'season-manage-delete-season') as HTMLElement;
-		expect(btn.tagName).toBe('BUTTON');
-		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
-		expect(toolbar, 'the header row exists').not.toBeNull();
-		expect(toolbar.contains(btn), '#236 — the delete sits IN the header row').toBe(true);
-		// #217 review F3 — the name comes from the SEASON's own key, not the
-		// event row's: the two read alike today, so borrowing the event key
-		// leaves this control one copy edit away from announcing a season as an
-		// event. #236 keeps testid AND aria-label byte-identical.
-		const label = btn.getAttribute('aria-label') ?? '';
-		expect(label).toContain('season_manage_season_delete');
-		expect(label).toContain('Season 2026');
-		// #236 — a red TRASHCAN, not the old ×: colour from the existing
-		// destructive token the confirm half already uses (no new palette).
-		expect(Array.from(btn.classList), '#236 — red from text-red-700').toContain('text-red-700');
-		expect(btn.textContent ?? '', '#236 — the × glyph is retired').not.toContain('×');
+		expect(
+			q(container, 'season-manage-delete-season'),
+			'#261 — the trashcan is OFF the collapsed face entirely'
+		).toBeNull();
+		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
 
 		expect(deleteSeasonMock).not.toHaveBeenCalled();
 		expect(countSeasonScopeMock).not.toHaveBeenCalled();
 	});
 
-	it('editor, panel OPEN: the delete stays in the header row — it is NOT a descendant of the panel any more (the panel h2 row is gone)', async () => {
+	it('editor, panel OPEN: the delete renders on the title row as a real RED-trashcan button with the same accessible name — NOT a descendant of the panel (no <h2> inside the panel either)', async () => {
 		const container = await renderReady();
 		const panel = await openPanelWithRows(container);
 
 		const btn = q(container, 'season-manage-delete-season') as HTMLElement;
 		expect(btn).not.toBeNull();
-		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
-		expect(toolbar.contains(btn), '#236 — header row, both states').toBe(true);
-		expect(panel.contains(btn), '#236 — no longer inside the panel').toBe(false);
-		// The panel's own header row went away entirely: no <h2> left inside it.
+		expect(btn.tagName).toBe('BUTTON');
+		expect(panel.contains(btn), '#261 — title row, never panel internals').toBe(false);
+		// The title row is where the collapse control lives — same row.
+		const collapse = q(container, SEASON_CARD_COLLAPSE) as HTMLElement;
+		expect(collapse, 'the opened title row exists').not.toBeNull();
+		expect(
+			btn.parentElement?.contains(collapse),
+			'#261 — the delete sits ON the title row, beside the name'
+		).toBe(true);
+		// #217 review F3 — the name comes from the SEASON's own key, not the
+		// event row's. #261 keeps testid AND aria-label byte-identical.
+		const label = btn.getAttribute('aria-label') ?? '';
+		expect(label).toContain('season_manage_season_delete');
+		expect(label).toContain('Season 2026');
+		// #236 — a red TRASHCAN, not the old ×.
+		expect(Array.from(btn.classList), '#236 — red from text-red-700').toContain('text-red-700');
+		expect(btn.textContent ?? '', '#236 — the × glyph is retired').not.toContain('×');
+		// The panel's own header row stays gone: no <h2> left inside it.
 		expect(panel.querySelector('h2'), '#236 — the panel h2 row is deleted').toBeNull();
+
+		expect(deleteSeasonMock).not.toHaveBeenCalled();
 	});
 
-	it('NON-editor: no season delete affordance ANYWHERE on the page (fail-closed — #236 the header gate is the gear’s gate)', async () => {
+	it('NON-editor: no season delete affordance ANYWHERE on the page (fail-closed — the title row rides the card’s rights gate)', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
 		const container = await renderReady();
 
+		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
 		expect(q(container, 'season-manage-gear')).toBeNull();
 		expect(q(container, 'season-manage-delete-season')).toBeNull();
 		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
@@ -1670,37 +1673,37 @@ describe('agenda — #217 a FAILED season cascade lands in the delete-error slot
 	});
 });
 
-// ── #236 — the delete is reachable from the COLLAPSED card ─────────────────────
+// ── #261 — the season delete runs from the OPENED row; feedback survives ──────
 //
-// PO ruling on the issue (accepted, no extra guard): the trashcan lives in the
-// header row, so the whole arm → confirm → cascade can run with the panel
-// closed. The two-step is byte-identical; what #236 adds is FEEDBACK the
-// collapsed state can actually show (G2: the season error branch + the counter
-// at card level) and an Escape that still means something out there (G1:
-// routed through the EXISTING closeSeasonManagePanel(), which already clears
-// the armed state and returns focus — no separate disarm branch).
+// #236 made the whole arm → confirm → cascade reachable from the COLLAPSED
+// card; #261 REVERSES that (the collapsed face is the name alone — the pins
+// above). What #236's G2 ruling established and #261 preserves is the
+// FEEDBACK placement: the counter and the season-branch error render at CARD
+// level, so a cascade whose card gets folded shut mid-run stays visible.
 
-describe('agenda — #236 the season delete runs from the COLLAPSED card with visible feedback', () => {
-	it('collapsed arm re-reads the LIVE scope, the armed pair replaces the trashcan IN the header row, and the cascade + card-level counter + announcement all run without the panel ever opening', async () => {
+describe('agenda — #261 the season delete arms on the OPENED row; card-level feedback survives a collapse', () => {
+	it('arming on the opened row re-reads the LIVE scope; the armed pair renders ON the title row beside the name; the cascade + card-level counter run, and a MID-CASCADE collapse keeps the counter visible', async () => {
 		const run = hangingDeleteSeason();
 		const container = await renderReady();
 
 		await armSeasonDelete(container);
-		expect(q(container, 'season-manage-panel'), 'arming must not open the panel').toBeNull();
+		expect(q(container, 'season-manage-panel'), 'arming happens with the panel open').not.toBeNull();
 		await waitFor(() => {
 			expect(countSeasonScopeMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 		});
-		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
 		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
 		const cancel = q(container, 'season-manage-delete-season-cancel') as HTMLElement;
-		expect(toolbar.contains(confirm), 'the armed pair replaces the trashcan in place').toBe(
-			true
-		);
-		expect(toolbar.contains(cancel)).toBe(true);
+		const collapse = q(container, SEASON_CARD_COLLAPSE) as HTMLElement;
+		expect(collapse, 'the title row survives arming (never a title-row swap)').not.toBeNull();
+		expect(collapse.textContent, 'the season name stays in place').toContain('Season 2026');
 		expect(
-			q(container, 'season-manage-delete-season'),
-			'the trashcan is GONE while armed (#197 idiom)'
-		).toBeNull();
+			(confirm.parentElement as HTMLElement).contains(cancel),
+			'the pair renders together on the title row'
+		).toBe(true);
+		expect(
+			(confirm.parentElement as HTMLElement).contains(collapse),
+			'…adjacent to the name, on the SAME row'
+		).toBe(true);
 
 		await fireEvent.click(confirm);
 		await waitFor(() => {
@@ -1709,25 +1712,28 @@ describe('agenda — #236 the season delete runs from the COLLAPSED card with vi
 			});
 		});
 
-		// G2 — the counter is VISIBLE at card level while the panel is closed:
-		// a cascade with no on-screen feedback was the gap this ruling closes.
 		run.tick(2, 5, 'event');
 		await waitFor(() => {
 			expect(q(container, 'season-manage-delete-progress')).not.toBeNull();
 		});
+
+		// G2 (held through #261): fold the card shut around the running cascade
+		// — the SEASON cascade does not block the collapse (only series/convert
+		// runs do), and the counter must stay visible at card level.
+		await collapseSeasonCard(container);
 		const progress = q(container, 'season-manage-delete-progress') as HTMLElement;
+		expect(progress, 'the counter survives the collapse').not.toBeNull();
 		expect(progress.getAttribute('role')).toBe('status');
 		expect(progress.textContent?.trim()).toBe('Kustutan 2 / 5…');
 		expect((q(container, 'agenda-admin-card') as HTMLElement).contains(progress)).toBe(true);
-		expect(q(container, 'season-manage-panel'), 'still collapsed').toBeNull();
+		expect(q(container, 'season-manage-panel'), 'collapsed').toBeNull();
 
 		run.finish({ series: 3, events: 21, repertoireItems: 6 });
 		await waitFor(() => {
 			expect(q(container, 'season-manage-delete-progress')).toBeNull();
 		});
 		// #217's live region is mounted from first render and DELIBERATELY
-		// untouched by #236 (moving or duplicating it breaks the announce
-		// contract) — it announces the collapsed-state success as-is.
+		// untouched — it announces the success whatever state the card is in.
 		await waitFor(() => {
 			const status = q(container, 'season-manage-delete-status') as HTMLElement | null;
 			expect(status?.textContent).toContain('season_delete_success');
@@ -1735,18 +1741,24 @@ describe('agenda — #236 the season delete runs from the COLLAPSED card with vi
 		});
 	});
 
-	it('G2 — a FAILED collapsed cascade shows the SEASON error branch at card level: role=alert, visible with the panel closed; the control survives', async () => {
-		deleteSeasonMock.mockRejectedValue({
+	it('G2 — a cascade that FAILS after the card was collapsed shows the SEASON error branch at card level: role=alert, visible with the panel closed', async () => {
+		const run = hangingDeleteSeason();
+		const container = await renderReady();
+
+		await armSeasonDelete(container);
+		await fireEvent.click(q(container, 'season-manage-delete-season-confirm') as HTMLElement);
+		await waitFor(() => {
+			expect(deleteSeasonMock).toHaveBeenCalled();
+		});
+		await collapseSeasonCard(container);
+
+		run.fail({
 			code: 'season-cascade-partial',
 			seasonId: SEASON_ID,
 			deletedCount: 2,
 			totalCount: 6,
 			failure: new Error('boom')
 		});
-		const container = await renderReady();
-
-		await armAndConfirmSeasonDelete(container);
-
 		await waitFor(() => {
 			expect(q(container, 'season-manage-delete-error')).not.toBeNull();
 		});
@@ -1754,15 +1766,11 @@ describe('agenda — #236 the season delete runs from the COLLAPSED card with vi
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('season_manage_season_delete_partial');
 		expect((q(container, 'agenda-admin-card') as HTMLElement).contains(alert)).toBe(true);
-		expect(q(container, 'season-manage-panel'), 'the panel never opened').toBeNull();
-		expect(
-			q(container, 'season-manage-delete-season-confirm') ??
-				q(container, 'season-manage-delete-season')
-		).not.toBeNull();
+		expect(q(container, 'season-manage-panel'), 'the card stays collapsed').toBeNull();
 		expect(q(container, 'season-manage-delete-progress'), 'counter cleared').toBeNull();
 	});
 
-	it('G1 — Escape while armed in the collapsed header disarms through the EXISTING closeSeasonManagePanel(): trashcan back, nothing deleted, focus handed to the gear', async () => {
+	it('G1 — Escape while armed on the opened title row routes through the EXISTING closeSeasonManagePanel(): the panel closes disarmed, nothing deleted, focus lands on the expand control', async () => {
 		const container = await renderReady();
 		await armSeasonDelete(container);
 
@@ -1771,145 +1779,42 @@ describe('agenda — #236 the season delete runs from the COLLAPSED card with vi
 		await fireEvent.keyDown(confirm, { key: 'Escape' });
 
 		await waitFor(() => {
-			expect(
-				q(container, 'season-manage-delete-season'),
-				'disarmed — the trashcan returns'
-			).not.toBeNull();
+			expect(q(container, 'season-manage-panel'), 'one close path: the panel folds').toBeNull();
 		});
 		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
 		expect(deleteSeasonMock).not.toHaveBeenCalled();
 		// The ruling forbids a NEW disarm branch: one call to the existing
 		// closeSeasonManagePanel() clears the armed state AND returns focus to
-		// the gear (#197 review F2's focus contract). That landing spot is the
-		// observable signature of routing through the existing function.
-		expect(document.activeElement).toBe(q(container, 'season-manage-gear'));
+		// the collapsed card's expand control (#261's focus anchor — the gear is
+		// gone). That landing spot is the observable signature of routing
+		// through the existing function.
+		expect(document.activeElement).toBe(q(container, SEASON_CARD_EXPAND));
 	});
 
-	it('#236 roving — while armed the confirm/cancel pair are REAL toolbar members in the trashcan’s slot: exactly one tabindex=0 stop, ArrowRight roves confirm → cancel, and roving never deletes', async () => {
-		const container = await renderReady();
-		await armSeasonDelete(container);
+	// (#236's roving-tabindex pins — armed pair as toolbar members, the stop
+	// moving off the disabled pair mid-cascade, last-focused hand-over — lived
+	// here. #261 retires role="toolbar" and the roving pattern with the gear;
+	// the confirm-disabled-while-running pin above survives on its own.)
 
-		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
-		const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button'));
-		expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual([
-			'season-manage-delete-season-confirm',
-			'season-manage-delete-season-cancel',
-			'season-create',
-			'season-manage-gear'
-		]);
-		const stops = buttons.filter((b) => b.getAttribute('tabindex') === '0');
-		expect(stops, 'exactly ONE roving stop while armed').toHaveLength(1);
-
-		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLButtonElement;
-		confirm.focus();
-		await fireEvent.keyDown(confirm, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(q(container, 'season-manage-delete-season-cancel'));
-		expect(deleteSeasonMock).not.toHaveBeenCalled();
-	});
-
-	// ── #236 review — the roving stop under the armed pair's OWN disabled flag ──
-
-	it('#236 review F1 — MID-CASCADE the toolbar still holds exactly one ENABLED Tab stop: the armed pair is `disabled` for the whole run, so the stop must move OFF it, not strand the keyboard', async () => {
-		const run = hangingDeleteSeason();
-		const container = await renderReady();
-
-		await armSeasonDelete(container);
-		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLButtonElement;
-		confirm.focus();
-		await fireEvent.focus(confirm);
-		await fireEvent.click(confirm);
-		await waitFor(() => {
-			expect(deleteSeasonMock).toHaveBeenCalled();
-		});
-
-		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
-		const buttons = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button'));
-		// The pair really is out of action while the cascade runs — that is the
-		// premise, not an incidental detail.
-		await waitFor(() => {
-			expect(
-				(q(container, 'season-manage-delete-season-confirm') as HTMLButtonElement).disabled,
-				'the confirm disables for the length of the run'
-			).toBe(true);
-		});
-		expect(
-			(q(container, 'season-manage-delete-season-cancel') as HTMLButtonElement).disabled
-		).toBe(true);
-
-		// …so the single roving stop must be on a member that can actually take
-		// focus. Pinning it to the disabled confirm left ZERO Tab stops in the
-		// toolbar (every member -1, the toolbar itself -1) for the whole cascade.
-		const enabledStops = buttons.filter(
-			(b) => b.getAttribute('tabindex') === '0' && !b.disabled
-		);
-		expect(
-			enabledStops,
-			'exactly one OPERABLE Tab stop must remain while the cascade runs'
-		).toHaveLength(1);
-		expect(
-			buttons.filter((b) => b.getAttribute('tabindex') === '0'),
-			'and no disabled member may hold a stop'
-		).toEqual(enabledStops);
-
-		run.finish({ series: 3, events: 21, repertoireItems: 6 });
-	});
-
-	it('#236 review F2 — while armed, focusing [+ Season] or the gear HANDS THE STOP OVER: last-focused wins over "confirm leads the pair"', async () => {
-		const container = await renderReady();
-		await armSeasonDelete(container);
-
-		const toolbar = q(container, 'agenda-admin-toolbar') as HTMLElement;
-		const stops = () =>
-			Array.from(toolbar.querySelectorAll<HTMLButtonElement>('button')).filter(
-				(b) => b.getAttribute('tabindex') === '0'
-			);
-
-		const seasonCreate = q(container, 'season-create') as HTMLButtonElement;
-		seasonCreate.focus();
-		await fireEvent.focus(seasonCreate);
-		await waitFor(() => {
-			expect(stops(), 'Tab-out/Tab-in must return to [+ Season], not to the confirm').toEqual([
-				seasonCreate
-			]);
-		});
-
-		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
-		gear.focus();
-		await fireEvent.focus(gear);
-		await waitFor(() => {
-			expect(stops()).toEqual([gear]);
-		});
-
-		// …and the pair takes it back when it is focused again.
-		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLButtonElement;
-		confirm.focus();
-		await fireEvent.focus(confirm);
-		await waitFor(() => {
-			expect(stops()).toEqual([confirm]);
-		});
-		expect(deleteSeasonMock).not.toHaveBeenCalled();
-	});
-
-	it('#236 review F3 — Escape on [+ Season] with the panel CLOSED and nothing armed is inert: focus stays put, the gear does not steal it', async () => {
+	it('#236 review F3 (held through #261) — Escape on the standalone [+ Season] with nothing open and nothing armed is inert: focus stays put', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
 		expect(q(container, 'season-manage-panel'), 'nothing open').toBeNull();
-		expect(q(container, 'season-manage-delete-season'), 'nothing armed').not.toBeNull();
+		expect(q(container, 'season-manage-delete-season-confirm'), 'nothing armed').toBeNull();
 
 		const seasonCreate = q(container, 'season-create') as HTMLButtonElement;
 		seasonCreate.focus();
 		await fireEvent.keyDown(seasonCreate, { key: 'Escape' });
 
-		// The G1 catcher rides the whole toolbar, so an unguarded Escape reached
-		// closeSeasonManagePanel()'s tail `seasonManageGearEl?.focus()` and moved
-		// focus off the pressed button for no reason.
+		// An unguarded Escape catcher used to reach closeSeasonManagePanel()'s
+		// focus tail and move focus off the pressed button for no reason.
 		expect(document.activeElement).toBe(seasonCreate);
 		expect(q(container, 'season-create-form'), 'Escape opened nothing either').toBeNull();
 	});
 
-	it('#236 review F4 — the armed pair keeps the 44px touch-target floor (both halves)', async () => {
+	it('#236 review F4 (held through #261) — the armed pair keeps the 44px touch-target floor (both halves)', async () => {
 		const container = await renderReady();
 		await armSeasonDelete(container);
 

@@ -153,6 +153,7 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
@@ -469,16 +470,9 @@ async function renderAgendaReady(waitTestid: string): Promise<HTMLElement> {
 	return container as HTMLElement;
 }
 
-/** Click the gear, wait for the panel AND its repertoire section's rows. */
+/** #261 — expand the season card, wait for the panel (shared helper). */
 async function openPanel(container: HTMLElement): Promise<HTMLElement> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-panel')).not.toBeNull();
-	});
-	return q(container, 'season-manage-panel') as HTMLElement;
+	return await openSeasonCardPanel(container);
 }
 
 function addWorkSelect(section: HTMLElement): HTMLSelectElement {

@@ -182,6 +182,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
@@ -334,12 +335,9 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Open the season-manage panel (the gear), then the [+ Series] form. */
+/** Open the season-manage panel (#261: expand the season card), then the [+ Series] form. */
 async function openSeriesForm(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-add-series')).not.toBeNull();
 	});
@@ -351,10 +349,7 @@ async function openSeriesForm(container: HTMLElement): Promise<void> {
 
 /** Open the season-manage panel, then its [+ Event] (season pre-filled). */
 async function openEventFormFromPanel(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-add-event')).not.toBeNull();
 	});

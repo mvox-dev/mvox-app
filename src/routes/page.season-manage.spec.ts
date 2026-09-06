@@ -27,14 +27,18 @@
 //       cached getRoster — never a fresh 1+N fan-out per panel open).
 //     - rights gate = the page's existing `seasonManageRights` derivation
 //       (manageRightsFrom on the CURRENT season's ride-along _owner/_editor).
-//       FAIL-CLOSED: a non-editor gets NO gear, not a disabled one. No current
-//       season → nothing to manage → no gear (independent of T2's [+ Season]).
+//       FAIL-CLOSED: a non-editor gets NO card, not a disabled one. No current
+//       season → nothing to manage → no card (independent of T2's [+ Season]).
 //
 //   TESTIDS
-//     season-manage-gear          the [⚙] button. Renders IFF a CURRENT season
-//                                 exists AND the viewer is its editor. Has an
-//                                 accessible name (aria-label) — an icon-only
-//                                 button announcing nothing is not shippable.
+//     season-card-expand          #261 — the collapsed card's whole-card expand
+//                                 button (the retired [⚙]'s successor). Renders
+//                                 IFF a manageable season exists AND the viewer
+//                                 is its editor. Carries its own accessible
+//                                 name (aria-label, season_manage_expand_label).
+//     season-card-collapse        #261 — the opened card's title-row collapse
+//                                 button (full contract in
+//                                 page.season-card.spec.ts).
 //     season-manage-panel         the inline panel it opens: role="dialog" with
 //                                 an accessible name, same route (no goto).
 //     season-manage-name          the season name display inside the panel
@@ -192,6 +196,12 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import {
+	openSeasonCardPanel,
+	collapseSeasonCard,
+	SEASON_CARD_EXPAND,
+	SEASON_CARD_COLLAPSE
+} from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
@@ -409,16 +419,10 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Click the gear, wait for the panel. Returns the panel element. */
+/** #261 — expand the season card (the gear is gone), wait for the panel.
+ *  Returns the panel element. Routed through the ONE shared helper. */
 async function openPanel(container: HTMLElement): Promise<HTMLElement> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-panel')).not.toBeNull();
-	});
-	return q(container, 'season-manage-panel') as HTMLElement;
+	return await openSeasonCardPanel(container);
 }
 
 /** The event/[id] per-field pattern: click the edit button, type, Enter. */
@@ -463,34 +467,35 @@ async function pickConductor(panel: HTMLElement, personId: string): Promise<void
 	await fireEvent.change(conductorSelect(panel), { target: { value: personId } });
 }
 
-// ── the entry point: gear on the season header, rights-gated ────────────────────
+// ── the entry point: the season card itself, rights-gated (#261) ────────────────
 
-describe('agenda — the [⚙] season-manage entry point', () => {
-	it('season editor + current season: season-manage-gear renders as a BUTTON whose accessible name says what it DOES (own aria-label), outside any agenda row; merely rendering opens no panel and writes nothing', async () => {
+describe('agenda — the season-card season-manage entry point', () => {
+	it('season editor + current season: season-card-expand renders as a BUTTON whose accessible name says what it DOES *and* which season it is (sr-only verb + visible name), outside any agenda row; merely rendering opens no panel and writes nothing', async () => {
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
 		});
-		const gear = q(container, 'season-manage-gear') as HTMLElement;
-		expect(gear.tagName).toBe('BUTTON');
-		// Icon-only affordance MUST carry a name a screen reader can announce.
-		// #238 — the visible h2 now carries the season's NAME, so borrowing it
-		// via aria-labelledby would announce the gear as "Season 2026" — an
-		// identity, not a function. The gear authors its OWN aria-label from the
-		// season_manage_gear_label copy instead ('Manage season' in en; the
-		// message mock renders keys verbatim).
-		expect(gear.getAttribute('aria-label')).toBe('season_manage_gear_label');
-		// aria-labelledby OUTRANKS aria-label in the accname algorithm — keeping
-		// it would silently rename the gear to the season. It must be gone.
+		const expand = q(container, SEASON_CARD_EXPAND) as HTMLElement;
+		expect(expand.tagName).toBe('BUTTON');
+		// The visible text is the season's NAME, so the control adds the NEW
+		// season_manage_expand_label copy (the message mock renders keys
+		// verbatim) as an sr-only verb INSIDE itself — an identity is not a
+		// function. #261 review F1: the verb SUPPLEMENTS the visible name, it
+		// does not supersede it. An `aria-label` REPLACES the button's own
+		// contents, dropping "Season 2026" out of the accessible name — a WCAG
+		// 2.1 AA 2.5.3 (Label in Name) failure, and the exact mistake #205
+		// review F1 corrected for the panel's three field activators.
+		expect(expand.hasAttribute('aria-label')).toBe(false);
+		// The real accname algorithm agrees: the control resolves BY its
+		// function AND by the season it belongs to.
 		expect(
-			gear.hasAttribute('aria-labelledby'),
-			'aria-labelledby would override the aria-label with the season name'
-		).toBe(false);
-		// The real accname algorithm agrees: the gear resolves BY its function.
-		expect(within(container).getByRole('button', { name: 'season_manage_gear_label' })).toBe(gear);
-		expect(gear.closest('[data-testid^="agenda-row-"]')).toBeNull();
-		expect(gear.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
+			within(container).getByRole('button', { name: /season_manage_expand_label.*Season 2026/ })
+		).toBe(expand);
+		expect(expand.closest('[data-testid^="agenda-row-"]')).toBeNull();
+		expect(expand.closest('[data-testid^="agenda-recent-row-"]')).toBeNull();
+		// #261 — the gear does not exist any more, for anyone.
+		expect(q(container, 'season-manage-gear')).toBeNull();
 
 		expect(q(container, 'season-manage-panel')).toBeNull();
 		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
@@ -498,14 +503,15 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		expect(listEventsForSeasonMock).not.toHaveBeenCalled();
 	});
 
-	it('NON-editor: no gear at all — fail-closed, same as every other rights gate', async () => {
+	it('NON-editor: no card at all — fail-closed, same as every other rights gate', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
 		const container = await renderReady();
 
+		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
 		expect(q(container, 'season-manage-gear')).toBeNull();
 	});
 
-	it('the only season LAPSED yesterday and nothing is queued behind it: the gear RENDERS — its panel is the only way to fix that season’s dates', async () => {
+	it('the only season LAPSED yesterday and nothing is queued behind it: the card RENDERS — its panel is the only way to fix that season’s dates', async () => {
 		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(true));
 		const container = await renderReady();
 
@@ -513,13 +519,13 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 			expect(q(container, 'agenda-empty')).not.toBeNull();
 		});
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
 		});
 		// The rights rode along on the season list — no database-entity round-trip.
 		expect(resolveManageRightsMock).not.toHaveBeenCalled();
 	});
 
-	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the gear', async () => {
+	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the card', async () => {
 		loadFullAgendaMock.mockResolvedValue(lapsedOnlySeasonResult(false));
 		const container = await renderReady();
 
@@ -531,20 +537,20 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		await waitFor(() => {
 			expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
 		});
-		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
 	});
 
-	it('the gear gates INDEPENDENTLY of [+ Season]: with an upcoming season the create affordance is gone, the gear stays (the current season is still manageable)', async () => {
+	it('the card gates INDEPENDENTLY of [+ Season]: with an upcoming season the create affordance is gone, the card stays (the current season is still manageable)', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
 		});
 		expect(q(container, 'season-create')).toBeNull();
 	});
 
-	it('clicking [⚙] opens season-manage-panel INLINE (no route change), a dialog with an accessible name, and loads the series + standalone-event lists for THIS season', async () => {
+	it('clicking the collapsed card opens season-manage-panel INLINE (no route change), a dialog with an accessible name, and loads the series + standalone-event lists for THIS season', async () => {
 		const container = await renderReady();
 		const panel = await openPanel(container);
 
@@ -576,25 +582,18 @@ describe('agenda — the [⚙] season-manage entry point', () => {
 		expect(listEventsForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 	});
 
-	it('#238 — the header leads with the season NAME: with the panel OPEN the h2 shows the name, the "Manage season" phrase is visible NOWHERE (announced only, on the gear), and season_manage_panel_label is consumed nowhere', async () => {
+	it('#238/#261 — the header leads with the season NAME: with the panel OPEN the title shows the name, and the retired gear/panel-label keys are consumed NOWHERE', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		// #238 — the card's title IS the season now. The 'Manage season' copy
-		// moved from visible text into the gear's aria-label, so as VISIBLE
-		// text (textContent — attributes don't render) it appears ZERO times.
+		// #238 — the card's title IS the season. #261 keeps the identity on the
+		// opened title row (season-manage-label survives as the named element).
 		const label = q(container, 'season-manage-label') as HTMLElement;
-		expect(label, 'the promoted h2 stays mounted with the panel open').not.toBeNull();
-		expect(label.textContent?.trim(), '#238 — the h2 text is the season name').toBe('Season 2026');
-		const occurrences =
-			(container.textContent ?? '').match(/season_manage_gear_label/g)?.length ?? 0;
-		expect(occurrences, '#238 — the gear-label copy is never visible text now').toBe(0);
-		// …but the copy is still AUTHORED and announced: the gear's accessible
-		// name is the gear-label copy (its own aria-label), not the season name.
-		const gear = q(container, 'season-manage-gear') as HTMLElement;
-		expect(within(container).getByRole('button', { name: 'season_manage_gear_label' })).toBe(gear);
-		// …and the retired duplicate key feeds NOTHING any more — no text node,
-		// no aria-label attribute (innerHTML catches both).
+		expect(label, 'the title element stays mounted with the panel open').not.toBeNull();
+		expect(label.textContent?.trim(), 'the title text is the season name').toBe('Season 2026');
+		// #261 — the gear is GONE and its copy with it: the retired key feeds
+		// NOTHING — no text node, no aria-label attribute (innerHTML catches both).
+		expect(container.innerHTML).not.toContain('season_manage_gear_label');
 		expect(container.innerHTML).not.toContain('season_manage_panel_label');
 	});
 });
@@ -1188,10 +1187,7 @@ describe('agenda — the panel lists the season’s series and standalone events
 			expect(q(container, 'season-manage-series-error')).not.toBeNull();
 		});
 
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-panel')).toBeNull();
-		});
+		await collapseSeasonCard(container);
 		await openPanel(container);
 
 		await waitFor(() => {
@@ -1266,16 +1262,13 @@ describe('agenda — the panel’s reads respect the page-wide requestId guard',
 // ── close / Escape / persistence ────────────────────────────────────────────────
 
 describe('agenda — closing the panel, and what survives it', () => {
-	it('a second GEAR click dismisses the panel (#213 — no internal close button exists); nothing was written by opening + closing', async () => {
+	it('a TITLE-ROW click dismisses the panel (#261 — the card is the toggle; no internal close button exists); nothing was written by opening + closing', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		// #213 — the panel carries no season-manage-close; the gear toggles.
+		// The panel carries no season-manage-close; the title row collapses.
 		expect(q(container, 'season-manage-close')).toBeNull();
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-panel')).toBeNull();
-		});
+		await collapseSeasonCard(container);
 		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
 		expect(addSeasonConductorMock).not.toHaveBeenCalled();
 		expect(removeSeasonConductorMock).not.toHaveBeenCalled();
@@ -1284,11 +1277,11 @@ describe('agenda — closing the panel, and what survives it', () => {
 	// #132/T3 review F1 — the Escape assertions below dispatch at
 	// `document.activeElement`, NEVER at the panel element: firing the key at the
 	// panel proves only that the handler is bound, not that a real keypress can
-	// ever reach it. #222 containment model: the panel renders inside the shared
-	// agenda-admin-card as a SIBLING of the role="toolbar" header row that holds
-	// the gear — never inside the toolbar element itself — so unless the open
-	// ACTUALLY moves focus into the dialog, a browser Escape dispatches at the
-	// gear (or <body>) and never enters the panel's subtree.
+	// ever reach it. #222/#261 containment model: the panel renders inside the
+	// shared agenda-admin-card as a SIBLING of the title row — never inside the
+	// title-row button itself — so unless the open ACTUALLY moves focus into the
+	// dialog, a browser Escape dispatches at the title row (or <body>) and never
+	// enters the panel's subtree.
 	function pressEscapeAtFocus(): Promise<boolean> {
 		return fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
 	}
@@ -1316,7 +1309,7 @@ describe('agenda — closing the panel, and what survives it', () => {
 		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
 	});
 
-	it('dismissing the panel returns focus to the [⚙] that opened it — a keyboard user is not dropped at document start', async () => {
+	it('dismissing the panel returns focus to the collapsed card’s EXPAND control (#261 — the gear was the old anchor) — a keyboard user is not dropped at document start', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 		await waitFor(() => {
@@ -1327,18 +1320,17 @@ describe('agenda — closing the panel, and what survives it', () => {
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
-		expect(document.activeElement).toBe(q(container, 'season-manage-gear'));
+		expect(document.activeElement).toBe(q(container, SEASON_CARD_EXPAND));
 	});
 
-	it('closing through the GEAR leaves focus on the gear (#213 — it does not unmount; the old × did)', async () => {
+	it('closing through the TITLE ROW hands focus to the expand control that takes its place (#261 — the collapse control unmounts with the open state, like the old × did)', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await collapseSeasonCard(container);
 		await waitFor(() => {
-			expect(q(container, 'season-manage-panel')).toBeNull();
+			expect(document.activeElement).toBe(q(container, SEASON_CARD_EXPAND));
 		});
-		expect(document.activeElement).toBe(q(container, 'season-manage-gear'));
 	});
 
 	it('the two-Escapes-to-leave layering holds through REAL focus: the first Escape (fired at the focused edit input) closes only the edit, the second dismisses the panel', async () => {
@@ -1379,10 +1371,7 @@ describe('agenda — closing the panel, and what survives it', () => {
 			expect(updateSeasonFieldMock).toHaveBeenCalledTimes(1);
 		});
 
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-panel')).toBeNull();
-		});
+		await collapseSeasonCard(container);
 
 		await openPanel(container);
 		await waitFor(() => {

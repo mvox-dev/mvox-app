@@ -20,7 +20,7 @@
 //       agendaData.spec.ts #167 block): the current season when one runs,
 //       else the SOONEST-starting future season. These fixtures return the
 //       new shape; the page must GATE ON IT.
-//     - `showEventCreate` and the season-manage gear derive from the
+//     - `showEventCreate` and the season card derive from the
 //       MANAGEABLE season: manageableSeasonId !== null AND the viewer holds
 //       manage rights on it (manageRightsFrom over its owners/editors —
 //       ownership subsumes editing). The season-manage panel's season-scoped
@@ -36,13 +36,14 @@
 //       season; a future-only collective still shows the empty agenda list.
 //
 //   TESTIDS (all pre-existing)
-//     event-create             REMOVED by #213 — the gear (same gate) is the
+//     event-create             REMOVED by #213 — the season card (same gate) is the
 //                              page-level proxy for the manageable-season
 //                              rights answer now; event creation lives inside
 //                              the panel (season-manage-add-event)
 //     event-create-form        the inline creation form; its season <select>
 //                              (event-create-season) must OFFER the future season
-//     season-manage-gear       opens the season-manage panel for the MANAGEABLE season
+//     season-card-expand       #261 — the collapsed season card's expand button
+//                              opens the season-manage panel for the MANAGEABLE season
 //     season-manage-panel      the panel; carries season-manage-add-event and
 //                              season-manage-add-series (the series entry point)
 //     season-create[-*]        the #132/T2 season-create flow (used by the repro test)
@@ -367,18 +368,18 @@ async function fill(container: HTMLElement, testid: string, value: string): Prom
 // ── the gate: a FUTURE-only season is manageable ────────────────────────────────
 
 describe('#167 — event creation controls with a FUTURE-only season', () => {
-	it('viewer is the future season’s EDITOR → the gear renders, the panel’s [+ Event] opens the form, and the future season is offerable in its season select', async () => {
+	it('viewer is the future season’s EDITOR → the season card renders, the panel’s [+ Event] opens the form, and the future season is offerable in its season select', async () => {
 		loadFullAgendaMock.mockResolvedValue(
 			futureOnlyAgenda(futureSeason({ editors: ['person-p'] }))
 		);
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		// #213 — the page-level [+ Event] is gone; the panel's [+ Event] is the way in.
 		expect(q(container, 'event-create')).toBeNull();
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await fireEvent.click(q(container, 'season-card-expand') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-add-event')).not.toBeNull();
 		});
@@ -390,22 +391,22 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 		expect(Array.from(seasonSelect.options).map((o) => o.value)).toContain(FUTURE_SEASON_ID);
 	});
 
-	it('viewer is the future season’s OWNER → the gear renders (ownership subsumes editing)', async () => {
+	it('viewer is the future season’s OWNER → the season card renders (ownership subsumes editing)', async () => {
 		loadFullAgendaMock.mockResolvedValue(futureOnlyAgenda(futureSeason({ owners: ['person-p'] })));
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 	});
 
-	it('NO rights visible on the season, but the viewer holds rights on the DATABASE entity → the gear renders (the #167 cause-2 fallback: Mihkel is `_owner` on the database entity)', async () => {
+	it('NO rights visible on the season, but the viewer holds rights on the DATABASE entity → the season card renders (the #167 cause-2 fallback: Mihkel is `_owner` on the database entity)', async () => {
 		loadFullAgendaMock.mockResolvedValue(futureOnlyAgenda(futureSeason()));
 		resolveManageRightsMock.mockResolvedValue('editor');
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		// the fallback probes the DATABASE entity, for THIS person:
 		expect(resolveManageRightsMock).toHaveBeenCalledWith(
@@ -415,26 +416,26 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 		);
 	});
 
-	it('fail-closed: no rights on the season AND none on the database entity → neither the gear nor any event entry point renders', async () => {
+	it('fail-closed: no rights on the season AND none on the database entity → neither the season card nor any event entry point renders', async () => {
 		loadFullAgendaMock.mockResolvedValue(futureOnlyAgenda(futureSeason()));
 		resolveManageRightsMock.mockResolvedValue('not-editor');
 		const container = await renderReady();
 
 		await flush();
 		expect(q(container, 'event-create')).toBeNull();
-		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-card-expand')).toBeNull();
 	});
 
-	it('SERIES creation reachable: editor of the future season → gear renders, the panel opens with [+ Series] and [+ Event], and its season-scoped reads target the FUTURE season', async () => {
+	it('SERIES creation reachable: editor of the future season → the season card renders, the panel opens with [+ Series] and [+ Event], and its season-scoped reads target the FUTURE season', async () => {
 		loadFullAgendaMock.mockResolvedValue(
 			futureOnlyAgenda(futureSeason({ editors: ['person-p'] }))
 		);
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await fireEvent.click(q(container, 'season-card-expand') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).not.toBeNull();
 		});
@@ -452,7 +453,7 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 // ── the reported repro, end to end on the route ─────────────────────────────────
 
 describe('#167 — the reported repro: create a season, controls appear', () => {
-	it('empty collective → create a FUTURE-dated season via the form → [+ Event] and the gear appear after the refresh', async () => {
+	it('empty collective → create a FUTURE-dated season via the form → the season card appears after the refresh', async () => {
 		// First load: no seasons at all. After createSeason, the page's refresh
 		// (loadFullAgenda re-invoked — pinned in page.season-create.spec.ts)
 		// returns the new future-only season with the creator's rights on it.
@@ -464,12 +465,12 @@ describe('#167 — the reported repro: create a season, controls appear', () => 
 
 		const container = await renderReady();
 
-		// No season exists yet → season-create offered, no gear (there
+		// No season exists yet → season-create offered, no season card (there
 		// is nothing to manage or put an event into).
 		await waitFor(() => {
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
-		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-card-expand')).toBeNull();
 		expect(q(container, 'event-create')).toBeNull();
 
 		await fireEvent.click(q(container, 'season-create') as HTMLElement);
@@ -486,9 +487,9 @@ describe('#167 — the reported repro: create a season, controls appear', () => 
 
 		// THE BUG: after the refresh the page showed only "no upcoming
 		// rehearsals". The event/series creation entry point MUST be there now
-		// (#213: the gear IS that entry point).
+		// (#261: the season card IS that entry point).
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 	});
 });
@@ -525,9 +526,9 @@ describe('#167 review F1 — a lapsed season alongside a just-created one', () =
 		const container = await renderReady();
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
-		await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+		await fireEvent.click(q(container, 'season-card-expand') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).not.toBeNull();
 		});
@@ -551,9 +552,9 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 		resolveManageRightsMock.mockResolvedValue('editor');
 		const container = await renderReadyWithRow();
 
-		// the manageable-season gate (event/series creation — #213: the gear)…
+		// the manageable-season gate (event/series creation — #261: the season card)…
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		// …the season-CREATE gate (nothing upcoming exists to suppress it)…
 		await waitFor(() => {
@@ -585,7 +586,7 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 		const container = await renderReadyWithRow();
 
 		await flush();
-		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-card-expand')).toBeNull();
 		expect(q(container, 'event-create')).toBeNull();
 		expect(q(container, 'season-create')).toBeNull();
 		expect(listWorksMock).not.toHaveBeenCalled();
@@ -748,7 +749,7 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 
 		// The manageable (future) season's own grant already opened these…
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 
 		// …and the database entity is asked ANYWAY, on account of the current
@@ -813,7 +814,7 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 		});
 		await flush();
 		// The future season's own grant still opens creation — that is its right.
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
+		expect(q(container, 'season-card-expand')).not.toBeNull();
 		// The current season's repertoire stays filtered: no unfiltered re-read.
 		expect(loadWorksByEventIdMock).not.toHaveBeenCalledWith(
 			expect.anything(),

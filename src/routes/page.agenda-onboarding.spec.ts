@@ -23,17 +23,18 @@
 //                                       keeps the existing generic empty state)
 //
 //   TESTIDS
-//     agenda-onboarding        the banner container
-//     agenda-onboarding-cta    its call-to-action; clicking it opens the
-//                              EXISTING inline season-create form (same route,
-//                              no goto) — the flow's step 1 made actionable
+//     agenda-onboarding        the banner container (explanatory steps)
+//     agenda-onboarding-cta    RETIRED by #261: with zero seasons the
+//                              standalone [+ Season] (season-create) is the
+//                              ONLY control on the surface — the banner keeps
+//                              its explanatory steps but presents no second
+//                              create button of its own
 //
 //   COPY — localized paraglide keys, never hardcoded strings (Comenius owns
 //   the real copy; this spec asserts KEYS via the proxy message mock):
 //     agenda_onboarding_step_season    step 1 — create a season
 //     agenda_onboarding_step_series    step 2 — add an event series
 //     agenda_onboarding_step_events    step 3 — events are generated
-//     agenda_onboarding_cta            the CTA's label
 //   The three step keys must appear IN THAT ORDER in the banner's text — the
 //   sequence IS the content (season → series → events).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
@@ -307,31 +308,37 @@ describe('agenda — empty-state onboarding banner (#201): the content', () => {
 		expect(seriesAt).toBeLessThan(eventsAt);
 	});
 
-	it('the call-to-action is labeled via paraglide and lives INSIDE the banner', async () => {
+	it('#261 — the banner presents NO cta of its own: agenda-onboarding-cta is retired, and the standalone [+ Season] is the single create control on the surface', async () => {
 		const container = await renderSettled();
 
-		const cta = await waitFor(() => {
-			const el = q(container, 'agenda-onboarding-cta');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
+		await waitFor(() => {
+			expect(q(container, 'agenda-onboarding')).not.toBeNull();
 		});
-		expect(cta.textContent).toContain('agenda_onboarding_cta');
-		expect(q(container, 'agenda-onboarding')?.contains(cta)).toBe(true);
+		expect(
+			q(container, 'agenda-onboarding-cta'),
+			'#261 — the banner’s second create button merges into the standalone [+ Season]'
+		).toBeNull();
+		const create = q(container, 'season-create') as HTMLElement;
+		expect(create, 'the ONE control an admin can act on').not.toBeNull();
+		expect(
+			q(container, 'agenda-onboarding')?.contains(create),
+			'[+ Season] stands on its own, not inside the banner'
+		).toBe(false);
 	});
 });
 
-// ── the CTA ─────────────────────────────────────────────────────────────────────
+// ── the single create control (#261) ────────────────────────────────────────────
 
-describe('agenda — empty-state onboarding banner (#201): the call-to-action', () => {
-	it('clicking the CTA opens the EXISTING inline season-create form — step 1 made actionable, same route', async () => {
+describe('agenda — empty-state onboarding (#201/#261): the standalone [+ Season]', () => {
+	it('clicking [+ Season] opens the EXISTING inline season-create form — step 1 made actionable, same route', async () => {
 		const container = await renderSettled();
 
-		const cta = await waitFor(() => {
-			const el = q(container, 'agenda-onboarding-cta');
+		const create = await waitFor(() => {
+			const el = q(container, 'season-create');
 			expect(el).not.toBeNull();
 			return el as HTMLElement;
 		});
-		await fireEvent.click(cta);
+		await fireEvent.click(create);
 
 		await waitFor(() => {
 			expect(q(container, 'season-create-form')).not.toBeNull();
@@ -341,21 +348,20 @@ describe('agenda — empty-state onboarding banner (#201): the call-to-action', 
 		expect(createSeasonMock).not.toHaveBeenCalled();
 	});
 
-	// #201 review F1 — the banner must UNMOUNT once its own CTA has opened the
-	// form, exactly like the toolbar's [+ Season] trigger (`showSeasonCreate &&
-	// !seasonCreateOpen`). Left mounted, a second click re-runs
-	// `openSeasonCreateForm`, which unconditionally blanks every season-create
-	// field — silently discarding in-progress input. `createEntryPointsBlocked`
-	// is no defence: it is only true during a write or an unfinished series run.
-	it('unmounts once the form is open, so its CTA cannot re-run and blank in-progress input', async () => {
+	// #201 review F1 (held through #261) — the banner must UNMOUNT once the
+	// form is open (`showSeasonCreate && !seasonCreateOpen` idiom): left
+	// mounted, a second trigger click would re-run `openSeasonCreateForm`,
+	// which unconditionally blanks every season-create field — silently
+	// discarding in-progress input.
+	it('the banner unmounts once the form is open, so no leftover trigger can re-run and blank in-progress input', async () => {
 		const container = await renderSettled();
 
-		const cta = await waitFor(() => {
-			const el = q(container, 'agenda-onboarding-cta');
+		const create = await waitFor(() => {
+			const el = q(container, 'season-create');
 			expect(el).not.toBeNull();
 			return el as HTMLElement;
 		});
-		await fireEvent.click(cta);
+		await fireEvent.click(create);
 
 		const nameInput = await waitFor(() => {
 			const el = q(container, 'season-create-name');
@@ -365,6 +371,7 @@ describe('agenda — empty-state onboarding banner (#201): the call-to-action', 
 		// No second trigger survives above the open form …
 		expect(q(container, 'agenda-onboarding')).toBeNull();
 		expect(q(container, 'agenda-onboarding-cta')).toBeNull();
+		expect(q(container, 'season-create')).toBeNull();
 
 		// … so typed input cannot be blanked out from under the editor.
 		await fireEvent.input(nameInput, { target: { value: 'Hooaeg 2027' } });

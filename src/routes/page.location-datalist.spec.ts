@@ -170,6 +170,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import type { AgendaItem } from '$lib/agenda/types';
@@ -360,13 +361,13 @@ async function renderReady(): Promise<HTMLElement> {
 		expect(q(container, 'agenda-skeleton')).toBeNull();
 	});
 	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
+		expect(q(container, 'season-card-expand')).not.toBeNull();
 	});
 	return container;
 }
 
 async function openPanel(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+	await openSeasonCardPanel(container);
 }
 
 async function openSeriesForm(container: HTMLElement): Promise<void> {

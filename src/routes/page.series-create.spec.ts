@@ -293,6 +293,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { HOURS_24, MINUTES_5, fillTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
@@ -433,12 +434,10 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Open the season-manage panel (T3's gear), then the [+ Series] form. */
+/** Open the season-manage panel (#261: expand the season card — routed
+ *  through the ONE shared helper), then the [+ Series] form. */
 async function openSeriesForm(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-add-series')).not.toBeNull();
 	});
@@ -565,11 +564,13 @@ describe('season panel — the [+ Series] entry point', () => {
 		expect(q(container, 'series-create-generate')).toBeNull();
 	});
 
-	it('NON-editor: no season-manage-gear at all — the panel (and with it the form) is unreachable, fail-closed like every other rights gate', async () => {
+	it('NON-editor: no season card at all (#261 — the gear is gone for everyone) — the panel (and with it the form) is unreachable, fail-closed like every other rights gate', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false }));
 		const container = await renderReady();
 
 		await flush();
+		expect(q(container, 'agenda-admin-card')).toBeNull();
+		expect(q(container, 'season-card-expand')).toBeNull();
 		expect(q(container, 'season-manage-gear')).toBeNull();
 		expect(q(container, 'series-create-form')).toBeNull();
 	});
@@ -2178,7 +2179,7 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		// org-b acquires its OWN stopped run (occurrence 2 of 3 fails)…
 		selectedCollectiveDbStore.set('org-b');
 		await waitFor(() => {
-			expect(q(container, 'season-manage-gear')).not.toBeNull();
+			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		await stopRunInOrgA(container); // db-agnostic: it runs in whatever is selected
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);

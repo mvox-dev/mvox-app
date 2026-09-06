@@ -203,6 +203,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { isMessageEmpty, everyPatternContains, type MessageFile } from '$lib/testing/messageFile.js';
 import type { Season } from '$lib/seasons/types';
@@ -347,12 +348,10 @@ async function openEventCreateFromPanel(container: HTMLElement): Promise<void> {
 	});
 }
 
-/** Open the season-manage panel and wait for the standalone-event row. */
+/** Open the season-manage panel (#261: expand the season card) and wait for
+ *  the standalone-event row. */
 async function openPanel(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
+	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
 	});
@@ -950,14 +949,17 @@ describe('the convert entry point obeys the panel’s create discipline', () => 
 		// The panel cannot be torn down around the only record of what the run owes.
 		await fireEvent.keyDown(q(container, 'season-manage-panel') as HTMLElement, { key: 'Escape' });
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
-		// #213 / Gama ruling (1): the GEAR (the only close control left) renders
-		// DISABLED while the conversion run is unfinished — the full
-		// closeSeasonManagePanel guard formula, seriesRunUnfinished ||
+		// #261 / Gama ruling (1): the TITLE-ROW collapse (the only close control
+		// left) renders DISABLED while the conversion run is unfinished — the
+		// full closeSeasonManagePanel guard formula, seriesRunUnfinished ||
 		// eventConvertRunUnfinished, not the narrower one the old × had — and a
 		// click that reaches it anyway cannot discard the panel.
-		const gear = q(container, 'season-manage-gear') as HTMLButtonElement;
-		expect(gear.disabled, 'the gear must be visibly refused mid-conversion-run').toBe(true);
-		await fireEvent.click(gear);
+		const collapse = q(container, 'season-card-collapse') as HTMLButtonElement;
+		expect(
+			collapse.disabled,
+			'the title-row collapse must be visibly refused mid-conversion-run'
+		).toBe(true);
+		await fireEvent.click(collapse);
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 		expect(q(container, 'event-convert-resume-notice')).not.toBeNull();
 
@@ -966,8 +968,8 @@ describe('the convert entry point obeys the panel’s create discipline', () => 
 			expect(q(container, 'event-convert-form')).toBeNull();
 		});
 		expect((q(container, 'season-manage-add-event') as HTMLButtonElement).disabled).toBe(false);
-		// #213 — the gear is a live toggle again once nothing is owed.
-		expect((q(container, 'season-manage-gear') as HTMLButtonElement).disabled).toBe(false);
+		// #261 — the title-row collapse is live again once nothing is owed.
+		expect((q(container, 'season-card-collapse') as HTMLButtonElement).disabled).toBe(false);
 	});
 });
 

@@ -145,6 +145,7 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
@@ -276,13 +277,7 @@ async function renderReady(): Promise<HTMLElement> {
 }
 
 async function openPanel(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-manage-gear')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-gear') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-panel')).not.toBeNull();
-	});
+	await openSeasonCardPanel(container);
 }
 
 const FIELDS = ['name', 'start_date', 'end_date'] as const;
