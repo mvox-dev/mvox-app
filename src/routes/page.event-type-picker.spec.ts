@@ -196,13 +196,22 @@ import {
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
-/** The v4E canonical event types, schema order (schema.ts `event_type` note —
- *  the same order $lib/events/eventTypeLabels declares). */
+/** The canonical event types, pinned order — TEN since #266: trip and service
+ *  join, service beside concert (performance family), trip beside retreat
+ *  (travel family).
+ *
+ *  DELIBERATELY HAND-TYPED, never `import { CANONICAL_EVENT_TYPES }` from
+ *  production: an imported-constant assertion is tautological — it would pass
+ *  even when the production constant is wrong. The independent copy is the
+ *  house test-integrity style; when the vocabulary changes, THIS list changes
+ *  with intent. */
 const CANONICAL_EVENT_TYPES = [
 	'rehearsal',
 	'concert',
+	'service',
 	'festival',
 	'retreat',
+	'trip',
 	'workshop',
 	'meeting',
 	'social',
@@ -379,7 +388,7 @@ function canonicalPairs(): Array<[string, string]> {
 /** #242 — the STANDALONE event picker's pairs: a leading, non-submittable ''
  *  placeholder labeled by the NEW event_create_type_placeholder message
  *  (asserted via the key mock, never a hard-coded literal — same discipline
- *  as canonicalPairs), then the 8 canonical pairs. The SERIES picker keeps
+ *  as canonicalPairs), then the 10 canonical pairs. The SERIES picker keeps
  *  canonicalPairs() unchanged — the placeholder does NOT extend there. */
 function eventPickerPairs(): Array<[string, string]> {
 	return [['', 'event_create_type_placeholder'], ...canonicalPairs()];
@@ -423,7 +432,7 @@ describe('series form — series-create-type is a localized canonical picker', (
 		expect(type?.tagName).toBe('SELECT');
 	});
 
-	it('offers EXACTLY the 8 canonical v4E types, schema order, canonical keys as values and the paraglide event_type_* messages as labels — no "" placeholder, no free-text prior types mixed in', async () => {
+	it('offers EXACTLY the 10 canonical types (#266), pinned order, canonical keys as values and the paraglide event_type_* messages as labels — no "" placeholder, no free-text prior types mixed in', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
 
@@ -492,7 +501,7 @@ describe('series form — series-create-type is a localized canonical picker', (
 // ── event form: the type field is the SAME canonical, localized <select> ────────
 
 describe('event form — event-create-type is a localized canonical picker that STARTS EMPTY (#242)', () => {
-	it('renders a <select> with the "" placeholder FIRST (labeled by the NEW event_create_type_placeholder message) then the 8 canonical types, localized labels, on the real event-create form — #242 flips the old exactly-8 pin', async () => {
+	it('renders a <select> with the "" placeholder FIRST (labeled by the NEW event_create_type_placeholder message) then the 10 canonical types (#266), localized labels, on the real event-create form — #242 flips the old exactly-8 pin', async () => {
 		const container = await renderReady();
 		await openEventFormFromPanel(container);
 

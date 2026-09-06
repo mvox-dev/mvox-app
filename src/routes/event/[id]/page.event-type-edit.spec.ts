@@ -423,7 +423,7 @@ describe('/event/[id] — the type badge gains the #205 whole-field activator, r
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('/event/[id] — tapping the badge opens the #199 canonical native <select>', () => {
-	it('a native SELECT, self-labelled, seeded with the current type, listing EXACTLY the eight canonical types in schema order via eventTypeLabel', async () => {
+	it('a native SELECT, self-labelled, seeded with the current type, listing EXACTLY the canonical types in canonical order via eventTypeLabel', async () => {
 		const { container } = renderEditPage(editorEvent());
 		const select = await beginTypeEdit(container);
 		// Standing rule 1 — native control, no custom widget.
@@ -444,6 +444,34 @@ describe('/event/[id] — tapping the badge opens the #199 canonical native <sel
 			const opt = options.find((o) => o.value === type)!;
 			expect(opt.textContent).toContain(`[event_type_${type}]`);
 		}
+	});
+
+	// #266 — trip and service join the vocabulary. The test above rides the
+	// IMPORTED constant, which is deliberate for the same-option-source pin but
+	// TAUTOLOGICAL for vocabulary growth (it passes whatever the constant
+	// holds). This pin is the independent, hand-typed guard: the editor offers
+	// the TEN types in the NEW order — service beside concert, trip beside
+	// retreat — with the new options' labels routed through paraglide.
+	it('#266 — the editor select offers trip and service, hand-typed ten-list, pinned order, localized labels', async () => {
+		const { container } = renderEditPage(editorEvent());
+		const select = await beginTypeEdit(container);
+		const options = [...select.querySelectorAll('option')];
+		expect(options.map((o) => o.value).filter((v) => v !== '')).toEqual([
+			'rehearsal',
+			'concert',
+			'service',
+			'festival',
+			'retreat',
+			'trip',
+			'workshop',
+			'meeting',
+			'social',
+			'other'
+		]);
+		expect(options.find((o) => o.value === 'trip')!.textContent).toContain('[event_type_trip]');
+		expect(options.find((o) => o.value === 'service')!.textContent).toContain(
+			'[event_type_service]'
+		);
 	});
 });
 

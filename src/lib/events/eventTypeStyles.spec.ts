@@ -58,9 +58,39 @@ describe('eventTypeBadgeClass — exact per-type class strings (#211)', () => {
 		['workshop', 'bg-type-workshop-soft text-type-workshop border-type-workshop'],
 		['meeting', 'bg-type-meeting-soft text-type-meeting border-type-meeting'],
 		['social', DEFAULT_CLASS],
-		['other', DEFAULT_CLASS]
+		['other', DEFAULT_CLASS],
+		// #266 — quiet-grey-first: trip and service join the vocabulary WITHOUT
+		// a hue. They need EXPLICIT map entries (the map-coverage pin below
+		// forces exactly the canonical key set; the runtime fallback alone
+		// cannot satisfy it) — both mapping to the same quiet default.
+		['trip', DEFAULT_CLASS],
+		['service', DEFAULT_CLASS]
 	])('%s → %s', (type, expected) => {
 		expect(eventTypeBadgeClass(type)).toEqual(expected);
+	});
+
+	// #266 negative pin — the HUED set stays EXACTLY the #211 six. #211's
+	// daylight-distinguishability bar (Mihkel's outdoor test) capped the hued
+	// set; trip/service arrive quiet, promotion is a later, separate ruling.
+	it('#266 — trip and service are NOT hued: quiet default, identical to social/other, never a type-* token class', () => {
+		for (const type of ['trip', 'service']) {
+			// EXPLICIT map entries, not the runtime fallback: the function
+			// already returns the default for ANY unknown string, so hasOwn is
+			// the assertion that actually proves the two joined the map (and the
+			// map-coverage pin below keeps the key set exactly canonical).
+			expect(
+				Object.hasOwn(EVENT_TYPE_BADGE_CLASS, type),
+				`${type} needs an explicit EVENT_TYPE_BADGE_CLASS entry`
+			).toBe(true);
+			expect(eventTypeBadgeClass(type)).toEqual(DEFAULT_CLASS);
+			expect(eventTypeBadgeClass(type)).not.toMatch(/type-/);
+		}
+		// And they add nothing to the hued family: still six distinct hued
+		// strings, none of which the newcomers share.
+		const hued = new Set(HUED_TYPES.map((t) => eventTypeBadgeClass(t)));
+		expect(hued.size).toBe(6);
+		expect(hued.has(eventTypeBadgeClass('trip'))).toBe(false);
+		expect(hued.has(eventTypeBadgeClass('service'))).toBe(false);
 	});
 
 	it('the six hued types produce six MUTUALLY DISTINCT class strings', () => {
@@ -86,7 +116,7 @@ describe('eventTypeBadgeClass — exact per-type class strings (#211)', () => {
 		expect(eventTypeBadgeClass('constructor')).toEqual(DEFAULT_CLASS);
 	});
 
-	it('the underlying map covers exactly the 8 canonical types — no extras, no free-text keys', () => {
+	it('the underlying map covers exactly the canonical types (10 since #266) — no extras, no free-text keys', () => {
 		expect(Object.keys(EVENT_TYPE_BADGE_CLASS).sort()).toEqual([...CANONICAL_EVENT_TYPES].sort());
 	});
 

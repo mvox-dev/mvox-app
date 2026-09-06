@@ -23,8 +23,13 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
 		event_type_rehearsal: () => '[msg:rehearsal]',
 		event_type_concert: () => '[msg:concert]',
+		// #266 — the two new types get their own stubbed markers: an unstubbed
+		// key resolving oddly (undefined → raw-key fallback) would silently pass
+		// the wrong path.
+		event_type_service: () => '[msg:service]',
 		event_type_festival: () => '[msg:festival]',
 		event_type_retreat: () => '[msg:retreat]',
+		event_type_trip: () => '[msg:trip]',
 		event_type_workshop: () => '[msg:workshop]',
 		event_type_meeting: () => '[msg:meeting]',
 		event_type_social: () => '[msg:social]',
@@ -34,20 +39,28 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 
 import { EVENT_TYPE_LABEL, eventTypeLabel } from './eventTypeLabels';
 
+// #266 — trip and service join the vocabulary: TEN types, in the NEW pinned
+// order — service beside concert (performance family), trip beside retreat
+// (travel family). Hand-typed on purpose: this list is the independent guard
+// on the production map, never derived from it.
 const SCHEMA_TYPES = [
 	'rehearsal',
 	'concert',
+	'service',
 	'festival',
 	'retreat',
+	'trip',
 	'workshop',
 	'meeting',
 	'social',
 	'other'
 ] as const;
 
-describe('eventTypeLabels — shared event-type label map (#194/#202)', () => {
-	it('EVENT_TYPE_LABEL covers exactly the eight v4E schema types', () => {
-		expect(Object.keys(EVENT_TYPE_LABEL).sort()).toEqual([...SCHEMA_TYPES].sort());
+describe('eventTypeLabels — shared event-type label map (#194/#202, #266)', () => {
+	it('EVENT_TYPE_LABEL covers exactly the ten canonical types, IN THE PINNED ORDER — insertion order is CANONICAL_EVENT_TYPES and thus render order everywhere (#266)', () => {
+		// Exact order, not .sort(): CANONICAL_EVENT_TYPES = Object.keys of this
+		// map, and every picker/chip row renders in that order.
+		expect(Object.keys(EVENT_TYPE_LABEL)).toEqual([...SCHEMA_TYPES]);
 	});
 
 	it('every known type resolves through its paraglide message', () => {

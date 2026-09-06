@@ -50,6 +50,13 @@
   --color-type-meeting: #8a4266;
   --color-type-meeting-soft: #f0dce6;
 
+  /* #266 — trip/service join the vocabulary quiet-grey-first (DEFAULT_CLASS in
+   * eventTypeStyles.ts), NO new tokens here: the six hued types above are the
+   * #211 daylight-distinguishability cap (Mihkel's outdoor test) [refinable at
+   * live review]. A later hue promotion for either type needs its own
+   * --color-type-<name> / -soft pair here, re-verified against the same
+   * contrast floor and outdoor-daylight bar for the resulting larger set. */
+
   --font-sans: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
   --font-display: 'Caveat', cursive;

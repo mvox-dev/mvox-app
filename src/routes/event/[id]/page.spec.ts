@@ -669,7 +669,7 @@ describe('/event/[id] — type badge is translated', () => {
 	it('guard: every event_type_* key in en.json exists in et, lv and uk, and none is empty', () => {
 		const en = JSON.parse(readFileSync(resolve('messages/en.json'), 'utf8')) as MessageFile;
 		const typeKeys = Object.keys(en).filter((k) => k.startsWith('event_type_'));
-		expect(typeKeys.length).toBe(8); // the v4E schema's eight known event types
+		expect(typeKeys.length).toBe(10); // the ten canonical event types (#266 adds trip + service) — a hard literal on purpose: an independent guard on the locale FILES, distinct from the constant pins
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(
 				readFileSync(resolve(`messages/${locale}.json`), 'utf8')
