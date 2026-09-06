@@ -2,6 +2,97 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] #264 item 6 — `_inheritrights` absence ≡ false, not inherit-by-default (2026-09-06)
+
+Read-only, source-verified (`~/projects/entu-api`), reported to team-lead. **Corrects my own
+older "absent default = true at create" note below** (Entu platform mechanics section) — that was
+half-right and needs the missing condition attached:
+
+- **CREATE-time** (`entity.js` `inheritParentProperties:296-325`): if the client's POST omits
+  `_inheritrights`, the server auto-fills `true` on the new entity **ONLY IF at least one of its
+  `_parent` targets already carries `_inheritrights.boolean === true`** at that moment. If no
+  parent has it true, nothing is written — the property stays genuinely ABSENT, not defaulted to
+  anything.
+- **AGGREGATE-time** (`aggregate.js:168`): the parent-rights cascade (materializing `_parent_*`
+  fields from the parent's `_owner`/`_editor`/`_expander`/`_viewer`) fires only on a strict
+  `_inheritrights?.at(0)?.boolean === true` check. **Absent and explicit `false` are behaviorally
+  IDENTICAL here — there is no inherit-by-default state.**
+- **Propagation-time** (`aggregate.js:512`, re-queueing children when a parent's rights change):
+  same strict `true` gate. A child sitting at absent/false is silently skipped forever — no
+  self-healing on a later parent-rights change.
+
+Live mvox_crede: db entity `_inheritrights:true` (platform's own `setupDatabase.js:110` bootstrap
+default, not mvox's choice). ALL 7 sections show it explicitly `true` — NOT because
+`sectionActions.ts` sets it (confirmed it doesn't), but because the create-time auto-fill kicked
+in: every section's parent IS the db entity, which already carries `true`. polyphony spot-check
+came up EMPTY — 0 `section` AND 0 `organization` instances live right now (confirmed via both
+`_type.string=` and `_type.reference=`, not a query miss) — a substantial reset since my last full
+audit that I didn't chase (out of scope here); checked `member` instead (only 2 live), both
+`_inheritrights:true`, consistent with the same mechanism.
+
+**Verdict passed to team-lead**: no live rights hole TODAY (the auto-fill happens to rescue
+`sectionActions.ts`'s omission every time, because every section's parent is the db entity and the
+db entity is true) — but it's a genuine unasserted dependency, not a designed default. Recommended
+`sectionActions.ts` set `_inheritrights:true` explicitly (matching `inviteData.ts`'s existing
+practice) rather than resting on an unwritten platform behavior team-lead's call whether that
+earns its own issue.
+
+## [DONE] #264 Soprano II `_parent` duplicate repair — LIVE, single-op, verified (2026-09-06)
+
+PO-authorized (issue #264 REPAIR AUTHORIZATION comment) + team-lead's explicit "I authorize this
+run": minimal single-DELETE variant (not the atomic-overwrite alternative). Guard read matched
+exactly (both duplicate value ids present, no drift since stage-1) → `DELETE /property/
+6a9d32a9ca67df980f41742e` → 200 → fresh read-back confirms Soprano II holds exactly ONE `_parent`
+(`6a9d31cbca67df980f417425`, referencing the mvox_crede db entity) → all 7 sections' member counts
+byte-identical before/after (5/4/4/3/1/3/1) — this op has no mechanism to touch membership, so
+identity was the only expected result. Ledger written (not committed — tree is mid-#262-pipeline
+on `feat/262-schedule-items-ui`, folding in at the next `main` seam):
+`scripts/migrations/seed-results/repair-264-soprano-ii-parent-dedup-live-2026-09-06T09-56-38Z.json`.
+Posted read-back verification as a comment on #264 myself (repair execution record convention):
+https://github.com/mvox-dev/mvox-app/issues/264#issuecomment-5558468188. **Honest note, not
+chased**: live-queried counts (Soprano I=5) don't match the issue's originally-cited 9/4/4/3/1
+snapshot from report time — section `_parent` dedup can't move membership counts either way, so
+this is someone else's drift to track, not a defect in this repair.
+
+## [PROBE-RESULT] #264 stage-1 read-only round on mvox_crede (2026-09-06)
+
+Read-only investigation (no writes), reported to team-lead by SendMessage (not posted on the
+issue — team-lead composes the stage-1 report). Three findings:
+
+1. **Soprano II holds a stranded duplicate `_parent`, confirmed live.** `_id 6a92a445...156a0`
+   carries TWO `_parent` property-values, BOTH `reference: 6a8f471a...e5112` (the mvox_crede db
+   entity — i.e. Mihkel's manual repair correctly landed Soprano II back at top-level), but as two
+   DISTINCT property-value `_id`s (`6a9d31cb...7425` and `6a9d32a9...742e`). Soprano I (`_id
+   6a92a444...15691`) has exactly ONE clean `_parent` value, untouched. This is the invisible
+   damage mechanism (A) predicted — confirmed, not hypothetical. [speculative, beyond the raw
+   read]: reads as Joosep's original indent leaving the pre-indent db-entity-ref value stranded
+   (its paired DELETE denied) while ALSO landing a new Soprano-I-ref value; Mihkel's later manual
+   outdent then added a THIRD, fresh db-entity-ref value without knowing to also clean up the
+   original stranded one — netting two identical-target values instead of one.
+2. **Joosep's actual rights are `_editor` (not `_owner`) uniformly, granted ONCE at the root and
+   cascading down** — NOT missing expander/owner-class rights at the collective as mechanism (B)
+   framed it. Confirmed via 3 direct entity reads: the mvox_crede db entity's OWN `_editor` array
+   lists Joosep Loidap (`_id 6a92a3fd...565d`) as a direct (non-`inherited`) grant; Soprano I and
+   Soprano II both show Joosep in `_editor`/`_expander`/`_viewer` with `inherited: true`
+   (cascading via `_inheritrights: true` all the way down from the db entity). He appears in NO
+   entity's `_owner` array. Per the established rights-tier model (`_editor` grants POST-
+   props/DELETE-prop-value, sufficient for a plain reference-property write like `_parent`), this
+   should in principle suffice for all four write kinds Gama enumerated — **which means mechanism
+   (B) as stated doesn't match what the private bucket shows.** Flagged to team-lead as a genuine
+   open puzzle for the code-research workflow, not resolved by me: something else in the write
+   path (BFF-side check, an Entu reference-property rule I haven't previously observed, or a
+   mis-surfaced error) must be the actual gate — not a bare insufficient-grant reading.
+3. **Live mvox.eu is ≥ #253 (and ≥ #259).** No commit SHA is served in the HTML/JS (Path C SPA
+   shell is the same for every route; roster's own lazy chunk never loads under an unauthenticated
+   curl, so I couldn't hash-match at that granularity). `/_app/version.json` gives a build
+   timestamp (`1788683384954` → 2026-09-06T08:29:44Z) that postdates BOTH #253 (2026-09-05
+   11:29:22Z) and the most recent roster-touching commit, #259 (2026-09-06 01:24:59Z) — cross-
+   referenced against `git log` timestamps, not asserted from the number alone. Current main HEAD
+   (`94b2033`, #262 work) is ~1h AHEAD of the live build timestamp — expected, that pipeline hasn't
+   deployed yet. `wrangler pages deployment list` timed out (no interactive CF auth in this
+   shell) — didn't chase further since the timestamp cross-reference already answers the question
+   cleanly.
+
 ## [DONE] Schema-of-record home proposal — filed as #263, ruled, follow-ups landed (2026-09-06)
 
 Dispatched by team-lead to draft the durable schema-of-record home proposal (common-prompt.md
@@ -477,12 +568,21 @@ copied to instances (checked directly — it's not the source of create-time cop
 parent ENTITY is).
 
 **`_inheritrights` is a CHILD-side property.** Controls whether that entity inherits rights from
-**its own parent**. Absent default = `true` at create. An org's own `_inheritrights:false` blocks
-cascade INTO the org from its parent (umbrella/db) — it says nothing about whether the org's
-CHILDREN inherit from the org; that's controlled by each child's own `_inheritrights` (sections/
-members/agenda nodes are `true` by design, so org `_viewer` grants cascade down through them).
-(Session-39 entry corrected an earlier wrong model that had this backwards — this is the settled
-version.)
+**its own parent**. An org's own `_inheritrights:false` blocks cascade INTO the org from its parent
+(umbrella/db) — it says nothing about whether the org's CHILDREN inherit from the org; that's
+controlled by each child's own `_inheritrights` (sections/members/agenda nodes are `true` by
+design, so org `_viewer` grants cascade down through them). (Session-39 entry corrected an earlier
+wrong model that had this backwards — this is the settled version.)
+
+**[CORRECTED 2026-09-06, #264 item-6 audit, source-verified against `entu-api`]**: "absent default
+= true at create" was imprecise — the real mechanic is `entity.js` `inheritParentProperties`
+(:296-325): omitting `_inheritrights` on a CREATE POST auto-fills `true` on the child **only if a
+`_parent` target already carries `_inheritrights.boolean === true`**; otherwise the property stays
+genuinely ABSENT (no default written at all). And absence is NOT inherit-by-default at read time —
+`aggregate.js:168`'s cascade and `:512`'s rights-change-propagation queue both gate on a strict
+`=== true` check, so **absent behaves exactly like explicit `false`**, permanently, with no
+self-healing on a later parent-rights change. See the `[PROBE-RESULT]` entry above for the full
+mvox_crede/polyphony live comparison and the verdict passed to team-lead.
 
 **Rights tiers**: `_editor` grants LIST/GET/POST-props/DELETE-prop-value but NOT `DELETE /entity`
 (needs `_owner`) and NOT writes to any `rightType` property (`_noaccess/_viewer/_expander/_editor/

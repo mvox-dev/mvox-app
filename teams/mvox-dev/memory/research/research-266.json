@@ -1,0 +1,176 @@
+{
+ "issue": 266,
+ "agents": [
+  {
+   "key": "vocabulary",
+   "findings": [
+    {
+     "claim": "EVENT_TYPE_LABEL — the one label map, 8 canonical keys, schema order — quoted whole",
+     "evidence": "src/lib/events/eventTypeLabels.ts:15-24 — export const EVENT_TYPE_LABEL: Record<string, () => string> = { rehearsal: m.event_type_rehearsal, concert: m.event_type_concert, festival: m.event_type_festival, retreat: m.event_type_retreat, workshop: m.event_type_workshop, meeting: m.event_type_meeting, social: m.event_type_social, other: m.event_type_other }. Line 30-32: CANONICAL_EVENT_TYPES = Object.keys(EVENT_TYPE_LABEL) — the ONE source, key order = picker render order. Lines 44-49: eventTypeLabel(eventType) does Object.hasOwn-guarded lookup, returns label?.() ?? eventType (raw value fallback, not '' / not crash) — guards against Object.prototype key names like 'toString'.",
+     "verified": true
+    },
+    {
+     "claim": "EVENT_TYPE_BADGE_CLASS — the one badge-color map, quoted whole; six hued types + two quiet-grey",
+     "evidence": "src/lib/events/eventTypeStyles.ts:18 DEFAULT_CLASS = 'text-ink-2 border-ink-4'. Lines 24-33: EVENT_TYPE_BADGE_CLASS = { rehearsal: 'bg-type-rehearsal-soft text-type-rehearsal border-type-rehearsal', concert: 'bg-type-concert-soft text-type-concert border-type-concert', festival: 'bg-type-festival-soft text-type-festival border-type-festival', retreat: 'bg-type-retreat-soft text-type-retreat border-type-retreat', workshop: 'bg-type-workshop-soft text-type-workshop border-type-workshop', meeting: 'bg-type-meeting-soft text-type-meeting border-type-meeting', social: DEFAULT_CLASS, other: DEFAULT_CLASS }. HUED (6): rehearsal, concert, festival, retreat, workshop, meeting. QUIET-GREY (2, today): social, other. Function eventTypeBadgeClass (lines 44-48) requires membership in CANONICAL_TYPE_SET (derived from CANONICAL_EVENT_TYPES, line 40) AND Object.hasOwn on the map before returning a hued class; anything else (unknown free text, undefined, or a canonical key absent from this map) falls to DEFAULT_CLASS.",
+     "verified": true
+    },
+    {
+     "claim": "Underlying @theme color tokens for the six hued types, in src/app.css",
+     "evidence": "src/app.css:40-51 — --color-type-rehearsal:#3d5a80 / -soft:#dbe4ef; --color-type-concert:#6b4c85 / -soft:#e6ddee; --color-type-festival:#874711 / -soft:#f0dcc5; --color-type-retreat:#35604b / -soft:#d9e8df; --color-type-workshop:#215a61 / -soft:#d3e8ea; --color-type-meeting:#8a4266 / -soft:#f0dce6.",
+     "verified": true
+    },
+    {
+     "claim": "The three pickers (#199 series-create, #242 standalone-create, #245 detail editor) share ONE constant — no independent enumeration in production code",
+     "evidence": "Series-create picker: src/routes/+page.svelte:6341-6343 `{#each CANONICAL_EVENT_TYPES as type (type)}<option value={type}>{eventTypeLabel(type)}</option>{/each}` (import at line 150, `seriesCreateType` state default 'rehearsal' at line 4484). Standalone-create picker: src/routes/+page.svelte:7351-7354, same each-block, plus a leading `<option value=\"\">{m.event_create_type_placeholder()}</option>` at line 7351 (empty default, #242 ruling — no preselection, `eventCreateType` starts '' at line 3235). Detail editor: src/routes/event/[id]/+page.svelte:2125-2126, identical each-block over the same imported CANONICAL_EVENT_TYPES/eventTypeLabel (import line 44). All three import from $lib/events/eventTypeLabels — one constant, zero drift risk in the app code itself.",
+     "verified": true
+    },
+    {
+     "claim": "A TEST file (page.event-type-picker.spec.ts) independently re-declares its own hardcoded 8-item canonical list rather than importing the real constant — this is a genuine duplicate that will silently pass green today but needs a manual edit when 'trip'/'service' join",
+     "evidence": "src/routes/page.event-type-picker.spec.ts:201-210 — `const CANONICAL_EVENT_TYPES = ['rehearsal','concert','festival','retreat','workshop','meeting','social','other'];` (a local const, not an import). Used at line 376 (`canonicalPairs()`) and line 385 (`eventPickerPairs()`), asserted via `optionPairs(type)).toEqual(canonicalPairs())` at lines 431 and 470, and `optionPairs(type).toEqual(eventPickerPairs())` at lines 502 and 647 — i.e. it asserts the exact rendered <option> value/label pairs of both the series and standalone pickers against this locally-hardcoded list. This is a hard-pin that WILL FAIL (list mismatch: 8 vs 10) the moment the real CANONICAL_EVENT_TYPES grows to 10, and is a separate risk from the eventTypeLabels/eventTypeStyles pins because the fix lives in a different file with no shared import to update centrally.",
+     "verified": true
+    },
+    {
+     "claim": "#214 filter chips — chip colour comes straight from eventTypeBadgeClass (the same #211 map), no second color map; chip set derives from types actually present in the agenda, not the canonical 8",
+     "evidence": "src/routes/+page.svelte:220-223 (type AgendaFilterBucket = (typeof CANONICAL_EVENT_TYPES)[number]; CANONICAL_EVENT_TYPE_SET = new Set(CANONICAL_EVENT_TYPES)). Lines 227-231 agendaFilterBucketOf: any free-text or empty event_type, AND canonical 'other' itself, bucket to 'other' — only the ROW badge shows the raw string; filtering groups them. Lines 234-239 agendaFilterChips = CANONICAL_EVENT_TYPES.filter((type) => present.has(type)) — canonical ORDER, only buckets actually present in agendaItems+recentItems. Lines 261-264 agendaTypeChipClass: `agendaTypeFilter === type ? `${eventTypeBadgeClass(type)} ${CHIP_PRESSED_CLASS}` : 'border-ink-4 text-ink-2'` — pressed chip color literally IS eventTypeBadgeClass(type), same function/map as every badge elsewhere; comment at lines 256-259 states explicitly '#211's map stays the single hue source (never a second hand-typed color map)'. Chip label at line 7721: `{eventTypeLabel(type)}`.",
+     "verified": true
+    },
+    {
+     "claim": "#247 month view badge and the agenda-row badges (recent + upcoming) all consume the same eventTypeLabel/eventTypeBadgeClass pair",
+     "evidence": "src/lib/components/agenda/AgendaMonthView.svelte:17,19 import eventTypeLabel / eventTypeBadgeClass; line 177 class=\"...{eventTypeBadgeClass(...)}\", line 181 {eventTypeLabel(item.eventType)}. src/lib/components/agenda/AgendaList.svelte:17,19 same imports; recent badge at lines 424/426, upcoming badge at lines 570/572 — both `class=\"...{eventTypeBadgeClass(item.eventType)}\"` / `{eventTypeLabel(item.eventType)}`. Event-detail badge: src/routes/event/[id]/+page.svelte:2147-2149 and 2156-2158, same pair.",
+     "verified": true
+    },
+    {
+     "claim": "Full consumer sweep of eventTypeLabels/eventTypeStyles/event_type_ finds no additional production consumers beyond the ones enumerated",
+     "evidence": "`grep -rln \"eventTypeLabels\\|eventTypeStyles\\|EVENT_TYPE_LABEL\\|EVENT_TYPE_BADGE_CLASS\\|CANONICAL_EVENT_TYPES\\|eventTypeLabel\\|eventTypeBadgeClass\" src/` returned exactly: eventTypeLabels.ts, eventTypeLabels.spec.ts, eventTypeStyles.ts, eventTypeStyles.spec.ts, AgendaList.svelte + its .event-type.spec.ts, AgendaMonthView.svelte, +page.svelte, event/[id]/+page.svelte + page.spec.ts + page.event-type-edit.spec.ts, page.agenda-filter.spec.ts, page.agenda-month-view.spec.ts, page.event-type-picker.spec.ts, page.series-create.spec.ts — no other file references any of these symbols.",
+     "verified": true
+    },
+    {
+     "claim": "Unknown wire value rendering: label falls back to the RAW string (never invented/blank), badge falls back to the quiet-grey DEFAULT_CLASS (never crash, never a stray hue) — confirmed both by source and by the pinning specs",
+     "evidence": "eventTypeLabels.ts:44-49 (own-property guarded lookup, `label?.() ?? eventType`). eventTypeLabels.spec.ts:59-61 asserts `eventTypeLabel('proov')` === 'proov'; lines 63-64 assert `eventTypeLabel('')` === ''; lines 72-79 assert Object.prototype key names ('toString','valueOf','constructor','hasOwnProperty','isPrototypeOf') still return themselves as strings (guards against prototype-pollution crash). eventTypeStyles.ts:44-48 (`type !== undefined && CANONICAL_TYPE_SET.has(type) && Object.hasOwn(...)` else DEFAULT_CLASS); eventTypeStyles.spec.ts:76-79 asserts `eventTypeBadgeClass('proov')` and `eventTypeBadgeClass(undefined)` both equal DEFAULT_CLASS; lines 84-87 assert 'toString'/'constructor' also get DEFAULT_CLASS not a prototype hit. Detail-page live confirmation: src/routes/event/[id]/page.spec.ts:657-667 — an event with event_type 'flashmob' renders 'flashmob' verbatim in [data-testid=event-detail-type].",
+     "verified": true
+    },
+    {
+     "claim": "event_type_* locale keys — 8 keys per file today, exact text quoted, confirmed same key SET across en/et/lv/uk (order identical too)",
+     "evidence": "messages/en.json:337-344 rehearsal='Rehearsal', concert='Concert', festival='Festival', retreat='Retreat', workshop='Workshop', meeting='Meeting', social='Social', other='Other'. messages/et.json:337-344 rehearsal='Proov', concert='Kontsert', festival='Festival', retreat='Laager', workshop='Töötuba', meeting='Koosolek', social='Seltskondlik üritus', other='Muu'. messages/lv.json:338-345 rehearsal='Mēģinājums', concert='Koncerts', festival='Festivāls', retreat='Nometne', workshop='Darbnīca', meeting='Sapulce', social='Saviesīgs pasākums', other='Cits'. messages/uk.json:339-346 rehearsal='Репетиція', concert='Концерт', festival='Фестиваль', retreat='Виїзний збір', workshop='Майстер-клас', meeting='Збори', social='Товариська зустріч', other='Інше'. Same 8 keys in the same order in all four files (line numbers differ slightly by locale only because of unrelated preceding keys in each file).",
+     "verified": true
+    },
+    {
+     "claim": "A spec asserts a hard count of exactly 8 event_type_* keys in en.json and cross-checks all 4 locale files against that set — this WILL FAIL the moment 2 new keys are added, independent of the eventTypeLabels/eventTypeStyles pins",
+     "evidence": "src/routes/event/[id]/page.spec.ts:669-684 — `it('guard: every event_type_* key in en.json exists in et, lv and uk, and none is empty', ...)`; line 672: `expect(typeKeys.length).toBe(8); // the v4E schema's eight known event types` — a literal hardcoded count, not derived from any shared constant.",
+     "verified": true
+    },
+    {
+     "claim": "Picker ordering is exactly Object.keys(EVENT_TYPE_LABEL) insertion order — today rehearsal, concert, festival, retreat, workshop, meeting, social, other — and every picker/chip-set renders in that same order because all iterate the same CANONICAL_EVENT_TYPES array",
+     "evidence": "eventTypeLabels.ts:30-32 `CANONICAL_EVENT_TYPES = Object.keys(EVENT_TYPE_LABEL)`. Every consumer does `{#each CANONICAL_EVENT_TYPES as type}` (series-create +page.svelte:6341, standalone-create +page.svelte:7352, detail editor event/[id]/+page.svelte:2125, filter-chip derivation +page.svelte:238 `CANONICAL_EVENT_TYPES.filter(...)`) — so wherever the new 'trip'/'service' keys are inserted into the EVENT_TYPE_LABEL object literal is exactly where they will appear in every picker and in the filter-chip order (subject to chip filtering by presence).",
+     "verified": true
+    },
+    {
+     "claim": "Three exhaustive spec pins will fail the moment 'trip'/'service' are added to the vocabulary, requiring coordinated edits: (a) eventTypeLabels.spec.ts SCHEMA_TYPES 8-list, (b) eventTypeStyles.spec.ts's 'covers exactly the 8 canonical types' assertion (dynamic against CANONICAL_EVENT_TYPES, so it only fails if the badge-class map isn't updated in lockstep) plus its hardcoded HUED_TYPES 6-list (only needs updating IF the PO decides the new types get hues — otherwise no change needed since new types fall to DEFAULT_CLASS by omission), (c) page.spec.ts:672 hardcoded .toBe(8), (d) page.event-type-picker.spec.ts's locally-hardcoded 8-item CANONICAL_EVENT_TYPES const feeding 4 exact toEqual() picker-option assertions",
+     "evidence": "eventTypeLabels.spec.ts:37-50 (`SCHEMA_TYPES` array literal + `expect(Object.keys(EVENT_TYPE_LABEL).sort()).toEqual([...SCHEMA_TYPES].sort())`). eventTypeStyles.spec.ts:46 (`HUED_TYPES` literal, 6 entries) and :89-91 (`expect(Object.keys(EVENT_TYPE_BADGE_CLASS).sort()).toEqual([...CANONICAL_EVENT_TYPES].sort())` — this one is dynamic but STILL fails if trip/service aren't added as explicit keys to EVENT_TYPE_BADGE_CLASS, since Object.keys only sees keys physically in the object literal, not ones falling through to DEFAULT_CLASS by the runtime guard). page.spec.ts:672 (`.toBe(8)`). page.event-type-picker.spec.ts:201-210 + :431,470,502,647 (local hardcoded list feeding 4 toEqual pins on rendered <option> pairs).",
+     "verified": true
+    },
+    {
+     "claim": "lv/uk label-length-on-phone concern is not yet resolvable — 'trip'/'service' have no lv/uk translations in the repo today; only the Estonian labels are fixed by the issue (Reis, Teenistus)",
+     "evidence": "grep of messages/lv.json and messages/uk.json event_type_* keys (shown above) contains only the current 8 keys; no 'trip'/'service'/'reis'/'teenistus' key exists in any of the four locale files today. mvox-app#266 brief (task context) fixes only the Estonian labels; lv/uk wording is undetermined pending this issue's implementation.",
+     "verified": true
+    }
+   ],
+   "risks": [
+    "page.event-type-picker.spec.ts (line 201-210) hardcodes its own copy of the canonical-type list instead of importing $lib/events/eventTypeLabels' CANONICAL_EVENT_TYPES — a real drift surface distinct from the two production-code enumeration points; easy to miss when scoping the #266 diff because it lives in a test file, not app code.",
+    "eventTypeStyles.spec.ts line 89-91 checks Object.keys(EVENT_TYPE_BADGE_CLASS) against CANONICAL_EVENT_TYPES exactly — meaning the implementation MUST add explicit 'trip'/'service' entries to EVENT_TYPE_BADGE_CLASS (even if both map to DEFAULT_CLASS) or this test fails; simply relying on the runtime fallback-to-DEFAULT_CLASS behavior (which works functionally) will not satisfy this pin.",
+    "page.spec.ts:672's `.toBe(8)` is a magic-number assertion with no shared source; it is easy to bump to 10 without noticing it is testing the SAME invariant as eventTypeLabels.spec.ts's SCHEMA_TYPES list, so both need to be found and edited independently.",
+    "No locale entries (et/lv/uk) for 'trip'/'service' exist yet anywhere in the repo — implementation will need 4 new locale-key pairs (event_type_trip, event_type_service) × 4 files, and the lv/uk wording is entirely open per the issue brief.",
+    "Whether 'trip'/'service' join the hued set or the quiet-grey set is a PO-ruling item still pending (#211 capped hued set at six, quiet-grey-first legitimate per the issue text) — this mapping task surfaces the mechanics but does not itself resolve that design call."
+   ]
+  },
+  {
+   "key": "blast-axes",
+   "findings": [
+    {
+     "claim": "Repo guard passed: ~/workspace-app origin is https://github.com/mvox-dev/mvox-app.git; current branch is feat/262-schedule-items-ui (not #266), so all evidence below was read via `git show main:<path>` for main-branch fidelity as instructed.",
+     "evidence": "Bash: git remote get-url origin -> mvox-app.git; git branch --show-current -> feat/262-schedule-items-ui",
+     "verified": true
+    },
+    {
+     "claim": "The vocabulary IS single-source today for label + badge-color + canonical-key-list: EVENT_TYPE_LABEL (src/lib/events/eventTypeLabels.ts:15-24) is the one map; CANONICAL_EVENT_TYPES (eventTypeLabels.ts:30-32) is derived FROM EVENT_TYPE_LABEL's own Object.keys (not a second hand-typed list); EVENT_TYPE_BADGE_CLASS (eventTypeStyles.ts:24-33) imports CANONICAL_EVENT_TYPES for its own-property guard. All consumers (agenda list, month view, event detail, season/event/series create pickers, #214 filter chips) import from these two modules only.",
+     "evidence": "git show main:src/lib/events/eventTypeLabels.ts and eventTypeStyles.ts; git grep -n CANONICAL_EVENT_TYPES/EVENT_TYPE_BADGE_CLASS/EVENT_TYPE_LABEL main -- 'src/**' shows consumers in src/routes/+page.svelte, src/routes/event/[id]/+page.svelte, src/lib/components/agenda/AgendaList.svelte, AgendaMonthView.svelte — no second production list found.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL (1) — real hardcoded-count/list breakage spots that WILL need updating for +2 types: (a) src/lib/events/eventTypeLabels.spec.ts:38-47 hand-types SCHEMA_TYPES = [8 strings] and asserts 'EVENT_TYPE_LABEL covers exactly the eight v4E schema types' (line 49) — breaks once trip/service are added to the source map; its vi.mock of $lib/paraglide/messages.js (lines 21-30) also only stubs the original 8 event_type_* keys, so eventTypeLabel('trip') would hit the fallback path in that test file until updated. (b) src/routes/event/[id]/page.spec.ts:672 literally asserts `expect(typeKeys.length).toBe(8); // the v4E schema's eight known event types` against messages/en.json's event_type_* keys — a hard numeric literal that breaks the moment two new locale keys are added. (c) src/routes/page.event-type-picker.spec.ts:201-210 hand-types its OWN `CANONICAL_EVENT_TYPES` array (8 strings) rather than importing the real constant from $lib/events/eventTypeLabels — a genuine parallel list per the issue's own 'unify if pickers enumerate independently' done-when; canonicalPairs() (line ~376) derives from this local copy, so it silently stays at 8 unless someone manually adds 'trip'/'service' to this test file's local array too.",
+     "evidence": "git show main of the three files at the cited lines (read this turn).",
+     "verified": true
+    },
+    {
+     "claim": "eventTypeStyles.spec.ts:90 asserts `Object.keys(EVENT_TYPE_BADGE_CLASS).sort()).toEqual([...CANONICAL_EVENT_TYPES].sort())` — this is a derived (not hardcoded) equality, so it will correctly force GREEN to add explicit trip/service entries to EVENT_TYPE_BADGE_CLASS (even if both just point at DEFAULT_CLASS) but will not silently pass with a stale count; this is by-design TDD friction, not a bug. Separately, the file's own test.each table at lines ~50-63 is a hand-typed array of [type, expectedClass] pairs that simply won't cover trip/service until rows are added (a coverage gap, not a false-pass).",
+     "evidence": "git show main:src/lib/events/eventTypeStyles.spec.ts lines 50-115, read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL (2) — no logic branches on specific event_type string values in a way that would special-case around trip/service. eventTypeLabel() and eventTypeBadgeClass() are both generic own-property-guarded lookups (no per-key special code); the #214 agenda filter bucketing (src/routes/+page.svelte:216-224, agendaFilterBucketOf) checks only `type !== 'other' && CANONICAL_EVENT_TYPE_SET.has(type)` — trip/service simply become new canonical buckets, no code change needed; eventConvert.ts and entityCreate.ts only read/write event_type as an opaque string (no value-specific branching found via grep across src/**).",
+     "evidence": "git show main of eventTypeLabels.ts:44-49, eventTypeStyles.ts:44-49, +page.svelte:216-224; git grep -n \"event_type\" main -- src/** excluding specs/label/style modules, read this turn — no conditional keyed off a specific type string (e.g. `if (eventType === 'concert')`) exists in production code.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL (3) — #250 ('agenda day header reads as a section title') and #252 ('roster arrange indent/unindent tap targets') are UNRELATED to event_type enumeration: #250 is exclusively about AgendaList.svelte day-header font-size/weight/color (text-[10px]→text-base etc.); #252 is exclusively about roster section indent/unindent triangle buttons (src/routes/roster/+page.svelte). Neither issue's done-when or diff touches event_type, EVENT_TYPE_LABEL, EVENT_TYPE_BADGE_CLASS, or any picker/badge/chip enumeration. The task brief's premise linking a 'size-step/outlined-pill mechanism' and 'solid/outline arrange buttons' to event-type handling does not match these issues' actual content.",
+     "evidence": "gh issue view 250 and gh issue view 252 (mvox-dev/mvox-app), full bodies read this turn; git log --oneline main confirms commits f4abbb2 feat(#252): roster arrange..., 704c967 feat(#250): agenda day header... — both unrelated to event type.",
+     "verified": true
+    },
+    {
+     "claim": "MECHANICAL (4) — chip colour IS directly derived from EVENT_TYPE_BADGE_CLASS, not a parallel list: src/routes/+page.svelte:258 `agendaTypeChipClass` calls `eventTypeBadgeClass(type)` directly for the pressed/active chip class, layered with a scheme-independent CHIP_PRESSED_CLASS ('font-semibold ring-1 ring-ink'); the inactive-chip class is the fixed quiet 'border-ink-4 text-ink-2' (same as DEFAULT_CLASS look). No second color map exists for chips. Confirmed the chip set itself (agendaFilterChips, +page.svelte:227-234) is derived from event types PRESENT in the rendered agenda, not the canonical list, per #214 Gama ruling comment.",
+     "evidence": "git show main:src/routes/+page.svelte lines 200-265, read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (5) locales — the four event_type_* files each hold exactly 8 keys today (rehearsal/concert/festival/retreat/workshop/meeting/social/other) with distinct translated values per locale; en/et/lv/uk all present and non-empty (guarded by page.spec.ts:672-681's cross-locale-completeness check, independent of the stale count-8 assertion at :672). Longest CURRENT lv/uk strings are lv 'Saviesīgs pasākums' (18 chars) and uk 'Товариська зустріч' (18 chars, Cyrillic) for 'social'.",
+     "evidence": "git show main:messages/en.json, et.json, lv.json, uk.json filtered to event_type_* keys, read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (5) truncation/overflow treatment — NONE of the three badge-rendering call sites (AgendaList.svelte:377/522, AgendaMonthView.svelte:177, event/[id]/+page.svelte:1871/1880) apply `truncate`, `max-w-*`, or any wrapping-prevention class to the badge span itself; badges use only `w-fit`/`shrink-0` + `rounded-full border px-1.5 py-0.5 ... uppercase`. By contrast the event NAME span explicitly carries `truncate` (AgendaList.svelte:369, MonthView 'min-w-0 flex-1 truncate'), and the #247 month-view date column has an explicit documented min-width treatment (AgendaMonthView.svelte comment ~160-168) sized for the WIDEST known weekday-key string across locales. So there is a documented precedent for locale-width defensive sizing on ONE surface (month date column) but NO equivalent defensive treatment exists yet for the type badge/chip/picker text — a long lv/uk 'trip'/'service' translation has no truncation guard if it turns out longer than the current 18-char ceiling; the filter-chip CONTAINER does use `flex flex-wrap` (+page.svelte:7651) so chips as a group can wrap to a new line, but an individual badge/chip span has no internal wrap-prevention or truncation.",
+     "evidence": "git show main of the four svelte files, exact line numbers cited, read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (5) et-caps / #250 / #251 interaction — no evidence found linking #250 or #251 to event-type label casing. #251 is exclusively about Intl.DateTimeFormat locale defaulting for narrative date headers (device locale vs app language), unrelated to event_type. Separately (found independently, not from #250/#251): badges and filter chips DO force `uppercase` via a Tailwind utility class on the badge/chip span itself (not literal-uppercase source strings) in all three badge sites and the chip button (+page.svelte:7674); the native <select> picker options render eventTypeLabel() output with no uppercase transform. This means Estonian/Latvian/Ukrainian diacritics/Cyrillic go through the browser's native CSS text-transform:uppercase on badges/chips only — 'Reis'/'Teenistus' contain no diacritics so this poses no new risk for the two new types specifically, but it is a real mechanism (not literal ALL-CAPS translation strings) that any new label automatically inherits without special-casing.",
+     "evidence": "gh issue view 251 (full body) read this turn — no event_type mention; grep of `uppercase` class occurrences at the badge/chip lines cited above vs. absence of `uppercase` near the <select>/<option> markup at +page.svelte:6299-6301/7310-7311 and event/[id]/+page.svelte:1849-1850, read this turn. The task brief's claimed '#250/#251 et-caps interactions' premise could not be confirmed against either issue's actual content — flagged as unresolved/likely mismatched premise.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (6) multi-collective — the vocabulary is global app code, not per-collective. EVENT_TYPE_LABEL/CANONICAL_EVENT_TYPES/EVENT_TYPE_BADGE_CLASS live under src/lib/events/ with no collective-id parameter, no per-collective config file, and are imported identically by every route regardless of which collective db is selected.",
+     "evidence": "Full read of eventTypeLabels.ts and eventTypeStyles.ts this turn — no collective/org parameterization present; grep across src/** for these symbols shows only import sites, no collective-scoped variants.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (6) existing live-shaped values — #195 ('Rename 39 Crede event_type values from proov to rehearsal') was a rename FROM the Estonian free-text stray value 'proov' TO the canonical English key 'rehearsal', not an English->translated rename as MEMORY.md's note phrases it ('event_type was all-English at seed; #195 renamed'). This is a discrepancy between the memory note and the issue's actual text; flagged rather than silently trusted. Regardless of the exact seed history, adding trip/service to the vocabulary maps is a pure additive change (new object keys) with no modification to the own-property-guarded fallback path (eventTypeLabels.ts:44-49, eventTypeStyles.ts:44-49) that any pre-existing wire value (canonical or free-text) goes through — so done-when 6 ('existing events untouched') holds structurally: no existing value's rendering path changes.",
+     "evidence": "gh issue view 195 body, read this turn, compared against MEMORY.md excerpt in system context; eventTypeLabels.ts/eventTypeStyles.ts fallback logic re-read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (7) rights — event_type is written from exactly two surfaces, both editor-gated: (a) the season-manage create pickers in src/routes/+page.svelte (series-create-type, event-create-type), reachable only through the manage panel gated by `canManage` (derived from `_owner`/`_editor` on the season/event, +page.svelte ~line 1197-1200); (b) the event detail page's inline type editor (src/routes/event/[id]/+page.svelte:1830-1888), which only renders its editable <button>/<select> branch when the viewer has edit rights (the non-editor branch at the same location renders a plain non-interactive badge span). Grepping every `event_type` occurrence in src/** outside eventTypeLabels/eventTypeStyles/specs found no RSVP, attendance, or other member-facing write path touching event_type.",
+     "evidence": "git show main of src/routes/+page.svelte (canManage derivation ~1197) and src/routes/event/[id]/+page.svelte:1825-1888, plus the full event_type grep across src/**, read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "AXIS (8) — exact spec-pinned contracts that must not be disturbed: #242 no-preselect (src/routes/page.event-type-picker.spec.ts:52-60): '#242 RULING (Mihkel, 2026-09-05) SUPERSEDES the old default pin: the standalone picker STARTS EMPTY — no preselected type... An untouched submit is REFUSED with event_create_type_required... the SERIES form is NOT touched by #242: seriesCreateType keeps its 'rehearsal' default and its select gains no placeholder'; and its eventPickerPairs() helper (line ~383) explicitly documents 'The SERIES picker keeps canonicalPairs() unchanged — the placeholder does NOT extend there.' #199 localized-picker contract (page.event-type-picker.spec.ts:14-22): 'THE CANONICAL TYPES — v4E schema.ts event_type note, in schema order... option labels come through paraglide m.event_type_<key> messages... NEVER hard-coded English and NEVER the raw key.' Both contracts are about ORDERING/SOURCE/PRESELECT behavior, not about the SIZE of the canonical set — adding two more keys at the end (or wherever picker-ordering is decided per #266 done-when 4) does not contradict either pinned text, since both derive from CANONICAL_EVENT_TYPES/canonicalPairs() rather than asserting a fixed length anywhere in their pinned prose (only the separate hand-typed local array at line 201 asserts a fixed length, per finding above).",
+     "evidence": "git show main:src/routes/page.event-type-picker.spec.ts lines 14-22, 52-60, 383-389, quoted verbatim, read this turn.",
+     "verified": true
+    },
+    {
+     "claim": "The #266 issue itself (gh issue view 266) already states the scoping facts nearly verbatim to the task brief: no schema change, free-text wire, one shared vocabulary (eventTypeLabels.ts/eventTypeStyles.ts/locale keys), done-when items 1-7 covering unification, 4-locale keys (et fixed as 'Reis'/'Teenistus'), badge-treatment as an open design proposal bounded by the daylight six-hue cap (a PO-ruling constraint, not code-enforced — no assertion anywhere caps HUED_TYPES.length), picker ordering as open, #214/#247 pick-up-for-free verification, no migration, and lv/uk phone-width check.",
+     "evidence": "gh issue view 266 (mvox-dev/mvox-app), full body read this turn; app.css:21-40 shows the six hued tokens with a documented 4.5:1 contrast floor and 'Hue angle is Mihkel's to move' but no code assertion limiting the hued set to six.",
+     "verified": true
+    }
+   ],
+   "risks": [
+    "src/routes/event/[id]/page.spec.ts:672 (`expect(typeKeys.length).toBe(8)`) is a hard numeric literal that will fail the moment two locale keys are added in any of the four messages/*.json files — must be bumped to 10 (or better, derived) as part of GREEN.",
+    "src/routes/page.event-type-picker.spec.ts:201-210 hand-types its own CANONICAL_EVENT_TYPES array instead of importing the real one from $lib/events/eventTypeLabels — this is the parallel-list drift the issue explicitly asks to unify; if left as-is, GREEN must remember to manually add 'trip'/'service' to this test-local array too, or picker specs will silently stay stuck testing only 8 options while production offers 10.",
+    "src/lib/events/eventTypeLabels.spec.ts's vi.mock of paraglide messages (lines 21-30) only stubs the original 8 event_type_* keys — trip/service label lookups in that spec file will resolve through the real (unmocked in this file's scope) messages or produce an undefined-message case unless the mock is extended.",
+    "eventTypeStyles.spec.ts:90's exact-key-parity assertion means EVERY canonical type (including trip/service) must get an explicit entry in EVENT_TYPE_BADGE_CLASS — if GREEN forgets to add trip/service rows there while adding them to EVENT_TYPE_LABEL, this spec fails (a good guardrail, but a required touch point, not automatic).",
+    "No existing defensive truncation/max-width treatment exists on the badge/chip/picker text itself (only the event-name span and, on month view, the date column have explicit width/truncation handling) — if lv or uk translations for 'trip'/'service' exceed the current ~18-character ceiling set by 'Saviesīgs pasākums'/'Товариська зустріч', there is no existing wrap/truncate guard on badges specifically to fall back on; this should be visually checked on a narrow-phone viewport once translations are drafted.",
+    "The task brief's premise that '#250 size-step/outlined-pill mechanism', '#252 solid/outline arrange buttons', and 'et-caps interactions noted around #250/#251' bear on event-type handling could not be confirmed — both issues are about unrelated UI surfaces (day-header typography, roster indent controls). This may indicate the orchestrating brief conflated issue numbers/topics; findings for items (3) and part of (5) are reported as 'premise not found' rather than as confirmed facts.",
+    "MEMORY.md's note that 'event_type was all-English at seed; #195 renamed' does not match #195's actual issue text (which describes a proov→rehearsal rename, i.e. Estonian-stray-value-to-canonical-English, not an all-English-to-translated rename) — worth a memory correction, independent of #266."
+   ]
+  }
+ ]
+}

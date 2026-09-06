@@ -1,0 +1,71 @@
+{
+  "issue": "#264",
+  "authorization": "PO ruling comment on issue #264, REPAIR AUTHORIZATION section (Gama) + team-lead explicit \"I authorize this run\"",
+  "db": "mvox_crede",
+  "op": "single property-value DELETE (minimal-op variant, not atomic-overwrite)",
+  "target": {
+    "entity": "Soprano II",
+    "entityId": "6a92a445ca67df980f4156a0"
+  },
+  "deletedPropertyValueId": "6a9d32a9ca67df980f41742e",
+  "keptPropertyValueId": "6a9d31cbca67df980f417425",
+  "guard": {
+    "description": "pre-op read of Soprano II's _parent values must show exactly the two authorized value ids, both referencing the db entity",
+    "preOpRead": [
+      {
+        "_id": "6a9d31cbca67df980f417425",
+        "reference": "6a8f471a5eb2498f434e5112"
+      },
+      {
+        "_id": "6a9d32a9ca67df980f41742e",
+        "reference": "6a8f471a5eb2498f434e5112"
+      }
+    ],
+    "result": "PASS \u2014 exact match, no drift, proceeded"
+  },
+  "deleteResponse": {
+    "httpStatus": 200,
+    "body": {
+      "deleted": true
+    }
+  },
+  "readBackVerification": {
+    "method": "fresh GET, independent of the DELETE call's own response",
+    "soprano2Parent": [
+      {
+        "_id": "6a9d31cbca67df980f417425",
+        "reference": "6a8f471a5eb2498f434e5112",
+        "entity_type": "database",
+        "string": "mvox_crede"
+      }
+    ],
+    "exactlyOneParent": true,
+    "referencesDbEntity": true
+  },
+  "memberCounts": {
+    "method": "GET entity?_type.string=member&_parent.reference=<sectionId>, count field only",
+    "before": {
+      "Soprano I (6a92a444ca67df980f415691)": 5,
+      "Soprano II (6a92a445ca67df980f4156a0)": 4,
+      "Alto I (6a92a446ca67df980f4156ae)": 4,
+      "Alto II (6a92a446ca67df980f4156bc)": 3,
+      "Tenor (6a92a447ca67df980f4156c9)": 1,
+      "Baritone (6a92a447ca67df980f4156d4)": 3,
+      "Conductor (6a92a448ca67df980f4156e0)": 1
+    },
+    "after": {
+      "Soprano I (6a92a444ca67df980f415691)": 5,
+      "Soprano II (6a92a445ca67df980f4156a0)": 4,
+      "Alto I (6a92a446ca67df980f4156ae)": 4,
+      "Alto II (6a92a446ca67df980f4156bc)": 3,
+      "Tenor (6a92a447ca67df980f4156c9)": 1,
+      "Baritone (6a92a447ca67df980f4156d4)": 3,
+      "Conductor (6a92a448ca67df980f4156e0)": 1
+    },
+    "unchanged": true,
+    "note": "these live-queried counts (Soprano I=5) differ from the issue's originally-cited 9/4/4/3/1 snapshot; not investigated further here since section._parent dedup has no mechanism to affect member._parent counts either way \u2014 before/after identity within this op is the relevant verification, not a match to the original issue-time snapshot"
+  },
+  "outcome": "SUCCESS \u2014 Soprano II holds exactly one _parent value, referencing the mvox_crede db entity; all section member counts unchanged",
+  "executedBy": "Perotin",
+  "timestampUtc": "2026-09-06T09-56-38Z"
+}
