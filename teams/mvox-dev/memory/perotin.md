@@ -2,6 +2,35 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #265 LIVE provisioning complete — admin_member_record + roster_show_real_names, both dbs (2026-09-06)
+
+Authorized: Mihkel comment 5561915982, verbatim "agreed, go ahead with live provisioning" — read
+before acting. Precondition satisfied: fresh re-dry-run immediately pre-live, clean on both dbs
+(7/7, toggle confirmed `domain`), before touching anything live.
+
+**Live run, both databases, 13/13 steps each, 0 failures.** Every prop-def's effective `_sharing`
+read back and asserted against intent via `assertPropDefSharing` — hard-fail-on-mismatch, none
+triggered: person→domain, name→domain, phone→private, email→private, birthdate→private,
+roster_show_real_names→domain. **Independently re-verified after the script's own self-report**
+(fresh GETs, not trusting the ledger alone): zero `admin_member_record` instances on either db,
+all six prop-defs' `_sharing` confirmed matching exactly, both dbs. Type-def ids: polyphony
+`6a9dcbc9ca67df980f417470`, mvox_crede `6a9dcbd3ca67df980f4174c6`.
+
+Ledgers committed `b4c7530` (also cleaned up two redundant just-before-live dry-run re-checks that
+added nothing beyond the already-committed clean dry-run — artifact hygiene). **Empty structure
+only, zero instances for any real person on either db** — real member data enters later through
+the admin layer, separately authorized per issuecomment-5561895850 (Joosep's live-test round).
+
+**#265 full arc, for the record**: shape proposal → per-property-sharing branch confirmed via
+source read + live probe → shape review APPROVED with 4 corrections → definition committed →
+provisioning halted on `organization`-retired-by-#161 premise mismatch → corrected to `database` →
+dry-run surfaced the toggle's inherit-vs-empirical-match sharing bug → fixed, explicit `domain` →
+clean dry-run both dbs → LIVE, both dbs, clean, independently verified. Two genuine defects caught
+before they ever touched real data, both the omission-inherits-something-wider trap wearing
+different faces. Next: PO-Approved definition PR housekeeping if not already covered by the
+commit trailers; dev tasks get cut separately, scoped for Mihkel's review, gated on Joosep's live
+round with real data on crede.
+
 ## [DONE] #265 provisioning definitions settled — DRY-RUN CLEAN both dbs, 7/7, live authorization next (2026-09-06)
 
 Team-lead's ruling interpretation (reported to PO): "same as the collective's other properties"
