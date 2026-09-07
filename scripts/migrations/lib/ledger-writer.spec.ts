@@ -117,4 +117,18 @@ describe('writeLedger — redaction shape table (RED-274.1)', () => {
 		const { content } = lastWrite();
 		expect(content.section).toEqual(['Soprano I']);
 	});
+
+	// mvox-app#278 (Gama ruling) — 'name' joined DEFAULT_REDACT_FIELDS with NO
+	// opt-out. Same five shapes as the other DEFAULT_REDACT_FIELDS member
+	// above; this is the belt Gama's ruling asked for underneath the
+	// acknowledgedNonSensitive exemption seed-246/265-crede now demonstrate
+	// as a copy-template — the default has to be safe even when the
+	// cross-check is (legitimately) bypassed.
+	const nameFieldCells = cellsFor('name');
+
+	it.each(nameFieldCells)('DEFAULT_REDACT_FIELDS field (#278) — $label', ({ build, read }) => {
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: build() });
+		const { content } = lastWrite();
+		expect(read(content)).toBe('[REDACTED]');
+	});
 });

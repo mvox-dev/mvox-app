@@ -15,16 +15,20 @@
 //    stray real address on ANY script, crede or polyphony, sensitive or not.
 //
 // 2. DECLARED-field redaction (unconditional) + gitignored routing (opt-in
-//    via `sensitive: true`). Unlike email addresses, a bare `name` field is
-//    genuinely ambiguous in this corpus — "Soprano I" (a section name) and
-//    "Jaan Tamm" (a person's name) are both plausible values of a field
-//    called `name`, and no regex tells them apart. So this layer is
-//    EXPLICIT, not inferred: the calling script states `sensitive: true`
-//    when its ledger may carry real per-person values (crede member/profile
-//    provisioning). Redaction of DEFAULT_REDACT_FIELDS / the caller's own
-//    `redactFields` runs REGARDLESS of `sensitive` — only the ROUTING is
-//    gated on it: `sensitive: true` additionally routes the file to
-//    `seed-results/crede-instance/`, the one directory `.gitignore`
+//    via `sensitive: true`). `name` is a DEFAULT_REDACT_FIELDS member (added
+//    mvox-app#278) even though a bare `name` field is genuinely ambiguous in
+//    this corpus — "Soprano I" (a section name) and "Jaan Tamm" (a person's
+//    name) are both plausible values of a field called `name`, and no regex
+//    tells them apart. #278's ruling (Gama): no opt-out for schema ledgers —
+//    a redacted type/prop-def name in a schema-provisioning ledger costs a
+//    reader nothing they cannot recover from the type definition itself, so
+//    the safe default costs nothing even where it turns out unnecessary. So
+//    this layer is EXPLICIT, not inferred: the calling script states
+//    `sensitive: true` when its ledger may carry real per-person values
+//    (crede member/profile provisioning). Redaction of DEFAULT_REDACT_FIELDS
+//    / the caller's own `redactFields` runs REGARDLESS of `sensitive` — only
+//    the ROUTING is gated on it: `sensitive: true` additionally routes the
+//    file to `seed-results/crede-instance/`, the one directory `.gitignore`
 //    excludes — belt-and-suspenders: even a redaction bug still cannot
 //    reach git history. Schema/type-provisioning ledgers (#246, #265) and
 //    every polyphony ledger stay `sensitive: false` and land in plain
@@ -38,12 +42,16 @@
 // (Bentham, YELLOW-274.3) added a companion assertion, not an inference: a
 // crede-looking `db` combined with `sensitive: false` throws unless the
 // caller also passes `acknowledgedNonSensitive: true` — refusing a
-// suspicious combination loudly is not the same as guessing quietly.
+// suspicious combination loudly is not the same as guessing quietly. This
+// cross-check is load-bearing, not decorative: with `seed-results/` tracked
+// (per hole A's #274 resolution), the caller's `sensitive: true` is the
+// only fence between a real-PII payload and a public git history — nothing
+// else in the pipeline stops it (Bentham, #274 review, relayed via #278).
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const DEFAULT_REDACT_FIELDS = ['email', 'forename', 'surname', 'phone', 'birthdate'] as const;
+export const DEFAULT_REDACT_FIELDS = ['email', 'forename', 'surname', 'phone', 'birthdate', 'name'] as const;
 
 const EMAIL_RE = /[^\s"]+@[^\s"]+\.[^\s"]+/g;
 
