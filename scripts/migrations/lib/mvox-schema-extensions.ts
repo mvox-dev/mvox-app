@@ -270,16 +270,26 @@ export const admin_member_record: MvoxEntityDef = {
 			descriptionEn: 'Date of birth, admin-managed. Not readable by members.',
 			descriptionEt: 'Sünnikuupäev, admini hallatud. Liikmetele mitte nähtav.',
 			ordinal: 5
+		},
+		{
+			name: 'id_code',
+			type: 'string',
+			required: false,
+			sharing: 'private',
+			descriptionEn: 'Estonian personal identification code (isikukood), admin-managed. Used for foreign travel and festival registration. Not readable by members.',
+			descriptionEt: 'Isikukood, admini hallatud. Kasutusel välisreisidel ja festivalidel registreerimiseks. Liikmetele mitte nähtav.',
+			ordinal: 6
 		}
 	],
 	creators: [{ kind: 'parent_right', right: '_editor' }],
 	notes: [
-		'Per-property sharing is a PRIVACY control here, not style (Mihkel, comment 5561632474): name -> domain, person -> domain (required for R2 to resolve rows at all), phone/email/birthdate -> private. Set EXPLICITLY on every prop-def, never left to inherit — omitting `_sharing` on a prop-def inherits the parent TYPE\'s tier (domain), which would silently widen the personal fields (mvox-app#265 live-probe finding).',
+		'Per-property sharing is a PRIVACY control here, not style (Mihkel, comment 5561632474): name -> domain, person -> domain (required for R2 to resolve rows at all), phone/email/birthdate/id_code -> private. Set EXPLICITLY on every prop-def, never left to inherit — omitting `_sharing` on a prop-def inherits the parent TYPE\'s tier (domain), which would silently widen the personal fields (mvox-app#265 live-probe finding).',
 		'One admin_member_record per person is an APP-level invariant (check-then-create) — Entu has no native uniqueness constraint. Same discipline as `profile`/`member`.',
 		'Instance `_sharing` asserted explicitly as `domain` at create time (not left to inherit) — matches `member`\'s own established pattern of asserting its tier rather than relying on parent inheritance.',
 		'R3 (outputs-of-record rule, e.g. a future concert programme): always reads `admin_member_record.name`, never `profile`, unconditionally regardless of the R2 toggle. No such output exists yet — documented contract only, nothing built for it in this commission.',
 		'R4 (prefill without dependency): an admin creating a record MAY prefill `name` from the person\'s existing profile display name as a ONE-TIME plain-value copy at creation time — never a formula or live reference. Formula properties cannot "compute once then freeze" (they always live-recompute), so a formula-based prefill would violate "drawing on, but not depending on" profile data the moment it changed.',
 		'Provisioning requirement (PO addition, comment 5561754737): after creating each prop-def, read back its effective `_sharing` and assert it matches the intent above, failing loudly on mismatch — the same unasserted-dependency discipline as mvox-app#264 item 6. Result goes in the seed-results ledger. This belongs to the provisioning script (next phase), not this definition.',
+		'id_code (isikukood) added mvox-app#282 (2026-09-07, PO-Approved comment 5573048456) — same per-property-sharing discipline as the original four fields, private explicit. Purpose: foreign travel / festival registration, stated by Mihkel, not inferred. Does not duplicate birthdate: a festival/travel form asks for the id_code itself as an identifier, not the DOB encoded inside it. `commissionedBy` on this type stays `mvox-app#265` (Gama\'s own ruling, same comment) — this bullet is the pointer from this field to its own adjudication; a second incrementally-commissioned field is the trigger to reconsider whether notes-as-pointer is still enough.',
 		'mvox app extension — not part of the canonical v4E schema (upstream flow retired 2026-09-06; entu/research is historical reference only).'
 	],
 	commissionedBy: 'mvox-app#265'

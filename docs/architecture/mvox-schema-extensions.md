@@ -93,10 +93,23 @@ discipline as `profile`/`member`.
 | `phone`     | string    | no       | private | Real phone number, admin-managed. Not readable by members.                                       |
 | `email`     | string    | no       | private | Real email, admin-managed. Not readable by members.                                              |
 | `birthdate` | datetime  | no       | private | Date of birth, admin-managed. Not readable by members. (No date-only wire type exists — full datetime, UI shows the date portion.) |
+| `id_code`   | string    | no       | private | Estonian personal identification code (isikukood), admin-managed. Used for foreign travel and festival registration. Not readable by members. |
 
 Required-vs-optional and the sharing split are Mihkel's shape-review
 corrections (comment 5561754737): only `name` is required (not `phone`, as
 the proposal had first read the commission); the rest are optional.
+
+**`id_code` was added** [mvox-app#282](https://github.com/mvox-dev/mvox-app/issues/282)
+(PO-Approved 2026-09-07, Gama comment 5573048456, Mihkel verbatim GO) — same
+per-property-sharing discipline as the original four fields, `private`
+explicit. Purpose stated by Mihkel: foreign travel and festival
+registration. Does not duplicate `birthdate` — a festival/travel form asks
+for the id_code itself as an identifier, not the DOB encoded inside it.
+`commissionedBy` on the type stays `mvox-app#265` (Gama's own ruling, same
+comment): it names the commission that adjudicated the type, which #282
+does not change; this paragraph is the pointer from the field to its own
+adjudication. A second incrementally-commissioned field on this type is the
+named trigger to reconsider whether notes-as-pointer is still enough.
 
 **Rights posture**: `_inheritsRights: true`, cascading the collective's own
 `_owner`/`_editor` down as this record's own — an admin (holds `_editor`+ on
@@ -176,7 +189,7 @@ BFF acts in the authenticated user's rights by default.
 | ----------------------- | -------------------------------- | ------------------ | ---------------------------------------------------- |
 | `program_item`          | domain                            | matches event       | name, edition, ordinal, notes                         |
 | `schedule_item`         | domain                            | matches event       | name, datetime                                        |
-| `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate` never leave the private bucket, per-property, regardless of the type/instance tier |
+| `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only
