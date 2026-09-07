@@ -217,8 +217,10 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		expect(result.seasonConductors).toEqual(['p-anna', 'p-bert']);
 	});
 
-	// #132/T2 — the season-creation upcoming-season gate reads this straight off
-	// the load, no extra fetch.
+	// #132/T2 — the page's season-list consumers (event-create <select>,
+	// zero-season onboarding gate, `deriveSeasonCreateRights`'s fallback) read
+	// this straight off the load, no extra fetch. NOT an upcoming-season
+	// suppression gate: #261 (PO:Gama reopen, 2026-09-07) removed that.
 	it('carries the FULL season list (both past/current and future) as `seasons`', async () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31'),

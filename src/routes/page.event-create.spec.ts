@@ -659,14 +659,16 @@ describe('agenda — the event-creation entry point (rights gate — #213: the g
 		expect(q(container, 'season-card-expand')).toBeNull();
 	});
 
-	it('an upcoming season hides [+ Season] (T2) but NOT the card — the two gates are independent', async () => {
+	it('an upcoming season hides NEITHER [+ Season] (#261 reopen) NOR the card — the two gates are independent, both rights-driven', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
 
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
-		expect(q(container, 'season-create')).toBeNull();
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
 	});
 
 	it("the PANEL's [+ Event] (T3's season-manage-add-event) opens the SAME form with the panel's season PRE-FILLED and the series options already offered", async () => {

@@ -356,8 +356,21 @@
 	let eventManageRights = $state<Record<string, ManageRightsState>>({});
 	// #132/T2 — the FULL season list `loadFullAgenda` already fetches (it calls
 	// listSeasons internally and today throws the list away after picking the
-	// current one). Powers ONLY the season-creation "an upcoming season already
-	// exists" gate below — no extra fetch.
+	// current one) — no extra fetch. Consumed by several page-level surfaces.
+	// Anchors below are grep targets, NOT line numbers: this file is edited
+	// often and any `:NNNN` pointer here silently rots into a wrong-code
+	// pointer for the next reader. The consumers are the event-create season
+	// <select> (`data-testid="event-create-season"`), the zero-season
+	// onboarding banner gate (`seasons.length === 0`, guarding
+	// `data-testid="agenda-onboarding"`), and the two manageable-season field
+	// lookups (`seasonManageDeleteName`, and the `seasonManageFieldsLoaded`
+	// initial-field-value block inside `openSeasonManagePanel`). The SAME list
+	// also reaches `deriveSeasonCreateRights` as `fullSeasons`, straight off
+	// the agenda result at the `deriveSeasonCreateRights(` call site, for its
+	// lapsed / no-current-season fallback.
+	// #261 (PO:Gama reopen, 2026-09-07) — it no longer powers any "an upcoming
+	// season already exists" suppression on the season-create entry point; that
+	// gate is gone.
 	let seasons = $state<Season[]>([]);
 	// The season's repertoire_items — the exclusion set for the "Add work"
 	// picker. Read separately from the agenda rows because a fully programmed
@@ -772,8 +785,8 @@
 					agendaItems = upcoming;
 					agendaLoading = false;
 					recentItems = recent;
-					// #132/T2 — the full season list, for the season-creation entry point's
-					// "an upcoming season already exists" gate. No extra fetch.
+					// #132/T2 — the full season list, for the page-level consumers listed
+					// on the `seasons` declaration above. No extra fetch.
 					seasons = fullSeasons;
 
 					// #90 TR.2 / #91 TR.3 — the Works element on every row, plus the
@@ -2190,11 +2203,13 @@
 	// collective admin needs an in-app way to open the NEXT season before the
 	// current one runs out; today that's only possible in Entu's admin UI.
 	//
-	// Rights gate: `seasonManageRights` (already derived above from the CURRENT
-	// season's `_owner`/`_editor`, fail-closed — see #91). Existence gate: no
-	// UPCOMING season already exists — `seasons` (loaded alongside the agenda,
-	// no extra fetch) has none whose `startDate` is strictly after today (the
-	// CURRENT/running season never counts as upcoming).
+	// Rights gate, and ONLY a rights gate: `seasonCreateRights` (derived from the
+	// CURRENT season's `_owner`/`_editor` with a lapsed/no-current-season
+	// fallback, fail-closed — see #91 and `deriveSeasonCreateRights`).
+	// #261 (PO:Gama reopen, 2026-09-07) — the former existence gate ("no UPCOMING
+	// season already exists") is REMOVED: the ruling puts [+ Season] above the
+	// existing season cards, so it stays visible when an upcoming season exists.
+	// See the render-site comment on `season-create` for the full rationale.
 	let seasonCreateOpen = $state(false);
 	let seasonCreateName = $state('');
 	let seasonCreateStartDate = $state('');
@@ -2231,11 +2246,7 @@
 		rosterPickerOptions(seasonCreateConductors.map((c) => c.id))
 	);
 
-	const hasUpcomingSeason = $derived.by(() => {
-		const todayIso = new Date().toISOString().slice(0, 10);
-		return seasons.some((s) => s.startDate > todayIso);
-	});
-	const showSeasonCreate = $derived(seasonCreateRights === 'editor' && !hasUpcomingSeason);
+	const showSeasonCreate = $derived(seasonCreateRights === 'editor');
 
 	function openSeasonCreateForm(): void {
 		// #132/T6 review F1 — a form with a write on the wire, or a series run that
@@ -5595,10 +5606,17 @@
 						<!-- #261 (Mihkel ruling 2026-09-06, verbatim) — "'+ Hooaeg' … stands
 						     above [the season cards]… if there are [seasons], then these
 						     season cards are below this control." [+ Season] LEAVES the
-						     card and stands here, above it, as its own page-level control;
-						     its gate (`showSeasonCreate && !seasonCreateOpen`) is UNCHANGED
-						     from #132/T2. With zero seasons + an editor this is the ONLY
-						     control on the surface (the onboarding banner's own CTA is
+						     card and stands here, above it, as its own page-level control.
+						     REOPENED #261 (PO:Gama, 2026-09-07) — the gate previously also
+						     required `!hasUpcomingSeason` (an onboarding-affordance holdover
+						     from #132/T2: don't prompt for a season when one is already
+						     coming). That rationale does not survive the move above the
+						     cards: the ruling explicitly puts this control above EXISTING
+						     season cards, so it must stay visible whenever an upcoming
+						     season exists too. The gate is now `seasonCreateRights ===
+						     'editor'` alone; `seasonCreateOpen` still hides the trigger while
+						     the form is open. With zero seasons + an editor this is still the
+						     ONLY control on the surface (the onboarding banner's own CTA is
 						     retired, above). -->
 						{#if showSeasonCreate && !seasonCreateOpen}
 							<button

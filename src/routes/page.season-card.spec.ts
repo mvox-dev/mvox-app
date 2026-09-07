@@ -36,8 +36,12 @@
 //   SHAPE
 //     - [+ Season] (season-create, testid unchanged) leaves the card and
 //       stands ABOVE it as a standalone page-level control; its gate
-//       (showSeasonCreate) is unchanged. With ZERO seasons + an editor it is
-//       the ONLY control on the surface: the onboarding banner's own CTA
+//       (showSeasonCreate) is EDITOR-ONLY (#261 reopen ruling): an existing
+//       UPCOMING season does NOT suppress it — visible whenever the user may
+//       create a season. Both data states are contracts of their own:
+//       an upcoming season present → [+ Season] renders; ZERO seasons + an
+//       editor → it renders and is the ONLY control on the surface (the sole
+//       exit from the empty state): the onboarding banner's own CTA
 //       (agenda-onboarding-cta) is retired — the banner's explanatory steps
 //       may stay, its second create button may not. The NON-editor zero-season
 //       path (agenda-empty) is byte-untouched.
@@ -487,14 +491,16 @@ describe('season card #261 — [+ Season] stands above the card as a standalone 
 		expect(createSeasonMock).not.toHaveBeenCalled();
 	});
 
-	it('gate unchanged: an UPCOMING season hides [+ Season]; the card (its expand control) stays', async () => {
+	it('an UPCOMING season: [+ Season] STAYS for an editor (#261 reopen — no upcoming-season suppression) and the card (its expand control) stays too', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
 
 		await waitFor(() => {
 			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
 		});
-		expect(q(container, 'season-create')).toBeNull();
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
 	});
 });
 

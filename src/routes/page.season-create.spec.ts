@@ -15,13 +15,18 @@
 //   DATA
 //     - `FullAgendaResult` grows a `seasons: Season[]` field — the FULL season
 //       list `listFullAgenda` already fetched (it calls `listSeasons` and today
-//       throws the list away after picking the current one). The page derives
-//       "an upcoming season exists" = `seasons.some(s => s.startDate > <today
-//       ISO date>)` — strictly AFTER today, so the CURRENT (running) season
-//       never counts as upcoming. No extra fetch.
+//       throws the list away after picking the current one). No extra fetch.
+//       The page derives NO upcoming-season condition from it: per the #261
+//       reopen ruling (PO:Gama, 2026-09-07) the render gate on [+ Season] is
+//       `seasonCreateRights === 'editor'` ALONE. The list is transported for the
+//       event-create season <select>, the zero-season onboarding banner gate
+//       (`seasons.length === 0`), the manageable-season field lookups, and
+//       `deriveSeasonCreateRights`'s lapsed / no-current-season fallback.
 //     - rights gate = `manageRightsFrom(seasonOwners, seasonEditors, personId)`
-//       on the CURRENT season (the src/routes/+page.svelte:284-292 derivation
-//       that already exists — `_owner` subsumes editor). FAIL-CLOSED: a
+//       on the CURRENT season — the `seasonManageRights =` derivation that
+//       already exists in src/routes/+page.svelte (grep that assignment rather
+//       than trusting a line number: the file moves under it). `_owner`
+//       subsumes editor. FAIL-CLOSED: a
 //       non-editor gets NO control, not a disabled one.
 //     - submit calls `createSeason(cfg, { name, dbEntityId, startDate, endDate,
 //       conductorRefs })` — dbEntityId from `resolveDatabaseEntityId(cfg, personId)` (NEVER a
@@ -42,8 +47,11 @@
 //
 //   TESTIDS
 //     season-create               the [+ Season] button. Renders IFF the viewer
-//                                 is a season editor AND no upcoming season
-//                                 exists. Page-level: never inside a row/picker.
+//                                 may create a season (rights gate ONLY — the
+//                                 #261 reopen ruling removed the upcoming-season
+//                                 suppression: an existing future-start season
+//                                 does NOT hide it). Page-level: never inside a
+//                                 row/picker.
 //     season-create-form          the inline form it opens (same route — no goto)
 //     season-create-name          name text input, AUTO-FOCUSED on open
 //     season-create-start         start date input, type="date"
@@ -376,9 +384,9 @@ async function submit(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'season-create-submit') as HTMLElement);
 }
 
-// ── the entry point: rights-gated, upcoming-season-gated ────────────────────────
+// ── the entry point: rights-gated ONLY ──────────────────────────────────────────
 
-describe('agenda — the [+ Season] entry point (rights + upcoming-season gate)', () => {
+describe('agenda — the [+ Season] entry point (rights gate; upcoming seasons do NOT suppress it — #261 reopen)', () => {
 	it('season editor + NO upcoming season: season-create renders, at page level (not inside any agenda row), and merely rendering writes nothing', async () => {
 		const container = await renderReady();
 
@@ -401,8 +409,27 @@ describe('agenda — the [+ Season] entry point (rights + upcoming-season gate)'
 		expect(q(container, 'season-create')).toBeNull();
 	});
 
-	it('an UPCOMING season already exists (startDate strictly after today): season-create does NOT render, editor or not', async () => {
+	it('an UPCOMING season already exists (startDate strictly after today): season-create STILL renders for an editor — #261 reopen: visible whenever the user may create a season', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
+	});
+
+	it('NON-editor + an UPCOMING season: season-create does NOT render — the #261 reopen removes only the upcoming-season clause, it never widens the RIGHTS gate', async () => {
+		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false, withUpcomingSeason: true }));
+		const container = await renderReady();
+
+		expect(q(container, 'season-create')).toBeNull();
+	});
+
+	it("rights fallback answers 'error' + an UPCOMING season: still fail-closed — season-create does NOT render", async () => {
+		// The current season carries no visible rights, so the page probes the
+		// database entity; a blip ('error') must read as no grant, never as one.
+		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: false, withUpcomingSeason: true }));
+		resolveManageRightsMock.mockResolvedValue('error');
 		const container = await renderReady();
 
 		expect(q(container, 'season-create')).toBeNull();

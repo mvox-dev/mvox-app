@@ -258,8 +258,9 @@ function currentSeason(viewerIsEditor: boolean): Season {
 	};
 }
 
-/** An UPCOMING season — makes T2's [+ Season] gate close while the CURRENT
- *  season stays fully manageable (the two affordances gate independently). */
+/** An UPCOMING season — since the #261 reopen it does NOT close T2's
+ *  [+ Season] gate (rights-only); the CURRENT season stays fully manageable
+ *  (the two affordances gate independently). */
 function upcomingSeason(): Season {
 	return {
 		id: 'season-2',
@@ -540,14 +541,16 @@ describe('agenda — the season-card season-manage entry point', () => {
 		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
 	});
 
-	it('the card gates INDEPENDENTLY of [+ Season]: with an upcoming season the create affordance is gone, the card stays (the current season is still manageable)', async () => {
+	it('the card gates INDEPENDENTLY of [+ Season]: with an upcoming season BOTH stay present (#261 reopen — the create affordance is rights-gated only; the current season is still manageable)', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaResult({ editor: true, withUpcomingSeason: true }));
 		const container = await renderReady();
 
 		await waitFor(() => {
 			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
 		});
-		expect(q(container, 'season-create')).toBeNull();
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
 	});
 
 	it('clicking the collapsed card opens season-manage-panel INLINE (no route change), a dialog with an accessible name, and loads the series + standalone-event lists for THIS season', async () => {

@@ -24,9 +24,13 @@ export interface FullAgendaResult {
 	seasonEditors: string[];
 	/**
 	 * #132/T2 — the FULL season list `listSeasons` already fetched, thrown away
-	 * after picking the current one. The season-creation entry point derives
-	 * "an upcoming season exists" from this (`startDate` strictly after today),
-	 * at zero extra fetch cost.
+	 * after picking the current one. Feeds SEVERAL page-level gates at zero
+	 * extra fetch cost — not an exhaustive list, but as of #261: the
+	 * event-create season `<select>`, the zero-season onboarding banner gate
+	 * (`seasons.length === 0` — the first-run surface, invisible to anyone
+	 * testing with data), the manageable-season field lookups, and
+	 * `deriveSeasonCreateRights`'s lapsed / no-current-season fallback. Check
+	 * the consumers before trimming this field.
 	 */
 	seasons: Season[];
 	/**
