@@ -835,6 +835,99 @@ describe('#204 — agenda page work pickers show composer', () => {
 	});
 });
 
+// ── #272 — programme control: conditional select + link, on the PAGE ─────────
+//
+// RED contract (Mihkel's four-part ruling, parts 3+4, exercised through the
+// real agenda page so the wiring — rights, picker derivation, write queue —
+// runs for real, not just the component in isolation):
+//   • the "Add to programme" button is ABSENT until an edition is selected
+//     (today it renders disabled), and absent AGAIN after a successful add
+//     (the handler's existing selection reset now also hides it);
+//   • with NOTHING pickable the <select> does not render at all — while the
+//     work-manage-add-programme wrapper block stays (the first-program_item
+//     scar: the block must keep rendering on the season-repertoire fallback).
+
+/** installWorld, with the edition read returning NOTHING pickable. */
+function installEditionlessWorld(options: WorldOptions = {}) {
+	const base = installWorld(options);
+	const wrapped = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+		const url = String(input);
+		const method = init?.method ?? 'GET';
+		if (method === 'GET' && url.includes('_type.string=edition')) {
+			return json({ entities: [] });
+		}
+		return base(input, init);
+	});
+	vi.stubGlobal('fetch', wrapped);
+	return wrapped;
+}
+
+describe('#272 — agenda page: programme select + add link are conditionally shown', () => {
+	it('the "Add to programme" button is ABSENT until an edition is selected, appears on selection, and is gone again after the add', async () => {
+		const fetchMock = installWorld({ seasonEditor: false, eventEditor: true, programItems: [] });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-programme-select"]')
+			).not.toBeNull();
+		});
+		// Part 3 — hidden, not disabled: no edition selected → no button in the DOM.
+		expect(
+			container.querySelector('[data-testid="work-manage-add-programme-button"]'),
+			'nothing selected → the button must be absent (the old shape was disabled-but-present)'
+		).toBeNull();
+
+		await fireEvent.change(
+			container.querySelector('[data-testid="work-manage-add-programme-select"]')!,
+			{ target: { value: 'ed-1' } }
+		);
+		const button = container.querySelector(
+			'[data-testid="work-manage-add-programme-button"]'
+		) as HTMLButtonElement | null;
+		expect(button, 'edition selected → the button appears').not.toBeNull();
+
+		await fireEvent.click(button!);
+		// The write itself is unchanged — the create still goes out…
+		await vi.waitFor(() => {
+			expect(
+				postsTo(fetchMock, '/entity').filter(([url]) => String(url).endsWith('/entity')).length
+			).toBe(1);
+		});
+		// …and the handler's selection reset now hides the button again.
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-programme-button"]'),
+				'post-add: selection reset → button hidden again'
+			).toBeNull();
+		});
+	});
+
+	it('an EVENT editor with NO programme yet and NOTHING pickable still gets the wrapper — select absent, button absent, the fallback works render un-crashed', async () => {
+		// Sibling of "…can still start one" above: same rights shape, same
+		// season-repertoire fallback (the block deliberately not gated on
+		// context — the scar comment in RepertoireElement.svelte), but the
+		// edition read yields nothing to pick. Part 4's gate lands on the INNER
+		// select only; the wrapper stays.
+		installEditionlessWorld({ seasonEditor: false, eventEditor: true, programItems: [] });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(container.querySelector('[data-testid="work-manage-add-programme"]')).not.toBeNull();
+		});
+		expect(
+			container.querySelector('[data-testid="work-manage-add-programme-select"]'),
+			'empty pickable list → a placeholder-only dropdown must not render'
+		).toBeNull();
+		expect(container.querySelector('[data-testid="work-manage-add-programme-button"]')).toBeNull();
+		// The surface around it is intact: the fallback rows are on screen.
+		expect(container.querySelectorAll('[data-testid="work-row"]').length).toBeGreaterThan(0);
+	});
+});
+
 // (*MVOX:Josquin* — #91 review fix-forward: end-to-end management wiring)
 // (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
 // (*MVOX:Tallis* — #204 review fix-forward: nameless work on the wire)
+// (*MVOX:Tallis* — #272 RED: programme select + add link conditionally shown, page wiring)

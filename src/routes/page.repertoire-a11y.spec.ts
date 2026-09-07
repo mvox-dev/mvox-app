@@ -50,8 +50,9 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		repertoire_move_down: () => 'Move down',
 		repertoire_add_work_label: () => 'Add a work',
 		repertoire_add_work_button: () => 'Add',
-		repertoire_add_programme_label: () => 'Add to programme',
-		repertoire_add_programme_button: () => 'Add',
+		// #272 — the placeholder names the CHOICE, the button names the ACTION.
+		repertoire_add_programme_label: () => 'Select edition',
+		repertoire_add_programme_button: () => 'Add to programme',
 		repertoire_inactive_count: (p) => `+${p?.count} inactive`,
 		// The badge screen-reader label GREEN is expected to add — named here so
 		// the "contains Repertoire" assertions read against realistic copy.
@@ -650,7 +651,7 @@ describe('#93 — a11y: management controls identify their work', () => {
 		}
 	});
 
-	it("the two Add buttons have distinct accessible names — both surfaces can render together and two bare 'Add' buttons are indistinguishable", () => {
+	it("the two Add buttons have distinct accessible names — both surfaces can render together and two bare 'Add' buttons are indistinguishable", async () => {
 		// Empty rows + editor rights on BOTH surfaces: the works-manage-empty
 		// branch renders both Add controls side by side.
 		const { container } = render(RepertoireElement, {
@@ -663,6 +664,12 @@ describe('#93 — a11y: management controls identify their work', () => {
 				pickableEditions: [{ id: 'ed-new', label: 'New work — Urtext' }]
 			}
 		});
+		// #272 part 3 — the programme button only exists once an edition is
+		// selected, so select one before reading the two buttons' names.
+		await fireEvent.change(
+			container.querySelector('[data-testid="work-manage-add-programme-select"]')!,
+			{ target: { value: 'ed-new' } }
+		);
 		const addWork = container.querySelector('[data-testid="work-manage-add-work-button"]') as HTMLElement;
 		const addProgramme = container.querySelector(
 			'[data-testid="work-manage-add-programme-button"]'

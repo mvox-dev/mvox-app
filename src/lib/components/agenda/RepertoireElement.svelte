@@ -550,29 +550,33 @@
 	     season-only editor does not. -->
 	{#if canManageProgramme}
 		<div data-testid="work-manage-add-programme" class="flex flex-wrap items-center gap-2 pt-1">
-			<select
-				data-testid="work-manage-add-programme-select"
-				class="w-full sm:w-auto"
-				value={selectedEditionForAdd}
-				disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
-				aria-label={m.repertoire_add_programme_select_aria_label()}
-				onchange={(e) => (selectedEditionForAdd = (e.currentTarget as HTMLSelectElement).value)}
-			>
-				<option value="">{m.repertoire_add_programme_label()}</option>
-				{#each pickableEditions as opt (opt.id)}
-					<option value={opt.id}>{opt.label}</option>
-				{/each}
-			</select>
-			<button
-				type="button"
-				data-testid="work-manage-add-programme-button"
-				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-				disabled={pendingKeys.has(ADD_PROGRAMME_KEY) || !selectedEditionForAdd}
-				aria-label={m.repertoire_add_programme_aria_label()}
-				onclick={handleAddProgramItem}
-			>
-				{m.repertoire_add_programme_button()}
-			</button>
+			{#if pickableEditions.length > 0}
+				<select
+					data-testid="work-manage-add-programme-select"
+					class="w-full sm:w-auto"
+					value={selectedEditionForAdd}
+					disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
+					aria-label={m.repertoire_add_programme_select_aria_label()}
+					onchange={(e) => (selectedEditionForAdd = (e.currentTarget as HTMLSelectElement).value)}
+				>
+					<option value="">{m.repertoire_add_programme_label()}</option>
+					{#each pickableEditions as opt (opt.id)}
+						<option value={opt.id}>{opt.label}</option>
+					{/each}
+				</select>
+			{/if}
+			{#if selectedEditionForAdd}
+				<button
+					type="button"
+					data-testid="work-manage-add-programme-button"
+					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+					disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
+					aria-label={m.repertoire_add_programme_aria_label()}
+					onclick={handleAddProgramItem}
+				>
+					{m.repertoire_add_programme_button()}
+				</button>
+			{/if}
 		</div>
 	{/if}
 {/snippet}
