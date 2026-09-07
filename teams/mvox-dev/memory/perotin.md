@@ -2,6 +2,48 @@
 
 (*MVOX:Perotin*)
 
+## [WIP] #278 name→DEFAULT_REDACT_FIELDS — read-only prep done, HOLDING for seam (2026-09-07)
+
+PO-ruled follow-up to #274 (does not reopen it). Read-only prep complete,
+no repo writes yet — pipeline wf_4bc7894e-ec2 owns the tree, team-lead
+grants the seam window before I touch anything.
+
+**Confirmed via read-only checks**: adding `'name'` to `DEFAULT_REDACT_FIELDS`
+(lib/ledger-writer.ts:46) is safe against every currently-migrated script —
+none of the 4 schema-provisioning ledgers (seed-246/265 × crede/polyphony)
+have a `name` KEY anywhere in their payload (`LedgerStep`'s `after`/`before`
+never use it; `target` VALUES like `"admin_member_record.name"` are string
+content, not keys, so key-based redaction never touches them — confirmed by
+grepping `ensure-schema-type.ts`'s `ledger.push` call sites). seed-186
+already passes `redactFields:['name']` explicitly for the real person-name
+field — becomes redundant, harmless (Set dedup), no call-site edit needed.
+`tidy-td2-name-visibility.ts` DOES carry `name:` keys in its ledger
+(polyphony synthetic entity names) — good candidate for the required
+"one type-provisioning dry-run smoke, [REDACTED] now expected" check.
+
+**Write-phase plan (execute only inside the granted seam)**:
+1. `lib/ledger-writer.ts`: add `'name'` to `DEFAULT_REDACT_FIELDS`; fold
+   Bentham's rider sentence into the module doc — "with `seed-results/`
+   tracked, the caller's `sensitive: true` is the only fence" (why the
+   YELLOW-274.3 cross-check is load-bearing).
+2. `lib/ledger-writer.spec.ts`: extend the shape table with a THIRD
+   `cellsFor('name')` block asserted under the DEFAULT set (no
+   `redactFields` override) — 5 more cells, same scalar/array-of-string/
+   array-of-object/nested-object/deep-nested shapes as `surname`/`nickname`.
+3. Dry-run smoke: `tidy-td2-name-visibility.ts` against polyphony —
+   confirm ledger's `name` fields now read `[REDACTED]`, expected/accepted
+   per the ruling, not a regression.
+4. `pnpm check` + FULL `pnpm vitest run` (not path-scoped — standing habit
+   from #274 round 2) before reporting.
+5. **Open question not yet resolved, will ask when seam opens**: branch
+   strategy unstated this time (unlike #274's explicit "chore branch").
+   Given this touches the same reviewed lib/ file under the same safety
+   discipline, default assumption is same protocol (chore branch + Bentham
+   review) unless team-lead says direct-to-main-in-seam for something this
+   small — confirming rather than assuming.
+6. Writer-by-construction guard (open Gama question in the issue): NOT
+   building — team-lead explicit "don't build it unless Gama says so."
+
 ## [DONE] #274 script-safety hardening — PR #276, no live mutation (2026-09-07)
 
 Henry's post-close audit (Gama clone-verified): seed-184/187/188 had ZERO

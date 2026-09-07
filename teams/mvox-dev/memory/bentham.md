@@ -107,6 +107,52 @@ branch (the common case), so make it conditional or `--allow-empty`. And re-run 
 review time — a clean RED commit does not bind the GREEN / i18n / FIX commits that follow, each of
 which gets its own `add -A`.
 
+## [GOTCHA-DEDUP-BY-DELETE-IS-PARITY-DEPENDENT] 2026-09-07, #269 — demand an ODD-count test
+
+"Drop duplicates from a map" written as *set-on-first, delete-on-second* is **count-parity dependent**
+and silently re-adds. Without a `seen`/`duplicated` set, record 3 finds `map.has(id)` false — the
+delete removed it — and re-`set`s the person under an arbitrary name. Measured on the real loop shape:
+
+| records for one person | with the `duplicated` guard | WITHOUT it |
+|---|---|---|
+| 2 | dropped | dropped ✓ |
+| **3** | dropped | **re-added as the 3rd name** ✗ |
+| 4 | dropped | dropped ✓ |
+
+**Two and four both pass. Only odd counts ≥3 fail.** So a spec that pins only the two-record case
+certifies a broken implementation, and the bug reaches production looking tested. #269 shipped the
+correct form (a `duplicated: Set` consulted *before* the `has` check, making it count-independent) and
+a dedicated third-record pin — verified by replaying both pins at file granularity against the pre-fix
+blob: exactly 3 failures, 27 unrelated cases still green.
+
+**Standing move**: for ANY dedup/drop/refuse-to-guess collection logic, ask for the **odd-count**
+case, not just the duplicate case — and check the implementation is guarded by a separate seen-set
+rather than by the absence of the key it just deleted. The general form: **never use a mutated
+collection's own membership as the memory of what you removed from it.**
+
+## [PATTERN-NEW-SUSPENSION-POINT-AUDIT] 2026-09-07, #268 r4 — three questions, always
+
+When a fix inserts an `await` into a guarded async handler (here: a fresh `loadMemberRecord` moved
+into `saveRecordEditor` so the check-then-create invariant guards the WRITE, not the editor-open),
+run all three:
+
+1. **Does the new guard exist?** Every pre-existing guard across a suspension point must be re-checked
+   across the new one. #268 did this — `isCurrent(g) && recordEditorMemberId === memberId` is
+   re-checked immediately after the new await.
+2. **Did the existing race pins go SHORT-CIRCUIT?** A held-promise race test may now satisfy itself at
+   the NEW early guard and never reach the post-write guard it was written for — passing for a
+   different reason, leaving the original guard uncovered. Trace the await ordering in the test:
+   #268's `:732` pin survived intact because its `await tick()` lets the new lookup resolve and the
+   held `createMemberRecord` be entered BEFORE the collective switch, so the post-write guard is still
+   the one under test. **That has to be traced, not assumed** — a green suite says nothing about which
+   branch did the work.
+3. **Does the NEW guard have its own pin?** Usually not, and that is the finding. The new suspension
+   point needs a race test that holds the *new* await (defer `loadMemberRecordMock`, switch, release)
+   and asserts neither write fires. Without it a future refactor deletes the guard silently.
+
+Q2 and Q3 are the ones everyone misses; Q1 is the one everyone remembers. A fix that adds an await is
+a **coverage** event as much as a behaviour one.
+
 ## [CALIBRATION-SCOPED-GATE-IS-NOT-THE-GATE] 2026-09-07, #274 r2
 
 Pérotin reported "vitest 117/117" and it was true — of a **scoped** run
