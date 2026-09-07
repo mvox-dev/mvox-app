@@ -990,7 +990,374 @@ describe('(F) privacy fence — non-admins never get the fields in the DOM', () 
 	});
 });
 
+describe('(#283) environment smoke — the guard primitives hold in THIS environment, not by inference', () => {
+	// Toolchain note: `/\p{L}/u` has ZERO precedent in this codebase, so its
+	// behaviour is pinned HERE, inside the suite's own environment (esnext
+	// target, Node 22, happy-dom via @vitest-environment above) — not inferred
+	// from spec sheets.
+	it('/\\p{L}/u matches letters in ANY alphabet (õ, š, Cyrillic А) and rejects digits, +, spaces, parens, hyphens and dots', () => {
+		expect(/\p{L}/u.test('õ')).toBe(true);
+		expect(/\p{L}/u.test('š')).toBe(true);
+		expect(/\p{L}/u.test('А')).toBe(true); // CYRILLIC CAPITAL A, not Latin
+		expect(/\p{L}/u.test('0123456789')).toBe(false);
+		expect(/\p{L}/u.test('+372 5555 5555')).toBe(false);
+		expect(/\p{L}/u.test('+44 (0)20 7946 0958')).toBe(false);
+		expect(/\p{L}/u.test('372.5555.5555')).toBe(false);
+		expect(/\p{L}/u.test('+1-555-0100')).toBe(false);
+	});
+
+	// Gama's #283 ruling routes the email guard through the BROWSER'S OWN
+	// constraint validation — `checkValidity()` on the type=email element, no
+	// hand-rolled regex. That only works if this suite's DOM implementation
+	// actually computes email validity; pin it directly so a happy-dom upgrade
+	// that stops validating turns THIS test red instead of silently hollowing
+	// out the guard tests below.
+	it("happy-dom computes type=email validity: 'not an email' invalid, 'a@b' valid, '' valid (optional-field semantics), 'a@b@c' invalid", () => {
+		const el = document.createElement('input');
+		el.type = 'email';
+		el.value = 'not an email';
+		expect(el.checkValidity()).toBe(false);
+		el.value = 'a@b';
+		expect(el.checkValidity()).toBe(true);
+		el.value = '';
+		expect(el.checkValidity()).toBe(true);
+		el.value = 'a@b@c';
+		expect(el.checkValidity()).toBe(false);
+	});
+});
+
+describe('(#283) phone guard — letters refuse the save; + and friends survive (name-required idiom)', () => {
+	// Joosep, verbatim: "ei luba tähti salvestada aga + märki lubab" — a guard
+	// on the WRITE, not a filter on typing. The rule is rejection-of-letters
+	// ONLY (`/\p{L}/u`): the issue explicitly forbids an allowlist, because an
+	// allowlist that forgets a legitimate character rejects a valid number
+	// while claiming to be a fix. Placement is the name-required slot in
+	// `saveRecordEditor`: a refusal is NOT a write — it must never arm the
+	// single-flight lock, never reach the fresh-lookup re-read, never touch
+	// the partial/damaged/failed error kinds.
+	it("CREATE path: 'tel: 555' refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming; sibling typed fields survive", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1); // the editor open
+		await fireEvent.input(nameInput(container), { target: { value: 'Berta Real' } });
+		await fireEvent.input(birthdateInput(container), { target: { value: '1990-03-15' } });
+		await fireEvent.input(phoneInput(container), { target: { value: 'tel: 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		const alert = await waitFor(() => {
+			const el = q(container, 'roster-record-save-error');
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		expect(alert.getAttribute('role')).toBe('alert');
+		// The guard's OWN copy — never the all-or-nothing failure message.
+		expect(alert.textContent).toContain('[roster_record_phone_invalid]');
+		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+		// PLACEMENT: the refusal fired BEFORE the fresh-lookup suspension point —
+		// still only the editor-open read.
+		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
+		// PLACEMENT: the single-flight lock was never armed — save re-armable,
+		// the row's own cancel never went disabled.
+		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
+		expect((q(container, 'roster-record-cancel') as HTMLButtonElement).disabled).toBe(false);
+		// Editor stays open with everything the admin typed still in it.
+		expect(nameInput(container).value).toBe('Berta Real');
+		expect(birthdateInput(container).value).toBe('1990-03-15');
+		expect(phoneInput(container).value).toBe('tel: 555');
+		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
+	});
+
+	it("'õhtul helistada' is refused — Estonian letters are letters (a /[a-z]/i check would pass õäöü)", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: 'õhtul helistada' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_phone_invalid]'
+		);
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+	});
+
+	it("'тел 555' is refused — Cyrillic letters are letters too, any alphabet", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: 'тел 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_phone_invalid]'
+		);
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+	});
+
+	it('PRIVACY (crede real-PII law): the refusal copy is a STATIC string naming the field — the typed value appears in no alert and no console output', async () => {
+		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: 'õhtul helistada 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		const alert = await waitFor(() => {
+			const el = q(container, 'roster-record-save-error');
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		expect(alert.textContent).not.toContain('õhtul helistada 555');
+		const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
+			.map((c) => c.map(String).join(' '))
+			.join(' ');
+		expect(logged).not.toContain('õhtul helistada 555');
+		consoleErrorSpy.mockRestore();
+		consoleLogSpy.mockRestore();
+	});
+
+	it("'+372 5555 5555' saves UNCHANGED — + survives by construction (foreign travel is the normal case, #282)", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: '+372 5555 5555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual({
+			dbEntityId: 'db-1',
+			personId: 'pp-2',
+			name: 'Berta Bass',
+			phone: '+372 5555 5555',
+			email: 'berta@example.com',
+			birthdate: ''
+		});
+	});
+
+	// NO ALLOWLIST — the issue's explicit trap warning: spaces, parens, hyphens
+	// and dots are not letters, so every one of these legitimate shapes passes.
+	it.each(['+44 (0)20 7946 0958', '372.5555.5555', '+1-555-0100'])(
+		"'%s' saves verbatim — rejection-of-letters only, never an allowlist",
+		async (phone) => {
+			const { container } = await renderRosterAs('admin');
+			await openEditor(container, 'm2');
+			await fireEvent.input(phoneInput(container), { target: { value: phone } });
+			await fireEvent.click(q(container, 'roster-record-save')!);
+			await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+			expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+				expect.objectContaining({ phone })
+			);
+		}
+	);
+
+	it('an EMPTY phone still saves — the field is optional and stays so', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(phoneInput(container).value).toBe('');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ phone: '' })
+		);
+	});
+
+	it("UPDATE path: letters in an EXISTING record's phone refuse too — updateMemberRecord never fires, sibling typed change survives", async () => {
+		loadMemberRecordMock.mockResolvedValue({
+			state: 'one',
+			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
+		});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), { target: { value: 'kept@example.com' } });
+		await fireEvent.input(phoneInput(container), { target: { value: 'mob. 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_phone_invalid]'
+		);
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(emailInput(container).value).toBe('kept@example.com');
+	});
+
+	it('the phone REFUSAL owns the live region too: cleared-before-gate ordering — a stale "saved" cannot outlive it', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() =>
+			expect(q(container, 'roster-member-record-status')!.textContent).toContain(
+				'roster_record_saved'
+			)
+		);
+		await openEditor(container, 'm1');
+		await fireEvent.input(phoneInput(container), { target: { value: 'tel: 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_phone_invalid]'
+		);
+		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
+		expect(createMemberRecordMock).toHaveBeenCalledTimes(1); // the FIRST save only
+	});
+
+	it('after removing the letters, the same save goes through — the refusal is a gate, not a dead end', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: 'tel: 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		await fireEvent.input(phoneInput(container), { target: { value: '+372 555' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ phone: '+372 555' })
+		);
+	});
+});
+
+describe("(#283) email guard — the browser's OWN constraint validation, weakest-rule fence", () => {
+	// Gama's ruling on #283: the guard is `emailInputEl && !emailInputEl.
+	// checkValidity()` — the browser's deliberately-permissive email rule, NO
+	// hand-rolled regex of ours to write, argue about, or later "improve".
+	it("'not an email' refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
+		await fireEvent.input(emailInput(container), { target: { value: 'not an email' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		const alert = await waitFor(() => {
+			const el = q(container, 'roster-record-save-error');
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		expect(alert.getAttribute('role')).toBe('alert');
+		expect(alert.textContent).toContain('[roster_record_email_invalid]');
+		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1); // no fresh-lookup re-read
+		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
+		expect((q(container, 'roster-record-cancel') as HTMLButtonElement).disabled).toBe(false);
+		expect(emailInput(container).value).toBe('not an email');
+		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
+	});
+
+	// WEAKEST-RULE FENCE (Gama, #283, verbatim law): "The rule must stay the
+	// weakest thing that closes the reported hole." A future guard that rejects
+	// 'a@b' is a CONTRACT VIOLATION — it would start rejecting real addresses
+	// to catch a class of typo nobody has reported. This passing pin IS the
+	// fence: improvement is refused on sight, with a reason.
+	it("WEAKEST-RULE FENCE: 'a@b' SAVES — a stricter guard that rejects it is a regression, not an improvement", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), { target: { value: 'a@b' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual({
+			dbEntityId: 'db-1',
+			personId: 'pp-2',
+			name: 'Berta Bass',
+			phone: '',
+			email: 'a@b',
+			birthdate: ''
+		});
+		expect(q(container, 'roster-record-save-error')).toBeNull();
+	});
+
+	it("'a@b@c' is refused — the browser's rule catches it, no regex of ours involved", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), { target: { value: 'a@b@c' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_email_invalid]'
+		);
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+	});
+
+	it('an EMPTY email still saves — the field is optional and stays so (optional-field semantics of checkValidity)', async () => {
+		loadRosterMock.mockResolvedValue([
+			rosterTwo[0],
+			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: '', sectionIds: [], dbEntityId: 'db-1' }
+		]);
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(emailInput(container).value).toBe('');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ email: '' })
+		);
+	});
+
+	it('a normal address saves unchanged — plus-addressing and subdomains included', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), {
+			target: { value: 'mari.tamm+koor@mail.example.co.uk' }
+		});
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ email: 'mari.tamm+koor@mail.example.co.uk' })
+		);
+	});
+
+	it("UPDATE path: a malformed email on an EXISTING record refuses too — updateMemberRecord never fires", async () => {
+		loadMemberRecordMock.mockResolvedValue({
+			state: 'one',
+			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
+		});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: '+372 5550000' } });
+		await fireEvent.input(emailInput(container), { target: { value: 'not an email' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_email_invalid]'
+		);
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(phoneInput(container).value).toBe('+372 5550000');
+	});
+
+	it('PRIVACY (crede real-PII law): the email refusal copy is STATIC — the typed value appears in no alert and no console output', async () => {
+		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), { target: { value: 'secret typo @ example' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		const alert = await waitFor(() => {
+			const el = q(container, 'roster-record-save-error');
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		expect(alert.textContent).not.toContain('secret typo @ example');
+		const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
+			.map((c) => c.map(String).join(' '))
+			.join(' ');
+		expect(logged).not.toContain('secret typo @ example');
+		consoleErrorSpy.mockRestore();
+		consoleLogSpy.mockRestore();
+	});
+
+	it('after fixing the address, the same save goes through — the refusal is a gate, not a dead end', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), { target: { value: 'not an email' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		await fireEvent.input(emailInput(container), { target: { value: 'berta@example.com' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+	});
+});
+
 // (*MVOX:Tallis* — #268 RED, route-level)
 // (*MVOX:Josquin* — #268 review F1/F2/F3 pins)
 // (*MVOX:Josquin* — #268 review r3 pins: empty-landed failure copy, save-time
 //  existence check)
+// (*MVOX:Tallis* — #283 RED: phone letters + email checkValidity save guards,
+//  weakest-rule fence)

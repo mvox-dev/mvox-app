@@ -236,6 +236,8 @@
 	"roster_record_edit_label": "Edit member details:",
 	"roster_record_name_label": "Real name",
 	"roster_record_name_required": "A real name is required — nothing was saved. Enter a name, then save again.",
+	"roster_record_phone_invalid": "The phone number can’t contain letters — nothing was saved. Remove the letters, then save again.",
+	"roster_record_email_invalid": "The email address doesn’t look valid — nothing was saved. Check the address, then save again.",
 	"roster_record_phone_label": "Phone",
 	"roster_record_email_label": "Email",
 	"roster_record_birthdate_label": "Date of birth",

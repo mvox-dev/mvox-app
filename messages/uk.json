@@ -236,6 +236,8 @@
 	"roster_record_edit_label": "Редагувати дані учасника:",
 	"roster_record_name_label": "Справжнє ім'я",
 	"roster_record_name_required": "Справжнє ім'я обов'язкове — нічого не збережено. Введіть ім'я та збережіть ще раз.",
+	"roster_record_phone_invalid": "Номер телефону не може містити літер — нічого не збережено. Приберіть літери та збережіть ще раз.",
+	"roster_record_email_invalid": "Адреса ел. пошти виглядає недійсною — нічого не збережено. Перевірте адресу та збережіть ще раз.",
 	"roster_record_phone_label": "Телефон",
 	"roster_record_email_label": "Ел. пошта",
 	"roster_record_birthdate_label": "Дата народження",

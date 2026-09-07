@@ -236,6 +236,8 @@
 	"roster_record_edit_label": "Muuda liikme andmeid:",
 	"roster_record_name_label": "Pärisnimi",
 	"roster_record_name_required": "Pärisnimi on kohustuslik — midagi ei salvestatud. Sisesta nimi ja salvesta uuesti.",
+	"roster_record_phone_invalid": "Telefoninumber ei tohi sisaldada tähti — midagi ei salvestatud. Eemalda tähed ja salvesta uuesti.",
+	"roster_record_email_invalid": "E-posti aadress ei tundu õige — midagi ei salvestatud. Kontrolli aadressi ja salvesta uuesti.",
 	"roster_record_phone_label": "Telefon",
 	"roster_record_email_label": "E-post",
 	"roster_record_birthdate_label": "Sünnikuupäev",

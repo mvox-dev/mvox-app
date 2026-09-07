@@ -1048,8 +1048,19 @@
 		// inert here (the editor is not wrapped in a <form> and the save control
 		// is a type="button" with an onclick), so the gate lives in the save
 		// handler and reports through this same slot.
-		| { memberId: string; kind: 'name-required' };
+		| { memberId: string; kind: 'name-required' }
+		// #283 — phone letters refusal. Same idiom as name-required: same slot,
+		// same "refuse loudly, write nothing, keep typed values" contract.
+		| { memberId: string; kind: 'phone-invalid' }
+		// #283 — email refusal, routed through the browser's OWN checkValidity()
+		// on the type=email element (Gama's ruling) — no regex of ours.
+		| { memberId: string; kind: 'email-invalid' };
 	let recordSaveError = $state<RecordSaveError | null>(null);
+	// #283 — the email input element, bound so the save handler can ask the
+	// browser's own constraint validation `checkValidity()` rather than write a
+	// regex. Not wrapped in a <form> (see name-required note above), so this is
+	// the only way to reach the browser's email rule at all.
+	let emailInputEl = $state<HTMLInputElement | null>(null);
 	// #268 (E) — the fifth sr-only role="status" region's text, same contract as
 	// `reorderStatus`/`removeStatus`/`pageCreateStatus`/`renameStatus` above.
 	let recordStatus = $state('');
@@ -1182,6 +1193,33 @@
 		// open with everything the admin typed still in it.
 		if (recordForm.name.trim() === '') {
 			recordSaveError = { memberId, kind: 'name-required' };
+			return;
+		}
+		// #283 — PHONE LETTERS (Joosep, same idiom as name-required above): a
+		// rejection-of-letters-only rule, never an allowlist (an allowlist that
+		// forgets a legitimate character rejects a valid number while claiming to
+		// be a fix). `/\p{L}/u` matches a letter in ANY alphabet — `/[a-z]/i`
+		// would miss Estonian õäöü and Cyrillic. The field stays optional: an
+		// empty string has no letter in it, so it passes through untouched. This
+		// guard sits BEFORE the generation capture and single-flight arm below,
+		// same as name-required, because a refusal is NOT a write: it must never
+		// arm the single-flight lock or reach the fresh-lookup re-read.
+		if (/\p{L}/u.test(recordForm.phone)) {
+			recordSaveError = { memberId, kind: 'phone-invalid' };
+			return;
+		}
+		// #283 — EMAIL FORMAT (Gama's ruling): routed through the browser's OWN
+		// constraint validation on the type=email element — `checkValidity()` —
+		// never a hand-rolled regex. The HTML spec's email rule is deliberately
+		// permissive (a willful violation of RFC 5322) so it accepts real-world
+		// addresses; this is the WEAKEST-RULE FENCE — `a@b` must keep saving, and
+		// a future guard that rejects it is a regression, not an improvement.
+		// `emailInputEl` is null only before the element has mounted, which
+		// cannot happen here (the editor is already open); the null check is
+		// defensive, not a live branch. Same placement as phone above: before the
+		// single-flight arm, because a refusal is not a write.
+		if (emailInputEl && !emailInputEl.checkValidity()) {
+			recordSaveError = { memberId, kind: 'email-invalid' };
 			return;
 		}
 		const g = routeLoad.generation;
@@ -3119,6 +3157,7 @@
 								<input
 									type="email"
 									data-testid="roster-record-email"
+									bind:this={emailInputEl}
 									bind:value={recordForm.email}
 									disabled={recordSavingMemberId !== null}
 									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
@@ -3176,6 +3215,10 @@
 										})}
 									{:else if recordSaveError.kind === 'name-required'}
 										{m.roster_record_name_required()}
+									{:else if recordSaveError.kind === 'phone-invalid'}
+										{m.roster_record_phone_invalid()}
+									{:else if recordSaveError.kind === 'email-invalid'}
+										{m.roster_record_email_invalid()}
 									{:else}
 										{m.roster_record_save_failed()}
 									{/if}
