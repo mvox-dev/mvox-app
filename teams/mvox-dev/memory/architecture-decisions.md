@@ -901,6 +901,10 @@ Everything below spent months in the reviewer's personal scratchpad, where exact
 
 Read this way: sections **A** and **E** bind Tallis (RED author) and the GREEN pair; **B**, **C** and **G** bind Josquin and Pérotin; **F** binds Byrd; **D** tells any agent how to read a verdict they receive. Where a rule already had a home elsewhere in this file, the subsection cross-links rather than restates — the older section stays canonical.
 
+**Start with section I** if you are writing or reviewing a guard of any kind — it is the lens the other
+sections turn out to be instances of, and it sits last only so the A–H letters already cited across
+scratchpads and prompts keep resolving.
+
 Provenance: every file:line reference below was re-verified on 2026-09-06 against the tree at `f1944e8`. `main` moved twice during the lift (`5c8b052`, `06cd4d7`), but `git diff --stat f1944e8..HEAD -- src/` was empty at each move — those commits touched migrations, ledgers and team docs only, so the references stand. Re-run that command before trusting a line number here; **line numbers rot, and the symbol names and the reasoning are the durable part.** Per the standing lesson at the rule-6 correction box above, verify a "shipped as #N" claim against code, not issue state.
 
 ## A. Tests that pass while the code is broken — the recurring family
@@ -1062,6 +1066,79 @@ Classify each hit with `git log -1 --format='%s%n%p' <c>`: an empty parent list 
 **Method note, generally applicable**: an empty grep is evidence only if you **control-check that the input stream was non-empty**. The follow-up sweep of `seed-results/` and `snapshots/` reported zero email matches across 682,946 bytes; that zero was only trustworthy because the same pass counted 54 `_id` occurrences proving the stream had content, and a positive control found all 20 known addresses in the file that did contain them. Without that check it is the same false all-clear as the reachable-history probe above. Beware token collisions too — a `*crede*` search matches "**cre**dential".
 
 (*MVOX:Bentham*, steward — lifted from `bentham.md` at team-lead's direction, MVOX-16)
+
+## I. A guard is a property of a PATH, not of an outcome
+
+**The rule**: a guard protects the path it sits on. It does not protect the outcome it is named after.
+The outcome stays reachable by every path the guard is not on — so "this guard is correct" and "this
+outcome cannot happen" are **two different claims**, and a review that verifies the first while
+reporting the second has not done the work.
+
+**The signature that makes this hard to see**: in every instance below, *the guarded step worked
+correctly every single time it ran.* Nothing failed. There is no failing test, no error in a log, no
+suspicious diff at the guard. The defect is entirely in what happens **beside** it. That is why these
+survive review — the reviewer's eye goes to the mechanism, and the mechanism is fine.
+
+**The checkable question**, for every guard a diff relies on:
+
+1. Name the **outcome** the guard exists to prevent (the harm, not the step it performs).
+2. **Enumerate the paths** that reach that outcome.
+3. Confirm the guard is on **all** of them.
+
+If step 2 cannot be enumerated, that inability is itself the finding — report it, do not wave it
+through. Where the enumeration can be made mechanical, **convert it into a standing predicate**, because
+a prose answer decays the moment someone adds a path. The worked example is #278's
+`seedResultsWriter.guard.spec.ts`: a path-completeness answer turned into a test. Note also how it
+handles its own limit — it is a per-FILE check, not per-call-site, and says so, with the narrowing
+stated as deliberate scope ("close the obvious door, not every door") rather than left implicit. A guard
+with a stated boundary is honest; a guard whose boundary a reader has to discover is the next instance
+of this same rule.
+
+**Three instances, one day** (2026-09-07). Provenance differs and is marked, because the point of this
+section is precisely not to accept a shape on resemblance:
+
+- **The ledger writer's bypass** (#274 → #278). Every `writeLedger` call site declared `sensitive`
+  correctly — I verified all of them. But nothing forced a ledger write to go *through* the writer at
+  all: 12 scripts wrote artefacts with their own `writeFileSync`, never importing it. The guarded step
+  never once failed; the adjacent path simply did not traverse it. *Verified by me at the source.*
+- **The redactor's array hole** (#274 RED-274.1). The declared-field key check existed and was correct —
+  for a string leaf. The **type dispatch ran first**, so array- and object-shaped values were routed
+  around the check before it could apply. The guard was on the scalar path only. *Verified by me by
+  running the committed blob.*
+- **The upload phantom fence** (#275). *Promoted from relayed to **VERIFIED** at the fix review,
+  2026-09-08 — and the verified shape is worse than the report, which is itself the lesson: enumerating
+  the paths found **three**, and the fence covered one.* It cleans up a file property whose S3 PUT
+  failed, so it sits on the **failed-PUT** path only. Positional `entries[i]`/`files[i]` zipping opened
+  two more, both invisible to it:
+  1. **entries > files** — `files[i]` is `undefined`, the PUT goes out with an undefined body, and a
+     2xx **promotes a byte-less property into `uploaded`**. The fence never fires, because `putOk` is
+     *true*: the guarded step ran, succeeded, and was the wrong thing to succeed at.
+  2. **files > entries** — the surplus file is never reached by the loop at all and vanishes from the
+     result entirely. Not a phantom; a silent omission, with no guard anywhere near it.
+
+  The fix is the shape worth copying: reconcile on a key (`filename` + `filesize` — values the client
+  itself sent in step 1, so they round-trip rather than being trusted as server-derived), then make
+  **both** leftovers loud — an unpairable entry short-circuits to the DELETE, an unclaimed file is
+  reported `not-created` with a null id. Note *how* route 1 is closed: `claimFileFor` returns
+  `File | null` and the `fetch` sits in the non-null branch, so **an undefined body is no longer
+  expressible** and the type checker enforces it. Structure over a runtime belt (section A), on a path
+  that previously had neither. Its residual ambiguity (same filename *and* filesize) is stated at the
+  site and priced, which is the honest-boundary discipline this section asks for.
+
+**Pairs with the completeness predicate** (the #274 lesson; section G's "ask which function produced it"
+and the class-shaped prescription in `bentham.md`). They are one question from opposite ends: this
+section asks *"is the guard on every path to the outcome?"*, the completeness predicate asks the
+inverse, *"does everything that produces this outcome pass through the guarded step?"* Asking only the
+first is exactly how #274 shipped with 12 bypasses while every call site was correct — I checked the
+call sites and never asked the inverse. **Ask both, or expect to close one instance of a class and call
+it the class.**
+
+**Source**: formulated by the PO team from their read of the 2026-09-07 arc, relayed by team-lead for
+stewardship. Enshrined here rather than in `bentham.md` because it binds implementers writing a guard as
+much as the reviewer checking one — the same reason the rulebook was lifted out of the scratchpad at
+MVOX-16.
+
+(*MVOX:Bentham*, steward — PO-team formulation; instances verified or provenance-marked as above)
 
 ---
 
