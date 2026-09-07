@@ -107,6 +107,60 @@ branch (the common case), so make it conditional or `--allow-empty`. And re-run 
 review time — a clean RED commit does not bind the GREEN / i18n / FIX commits that follow, each of
 which gets its own `add -A`.
 
+## [CALIBRATION-SCOPED-GATE-IS-NOT-THE-GATE] 2026-09-07, #274 r2
+
+Pérotin reported "vitest 117/117" and it was true — of a **scoped** run
+(`scripts/migrations/lib`, `src/lib/sections`). The full suite was **1 failed | 3633 passed**: the new
+`script-runner.spec.ts` tripped `src/lib/testing/testIsolation.guard.spec.ts` (#163 C6, Tallis), a
+**repo-wide** guard asserting no `*.spec.ts` under `src/` or `scripts/` contains the literal
+production Entu host. A path-scoped run cannot see a guard that lives outside the scope but polices
+inside it — and adding a spec file is exactly when repo-wide guards fire. **Always re-run the FULL
+suite on a branch that adds a spec, and never accept a scoped count as the gate.** Round 1 being fully
+green (242 files / 3606 tests) is what made the regression attributable in one step — carry a
+full-suite number forward from the previous round for exactly this.
+
+## [CALIBRATION-MY-PROBE-POLLUTED-THE-TREE] 2026-09-07, #274
+
+`writeLedger` builds its output path with a **relative** `join('scripts','migrations','seed-results')`,
+so it writes relative to **cwd**. My round-1 probe's first invocation ran with the repo as cwd and
+dropped 4 `PROBE-dry-*.json` files into the real `seed-results/` — untracked, in a directory #274 had
+just un-ignored, i.e. precisely where a merge-time `git add -A` would sweep them into the squash. I
+caught them only because I re-read `git status` at the top of round 2.
+
+Two rules for myself. **Run probes from the scratchpad cwd, never the repo cwd** — and prefer what the
+spec did (mock `node:fs`) when the goal is behaviour rather than file output. And **`| head` on a
+side-effecting probe is dangerous**: SIGPIPE killed the run after 4 of 6 writes, which is why the
+artefacts were both present and incomplete. **Re-read `git status -s` at the START and END of every
+review round** — I already do that for HEAD movement; extend it to untracked files, because my own
+tooling is a source of them.
+
+## [GOTCHA-REDACTOR-DROPS-KEY-CONTEXT] 2026-09-07, #274 — a recursive scrubber must carry the key down
+
+`ledger-writer.ts`'s `redactValue` dispatched on **type first**, so the declared-field check
+(`keyLower && redactFieldSet.has(keyLower)`) only ever ran on a **string** leaf. Descending into an
+array passed `null` as the key, and descending into an object re-keyed children by their **own**
+names — so the key context died at the first non-scalar. `{surname: 'Tamm'}` redacted;
+`{surname: ['Tamm']}`, `{surname: [{string:'Tamm'}]}` and `{surname: {string:'Tamm'}}` all came
+through **in the clear**, silently. That third shape is Entu's *native* multi-value property shape
+(`project_entu_post_appends_multi_value`: every non-formula string prop is implicitly multi-valued),
+so the hole sat exactly where this codebase's data actually lives.
+
+**The general rule**: in any recursive redact/scrub/mask, hoist the key-match ABOVE the type
+dispatch, so a declared-sensitive key redacts its **whole subtree** whatever shape it holds. A
+content regex (here the unconditional email scan) hides this bug — emails kept getting caught by
+content while names silently escaped, which is why the mechanism looked like it worked.
+
+**Completion test for this class** — not a grep, a shape table. Any field-based redactor must pin all
+of: scalar / array-of-string / array-of-object / nested-object / deep-nested, under BOTH a default
+field and a caller-supplied `redactFields` entry. I proved the #274 instance by running the real
+committed blob (verified `git hash-object` == `19347f07`) from a scratchpad cwd — copy the module out,
+drive it, read the JSON. Cheaper and far more honest than reading the recursion.
+
+**Calibration that made this findable**: I did NOT trust "verified live: seed-178 shows `[REDACTED]`"
+in the commit body. That claim was TRUE and still concealed the bug, because seed-178's fields are
+scalars. **A worked example proves the shape it exercises and nothing wider** — when a safety claim is
+universal ("redacts every value under a declared name"), test the shapes the example does *not* cover.
+
 ## [LEARNED 2026-09-06, #264] A class-shaped finding needs a class-shaped prescription
 
 Round 3 of #264 found stale clear-then-set comments and named **two spec files**. The fix corrected

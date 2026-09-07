@@ -2,6 +2,47 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #274 script-safety hardening — PR #276, no live mutation (2026-09-07)
+
+Henry's post-close audit (Gama clone-verified): seed-184/187/188 had ZERO
+DRY_RUN guard — every invocation was live-unconditional. Built `scripts/
+migrations/lib/script-runner.ts` (readDryRun/loadCredeCfg/runScript) +
+`lib/ledger-writer.ts` (writeLedger, two redaction layers: unconditional
+email-content regex scrub always-on, plus caller-declared `sensitive: true`
+field redaction — default fields email/forename/surname/phone/birthdate,
+extendable per-script — routed to the one gitignored subdir). Migrated all
+10 crede-touching scripts (178/182/184/186/187/188, 246×2, 265×2) + all 13
+`ledgers/`-writing scripts onto both.
+
+**[DECISION] Reversed my own earlier "gitignore all crede seed-results"
+call (fa9ec16/#185).** New rule: `seed-results/` is TRACKED by default
+(schema/type-provisioning + polyphony-synthetic ledgers — the 50
+force-tracked files were already this shape, confirmed by audit, nothing
+mis-tracked). Only `seed-results/crede-instance/` stays gitignored — the
+literal directory the shared writer routes `sensitive: true` runs into.
+Grounds: redaction-by-construction (verified live — seed-178's dry-run
+ledger showed `fullName`/`displayName`/`email` all `[REDACTED]`) makes the
+old blanket-ignore both unnecessary AND actively confusing (it's WHY 50
+files had to be force-added past it in the first place — a self-inflicted
+hole). Belt-and-suspenders kept: even with working redaction, ANY
+`sensitive: true` payload still lands in the gitignored subdir, so a
+redaction bug still can't reach git. Retired `ledgers/` entirely (had NO
+ignore rule at all — hole B) — `git mv`'d its 20 files into `seed-results/`,
+history preserved.
+
+Verified end-to-end, not just typechecked: `pnpm check` 0 errors, vitest
+89+133 passed, THREE live dry-run smoke tests (seed-184, seed-178 both
+mvox_crede; attendance-propdef-sharing-widen polyphony) — all three
+correctly gated (zero mutation), correctly redacted/routed. No live
+mutation authorization was needed or used.
+
+Branch `chore/274-script-safety-hardening`, PR #276 — team-lead's explicit
+dispatch named "work on a chore branch, normal commit discipline" for this
+one (infrastructure/tooling, not a routine seed), overriding my usual
+direct-to-main convention for THIS task only. Flagged the tracked-vs-
+ignored reversal to team-lead for Gama/Mihkel visibility rather than
+treating my own prior call as unrevisitable.
+
 ## [DONE] #265 LIVE provisioning complete — admin_member_record + roster_show_real_names, both dbs (2026-09-06)
 
 Authorized: Mihkel comment 5561915982, verbatim "agreed, go ahead with live provisioning" — read

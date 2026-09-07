@@ -1,0 +1,165 @@
+{
+  "_meta": "research for REOPENED #261 gate fix, run wf_a672cbff-fdf 2026-09-07. Contract = Gama reopen comment 00:29 UTC. (*MVOX:Palestrina*)",
+  "surface": {
+    "findings": [
+      {
+        "title": "(a) Gate definition — exact current expression",
+        "detail": "src/routes/+page.svelte:2234-2238. `hasUpcomingSeason` ($derived.by, lines 2234-2237): `const todayIso = new Date().toISOString().slice(0, 10); return seasons.some((s) => s.startDate > todayIso);`. Gate itself, line 2238: `const showSeasonCreate = $derived(seasonCreateRights === 'editor' && !hasUpcomingSeason);` — confirms the reopen comment's characterization exactly.",
+        "files": [
+          "src/routes/+page.svelte"
+        ],
+        "severity": "info"
+      },
+      {
+        "title": "(b) Both showSeasonCreate call sites confirmed — no third site",
+        "detail": "grep for `showSeasonCreate` across src/ finds exactly two `{#if}` consumption sites (plus the $derived def and two doc-comment mentions, at 2451 and 5599, that only reference it in prose): trigger button at src/routes/+page.svelte:5603 `{#if showSeasonCreate && !seasonCreateOpen}` (renders the `season-create` button, lines 5604-5612); form block at src/routes/+page.svelte:7057 `{#if showSeasonCreate}` (wraps the inline creation form, further gated inside by `seasonCreateOpen` at line 7058). The reopen comment's two named sites are correct and exhaustive.",
+        "files": [
+          "src/routes/+page.svelte"
+        ],
+        "severity": "info"
+      },
+      {
+        "title": "(c) hasUpcomingSeason has no other consumer — becomes fully dead code if the clause is removed",
+        "detail": "Repo-wide grep (`grep -rn hasUpcomingSeason .` excluding node_modules) finds only two live hits, both in src/routes/+page.svelte: the definition (2234) and its sole use inside the showSeasonCreate expression (2238). No spec file, no other route, and no other derived value reads it. If `!hasUpcomingSeason` is deleted from the gate per the fix spec, the `hasUpcomingSeason` `$derived.by` block (lines 2234-2237) becomes unreferenced and should be deleted too, not left orphaned.",
+        "files": [
+          "src/routes/+page.svelte"
+        ],
+        "severity": "notable"
+      },
+      {
+        "title": "(d) Block comment and spec line both currently assert the gate is 'unchanged' — both need rewriting",
+        "detail": "src/routes/+page.svelte:5595-5602 (comment immediately above the trigger-button `{#if}` at 5603): \"#261 (Mihkel ruling 2026-09-06, verbatim) — ... [+ Season] LEAVES the card and stands here, above it, as its own page-level control; its gate (`showSeasonCreate && !seasonCreateOpen`) is UNCHANGED from #132/T2. With zero seasons + an editor this is the ONLY control on the surface (the onboarding banner's own CTA is retired, above).\" src/routes/page.season-card.spec.ts:37-39 (exact text): \"    - [+ Season] (season-create, testid unchanged) leaves the card and\\n      stands ABOVE it as a standalone page-level control; its gate\\n      (showSeasonCreate) is unchanged. With ZERO seasons + an editor it is\". Both must drop the 'unchanged' framing per fix-spec item (5).",
+        "files": [
+          "src/routes/+page.svelte",
+          "src/routes/page.season-card.spec.ts"
+        ],
+        "severity": "notable"
+      },
+      {
+        "title": "(e) Zero-season path confirmed as sole exit; banner CTA confirmed retired",
+        "detail": "src/routes/+page.svelte:5569-5574 comment: \"#261 (Mihkel ruling 2026-09-06) — the banner's OWN create button (agenda-onboarding-cta) is RETIRED: with zero seasons the standalone [+ Season] below (season-create) is the only control an admin needs...\". The onboarding block itself (lines 5583-5594, testid `agenda-onboarding`) renders only an explanatory `<ol>` — no button. Repo grep confirms zero remaining `agenda-onboarding-cta` / `agenda_onboarding_cta` references anywhere in src. With zero seasons, `seasons.some(...)` is vacuously false, so `hasUpcomingSeason` is already false and `showSeasonCreate` already reduces to `seasonCreateRights === 'editor'` today — meaning removing `!hasUpcomingSeason` cannot regress the zero-season path (it was never the deciding clause there); the only behavior change is at nonzero-with-upcoming-season states.",
+        "files": [
+          "src/routes/+page.svelte"
+        ],
+        "severity": "info"
+      },
+      {
+        "title": "(f) Two existing tests hard-assert the exact behavior the ruling reopens the issue over",
+        "detail": "src/routes/page.season-create.spec.ts:404-409 — test titled \"an UPCOMING season already exists (startDate strictly after today): season-create does NOT render, editor or not\" asserts `expect(q(container, 'season-create')).toBeNull();` (line 408) with `agendaResult({ editor: true, withUpcomingSeason: true })`. src/routes/page.season-card.spec.ts:490-498 — test titled \"gate unchanged: an UPCOMING season hides [+ Season]; the card (its expand control) stays\" asserts `expect(q(container, 'season-create')).toBeNull();` (line 497), same setup. Both will fail (correctly, per the ruling) once `!hasUpcomingSeason` is removed, and both need renaming (drop 'does NOT render' / 'gate unchanged' / 'hides') plus flipping to `.not.toBeNull()` — this satisfies fix-spec item (4)'s 'name the upcoming-season state' requirement if these are the tests updated.",
+        "files": [
+          "src/routes/page.season-create.spec.ts",
+          "src/routes/page.season-card.spec.ts"
+        ],
+        "severity": "blocking"
+      },
+      {
+        "title": "(f) Two more tests assert the same now-wrong outcome as a side-check ('gates are independent')",
+        "detail": "src/routes/page.event-create.spec.ts:662-669 — \"an upcoming season hides [+ Season] (T2) but NOT the card — the two gates are independent\" — asserts `expect(q(container, 'season-create')).toBeNull();` at line 669. src/routes/page.season-manage.spec.ts:543-550 — \"the card gates INDEPENDENTLY of [+ Season]: with an upcoming season the create affordance is gone, the card stays (the current season is still manageable)\" — asserts the same at line 550. Both use `agendaResult({ editor: true, withUpcomingSeason: true })`. These are secondary/incidental assertions (their primary point is season-card/season-manage-panel independence from showSeasonCreate, still true structurally) but the specific 'season-create is gone' expectation is now false and must flip to `.not.toBeNull()`; wording ('hides [+ Season]', 'create affordance is gone') should be corrected too.",
+        "files": [
+          "src/routes/page.event-create.spec.ts",
+          "src/routes/page.season-manage.spec.ts"
+        ],
+        "severity": "notable"
+      },
+      {
+        "title": "(f) Zero-season state already has a named test — likely satisfies fix-spec item (4)'s other half",
+        "detail": "src/routes/page.season-card.spec.ts:503-511, describe block \"season card #261 — zero seasons: [+ Season] is the ONLY control for an editor\", test \"no card, no second create button: agenda-admin-card is GONE, the onboarding banner presents NO cta of its own (agenda-onboarding-cta retired), season-create stands alone and opens the form\" (uses `noSeasonsResult()`, asserts `season-create` renders). This test's naming and assertions are unaffected by the gate-clause removal and already names the zero-season state explicitly.",
+        "files": [
+          "src/routes/page.season-card.spec.ts"
+        ],
+        "severity": "info"
+      },
+      {
+        "title": "Four other withUpcomingSeason tests are unaffected — do not touch",
+        "detail": "src/routes/page.event-create.spec.ts:783, :795, :1553, :1589 all seed `agendaResult({ withUpcomingSeason: true })` purely to populate the event-create season `<select>` with two options (current + upcoming); none assert on `season-create` visibility or `showSeasonCreate`. These are out of scope for the fix.",
+        "files": [
+          "src/routes/page.event-create.spec.ts"
+        ],
+        "severity": "info"
+      }
+    ]
+  },
+  "blast": {
+    "findings": [
+      {
+        "title": "Mechanical: page.season-create.spec.ts test directly asserts the behavior the ruling reverses",
+        "detail": "The test 'an UPCOMING season already exists (startDate strictly after today): season-create does NOT render, editor or not' at src/routes/page.season-create.spec.ts:404-409 builds a fixture with an editor + an upcoming season (agendaResult({ editor: true, withUpcomingSeason: true })) and asserts q(container,'season-create') is null. Ran it live at HEAD (pnpm vitest run src/routes/page.season-create.spec.ts -t 'UPCOMING season already exists') — 1 passed. Once !hasUpcomingSeason is removed from showSeasonCreate (+page.svelte:2238), the control WILL render for this fixture and this assertion will fail (correctly, since the old behavior is exactly what's being reversed). This is the one test in the whole suite (grep across src/routes/*.spec.ts for 'season-create' + upcoming/hidden patterns found no other hits) that encodes the old gate as a passing assertion; it must be inverted/renamed, satisfying ticket requirement (4)'s upcoming-season-named test.",
+        "files": [
+          "src/routes/page.season-create.spec.ts"
+        ]
+      },
+      {
+        "title": "Doc-rot: multiple comments describe the old gate as authoritative/'unchanged' and will be false after the fix",
+        "detail": "Three separate places currently describe showSeasonCreate's rights+upcoming-season shape as settled fact: (1) src/routes/+page.svelte:5599 '...its gate (`showSeasonCreate && !seasonCreateOpen`) is UNCHANGED from #132/T2' — false once the clause is removed; (2) src/routes/page.season-card.spec.ts:37-39 '... its gate (showSeasonCreate) is unchanged.' — same; (3) src/routes/page.season-create.spec.ts:44-46 TESTIDS block: 'season-create ... Renders IFF the viewer is a season editor AND no upcoming season exists.' — states the exact clause being removed, and the describe() title at line 381 'the [+ Season] entry point (rights + upcoming-season gate)' likewise misdescribes the fixed behavior. Ticket requirement (5) only names +page.svelte's block comment and page.season-card.spec.ts:39, but page.season-create.spec.ts's TESTIDS doc and describe title are the same category of now-false claim and should be updated in the same pass to avoid leaving a second lie in the suite.",
+        "files": [
+          "src/routes/+page.svelte",
+          "src/routes/page.season-card.spec.ts",
+          "src/routes/page.season-create.spec.ts"
+        ]
+      },
+      {
+        "title": "hasUpcomingSeason becomes dead code once the clause is removed",
+        "detail": "grep confirms hasUpcomingSeason (src/routes/+page.svelte:2234-2237) has exactly one use site: showSeasonCreate at line 2238. Removing '&& !hasUpcomingSeason' leaves the $derived.by block computing a value nothing reads. The `seasons` state field it reads stays live for other reasons (season lookup by id at lines 2545/2862, the {#each seasons as season} option list in the event-create season <select> at line 7278, and deriveSeasonCreateRights's fallback), so only the hasUpcomingSeason derivation itself is orphaned and should be deleted, not the seasons field. Related: src/lib/agenda/agendaData.ts:26-30's FullAgendaResult.seasons doc comment ('The season-creation entry point derives \"an upcoming season exists\" from this ... at zero extra fetch cost') also becomes stale — the field's other consumers (event-create season picker, season lookups) still justify keeping it, so this is a comment fix, not a field removal.",
+        "files": [
+          "src/routes/+page.svelte",
+          "src/lib/agenda/agendaData.ts"
+        ]
+      },
+      {
+        "title": "No duplicate-season / at-most-one-upcoming assumption in the create/submit path — verified clean",
+        "detail": "Read submitSeasonCreate (+page.svelte:2358-2436) and createSeason (src/lib/entity/entityCreate.ts:435-452) end to end: submit validates name/dates only, resolves the collective's database entity id, and POSTs name/start_date/end_date/conductors with no read-back of existing seasons and no dedupe/uniqueness check. Creating a second upcoming season while one already exists is a plain, unguarded write — nothing in this path assumes at most one upcoming season, so the gate change introduces no downstream write-path bug.",
+        "files": [
+          "src/routes/+page.svelte",
+          "src/lib/entity/entityCreate.ts"
+        ]
+      },
+      {
+        "title": "Downstream single-upcoming-season consumer: manageableSeason() picks only the SOONEST not-yet-started season",
+        "detail": "src/lib/attendance/conductorLogic.ts:104-116 manageableSeason(): when no season is current-and-unlapsed, it filters to not-yet-started seasons and reduces to the one with the smallest startDate ('soonest'), returning exactly one season id. This feeds manageableSeasonId (+page.svelte:803), which alone gates showSeasonCard (season-manage panel, line 2466-2468) and is the default season for the panel's [+ Event]/[+ Series] creation (openEventCreateForm prefillSeasonId, line 3360). Concrete consequence once #261's fix makes it possible to create a SECOND upcoming season: the later-starting one becomes silently unmanageable (no season-manage card, not the prefilled season for panel-born event/series creation) until the earlier one starts or lapses. This is pre-existing #167 design (not introduced by removing !hasUpcomingSeason) and is not a crash/data-loss bug, but it is the concrete 'what happens' the task asked to trace — an admin who creates two upcoming seasons will find only one of them manageable at a time, with no UI explanation of which or why.",
+        "files": [
+          "src/lib/attendance/conductorLogic.ts",
+          "src/routes/+page.svelte"
+        ]
+      },
+      {
+        "title": "No stale-collective leak on this surface — generation guard is already correct and untouched by the fix",
+        "detail": "Verified src/routes/+page.svelte:679-825: a collective switch increments requestId (line 679) and synchronously resets seasons=[] (line 745) before the async loadFullAgenda() call; seasons, manageableSeasonId, and seasonCreateRights are all assigned only inside the .then() callback behind `if (thisRequest !== requestId) return;` (line 771). Both hasUpcomingSeason (reads `seasons`) and seasonCreateRights are therefore correctly generation-guarded and cannot show a previous collective's upcoming-season/rights state after a switch. This guard is unrelated to the clause being removed and needs no change.",
+        "files": [
+          "src/routes/+page.svelte"
+        ]
+      },
+      {
+        "title": "Rights-tier fail-closed behavior is unaffected — non-editor still sees nothing",
+        "detail": "ManageRightsState is 'editor' | 'not-editor' | 'error' (src/lib/repertoire/types.ts:28). showSeasonCreate's remaining condition after the fix is `seasonCreateRights === 'editor'` (strict equality), so 'not-editor' and 'error' both continue to hide the control exactly as before; removing !hasUpcomingSeason only affects the upcoming-season sub-condition, not the rights sub-condition. No new rights-tier exposure.",
+        "files": [
+          "src/routes/+page.svelte",
+          "src/lib/repertoire/types.ts"
+        ]
+      },
+      {
+        "title": "Locale strings: no clipping risk from this change — visibility-only toggle, text/layout untouched",
+        "detail": "Checked messages/{en,et,lv,uk}.json:season_create ('+ Season' / '+ Hooaeg' / '+ Sezona' / '+ Сезон') — all short single-line strings, same button markup/classes at both call sites (+page.svelte:5603-5612 and :7057). The fix only changes WHEN the existing button/form render, not their markup, styling, or the strings themselves, so there is no new layout surface for any of the 4 locales to clip on.",
+        "files": [
+          "messages/en.json",
+          "messages/et.json",
+          "messages/lv.json",
+          "messages/uk.json"
+        ]
+      },
+      {
+        "title": "Zero-season path is structurally orthogonal to the fix — confirmed no regression risk",
+        "detail": "hasUpcomingSeason (`seasons.some(s => s.startDate > todayIso)`) trivially evaluates false on an empty seasons array regardless of the clause's presence, so the zero-season/onboarding exit path (src/routes/page.agenda-onboarding.spec.ts:332-379, the sole '+ Season' control per the #261 ruling since the banner CTA's retirement) is untouched by removing !hasUpcomingSeason from showSeasonCreate. No test in that file references hasUpcomingSeason/withUpcomingSeason.",
+        "files": [
+          "src/routes/page.agenda-onboarding.spec.ts"
+        ]
+      },
+      {
+        "title": "Event-create season picker already supports multiple seasons — no new axis exposed",
+        "detail": "src/routes/+page.svelte:7268-7281 renders a full <select> over the entire `seasons` array (not just manageableSeasonId) for event creation, meaning the codebase already anticipated more than one season (current+past+future) coexisting on this surface before this fix. Creating a second upcoming season does not exercise any new, previously-unreached code path here — this select and handleEventCreateSeasonChange (line 3454) already had to handle an arbitrary seasons list.",
+        "files": [
+          "src/routes/+page.svelte"
+        ]
+      }
+    ]
+  }
+}
