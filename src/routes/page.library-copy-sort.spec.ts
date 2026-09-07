@@ -44,6 +44,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_node_retry: () => 'Retry',
 		library_librarian_tools: () => 'Librarian tools',
 		library_create_work_button: () => 'Add work',
+		library_edition_file_attach: () => 'Attach files',
 		library_create_work_name_label: () => 'Title',
 		library_create_work_composer_label: () => 'Composer',
 		library_create_work_submit: () => 'Create work',

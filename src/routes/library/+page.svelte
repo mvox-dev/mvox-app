@@ -26,7 +26,8 @@
 		type Edition,
 		type Copy,
 		type Lending,
-		type LoanChain
+		type LoanChain,
+		type EditionFile
 	} from '$lib/library/libraryData';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
@@ -34,6 +35,9 @@
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 	import { createWork, createEdition } from '$lib/entity/entityCreate';
+	// #275 — the app's first upload path: attach files to an edition.
+	import { uploadEditionFiles, formatFileSize } from '$lib/library/editionFiles';
+	import { signFileUrl } from '$lib/repertoire/fileUrls';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
 	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
@@ -583,6 +587,186 @@
 		expandedEditions = next;
 		if (copiesByEdition.has(editionId)) return; // cached
 		void loadCopiesFor(editionId);
+	}
+
+	// #275 — files on an edition: the app's FIRST upload path. STATE IS KEYED
+	// PER EDITION (createEditionPending Map/Set precedent — #271), so several
+	// editions can be mid-upload independently. STATED CHOICE: per-BATCH
+	// pending, not per-file — one "Uploading…" for the whole selection,
+	// matching the wire contract's single POST (editionFiles.ts: several
+	// files ride ONE POST, never N) and keeping the per-edition Map/Set shape
+	// flat instead of a second nested per-file map.
+	let editionFilesPending = $state<Set<string>>(new Set());
+	// Per-file failures whose phantom property WAS cleaned up ('deleted') —
+	// rendered as a visible per-file alert naming each filename (#253
+	// says-exactly-what-landed).
+	let editionFilesErrors = $state<Map<string, string[]>>(new Map());
+	// The whole batch's step-1 POST rejected outright (transport failure,
+	// nothing was created) — one message covers the attempt; there is
+	// nothing per-file to name.
+	let editionFilesBatchError = $state<Set<string>>(new Set());
+	// Failures whose cleanup DELETE itself failed ('delete-failed') — a
+	// broken attachment may remain server-side. Rendered as its own BROKEN
+	// row, never as a normal attachment; accumulates rather than clearing on
+	// the next attempt, since the phantom this names is still out there
+	// until someone fixes it server-side.
+	let editionFilesBroken = $state<Map<string, Array<{ propertyId: string; filename: string }>>>(
+		new Map()
+	);
+	// Selected files step 1 returned NO property for ('not-created') — nothing
+	// exists server-side and nothing landed, so this is neither a cleaned-up
+	// failure nor a broken phantom; it gets its own message rather than
+	// borrowing one that would misdescribe what happened.
+	let editionFilesNotCreated = $state<Map<string, string[]>>(new Map());
+	// Per-FILE open failures (signFileUrl rejected). Keyed by file property id,
+	// not by edition: Open is a per-file control and this is a READ-path error
+	// every member can hit, so it renders with the files list, OUTSIDE the
+	// librarian gate. Cleared at the start of each open attempt for that file,
+	// so the next successful open removes it.
+	let editionFileOpenErrors = $state<Set<string>>(new Set());
+	let editionFilesStatuses = $state<Map<string, string>>(new Map());
+
+	/** Locate which work owns `editionId` and replace that one edition's
+	 *  `files` array — same "never refetch, local insert" contract as #271's
+	 *  createEdition, applied to an in-place update instead of an append. */
+	function updateEditionFiles(
+		editionId: string,
+		update: (files: EditionFile[]) => EditionFile[]
+	): void {
+		for (const [workId, editions] of editionsByWork) {
+			if (!editions.some((e) => e.id === editionId)) continue;
+			editionsByWork = new Map(editionsByWork).set(
+				workId,
+				editions.map((e) => (e.id === editionId ? { ...e, files: update(e.files ?? []) } : e))
+			);
+			return;
+		}
+	}
+
+	async function handleAttachFiles(editionId: string, fileList: FileList | null): Promise<void> {
+		if (!fileList || fileList.length === 0) return;
+		const files = Array.from(fileList);
+		const current = selected;
+		const token = getToken();
+		// Fail LOUDLY (house rule) — same three-way precondition guard as
+		// submitCreateEdition; no explicit 401 branch (entuFetch's own
+		// handleAuthExpired401 owns that path for the write itself).
+		if (!current || !token) {
+			console.error('library: attach files with no cfg', {
+				hasCollective: !!current,
+				hasToken: !!token,
+				editionId
+			});
+			editionFilesBatchError = new Set(editionFilesBatchError).add(editionId);
+			return;
+		}
+		const cfg = { db: current.db, token };
+
+		// #275 GENERATION GUARD (#271 precedent, same seam) — captured BEFORE
+		// the upload chain. Success-apply AND failure-apply are BOTH gated on
+		// isCurrent below: a mid-flight collective switch must not leak either
+		// half of a settling mixed result into a different collective's tree.
+		const g = routeLoad.generation;
+
+		editionFilesPending = new Set(editionFilesPending).add(editionId);
+		const errs = new Map(editionFilesErrors);
+		errs.delete(editionId);
+		editionFilesErrors = errs;
+		const batchErrs = new Set(editionFilesBatchError);
+		batchErrs.delete(editionId);
+		editionFilesBatchError = batchErrs;
+		const notCreated = new Map(editionFilesNotCreated);
+		notCreated.delete(editionId);
+		editionFilesNotCreated = notCreated;
+		editionFilesStatuses = new Map(editionFilesStatuses).set(editionId, '');
+
+		let result: Awaited<ReturnType<typeof uploadEditionFiles>>;
+		try {
+			result = await uploadEditionFiles(cfg, editionId, files);
+		} catch (e) {
+			console.error('library: attach files failed', editionId, e);
+			if (routeLoad.isCurrent(g)) {
+				editionFilesBatchError = new Set(editionFilesBatchError).add(editionId);
+			}
+			return;
+		} finally {
+			const next = new Set(editionFilesPending);
+			next.delete(editionId);
+			editionFilesPending = next;
+		}
+
+		if (!routeLoad.isCurrent(g)) return; // superseded — a different collective owns this edition id now
+
+		if (result.uploaded.length > 0) {
+			updateEditionFiles(editionId, (existing) => [
+				...existing,
+				...result.uploaded.map((u) => ({
+					id: u.propertyId,
+					filename: u.filename,
+					filesize: u.filesize,
+					filetype: u.filetype
+				}))
+			]);
+			editionFilesStatuses = new Map(editionFilesStatuses).set(
+				editionId,
+				m.library_edition_file_uploaded({
+					filenames: result.uploaded.map((u) => u.filename).join(', ')
+				})
+			);
+		}
+
+		const cleaned = result.failed.filter((f) => f.cleanup === 'deleted');
+		if (cleaned.length > 0) {
+			editionFilesErrors = new Map(editionFilesErrors).set(
+				editionId,
+				cleaned.map((f) => f.filename)
+			);
+		}
+		const missing = result.failed.filter((f) => f.cleanup === 'not-created');
+		if (missing.length > 0) {
+			editionFilesNotCreated = new Map(editionFilesNotCreated).set(
+				editionId,
+				missing.map((f) => f.filename)
+			);
+		}
+		// flatMap, not filter+map: narrowing on the cleanup state inside the
+		// callback is what proves propertyId is a real id here and not the
+		// 'not-created' member's null.
+		const broken = result.failed.flatMap((f) =>
+			f.cleanup === 'delete-failed' ? [{ propertyId: f.propertyId, filename: f.filename }] : []
+		);
+		if (broken.length > 0) {
+			const existing = editionFilesBroken.get(editionId) ?? [];
+			editionFilesBroken = new Map(editionFilesBroken).set(editionId, [...existing, ...broken]);
+		}
+	}
+
+	// #90 TR.2 precedent, reused for #275 — sign AT CLICK TIME (60s TTL,
+	// never cached — the read model carries no url field by design). The
+	// blank tab opens SYNCHRONOUSLY inside the click's user-gesture window,
+	// same popup-blocker-safe shape as the agenda's handlePdfClick.
+	function handleOpenEditionFile(fileId: string): void {
+		if (!selected) return;
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		// A retry clears the previous verdict up front, so a later success
+		// leaves nothing stale behind (agenda handlePdfClick precedent).
+		const cleared = new Set(editionFileOpenErrors);
+		cleared.delete(fileId);
+		editionFileOpenErrors = cleared;
+		const tab = window.open('', '_blank');
+		if (tab) tab.opener = null;
+		signFileUrl(cfg, fileId)
+			.then((url) => {
+				if (tab) tab.location.href = url;
+				else window.location.href = url;
+			})
+			.catch((e) => {
+				console.error('library: sign edition file url failed', fileId, e);
+				tab?.close();
+				// The blank tab closing again is invisible feedback — say it on
+				// the page, or the click looks like nothing happened.
+				editionFileOpenErrors = new Set(editionFileOpenErrors).add(fileId);
+			});
 	}
 
 	// #74 — auto-select work when there is exactly one
@@ -1387,6 +1571,123 @@
 															{/if}
 													{/if}
 												</div>
+
+												<!-- #275 — files on an edition: the app's FIRST upload path.
+												     STATED LAYOUT CHOICE: inline-in-edition-block — a SIBLING
+												     of the copies div above (`library-copies-{edition.id}`),
+												     not nested inside it and not a THIRD ml-4 indent level.
+												     Phone-width rationale (max-w-md): two ml-4 levels already
+												     exist here (work→editions, edition→copies); a third
+												     would leave too thin a remaining strip for a filename to
+												     wrap into, so this rides the edition's EXISTING indent
+												     instead. Filenames wrap (break-words), never truncate —
+												     an attachment is read by name, not fitted to one line. -->
+												{#if (edition.files ?? []).length > 0 || (editionFilesBroken.get(edition.id)?.length ?? 0) > 0}
+													<div
+														data-testid="library-edition-files-{edition.id}"
+														class="mt-1.5 flex flex-col gap-1"
+													>
+														{#each edition.files ?? [] as file (file.id)}
+															<div class="flex flex-col gap-0.5">
+																<div
+																	data-testid="library-edition-file-{file.id}"
+																	class="flex items-center justify-between gap-2 text-xs"
+																>
+																	<span class="break-words text-ink">
+																		{file.filename} · {formatFileSize(file.filesize)}
+																	</span>
+																	<button
+																		type="button"
+																		data-testid="library-edition-file-open-{file.id}"
+																		class="shrink-0 text-xs underline"
+																		onclick={() => handleOpenEditionFile(file.id)}
+																	>
+																		{m.library_edition_file_open()}
+																	</button>
+																</div>
+																<!-- Open is a READ affordance every member has, so its
+																     failure message lives HERE, beside the files list,
+																     and NOT inside the librarian gate below — a
+																     non-librarian who clicks Open must see why nothing
+																     opened. -->
+																{#if editionFileOpenErrors.has(file.id)}
+																	<span
+																		data-testid="library-edition-file-open-error-{file.id}"
+																		role="alert"
+																		class="break-words text-xs text-red-700"
+																	>
+																		{m.library_edition_file_open_error()}
+																	</span>
+																{/if}
+															</div>
+														{/each}
+														{#each editionFilesBroken.get(edition.id) ?? [] as broken (broken.propertyId)}
+															<div
+																data-testid="library-edition-file-broken-{broken.propertyId}"
+																class="break-words text-xs text-red-700"
+															>
+																{m.library_edition_file_broken({ filename: broken.filename })}
+															</div>
+														{/each}
+													</div>
+												{/if}
+
+												<!-- ATTACH — librarian-only (absent-not-disabled), a native
+												     file input, multiple [TRIGGER-NATIVE-CONTROLS]. State
+												     keyed PER EDITION (createEditionPending precedent). -->
+												{#if $librarianStore === 'librarian'}
+													<div class="mt-1.5 flex flex-col gap-1">
+														<label class="flex flex-col gap-0.5 text-xs text-ink-2">
+															{m.library_edition_file_attach()}
+															<input
+																type="file"
+																multiple
+																data-testid="library-attach-file-{edition.id}"
+																aria-label={m.library_edition_file_attach()}
+																disabled={editionFilesPending.has(edition.id)}
+																onchange={(e) => {
+																	const input = e.currentTarget as HTMLInputElement;
+																	void handleAttachFiles(edition.id, input.files);
+																	input.value = '';
+																}}
+															/>
+														</label>
+														{#if editionFilesPending.has(edition.id)}
+															<span
+																data-testid="library-edition-files-uploading-{edition.id}"
+																class="text-xs text-ink-2"
+															>
+																{m.library_edition_file_uploading()}
+															</span>
+														{/if}
+														{#if editionFilesBatchError.has(edition.id) || (editionFilesErrors.get(edition.id)?.length ?? 0) > 0 || (editionFilesNotCreated.get(edition.id)?.length ?? 0) > 0}
+															<div
+																data-testid="library-edition-files-error-{edition.id}"
+																role="alert"
+																class="flex flex-col gap-0.5 break-words text-xs text-red-700"
+															>
+																{#if editionFilesBatchError.has(edition.id)}
+																	<span>{m.library_edition_file_error()}</span>
+																{:else}
+																	{#each editionFilesErrors.get(edition.id) ?? [] as filename}
+																		<span>{m.library_edition_file_failed({ filename })}</span>
+																	{/each}
+																	{#each editionFilesNotCreated.get(edition.id) ?? [] as filename}
+																		<span>{m.library_edition_file_not_created({ filename })}</span>
+																	{/each}
+																{/if}
+															</div>
+														{/if}
+														<div
+															data-testid="library-edition-files-status-{edition.id}"
+															role="status"
+															aria-live="polite"
+															class="sr-only"
+														>
+															{editionFilesStatuses.get(edition.id) ?? ''}
+														</div>
+													</div>
+												{/if}
 											{/if}
 										</div>
 									{/each}
