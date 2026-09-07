@@ -4,19 +4,24 @@
 // Idempotent: skips a snapshot record if a profile with the expected name
 // already exists under the target db.
 //
+// mvox-app#274 — migrated onto the shared script-runner + ledger-writer.
+// The ledger entries carry real names and emails (`fullName`, `displayName`,
+// `email`) by design — the shared writer's default redaction (email-content
+// scrub always, `email`/`forename`/`surname`/`phone`/`birthdate` fields when
+// `sensitive: true`) plus this script's explicit `redactFields: ['fullName',
+// 'displayName']` cover every personal field this ledger shape carries.
+//
 // Run:
-//   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/seed-178-crede-members-2026-08-27.ts        # DRY_RUN=true default
-//   DRY_RUN=false node --import tsx ... same-file                      # live, AFTER authorization
+//   ./scripts/migrations/seed-178-crede-members-2026-08-27.ts        # DRY_RUN=true default
+//   DRY_RUN=false ... same-file                                      # live, AFTER authorization
 
-import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
+import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
+import { writeLedger } from './lib/ledger-writer';
 
-const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
-
-const DB = process.env.MVOX_CREDE_DB ?? 'mvox_crede';
-const CREDE_API_KEY = process.env.MVOX_CREDE_API_KEY;
+const DRY_RUN = readDryRun();
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 // Type ids updated 2026-08-29 (#188 clean-slate re-provision — Phase 2 minted
 // fresh type entities for everything except the built-in `person` type).
@@ -53,26 +58,15 @@ type LedgerEntry = {
 	message?: string;
 };
 
-async function getToken(): Promise<string> {
-	if (!CREDE_API_KEY) throw new Error('getToken: MVOX_CREDE_API_KEY is not set — source ~/.config/mvox/credentials.env first');
-	const res = await fetch(`https://api.entu.app/auth?db=${DB}`, {
-		headers: { Authorization: `Bearer ${CREDE_API_KEY}`, Accept: 'application/json' }
-	});
-	if (!res.ok) throw new Error(`auth exchange failed: ${res.status}`);
-	const body = (await res.json()) as { token?: string; accounts?: unknown[] };
-	if (!body.token) throw new Error('auth exchange returned no token (apparent-success trap)');
-	return body.token;
-}
-
-async function alreadyExists(token: string, displayName: string): Promise<boolean> {
-	const res = await entuFetch(DB, `entity?_type.reference=${PROFILE_TYPE_ID}&name.string=${encodeURIComponent(displayName)}&limit=1`, token);
+async function alreadyExists(db: string, token: string, displayName: string): Promise<boolean> {
+	const res = await entuFetch(db, `entity?_type.reference=${PROFILE_TYPE_ID}&name.string=${encodeURIComponent(displayName)}&limit=1`, token);
 	if (!res.ok) throw new Error(`existence check failed: ${res.status}`);
 	const body = (await res.json()) as { count: number };
 	return body.count > 0;
 }
 
-async function createEntity(token: string, props: Prop[]): Promise<string> {
-	const res = await entuFetch(DB, 'entity', token, {
+async function createEntity(db: string, token: string, props: Prop[]): Promise<string> {
+	const res = await entuFetch(db, 'entity', token, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(props)
@@ -83,12 +77,12 @@ async function createEntity(token: string, props: Prop[]): Promise<string> {
 	return body._id;
 }
 
-async function processRecord(token: string, record: SourceRecord, ledger: LedgerEntry[]): Promise<void> {
+async function processRecord(db: string, token: string, record: SourceRecord, ledger: LedgerEntry[]): Promise<void> {
 	const displayName = record.nickname?.trim() || record.name.trim();
 	const email = record.email_id?.trim() || record.email_contact?.trim() || null;
 
 	try {
-		if (await alreadyExists(token, displayName)) {
+		if (await alreadyExists(db, token, displayName)) {
 			ledger.push({ sourceId: record.id, fullName: record.name, displayName, email, status: 'skipped-exists' });
 			return;
 		}
@@ -105,13 +99,13 @@ async function processRecord(token: string, record: SourceRecord, ledger: Ledger
 	let personId: string | undefined;
 	let memberId: string | undefined;
 	try {
-		personId = await createEntity(token, [
+		personId = await createEntity(db, token, [
 			{ type: '_type', reference: PERSON_TYPE_ID },
 			{ type: '_parent', reference: DB_ENTITY_ID },
 			{ type: '_inheritrights', boolean: true }
 		]);
 
-		memberId = await createEntity(token, [
+		memberId = await createEntity(db, token, [
 			{ type: '_type', reference: MEMBER_TYPE_ID },
 			{ type: '_parent', reference: DB_ENTITY_ID },
 			{ type: 'person', reference: personId },
@@ -128,7 +122,7 @@ async function processRecord(token: string, record: SourceRecord, ledger: Ledger
 			{ type: 'name', string: displayName }
 		];
 		if (email) profileProps.push({ type: 'email', string: email });
-		const profileId = await createEntity(token, profileProps);
+		const profileId = await createEntity(db, token, profileProps);
 
 		ledger.push({ sourceId: record.id, fullName: record.name, displayName, email, status: 'created', personId, memberId, profileId });
 	} catch (err) {
@@ -143,19 +137,15 @@ async function processRecord(token: string, record: SourceRecord, ledger: Ledger
 	}
 }
 
-function errMsg(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
-}
-
-async function main() {
+async function main(): Promise<boolean> {
 	const records = JSON.parse(readFileSync(SNAPSHOT_PATH, 'utf-8')) as SourceRecord[];
 	console.error(`Loaded ${records.length} records from snapshot.`);
 
-	const token = await getToken();
+	const cfg = await loadCredeCfg();
 	const ledger: LedgerEntry[] = [];
 
 	for (const record of records) {
-		await processRecord(token, record, ledger);
+		await processRecord(cfg.db, cfg.token, record, ledger);
 	}
 
 	const byStatus = { created: 0, 'skipped-exists': 0, 'would-create': 0, failed: 0 };
@@ -170,17 +160,19 @@ async function main() {
 		for (const f of failures) console.log(`  ${f.sourceId} "${f.fullName}" — ${f.message}`);
 	}
 
-	const dir = join('scripts', 'migrations', 'seed-results');
-	mkdirSync(dir, { recursive: true });
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const filePath = join(dir, `seed-178-crede-members-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`);
-	writeFileSync(filePath, JSON.stringify({ dryRun: DRY_RUN, byStatus, ledger }, null, 2));
+	const filePath = writeLedger({
+		scriptName: 'seed-178-crede-members',
+		dryRun: DRY_RUN,
+		db: cfg.db,
+		sensitive: true,
+		redactFields: ['fullName', 'displayName'],
+		payload: { byStatus, ledger }
+	});
 	console.log(`\nLedger artifact: ${filePath}`);
 
-	process.exit(failures.length > 0 ? 1 : 0);
+	return failures.length === 0;
 }
 
-main().catch((err) => {
-	console.error('#178 Crede member seed ABORTED:', errMsg(err));
-	process.exit(1);
-});
+runScript('#178 Crede member seed', main);
+
+// (*MVOX:Perotin*)

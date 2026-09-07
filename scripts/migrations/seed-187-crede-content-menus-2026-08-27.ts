@@ -6,9 +6,21 @@
 // literal, applied to this collective — flagged as a judgment call in the
 // report, not blocking since it's a one-line value, trivially correctable.
 // Authorized by team-lead 2026-08-27.
-import { entuFetch } from '$lib/entu/request';
+//
+// mvox-app#274 — migrated onto the shared script-runner + ledger-writer.
+// This script previously had NO DRY_RUN guard at all: every invocation ran
+// live unconditionally, one copy-paste away from an accidental mutation.
+// Now dry-run by default, same as every other crede script.
+//
+// Run:
+//   ./scripts/migrations/seed-187-crede-content-menus-2026-08-27.ts        # DRY_RUN=true default
+//   DRY_RUN=false ... same-file                                           # live, AFTER authorization
 
-const DB = process.env.MVOX_CREDE_DB ?? 'mvox_crede';
+import { entuFetch } from '$lib/entu/request';
+import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
+import { writeLedger } from './lib/ledger-writer';
+
+const DRY_RUN = readDryRun();
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 const MENU_TYPE_ID = '6a8f471a5eb2498f434e50d4';
 const GROUP = 'Crede';
@@ -29,27 +41,15 @@ const MENUS: Array<{ name: string; query: string; ordinal: number }> = [
 	{ name: 'Attendance', query: '_type.string=attendance&sort=name.string', ordinal: 500 }
 ];
 
-type LedgerEntry = { name: string; status: 'created' | 'failed'; id?: string; message?: string };
+type LedgerEntry = { name: string; status: 'created' | 'would-create' | 'failed'; id?: string; message?: string };
 
-function errMsg(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
-}
-
-async function getToken(): Promise<string> {
-	const key = process.env.MVOX_CREDE_API_KEY;
-	if (!key) throw new Error('MVOX_CREDE_API_KEY is not set');
-	const res = await fetch(`https://api.entu.app/auth?db=${DB}`, {
-		headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }
-	});
-	if (!res.ok) throw new Error(`auth exchange failed: ${res.status}`);
-	const body = (await res.json()) as { token?: string };
-	if (!body.token) throw new Error('auth exchange returned no token');
-	return body.token;
-}
-
-async function createMenu(token: string, menu: (typeof MENUS)[number], ledger: LedgerEntry[]): Promise<void> {
+async function createMenu(db: string, token: string, menu: (typeof MENUS)[number], ledger: LedgerEntry[]): Promise<void> {
+	if (DRY_RUN) {
+		ledger.push({ name: menu.name, status: 'would-create' });
+		return;
+	}
 	try {
-		const res = await entuFetch(DB, 'entity', token, {
+		const res = await entuFetch(db, 'entity', token, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify([
@@ -67,7 +67,7 @@ async function createMenu(token: string, menu: (typeof MENUS)[number], ledger: L
 		const body = (await res.json()) as { _id?: string };
 		if (!body._id) throw new Error('create returned 2xx without _id (apparent-success trap)');
 
-		const verifyRes = await entuFetch(DB, `entity/${body._id}?props=name,query,ordinal`, token);
+		const verifyRes = await entuFetch(db, `entity/${body._id}?props=name,query,ordinal`, token);
 		const verifyBody = await verifyRes.json();
 		const actualQuery = verifyBody.entity?.query?.[0]?.string;
 		if (actualQuery !== menu.query) throw new Error(`verify mismatch: expected query ${JSON.stringify(menu.query)}, got ${JSON.stringify(actualQuery)}`);
@@ -78,21 +78,29 @@ async function createMenu(token: string, menu: (typeof MENUS)[number], ledger: L
 	}
 }
 
-async function main() {
-	const token = await getToken();
+async function main(): Promise<boolean> {
+	const cfg = await loadCredeCfg();
 	const ledger: LedgerEntry[] = [];
-	for (const menu of MENUS) await createMenu(token, menu, ledger);
+	for (const menu of MENUS) await createMenu(cfg.db, cfg.token, menu, ledger);
 
-	const created = ledger.filter((e) => e.status === 'created').length;
 	const failures = ledger.filter((e) => e.status === 'failed');
 	console.log(`\n── #187 Crede content menus — summary ──`);
-	console.log(`Total: ${ledger.length}  created: ${created}  failed: ${failures.length}`);
-	for (const e of ledger) console.log(`  ${e.status === 'created' ? 'OK' : 'FAIL'} ${e.name}${e.id ? ` (${e.id})` : ''}${e.message ? ` — ${e.message}` : ''}`);
+	console.log(`DRY_RUN=${DRY_RUN}`);
+	console.log(`Total: ${ledger.length}  failed: ${failures.length}`);
+	for (const e of ledger) console.log(`  ${e.status} ${e.name}${e.id ? ` (${e.id})` : ''}${e.message ? ` — ${e.message}` : ''}`);
 
-	process.exit(failures.length > 0 ? 1 : 0);
+	const filePath = writeLedger({
+		scriptName: 'seed-187-crede-content-menus',
+		dryRun: DRY_RUN,
+		db: cfg.db,
+		sensitive: true,
+		payload: { ledger }
+	});
+	console.log(`\nLedger artifact: ${filePath}`);
+
+	return failures.length === 0;
 }
 
-main().catch((err) => {
-	console.error('#187 ABORTED:', errMsg(err));
-	process.exit(1);
-});
+runScript('#187 Crede content menus', main);
+
+// (*MVOX:Perotin*)

@@ -28,13 +28,14 @@
 //   DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
 //     ./scripts/migrations/tidy-td3-type-labels.ts       # ONLY after dry-run verified
 
-import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
 import { loadCfg } from './lib/creds';
+import { readDryRun } from './lib/script-runner';
+import { writeLedger as writeLedgerShared } from './lib/ledger-writer';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
+const DRY_RUN = readDryRun();
 
 // ── Target manifest ────────────────────────────────────────────────────────────
 // Each entry: type schema name, type entity ID, known label property-value _id,
@@ -233,14 +234,12 @@ interface LedgerEntry {
 
 const ledger: LedgerEntry[] = [];
 
+// mvox-app#274 — writeLedger now goes through the shared, redaction-aware
+// writer, landing in seed-results/ instead of the retired ledgers/ dir;
+// `sensitive: false` (polyphony is synthetic, and this ledger carries only
+// ids/status/sharing metadata regardless).
 function writeLedger(payload: Record<string, unknown>): string {
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const dir = join('scripts', 'migrations', 'ledgers');
-	const filename = `tidy-td3-type-labels-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`;
-	const filePath = join(dir, filename);
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(filePath, JSON.stringify(payload, null, 2));
-	return filePath;
+	return writeLedgerShared({ scriptName: 'tidy-td3-type-labels', dryRun: DRY_RUN, db: process.env.ENTU_DATABASE ?? 'polyphony', sensitive: false, payload });
 }
 
 // ── Pre-flight: verify current label values match expectations ──────────────

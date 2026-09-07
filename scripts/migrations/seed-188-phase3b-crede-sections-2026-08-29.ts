@@ -4,11 +4,23 @@
 // (old member id -> sourceId -> new member id) since Phase 1/2/3 minted a
 // fresh section type id and fresh member entity ids. Authorized by
 // team-lead 2026-08-28 (#188 full-run authorization, Phase 3b explicit).
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { entuFetch } from '$lib/entu/request';
+//
+// mvox-app#274 — migrated onto the shared script-runner + ledger-writer.
+// This script previously had NO DRY_RUN guard at all: every invocation ran
+// live unconditionally, one copy-paste away from an accidental mutation —
+// and it was flagged as the copy-paste template a seed author would
+// naturally reach for. Now dry-run by default, same as every other crede
+// script.
+//
+// Run:
+//   ./scripts/migrations/seed-188-phase3b-crede-sections-2026-08-29.ts        # DRY_RUN=true default
+//   DRY_RUN=false ... same-file                                               # live, AFTER authorization
 
-const DB = process.env.MVOX_CREDE_DB ?? 'mvox_crede';
+import { entuFetch } from '$lib/entu/request';
+import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
+import { writeLedger } from './lib/ledger-writer';
+
+const DRY_RUN = readDryRun();
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 const SECTION_TYPE_ID = '6a92a325ca67df980f414ea3';
 
@@ -24,25 +36,9 @@ const SECTIONS: SectionDef[] = [
 	{ name: 'Conductor', voice: '', displayOrder: 12, memberIds: ['6a92a3f1ca67df980f415490'] }
 ];
 
-type LedgerEntry = { section: string; sectionId?: string; memberId: string; status: 'created' | 'failed'; message?: string };
+type LedgerEntry = { section: string; sectionId?: string; memberId: string; status: 'created' | 'would-create' | 'failed'; message?: string };
 
-function errMsg(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
-}
-
-async function getToken(): Promise<string> {
-	const key = process.env.MVOX_CREDE_API_KEY;
-	if (!key) throw new Error('MVOX_CREDE_API_KEY is not set');
-	const res = await fetch(`https://api.entu.app/auth?db=${DB}`, {
-		headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }
-	});
-	if (!res.ok) throw new Error(`auth exchange failed: ${res.status}`);
-	const body = (await res.json()) as { token?: string };
-	if (!body.token) throw new Error('no token');
-	return body.token;
-}
-
-async function createSection(token: string, section: SectionDef): Promise<string> {
+async function createSection(db: string, token: string, section: SectionDef): Promise<string> {
 	const props: Array<{ type: string; reference?: string; string?: string; boolean?: boolean; number?: number }> = [
 		{ type: '_type', reference: SECTION_TYPE_ID },
 		{ type: '_parent', reference: DB_ENTITY_ID },
@@ -52,7 +48,7 @@ async function createSection(token: string, section: SectionDef): Promise<string
 		{ type: 'display_order', number: section.displayOrder }
 	];
 	if (section.voice) props.push({ type: 'voice', string: section.voice });
-	const res = await entuFetch(DB, 'entity', token, {
+	const res = await entuFetch(db, 'entity', token, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(props)
@@ -63,8 +59,8 @@ async function createSection(token: string, section: SectionDef): Promise<string
 	return body._id;
 }
 
-async function appendSectionParent(token: string, memberId: string, sectionId: string): Promise<void> {
-	const res = await entuFetch(DB, `entity/${memberId}`, token, {
+async function appendSectionParent(db: string, token: string, memberId: string, sectionId: string): Promise<void> {
+	const res = await entuFetch(db, `entity/${memberId}`, token, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify([{ type: '_parent', reference: sectionId }])
@@ -72,21 +68,25 @@ async function appendSectionParent(token: string, memberId: string, sectionId: s
 	if (!res.ok) throw new Error(`member _parent append failed: ${res.status}`);
 }
 
-async function main() {
-	const token = await getToken();
+async function main(): Promise<boolean> {
+	const cfg = await loadCredeCfg();
 	const ledger: LedgerEntry[] = [];
 
 	for (const section of SECTIONS) {
+		if (DRY_RUN) {
+			for (const memberId of section.memberIds) ledger.push({ section: section.name, memberId, status: 'would-create' });
+			continue;
+		}
 		let sectionId: string;
 		try {
-			sectionId = await createSection(token, section);
+			sectionId = await createSection(cfg.db, cfg.token, section);
 		} catch (err) {
 			for (const memberId of section.memberIds) ledger.push({ section: section.name, memberId, status: 'failed', message: `section create: ${errMsg(err)}` });
 			continue;
 		}
 		for (const memberId of section.memberIds) {
 			try {
-				await appendSectionParent(token, memberId, sectionId);
+				await appendSectionParent(cfg.db, cfg.token, memberId, sectionId);
 				ledger.push({ section: section.name, sectionId, memberId, status: 'created' });
 			} catch (err) {
 				ledger.push({ section: section.name, sectionId, memberId, status: 'failed', message: errMsg(err) });
@@ -94,28 +94,30 @@ async function main() {
 		}
 	}
 
-	const byStatus = { created: 0, failed: 0 };
+	const byStatus = { created: 0, 'would-create': 0, failed: 0 };
 	for (const e of ledger) byStatus[e.status]++;
 	const failures = ledger.filter((e) => e.status === 'failed');
 
 	console.log(`\n── #188 Phase 3b Crede sections — summary ──`);
-	console.log(`Total: ${ledger.length}  created: ${byStatus.created}  failed: ${byStatus.failed}`);
+	console.log(`DRY_RUN=${DRY_RUN}`);
+	console.log(`Total: ${ledger.length}  created: ${byStatus.created}  would-create: ${byStatus['would-create']}  failed: ${byStatus.failed}`);
 	if (failures.length > 0) {
 		console.log('Failures:');
 		for (const f of failures) console.log(`  ${f.section} / ${f.memberId} — ${f.message}`);
 	}
 
-	const dir = join('scripts', 'migrations', 'seed-results');
-	mkdirSync(dir, { recursive: true });
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const filePath = join(dir, `seed-188-phase3b-crede-sections-${timestamp}.json`);
-	writeFileSync(filePath, JSON.stringify({ byStatus, ledger }, null, 2));
+	const filePath = writeLedger({
+		scriptName: 'seed-188-phase3b-crede-sections',
+		dryRun: DRY_RUN,
+		db: cfg.db,
+		sensitive: true,
+		payload: { byStatus, ledger }
+	});
 	console.log(`\nLedger artifact: ${filePath}`);
 
-	process.exit(failures.length > 0 ? 1 : 0);
+	return failures.length === 0;
 }
 
-main().catch((err) => {
-	console.error('#188 Phase 3b ABORTED:', errMsg(err));
-	process.exit(1);
-});
+runScript('#188 Phase 3b', main);
+
+// (*MVOX:Perotin*)
