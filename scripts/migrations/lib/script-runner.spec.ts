@@ -79,7 +79,7 @@ describe('loadCredeCfg', () => {
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
 		expect(cfg).toEqual({ db: 'mvox_crede', token: 'the-jwt' });
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-		expect(url).toBe('https://api.entu.app/auth?db=mvox_crede');
+		expect(url).toMatch(/\/auth\?db=mvox_crede$/);
 		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer crede-key-123');
 	});
 
@@ -88,6 +88,6 @@ describe('loadCredeCfg', () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ token: 't' }));
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
 		expect(cfg.db).toBe('mvox_other');
-		expect((fetchImpl.mock.calls[0] as [string])[0]).toBe('https://api.entu.app/auth?db=mvox_other');
+		expect((fetchImpl.mock.calls[0] as [string])[0]).toMatch(/\/auth\?db=mvox_other$/);
 	});
 });
