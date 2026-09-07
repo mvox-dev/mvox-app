@@ -801,3 +801,86 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 });
 
 // (*MVOX:Palestrina* — #155/S4)
+
+// ── #237: the section delete joins the shared red-trashcan unit ────────────────
+//
+// The glyph here is the LITERAL ✕ character (U+2715), not the &times; entity —
+// the sweep must not be a blind find/replace. Beyond the glyph, this site was
+// BELOW the app's touch standard: the trigger shipped at `p-1` (~20px) in the
+// muted tone — the same defect shape #252 fixed on the arrange controls beside
+// it. The shared unit brings `min-h-11 min-w-11` BY CONSTRUCTION (PO ruling,
+// relayed via Henry 2026-09-07), and the tone follows #252's precedent: the
+// destructive red, not the page's muted-icon convention (#252 established the
+// muted convention is what read as invisible).
+//
+// Byte-preserved (glyph + face only): the canDelete gating, the disabled
+// conditions (structuralWritePending / renaming / !canDelete), the two-step
+// confirm testids, and the #110 F1 creator-only-_owner behavior — the suites
+// above locate by testid and must stay green through the swap.
+//
+// KNOWN PRE-EXISTING GAP, flagged NOT fixed (out of this issue's scope): the
+// confirm/cancel halves here carry no disabled/aria-busy wiring during the
+// in-flight delete, unlike the agenda's. #237 is a glyph sweep; the gap
+// predates it and stays as-is.
+
+describe('/roster — #237 the section-remove trigger renders the shared red trashcan at 44px', () => {
+	it('the idle ✕ becomes the shared unit: aria-hidden TrashIcon, red tone, min-h-11 min-w-11 by construction — the p-1 sub-20px face is gone', async () => {
+		const container = await renderArrangeReady();
+		const btn = q(container, 'section-remove-sec-bass') as HTMLButtonElement;
+		expect(btn).not.toBeNull();
+
+		// The shared unit's face.
+		const svg = btn.querySelector('svg[data-icon="trash"]');
+		expect(svg, 'TrashIcon must render inside the trigger').not.toBeNull();
+		expect(svg?.getAttribute('aria-hidden')).toBe('true');
+
+		// The literal ✕ (U+2715) is gone — and so is the × entity, in case the
+		// swap went through a glyph-blind path.
+		expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
+
+		// 44px BY CONSTRUCTION + the destructive tone (#252 precedent: the muted
+		// convention is what read as invisible; do not re-inherit it).
+		for (const cls of ['min-h-11', 'min-w-11', 'text-red-700', 'hover:text-red-800']) {
+			expect(btn.classList.contains(cls), `${cls} missing on the trigger`).toBe(true);
+		}
+		expect(btn.classList.contains('text-ink-2'), 'muted tone must go').toBe(false);
+
+		// Accessible name + title: the SAME glyph-independent key, unchanged.
+		expect(btn.getAttribute('aria-label')).toBe('roster_section_remove');
+		expect(btn.getAttribute('title')).toBe('roster_section_remove');
+	});
+
+	it('gating is byte-preserved through the swap: an INELIGIBLE section renders the same trashcan, disabled — and the disabled trigger still ignores a click', async () => {
+		const container = await renderArrangeReady();
+		const btn = q(container, 'section-remove-sec-alto') as HTMLButtonElement;
+		expect(btn).not.toBeNull();
+		// Same face…
+		expect(btn.querySelector('svg[data-icon="trash"]')).not.toBeNull();
+		// …same gate (has members → disabled, never absent).
+		expect(btn.disabled).toBe(true);
+		await fireEvent.click(btn);
+		expect(q(container, 'section-remove-confirm-sec-alto')).toBeNull();
+		expect(deleteMock).not.toHaveBeenCalled();
+	});
+
+	it('the two-step survives the swap: arm → confirm/cancel (unchanged testids), cancel restores a trigger that STILL renders the trashcan', async () => {
+		const container = await renderArrangeReady();
+		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-confirm-sec-bass')).not.toBeNull();
+		});
+		expect(deleteMock).not.toHaveBeenCalled();
+
+		await fireEvent.click(q(container, 'section-remove-cancel-sec-bass') as HTMLElement);
+		const restored = await waitFor(() => {
+			const btn = q(container, 'section-remove-sec-bass');
+			expect(btn).not.toBeNull();
+			return btn as HTMLElement;
+		});
+		expect(restored.querySelector('svg[data-icon="trash"]')).not.toBeNull();
+		expect(deleteMock).not.toHaveBeenCalled();
+	});
+});
+
+// (*MVOX:Palestrina* — #237 RED: section-remove joins the shared unit; ✕ U+2715
+// out, 44px by construction in, gating and two-step byte-preserved)

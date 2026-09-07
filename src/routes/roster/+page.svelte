@@ -41,6 +41,7 @@
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	const selected = $derived($selectedCollectiveStore);
@@ -3648,19 +3649,27 @@
 											{m.roster_section_remove_cancel_short()}
 										</button>
 									{:else}
-										<button
-											type="button"
+										<!-- #237 — joins the shared red-trashcan unit: 44px BY
+										     CONSTRUCTION replaces the old p-1 (~20px) face, and the
+										     tone follows #252's precedent (destructive red, not the
+										     muted convention #252 found invisible). The disabled face
+										     (ineligible section: has children/members, mid-rename, or a
+										     structural write in flight) now comes FROM the unit —
+										     disabled:opacity-60 + disabled:hover:text-red-700, per #237
+										     review F2 — rather than from a per-site class string. KNOWN GAP, NOT
+										     fixed here: this trigger's confirm/cancel siblings above
+										     carry no disabled/aria-busy wiring during an in-flight
+										     delete, unlike the agenda's — out of #237's glyph-sweep
+										     scope. -->
+										<DeleteTrigger
 											data-testid="section-remove-{row.id}"
 											aria-label={m.roster_section_remove({ name: row.name })}
 											title={m.roster_section_remove({ name: row.name })}
 											disabled={structuralWritePending ||
 												renamingSectionId === row.id ||
 												!canDelete}
-											class="rounded p-1 text-xs text-ink-2 hover:text-red-700 disabled:cursor-default disabled:opacity-30 disabled:hover:text-ink-2"
 											onclick={() => void armRemove(row.id)}
-										>
-											✕
-										</button>
+										/>
 									{/if}
 								</div>
 								{#if renameError?.id === row.id}

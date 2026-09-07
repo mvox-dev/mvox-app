@@ -1924,3 +1924,107 @@ describe('#217/#216 — i18n: the season-delete keys exist in en/et/lv/uk', () =
 // confirm quoting the live scope, deleteSeason wiring with onProgress, ONE
 // progress counter under the series list for both cascades, success close +
 // announcement, season-partial error branch, locale guard for the new keys)
+
+// ── #237: the red-trashcan sweep — series + event rows (panel internals) ────────
+//
+// The idle × triggers become the SHARED delete-trigger unit (DeleteTrigger →
+// TrashIcon inside a red 44px button — see DeleteTrigger.spec.ts for the unit
+// contract, trashcan-sweep.spec.ts for the one-definition pin). ONLY the glyph
+// and its colour change: testids, aria-labels (glyph-independent keys), the
+// arm→confirm/cancel two-step, disabled/aria-busy wiring, and the shared
+// single-armed-slot rule are all byte-preserved — the existing #197/#212/#217
+// suites above locate by testid and must stay green through the swap.
+
+describe('agenda — #237 the series/event delete triggers render the shared red trashcan (integration: real route)', () => {
+	it('EVERY idle series + event trigger wraps an aria-hidden TrashIcon in the shared red 44px face — no × glyph left', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		for (const testid of [
+			'season-manage-series-delete-series-1',
+			'season-manage-series-delete-series-2',
+			'season-manage-event-delete-ev-9'
+		]) {
+			const btn = q(container, testid) as HTMLElement;
+			expect(btn, `${testid} missing`).not.toBeNull();
+
+			// The shared unit's face: ONE aria-hidden trashcan svg inside the button.
+			const svg = btn.querySelector('svg[data-icon="trash"]');
+			expect(svg, `${testid}: TrashIcon must render inside the trigger`).not.toBeNull();
+			expect(svg?.getAttribute('aria-hidden')).toBe('true');
+			// Default icon size (h-5 w-5, the #236 precedent) — these rows host
+			// 44px buttons already, so no smaller-icon deviation is warranted here.
+			expect(svg?.classList.contains('h-5'), `${testid}: icon default h-5`).toBe(true);
+			expect(svg?.classList.contains('w-5'), `${testid}: icon default w-5`).toBe(true);
+
+			// The × is GONE — it reads as a close button, which is the #236 confusion.
+			expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
+
+			// Red treatment + 44px BY CONSTRUCTION (the Henry-relayed PO ruling).
+			for (const cls of ['text-red-700', 'hover:text-red-800', 'min-h-11', 'min-w-11']) {
+				expect(btn.classList.contains(cls), `${testid}: ${cls} missing`).toBe(true);
+			}
+			// The old muted tone is not merely supplemented — it LEAVES.
+			expect(btn.classList.contains('text-ink-2'), `${testid}: muted tone must go`).toBe(false);
+
+			// Accessible name: the SAME glyph-independent key as before the sweep.
+			const expectedKey = testid.includes('series-delete')
+				? 'season_manage_series_delete'
+				: 'season_manage_event_delete';
+			expect(btn.getAttribute('aria-label') ?? '').toMatch(new RegExp(`^${expectedKey}`));
+		}
+	});
+
+	it('the two-step survives the swap: arm → confirm/cancel appear (unchanged testids), cancel restores a trigger that STILL renders the trashcan', async () => {
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-delete-confirm-series-1')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-series-delete-cancel-series-1')).not.toBeNull();
+		// Arming wrote nothing (glyph swap must not disturb the write seam).
+		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
+
+		await fireEvent.click(q(container, 'season-manage-series-delete-cancel-series-1') as HTMLElement);
+		const restored = await waitFor(() => {
+			const btn = q(container, 'season-manage-series-delete-series-1');
+			expect(btn).not.toBeNull();
+			return btn as HTMLElement;
+		});
+		// The RE-mounted trigger is the shared unit too — not a re-render fallback ×.
+		expect(restored.querySelector('svg[data-icon="trash"]')).not.toBeNull();
+		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
+	});
+
+	it('Table B fence, rendered: the conductor-remove chip in the SAME panel keeps its × and muted tone (unlink is not destroy)', async () => {
+		// Give the season a conductor so the chip renders.
+		const season = currentSeason(true);
+		season.conductors = ['person-c1'];
+		loadFullAgendaMock.mockResolvedValue(
+			fullAgendaResult({
+				seasonId: season.id,
+				seasonConductors: season.conductors,
+				seasonOwners: season.owners,
+				seasonEditors: season.editors,
+				seasons: [season]
+			})
+		);
+		const container = await renderReady();
+		await openPanelWithRows(container);
+
+		const chip = await waitFor(() => {
+			const el = q(container, 'season-manage-conductor-remove-person-c1');
+			expect(el, 'conductor chip remove button missing').not.toBeNull();
+			return el as HTMLElement;
+		});
+		expect(chip.querySelector('svg[data-icon="trash"]'), 'a trashcan on an unlink').toBeNull();
+		expect(chip.textContent ?? '').toContain('×');
+		expect(chip.classList.contains('text-ink-2')).toBe(true);
+		expect(chip.classList.contains('text-red-700')).toBe(false);
+	});
+});
+
+// (*MVOX:Palestrina* — #237 RED: series/event rows join the shared red-trashcan
+// unit; two-step + testids + aria-labels byte-preserved; Table B fenced in-panel)

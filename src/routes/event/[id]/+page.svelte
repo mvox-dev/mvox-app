@@ -129,7 +129,7 @@
 		compareScheduleItems,
 		type ScheduleItem
 	} from '$lib/schedule/scheduleData';
-	import TrashIcon from '$lib/components/icons/TrashIcon.svelte';
+	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -2833,15 +2833,18 @@
 														</button>
 													</div>
 												{:else}
-													<button
-														type="button"
+													<!-- #237 — MIGRATED onto the shared DeleteTrigger unit: this
+													     was one of the two pre-existing TrashIcon sites, and the
+													     "defined once" contract forces it here rather than leaving
+													     a second definition standing. iconClass h-4 w-4 stays a
+													     stated per-site choice — these rows are narrower than the
+													     season-panel rows that keep the h-5 w-5 default. -->
+													<DeleteTrigger
 														data-testid={`event-schedule-remove-${row.id}`}
 														aria-label={m.event_schedule_remove_aria_label({ name: row.name })}
-														class="flex min-h-11 min-w-11 items-center justify-center text-red-700 hover:text-red-800"
+														iconClass="h-4 w-4"
 														onclick={() => armScheduleRemove(row.id)}
-													>
-														<TrashIcon class="h-4 w-4" />
-													</button>
+													/>
 												{/if}
 											{/if}
 										</div>
@@ -3202,18 +3205,20 @@
 						{:else}
 							<!-- No aria-label, per the #157 rule the pencils above follow: the
 							     button has visible content now, and aria-label would override
-							     name-from-contents and silence it. The × is kept as the visual
-							     marker but aria-hidden, so the accessible name is exactly the
-							     label a sighted user reads (WCAG 2.5.3 label-in-name). -->
-							<button
-								type="button"
+							     name-from-contents and silence it. #237 STATED CHOICE — this
+							     site keeps its VISIBLE label (not icon-only): the decoration
+							     moves from a bare × to the shared aria-hidden TrashIcon, so the
+							     accessible name is exactly the label a sighted user reads
+							     (WCAG 2.5.3 label-in-name), same as before the sweep. -->
+							<DeleteTrigger
 								data-testid="event-detail-delete"
-								class="flex min-h-11 min-w-11 items-center gap-1 px-1 text-xs text-red-700 underline hover:text-red-800"
+								class="gap-1 px-1 text-xs underline"
 								onclick={() => void armDelete()}
 							>
-								<span aria-hidden="true">&times;</span>
-								{m.event_detail_delete_label()}
-							</button>
+								{#snippet children()}
+									{m.event_detail_delete_label()}
+								{/snippet}
+							</DeleteTrigger>
 						{/if}
 						{#if deleteError}
 							<p data-testid="event-detail-delete-error" role="alert" class="text-xs text-red-700">

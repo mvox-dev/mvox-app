@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { authStore } from '$lib/auth/session';
-	import TrashIcon from '$lib/components/icons/TrashIcon.svelte';
+	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -5824,17 +5824,18 @@
 												     currentColor (src/lib/components/icons/TrashIcon.svelte) — the
 												     #237 icon-sweep trial instance. #261 — the gear this glyph once
 												     sat beside is gone; the trashcan keeps its own slot (ml-auto)
-												     unchanged. -->
-												<button
-													type="button"
+												     unchanged.
+												     #237 — MIGRATED onto the shared DeleteTrigger unit: this was
+												     one of the two pre-existing TrashIcon sites, and the "defined
+												     once" contract forces it onto the shared unit rather than
+												     leaving a second definition standing. -->
+												<DeleteTrigger
 													data-testid="season-manage-delete-season"
 													aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
-													class="ml-auto flex min-h-11 min-w-11 items-center justify-center text-red-700 hover:text-red-800"
+													class="ml-auto"
 													onclick={() => void armSeasonManageSeasonDelete()}
 													onkeydown={onSeasonManagePanelKeydown}
-												>
-													<TrashIcon class="h-5 w-5" />
-												</button>
+												/>
 											{/if}
 										{/if}
 									</div>
@@ -6091,6 +6092,18 @@
 													class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 												>
 													{seasonConductorLabel(personId)}
+													<!-- #237 SWEEP FENCE — DO NOT convert this to the shared
+													     DeleteTrigger. The red-trashcan sweep covered Table A
+													     (destroy) only; this chip is Table B (unlink), and the PO
+													     ruling in #237 is that unlink is not destroy: a red trashcan
+													     beside a person's NAME reads as "delete this person", not
+													     "drop them from this season's conductor list". So the control
+													     keeps its × and its muted tone deliberately — a decision, not
+													     an oversight for the next sweep to tidy up. The same ruling
+													     holds for the two sibling chips on this page
+													     (season-create-conductor-remove, event-create-conductor-remove).
+													     The negative fences that fail if a later sweep "finishes the
+													     job" live in src/trashcan-sweep.spec.ts, section 3. -->
 													<button
 														type="button"
 														data-testid="season-manage-conductor-remove-{personId}"
@@ -6659,15 +6672,13 @@
 															{m.season_manage_delete_cancel_short()}
 														</button>
 													{:else}
-														<button
-															type="button"
+														<!-- #237 — joins the shared red-trashcan unit; the old
+														     muted × leaves for TrashIcon + the destructive red pair. -->
+														<DeleteTrigger
 															data-testid="season-manage-series-delete-{series.id}"
 															aria-label={m.season_manage_series_delete({ name: series.name })}
-															class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
 															onclick={() => void armSeasonManageSeriesDelete(series)}
-														>
-															&times;
-														</button>
+														/>
 													{/if}
 												{/if}
 											</div>
@@ -6790,21 +6801,19 @@
 														>
 															{m.season_manage_delete_cancel_short()}
 														</button>
-													{:else}
-														<button
-															type="button"
-															data-testid="season-manage-event-delete-{event.id}"
-															aria-label={m.season_manage_event_delete({ name: event.name })}
-															class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-															onclick={() =>
-																void armSeasonManageDelete(
-																	event.id,
-																	`season-manage-event-delete-confirm-${event.id}`
-																)}
-														>
-															&times;
-														</button>
-													{/if}
+												{:else}
+													<!-- #237 — joins the shared red-trashcan unit; the old
+													     muted × leaves for TrashIcon + the destructive red pair. -->
+													<DeleteTrigger
+														data-testid="season-manage-event-delete-{event.id}"
+														aria-label={m.season_manage_event_delete({ name: event.name })}
+														onclick={() =>
+															void armSeasonManageDelete(
+																event.id,
+																`season-manage-event-delete-confirm-${event.id}`
+															)}
+													/>
+												{/if}
 												</div>
 											{/if}
 										</div>

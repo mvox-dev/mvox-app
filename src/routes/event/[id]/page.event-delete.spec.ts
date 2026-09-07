@@ -293,7 +293,13 @@ describe('event detail — #203 delete button visibility', () => {
 		).toBeTruthy();
 	});
 
-	it('the delete NAMES itself — a visible text label, not a bare glyph leaning on an aria-label', async () => {
+	// #237 SPEC FLIP — this test used to hunt the aria-hidden × span as the
+	// decorative marker. The sweep replaces the × with the shared trashcan unit
+	// (TrashIcon inside DeleteTrigger), and this is the STATED CHOICE pinned for
+	// the site: NOT icon-only — the visible label STAYS (the #157/#249
+	// single-name discipline; the button keeps name-from-contents), only the
+	// decoration changes from × to the aria-hidden trashcan svg.
+	it('the delete NAMES itself — visible text label beside the shared trashcan icon, not a bare glyph leaning on an aria-label (#237)', async () => {
 		const { container } = renderPage(editorEvent());
 		const btn = await idleDeleteButton(container);
 		// The label is a real message key rendered as button CONTENT. `aria-label`
@@ -301,12 +307,17 @@ describe('event detail — #203 delete button visibility', () => {
 		// the button must not carry one.
 		expect(btn.getAttribute('aria-label')).toBeNull();
 		expect(btn.textContent ?? '').toContain('[event_detail_delete_label]');
-		// The × survives as decoration only — hidden from the accessible name.
-		const glyph = [...btn.querySelectorAll('span')].find((el) =>
-			(el.textContent ?? '').includes('×')
-		);
-		expect(glyph, 'the × glyph span is gone').not.toBeUndefined();
-		expect(glyph!.getAttribute('aria-hidden')).toBe('true');
+		// The decoration is the shared trashcan now — aria-hidden, so the
+		// accessible name is exactly the label a sighted user reads (WCAG 2.5.3).
+		const svg = btn.querySelector('svg[data-icon="trash"]');
+		expect(svg, 'TrashIcon must render inside the trigger').not.toBeNull();
+		expect(svg!.getAttribute('aria-hidden')).toBe('true');
+		// The × is GONE — it read as a close control, the #236 confusion.
+		expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
+		// Red treatment + 44px by construction survive the migration to the unit.
+		for (const cls of ['text-red-700', 'hover:text-red-800', 'min-h-11', 'min-w-11']) {
+			expect(btn.classList.contains(cls), `${cls} missing on the trigger`).toBe(true);
+		}
 	});
 });
 
@@ -416,3 +427,5 @@ describe('event detail — #203 refused delete', () => {
 });
 
 // (*MVOX:Palestrina* — #203 RED: event detail delete button)
+// (*MVOX:Palestrina* — #237 RED spec flip: the decorative × becomes the shared
+// aria-hidden trashcan; the visible label stays as the accessible name)
