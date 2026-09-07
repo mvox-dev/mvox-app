@@ -131,4 +131,18 @@ describe('writeLedger — redaction shape table (RED-274.1)', () => {
 		const { content } = lastWrite();
 		expect(read(content)).toBe('[REDACTED]');
 	});
+
+	// mvox-app#282 (PO-Approved, Gama comment 5573048456) — 'id_code' (the
+	// Estonian isikukood) joined DEFAULT_REDACT_FIELDS in the same commit as
+	// the admin_member_record prop-def that introduces it. Same five shapes,
+	// same discipline: RED-274.1 was exactly this class of bug (a field-name
+	// match that only fired for a string leaf), so every DEFAULT_REDACT_FIELDS
+	// addition gets the full table, not just a scalar case.
+	const idCodeFieldCells = cellsFor('id_code');
+
+	it.each(idCodeFieldCells)('DEFAULT_REDACT_FIELDS field (#282) — $label', ({ build, read }) => {
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: build() });
+		const { content } = lastWrite();
+		expect(read(content)).toBe('[REDACTED]');
+	});
 });

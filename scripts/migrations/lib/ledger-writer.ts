@@ -47,11 +47,24 @@
 // (per hole A's #274 resolution), the caller's `sensitive: true` is the
 // only fence between a real-PII payload and a public git history — nothing
 // else in the pipeline stops it (Bentham, #274 review, relayed via #278).
+//
+// `id_code` (added mvox-app#282, PO-Approved comment 5573048456) is the
+// Estonian national identity code (isikukood) on `admin_member_record` —
+// landed in the SAME commit as the prop-def that introduces it, per Gama's
+// carried requirement: no window may exist where the field is defined in
+// the schema layer and uncovered here. Known limit, recorded not fixed
+// (Gama, same ruling): field-name redaction only protects a value sitting
+// directly under a key literally named `id_code` — an interpolated
+// composite under an unrelated key (e.g. `summary: "${name} (${id_code})"`)
+// would evade it, the same blind spot every DEFAULT_REDACT_FIELDS member
+// has had since #274. Not specific to this field; not fixed here. Trigger
+// for revisiting: the first ledger line that actually writes an
+// interpolated composite value.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-export const DEFAULT_REDACT_FIELDS = ['email', 'forename', 'surname', 'phone', 'birthdate', 'name'] as const;
+export const DEFAULT_REDACT_FIELDS = ['email', 'forename', 'surname', 'phone', 'birthdate', 'name', 'id_code'] as const;
 
 const EMAIL_RE = /[^\s"]+@[^\s"]+\.[^\s"]+/g;
 
