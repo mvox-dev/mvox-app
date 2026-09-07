@@ -60,9 +60,13 @@ const DRY_RUN = readDryRun();
 // mvox-app#274 — writeLedger now goes through the shared, redaction-aware
 // writer; `sensitive: false` — this ledger records prop-def ids and sharing
 // metadata only (empty-structure provisioning, zero instances, per the
-// top-of-file note), never a real person's data.
+// top-of-file note), never a real person's data. `acknowledgedNonSensitive:
+// true` is required by the writer's own review-round-1 cross-check
+// (YELLOW-274.3) whenever db looks like crede and sensitive is false —
+// stated explicitly here for the same reason `sensitive` itself is
+// explicit, not inferred.
 function writeLedger(payload: Record<string, unknown>): string {
-	return writeLedgerShared({ scriptName: 'seed-265-admin-member-record-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, payload });
+	return writeLedgerShared({ scriptName: 'seed-265-admin-member-record-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, acknowledgedNonSensitive: true, payload });
 }
 
 async function main(): Promise<void> {

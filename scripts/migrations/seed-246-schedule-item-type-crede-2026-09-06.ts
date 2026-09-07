@@ -33,9 +33,12 @@ const DRY_RUN = readDryRun();
 // mvox-app#274 — writeLedger now goes through the shared, redaction-aware
 // writer; `sensitive: false` because this ledger carries only type/prop-def
 // ids and sharing metadata, never a person's data (empty-structure
-// provisioning — see the top-of-file note).
+// provisioning — see the top-of-file note). `acknowledgedNonSensitive: true`
+// is required by the writer's own review-round-1 cross-check (YELLOW-274.3)
+// whenever db looks like crede and sensitive is false — stated explicitly
+// here for the same reason `sensitive` itself is explicit, not inferred.
 function writeLedger(payload: Record<string, unknown>): string {
-	return writeLedgerShared({ scriptName: 'seed-246-schedule-item-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, payload });
+	return writeLedgerShared({ scriptName: 'seed-246-schedule-item-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, acknowledgedNonSensitive: true, payload });
 }
 
 async function main(): Promise<void> {
