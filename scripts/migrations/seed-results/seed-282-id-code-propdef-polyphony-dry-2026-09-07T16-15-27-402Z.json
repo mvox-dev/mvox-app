@@ -1,0 +1,26 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "authorization": "PO-Approved 2026-09-07 mvox-app#282 comment 5573048456 (Gama, Mihkel verbatim GO)",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "adminMemberRecordTypeId": "6a9dcbc9ca67df980f417470",
+  "idCodePropDefId": "<dry-run-unresolved>",
+  "idCodeOrdinal": 6,
+  "idCodeExpectedSharing": "private",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.id_code",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "private",
+        "mandatory": false
+      }
+    }
+  ],
+  "exitCode": 0
+}

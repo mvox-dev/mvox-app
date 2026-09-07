@@ -1,0 +1,21 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "purpose": "demonstrate that assertPropDefSharing read-back lines (target/id/after.sharing) survive DEFAULT_REDACT_FIELDS redaction — no mutation, phone prop-def only, read-only GET",
+  "probedField": "admin_member_record.phone (existing sibling, not id_code — id_code does not exist yet)",
+  "entityMetaTypeId": "6a8f471a5eb2498f434e50cc",
+  "propertyMetaTypeId": "6a8f471a5eb2498f434e50e0",
+  "adminMemberRecordTypeId": "6a9dcbd3ca67df980f4174c6",
+  "ledger": [
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.phone.sharing-readback",
+      "id": "6a9dcbd4ca67df980f4174ec",
+      "outcome": "found",
+      "after": {
+        "sharing": "private"
+      }
+    }
+  ]
+}
