@@ -1,7 +1,11 @@
 // mvox-app#275 — LIVE WIRE SMOKE, polyphony only. GREEN's editionFiles.ts
 // exercises Entu's two-step signed-S3 upload against MOCKS; nothing in the
 // test suite calls the real S3 leg. This probe drives the real wire, end
-// to end, against a single existing edition, then cleans up after itself.
+// to end. Extended 2026-09-08 (team-lead ruling): polyphony had ZERO
+// `edition` entities to attach to, so this script now ALSO creates the
+// fixture it targets — and that fixture doubles as the target for the
+// human browser smoke that closes #275 (the browser-CORS-preflight half
+// this script cannot answer).
 //
 // SCOPE, STATED SO IT ISN'T OVER-READ:
 // - This does NOT answer the browser-CORS-preflight question. Node's
@@ -10,15 +14,35 @@
 //   proves the four-header contract is internally consistent and that
 //   POLYPHONY's S3 bucket accepts it from a server-side caller, but says
 //   NOTHING about whether a real browser will be allowed to send the same
-//   PUT. That half stays a human-in-a-real-browser gate, per team-lead's
-//   framing. Recorded in the ledger as `browserCorsAnswered: false`, not
-//   silently omitted.
+//   PUT. That half stays a human-in-a-real-browser gate. Recorded in the
+//   ledger as `browserCorsAnswered: false`, not silently omitted.
 // - This ALSO empirically answers what rights tier `DELETE /property/{id}`
-//   needs for a file property, since this script's API key's rights are
-//   already known (polyphony db-root key, per the existing credential
-//   convention) — the ledger records the OBSERVED outcome (succeeded/
-//   failed with this key) and does not extrapolate to what a lesser-
-//   privileged librarian key would see.
+//   needs for a file property (on the failure path only — see below),
+//   since this script's API key's rights are already known (polyphony
+//   db-root key) — the ledger records the OBSERVED outcome and does not
+//   extrapolate to what a lesser-privileged librarian key would see.
+//
+// FIXTURES (work + edition) — created, not reused, and PERSIST:
+// Mirrors src/lib/entity/entityCreate.ts's createWork/createEdition wire
+// shape exactly (read before writing this): `_type` + one-element
+// `_parent` + domain props, NO `_sharing`, NO `_inheritrights` — the
+// library-subtree rights policy (#132 decision), rights propagate down
+// from the library entity. Parented under the existing "Polyphony
+// Library" entity -> a "SMOKE-275 Test Work" work -> a "SMOKE-275 Test
+// Edition" edition. Names are unmistakably labeled so nobody mistakes them
+// for real content. Idempotent check-then-create (by name.string under the
+// expected parent), so a repeat dry-run/live invocation reuses the same
+// fixtures rather than multiplying them.
+//
+// PERSISTENCE, DELIBERATE: unlike the original single-shot version of this
+// script, the fixtures are NOT torn down — they are the target the human
+// browser round needs (team-lead ruling, 2026-09-08). On a SUCCESSFUL
+// upload, the smoke's own file is ALSO left attached (cleanup DELETE
+// skipped) so Mihkel's browser round has something to click "Open" on —
+// recorded in the ledger as `filePersistedOnSuccess: true`. The cleanup
+// DELETE remains exactly the app's own failure-path behavior: it only
+// fires when the PUT (or the download round-trip) did NOT succeed, same
+// as editionFiles.ts's phantom-cleanup path.
 //
 // Mirrors src/lib/library/editionFiles.ts's own wire contract exactly —
 // re-read at the merged 93f0b15 (fix round changed the reconciliation
@@ -34,14 +58,14 @@
 // ENTU_API_BASE and smuggle Authorization/Accept onto a signed URL whose
 // signature covers exactly those four); step 3 GETs property/{id} for a
 // fresh (60s-TTL) download URL and round-trips the bytes; step 4 is
-// cleanup — DELETE property/{id}, same as the app's own phantom-cleanup
-// path, except here it runs on a SUCCESSFUL upload (the smoke's own file,
-// not a real attachment) rather than a failed one.
+// cleanup on the FAILURE path only — DELETE property/{id}, same as the
+// app's own phantom-cleanup path.
 //
-// Target edition: EDITION_ID env override, or the first live `edition`
-// entity found on polyphony (read-only resolve). Synthetic db, routine-ops
-// pre-authorized — but per the standing two-step gate, live mutation here
-// STILL waits for team-lead's explicit "I authorize this run".
+// Synthetic db, routine-ops pre-authorized — but per the standing
+// two-step gate, live mutation here STILL waits for team-lead's explicit
+// "I authorize this run", covering the whole sequence (create work ->
+// create edition -> upload -> download round-trip -> success-path file
+// persists).
 //
 // Run (standalone node, outside Vite -- needs the $env shim via loader.mjs):
 //   cd ~/workspace-app
@@ -59,6 +83,9 @@ import { writeLedger } from '../lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
 
+const WORK_NAME = 'SMOKE-275 Test Work';
+const EDITION_NAME = 'SMOKE-275 Test Edition';
+
 interface UploadObject {
 	url: string;
 	method: string;
@@ -75,24 +102,93 @@ interface StepOneResponseBody {
 	properties?: { file?: StepOnePropertyEntry[] };
 }
 
-async function resolveTargetEditionId(db: string, token: string): Promise<{ id: string; name: string }> {
-	const override = process.env.EDITION_ID;
-	if (override) return { id: override, name: '(env override, not read)' };
+/** Resolve a type-def id by name, under the "entity" meta-type (v4E canonical
+ * types live here, not the mvox-schema-extensions app-extension catalog). */
+async function resolveTypeId(db: string, token: string, typeName: string): Promise<string> {
+	const res = await entuFetch(db, `entity?_type.string=entity&name.string=${encodeURIComponent(typeName)}&props=_id&limit=1`, token);
+	if (!res.ok) throw new Error(`resolveTypeId('${typeName}'): query failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: Array<{ _id: string }> };
+	const id = body.entities?.[0]?._id;
+	if (!id) throw new Error(`resolveTypeId('${typeName}'): type-def not found on ${db}`);
+	return id;
+}
 
-	const res = await entuFetch(db, `entity?_type.string=edition&props=name&limit=1`, token);
-	if (!res.ok) throw new Error(`resolveTargetEditionId: query failed: ${res.status}`);
-	const body = (await res.json()) as { count: number; entities: Array<{ _id: string; name?: Array<{ string: string }> }> };
-	if (body.count === 0) throw new Error('resolveTargetEditionId: no live `edition` entity found on polyphony — set EDITION_ID to target one explicitly');
-	const entity = body.entities[0];
-	return { id: entity._id, name: entity.name?.[0]?.string ?? '(unnamed)' };
+/** Idempotent check-then-create: find an entity of `typeId` named `name`
+ * under `parentId`, or create it (no _sharing/_inheritrights — #132 library-
+ * subtree rights policy, rights propagate down from the library entity). */
+async function ensureEntity(
+	db: string,
+	token: string,
+	typeId: string,
+	typeName: string,
+	parentId: string,
+	name: string,
+	dryRun: boolean,
+	ledger: Record<string, unknown>[]
+): Promise<string | null> {
+	const existing = await entuFetch(db, `entity?_type.reference=${typeId}&_parent.reference=${parentId}&name.string=${encodeURIComponent(name)}&props=_id&limit=1`, token);
+	if (!existing.ok) throw new Error(`ensureEntity('${name}'): existence check failed: ${existing.status}`);
+	const existingBody = (await existing.json()) as { entities?: Array<{ _id: string }> };
+	const existingId = existingBody.entities?.[0]?._id;
+	// Ledger key is `entityName`, deliberately NOT `name` — `name` is a
+	// DEFAULT_REDACT_FIELDS member (since #278) and would render this
+	// non-sensitive, already-labeled fixture name as [REDACTED], defeating
+	// the point of an auditable ledger for a smoke test. `entityName`
+	// carries the exact same string; only the KEY differs.
+	if (existingId) {
+		ledger.push({ step: `ensure-${typeName}`, outcome: 'found', id: existingId, entityName: name });
+		return existingId;
+	}
+
+	if (dryRun) {
+		ledger.push({ step: `ensure-${typeName}`, outcome: 'dry-run-would-create', entityName: name, parentId });
+		return null;
+	}
+
+	const res = await entuFetch(db, 'entity', token, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify([
+			{ type: '_type', reference: typeId },
+			{ type: '_parent', reference: parentId },
+			{ type: 'name', string: name }
+		])
+	});
+	if (!res.ok) throw new Error(`ensureEntity('${name}'): create failed: ${res.status}`);
+	const body = (await res.json()) as { _id?: string };
+	if (!body._id) throw new Error(`ensureEntity('${name}'): create returned 2xx without _id — apparent-success trap`);
+	ledger.push({ step: `ensure-${typeName}`, outcome: 'created', id: body._id, entityName: name, parentId });
+	return body._id;
 }
 
 async function main(): Promise<void> {
 	const cfg = await loadCfg();
 	console.log(`Mode: ${DRY_RUN ? 'DRY_RUN' : 'LIVE'} — db=${cfg.db}\n`);
 
-	const target = await resolveTargetEditionId(cfg.db, cfg.token);
-	console.log(`Target edition: ${target.id} (${target.name})`);
+	const ledger: Record<string, unknown>[] = [];
+
+	// Resolve the existing "Polyphony Library" entity — read-only, never created here.
+	const libRes = await entuFetch(cfg.db, `entity?_type.string=library&props=_id,name&limit=1`, cfg.token);
+	if (!libRes.ok) throw new Error(`library resolve failed: ${libRes.status}`);
+	const libBody = (await libRes.json()) as { count: number; entities: Array<{ _id: string; name?: Array<{ string: string }> }> };
+	if (libBody.count === 0) throw new Error('no `library` entity found on polyphony — cannot anchor the SMOKE-275 fixtures');
+	const libraryId = libBody.entities[0]._id;
+	console.log(`Library entity: ${libraryId} (${libBody.entities[0].name?.[0]?.string ?? '(unnamed)'})`);
+
+	const workTypeId = await resolveTypeId(cfg.db, cfg.token, 'work');
+	const editionTypeId = await resolveTypeId(cfg.db, cfg.token, 'edition');
+
+	const workId = await ensureEntity(cfg.db, cfg.token, workTypeId, 'work', libraryId, WORK_NAME, DRY_RUN, ledger);
+	console.log(`${WORK_NAME}: ${workId ?? '(would create — dry-run)'}`);
+
+	let editionId: string | null = null;
+	if (workId) {
+		editionId = await ensureEntity(cfg.db, cfg.token, editionTypeId, 'edition', workId, EDITION_NAME, DRY_RUN, ledger);
+		console.log(`${EDITION_NAME}: ${editionId ?? '(would create — dry-run)'}`);
+	} else {
+		console.log(`${EDITION_NAME}: skipped (dry-run, work not yet resolved)`);
+		ledger.push({ step: 'ensure-edition', outcome: 'skipped', reason: 'dry-run: work not yet created' });
+	}
 
 	const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 	const filename = `probe-275-wire-smoke-${stamp}.txt`;
@@ -100,17 +196,15 @@ async function main(): Promise<void> {
 	const filesize = bytes.byteLength;
 	const filetype = 'text/plain';
 
-	const ledger: Record<string, unknown>[] = [];
-
-	if (DRY_RUN) {
-		console.log(`Would POST entity/${target.id} [{type:'file', filename:'${filename}', filesize:${filesize}, filetype:'${filetype}'}]`);
+	if (DRY_RUN || !editionId) {
+		console.log(`\nWould POST entity/${editionId ?? '<edition-not-yet-created>'} [{type:'file', filename:'${filename}', filesize:${filesize}, filetype:'${filetype}'}]`);
 		console.log('Would PUT bytes to the returned upload.url with exactly the four returned headers.');
 		console.log('Would GET property/{id} for a fresh download URL and round-trip the bytes.');
-		console.log('Would DELETE property/{id} to clean up (also records the observed delete-rights outcome).');
-		ledger.push({ step: 'dry-run', wouldTarget: target.id, wouldFilename: filename, wouldFilesize: filesize });
+		console.log('On success: file property PERSISTS (no cleanup DELETE) — it is the browser smoke\'s target. On failure: DELETE property/{id} exactly as the app\'s own phantom-cleanup path.');
+		ledger.push({ step: 'dry-run-upload', wouldTargetEdition: editionId, wouldFilename: filename, wouldFilesize: filesize });
 	} else {
 		// STEP 1 — metadata POST, append idiom, exactly editionFiles.ts's shape.
-		const postRes = await entuFetch(cfg.db, `entity/${target.id}`, cfg.token, {
+		const postRes = await entuFetch(cfg.db, `entity/${editionId}`, cfg.token, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify([{ type: 'file', filename, filesize, filetype }])
@@ -160,17 +254,24 @@ async function main(): Promise<void> {
 			ledger.push({ step: 'step-3-download-roundtrip', outcome: 'skipped', reason: 'step-2 did not succeed' });
 		}
 
-		// STEP 4 — cleanup, always attempted regardless of upload outcome (this
-		// is OUR smoke file either way, never a real attachment). Also the
-		// delete-rights observation team-lead asked for: OBSERVED outcome only,
-		// with THIS key's known rights — not extrapolated to any other identity.
-		const delRes = await entuFetch(cfg.db, `property/${entry._id}`, cfg.token, { method: 'DELETE' });
-		const cleanupOk = delRes.ok;
-		console.log(`step 4: DELETE property/${entry._id} ${cleanupOk ? 'OK' : 'FAILED'} (status ${delRes.status}) — observed delete-rights outcome for THIS key only, not extrapolated`);
-		ledger.push({ step: 'step-4-cleanup-delete', outcome: cleanupOk ? 'deleted' : 'delete-failed', status: delRes.status, note: 'observed with this script\'s own API key rights only, not extrapolated to other identities' });
-
-		if (!cleanupOk) {
-			console.error(`\nCLEANUP FAILED — a phantom/orphan file property (${entry._id}) may remain on ${target.id}. Reporting, not retrying silently.`);
+		// STEP 4 — SUCCESS path PERSISTS the file (team-lead ruling, 2026-09-08):
+		// the browser smoke that closes #275 needs something to click "Open" on.
+		// FAILURE path (PUT failed, or the round-trip didn't match) still gets
+		// the app's own phantom-cleanup DELETE, and this is where the
+		// delete-rights observation lives — OBSERVED outcome only, with THIS
+		// key's known rights, not extrapolated to any other identity.
+		const uploadSucceeded = putOk && roundTripOk === true;
+		if (uploadSucceeded) {
+			console.log(`step 4: SKIPPED cleanup — upload succeeded, file PERSISTS on ${editionId} for the browser smoke (filePersistedOnSuccess: true)`);
+			ledger.push({ step: 'step-4-cleanup-delete', outcome: 'skipped-persisted-on-success', propertyId: entry._id });
+		} else {
+			const delRes = await entuFetch(cfg.db, `property/${entry._id}`, cfg.token, { method: 'DELETE' });
+			const cleanupOk = delRes.ok;
+			console.log(`step 4: DELETE property/${entry._id} ${cleanupOk ? 'OK' : 'FAILED'} (status ${delRes.status}) — observed delete-rights outcome for THIS key only, not extrapolated`);
+			ledger.push({ step: 'step-4-cleanup-delete', outcome: cleanupOk ? 'deleted' : 'delete-failed', status: delRes.status, note: 'observed with this script\'s own API key rights only, not extrapolated to other identities' });
+			if (!cleanupOk) {
+				console.error(`\nCLEANUP FAILED — a phantom/orphan file property (${entry._id}) may remain on ${editionId}. Reporting, not retrying silently.`);
+			}
 		}
 	}
 
@@ -180,8 +281,14 @@ async function main(): Promise<void> {
 		db: cfg.db,
 		sensitive: false,
 		payload: {
-			purpose: 'live wire smoke for mvox-app#275 — Entu two-step signed-S3 upload, real bytes, real round-trip, real cleanup. Mocks in the test suite cannot verify the S3 leg; this does.',
-			targetEditionId: target.id,
+			purpose: 'live wire smoke for mvox-app#275 — Entu two-step signed-S3 upload, real bytes, real round-trip. Mocks in the test suite cannot verify the S3 leg; this does. Fixtures (work+edition) also serve as the target for the human browser smoke that closes #275.',
+			libraryId,
+			workName: WORK_NAME,
+			editionName: EDITION_NAME,
+			workId,
+			editionId,
+			fixturesPersist: true,
+			filePersistedOnSuccess: true,
 			scopeNote: 'browserCorsAnswered is always false — Node can set Content-Length manually, a browser forbids it as a request header. This smoke proves the four-header contract and polyphony S3 acceptance from a server-side caller only, never the browser leg.',
 			ledger
 		}

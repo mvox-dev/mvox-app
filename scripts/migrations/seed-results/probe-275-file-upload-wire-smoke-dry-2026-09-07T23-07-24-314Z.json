@@ -1,0 +1,33 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "live wire smoke for mvox-app#275 — Entu two-step signed-S3 upload, real bytes, real round-trip. Mocks in the test suite cannot verify the S3 leg; this does. Fixtures (work+edition) also serve as the target for the human browser smoke that closes #275.",
+  "libraryId": "6a885aa1ac0a9c7d5f122da5",
+  "workName": "SMOKE-275 Test Work",
+  "editionName": "SMOKE-275 Test Edition",
+  "workId": null,
+  "editionId": null,
+  "fixturesPersist": true,
+  "filePersistedOnSuccess": true,
+  "scopeNote": "browserCorsAnswered is always false — Node can set Content-Length manually, a browser forbids it as a request header. This smoke proves the four-header contract and polyphony S3 acceptance from a server-side caller only, never the browser leg.",
+  "ledger": [
+    {
+      "step": "ensure-work",
+      "outcome": "dry-run-would-create",
+      "entityName": "SMOKE-275 Test Work",
+      "parentId": "6a885aa1ac0a9c7d5f122da5"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created"
+    },
+    {
+      "step": "dry-run-upload",
+      "wouldTargetEdition": null,
+      "wouldFilename": "probe-275-wire-smoke-2026-09-07T23-07-24-313Z.txt",
+      "wouldFilesize": 53
+    }
+  ]
+}
