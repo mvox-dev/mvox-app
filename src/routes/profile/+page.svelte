@@ -28,6 +28,11 @@
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
+	// #267 — admin-only roster-names toggle: adminStore is the roster
+	// precedent, resolved app-wide by +layout, keyed to the selected
+	// collective — zero new resolution wiring on this page.
+	import { adminStore } from '$lib/nav/adminStore';
+	import { readRosterNamesSetting, updateRosterShowRealNames } from '$lib/collective/rosterNames';
 	// #193 — linked auth providers + "Link another account".
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
@@ -81,6 +86,26 @@
 	let repairStatus = $state('');
 	let busy = $state(false);
 	let pendingMoveTo: Record<FieldKey, Level | null> = { name: null, email: null };
+
+	// #267 — the admin-only roster-names toggle. `rosterDbEntityId` rides along
+	// from the READ (the WRITE needs it); `rosterShowRealNames` is the
+	// server-CONFIRMED value only — never assigned optimistically. The status/
+	// error pair follows the profile-repair-status idiom: a persistent sr-only
+	// role="status" region (imperative text, cleared at the START of the next
+	// attempt) plus an inline role="alert" for the truthful failure message.
+	let rosterDbEntityId = $state<string | null>(null);
+	let rosterShowRealNames = $state(false);
+	let rosterBusy = $state(false);
+	let rosterStatus = $state('');
+	let rosterError = $state<string | null>(null);
+	const admin = $derived($adminStore);
+	// #267 — bound so resetState() can force the DOM `<select>` back in sync on
+	// a collective switch even when the reset lands the SAME boolean the
+	// select already held (Svelte's `value={…}` effect only re-runs on an
+	// actual SIGNAL change; a switch away mid-write can leave the browser's
+	// own already-mutated `.value`, from the user's onchange pick, stuck —
+	// see onRosterNamesChange for the matching settle-time correction).
+	let rosterSelectEl = $state<HTMLSelectElement | null>(null);
 
 	// #193 — linked auth providers, loaded alongside the profile fields but kept
 	// on its OWN try/catch (below): a hiccup reading them must not take down the
@@ -275,6 +300,14 @@
 		linkPickerOpen = false;
 		linkBusy = false;
 		linkError = null;
+		// #267 — a stale collective's roster-names state (value, in-flight lock,
+		// announcement) must never bleed into the next collective (#257/#260 class).
+		rosterDbEntityId = null;
+		rosterShowRealNames = false;
+		if (rosterSelectEl) rosterSelectEl.value = 'profile';
+		rosterBusy = false;
+		rosterStatus = '';
+		rosterError = null;
 		autosaveCtrl.destroy();
 	}
 
@@ -315,6 +348,31 @@
 		void loadLinkedIdentities(ctx.cfg, ctx.personId, routeLoad.generation);
 	}
 
+	/**
+	 * #267 — the roster-names setting read, isolated from the profile-fields
+	 * load the same way loadLinkedIdentities is: fired independently so a
+	 * profile-fields load-error can never take the admin-only control down
+	 * with it (the control is app chrome, not gated on route-load `status`).
+	 * Guarded on the captured generation, the same shape as every other
+	 * settle in this file — a stale answer must never land (#257/#260 class).
+	 * Never rejects into the caller: a failed read just leaves the default
+	 * ('profile' / false) standing, logged (console.warn — the
+	 * attendanceData.ts precedent for "non-fatal, degrades to a documented
+	 * default" — never console.error, which every OTHER profile-page spec
+	 * asserts silence on and does not mock this new dependency away).
+	 */
+	async function loadRosterNames(cfg: { db: string; token: string }, g: number): Promise<void> {
+		try {
+			const setting = await readRosterNamesSetting(cfg);
+			if (g !== routeLoad.generation) return;
+			rosterDbEntityId = setting.dbEntityId;
+			rosterShowRealNames = setting.showRealNames;
+		} catch (err) {
+			if (g !== routeLoad.generation) return;
+			console.warn('profile: roster-names setting read failed', err);
+		}
+	}
+
 	// #232 — the shared route-load machine (Status union, generation guard,
 	// loadForSelected sequencing) extracted into $lib/loading/routeLoad; this
 	// page's fetch BODY (below, `load`) and its page-specific `resetState` stay
@@ -333,6 +391,10 @@
 		},
 		async load({ cfg, selected: current, g, isCurrent }) {
 			const personId = current.personId;
+			// #267 — fired independently of the profile-fields read below: it must
+			// land (or fail on its own) even when listMyProfiles rejects, since the
+			// roster-names control is app chrome, not gated on route-load `status`.
+			void loadRosterNames(cfg, g);
 			const profiles = await listMyProfiles(cfg, personId);
 			if (!isCurrent()) return;
 			loadedProfiles = profiles;
@@ -771,6 +833,66 @@
 		onmove(field, toLevel);
 	}
 
+	/**
+	 * #267 — the roster-names WRITE. Server-confirmed, NEVER optimistic
+	 * (#253/#264 class): the select stays disabled and shows the OLD value
+	 * until the await resolves; only then does it flip to the new one. On
+	 * failure the message tells the truth (no success claim) and the select
+	 * returns to the value captured just before this attempt started — the
+	 * server-confirmed value from the last successful read or write, NOT a
+	 * re-read (STATED CHOICE: readRosterNamesSetting is not called again).
+	 * `rosterStatus` is cleared here, at the START of the attempt (never on
+	 * settle, never a timer) — the profile-repair-status idiom.
+	 */
+	async function onRosterNamesChange(e: Event): Promise<void> {
+		// The element reference is captured synchronously (before any await) and
+		// used to force the DOM back in sync below — the browser has already
+		// mutated `.value` to the user's pick as a normal `<select>` interaction,
+		// and Svelte's `value={…}` effect only re-runs when the SIGNAL it reads
+		// changes; a revert-to-the-same-boolean-it-already-was (e.g. two failed
+		// attempts in a row) would otherwise never re-run that effect, leaving
+		// the browser's already-mutated DOM value stuck on the user's pick.
+		const selectEl = e.currentTarget as HTMLSelectElement;
+		const value = selectEl.value === 'real';
+		const ctx = activeContext();
+		const dbEntityId = rosterDbEntityId;
+		// #267 (review F1) — a failing write PRECONDITION is NOT "nothing
+		// happened": the browser has ALREADY moved the select to the admin's pick.
+		// Returning silently would leave the control displaying a value the server
+		// does not have, with no error, no status and no console line — the one
+		// thing the issue rules out. The select is disabled until
+		// `rosterDbEntityId` is confirmed (see the markup), so this is the
+		// residual guard behind that gate, and it tells the truth: the DOM goes
+		// back to the last server-confirmed value and the write path's own failure
+		// message is shown. Nothing was written, and the page says so.
+		if (!ctx || !dbEntityId) {
+			selectEl.value = rosterShowRealNames ? 'real' : 'profile';
+			rosterStatus = '';
+			rosterError = m.profile_roster_names_error();
+			return;
+		}
+		const g = routeLoad.generation;
+		const preWriteValue = rosterShowRealNames;
+		rosterStatus = '';
+		rosterError = null;
+		rosterBusy = true;
+		try {
+			await updateRosterShowRealNames(ctx.cfg, dbEntityId, value);
+			if (g !== routeLoad.generation) return;
+			rosterShowRealNames = value;
+			selectEl.value = value ? 'real' : 'profile';
+			rosterBusy = false;
+			rosterStatus = m.profile_roster_names_saved();
+		} catch (err) {
+			if (g !== routeLoad.generation) return;
+			console.error('profile: roster-names write failed', err);
+			rosterShowRealNames = preWriteValue;
+			selectEl.value = preWriteValue ? 'real' : 'profile';
+			rosterBusy = false;
+			rosterError = m.profile_roster_names_error();
+		}
+	}
+
 	$effect(() => {
 		void selected;
 		loadForSelected().catch((e) => {
@@ -832,6 +954,64 @@
 				{m.profile_time_format_hint()}
 			</p>
 		</div>
+
+		<!--
+			#267 — admin-only roster-names toggle: mirrors the time-format control
+			above verbatim (label above, native <select>, hint below), sibling in
+			the SAME app-chrome column, NOT gated on route-load `status` — an admin
+			sees it even when the profile-fields load errored. Fail-closed on every
+			non-admin adminStore state ('not-admin' / 'loading' / 'error'): no
+			control, no disabled placeholder, no explanatory text.
+
+			#267 (review F1) — VISIBILITY (admin gate) and USABILITY (entity id
+			confirmed) are separate questions. adminStore resolves on its OWN clock
+			in +layout, independently of this page's roster-names read, so 'admin'
+			can land while `rosterDbEntityId` is still null — either because the
+			read is in flight (a window that reopens on every collective switch) or
+			because it FAILED and left the documented default standing. In both
+			states the write has no entity to write to, so the select is disabled
+			until the id is confirmed: the admin can never move a control that
+			cannot be saved. This is NOT a disabled control for a non-admin — the
+			admin gate above is unchanged, and a non-admin still gets no DOM at all.
+		-->
+		{#if admin === 'admin'}
+			<div class="flex flex-col items-start gap-1">
+				<label for="profile-roster-names" class="text-sm text-ink-2">
+					{m.profile_roster_names_label()}
+				</label>
+				<select
+					id="profile-roster-names"
+					data-testid="profile-roster-names"
+					bind:this={rosterSelectEl}
+					value={rosterShowRealNames ? 'real' : 'profile'}
+					disabled={rosterBusy || rosterDbEntityId === null}
+					onchange={onRosterNamesChange}
+					class="border border-ink-5 bg-paper px-2 py-1 text-ink"
+				>
+					<option value="profile">{m.profile_roster_names_profile()}</option>
+					<option value="real">{m.profile_roster_names_real()}</option>
+				</select>
+				<p data-testid="profile-roster-names-hint" class="text-xs text-ink-3">
+					{m.profile_roster_names_hint()}
+				</p>
+				{#if rosterError}
+					<p data-testid="profile-roster-names-error" role="alert" class="text-xs text-red-700">
+						{rosterError}
+					</p>
+				{/if}
+				<!-- Persistent sr-only role="status" region, the profile-repair-status
+					idiom verbatim: mounted (empty) before any attempt, text set
+					imperatively, cleared at the START of the next attempt only. -->
+				<div
+					data-testid="profile-roster-names-status"
+					role="status"
+					aria-live="polite"
+					class="sr-only"
+				>
+					{rosterStatus}
+				</div>
+			</div>
+		{/if}
 
 		<!-- #257 — the repair confirmation announcement. House idiom
 			(event-create-status / roster-reorder-status): a PERSISTENT sr-only
