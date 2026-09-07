@@ -43,9 +43,6 @@
 //   DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
 //     ./scripts/migrations/seed-265-admin-member-record-type-crede-2026-09-06.ts        # ONLY after dry-run verified + authorization
 
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	resolveMetaTypeIds,
 	resolveTypeIdByName,
@@ -55,30 +52,17 @@ import {
 	type LedgerStep
 } from './lib/ensure-schema-type';
 import { admin_member_record, roster_show_real_names } from './lib/mvox-schema-extensions';
+import { readDryRun, loadCredeCfg } from './lib/script-runner';
+import { writeLedger as writeLedgerShared } from './lib/ledger-writer';
 
-const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
-const DB = process.env.MVOX_CREDE_DB ?? 'mvox_crede';
+const DRY_RUN = readDryRun();
 
-async function loadCredeCfg(): Promise<EntuCfg> {
-	const key = process.env.MVOX_CREDE_API_KEY;
-	if (!key) throw new Error('loadCredeCfg: MVOX_CREDE_API_KEY is not set — source ~/.config/mvox/credentials.env first');
-	const res = await fetch(`https://api.entu.app/auth?db=${DB}`, {
-		headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }
-	});
-	if (!res.ok) throw new Error(`loadCredeCfg: auth exchange failed: ${res.status}`);
-	const body = (await res.json()) as { token?: string };
-	if (!body.token) throw new Error('loadCredeCfg: auth exchange returned no token (apparent-success trap)');
-	return { db: DB, token: body.token };
-}
-
+// mvox-app#274 — writeLedger now goes through the shared, redaction-aware
+// writer; `sensitive: false` — this ledger records prop-def ids and sharing
+// metadata only (empty-structure provisioning, zero instances, per the
+// top-of-file note), never a real person's data.
 function writeLedger(payload: Record<string, unknown>): string {
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const dir = join('scripts', 'migrations', 'seed-results');
-	const filename = `seed-265-admin-member-record-type-crede-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`;
-	const filePath = join(dir, filename);
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(filePath, JSON.stringify(payload, null, 2));
-	return filePath;
+	return writeLedgerShared({ scriptName: 'seed-265-admin-member-record-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, payload });
 }
 
 async function main(): Promise<void> {

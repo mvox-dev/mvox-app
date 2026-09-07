@@ -139,8 +139,9 @@ export async function createSection(
 		parentRef = dbEntityId;
 	}
 
-	// Full create body, exactly: _type + _parent + name + _sharing — no
-	// display_order, no voice, no description (see module contract above).
+	// Full create body, exactly: _type + _parent + name + _sharing +
+	// _inheritrights — no display_order, no voice, no description (see module
+	// contract above).
 	//
 	// explicit `_sharing: public` required (#133 audit) — KEEP, do not remove:
 	// inherit cannot produce this value. The org is `domain` (6/6 live) and seed

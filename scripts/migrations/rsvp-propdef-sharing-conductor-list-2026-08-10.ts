@@ -24,13 +24,13 @@
 //   DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
 //     ./scripts/migrations/rsvp-propdef-sharing-conductor-list-2026-08-10.ts       # ONLY after dry-run verified
 
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
 import { loadCfg } from './lib/creds';
+import { readDryRun } from './lib/script-runner';
+import { writeLedger as writeLedgerShared } from './lib/ledger-writer';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
+const DRY_RUN = readDryRun();
 
 // Known IDs from the TA.1 ledger (attendance-propdefs-rsvp-widen-2026-08-10-live).
 const RSVP_TYPE_ID = '6a0d2e8590c8df7a1cc7df1b';
@@ -55,14 +55,12 @@ interface LedgerEntry {
 
 const ledger: LedgerEntry[] = [];
 
+// mvox-app#274 — writeLedger now goes through the shared, redaction-aware
+// writer, landing in seed-results/ instead of the retired ledgers/ dir;
+// `sensitive: false` (polyphony is synthetic, and this ledger carries only
+// ids/status/sharing metadata regardless).
 function writeLedger(payload: Record<string, unknown>): string {
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const dir = join('scripts', 'migrations', 'ledgers');
-	const filename = `rsvp-propdef-sharing-conductor-list-2026-08-10-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`;
-	const filePath = join(dir, filename);
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(filePath, JSON.stringify(payload, null, 2));
-	return filePath;
+	return writeLedgerShared({ scriptName: 'rsvp-propdef-sharing-conductor-list-2026-08-10', dryRun: DRY_RUN, db: process.env.ENTU_DATABASE ?? 'polyphony', sensitive: false, payload });
 }
 
 /** List prop-defs under the rsvp type, returning a map of name -> { id, sharing }. */

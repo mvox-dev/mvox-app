@@ -4,20 +4,23 @@
 // polyphony.uk dump's member_sections table (21 rows, is_primary=1 on all,
 // exactly one section per member) and cross-referenced against #178's
 // live ledger for the actual mvox_crede person/member entity ids.
+//
+// mvox-app#274 — migrated onto the shared script-runner + ledger-writer.
+
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
+import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
+import { writeLedger } from './lib/ledger-writer';
 
-const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
-
-const DB = process.env.MVOX_CREDE_DB ?? 'mvox_crede';
+const DRY_RUN = readDryRun();
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 const SECTION_TYPE_ID = '6a8f91145eb2498f434e57bc';
 
 type SectionDef = { name: string; abbreviation: string; displayOrder: number; voice: string; memberIds: string[] };
 
 // memberIds are the mvox_crede `member` entity ids from #178's live ledger
-// (seed-results/seed-178-crede-members-live-2026-08-27T01-46-36-991Z.json).
+// (seed-results/crede-instance/seed-178-crede-members-live-2026-08-27T01-46-36-991Z.json).
 const SECTIONS: SectionDef[] = [
 	{ name: 'Soprano I', abbreviation: 'S1', displayOrder: 2, voice: 'soprano', memberIds: [
 		'6a8f96ef5eb2498f434e5d03', '6a8f96f05eb2498f434e5d1c', '6a8f96f15eb2498f434e5d35', '6a8f96f25eb2498f434e5d4e', '6a8f96f35eb2498f434e5d67'
@@ -44,23 +47,7 @@ const SECTIONS: SectionDef[] = [
 
 type LedgerEntry = { section: string; sectionId?: string; memberId: string; status: 'created' | 'would-create' | 'failed'; message?: string };
 
-function errMsg(err: unknown): string {
-	return err instanceof Error ? err.message : String(err);
-}
-
-async function getToken(): Promise<string> {
-	const key = process.env.MVOX_CREDE_API_KEY;
-	if (!key) throw new Error('getToken: MVOX_CREDE_API_KEY is not set — source ~/.config/mvox/credentials.env first');
-	const res = await fetch(`https://api.entu.app/auth?db=${DB}`, {
-		headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }
-	});
-	if (!res.ok) throw new Error(`auth exchange failed: ${res.status}`);
-	const body = (await res.json()) as { token?: string };
-	if (!body.token) throw new Error('auth exchange returned no token');
-	return body.token;
-}
-
-async function createSection(token: string, section: SectionDef): Promise<string> {
+async function createSection(db: string, token: string, section: SectionDef): Promise<string> {
 	const props: Array<{ type: string; reference?: string; string?: string; boolean?: boolean; number?: number }> = [
 		{ type: '_type', reference: SECTION_TYPE_ID },
 		{ type: '_parent', reference: DB_ENTITY_ID },
@@ -70,7 +57,7 @@ async function createSection(token: string, section: SectionDef): Promise<string
 		{ type: 'display_order', number: section.displayOrder }
 	];
 	if (section.voice) props.push({ type: 'voice', string: section.voice });
-	const res = await entuFetch(DB, 'entity', token, {
+	const res = await entuFetch(db, 'entity', token, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify(props)
@@ -81,8 +68,8 @@ async function createSection(token: string, section: SectionDef): Promise<string
 	return body._id;
 }
 
-async function appendSectionParent(token: string, memberId: string, sectionId: string): Promise<void> {
-	const res = await entuFetch(DB, `entity/${memberId}`, token, {
+async function appendSectionParent(db: string, token: string, memberId: string, sectionId: string): Promise<void> {
+	const res = await entuFetch(db, `entity/${memberId}`, token, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json' },
 		body: JSON.stringify([{ type: '_parent', reference: sectionId }])
@@ -90,8 +77,8 @@ async function appendSectionParent(token: string, memberId: string, sectionId: s
 	if (!res.ok) throw new Error(`member _parent append failed: ${res.status}`);
 }
 
-async function main() {
-	const token = await getToken();
+async function main(): Promise<boolean> {
+	const cfg = await loadCredeCfg();
 	const ledger: LedgerEntry[] = [];
 	const snapshotMapping: Array<{ section: string; sectionId: string | null; memberIds: string[] }> = [];
 
@@ -106,7 +93,7 @@ async function main() {
 
 		let sectionId: string;
 		try {
-			sectionId = await createSection(token, section);
+			sectionId = await createSection(cfg.db, cfg.token, section);
 		} catch (err) {
 			for (const memberId of section.memberIds) {
 				ledger.push({ section: section.name, memberId, status: 'failed', message: `section create: ${errMsg(err)}` });
@@ -117,7 +104,7 @@ async function main() {
 
 		for (const memberId of section.memberIds) {
 			try {
-				await appendSectionParent(token, memberId, sectionId);
+				await appendSectionParent(cfg.db, cfg.token, memberId, sectionId);
 				ledger.push({ section: section.name, sectionId, memberId, status: 'created' });
 			} catch (err) {
 				ledger.push({ section: section.name, sectionId, memberId, status: 'failed', message: errMsg(err) });
@@ -137,11 +124,13 @@ async function main() {
 		for (const f of failures) console.log(`  ${f.section} / ${f.memberId} — ${f.message}`);
 	}
 
-	const dir = join('scripts', 'migrations', 'seed-results');
-	mkdirSync(dir, { recursive: true });
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const filePath = join(dir, `seed-182-crede-sections-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`);
-	writeFileSync(filePath, JSON.stringify({ dryRun: DRY_RUN, byStatus, ledger }, null, 2));
+	const filePath = writeLedger({
+		scriptName: 'seed-182-crede-sections',
+		dryRun: DRY_RUN,
+		db: cfg.db,
+		sensitive: true,
+		payload: { byStatus, ledger }
+	});
 	console.log(`\nLedger artifact: ${filePath}`);
 
 	if (!DRY_RUN && failures.length === 0) {
@@ -152,10 +141,9 @@ async function main() {
 		console.log(`Section mapping snapshot: ${snapshotPath}`);
 	}
 
-	process.exit(failures.length > 0 ? 1 : 0);
+	return failures.length === 0;
 }
 
-main().catch((err) => {
-	console.error('#182 Crede sections ABORTED:', errMsg(err));
-	process.exit(1);
-});
+runScript('#182 Crede sections', main);
+
+// (*MVOX:Perotin*)

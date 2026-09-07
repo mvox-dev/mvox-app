@@ -39,8 +39,6 @@
 //   DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
 //     ./scripts/migrations/seed-265-admin-member-record-type-polyphony-2026-09-06.ts        # ONLY after dry-run verified + authorization
 
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { loadCfg } from './lib/creds';
 import {
 	resolveMetaTypeIds,
@@ -51,17 +49,16 @@ import {
 	type LedgerStep
 } from './lib/ensure-schema-type';
 import { admin_member_record, roster_show_real_names } from './lib/mvox-schema-extensions';
+import { readDryRun } from './lib/script-runner';
+import { writeLedger as writeLedgerShared } from './lib/ledger-writer';
 
-const DRY_RUN = (process.env.DRY_RUN ?? 'true').toLowerCase() !== 'false';
+const DRY_RUN = readDryRun();
 
+// mvox-app#274 — writeLedger now goes through the shared, redaction-aware
+// writer; `sensitive: false` (polyphony is synthetic, and this ledger is
+// schema-level regardless).
 function writeLedger(payload: Record<string, unknown>): string {
-	const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-	const dir = join('scripts', 'migrations', 'seed-results');
-	const filename = `seed-265-admin-member-record-type-polyphony-${DRY_RUN ? 'dry' : 'live'}-${timestamp}.json`;
-	const filePath = join(dir, filename);
-	mkdirSync(dir, { recursive: true });
-	writeFileSync(filePath, JSON.stringify(payload, null, 2));
-	return filePath;
+	return writeLedgerShared({ scriptName: 'seed-265-admin-member-record-type-polyphony', dryRun: DRY_RUN, db: process.env.ENTU_DATABASE ?? 'polyphony', sensitive: false, payload });
 }
 
 async function main(): Promise<void> {

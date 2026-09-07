@@ -1,0 +1,41 @@
+{
+  "task": "#233 formula-overwrite probe",
+  "db": "polyphony",
+  "stepA_manualNameBeforeFormula": "MANUAL-NAME-BEFORE-FORMULA",
+  "stepB_nameAfterExplicitAggregate": null,
+  "stepC_nameReadBackAfterAggregate": "2026-09-15 proov",
+  "stepD_postResponseBody": {
+    "_id": "6a99d377ca67df980f4166fa",
+    "properties": [
+      {
+        "_id": "6a99d378ca67df980f416702",
+        "type": "name",
+        "string": "MANUAL-NAME-ATTEMPT-2"
+      }
+    ]
+  },
+  "stepE_nameAfterFreshManualPost": "2026-09-15 proov",
+  "verdict": "FORMULA UNCONDITIONALLY OVERWRITES manual `name` values — halt condition CONFIRMED live",
+  "teardown": [
+    {
+      "label": "instance",
+      "ok": true
+    },
+    {
+      "label": "propdef name",
+      "ok": true
+    },
+    {
+      "label": "propdef evt_kind",
+      "ok": true
+    },
+    {
+      "label": "propdef evt_date",
+      "ok": true
+    },
+    {
+      "label": "type",
+      "ok": true
+    }
+  ]
+}
