@@ -2,7 +2,52 @@
 
 (*MVOX:Perotin*)
 
-## [WIP] #278 name→DEFAULT_REDACT_FIELDS — read-only prep done, HOLDING for seam (2026-09-07)
+## [WIP] #278 full round landed (PR #281), holding for Bentham review (2026-09-07)
+
+Scoping resolved fast: Gama confirmed the guard (issue comment 5564100053)
+mid-window; Bentham ruled the design (act-and-report) — enumerated
+grandfather list of exactly the 12 pre-#274 scripts (his list matched mine
+independently). Built `scripts/migrations/lib/seedResultsWriter.guard.spec.ts`
+(#163 C6 style): non-spec `.ts` under `scripts/migrations/` calling
+`writeFileSync` without importing `lib/ledger-writer` fails, except the
+writer + the 12. Sanity-checked the guard actually fires (throwaway
+violator file → RED → revert → clean) before trusting it — same discipline
+as always demanding a fix be proven against a real failure, not just
+plausible-looking. 12-script migration filed as explicit deferred checklist
+on #278 (my own issue comment), not this round.
+
+Two commits on chore/278-name-redact-default: `973d994` (name→
+DEFAULT_REDACT_FIELDS, shape table, doc rider) + `b58d270` (guard). PR #281.
+Full gates both rounds: pnpm check 0 errors, full vitest 254/3851 green.
+Holding for Bentham.
+
+Seam window opened, executed on chore/278-name-redact-default, commit
+`973d994`, PR #281. `name` → `DEFAULT_REDACT_FIELDS` (no opt-out per Gama's
+ruling), Bentham's rider folded into the module doc, shape table +5 cells
+(23/23 passing), full vitest 253/3849 green, live dry-run smoke against
+real mvox_crede (seed-265-crede) confirms no regression/false-positive.
+
+**[DISCOVERY, not yet resolved]** Gama's issue comment confirmed the
+writer-bypass guard (#163 C6 style) IS wanted — but building it literally
+("fail when anything but lib/ledger-writer.ts writes into seed-results/")
+would immediately RED against **12 pre-existing scripts #274's audit never
+saw**: library-visibility, orphan-115-disposition, config-menu-admin-only,
+library-instance-tier-widen, meta-descriptions, narrow-person-refs,
+retire-application-probe-bulletin, menu-empty-shells, member-display-config,
+delete-corroborated-orphans, widen-member-refs, db-root-owner-backfill —
+all top-level `scripts/migrations/*.ts` entrypoints with their own local
+`writeFileSync` into `seed-results/`, all DRY_RUN-guarded already, none
+crede-touching or `ledgers/`-origin so #274's two audit criteria both
+missed them. Mechanically these are the same shape as the 13 I migrated
+onto the shared writer in #274 — a scripted swap would work the same way —
+but that's real additional scope (~12 more files), not "small." Did NOT
+build the guard; held for team-lead's call (fold into #278, split to a new
+issue, or other). **Also**: `tidy-td2-name-visibility.ts` (team-lead's
+named smoke-test target) no longer runs against live polyphony at all —
+aborts on `organization` type-def not found, matches my #265-era finding
+that this type-def is gone from live polyphony; confirmed pre-existing via
+diff against origin/main (my #278 commit never touched this file). Used
+seed-265-crede for the live smoke instead.
 
 PO-ruled follow-up to #274 (does not reopen it). Read-only prep complete,
 no repo writes yet — pipeline wf_4bc7894e-ec2 owns the tree, team-lead

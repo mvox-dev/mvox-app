@@ -107,6 +107,22 @@ branch (the common case), so make it conditional or `--allow-empty`. And re-run 
 review time — a clean RED commit does not bind the GREEN / i18n / FIX commits that follow, each of
 which gets its own `add -A`.
 
+## [GOTCHA-MIGRATIONS-TWIN-FILES] 2026-09-07, #278 — never run a scripts/migrations predicate on basename
+
+`scripts/migrations/` holds **twin files**: `X.ts` at top level is a thin RUNNER that owns the
+`writeFileSync`, and `lib/X.ts` is the logic module with no file write. Twelve pairs at least
+(`config-menu-admin-only`, `library-visibility`, `widen-member-refs`, …). Consequences:
+
+- A predicate reported by **basename collapses each pair into one line** and silently hides which half
+  matched. Mine did on the first pass, and I nearly raised a false finding against #278's grandfather
+  list — its entries are bare filenames (`'library-visibility-2026-08-08.ts'`) while the guard compares
+  `relative(scripts/migrations, full)`, which yields `lib/…` for the lib half. That looks like a path
+  bug and is not: only the top-level halves call `writeFileSync`, so their `rel` IS the bare filename.
+  **Always emit full relative paths, never `basename`.**
+- Generally: **a guard's exemption list and the audit predicate that produced it must agree on path
+  shape.** Check that they do before trusting either — they can agree on the *set* while disagreeing on
+  the *keys*, which passes today and breaks the moment a file moves between the twin locations.
+
 ## [GOTCHA-DEDUP-BY-DELETE-IS-PARITY-DEPENDENT] 2026-09-07, #269 — demand an ODD-count test
 
 "Drop duplicates from a map" written as *set-on-first, delete-on-second* is **count-parity dependent**
