@@ -1,0 +1,138 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "settle the step-1 append-POST response envelope shape with actual bytes, per team-lead authorization 2026-09-08 — editionFiles.ts and the original wire-smoke assumed properties.file[] (quickstart/index.md, the NEW-entity shape); files/index.md's own append example shows a flat object instead. No bytes ever PUT — envelope probe only, both properties created are phantoms by construction.",
+  "editionId": "6a9f440dca67df980f417d78",
+  "priorPhantomId": "6a9f440dca67df980f417d80",
+  "probe1SingleFile": {
+    "sentFilename": "probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt",
+    "status": 200,
+    "rawResponse": {
+      "_id": "6a9f440dca67df980f417d78",
+      "properties": [
+        {
+          "_id": "6a9f4512ca67df980f417d81",
+          "type": "file",
+          "filename": "probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt",
+          "filesize": 11,
+          "filetype": "text/plain",
+          "upload": {
+            "url": "https://entu-files.fra1.digitaloceanspaces.com/polyphony/6a9f440dca67df980f417d78/6a9f4512ca67df980f417d81?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=DO801K7KGBJ4M3DXWW4X%2F20260907%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20260907T231323Z&X-Amz-Expires=60&X-Amz-Signature=0da7024c85ad876618e2516ef8ded7f5de60da54f87bcc347f8239f86af53449&X-Amz-SignedHeaders=content-disposition%3Bhost&x-amz-acl=private&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject",
+            "method": "PUT",
+            "headers": {
+              "ACL": "private",
+              "Content-Disposition": "inline;filename=\"probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt\"",
+              "Content-Length": 11,
+              "Content-Type": "text/plain"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "probe2TwoFiles": {
+    "sentFilenames": [
+      "probe-275-envelope-b1-2026-09-07T23-13-22-923Z.txt",
+      "probe-275-envelope-b2-2026-09-07T23-13-22-923Z.txt"
+    ],
+    "status": 200,
+    "rawResponse": {
+      "_id": "6a9f440dca67df980f417d78",
+      "properties": [
+        {
+          "_id": "6a9f4513ca67df980f417d82",
+          "type": "file",
+          "filename": "probe-275-envelope-b1-2026-09-07T23-13-22-923Z.txt",
+          "filesize": 12,
+          "filetype": "text/plain",
+          "upload": {
+            "url": "https://entu-files.fra1.digitaloceanspaces.com/polyphony/6a9f440dca67df980f417d78/6a9f4513ca67df980f417d82?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=DO801K7KGBJ4M3DXWW4X%2F20260907%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20260907T231323Z&X-Amz-Expires=60&X-Amz-Signature=18661e75075ede859418e0b8748ca26029eb6b44ed3788e5cbe1265bdddf7f88&X-Amz-SignedHeaders=content-disposition%3Bhost&x-amz-acl=private&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject",
+            "method": "PUT",
+            "headers": {
+              "ACL": "private",
+              "Content-Disposition": "inline;filename=\"probe-275-envelope-b1-2026-09-07T23-13-22-923Z.txt\"",
+              "Content-Length": 12,
+              "Content-Type": "text/plain"
+            }
+          }
+        },
+        {
+          "_id": "6a9f4513ca67df980f417d83",
+          "type": "file",
+          "filename": "probe-275-envelope-b2-2026-09-07T23-13-22-923Z.txt",
+          "filesize": 13,
+          "filetype": "text/plain",
+          "upload": {
+            "url": "https://entu-files.fra1.digitaloceanspaces.com/polyphony/6a9f440dca67df980f417d78/6a9f4513ca67df980f417d83?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=DO801K7KGBJ4M3DXWW4X%2F20260907%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20260907T231323Z&X-Amz-Expires=60&X-Amz-Signature=9ae51cc845d594bc8b3d8fe56611975f734fb15a5499c79a565a14ca05431523&X-Amz-SignedHeaders=content-disposition%3Bhost&x-amz-acl=private&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject",
+            "method": "PUT",
+            "headers": {
+              "ACL": "private",
+              "Content-Disposition": "inline;filename=\"probe-275-envelope-b2-2026-09-07T23-13-22-923Z.txt\"",
+              "Content-Length": 13,
+              "Content-Type": "text/plain"
+            }
+          }
+        }
+      ]
+    }
+  },
+  "idsExtractedFromResponses": [
+    "6a9f4512ca67df980f417d81",
+    "6a9f4513ca67df980f417d82",
+    "6a9f4513ca67df980f417d83"
+  ],
+  "liveFilePropsBeforeCleanup": [
+    {
+      "_id": "6a9f440dca67df980f417d80",
+      "filename": "probe-275-wire-smoke-2026-09-07T23-09-01-527Z.txt",
+      "filesize": 53,
+      "filetype": "text/plain"
+    },
+    {
+      "_id": "6a9f4512ca67df980f417d81",
+      "filename": "probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt",
+      "filesize": 11,
+      "filetype": "text/plain"
+    },
+    {
+      "_id": "6a9f4513ca67df980f417d82",
+      "filename": "probe-275-envelope-b1-2026-09-07T23-13-22-923Z.txt",
+      "filesize": 12,
+      "filetype": "text/plain"
+    },
+    {
+      "_id": "6a9f4513ca67df980f417d83",
+      "filename": "probe-275-envelope-b2-2026-09-07T23-13-22-923Z.txt",
+      "filesize": 13,
+      "filetype": "text/plain"
+    }
+  ],
+  "deletions": [
+    {
+      "propertyId": "6a9f440dca67df980f417d80",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "propertyId": "6a9f4512ca67df980f417d81",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "propertyId": "6a9f4513ca67df980f417d82",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "propertyId": "6a9f4513ca67df980f417d83",
+      "outcome": "deleted",
+      "status": 200
+    }
+  ],
+  "finalVerification": {
+    "remainingFileProps": 0,
+    "remaining": []
+  },
+  "cleanupComplete": true
+}
