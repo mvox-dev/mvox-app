@@ -107,6 +107,29 @@ branch (the common case), so make it conditional or `--allow-empty`. And re-run 
 review time — a clean RED commit does not bind the GREEN / i18n / FIX commits that follow, each of
 which gets its own `add -A`.
 
+## [LEARNED 2026-09-06, #264] A class-shaped finding needs a class-shaped prescription
+
+Round 3 of #264 found stale clear-then-set comments and named **two spec files**. The fix corrected
+exactly those two — correctly, verbatim to the prescription — and the class was never swept. My
+post-cap pass found **four more**, three in SOURCE docstrings, including one
+(`repertoireActions.ts:241`) describing a "GET → DELETE → POST" order that was never the wire in
+either era.
+
+**Nothing went wrong in the fixing; the prescription was the defect.** A site list reads as the whole
+job, so a diligent agent closes the named sites and stops. Same failure as
+`[CALIBRATION-MY-OWN-RED-TRIGGER-NAMED-A-DEAD-FUNCTION]` from the other end: there I enforced by
+symbol instead of intent; here I would have prescribed by site instead of class.
+
+**The move**: when a finding is one instance of a searchable class, hand over the **grep that defines
+the class** alongside the sites — "run this after the fix; empty output is the completion test." That
+turns a site list into a verifiable predicate and makes a further round on that kind unnecessary.
+Worked instance:
+`grep -rn "DELETE every pre-existing\|DELETE-stale\|GET → DELETE\|POST-one-value\|DELETE every old" src/`
+It also earns its keep by finding the NON-findings, which matter as much: two hits were CORRECT
+(`seasonManage.ts` describing its own deliberately-unconverted code; a spec framing the old wire as
+explicitly historical). **Enumerate those in the verdict too**, or the fixer "corrects" true comments
+into false ones.
+
 ## PO standing rules — pointer only
 
 **The binding text is the "PO standing rules" section of `architecture-decisions.md`. Read it there;

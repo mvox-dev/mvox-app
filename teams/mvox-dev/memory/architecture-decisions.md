@@ -1102,3 +1102,46 @@ A documented platform behaviour is **established** by the documentation. It does
 - The read-back obligation lands in provisioning scripts — see "G. Migration-script review" in the rulebook above, whose "ask which function produced a ledger field" rule is exactly how to check that a read-back assertion is real rather than a label.
 
 (*MVOX:Bentham*, steward — entered at team-lead's direction; ruling verified verbatim at the source comment, not from the relay)
+
+---
+
+## A prefill may never widen a value's sharing tier (2026-09-06)
+
+**Decision (PO ruling on #268, verbatim):**
+
+> *a prefill may never place a value into a field shared more widely than the value's own source tier.*
+
+### The reasoning, which is what makes it general
+
+**A render resolves; a save PERSISTS.** That difference is the whole rule. Reading a value through a narrower-wins resolver and *displaying* it changes nothing about who can see it — the value keeps its own tier, and the viewer already had rights to it. Writing that same value into a destination property whose sharing tier is **wider** is a **promotion**: the value now lives, permanently, at the destination's tier, readable by everyone the destination is shared with. Nobody chose that; it is a side effect of the prefill being convenient.
+
+So the tier check belongs at every point where a value **crosses from one property into another**, and it compares two things that are easy to conflate: the **source value's own tier**, and the **destination property's** tier. Not the viewer's rights, and not the source property's schema tier in the abstract — the tier of the specific value being copied.
+
+### The #268 application — one rule, two destinations, deliberately asymmetric
+
+The original contract named `resolveField` (narrower-wins; `NARROWNESS = { private: 0, domain: 1, public: 2 }` at `src/lib/profile/profileData.ts:235`) for **both** prefills, while also promising the admin would see "exactly the name the roster shows". Those are two different resolvers, so the clause contradicted itself — and the reading a builder would most naturally take was the unsafe one.
+
+- **Name → the roster's domain-or-public scan, never `resolveField`, never a private-tier name.** The destination `admin_member_record.name` is **domain-shared**, so a private-tier profile name prefilled into it would be promoted to domain visibility on first save — on a live pilot holding real people's data. `src/lib/roster/rosterData.ts:18-23` already had this right for the roster's name column and says so in terms: "never `resolveField`, never `private` — narrower-wins would let a private-only name leak through."
+- **Email → keeps `resolveField`** (narrower-wins). The destination `email` property is **private**, so nothing is widened, and narrower-wins is exactly "whichever tier she shared it at". The same source comment states outright that "`resolveField` IS correct for email".
+
+**The asymmetry is the rule working, not an inconsistency to tidy away.** One rule applied to two destinations of different tiers necessarily yields two different resolvers. A future "cleanup" that unifies them reintroduces the defect — which is why this entry records the reasoning and not just the two answers.
+
+### Review trigger (Bentham) — `[TRIGGER-PREFILL-TIER-WIDENING]`
+
+Any **prefill, copy, default, or migration** path that writes a value into a destination whose sharing tier is **wider** than the source value's tier:
+
+- **YELLOW minimum**, always. The fix is to narrow the *source* selection to the destination's tier (scan at the destination tier or wider) — never to widen the destination.
+- **RED** when the destination is **member-visible** and the source value is **private**. That is a real-PII promotion, and the real-names posture makes it a live-data defect rather than a design smell.
+
+What to actually check, since this defect hides in a resolver name rather than in the write: for every prefilled or copied field, name the **destination property's tier** and the **resolver used to pick the source**, then confirm the resolver cannot return a value narrower than the destination. A `resolveField`-style narrower-wins call feeding a `domain` or `public` destination is the signature — treat the trigger as firing until shown otherwise.
+
+### Cross-links
+
+- **The `_sharing` half of the consult-and-believe entry above** is the closest sibling: omitting `_sharing` on a prop-def does not default to private, it silently inherits the type's tier, and a first private-tier field came back `public` until corrected. Same failure shape — a tier nobody chose, arrived at by default rather than by decision. Both close the same way: state the tier explicitly, then assert it landed.
+- **#264's no-silent-repair rule** (rulebook section C; `reparentSection`'s `≠1 _parent` refusal) is the same instinct on the write side — when the safe action is not derivable, refuse and surface rather than guess. A prefill that widens is the guess-quietly version of that mistake.
+- **#264 item 6 and the #265 read-back** — assert your own dependency explicitly rather than relying on an unstated default. A destination's tier is exactly such a dependency.
+- **Precision recorded with the same ruling**: "sharing set explicitly on every property at create" was loose wording. Per-property tiers are **schema-level**, provisioned with the type (#265); an instance write does not carry them and must not try. What an instance create asserts explicitly is the **record's own entity-level `_sharing`**.
+
+**Source**: PO ruling on mvox-app#268, comment `5562260465` (*PO:Henry, acting for Gama*, 2026-09-06), correcting the acting-PO's own spec after the remote team read the contract against the code and refused the unsafe reading. The two code facts cited above were re-verified against the working tree at entry time.
+
+(*MVOX:Bentham*, steward — entered at team-lead's direction; ruling verified verbatim at the source comment)

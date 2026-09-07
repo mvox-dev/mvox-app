@@ -1,15 +1,16 @@
-# Task List Snapshot — 2026-09-06 (session MVOX-15 FINAL close, 07:00 EEST — reopened once on the po-team doorbell)
+# Task List Snapshot — 2026-09-07 (session MVOX-16 close, 03:30 EEST — break after #237 per Mihkel)
 
-mvox-app main @ `3b29cee` (final; between it and 59f71a0: Pérotin's 0a6e946+1d088d4 #246 commits and seam chores). No formal task-list rows this session (all work ran as pipeline runs); queue state below is the restore source.
+mvox-app main @ `d0aaf88` (+ this seam's memory commit on top). No formal task-list rows (all work ran as pipeline runs); queue state below is the restore source.
 
-## PENDING (next session)
+## PENDING (next session — the resume IS the queue)
 
-1. **#247 correction round** — merged `3b29cee` (upcoming-only per Gama's ruling); Mihkel's live review is the issue's own acceptance gate; reviewer's visually-uncertain flags are in the pipeline journal + review record.
-2. **#262** schedule-item app UI — NOT ready; **product shape IS on the issue (Gama comment 05:30) and SUPERSEDES the starting shape in my #246 cut comment**: parent-event EDITORS edit (NOT conductor/admin — conductor is a person chip, not a rights role; roles→rights question stays parked), display event-detail-only in v1, agenda untouched. Promotes on ONE Mihkel nod (the agenda-surface question). Read the issue, not the cut comment. #246 open for PO lifecycle (schema half done, both dbs seeded).
-3. **#261** season-card header rework — NOT ready; promotes on Mihkel's nod.
+1. **Resume the five-slice packed run** — run id `wf_00da4c1d-d50`, tasks [261✓cached, 237✓cached, **267, 268, 269** live]. Args = merge of the five committed `pipeline-args/args-*.json` files in ruled order (see team-lead.md [NEXT SESSION] for the two resume paths). #267 had zero residue at the stop (no commits, no dirty files, branch deleted).
+2. **#267 → #268 → #269** are the only ready issues; all three gate on Joosep's live round on crede with real member data.
+3. Mihkel's live-review batch across #262/#264/#266/#247/#261/#237 — his side, listed in team-lead.md.
+4. Unfiled: the Entu docs divergence bug-report draft (prop-def `_sharing` create-time inheritance vs docs' default-private) — offered to PO, awaiting their call.
 
-## COMPLETED this session
+## COMPLETED this session (MVOX-16, 2026-09-06 10:36 → 2026-09-07 03:30)
 
-19 issues + epic #223 (reopened session added #247 `3b29cee`; #246's schema half done by Pérotin, issue open for PO): #253 b0cf6e2 · #242 65b8be9 · #250 704c967 · #255 e099364 · #251 ee2e1a2 · #252 f4abbb2 · #260 01ed068 · #258 bdc1dba · #225 c091063 · #224 0e088b2 · #226 b1e77c2 · #230 b5111cc · #231 b413e38 · #235 f6f7ac9 · #232 3d15696 · #257 1c1733d · #259 b40bfc6 · #249 59f71a0 · #247 3b29cee. Details in team-lead.md [SESSION LOG].
+8 issues: #263 (governance, same-day cycle) · #262 `9b5742b` · #264 `1170286` (root-cause atomic-overwrite fix + authorized live repair of Soprano II's duplicate _parent) · #266 `d263ea1` · #265 (closed by PO; definition + live provisioning of admin_member_record + roster_show_real_names on BOTH dbs) · #261 `b58d334` · #237 `d0aaf88`. Plus: Bentham rulebook consolidation + 3 new rulebook entries (consult-and-believe, prefill-tier-widening, schema-of-record); template hardening (git-safety/final-result/no-stash/placeholder rules); crede-real-PII posture absorbed team-wide.
 
 (*MVOX:Palestrina*)
