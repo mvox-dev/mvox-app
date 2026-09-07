@@ -15,8 +15,17 @@
 //     never N POSTs.
 //     STEP 2: PUT the bytes to the signed URL "using the exact headers
 //     returned in the response — all four are required".
-//   src/api/quickstart/index.md:57-67 — the POST response envelope:
-//     `{ _id, "properties": { "<prop>": [ { "_id", ... } ] } }`.
+//   THE RESPONSE ENVELOPE IS LIVE-CAPTURED, NOT DOC-DERIVED — provenance
+//     scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
+//     2026-09-07T23-13-25-163Z.json (polyphony, 2026-09-08):
+//     `{ _id, properties: [ { _id, type: 'file', filename, filesize,
+//     filetype, upload } ] }` — a FLAT ARRAY. The docs disagree with each
+//     other and with the wire here: quickstart/index.md:57-67 shows the keyed
+//     `properties: { "<prop>": [...] }` shape (that is the new-ENTITY-create
+//     response), files/index.md's append example a bare flat object. This
+//     spec's fixtures originally encoded the quickstart shape, which is
+//     exactly how a parsing bug shipped green past a full suite; every
+//     envelope fixture below now mirrors the ledger's bytes.
 //   files/index.md:72-74 — the PHANTOM-CLEANUP rider, named by the doc
 //     itself: "If the upload URL expires before you complete the S3 PUT,
 //     delete the property and start over." Step 1 creates the property BEFORE
@@ -68,7 +77,10 @@
 //     may leak: an entry no file answers is a phantom and gets the DELETE; a
 //     file no entry answers is reported `cleanup: 'not-created'` — nothing was
 //     created for it, so 'deleted' would lie.
-//   - a step-1 POST failure throws: nothing was created, nothing to clean.
+//   - a step-1 POST failure throws: nothing was created, nothing to clean. A
+//     2xx POST whose envelope cannot be read does NOT throw — it reports every
+//     file `not-created`, because throwing there strands whatever the server
+//     did create before cleanup can run.
 //
 //   formatFileSize(bytes) -> human string. STATED CHOICE: no filesize helper
 //   exists anywhere in src/ (checked at branch base), so a minimal local one
@@ -109,7 +121,9 @@ interface UploadObject {
 	headers: Record<string, string | number>;
 }
 
-/** Doc-shaped upload object for one file (files/index.md "Response:" block). */
+/** One file's upload object, shaped from the LIVE ledger (see step1Response):
+ *  four headers, Content-Length numeric, Content-Disposition
+ *  `inline;filename="…"`, method PUT. */
 function uploadFor(name: string, size: number, type: string, n: number): UploadObject {
 	return {
 		url: `https://s3.example.invalid/bucket/path-${n}?signature=sig-${n}`,
@@ -123,24 +137,29 @@ function uploadFor(name: string, size: number, type: string, n: number): UploadO
 	};
 }
 
-/** Doc-shaped step-1 response envelope (quickstart/index.md:59-67): the
- *  created property objects under `properties.file`, each with its own
- *  `upload` object (files/index.md:70). */
+/** The step-1 response envelope, mirroring REAL BYTES — provenance:
+ *  scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
+ *  2026-09-07T23-13-25-163Z.json (live capture against the polyphony db,
+ *  2026-09-08). `properties` is a FLAT ARRAY of property objects, one per
+ *  created value (probe 1: 1-element; probe 2: 2-element, identical shape) —
+ *  NOT quickstart/index.md's keyed `properties: { file: [...] }`, which is the
+ *  new-ENTITY-create response for a different operation, and not
+ *  files/index.md's bare flat object either. This fixture ENCODING THE WRONG
+ *  SHAPE is what let the parsing bug ship green, so it is re-grounded on the
+ *  ledger and re-verification goes to live bytes, never back to the docs. */
 function step1Response(
 	entries: Array<{ id: string; name: string; size: number; type: string; upload: UploadObject }>
 ) {
 	return {
 		_id: 'edition-1',
-		properties: {
-			file: entries.map((e) => ({
-				_id: e.id,
-				type: 'file',
-				filename: e.name,
-				filesize: e.size,
-				filetype: e.type,
-				upload: e.upload
-			}))
-		}
+		properties: entries.map((e) => ({
+			_id: e.id,
+			type: 'file',
+			filename: e.name,
+			filesize: e.size,
+			filetype: e.type,
+			upload: e.upload
+		}))
 	};
 }
 
@@ -223,6 +242,195 @@ describe('#275 — step 1: one POST to entity/{editionId} carries EVERY file (ap
 
 		expect(callsOf(impl, 'PUT')).toHaveLength(0);
 		expect(callsOf(impl, 'DELETE')).toHaveLength(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// THE ENVELOPE ITSELF — real bytes in, and every shape we do NOT understand
+// routed through the loud path instead of a silent empty success.
+// ---------------------------------------------------------------------------
+
+describe('#275 — step-1 parsing is grounded on the LIVE envelope, and an unreadable one fails LOUDLY', () => {
+	it('the ledger\'s own bytes drive a full upload: `properties` as a FLAT ARRAY of property objects, pasted from probe-275-envelope-diagnostic-live-2026-09-07T23-13-25-163Z.json (probe1SingleFile.rawResponse), sends the file to its real signed url and reports it uploaded', async () => {
+		// Verbatim capture — url, four headers, numeric Content-Length and all.
+		// Any future doubt about this contract is settled against live bytes like
+		// these, never against the docs (which disagree with both the wire and
+		// each other).
+		const ledgerResponse = {
+			_id: '6a9f440dca67df980f417d78',
+			properties: [
+				{
+					_id: '6a9f4512ca67df980f417d81',
+					type: 'file',
+					filename: 'probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt',
+					filesize: 11,
+					filetype: 'text/plain',
+					upload: {
+						url: 'https://entu-files.fra1.digitaloceanspaces.com/polyphony/6a9f440dca67df980f417d78/6a9f4512ca67df980f417d81?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=60&X-Amz-Signature=0da7024c85ad876618e2516ef8ded7f5de60da54f87bcc347f8239f86af53449&x-amz-acl=private&x-id=PutObject',
+						method: 'PUT',
+						headers: {
+							ACL: 'private',
+							'Content-Disposition':
+								'inline;filename="probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt"',
+							'Content-Length': 11,
+							'Content-Type': 'text/plain'
+						}
+					}
+				}
+			]
+		};
+		const file = makeFile('probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt', 11, 'text/plain');
+		const impl = makeFetchImpl({ post: json(ledgerResponse) });
+
+		const result = await uploadEditionFiles(cfg, '6a9f440dca67df980f417d78', [file], impl);
+
+		const puts = callsOf(impl, 'PUT');
+		expect(puts).toHaveLength(1);
+		expect(String(puts[0][0])).toBe(ledgerResponse.properties[0].upload.url);
+		expect(puts[0][1]?.headers).toEqual(ledgerResponse.properties[0].upload.headers);
+		expect(result).toEqual({
+			uploaded: [
+				{
+					propertyId: '6a9f4512ca67df980f417d81',
+					filename: 'probe-275-envelope-a-2026-09-07T23-13-22-923Z.txt',
+					filesize: 11,
+					filetype: 'text/plain'
+				}
+			],
+			failed: []
+		});
+		expect(callsOf(impl, 'DELETE')).toHaveLength(0);
+	});
+
+	it('THE SHIPPED BUG, pinned: the keyed `properties: { file: [...] }` shape (quickstart\'s new-entity-CREATE response — what this module used to parse) is NOT a success. Nothing is announced as attached, every file is reported failed, and no PUT is attempted against a shape we did not understand', async () => {
+		const impl = makeFetchImpl({
+			post: json({
+				_id: 'edition-1',
+				properties: {
+					file: [
+						{
+							_id: 'prop-1',
+							type: 'file',
+							filename: 'a.pdf',
+							filesize: 3,
+							filetype: 'application/pdf',
+							upload: uploadFor('a.pdf', 3, 'application/pdf', 1)
+						}
+					]
+				}
+			})
+		});
+
+		const result = await uploadEditionFiles(
+			cfg,
+			'edition-1',
+			[makeFile('a.pdf', 3, 'application/pdf')],
+			impl
+		);
+
+		expect(result).toEqual({
+			uploaded: [],
+			failed: [{ propertyId: null, filename: 'a.pdf', cleanup: 'not-created' }]
+		});
+		expect(callsOf(impl, 'PUT')).toHaveLength(0);
+		// STATED CHOICE: no read-back GET, so no DELETE fires here. The ids the
+		// server may hold were never handed to this client, and the only key we
+		// could match a read-back on (filename + filesize) cannot tell a property
+		// we just created from an identical file attached last week — deleting a
+		// real score to tidy a hypothetical phantom is the worse failure.
+		expect(callsOf(impl, 'DELETE')).toHaveLength(0);
+		expect(impl.mock.calls).toHaveLength(1);
+	});
+
+	it('a 2xx with NO properties at all is the same loud path — both files reported, nothing thrown (a throw would strand server-side properties before any cleanup could run)', async () => {
+		const impl = makeFetchImpl({ post: json({ _id: 'edition-1' }) });
+
+		const result = await uploadEditionFiles(
+			cfg,
+			'edition-1',
+			[makeFile('a.pdf', 3, 'application/pdf'), makeFile('b.mp3', 5, 'audio/mpeg')],
+			impl
+		);
+
+		expect(result).toEqual({
+			uploaded: [],
+			failed: [
+				{ propertyId: null, filename: 'a.pdf', cleanup: 'not-created' },
+				{ propertyId: null, filename: 'b.mp3', cleanup: 'not-created' }
+			]
+		});
+		expect(callsOf(impl, 'PUT')).toHaveLength(0);
+	});
+
+	it('non-file members of the array are ignored — only `type: "file"` entries are uploaded, and a non-file property is never PUT to nor DELETEd', async () => {
+		const upA = uploadFor('a.pdf', 3, 'application/pdf', 1);
+		const impl = makeFetchImpl({
+			post: json({
+				_id: 'edition-1',
+				properties: [
+					{ _id: 'prop-name', type: 'name', string: 'Kyrie' },
+					{
+						_id: 'prop-1',
+						type: 'file',
+						filename: 'a.pdf',
+						filesize: 3,
+						filetype: 'application/pdf',
+						upload: upA
+					}
+				]
+			})
+		});
+
+		const result = await uploadEditionFiles(
+			cfg,
+			'edition-1',
+			[makeFile('a.pdf', 3, 'application/pdf')],
+			impl
+		);
+
+		expect(result).toEqual({
+			uploaded: [
+				{ propertyId: 'prop-1', filename: 'a.pdf', filesize: 3, filetype: 'application/pdf' }
+			],
+			failed: []
+		});
+		const puts = callsOf(impl, 'PUT');
+		expect(puts).toHaveLength(1);
+		expect(String(puts[0][0])).toBe(upA.url);
+		expect(callsOf(impl, 'DELETE')).toHaveLength(0);
+	});
+
+	it('a file entry carrying an id but NO usable upload object is a phantom this client CAN clean: no PUT is attempted, the id it handed us is DELETEd, and the file is reported', async () => {
+		const impl = makeFetchImpl({
+			post: json({
+				_id: 'edition-1',
+				properties: [
+					{
+						_id: 'prop-1',
+						type: 'file',
+						filename: 'a.pdf',
+						filesize: 3,
+						filetype: 'application/pdf'
+					}
+				]
+			})
+		});
+
+		const result = await uploadEditionFiles(
+			cfg,
+			'edition-1',
+			[makeFile('a.pdf', 3, 'application/pdf')],
+			impl
+		);
+
+		expect(result).toEqual({
+			uploaded: [],
+			failed: [{ propertyId: 'prop-1', filename: 'a.pdf', cleanup: 'deleted' }]
+		});
+		expect(callsOf(impl, 'PUT')).toHaveLength(0);
+		const dels = callsOf(impl, 'DELETE');
+		expect(dels).toHaveLength(1);
+		expect(String(dels[0][0])).toBe(`${API}polyphony/property/prop-1`);
 	});
 });
 
@@ -567,3 +775,5 @@ describe('#275 — formatFileSize', () => {
 });
 
 // (*MVOX:Tallis* — #275 RED)
+// (*MVOX:Palestrina* — #275 fix: envelope fixtures re-grounded on the live
+//  ledger; the wrong-shape fixture is what let the parsing bug ship green)
