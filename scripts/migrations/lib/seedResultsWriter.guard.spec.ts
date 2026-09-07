@@ -51,6 +51,18 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // writer", never an implicit one a reader has to reconstruct. A NEW script
 // pasted from one of these twelve is a NEW file — not on this list — and
 // fails the guard loudly, which is the actual protection.
+//
+// TWIN-FILE LAYOUT (Bentham, GREEN-round non-blocking note): each entry
+// below is a BARE filename, e.g. `widen-member-refs-2026-08-07.ts` — the
+// top-level `scripts/migrations/widen-member-refs-2026-08-07.ts` ENTRYPOINT,
+// which owns the `writeFileSync` call. Several of these twelve also have a
+// same-named module under `scripts/migrations/lib/` (e.g.
+// `lib/widen-member-refs-2026-08-07.ts`) holding the tested engine the
+// entrypoint imports — that lib module has NO `writeFileSync` of its own, so
+// it never matches this guard's predicate regardless of exemption. The bare
+// filenames are correct as written; "fixing" them to `lib/…` paths would
+// silently un-exempt all twelve (the guard would then flag the real
+// writers, which live at the top level, not under `lib/`).
 const GRANDFATHERED_PRE_274_WRITERS = [
 	'config-menu-admin-only-2026-08-09.ts',
 	'db-root-owner-backfill-2026-08-09.ts',
