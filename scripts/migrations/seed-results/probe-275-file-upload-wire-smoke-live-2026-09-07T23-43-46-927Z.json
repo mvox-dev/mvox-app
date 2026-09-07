@@ -1,0 +1,57 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "live wire smoke for mvox-app#275 — Entu two-step signed-S3 upload, real bytes, real round-trip. Mocks in the test suite cannot verify the S3 leg; this does. Fixtures (work+edition) also serve as the target for the human browser smoke that closes #275.",
+  "libraryId": "6a885aa1ac0a9c7d5f122da5",
+  "workName": "SMOKE-275 Test Work",
+  "editionName": "SMOKE-275 Test Edition",
+  "workId": "6a9f440cca67df980f417d70",
+  "editionId": "6a9f440dca67df980f417d78",
+  "fixturesPersist": true,
+  "filePersistedOnSuccess": true,
+  "scopeNote": "browserCorsAnswered is always false — Node can set Content-Length manually, a browser forbids it as a request header. This smoke proves the four-header contract and polyphony S3 acceptance from a server-side caller only, never the browser leg.",
+  "ledger": [
+    {
+      "step": "ensure-work",
+      "outcome": "found",
+      "id": "6a9f440cca67df980f417d70",
+      "entityName": "SMOKE-275 Test Work"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "found",
+      "id": "6a9f440dca67df980f417d78",
+      "entityName": "SMOKE-275 Test Edition"
+    },
+    {
+      "step": "step-1-metadata-post",
+      "outcome": "created",
+      "propertyId": "6a9f4c32ca67df980f417d84",
+      "uploadMethod": "PUT",
+      "uploadHeaderKeys": [
+        "ACL",
+        "Content-Disposition",
+        "Content-Length",
+        "Content-Type"
+      ]
+    },
+    {
+      "step": "step-2-s3-put",
+      "outcome": "ok",
+      "status": 200,
+      "browserCorsAnswered": false
+    },
+    {
+      "step": "step-3-download-roundtrip",
+      "outcome": "ok",
+      "status": 200,
+      "roundTripMatch": true
+    },
+    {
+      "step": "step-4-cleanup-delete",
+      "outcome": "skipped-persisted-on-success",
+      "propertyId": "6a9f4c32ca67df980f417d84"
+    }
+  ]
+}
