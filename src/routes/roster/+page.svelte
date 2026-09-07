@@ -1292,10 +1292,42 @@
 		document.querySelector<HTMLElement>(`[data-testid="section-remove-confirm-${id}"]`)?.focus();
 	}
 
+	/** Query `[data-testid="{testid}"]` and return it only if present AND not
+	 *  disabled — a disabled control cannot take focus, so a `??` landing chain
+	 *  must step OVER one rather than stopping on it (#155/S4 review F1
+	 *  follow-up; shared by `disarmRemove` and `placeFocusAfterFailedRemove`,
+	 *  #273). */
+	function focusableByTestId(testid: string): HTMLElement | null {
+		const el = document.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
+		return el && !(el as HTMLButtonElement).disabled ? el : null;
+	}
+
+	/** #273 — no in-flight guard added here: the cancel button that calls this
+	 *  is itself `disabled={structuralWritePending}` at the render site, so a
+	 *  disabled control cannot dispatch the click that would reach this
+	 *  function while a write is in flight — the same reasoning the agenda's
+	 *  own `disarmSeasonManageDelete` relies on, which carries no pending-guard
+	 *  either. What DOES change under #273: disarming after a FAILED delete can
+	 *  restore a ✕ that the failure's own reconcile has made ineligible
+	 *  (`canDelete` now false — e.g. a newly-discovered child), present but
+	 *  disabled, so the landing has to step over it exactly the way
+	 *  `placeFocusAfterFailedRemove` already does, rather than dropping to
+	 *  <body>. */
 	async function disarmRemove(id: string): Promise<void> {
 		pendingRemoveId = null;
 		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="section-remove-${id}"]`)?.focus();
+		// #155/S4 review F2 — same two-UI lookup as `placeFocusAfterRemove`/
+		// `placeFocusAfterFailedRemove`: `section-toggle-*` is dead in arrange
+		// mode (delete only renders there today), kept as the same defensive
+		// middle rung.
+		const target =
+			focusableByTestId(`section-remove-${id}`) ??
+			focusableByTestId(`section-toggle-${id}`) ??
+			focusableByTestId(`arrange-row-${id}`);
+		target?.focus();
+		if (target === document.querySelector(`[data-testid="arrange-row-${id}"]`)) {
+			rovingHandleId = id;
+		}
 	}
 
 	// #113 review F1 — the COMPLETING half of the same WCAG 2.4.3 story as
@@ -1346,32 +1378,27 @@
 		(neighbour ?? document.querySelector<HTMLElement>('[data-testid="roster-view-chip-collapsed"]'))?.focus();
 	}
 
-	/** …and after a REFUSED one: nothing was removed, so the ✕ that the Confirm
-	 *  button replaced is back in the header row and is the honest landing (the
-	 *  header itself only as a fallback — `canRemove` could have gone false under
-	 *  a concurrent refetch). The error text is announced separately by
-	 *  `section-remove-error`'s role="alert". */
+	/** …and after a FAILED one (write error OR refusal): #273 — the armed pair
+	 *  is no longer restored to the ✕ here, because it no longer UNMOUNTS on a
+	 *  failure at all: `pendingRemoveId` clears only on success (see
+	 *  `handleRemoveSection`), so the pair sits ARMED next to the error for a
+	 *  direct retry, and the honest landing is the re-enabled CONFIRM itself —
+	 *  the ✕ it used to target does not exist while armed. `arrange-row-${id}`
+	 *  is kept as the one fallback, for the pathological case where confirm is
+	 *  somehow still disabled (e.g. another structural write raced in before
+	 *  this ran) — never <body> (WCAG 2.4.3). The row-that-was-ineligible
+	 *  scenario this used to resolve directly now surfaces one step later, at
+	 *  CANCEL time (`disarmRemove`), once the user disarms out of the error.
+	 *  The error text itself is announced separately by `section-remove-error`'s
+	 *  role="alert". */
 	async function placeFocusAfterFailedRemove(id: string): Promise<void> {
 		await tick();
-		// #155/S4 review F1 (follow-up) — PRESENT is not the same as FOCUSABLE. S4
-		// made the ✕ `disabled` when the section is ineligible (`!canDelete`) as
-		// well as while a structural write is in flight, and a disabled <button>
-		// cannot take focus at all: stopping the `??` chain at the first element
-		// that merely EXISTS made `.focus()` a silent no-op and dropped focus to
-		// <body>. That is precisely the `section-not-empty` case — the refusal's own
-		// reconcile reveals the child that makes the ✕ ineligible — so the chain has
-		// to step OVER a disabled candidate and land on the row instead.
-		const focusable = (testid: string): HTMLElement | null => {
-			const el = document.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
-			return el && !(el as HTMLButtonElement).disabled ? el : null;
-		};
-		// #155/S4 review F2 — same two-UI lookup as `placeFocusAfterRemove`: the
-		// `section-toggle-*` fallback is dead in arrange mode, where the row itself
-		// is the landing.
+		// #155/S4 review F1 (follow-up) / #273 — PRESENT is not the same as
+		// FOCUSABLE: `focusableByTestId` steps over a disabled candidate (a
+		// disabled <button> cannot take focus) rather than stopping the `??`
+		// chain on one and silently dropping to <body>.
 		const target =
-			focusable(`section-remove-${id}`) ??
-			focusable(`section-toggle-${id}`) ??
-			focusable(`arrange-row-${id}`);
+			focusableByTestId(`section-remove-confirm-${id}`) ?? focusableByTestId(`arrange-row-${id}`);
 		if (!target) return;
 		target.focus();
 		// Landing on the ROW means landing inside the roving-tabindex widget, where
@@ -1403,12 +1430,13 @@
 	async function handleRemoveSection(id: string): Promise<void> {
 		// #155/S4 review F1 — one structural write at a time, the same refusal
 		// `performReorder`/`performReparent` already make. The primary guard is the
-		// UI disabling the controls (see `structuralWritePending` on the arrange
-		// row's buttons); this is the defensive backstop for the paths the UI
-		// can't disable (the armed Confirm button renders unconditionally).
+		// UI disabling the controls (see `structuralWritePending` at the render
+		// site, #273); this is the defensive backstop for the moment BEFORE that
+		// render lands and for any path the UI can't disable.
 		if (structuralWritePending) return;
-		// Both resolved BEFORE `pendingRemoveId` is cleared and the tree mutated —
-		// each of those destroys the evidence this needs.
+		// Both resolved BEFORE the tree is mutated below — that mutation destroys
+		// the evidence this needs (the pre-removal sibling list, the pre-removal
+		// activeElement comparison).
 		const fallbackId = removeFocusFallbackId(id);
 		const active = document.activeElement;
 		// Only restore focus if the REMOVAL is what lost it — the same `ownsFocus`
@@ -1418,7 +1446,17 @@
 			!active ||
 			active === document.body ||
 			active === document.querySelector(`[data-testid="section-remove-confirm-${id}"]`);
-		pendingRemoveId = null;
+		// #273 — `pendingRemoveId` is DELIBERATELY left set here (unchanged from
+		// whatever `armRemove` put in it). Before #273 this function nulled it
+		// SYNCHRONOUSLY at this exact point, before any `await`, which unmounted
+		// the armed pair in the same tick as the (also-synchronous) optimistic
+		// `sections` mutation this used to do next — so double-submit and
+		// cancel-mid-flight never reproduced, but only by render-timing accident,
+		// not by construction (research + PO ruling on #273). It now clears in
+		// exactly ONE place: the success branch below. Every failure path —
+		// including this function's own early `!cfg` bail-out — leaves it set, so
+		// the pair stays ARMED next to the error for a direct retry, mirroring the
+		// agenda's `onSeasonManageSeriesDelete` lifecycle.
 		removeError = null;
 		// A fresh attempt owns the live region too — a previous "Tenor removed."
 		// must not sit in it while a new removal is in flight.
@@ -1437,26 +1475,35 @@
 		const g = routeLoad.generation;
 		const before = sections;
 		// #155/S4 review F1 (follow-up) — the failure landing is DEFERRED to the
-		// `finally`, because the ✕ it wants to land on is
-		// `disabled={structuralWritePending || …}` and `removePending` is still true
-		// for the whole of the `catch`. Focusing from there was a no-op that dropped
-		// focus to <body> (WCAG 2.4.3). Same ordering `submitRename` already gets
-		// right: clear the flag, THEN `tick()` + focus. Left null on every path that
-		// must NOT move focus — success (which places its own), and the
-		// collective-switch bail-outs, where the tree on screen is no longer this
-		// removal's.
+		// `finally`, because the CONFIRM button it wants to land on is
+		// `disabled={structuralWritePending}` (#273) and `removePending` is still
+		// true for the whole of the `catch`. Focusing from there was a no-op that
+		// dropped focus to <body> (WCAG 2.4.3). Same ordering `submitRename`
+		// already gets right: clear the flag, THEN `tick()` + focus. Left null on
+		// every path that must NOT move focus — success (which places its own),
+		// and the collective-switch bail-outs, where the tree on screen is no
+		// longer this removal's.
 		let failedRemoveId: string | null = null;
 		removePending = true;
-		sections = removeSectionNode(sections, id);
 		try {
 			await deleteSection(cfg, id);
+			// #273 — the tree mutation MOVES here, from before the `await`: agenda
+			// parity (`onSeasonManageSeriesDelete` splices its list only in
+			// `.then()`, never optimistically) means the write is now PESSIMISTIC,
+			// which is also exactly what keeps the armed pair — and therefore the
+			// row it lives in — on screen for the whole of the write, rather than
+			// vanishing with the optimistic update the instant the write starts.
+			sections = removeSectionNode(sections, id);
+			// The one and only place this clears: a SUCCESSFUL removal.
+			pendingRemoveId = null;
 			// #110 review F3 — the node is gone for good, so its collapse-state entry
 			// is dead weight. Pruned only AFTER the write lands: a rejected delete
-			// restores the tree, and the section's expanded state must come back with
-			// it. (Neither view-mode chip's `aria-pressed` depends on this pruning
-			// for correctness — #155/S1 reads `viewMode` directly, never a live
-			// re-derivation off `expandedIds` — but the set should not keep growing
-			// across removals either.)
+			// leaves the tree untouched (see the comment on the mutation above), and
+			// the section's expanded state must survive with it. (Neither view-mode
+			// chip's `aria-pressed` depends on this pruning for correctness — #155/S1
+			// reads `viewMode` directly, never a live re-derivation off
+			// `expandedIds` — but the set should not keep growing across removals
+			// either.)
 			if (expandedIds.has(id)) {
 				const next = new Set(expandedIds);
 				next.delete(id);
@@ -1466,16 +1513,18 @@
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
 		} catch (e) {
 			console.error('roster: section remove failed', id, e);
-			// #155/S4 review F1 — STOP GUESSING, re-derive from the server. The blind
-			// `sections = before` this replaces restored a snapshot taken before the
-			// write went out, discarding whatever landed since, and it was WRONG for
-			// the refusal case in its own right: `section-not-empty` means the server
-			// holds members/sub-sections this stale tree does not know about (that is
-			// the whole reason `canDelete` couldn't gate it — see sectionErrors.ts),
-			// so the honest thing to put back on screen is the server's tree, not the
-			// one that mispredicted. Exactly the `listSections` reconcile
-			// `performReparent` uses, with the same `generation` guard; the snapshot
-			// survives only as the fallback for when the refetch ALSO fails.
+			// #155/S4 review F1 — STOP GUESSING, re-derive from the server. #273:
+			// `sections` was NEVER optimistically mutated above, so this is no
+			// longer restoring a blind pre-write snapshot over a discarded optimistic
+			// edit — it is reconciling in whatever landed elsewhere since load, which
+			// matters in its own right for the refusal case: `section-not-empty`
+			// means the server holds members/sub-sections this stale tree does not
+			// know about (that is the whole reason `canDelete` couldn't gate it —
+			// see sectionErrors.ts), so the honest thing to put on screen is the
+			// server's tree, not the client's stale guess. Exactly the `listSections`
+			// reconcile `performReparent` uses, with the same `generation` guard;
+			// `before` survives only as the fallback for when the refetch ALSO fails
+			// (at which point it is a no-op — nothing here has changed it yet).
 			try {
 				const fresh = await listSections(cfg);
 				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
@@ -1490,6 +1539,8 @@
 			// a different instruction to the user than "the delete was refused".
 			removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
 			failedRemoveId = id;
+			// `pendingRemoveId` is left set — #273's retry convention: the pair
+			// stays armed beside `removeError` above.
 		} finally {
 			removePending = false;
 			if (ownsFocus && failedRemoveId !== null) await placeFocusAfterFailedRemove(failedRemoveId);
@@ -4092,13 +4143,38 @@
 									     too — `section-remove-*`), the exact two-step-confirm write seam
 									     `sectionGroup` used to render. Only the RENDERING moved: always
 									     shown, `disabled` when `!canDelete` rather than absent, per the
-									     task's own "Disable for sections with children/members". -->
+									     task's own "Disable for sections with children/members".
+									     #273 — the armed pair now adopts the agenda's arm-state
+									     lifecycle (`onSeasonManageSeriesDelete`): `pendingRemoveId`
+									     stays set through the write (see `handleRemoveSection`), so
+									     this pair stays MOUNTED here rather than unmounting on confirm.
+									     `disabled` binds to `structuralWritePending` — the same guard
+									     the ✕ trigger below already uses — rather than to `removePending`
+									     alone: this pair can only ever be showing for `pendingRemoveId`,
+									     and `structuralWritePending` is the page's one-structural-write-
+									     at-a-time invariant (reorder/rename/remove), so freezing BOTH
+									     halves under it (not just during this row's own write) matches
+									     the ✕ trigger's existing face and needs no separate dedicated
+									     pending-id: only one row can ever be armed
+									     (`pendingRemoveId` is a single slot) and arming a second is
+									     itself blocked by the ✕ trigger's own `structuralWritePending`
+									     disable, so there is no second armed pair a bespoke id would need
+									     to distinguish from this one — a double-tap on THIS confirm is
+									     stopped twice over (disabled cannot dispatch a click, and
+									     `handleRemoveSection`'s own `if (structuralWritePending) return`
+									     backstops it regardless). `aria-busy` on confirm alone binds to
+									     `removePending` specifically — this row's own write, not any
+									     structural write — since aria-busy communicates "recompute your
+									     region, this is the crossing element", which is only true for the
+									     write actually in progress here. -->
 									{#if pendingRemoveId === row.id}
 										<button
 											type="button"
 											data-testid="section-remove-confirm-{row.id}"
 											aria-label={m.roster_section_remove_confirm({ name: row.name })}
-											class="rounded px-1 text-xs text-red-700 underline"
+											disabled={structuralWritePending}
+											aria-busy={removePending}
+											class="rounded px-1 text-xs text-red-700 underline disabled:opacity-50"
 											onclick={() => void handleRemoveSection(row.id)}
 										>
 											{m.roster_section_remove_confirm_short()}
@@ -4107,7 +4183,8 @@
 											type="button"
 											data-testid="section-remove-cancel-{row.id}"
 											aria-label={m.roster_section_remove_cancel({ name: row.name })}
-											class="rounded px-1 text-xs text-ink-2 underline hover:text-ink"
+											disabled={structuralWritePending}
+											class="rounded px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
 											onclick={() => void disarmRemove(row.id)}
 										>
 											{m.roster_section_remove_cancel_short()}
@@ -4120,11 +4197,7 @@
 										     (ineligible section: has children/members, mid-rename, or a
 										     structural write in flight) now comes FROM the unit —
 										     disabled:opacity-60 + disabled:hover:text-red-700, per #237
-										     review F2 — rather than from a per-site class string. KNOWN GAP, NOT
-										     fixed here: this trigger's confirm/cancel siblings above
-										     carry no disabled/aria-busy wiring during an in-flight
-										     delete, unlike the agenda's — out of #237's glyph-sweep
-										     scope. -->
+										     review F2 — rather than from a per-site class string. -->
 										<DeleteTrigger
 											data-testid="section-remove-{row.id}"
 											aria-label={m.roster_section_remove({ name: row.name })}

@@ -45,6 +45,8 @@
 //     arrange-rename-*, or section-drag-handle-* controls anywhere.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
@@ -676,7 +678,13 @@ describe('/roster — the delete outcome is ANNOUNCED from arrange mode (#155/S4
 // ── 6. Keyboard/focus invariants the relocation put at risk ──────────────────
 
 describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 review F2/F3)', () => {
-	it('a SUCCESSFUL delete lands focus on the PREVIOUS SIBLING arrange row — never on the Collapsed view-mode chip', async () => {
+	// #273 REWORK — this test used to confirm-and-settle in one breath, which
+	// let the pair's synchronous unmount pass for a lifecycle. The write is now
+	// HELD open: the pair must stay MOUNTED (disabled) through the flight, and
+	// only the SUCCESS clears the armed state and places focus.
+	it('a SUCCESSFUL delete lands focus on the PREVIOUS SIBLING arrange row — never on the Collapsed view-mode chip, never <body>', async () => {
+		const gate = deferred();
+		deleteMock.mockImplementation(() => gate.promise);
 		const container = await renderArrangeReady();
 
 		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
@@ -685,6 +693,15 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		});
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 
+		// In flight: the pair is still on screen, disabled — the UI never shows a
+		// disarmed/rest state while the write is running (#273, agenda lifecycle).
+		await waitFor(() => {
+			const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
+			expect(confirm).not.toBeNull();
+			expect(confirm.disabled).toBe(true);
+		});
+
+		gate.settle();
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
 		});
@@ -694,19 +711,21 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		// The regression this pins: the chip fallback firing every time, so the
 		// next Enter/Space silently left arrange mode.
 		expect(document.activeElement).not.toBe(q(container, 'roster-view-chip-collapsed'));
+		expect(document.activeElement).not.toBe(document.body);
 		expect(q(container, 'roster-arrange-list')).not.toBeNull();
 		// The roving tab stop travelled with the focus.
 		expect(q(container, 'arrange-row-sec-alto')?.getAttribute('tabindex')).toBe('0');
 	});
 
-	// #155/S4 review F1 (follow-up) — re-homed from the retired
-	// page.roster-ux-a11y.spec.ts ("a REFUSED remove returns focus to the restored
-	// ✕"). S4 made the ✕ `disabled` while a structural write is in flight and when
-	// the section is ineligible, and a disabled <button> cannot take focus — so the
-	// failure landing has to be placed AFTER `removePending` clears, and it has to
-	// step over a candidate that is disabled rather than stopping at it. Without
-	// both, `.focus()` is a silent no-op and focus drops to <body> (WCAG 2.4.3).
-	it('a FAILED delete returns focus to the RESTORED ✕ — never <body>', async () => {
+	// #273 REWORK (was #155/S4 review F1 follow-up, re-homed from the retired
+	// page.roster-ux-a11y.spec.ts) — the old expectation ("focus returns to the
+	// RESTORED ✕") assumed the pair unmounts on confirm. Under the agenda's
+	// arm-state lifecycle a failure leaves the pair ARMED beside the error for
+	// direct retry, so the ✕ is never restored here: the honest landing is the
+	// re-enabled CONFIRM itself. The WCAG 2.4.3 core survives — the landing is
+	// placed AFTER `removePending` clears (a disabled <button> cannot take
+	// focus), and it must never be <body>.
+	it('a FAILED delete leaves the pair ARMED beside the error, focus on the re-enabled confirm — never <body>', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		deleteMock.mockRejectedValue(new Error('500'));
 		const container = await renderArrangeReady();
@@ -720,21 +739,36 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		await waitFor(() => {
 			expect(q(container, 'section-remove-error')).not.toBeNull();
 		});
+		// The pair is still armed — the rest-state ✕ was never restored.
+		const confirm = await waitFor(() => {
+			const el = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
+			expect(el).not.toBeNull();
+			return el;
+		});
+		expect(confirm.disabled).toBe(false);
+		expect(q(container, 'section-remove-sec-bass')).toBeNull();
 		await waitFor(() => {
-			expect(document.activeElement).toBe(q(container, 'section-remove-sec-bass'));
+			expect(document.activeElement).toBe(q(container, 'section-remove-confirm-sec-bass'));
 		});
 		expect(document.activeElement).not.toBe(document.body);
 		consoleSpy.mockRestore();
 	});
 
-	it('a REFUSED delete whose refetched tree makes the ✕ INELIGIBLE lands focus on the row, not <body>', async () => {
+	// #273 REWORK — the pair no longer unmounts on a refusal (agenda lifecycle:
+	// armed until success), so the old "the ✕ comes back DISABLED and focus
+	// steps to the row" sequencing moves to CANCEL time: the failure lands focus
+	// on the still-armed confirm; cancelling out of the refusal then restores an
+	// ✕ that the refetched tree has made INELIGIBLE (disabled — cannot take
+	// focus), and the row is the honest landing for THAT step. Never <body>,
+	// at either step (WCAG 2.4.3).
+	it('a REFUSED delete keeps the pair armed (focus on confirm); cancelling restores an INELIGIBLE ✕ and lands focus on the row, not <body>', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		deleteMock.mockRejectedValue({ code: 'section-not-empty' });
 		const container = await renderArrangeReady();
 
 		// The refusal's whole point: the server holds a child this tree never knew
-		// about. The reconcile reveals it, so `canDelete` goes false and the ✕ comes
-		// back DISABLED — the row itself is then the honest landing.
+		// about. The reconcile reveals it, so `canDelete` goes false and the ✕ —
+		// once the user disarms — comes back DISABLED.
 		listSectionsMock.mockResolvedValue([
 			{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
@@ -758,6 +792,26 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass1')).not.toBeNull();
+		});
+		// Step 1 — the refusal leaves the pair ARMED beside the error (armed id
+		// cleared only on success); focus lands on the re-enabled confirm.
+		await waitFor(() => {
+			const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
+			expect(confirm).not.toBeNull();
+			expect(confirm.disabled).toBe(false);
+		});
+		expect(q(container, 'section-remove-sec-bass')).toBeNull();
+		await waitFor(() => {
+			expect(document.activeElement).toBe(q(container, 'section-remove-confirm-sec-bass'));
+		});
+		expect(document.activeElement).not.toBe(document.body);
+
+		// Step 2 — CANCEL out of the refusal: the restored ✕ is now ineligible
+		// (disabled, cannot take focus), so the focus landing must step over it
+		// to the row rather than dropping to <body>.
+		await fireEvent.click(q(container, 'section-remove-cancel-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-sec-bass')).not.toBeNull();
 		});
 		expect((q(container, 'section-remove-sec-bass') as HTMLButtonElement).disabled).toBe(true);
 		await waitFor(() => {
@@ -821,10 +875,8 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 // confirm testids, and the #110 F1 creator-only-_owner behavior — the suites
 // above locate by testid and must stay green through the swap.
 //
-// KNOWN PRE-EXISTING GAP, flagged NOT fixed (out of this issue's scope): the
-// confirm/cancel halves here carry no disabled/aria-busy wiring during the
-// in-flight delete, unlike the agenda's. #237 is a glyph sweep; the gap
-// predates it and stays as-is.
+// (The confirm/cancel halves' own in-flight disabled/aria-busy wiring — #237
+// found it absent and correctly left it out of a glyph sweep — is #273, below.)
 
 describe('/roster — #237 the section-remove trigger renders the shared red trashcan at 44px', () => {
 	it('the idle ✕ becomes the shared unit: aria-hidden TrashIcon, red tone, min-h-11 min-w-11 by construction — the p-1 sub-20px face is gone', async () => {
@@ -887,3 +939,219 @@ describe('/roster — #237 the section-remove trigger renders the shared red tra
 
 // (*MVOX:Palestrina* — #237 RED: section-remove joins the shared unit; ✕ U+2715
 // out, 44px by construction in, gating and two-step byte-preserved)
+
+// ── #273: the armed confirm/cancel pair adopts the agenda's ARM-STATE LIFECYCLE ──
+//
+// Premise on record (research + PO comment on #273): today the pair unmounts
+// SYNCHRONOUSLY on confirm (`pendingRemoveId = null` at the top of the handler,
+// before any await), so double-submit/cancel-mid-flight do not reproduce — by
+// render-timing accident, not by construction. "Matching the agenda's
+// treatment" (done-when 1) therefore means adopting its arm-state lifecycle,
+// verified at the agenda's three delete sites (src/routes/+page.svelte, e.g.
+// the event-delete handler):
+//
+//   - the armed id STAYS SET through the write — the pair stays MOUNTED;
+//   - both halves render DISABLED while the delete is pending; the confirm
+//     additionally carries aria-busy;
+//   - the armed id is cleared ONLY on success;
+//   - on failure the pair STAYS ARMED next to the error, re-enabled once the
+//     pending flag clears, for direct retry.
+//
+// Labels are UNCHANGED during pending (no new i18n keys) — the agenda model
+// disables in place, it does not swap copy.
+
+describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, through the in-flight delete', () => {
+	it('confirm starts the write WITHOUT unmounting the pair: both halves disabled, confirm aria-busy, labels unchanged — and a double-tap cannot fire two deletes', async () => {
+		const gate = deferred();
+		deleteMock.mockImplementation(() => gate.promise);
+		const container = await renderArrangeReady();
+
+		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-confirm-sec-bass')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
+
+		// The write is in flight — the pair is STILL MOUNTED, both halves
+		// disabled, confirm aria-busy (the agenda's in-flight face).
+		await waitFor(() => {
+			const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
+			expect(confirm, 'confirm must stay mounted through the write').not.toBeNull();
+			expect(confirm.disabled).toBe(true);
+		});
+		const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
+		expect(confirm.getAttribute('aria-busy')).toBe('true');
+		const cancel = q(container, 'section-remove-cancel-sec-bass') as HTMLButtonElement;
+		expect(cancel, 'cancel must stay mounted through the write').not.toBeNull();
+		expect(cancel.disabled).toBe(true);
+		// No new i18n keys — the pending face keeps the SAME labels (the lenient
+		// message mock renders key names, so these pin the keys themselves).
+		expect(confirm.getAttribute('aria-label')).toBe('roster_section_remove_confirm');
+		expect(cancel.getAttribute('aria-label')).toBe('roster_section_remove_cancel');
+
+		// Double-tap (the season-manage precedent's shape): a second tap on the
+		// still-mounted confirm writes nothing more.
+		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
+		expect(deleteMock).toHaveBeenCalledTimes(1);
+
+		gate.settle();
+		await waitFor(() => {
+			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
+		});
+		expect(deleteMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('CANCEL mid-flight is INERT: disabled, the pair stays mounted (never a disarmed rest state), and the delete lands honestly', async () => {
+		const gate = deferred();
+		deleteMock.mockImplementation(() => gate.promise);
+		const container = await renderArrangeReady();
+
+		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-confirm-sec-bass')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect((q(container, 'section-remove-cancel-sec-bass') as HTMLButtonElement).disabled).toBe(
+				true
+			);
+		});
+
+		// The "cancel that does not cancel" (#253/#264 shape): mid-flight, cancel
+		// must do NOTHING — the pair stays armed on screen, the rest-state ✕ is
+		// never shown while the write is running.
+		await fireEvent.click(q(container, 'section-remove-cancel-sec-bass') as HTMLElement);
+		expect(
+			q(container, 'section-remove-confirm-sec-bass'),
+			'the pair must not disarm while the delete is in flight'
+		).not.toBeNull();
+		expect(q(container, 'section-remove-cancel-sec-bass')).not.toBeNull();
+		expect(
+			q(container, 'section-remove-sec-bass'),
+			'the rest-state ✕ must never render while the write is running'
+		).toBeNull();
+
+		// Release: the delete LANDS, and the UI says so — row gone, success
+		// announced. Nothing about the mid-flight cancel tap changed the outcome.
+		gate.settle();
+		await waitFor(() => {
+			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'roster-section-remove-status')?.textContent).toContain(
+				'roster_section_removed'
+			);
+		});
+		expect(deleteMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('SUCCESS clears the armed id: the pair unmounts with the row — normal post-delete state', async () => {
+		const gate = deferred();
+		deleteMock.mockImplementation(() => gate.promise);
+		const container = await renderArrangeReady();
+
+		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-confirm-sec-bass')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect((q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement).disabled).toBe(
+				true
+			);
+		});
+
+		gate.settle();
+		await waitFor(() => {
+			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
+		});
+		expect(q(container, 'section-remove-confirm-sec-bass')).toBeNull();
+		expect(q(container, 'section-remove-cancel-sec-bass')).toBeNull();
+		await waitFor(() => {
+			expect(q(container, 'roster-section-remove-status')?.textContent).toContain(
+				'roster_section_removed'
+			);
+		});
+	});
+
+	it('FAILURE leaves the pair ARMED and re-enabled next to the error — direct retry through the SAME confirm succeeds', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const gate = deferred();
+		deleteMock.mockImplementation(() => gate.promise);
+		const container = await renderArrangeReady();
+
+		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-confirm-sec-bass')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect((q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement).disabled).toBe(
+				true
+			);
+		});
+
+		gate.reject(new Error('500'));
+		await waitFor(() => {
+			expect(q(container, 'section-remove-error')).not.toBeNull();
+		});
+		// The agenda's retry convention: armed id cleared ONLY on success — the
+		// pair sits re-enabled next to the error, aria-busy gone; the rest-state
+		// ✕ was never restored.
+		const confirm = await waitFor(() => {
+			const el = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
+			expect(el).not.toBeNull();
+			expect(el.disabled).toBe(false);
+			return el;
+		});
+		expect(confirm.getAttribute('aria-busy')).not.toBe('true');
+		expect((q(container, 'section-remove-cancel-sec-bass') as HTMLButtonElement).disabled).toBe(
+			false
+		);
+		expect(q(container, 'section-remove-sec-bass')).toBeNull();
+		// The failed delete's reconcile restored the row (server still holds it).
+		expect(q(container, 'arrange-row-sec-bass')).not.toBeNull();
+
+		// Direct retry — the SAME still-armed confirm, no re-arming dance.
+		deleteMock.mockResolvedValue(undefined);
+		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
+		});
+		expect(deleteMock).toHaveBeenCalledTimes(2);
+		await waitFor(() => {
+			expect(q(container, 'roster-section-remove-status')?.textContent).toContain(
+				'roster_section_removed'
+			);
+		});
+		consoleSpy.mockRestore();
+	});
+
+	// Done-when 4 + the issue's honest-comments rationale: a comment describing
+	// a CLOSED gap must not survive the fix — neither the source original
+	// (drifted to ~roster/+page.svelte:4123) nor this file's own #237-era
+	// near-duplicate. Grep-style, needle assembled so this test's own source
+	// never matches itself.
+	it('the KNOWN-GAP comments (source + this spec file) are removed with the fix', () => {
+		const needle = ['carry no disabled/', 'aria-busy wiring'].join('');
+		// vitest's cwd is the project root; import.meta.url is not a file: URL
+		// under the transform, so resolve from the root instead.
+		const page = readFileSync(resolve(process.cwd(), 'src/routes/roster/+page.svelte'), 'utf-8');
+		expect(
+			page.includes(needle),
+			'roster/+page.svelte still carries the KNOWN GAP comment for a gap this fix closes'
+		).toBe(false);
+		const spec = readFileSync(
+			resolve(process.cwd(), 'src/routes/page.roster-arrange-crud.spec.ts'),
+			'utf-8'
+		);
+		expect(
+			spec.includes(needle),
+			'this spec file still carries the #237-era KNOWN-GAP near-duplicate comment'
+		).toBe(false);
+	});
+});
+
+// (*MVOX:Palestrina* — #273 RED: the armed pair through the in-flight write —
+// agenda arm-state lifecycle: mounted + disabled + aria-busy in flight, cleared
+// only on success, armed-for-retry on failure; cancel-mid-flight inert)
