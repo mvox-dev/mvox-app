@@ -360,6 +360,10 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				memberId: 'member-1',
 				personId: 'person-a',
 				name: 'Ada Lovelace',
+				// #269 — `loadRoster` now always carries the profile resolution
+				// alongside the displayed name (equal here: no real-names overlay
+				// wired into this fixture's toggle read).
+				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
 				sectionIds: []
 			}
@@ -394,6 +398,8 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				memberId: 'member-1',
 				personId: 'person-a',
 				name: 'Ada Lovelace',
+				// #269 — see the previous test's note.
+				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
 				sectionIds: ['sec-sop', 'sec-lead']
 			}

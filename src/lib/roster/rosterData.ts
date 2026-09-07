@@ -2,6 +2,7 @@ import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles, resolveField, type MyProfile } from '$lib/profile/profileData';
 import { hasVisibleName } from '$lib/profile/completionGate';
+import { readRosterNamesSetting } from '$lib/collective/rosterNames';
 
 // T3.2/#18 — the roster READ data layer. RED (Tallis): every exported function below
 // is a STUB that throws 'not implemented' so `rosterData.spec.ts` compiles and FAILS
@@ -23,7 +24,10 @@ import { hasVisibleName } from '$lib/profile/completionGate';
 //     email (narrower-wins is exactly "whichever tier she shared it at").
 //   - `loadRoster` orchestrates: list members → fan out ONE profile read per member
 //     (`Promise.all`, genuinely independent reads) → resolve → drop nameless (#28) →
-//     sort by name. Fails loud as a whole on any per-member read rejection.
+//     sort by name. Fails loud as a whole on any per-member read rejection. It is
+//     PROFILE-NAMES-ONLY and shared by four routes; #269's real-names overlay is the
+//     separate, opt-in `loadRosterWithRealNames` that only /roster calls (scope
+//     ruling 2026-09-06 — see both functions' docs).
 //
 // HARD RULE — NO client-side privacy-boundary filtering anywhere in this module. The
 // server (entu-api Gate A: list-query `access` pre-filter; Gate B: `cleanupEntity`
@@ -188,6 +192,21 @@ export interface RosterRow {
 	 * pre-#161 fixtures.
 	 */
 	dbEntityId?: string;
+	/**
+	 * #269 — the roster's own domain-or-public PROFILE name (`toRosterRow`'s
+	 * `name`, unchanged), carried through separately from the DISPLAYED `name`
+	 * so every out-of-scope name surface on the roster page (SectionPicker's aria
+	 * label, the record-edit pencil, the deactivate/damaged-record banners) can
+	 * keep naming the member by her profile name even when her row displays a
+	 * real one — the roster-only scope ruling. Set by `loadRoster` on EVERY row
+	 * (where it always equals `name`) and carried through unchanged by
+	 * `loadRosterWithRealNames`, so both producers emit one row shape;
+	 * `undefined` on `toRosterRow`'s own bare output and on
+	 * `loadInactiveRoster`'s rows (memberLifecycle.ts — the inactive panel is a
+	 * deliberate v1 boundary that never resolves real names at all, see that
+	 * module).
+	 */
+	profileName?: string;
 }
 
 /**
@@ -241,6 +260,61 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 // ── orchestration (new) ───────────────────────────────────────────────────────────
 
 /**
+ * #269 — the ONE bulk `admin_member_record` read behind the real-names overlay:
+ * `entity?_type.string=admin_member_record&props=person,name&limit=500` — the
+ * PO-ruled incidental-exposure fence (never phone/email/birthdate; the listSections
+ * one-fetch idiom, one query for the whole roster, never one per member). Returns a
+ * personId → record-name map; a record with no `person` reference, or whose person
+ * is not on this roster, is simply never looked up — no throw, no misjoin. A person
+ * carrying MORE THAN ONE record is absent from the map entirely (see the loop) — the
+ * overlay refuses to guess which name is hers. The name itself is returned RAW
+ * (untrimmed) — the caller decides what "non-empty" means.
+ */
+async function listRecordNamesByPerson(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch
+): Promise<Map<string, string>> {
+	const res = await entuFetch(
+		cfg.db,
+		'entity?_type.string=admin_member_record&props=person,name&limit=500',
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listRecordNamesByPerson failed: ${res.status}`);
+	const body = (await res.json()) as {
+		entities?: Array<{
+			_id: string;
+			person?: Array<{ reference: string }>;
+			name?: Array<{ string: string }>;
+		}>;
+	};
+	const byPerson = new Map<string, string>();
+	// #269 review — a person carrying MORE THAN ONE record is the exact condition
+	// `loadMemberRecord` classifies as `{state:'damaged'}` (#264 — surface loudly,
+	// refuse to guess). Last-wins here would have the roster row confidently display
+	// an arbitrary server-order pick while the pencil on the SAME row refuses to
+	// guess; the check-then-create is not atomic across admins, so this is
+	// live-reachable. So we refuse too: a duplicated person is DROPPED from the map
+	// entirely (not first-wins), and the row falls back to the profile name —
+	// byte-indistinguishable from "no record at all", per the silent-and-complete
+	// fallback rule, and agreeing with what the pencil says about that member.
+	const duplicated = new Set<string>();
+	for (const raw of body.entities ?? []) {
+		const personId = raw.person?.[0]?.reference;
+		if (!personId) continue; // orphan record — ignored silently, never misjoined
+		if (duplicated.has(personId)) continue; // third+ record — stays dropped
+		if (byPerson.has(personId)) {
+			duplicated.add(personId);
+			byPerson.delete(personId);
+			continue;
+		}
+		byPerson.set(personId, raw.name?.[0]?.string ?? '');
+	}
+	return byPerson;
+}
+
+/**
  * List active members, fan out ONE profile read per member (`Promise.all` — N
  * genuinely independent reads, not a shared cache key like `listEvents`' series
  * cache), resolve each via `toRosterRow`, drop the nameless (#28), sort by name.
@@ -248,6 +322,25 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
  * unknown `_sharing`) propagates out of `Promise.all` and rejects `loadRoster` — a
  * member the app couldn't verify never silently vanishes into an incomplete-looking
  * roster; the caller sees the failure and can retry.
+ *
+ * PROFILE NAMES ONLY, ALWAYS. This is the app-wide member-name producer and it has
+ * FOUR production consumers: the /roster page, the event detail page's attendance
+ * panel (event/[id]/+page.svelte), the agenda's `getRoster` (attendance panel,
+ * conductor chips, all three conductor pickers — cached for ROSTER_CACHE_TTL_MS)
+ * and the admin roles page's two person selects + id→name lookup. Henry's
+ * 2026-09-06 scope ruling fences #269's real-names overlay to the roster row alone:
+ * "Every other place a member's name appears — pickers, chips, the agenda, event
+ * pages, the library — keeps profile names, and this slice must not quietly extend
+ * to them." So the overlay is NOT here — it lives in `loadRosterWithRealNames`
+ * below, which /roster opts into and nobody else calls. Adding the toggle read to
+ * this function would silently re-open the leak on all four surfaces; the boundary
+ * is pinned by page.agenda-real-names-fence.spec.ts,
+ * page.admin-real-names-fence.spec.ts and the "#269 scope fence" case in
+ * event/[id]/page.spec.ts (each asserts profile names AND zero
+ * `admin_member_record` requests).
+ *
+ * `row.profileName` is set here, on every row, equal to `row.name` — the ONE row
+ * shape both producers emit, so a consumer never has to know which one it got.
  */
 export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<RosterRow[]> {
 	const members = await listActiveMembers(cfg, fetchImpl);
@@ -259,6 +352,80 @@ export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch):
 	);
 	return rows
 		.filter((r): r is RosterRow => r !== null)
+		.map((row) => ({ ...row, profileName: row.name }))
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * #269 — `loadRoster` PLUS the real-names overlay. The OPT-IN producer, called
+ * from exactly one place: `src/routes/roster/+page.svelte`. See `loadRoster`'s doc
+ * for why the overlay is a separate export rather than a flag on the shared one.
+ *
+ * The overlay runs after the base resolution, never before it: ONLY when the
+ * collective's `roster_show_real_names` is true AND a member's
+ * `admin_member_record` carries a non-empty (post-trim) name does `row.name` become
+ * that real name; `row.profileName` always carries `loadRoster`'s domain-or-public
+ * profile resolution unchanged, for the out-of-scope surfaces ON the roster row
+ * (SectionPicker's aria label, the record-edit pencil, the deactivate/damaged
+ * banners) that must keep naming her by it regardless. The three sort sites (the
+ * sort below, the page's flat re-sort, `groupBySection`'s per-group order) all key
+ * off `row.name`, so they follow the displayed name for free.
+ *
+ * The overlay is DELIBERATELY NOT part of `loadRoster`'s fail-loud contract: it is
+ * wrapped in its own try/catch and degrades to "toggle off" (profile names,
+ * `recordNameByPerson` empty) on ANY failure — no visible database entity (a
+ * legitimate, documented `resolveDatabaseEntityId` answer, not just a test gap), a
+ * non-2xx toggle read, a non-2xx records read. A member's presence on the roster is
+ * the more critical property; losing the real-names overlay must never take the
+ * whole roster down with it. The degrade DIRECTION is what makes that safe: it can
+ * only show FEWER real names, never leak one while the toggle is off.
+ *
+ * #269 review F3 — but the degrade is OBSERVABLE and PINNED, not silent. It
+ * deliberately narrows `readRosterNamesSetting`'s stated fail-loud contract
+ * (rosterNames.ts: "no visible database entity or a non-2xx anywhere → throw") at
+ * this one call site, so it logs a `console.error` breadcrumb: without it, a blipping
+ * toggle read on a live collective would silently serve profile names to everyone
+ * with no signal to member, admin or console that the setting was being ignored
+ * (standing fail-loud-over-fallbacks rule). Both failing branches — the toggle read
+ * and the records read — are pinned in rosterData.realNames.spec.ts.
+ */
+export async function loadRosterWithRealNames(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<RosterRow[]> {
+	const profileRows = await loadRoster(cfg, fetchImpl);
+	// Nobody to overlay onto — and no reason to spend the toggle read finding out.
+	if (profileRows.length === 0) return [];
+
+	let recordNameByPerson = new Map<string, string>();
+	try {
+		const { showRealNames } = await readRosterNamesSetting(cfg, fetchImpl);
+		if (showRealNames) {
+			recordNameByPerson = await listRecordNamesByPerson(cfg, fetchImpl);
+		}
+	} catch (e) {
+		// See doc above — an unresolvable overlay degrades to "toggle off", never
+		// takes the base roster down with it, and says so loudly in the console
+		// (#269 review F3): a silent degrade here would hide a live collective
+		// ignoring its own roster_show_real_names setting.
+		console.error(
+			'loadRosterWithRealNames: real-names overlay unavailable, showing profile names',
+			e
+		);
+		recordNameByPerson = new Map();
+	}
+	// Toggle off, or nothing to apply: `loadRoster`'s rows are already the answer,
+	// already carrying `profileName` and already sorted by the displayed name.
+	if (recordNameByPerson.size === 0) return profileRows;
+
+	return profileRows
+		.map((row) => {
+			const recordName = recordNameByPerson.get(row.personId)?.trim();
+			return {
+				...row,
+				name: recordName ? recordName : row.name
+			};
+		})
 		.sort((a, b) => a.name.localeCompare(b.name));
 }
 
@@ -266,3 +433,5 @@ export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch):
 // (*MVOX:Josquin* — GREEN implementation)
 // (*MVOX:Palestrina* — #58: toRosterRow accepts domain OR public name)
 // (*MVOX:Palestrina* — F1 code-review fix: multi-section members, TS.1/#95)
+// (*MVOX:Palestrina* — #269 GREEN: the real-names overlay)
+// (*MVOX:Palestrina* — #269 review F1/F2: the overlay is opt-in at /roster only)

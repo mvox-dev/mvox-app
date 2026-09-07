@@ -6,13 +6,17 @@
 	// is true by default). No `completionGate` import here — the CURRENT-user
 	// application of #28 is the layout's redirect; the OTHER-members application (a
 	// nameless member never appearing as a row) lives entirely in `rosterData.ts`'s
-	// `toRosterRow` — this component only renders whatever `loadRoster` returns.
+	// `toRosterRow` — this component only renders whatever the roster producer returns.
 	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	// #269 review F1/F2 — the REAL-NAMES producer, opt-in and called from THIS
+	// route alone. The shared `loadRoster` stays profile-names-only for its three
+	// other consumers (agenda, event detail, admin roles) per Henry's 2026-09-06
+	// roster-only scope ruling; see rosterData.ts for both functions' contracts.
+	import { loadRosterWithRealNames, type RosterRow } from '$lib/roster/rosterData';
 	import {
 		deactivateMember,
 		reinstateMember,
@@ -174,7 +178,10 @@
 		},
 		async load({ cfg, isCurrent }) {
 			currentCfg = cfg;
-			const [rowResult, sectionResult] = await Promise.allSettled([loadRoster(cfg), listSections(cfg)]);
+			const [rowResult, sectionResult] = await Promise.allSettled([
+				loadRosterWithRealNames(cfg),
+				listSections(cfg)
+			]);
 			if (!isCurrent()) return; // superseded by a newer collective selection
 
 			if (rowResult.status === 'rejected') {
@@ -995,15 +1002,26 @@
 	// the new row's lookup even resolves.
 	//
 	// PREFILL (R4, ruling 2026-09-07 correction) — `name` and `email` prefill
-	// from the ROW, never a fresh `resolveField`/`listMyProfiles` call: `row.name`
-	// IS the roster's own domain-or-public scan (rosterData.ts's `toRosterRow`,
-	// never private-tier) and `row.email` IS already `resolveField`'s
-	// narrower-wins result — both computed once at roster-load time. Re-deriving
-	// either here would be redundant AND, for name, dangerous: a naive
-	// `resolveField('name', …)` prefers private-first and would promote a
+	// from the ROW, never a fresh `resolveField`/`listMyProfiles` call:
+	// `row.profileName` IS the roster's own domain-or-public scan (rosterData.ts's
+	// `toRosterRow`, never private-tier) and `row.email` IS already
+	// `resolveField`'s narrower-wins result — both computed once at roster-load
+	// time. Re-deriving either here would be redundant AND, for name, dangerous: a
+	// naive `resolveField('name', …)` prefers private-first and would promote a
 	// member's private-tier name into the domain-shared record on save (the
 	// #28/#58 leak class this ruling exists to close). Phone/date of birth have
 	// no profile source at all — they simply start empty.
+	//
+	// #269 review F2 — read `row.profileName`, NOT `row.name`: since #269
+	// `row.name` is the DISPLAYED name and may itself be an admin_member_record
+	// real name (real-names overlay, rosterData.ts). Nothing that WRITES to a
+	// record may read it — prefilling a fresh create from it would echo a record
+	// name back into a record, and after a record is deleted between roster load
+	// and pencil tap the stale displayed name would resurrect the deleted real
+	// name into the new one. `row.profileName` is unchanged by #269 and is what
+	// R4's "prefill from the profile display name" actually means; the `?? row.name`
+	// fallback covers only pre-#269 row shapes (`toRosterRow`'s bare output and
+	// `loadInactiveRoster`'s rows), where the two are equal by construction.
 	let recordEditorMemberId = $state<string | null>(null);
 	let recordEditorLookup = $state<MemberRecordLookup | null>(null);
 	let recordForm = $state<{ name: string; phone: string; email: string; birthdate: string }>({
@@ -1077,8 +1095,14 @@
 			if (result.state === 'none') {
 				// First open, no record yet (R4) — prefill from the ROW (see module
 				// doc): name/email from the roster's own resolution, phone/date of
-				// birth start empty (the profile holds neither).
-				recordForm = { name: row.name, phone: '', email: row.email, birthdate: '' };
+				// birth start empty (the profile holds neither). #269 review F2 —
+				// `profileName`, never the DISPLAYED `name`.
+				recordForm = {
+					name: row.profileName ?? row.name,
+					phone: '',
+					email: row.email,
+					birthdate: ''
+				};
 			} else if (result.state === 'one') {
 				// A record already exists — show THE RECORD, never the profile (R4):
 				// no re-prefill, no merge, a deliberately-cleared field stays cleared.
@@ -2996,18 +3020,23 @@
 					onclick={() => openRecordEditor(row)}
 				>
 					<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
-					<span class="sr-only">{m.roster_record_edit_label()} {row.name}</span>
+					<!-- #269 — this label is OUT of the contracted surface (the roster-only
+					     scope ruling names the `roster-row-name` span alone); it keeps
+					     naming the member by her PROFILE name even while her row shows a
+					     real one. -->
+					<span class="sr-only">{m.roster_record_edit_label()} {row.profileName ?? row.name}</span>
 				</button>
 				{#if recordEditorMemberId === row.memberId}
 					{#if recordEditorLookup?.state === 'damaged'}
 						<!-- (D) #264 — damaged data: loud, names the member, refuses to
-						     guess. No form renders; nothing is ever written from here. -->
+						     guess. No form renders; nothing is ever written from here.
+						     #269 — profile name (see the pencil label's note above). -->
 						<p
 							data-testid="roster-record-damaged-{row.memberId}"
 							role="alert"
 							class="mt-1 text-xs text-red-700"
 						>
-							{m.roster_record_damaged({ name: row.name })}
+							{m.roster_record_damaged({ name: row.profileName ?? row.name })}
 						</p>
 					{:else if recordEditorLookup !== null}
 						<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
@@ -3135,7 +3164,7 @@
 			     invisible to it. -->
 			<SectionPicker
 				memberId={row.memberId}
-				memberName={row.name}
+				memberName={row.profileName ?? row.name}
 				{sections}
 				selectedIds={row.sectionIds ?? []}
 				dbEntityId={row.dbEntityId}
@@ -3218,7 +3247,7 @@
 					role="alert"
 					class="text-xs text-red-700"
 				>
-					{m.roster_member_deactivate_failed({ name: row.name })}
+					{m.roster_member_deactivate_failed({ name: row.profileName ?? row.name })}
 				</p>
 			{/if}
 		{/if}

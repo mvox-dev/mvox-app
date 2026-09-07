@@ -38,7 +38,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 }));
 
 const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
+// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
+// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
+vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
 // sectionData and sectionActions are NOT mocked — the REAL read parses the
 // live-shaped wire and the REAL writes hit the fetch stub below.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));

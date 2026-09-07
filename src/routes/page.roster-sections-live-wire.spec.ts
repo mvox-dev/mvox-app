@@ -32,7 +32,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 }));
 
 const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
+// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
+// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
+vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
 // sectionData is NOT mocked — the REAL listSections parses the wire fixture.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));

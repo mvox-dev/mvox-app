@@ -45,6 +45,20 @@
 		 * nothing saying whose sections it edits. Optional in type only so TS.2-era
 		 * call sites stay type-clean — without it the listbox falls back to
 		 * `aria-labelledby` on the trigger, which at least names the current sections.
+		 *
+		 * #269 review F1 — deliberately NOT also an `aria-label` on the TRIGGER.
+		 * The trigger's accessible name is its own visible `triggerLabel` (the
+		 * member's current section names, or "Unassigned"); an `aria-label` would
+		 * REPLACE that — dropping the very information the visible text exists to
+		 * convey, breaking WCAG 2.5.3 Label in Name (a voice-control user saying
+		 * the visible "Soprano, Alt" would no longer match the control), and naming
+		 * the member twice while the picker is open. The caller still passes
+		 * whichever name is in scope for THIS surface — the roster page deliberately
+		 * passes the PROFILE name here even when the row's visible text shows a real
+		 * one (roster-only scope ruling: this is a section-assignment action, not the
+		 * contracted `roster-row-name` span). If a trigger-level accessible name is
+		 * ever wanted it is a separate commission, and it must CONTAIN the visible
+		 * text (e.g. "{name}: {sections}"), never replace it.
 		 */
 		memberName?: string;
 		/** The section tree, as returned by listSections. */

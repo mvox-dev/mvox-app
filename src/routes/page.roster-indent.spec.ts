@@ -118,7 +118,10 @@ const {
 	deleteMock: vi.fn(),
 	reparentMock: vi.fn()
 }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
+// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
+// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
+vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
 	return { ...actual, listSections: listSectionsMock };

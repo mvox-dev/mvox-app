@@ -1784,6 +1784,23 @@ type ComposeFixtures = Fixtures & {
 	copies?: unknown[];
 	members?: unknown[];
 	attendance?: AttendanceRaw[];
+	/** #269 review F1/F2 — serve the "the real-names overlay WOULD fire" wire:
+	 *  a resolvable database entity, `roster_show_real_names: true`, and named
+	 *  `admin_member_record`s for every member. Off by default (this page has no
+	 *  business asking for any of it — see the scope-fence describe below). */
+	realNames?: boolean;
+};
+
+/** #269 — the collective entity id the real-names wire resolves to. */
+const RN_DB_ENTITY = 'db-ent-fence';
+
+/** #269 — the record names the overlay would show if it leaked onto this page.
+ *  Keyed by person id, matching `activeMembersFixture`. */
+const RN_RECORD_NAMES: Record<string, string> = {
+	'p-viewer': 'Zoe Zeta',
+	'p-mihkel': 'Aaron Aardvark',
+	'p-alice': 'Yuri Yew',
+	'p-guest': 'Bruno Birch'
 };
 
 /**
@@ -1816,6 +1833,30 @@ function composeWireStub(fixtures: ComposeFixtures = {}) {
 		.map((r) => ({ _id: r._id, _parent: [{ reference: 'ev1' }], status: r.status }));
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
+		// #269 review F1/F2 — the "overlay would fire" branches, first so they
+		// outrank the generic ones below. Only served when a test opts in.
+		if (fixtures.realNames) {
+			if (url.includes('_type.string=admin_member_record')) {
+				return json({
+					entities: Object.entries(RN_RECORD_NAMES).map(([personId, name]) => ({
+						_id: `rec-${personId}`,
+						person: [{ reference: personId }],
+						name: [{ string: name }]
+					}))
+				});
+			}
+			if (url.includes('_type.string=database')) {
+				return json({ entities: [{ _id: RN_DB_ENTITY }] });
+			}
+			if (url.includes(`entity/${RN_DB_ENTITY}`) && url.includes('roster_show_real_names')) {
+				return json({
+					entity: {
+						_id: RN_DB_ENTITY,
+						roster_show_real_names: [{ _id: 'v-toggle', boolean: true }]
+					}
+				});
+			}
+		}
 		if (url.includes('_type.string=program_item')) return json({ entities: programItems });
 		if (url.includes('_type.string=repertoire_item')) return json({ entities: repertoireItems });
 		if (url.includes('_type.string=work')) return json({ entities: works });
@@ -2065,6 +2106,48 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 				.querySelector('[data-testid="attendance-toggle-member-3-absent"]')
 				?.getAttribute('aria-pressed')
 		).toBe('true');
+	});
+
+	// ── #269 review F1/F2 — the SCOPE FENCE ───────────────────────────────────
+	//
+	// Henry's 2026-09-06 scope ruling fences the real-names overlay to /roster:
+	// "Every other place a member's name appears — pickers, chips, the agenda,
+	// event pages, the library — keeps profile names, and this slice must not
+	// quietly extend to them." The first #269 GREEN put the overlay inside the
+	// SHARED `loadRoster`, which THIS page calls for its attendance panel — so
+	// the panel silently started naming members by their admin_member_record.
+	//
+	// `realNames: true` makes the fixture non-vacuous: the database entity
+	// RESOLVES, the toggle answers true, and named records are on the wire. A
+	// fence spec without that database stub would pass on a leaking tree
+	// (`resolveDatabaseEntityId` → null → the overlay degrades to off by itself).
+	it("the attendance panel keeps PROFILE names even with the toggle ON and named records on the wire, and never asks for a record (#269 scope fence)", async () => {
+		const { container, fetchStub } = renderComposePage({
+			event: pastEventEntity(),
+			season: conductorSeason(),
+			realNames: true
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
+		});
+
+		// The PROFILE name, not the record name.
+		expect(
+			container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
+		).toContain('Viewer Vera');
+		for (const recordName of Object.values(RN_RECORD_NAMES)) {
+			expect(container.textContent).not.toContain(recordName);
+		}
+
+		// The exposure fence, checked on the network rather than only the screen:
+		// no record data is pulled into this page's client at all.
+		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
+		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toEqual([]);
 	});
 
 	it("a NON-conductor gets the badge and tally but NO 'Take attendance'", async () => {
