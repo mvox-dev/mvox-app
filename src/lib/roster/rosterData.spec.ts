@@ -451,6 +451,35 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		const rows = await loadRoster(cfg, fetchImpl);
 		expect(rows.map((r) => r.name)).toEqual(['Ann', 'Zelda']);
 	});
+
+	// ── #268 privacy fence — the member-visible roster load fetches NOTHING new.
+	// The module docstring's fence stays true: rosterData is a MEMBER-VISIBLE
+	// path, so it must never read the admin's record layer. The `props=`
+	// negative assertion above (no notes/idcode/birthdate/phone) is the standing
+	// half; these pin the other half — no roster-load request ever names the
+	// admin_member_record type at all. (Fence pins: they PASS against the
+	// pre-#268 tree by design and guard GREEN from widening the read.)
+
+	it('#268 fence: no roster-load URL ever contains admin_member_record — the admin record layer is a separate, admin-only read', async () => {
+		const fetchImpl = makeFetchMock(
+			[{ _id: 'member-1', person: 'person-a' }],
+			{ 'person-a': [rawProfile('domain', 'Ada Lovelace', 'ada@example.com')] }
+		);
+		await loadRoster(cfg, fetchImpl);
+		expect(fetchImpl.mock.calls.length).toBeGreaterThan(0);
+		for (const call of fetchImpl.mock.calls as Array<[string]>) {
+			expect(String(call[0])).not.toContain('admin_member_record');
+		}
+	});
+
+	it('#268 fence: the member-list query still projects exactly props=person,_parent — nothing record-shaped rides along', async () => {
+		const fetchImpl = makeFetchMock([], {});
+		await loadRoster(cfg, fetchImpl);
+		expect(String((fetchImpl.mock.calls as Array<[string]>)[0][0])).toContain(
+			'props=person,_parent'
+		);
+	});
 });
 
 // (*MVOX:Tallis*)
+// (*MVOX:Tallis* — #268 fence pins)

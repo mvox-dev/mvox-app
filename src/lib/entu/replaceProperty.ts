@@ -105,5 +105,52 @@ export async function replaceEntityProperty(
 	}
 }
 
+/**
+ * REMOVE `prop` from `entityId` entirely — the counterpart to
+ * `replaceEntityProperty` for the one case an overwrite cannot express.
+ *
+ * #268 review F1 — WHY THIS EXISTS. An overwrite writes a VALUE, and every
+ * typed slot needs a value that is legal for its type. `string: ''` is a legal
+ * (if empty) string, so clearing a `string` property is still an overwrite.
+ * A `datetime` slot has no such empty value: entu-api's `insertProperties`
+ * (utils/entity.js) coerces with `if (property.datetime) { property.datetime =
+ * new Date(property.datetime) }`, so `datetime: ''` is FALSY, skips the
+ * coercion, and is inserted verbatim as a JS string — and
+ * `validatePropertyTypes` waves it through (it only requires SOME non-meta
+ * key), so the POST returns 200 while the stored value is type-invalid. It
+ * then poisons everything that trusts the slot: a formula reaches
+ * `''.toISOString()` (TypeError) and a datetime range filter's `new Date(value)`
+ * can never match. So: clearing a non-string-typed property is a REMOVAL, not
+ * an overwrite.
+ *
+ *   1. GET entity/{entityId}?props={prop} — the live value id(s).
+ *   2. DELETE /property/{id} for each (the documented removal path — entu-www
+ *      "Deleting a Property"; soft-delete, audit-preserving).
+ *
+ * Nothing existing → zero deletes, no POST, no throw. This is NOT the #264
+ * ban's territory: that ruling forbids DELETE as part of the OVERWRITE
+ * choreography (where a failed delete leaves a phantom duplicate). Here the
+ * delete IS the operation, so a failure leaves the OLD value intact and
+ * throws — never a half-cleared, never a type-invalid, property.
+ */
+export async function clearEntityProperty(
+	cfg: { db: string; token: string },
+	entityId: string,
+	prop: string,
+	fetchImpl: typeof fetch = fetch,
+	label = 'clearEntityProperty'
+): Promise<void> {
+	const getRes = await entuFetch(cfg.db, `entity/${entityId}?props=${prop}`, cfg.token, {}, fetchImpl);
+	if (!getRes.ok) throw new Error(`${label} lookup failed: ${getRes.status}`);
+	const body = (await getRes.json()) as { entity?: Record<string, Array<{ _id: string }>> };
+	const existing = body.entity?.[prop] ?? [];
+
+	for (const v of existing) {
+		const delRes = await entuFetch(cfg.db, `property/${v._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+		if (!delRes.ok) throw new Error(`${label} delete failed: ${delRes.status}`);
+	}
+}
+
 // (*MVOX:Palestrina* — #165 review F5)
 // (*MVOX:Palestrina* — #264 GREEN: atomic overwrite-POST, extras-only sweep)
+// (*MVOX:Josquin* — #268 review F1: clearEntityProperty, the removal path)

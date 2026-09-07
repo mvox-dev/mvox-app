@@ -23,7 +23,7 @@
 //      recoverable duplicate, never an empty property. The NORMAL path
 //      (zero or one existing value) issues ZERO deletes.
 import { describe, expect, it, vi } from 'vitest';
-import { replaceEntityProperty } from './replaceProperty';
+import { replaceEntityProperty, clearEntityProperty } from './replaceProperty';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
@@ -172,5 +172,70 @@ describe('replaceEntityProperty — atomic overwrite (#264)', () => {
 	});
 });
 
+describe('clearEntityProperty — the REMOVAL path (#268 review F1)', () => {
+	it('ONE existing value: GET, then DELETE /property/{id} — and NEVER a POST (an empty typed slot is not a writable value)', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValueOnce(json({ entity: { _id: 'e-1', birthdate: [{ _id: 'v-dob' }] } }))
+			.mockResolvedValue(json({ deleted: true }));
+
+		await clearEntityProperty(cfg, 'e-1', 'birthdate', fetchImpl);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(2);
+		expect(urls(fetchImpl)[0]).toContain('/testdb/entity/e-1?props=birthdate');
+		expect(methods(fetchImpl)[1]).toBe('DELETE');
+		expect(urls(fetchImpl)[1]).toContain('/testdb/property/v-dob');
+		// The whole point: no POST, so no `datetime: ""` can reach the wire.
+		expect(methods(fetchImpl)).not.toContain('POST');
+	});
+
+	it('SEVERAL existing values (corrupted state): every one is removed — a clear that leaves a value behind is not a clear', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValueOnce(
+				json({ entity: { _id: 'e-1', birthdate: [{ _id: 'v-a' }, { _id: 'v-b' }] } })
+			)
+			.mockResolvedValue(json({ deleted: true }));
+
+		await clearEntityProperty(cfg, 'e-1', 'birthdate', fetchImpl);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
+		expect(urls(fetchImpl)[1]).toContain('/property/v-a');
+		expect(urls(fetchImpl)[2]).toContain('/property/v-b');
+	});
+
+	it('nothing stored → zero deletes, zero POSTs, no throw (clearing an already-empty property is a no-op)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValueOnce(json({ entity: { _id: 'e-1' } }));
+
+		await clearEntityProperty(cfg, 'e-1', 'birthdate', fetchImpl);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(methods(fetchImpl)).not.toContain('DELETE');
+		expect(methods(fetchImpl)).not.toContain('POST');
+	});
+
+	it('a failed lookup throws and DELETES NOTHING', async () => {
+		const fetchImpl = vi.fn().mockResolvedValueOnce(json({ error: 'nope' }, 500));
+		await expect(clearEntityProperty(cfg, 'e-1', 'birthdate', fetchImpl)).rejects.toThrow(/500/);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it('a failed DELETE throws — the old value survives, never a half-cleared property', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValueOnce(json({ entity: { _id: 'e-1', birthdate: [{ _id: 'v-dob' }] } }))
+			.mockResolvedValueOnce(json({ error: 'forbidden' }, 403));
+		await expect(clearEntityProperty(cfg, 'e-1', 'birthdate', fetchImpl)).rejects.toThrow(/403/);
+	});
+
+	it("the `label` prefixes thrown messages, same as the overwrite path", async () => {
+		const fetchImpl = vi.fn().mockResolvedValueOnce(json({ error: 'nope' }, 500));
+		await expect(
+			clearEntityProperty(cfg, 'e-1', 'birthdate', fetchImpl, 'updateMemberRecord')
+		).rejects.toThrow(/updateMemberRecord lookup failed: 500/);
+	});
+});
+
 // (*MVOX:Palestrina* — #165 review F5)
 // (*MVOX:Tallis* — #264 RED: atomic overwrite, extras-only sweep)
+// (*MVOX:Josquin* — #268 review F1: clearEntityProperty, the removal path)

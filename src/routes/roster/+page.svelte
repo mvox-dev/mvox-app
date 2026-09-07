@@ -20,6 +20,14 @@
 		listDeactivateBlockers,
 		type DeactivateBlocker
 	} from '$lib/roster/memberLifecycle';
+	import {
+		loadMemberRecord,
+		createMemberRecord,
+		updateMemberRecord,
+		MemberRecordPartialSaveError,
+		type MemberRecordLookup,
+		type MemberRecord
+	} from '$lib/roster/memberRecord';
 	import { resolveMyLibraryId } from '$lib/library/librarianStore';
 	import { listSections, groupBySection, type SectionNode, type SectionGroup } from '$lib/sections/sectionData';
 	import {
@@ -115,6 +123,23 @@
 			pendingDeactivateId = null;
 			deactivateRefusal = null;
 			deactivateActionError = null;
+			// #268 — same reasoning as the deactivate trio above: an open editor,
+			// a mid-flight save, or a stale save error all describe a row the next
+			// tree may not even contain (or a rewritten `_id`). Reset unconditionally
+			// on EVERY load, not just an actual switch (matching `reorderStatus`/
+			// `removeStatus`/`pageCreateStatus`/`renameStatus` above, and unlike the
+			// isSwitch-gated inactive-panel trio below): the record editor is a
+			// per-row transient exactly like the deactivate confirm/refusal it sits
+			// beside, not data keyed to the tree's identity.
+			recordEditorMemberId = null;
+			recordEditorLookup = null;
+			recordSaveError = null;
+			// #268 review F3 — `recordSavingMemberId` is deliberately NOT reset
+			// here. It names a write that is genuinely still in flight; clearing it
+			// from a path that knows nothing about that write is exactly the defect
+			// this scope fixes. The save's own `finally` clears it (and only when it
+			// still names that save's row), so it self-heals on settle.
+			recordStatus = '';
 			// #255 review r3 F2 — the inactive panel is the one surface this function
 			// does NOT re-derive, so without this a switch left collective A's inactive
 			// members rendered under B's roster, each with a live Reinstate button
@@ -957,6 +982,274 @@
 			deactivateActionError = { memberId, kind: 'reinstate' };
 		} finally {
 			reinstatePending = null;
+		}
+	}
+
+	// ── #268 — admin member records: the in-row editor (real name, phone,
+	// email, date of birth). Release ruling (2026-09-07): in-row expansion,
+	// roster only, "labels as proposed". ONE editor open at a time — a single
+	// top-level `recordEditorMemberId` (not per-row state) makes that true by
+	// construction: opening a second row's editor overwrites it, and the
+	// FIRST row's `{#if recordEditorMemberId === row.memberId}` guard in
+	// `memberRow` stops rendering its fields on the very next tick, before
+	// the new row's lookup even resolves.
+	//
+	// PREFILL (R4, ruling 2026-09-07 correction) — `name` and `email` prefill
+	// from the ROW, never a fresh `resolveField`/`listMyProfiles` call: `row.name`
+	// IS the roster's own domain-or-public scan (rosterData.ts's `toRosterRow`,
+	// never private-tier) and `row.email` IS already `resolveField`'s
+	// narrower-wins result — both computed once at roster-load time. Re-deriving
+	// either here would be redundant AND, for name, dangerous: a naive
+	// `resolveField('name', …)` prefers private-first and would promote a
+	// member's private-tier name into the domain-shared record on save (the
+	// #28/#58 leak class this ruling exists to close). Phone/date of birth have
+	// no profile source at all — they simply start empty.
+	let recordEditorMemberId = $state<string | null>(null);
+	let recordEditorLookup = $state<MemberRecordLookup | null>(null);
+	let recordForm = $state<{ name: string; phone: string; email: string; birthdate: string }>({
+		name: '',
+		phone: '',
+		email: '',
+		birthdate: ''
+	});
+	/** #268 review F3 — the in-flight guard is ROW-SCOPED, not a bare boolean:
+	 *  it names the member whose save is running, and ONLY that save's own
+	 *  `finally` may clear it. A plain boolean was clearable by paths that knew
+	 *  nothing about which row was writing (opening another row's editor, a
+	 *  superseded save's finally, a roster reload), which could re-enable a save
+	 *  control while its write was still in flight — and replaceProperty.ts's
+	 *  header states plainly that the calling surface's single-flight guard is
+	 *  now the ONLY thing standing between a double-fire and a duplicate value.
+	 *  Non-null therefore means "a member-record write is in flight somewhere":
+	 *  every editor's save is refused (and shown disabled) until it settles. */
+	let recordSavingMemberId = $state<string | null>(null);
+	type RecordSaveError =
+		| { memberId: string; kind: 'failed' }
+		| { memberId: string; kind: 'partial'; savedFields: string[] }
+		// #268 review F2 — the required-name refusal. `required` on the input is
+		// inert here (the editor is not wrapped in a <form> and the save control
+		// is a type="button" with an onclick), so the gate lives in the save
+		// handler and reports through this same slot.
+		| { memberId: string; kind: 'name-required' };
+	let recordSaveError = $state<RecordSaveError | null>(null);
+	// #268 (E) — the fifth sr-only role="status" region's text, same contract as
+	// `reorderStatus`/`removeStatus`/`pageCreateStatus`/`renameStatus` above.
+	let recordStatus = $state('');
+	/** The loaded record's field values, R4's "independent from the moment a
+	 *  record exists" baseline — `updateMemberRecord` is sent ONLY the fields
+	 *  that differ from this. Read at save time only, never drives a render
+	 *  (same non-`$state` idiom as `currentCfg`). `null` on the lazy-create
+	 *  path (no baseline to diff against — every save there is a create). */
+	let recordEditorOriginal: { name: string; phone: string; email: string; birthdate: string } | null =
+		null;
+
+	const RECORD_FIELD_LABEL: Record<'name' | 'phone' | 'email' | 'birthdate', () => string> = {
+		name: m.roster_record_name_label,
+		phone: m.roster_record_phone_label,
+		email: m.roster_record_email_label,
+		birthdate: m.roster_record_birthdate_label
+	};
+
+	/** Pencil tap: (re)loads the ONE db-scoped record lookup for `row` and opens
+	 *  its editor in place — closing whichever row's editor was open before (see
+	 *  module doc above). Db-scoped generation guard (#259): a collective switch
+	 *  mid-load must write nothing from a stale settle. */
+	async function openRecordEditor(row: RosterRow): Promise<void> {
+		const cfg = currentCfg;
+		if (!cfg) return;
+		const memberId = row.memberId;
+		recordEditorMemberId = memberId;
+		recordEditorLookup = null;
+		recordSaveError = null;
+		// #268 review F3 — NOT cleared here: opening another row cannot cancel a
+		// write already in flight, and pretending otherwise re-enables a save
+		// button whose POST has not landed.
+		recordEditorOriginal = null;
+		recordForm = { name: '', phone: '', email: '', birthdate: '' };
+		const g = routeLoad.generation;
+		try {
+			const result = await loadMemberRecord(cfg, row.personId);
+			// Superseded by a collective switch, or by opening a DIFFERENT row's
+			// editor while this lookup was in flight — either way, a stale settle
+			// writes nothing.
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
+			recordEditorLookup = result;
+			if (result.state === 'none') {
+				// First open, no record yet (R4) — prefill from the ROW (see module
+				// doc): name/email from the roster's own resolution, phone/date of
+				// birth start empty (the profile holds neither).
+				recordForm = { name: row.name, phone: '', email: row.email, birthdate: '' };
+			} else if (result.state === 'one') {
+				// A record already exists — show THE RECORD, never the profile (R4):
+				// no re-prefill, no merge, a deliberately-cleared field stays cleared.
+				recordForm = {
+					name: result.record.name,
+					phone: result.record.phone,
+					email: result.record.email,
+					birthdate: result.record.birthdate
+				};
+				recordEditorOriginal = { ...recordForm };
+			}
+			// 'damaged' (#264) — no form to prefill; the alert below names the
+			// member and nothing is written.
+		} catch (e) {
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
+			// PRIVACY (memberRecord.ts header) — `e` carries a static message only,
+			// never a field value; safe to log verbatim.
+			console.error('roster: member record load failed', memberId, e);
+			recordEditorMemberId = null;
+		}
+	}
+
+	/** Close-without-save (B): creates nothing, writes nothing. */
+	function cancelRecordEditor(): void {
+		recordEditorMemberId = null;
+		recordEditorLookup = null;
+		recordSaveError = null;
+		// #268 review F3 — same reasoning as `openRecordEditor`: closing the
+		// editor writes nothing and cancels nothing already on the wire.
+		recordEditorOriginal = null;
+	}
+
+	/** Save (E) — server-confirmed, never optimistic: `recordSavingMemberId` disables
+	 *  the control and gates every state write below on the SAME generation +
+	 *  still-open-on-this-row guard `openRecordEditor` uses, so a save that
+	 *  settles after a collective switch (or after the admin opened a
+	 *  different row) writes nothing and announces nothing (#259). Lazy
+	 *  create (no record yet) vs. atomic per-field update (#264) branches on a
+	 *  FRESH lookup taken here, inside the write (review r3 F2) — the cached
+	 *  `recordEditorLookup` only decides whether a save may start at all;
+	 *  update sends ONLY the fields that changed from `recordEditorOriginal`
+	 *  (R4). A `MemberRecordPartialSaveError` that actually landed something
+	 *  (#253) gets its own distinct copy naming those fields; every other
+	 *  failure — including a partial error with an EMPTY landed list — states
+	 *  plainly that nothing was saved. All of them leave the typed values in
+	 *  the form. */
+	async function saveRecordEditor(row: RosterRow): Promise<void> {
+		// Single-flight across the WHOLE surface (review F3): any member-record
+		// write still on the wire refuses the next one, whichever row it belongs
+		// to. The controls render disabled to match, so this is never a silent
+		// no-op.
+		if (recordSavingMemberId !== null) return;
+		const cfg = currentCfg;
+		if (!cfg) return;
+		const lookup = recordEditorLookup;
+		if (!lookup || lookup.state === 'damaged') return;
+		const memberId = row.memberId;
+		recordSaveError = null;
+		// #268 review — a fresh attempt owns the live region too, same discipline
+		// as `armedRemove`/`submitPageCreate`/`startRename` above. Two things break
+		// without it: (1) a SECOND consecutive success reassigns the identical
+		// string, the DOM text never changes, and `aria-live="polite"` announces
+		// nothing; (2) a save that FAILS would leave the previous "Member details
+		// saved." sitting in the status region beside the role="alert" that says
+		// nothing was saved — the #253 lying-banner class, in the accessibility
+		// tree. Cleared BEFORE the required-name gate below so a refusal clears it
+		// too.
+		recordStatus = '';
+		// REQUIRED NAME (review F2) — enforced HERE, where the write happens. The
+		// input's `required` attribute cannot enforce anything: the editor is not
+		// wrapped in a <form> and the save control is a type="button" with an
+		// onclick, so browser constraint validation never runs; and Entu's
+		// `mandatory` prop-def flag is a UI hint, not enforcement. Without this
+		// gate an emptied name writes `{ type: 'name', string: '' }` — and `name`
+		// is the DOMAIN-shared field, so the result is a domain-visible record
+		// with no name at all. Refuse loudly, write NOTHING, and keep the editor
+		// open with everything the admin typed still in it.
+		if (recordForm.name.trim() === '') {
+			recordSaveError = { memberId, kind: 'name-required' };
+			return;
+		}
+		const g = routeLoad.generation;
+		recordSavingMemberId = memberId;
+		try {
+			// #268 review r3 F2 — the one-record-per-person invariant is a
+			// CHECK-THEN-CREATE, and the check belongs to the WRITE, not to the
+			// editor open. Branching on the lookup cached by `openRecordEditor`
+			// meant the create could fire on an arbitrarily stale reading: a retry
+			// after an ambiguous create failure (a dropped connection after the
+			// POST, or the 2xx-carrying-no-`_id` apparent-success trap the data
+			// layer throws on) issued a SECOND create, and two admins with editors
+			// open on the same pre-record member both took the create branch. The
+			// product of either is `state: 'damaged'` — the one state #264 forbids
+			// the app to repair. So the branch below reads the db again, HERE,
+			// inside the single-flight guard.
+			const fresh = await loadMemberRecord(cfg, row.personId);
+			// The re-read is a second suspension point: everything
+			// `openRecordEditor` guards against can happen across it too (a
+			// collective switch, the admin opening another row), so the same
+			// generation + still-open-on-this-row pair is re-checked before any
+			// write — not just before the state writes further down.
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
+			if (fresh.state === 'damaged') {
+				// #264 — the duplicate we were racing already exists. Write NOTHING,
+				// repair NOTHING: hand the row's lookup to the damaged alert (which
+				// replaces the form) and leave the typed values untouched in
+				// `recordForm`.
+				recordEditorLookup = fresh;
+				return;
+			}
+			if (fresh.state === 'none') {
+				const dbEntityId = row.dbEntityId ?? currentDbEntityId;
+				if (!dbEntityId) {
+					throw new Error(`roster: cannot resolve the database entity id for member ${memberId}`);
+				}
+				await createMemberRecord(cfg, {
+					dbEntityId,
+					personId: row.personId,
+					name: recordForm.name,
+					phone: recordForm.phone,
+					email: recordForm.email,
+					birthdate: recordForm.birthdate
+				});
+			} else {
+				// The record id comes from the FRESH read, never from the cached
+				// lookup — on the create-turned-update path there is no cached id at
+				// all. `recordEditorOriginal` is null there too, and the empty
+				// baseline it falls back to makes the diff send exactly the non-empty
+				// fields — the same set `createMemberRecord` would have sent, so a
+				// field the admin left empty never overwrites a value this editor
+				// never saw.
+				const original = recordEditorOriginal ?? { name: '', phone: '', email: '', birthdate: '' };
+				const changes: Partial<Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate'>> = {};
+				if (recordForm.name !== original.name) changes.name = recordForm.name;
+				if (recordForm.phone !== original.phone) changes.phone = recordForm.phone;
+				if (recordForm.email !== original.email) changes.email = recordForm.email;
+				if (recordForm.birthdate !== original.birthdate) changes.birthdate = recordForm.birthdate;
+				await updateMemberRecord(cfg, fresh.record._id, changes);
+			}
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return; // superseded — write nothing
+			recordEditorMemberId = null;
+			recordEditorLookup = null;
+			recordEditorOriginal = null;
+			recordStatus = m.roster_record_saved();
+		} catch (e) {
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return; // stale failure — write nothing
+			if (e instanceof MemberRecordPartialSaveError) {
+				console.error('roster: member record save incomplete', memberId, e.failedField);
+				// #268 review r3 F1 — `landedFields` is EMPTY whenever the FIRST
+				// attempted field failed, which is the commonest failure there is (a
+				// single-field update whose one write 500s). Routing that to the
+				// partial copy renders "saved: " with nothing after it — a broken
+				// sentence claiming a write that never happened, the #253 lying-banner
+				// class this branch exists to prevent. Only a NON-empty landed list
+				// earns the partial message; an empty one is a plain failure, and the
+				// plain failure copy is the one that says nothing was saved.
+				recordSaveError =
+					e.landedFields.length > 0
+						? { memberId, kind: 'partial', savedFields: e.landedFields }
+						: { memberId, kind: 'failed' };
+			} else {
+				// PRIVACY — `e`'s message is a static string + status code only
+				// (createMemberRecord/updateMemberRecord's own contract); safe to log.
+				console.error('roster: member record save failed', memberId, e);
+				recordSaveError = { memberId, kind: 'failed' };
+			}
+		} finally {
+			// Review F3 — clear the guard ONLY while it still names this save. A
+			// superseded save (collective switch, another row opened) must not free
+			// a control on behalf of a write it does not own.
+			if (recordSavingMemberId === memberId) recordSavingMemberId = null;
 		}
 	}
 
@@ -2684,6 +2977,135 @@
 		{#if showSection && rowSectionNames.length > 0}
 			<span data-testid="roster-row-section" class="text-xs text-ink-2">{rowSectionNames.join(', ')}</span>
 		{/if}
+		{#if admin === 'admin'}
+			<!-- #268 — the admin member-record editor. Whole-block gated on `admin`
+			     alone: the contract has NO self-row exclusion (unlike the deactivate
+			     block below, which never lets an admin act on her own row), so the
+			     pencil renders on EVERY row including the admin's own — deliberately
+			     not copy-pasting the `row.personId !== selected?.personId` guard. -->
+			<div>
+				<!-- #262 lesson: the accessible name is content-derived (sr-only
+				     action label + the row's own name), NEVER a templated aria-label
+				     — an aria-label would compute the SAME literal text for every row
+				     (a static i18n string has no room for `{name}`), leaving a
+				     screen reader unable to tell rows' pencils apart. -->
+				<button
+					type="button"
+					data-testid="roster-row-record-edit-{row.memberId}"
+					class="group flex items-center gap-1 rounded-md border border-transparent px-1 py-0.5 text-xs text-ink-2 hover:border-ink-4 hover:text-ink"
+					onclick={() => openRecordEditor(row)}
+				>
+					<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
+					<span class="sr-only">{m.roster_record_edit_label()} {row.name}</span>
+				</button>
+				{#if recordEditorMemberId === row.memberId}
+					{#if recordEditorLookup?.state === 'damaged'}
+						<!-- (D) #264 — damaged data: loud, names the member, refuses to
+						     guess. No form renders; nothing is ever written from here. -->
+						<p
+							data-testid="roster-record-damaged-{row.memberId}"
+							role="alert"
+							class="mt-1 text-xs text-red-700"
+						>
+							{m.roster_record_damaged({ name: row.name })}
+						</p>
+					{:else if recordEditorLookup !== null}
+						<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
+						     this <li>, not a dialog/drawer/overlay. -->
+						<div class="mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2">
+							<label class="flex flex-col gap-1 text-xs">
+								{m.roster_record_name_label()}
+								<input
+									type="text"
+									required
+									data-testid="roster-record-name"
+									bind:value={recordForm.name}
+									disabled={recordSavingMemberId !== null}
+									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+								/>
+							</label>
+							<label class="flex flex-col gap-1 text-xs">
+								{m.roster_record_phone_label()}
+								<input
+									type="tel"
+									data-testid="roster-record-phone"
+									bind:value={recordForm.phone}
+									disabled={recordSavingMemberId !== null}
+									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+								/>
+							</label>
+							<label class="flex flex-col gap-1 text-xs">
+								{m.roster_record_email_label()}
+								<input
+									type="email"
+									data-testid="roster-record-email"
+									bind:value={recordForm.email}
+									disabled={recordSavingMemberId !== null}
+									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+								/>
+							</label>
+							<label class="flex flex-col gap-1 text-xs">
+								{m.roster_record_birthdate_label()}
+								<!-- #207 — the platform's OWN date picker, never a custom
+								     calendar. -->
+								<input
+									type="date"
+									data-testid="roster-record-birthdate"
+									bind:value={recordForm.birthdate}
+									disabled={recordSavingMemberId !== null}
+									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+								/>
+							</label>
+							<div class="flex items-center gap-2">
+								<button
+									type="button"
+									data-testid="roster-record-save"
+									disabled={recordSavingMemberId !== null}
+									class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
+									onclick={() => saveRecordEditor(row)}
+								>
+									{m.roster_record_save()}
+								</button>
+								<!-- Review F3 — cancel stays live while ANOTHER row's write is in
+								     flight: closing this editor writes nothing and cancels nothing
+								     already on the wire, so trapping the admin behind an unrelated
+								     save would be worse than useless. -->
+								<button
+									type="button"
+									data-testid="roster-record-cancel"
+									disabled={recordSavingMemberId === row.memberId}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+									onclick={cancelRecordEditor}
+								>
+									{m.roster_record_cancel()}
+								</button>
+							</div>
+							{#if recordSaveError?.memberId === row.memberId}
+								<!-- (E) failure tells the truth (#253): a plain failure says
+								     nothing was saved; a MemberRecordPartialSaveError gets its
+								     OWN copy naming exactly which fields landed — never the
+								     all-or-nothing message, and never a field VALUE. Typed
+								     values stay in the inputs above either way (they're
+								     `bind:value`d to `recordForm`, untouched by either branch). -->
+								<p data-testid="roster-record-save-error" role="alert" class="text-xs text-red-700">
+									{#if recordSaveError.kind === 'partial'}
+										{m.roster_record_save_partial({
+											saved: recordSaveError.savedFields
+												.map((f) => RECORD_FIELD_LABEL[f as keyof typeof RECORD_FIELD_LABEL]())
+												.join(', ')
+										})}
+									{:else if recordSaveError.kind === 'name-required'}
+										{m.roster_record_name_required()}
+									{:else}
+										{m.roster_record_save_failed()}
+									{/if}
+								</p>
+							{/if}
+						</div>
+					{/if}
+				{/if}
+			</div>
+		{/if}
 		{#if admin === 'admin' && !sectionsError}
 			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. The
 			     picker's option list would hold only "(Unassigned)" (its sole reachable
@@ -2955,6 +3377,19 @@
 			class="sr-only"
 		>
 			{renameStatus}
+		</div>
+
+		<!-- #268 — the member-record editor's save result, same contract as the
+		     four regions above: mounted from first render, visually hidden. Only
+		     the SUCCESS text lands here; a failed/partial save is a role="alert"
+		     (`roster-record-save-error`), not a status. -->
+		<div
+			data-testid="roster-member-record-status"
+			role="status"
+			aria-live="polite"
+			class="sr-only"
+		>
+			{recordStatus}
 		</div>
 
 		{#if status === 'no-collective'}
