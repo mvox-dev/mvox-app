@@ -45,21 +45,28 @@
 // as editionFiles.ts's phantom-cleanup path.
 //
 // Mirrors src/lib/library/editionFiles.ts's own wire contract exactly —
-// re-read at the merged 93f0b15 (fix round changed the reconciliation
-// internals only: returned properties are now matched to local files by
-// filename+filesize instead of zipped by position, because entu-www never
-// guarantees ordering or count; irrelevant to this smoke's single file,
-// where positional and reconciled matching are the same thing). Wire shape
-// itself unchanged: step 1 is ONE POST entity/{editionId} carrying
-// `{type:'file', filename, filesize, filetype}` (append idiom, no
-// _type/_parent/_sharing — an append to an EXISTING entity); step 2 PUTs
-// bytes to the returned upload.url using EXACTLY the four returned
-// headers, through raw fetch (never entuFetch, which would prepend
-// ENTU_API_BASE and smuggle Authorization/Accept onto a signed URL whose
-// signature covers exactly those four); step 3 GETs property/{id} for a
-// fresh (60s-TTL) download URL and round-trips the bytes; step 4 is
-// cleanup on the FAILURE path only — DELETE property/{id}, same as the
-// app's own phantom-cleanup path.
+// re-read at the merged deee271 (the #275 fix round, grounded on THIS
+// script's own envelope diagnostic:
+// scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
+// 2026-09-07T23-13-25-163Z.json). STEP-1 PARSING CORRECTED: the real
+// response is `{_id, properties: [...]}`, a FLAT ARRAY of property
+// objects — matching NEITHER doc example (not quickstart.md's
+// object-keyed-by-type shape, not files/index.md's bare single object).
+// The original version of this script (and editionFiles.ts pre-fix) read
+// `body.properties?.file?.[0]`, which is always undefined against an
+// array — that mismatch is exactly what threw "no properties.file[0]" on
+// the first live run. Now: `body.properties` is typed `unknown` until an
+// `Array.isArray` check, then filtered by `isFileEntry` (type==='file' +
+// string _id), same predicate as editionFiles.ts's fix. Everything else
+// unchanged: step 1 is ONE POST entity/{editionId} carrying `{type:'file',
+// filename, filesize, filetype}` (append idiom, no _type/_parent/_sharing
+// — an append to an EXISTING entity); step 2 PUTs bytes to the returned
+// upload.url using EXACTLY the four returned headers, through raw fetch
+// (never entuFetch, which would prepend ENTU_API_BASE and smuggle
+// Authorization/Accept onto a signed URL whose signature covers exactly
+// those four); step 3 GETs property/{id} for a fresh (60s-TTL) download
+// URL and round-trips the bytes; step 4 is cleanup on the FAILURE path
+// only — DELETE property/{id}, same as the app's own phantom-cleanup path.
 //
 // Synthetic db, routine-ops pre-authorized — but per the standing
 // two-step gate, live mutation here STILL waits for team-lead's explicit
@@ -91,15 +98,27 @@ interface UploadObject {
 	method: string;
 	headers: Record<string, string | number>;
 }
+// mvox-app#275 — mirrors editionFiles.ts's corrected contract at deee271
+// exactly (fix-round, grounded on THIS script's own live-captured envelope,
+// scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
+// 2026-09-07T23-13-25-163Z.json): `properties` is a FLAT ARRAY, typed
+// `unknown` until checked — matches neither doc example, that was the bug.
 interface StepOnePropertyEntry {
 	_id: string;
-	filename: string;
-	filesize: number;
-	filetype: string;
-	upload: UploadObject;
+	type: string;
+	filename?: string;
+	filesize?: number;
+	filetype?: string;
+	upload?: UploadObject;
 }
 interface StepOneResponseBody {
-	properties?: { file?: StepOnePropertyEntry[] };
+	_id?: string;
+	properties?: unknown;
+}
+function isFileEntry(value: unknown): value is StepOnePropertyEntry {
+	if (typeof value !== 'object' || value === null) return false;
+	const entry = value as Partial<StepOnePropertyEntry>;
+	return entry.type === 'file' && typeof entry._id === 'string';
 }
 
 /** Resolve a type-def id by name, under the "entity" meta-type (v4E canonical
@@ -211,8 +230,11 @@ async function main(): Promise<void> {
 		});
 		if (!postRes.ok) throw new Error(`step-1 metadata POST failed: ${postRes.status}`);
 		const postBody = (await postRes.json()) as StepOneResponseBody;
-		const entry = postBody.properties?.file?.[0];
-		if (!entry) throw new Error('step-1 POST returned 2xx with no properties.file[0] — apparent-success trap');
+		if (!Array.isArray(postBody.properties)) {
+			throw new Error(`step-1 POST returned 2xx but properties is not an array — apparent-success trap; raw: ${JSON.stringify(postBody)}`);
+		}
+		const entry = postBody.properties.filter(isFileEntry)[0];
+		if (!entry || !entry.upload) throw new Error(`step-1 POST returned 2xx but no usable file entry with upload — apparent-success trap; raw: ${JSON.stringify(postBody)}`);
 		console.log(`step 1 OK: property ${entry._id}, upload.url minted, method=${entry.upload.method}, headers=${JSON.stringify(Object.keys(entry.upload.headers))}`);
 		ledger.push({ step: 'step-1-metadata-post', outcome: 'created', propertyId: entry._id, uploadMethod: entry.upload.method, uploadHeaderKeys: Object.keys(entry.upload.headers) });
 
