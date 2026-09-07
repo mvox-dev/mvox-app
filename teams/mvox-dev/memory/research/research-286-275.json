@@ -1,0 +1,213 @@
+{
+ "_meta": "research for #286+#275, run wf_6b2d7ca0-694 2026-09-07 23:08. (*MVOX:Palestrina*)",
+ "s286": {
+  "findings": [
+   {
+    "title": "(a) Deactivate armed pair today: no disabled/aria-busy wiring; arm flag survives BOTH reads+write, but disarms itself on every outcome except success-in-progress",
+    "severity": "blocking",
+    "files": [
+     "src/routes/roster/+page.svelte"
+    ],
+    "detail": "Render block for the pair is roster/+page.svelte:3283-3347. Confirm button (testid `member-deactivate-confirm-{memberId}`) at 3290-3299 and cancel (testid `member-deactivate-cancel-{memberId}`) at 3300-3307 carry NO `disabled` and NO `aria-busy` attribute at all — unlike #273's fixed section-remove pair (which binds both to `structuralWritePending`, confirm also `aria-busy={removePending}`). State: `pendingDeactivateId` (780, single $state slot — only one row armed at once), `deactivateRefusal` (781), `deactivatePending` (782), `deactivateActionError` (792-794). `armDeactivate` (796-802) sets `pendingDeactivateId`, clears refusal/error, focuses confirm. `disarmDeactivate` (804-808) unconditionally nulls `pendingDeactivateId` — no guard on `deactivatePending` at all, so a cancel click mid-flight (during the two awaited reads `resolveMyLibraryId`/`listDeactivateBlockers` at 845-846, or during the `deactivateMember` write at 852) immediately swaps the row back to the plain trigger button while the write is still travelling — the exact 'looks cancelled, isn't' lie the issue names. `handleDeactivateConfirm` (813-899): entry guard `if (deactivatePending) return` (814) stops a second confirm CALL from re-entering but does not disable the button, so a second physical tap still reaches the handler and is silently no-op'd rather than visibly blocked. Crucially: `pendingDeactivateId` DOES already stay set through both awaited reads and the write in the non-cancelled path (799→845→846→852 all run before any null-assignment) — so unlike #273's PRE-fix bug, the arm flag is already read-honest by default. What breaks it is disarm-on-outcome: refusal branch (847-851) sets `deactivateRefusal` then nulls `pendingDeactivateId` at 849 in the SAME synchronous block; failure catch (888-898) nulls `pendingDeactivateId` at 894 THEN sets `deactivateActionError` at 895. Both alerts render purely by memberId match — `deactivateRefusal?.memberId === row.memberId` (3319) and `deactivateActionError?.memberId === row.memberId && kind==='deactivate'` (3335) — NEITHER checks `pendingDeactivateId`. So on EVERY refusal and EVERY failure, by construction (not just via a cancel race), the row is disarmed back to the plain trigger button at the exact moment the alert appears next to it — this already violates done-when 'An error or refusal cannot surface against a row the admin has disarmed', independent of any cancel click. Success path nulls at 853 before the `loadForSelected()` refetch removes the row entirely (854-887)."
+   },
+   {
+    "title": "(b) #273's merged pattern to mirror, exact shape at 2ca0f87 (roster/+page.svelte)",
+    "severity": "info",
+    "files": [
+     "src/routes/roster/+page.svelte",
+     "src/routes/page.roster-arrange-crud.spec.ts"
+    ],
+    "detail": "Commit 2ca0f87 (`fix(#273): roster section-delete armed confirm/cancel wired for the in-flight write`). Key shape: `pendingRemoveId` now clears on the SUCCESS path only (in `handleRemoveSection`, after the now-pessimistic `deleteSection` await resolves) and is left SET on every failure/refusal path including the early `if (structuralWritePending) return` guard and the `!cfg` bail-out — the armed pair stays mounted next to the error for direct retry (agenda's `onSeasonManageSeriesDelete` lifecycle). The tree mutation (`sections = removeSectionNode(...)`) moved from BEFORE the `await deleteSection(...)` to the success branch AFTER it — this pessimistic-write change is what keeps the row (and its armed pair) on screen for the whole write instead of vanishing with an optimistic update. Render site: both confirm and cancel bind `disabled={structuralWritePending}` (the same page-wide guard already on the ✕ trigger, not a bespoke pending flag) — reasoning given inline (4190-4211): only one row can ever be armed (`pendingRemoveId` single slot) and arming a second is already blocked by the ✕ trigger's own `structuralWritePending` disable, so no dedicated pending-id was needed. Confirm alone additionally carries `aria-busy={removePending}` — this row's own write specifically, not the page-wide flag. `disarmRemove` (1354-1370ish) and `placeFocusAfterFailedRemove` share a new `focusableByTestId` helper that steps OVER a disabled candidate rather than stopping the `??` chain on a present-but-disabled element (WCAG 2.4.3 landing fix). Spec shapes added in page.roster-arrange-crud.spec.ts (302 lines added): a deterministic held-promise idiom for `deleteSection` (mock returns a promise whose resolve/reject is captured and released manually), the codebase's first cancel-mid-flight spec (cancel clicked while the delete promise is held — asserts UI stays armed/disabled, no second delete fires, and nothing implies cancellation), a double-tap spec (second confirm click while pending is a no-op), and focus-landing specs distinguishing success vs failure landing targets."
+   },
+   {
+    "title": "(c) Existing deactivate specs — one is load-bearing on the OLD (disarm-on-failure) behavior and will break under the #273-mirrored fix; the rest are compatible or untouched",
+    "severity": "notable",
+    "files": [
+     "src/routes/page.roster-deactivate.spec.ts"
+    ],
+    "detail": "File: src/routes/page.roster-deactivate.spec.ts (891 lines). 'cancel disarms — the arm control returns, still nothing written' (205-217) clicks cancel with NO write in flight (never taps confirm first) — unaffected by adding a `deactivatePending` disabled guard, since disarm-while-idle must still work. 'confirm calls deactivateMember...and refetches' (219-232) exercises only the success path — unaffected, since success still nulls `pendingDeactivateId` under either design. The five refusal/fail-closed specs (236-253, 255-267, 276-297, 304-323, 327-337) and the two fail-loud specs (549-566, 568-581) assert only that the correct alert testid appears and that `deactivateMember`/downstream calls did-or-didn't fire — none of them assert the arm/disarm state of `pendingDeactivateId` after the failure, so they will likely keep PASSING unchanged even if the fix flips failure to stay-armed (a real gap: they don't currently PIN the disarm-on-failure behavior the issue wants removed, so RED work should ADD assertions here for done-when 5, not just rely on existing green). The one spec that DOES depend on today's disarm-on-failure semantics and WILL break: 're-arming the confirm clears a previous failure alert — it is about the tap that just failed, not the row' (583-598). After a rejected `deactivateMember`, it clicks the PLAIN TRIGGER button `member-deactivate-m2` (594) to re-arm and clear the error — that trigger only exists post-failure because current code nulls `pendingDeactivateId` in the catch (894). Under the #273-mirrored fix (armed pair stays mounted on failure, confirm re-enabled for direct retry), `member-deactivate-m2` will not be present after a failure — only `member-deactivate-confirm-m2`/`-cancel-m2` will be, still armed. This spec's premise must change to either retry via CONFIRM again or explicit cancel-then-rearm. All reinstate-path specs (383-436, 600-633) and #259 collective-switch race specs (664-891) use the separate `reinstatePending` mechanism and `loadInactiveRoster` generation guard — untouched by this issue's scope (deactivate pair only, per the issue's own fence)."
+   },
+   {
+    "title": "(d) deactivatePending is NOT part of structuralWritePending — it is a fully independent single-boolean flag scoped to this row's own write",
+    "severity": "notable",
+    "files": [
+     "src/routes/roster/+page.svelte"
+    ],
+    "detail": "`structuralWritePending` is `$derived(reorderPending || renamePending || removePending)` at roster/+page.svelte:2259 — purely the section-STRUCTURE write invariant (reorder/rename/remove), used ~15 places (1474, 1964, 2087, 2262, 2291, 2564, 2734, 3934/3938/3989, 4025, 4145, 4164, 4218/4229/4248) including as the disabled binding #273 chose for the section-remove armed pair. `deactivatePending` (780) is a separate `$state(false)` used only inside `handleDeactivateConfirm`'s own re-entry guard (814) and its `finally` reset (897) — it is never referenced by `structuralWritePending` or vice versa, and member deactivation is not a section-structural write, so folding it into `structuralWritePending` would be the wrong invariant (it would block/be-blocked-by unrelated section reorders/renames and vice versa with no shared reason). The natural disabled/aria-busy invariant for THIS pair is `deactivatePending` itself — exactly mirroring the page's existing `reinstatePending`-gated `member-reinstate-{id}` button (941-989, spec-pinned at page.roster-deactivate.spec.ts:408-436) which already uses its own dedicated pending flag rather than `structuralWritePending`. One related gap worth naming for the RED work: `armDeactivate` (796) currently has no guard preventing arming a DIFFERENT row while `deactivatePending` is true for another — since `pendingDeactivateId` is a single slot, re-arming a different row mid-flight silently orphans the in-flight row's UI back to its plain trigger exactly like an unguarded cancel would, so the trigger button (`member-deactivate-{memberId}` at 3311) likely also needs `disabled={deactivatePending}` (or an entry guard in `armDeactivate`) to close that second vector of the same lie, alongside the confirm/cancel pair itself."
+   },
+   {
+    "title": "(e) No third armed confirm/cancel pair exists on roster/+page.svelte — only section-remove (fixed, #273) and member-deactivate (this issue)",
+    "severity": "info",
+    "files": [
+     "src/routes/roster/+page.svelte"
+    ],
+    "detail": "Grepped every arm/disarm-shaped function and every `-confirm-`/`-cancel-` testid in the file. Only two arm/disarm function pairs exist: `armRemove`/`disarmRemove` (1323, 1354 — section-remove, #273-fixed) and `armDeactivate`/`disarmDeactivate` (796, 804 — member-deactivate, this issue). Two other cancel-labelled controls exist but are NOT armed two-step destructive pairs: `roster-record-cancel` (3192-3200, the record editor's Cancel button beside Save) is a direct-write save/cancel form already correctly wired with `disabled={recordSavingMemberId !== null}` on Save and `disabled={recordSavingMemberId === row.memberId}` on Cancel (3182, 3195) — no arm/confirm step, not the same defect class. `roster-new-section-cancel` (4344) is the inline section-create form's cancel, also a direct-write form, not a two-step confirm. Section rename (`renamingSectionId`, `startRename`/`submitRename`/`cancelRename`, 2261-2356) is an inline single-input edit-then-submit (Enter submits, Escape cancels) rather than a confirm/cancel BUTTON pair — a different UI shape than 'armed pair' as the codebase uses the term (it never gets an `arm`/`disarm` function name). Net: nothing on this page currently fits the issue's 'third armed pair' fence beyond these two; the answer to name on the issue is none, with rename flagged only as a shape worth a separate look if the PO wants it, not as a matching instance."
+   }
+  ]
+ },
+ "s275": {
+  "findings": [
+   {
+    "title": "Repo guard passed — read at HEAD, includes merged #271/#283",
+    "detail": "origin=https://github.com/mvox-dev/mvox-app.git. HEAD=ad0c6c0 (chore memory seam), preceded by b70665b (#283 record editor) and 0fb1853 (#271 create-edition form). Working tree clean. All findings below are read-only observations at this commit.",
+    "severity": "info",
+    "files": []
+   },
+   {
+    "title": "(a) Read layer: EditionFile/Edition shape, and files render on AGENDA rows, not on the /library page itself",
+    "detail": "libraryData.ts:40-45 EditionFile{id,filename,filesize,filetype}; :47-57 Edition.files:EditionFile[] ([] when absent, per doc comment); :59-65 EditionRaw.file raw shape; :67-81 toEdition maps raw.file->files; :90 listEditions and :108 listAllEditions both request `file` in props= query. HOWEVER edition.files is never read/rendered anywhere in src/routes/library/+page.svelte's template — the only occurrence there is `files: []` in an optimistic local insert at line 544. Files DO render today, but on the AGENDA surfaces: src/routes/+page.svelte and src/routes/event/[id]/+page.svelte, via RepertoireElement.svelte's `work-link-pdf` testid (RepertoireElement.svelte:378-388), driven by a SINGLE WorkRow.fileId (repertoire/types.ts:64-68) computed by pickFileId in repertoire/workRows.ts:40-52, which prefers a filetype/filename match for 'pdf' else falls back to files[0].id — i.e. even when an edition carries several files, only one surfaces on the agenda today. #275's 'existing read paths unchanged' done-when bullet is about this PDF-link path, not about anything on /library.",
+    "files": [
+     "src/lib/library/libraryData.ts",
+     "src/routes/library/+page.svelte",
+     "src/lib/repertoire/workRows.ts",
+     "src/lib/repertoire/types.ts",
+     "src/lib/components/agenda/RepertoireElement.svelte"
+    ]
+   },
+   {
+    "title": "(b) Platform-doc upload mechanism (entu-www) — 4 required PUT headers and single-POST-multi-file are NOT stated in the issue body",
+    "detail": "~/projects/entu-www/src/api/files/index.md is the canonical source (per project_entu_platform_docs_location memory). Step 1 (lines 19-55): POST {type,filename,filesize,filetype} to the entity; response is a property object carrying `upload:{url,method:'PUT',headers:{ACL,Content-Disposition,Content-Length,Content-Type}}` — ALL FOUR headers are required on the PUT (line 59: 'using the exact headers returned in the response — all four are required'). Issue #275's body only says 'PUT the bytes directly to that signed URL' with no mention of the header requirement — a material implementation detail an implementer must get from the doc, not the issue. Step 2 (57-70): PUT to upload.url with those headers before the 60s expiry; 'Multiple file properties can be created in ONE POST — each gets its own upload object in the response' (line 70) — this contradicts a naive reading of the issue's 'Repeat step 1 per file': the doc allows a SINGLE POST carrying several file props (one per each({type:'file',...}) entry), not necessarily N separate POSTs. Failure path (72-74, 123-131): 'If the upload URL expires before you complete the S3 PUT, delete the property and start over' via `DELETE /api/{db}/property/{_id}` — this IS the phantom-attachment cleanup #275 demands, and the app already has this exact DELETE-property idiom live (see next finding). Download (76-86): GET /api/{db}/property/{_id} -> {url}, 60s TTL — already implemented (see finding on fileUrls.ts).",
+    "files": []
+   },
+   {
+    "title": "(b-cont) Wire-shape idiom for step 1 already exists in-app: POST entity/{id} appends (sectionActions.ts), NOT the collection-create idiom (entityCreate.ts)",
+    "detail": "The file-attach step 1 (POST metadata to an EXISTING edition entity) is the 'append property to an existing entity' idiom, already established at sectionActions.ts:240-241,255 (`POST entity/{memberId}` with a single new prop; POST appends to multi-valued props, never replaces) and its rollback partner at sectionActions.ts:266,296 (`DELETE property/{value._id}` for stale/failed values). This is a DIFFERENT code path from entityCreate.ts's postCreate (entityCreate.ts:393-429), which always POSTs to the `entity` COLLECTION endpoint to create a brand-new entity (createEdition itself, entityCreate.ts:588-602, only creates the edition — it has no function for attaching a file property to an edition that already exists). An implementer must write a new function following the sectionActions.ts append idiom, not extend entityCreate.ts.",
+    "files": [
+     "src/lib/sections/sectionActions.ts",
+     "src/lib/entity/entityCreate.ts"
+    ]
+   },
+   {
+    "title": "(b-cont) Existing download mechanism confirms the doc, and shows entuFetch is scoped to the Entu API host — S3 PUT must bypass it",
+    "detail": "src/lib/repertoire/fileUrls.ts:25-36 signFileUrl() calls `entuFetch(cfg.db, property/${fileId}, ...)` -> {url}, matching the doc's GET /property/{_id} exactly, and is deliberately called AT CLICK TIME (module doc comment lines 4-18) because the signed url lives only 60s — same pattern src/routes/+page.svelte:1049-1059 handlePdfClick uses (opens a blank tab synchronously before the async sign, to survive popup blockers). Separately, entuFetch (src/lib/entu/request.ts:100-117, entuUrl()) always prepends `ENTU_API_BASE + db` to its path — it can only address the Entu API itself. The signed S3 upload/download URLs returned by Entu are on a foreign S3 host, so the step-2 PUT (and any thumbnail/download redirect) MUST use plain fetch/fetchImpl directly against `upload.url`, never entuFetch — an easy mistake for anyone reusing entuFetch reflexively for 'the next step'.",
+    "files": [
+     "src/lib/repertoire/fileUrls.ts",
+     "src/lib/entu/request.ts",
+     "src/routes/+page.svelte"
+    ]
+   },
+   {
+    "title": "(c) #271 create-edition form is the insertion-context template — testid/idiom map",
+    "detail": "src/routes/library/+page.svelte:1220-1502 is the edition tree + create-edition block. Edition row: `library-edition-{edition.id}` (:1222), toggle `library-edition-toggle-{edition.id}` (:1225), copies region id `library-copies-{edition.id}` (:1239). The #271 create-edition affordance (a SIBLING after the loading/error/empty/list chain, per the code comment at :1395-1402) is librarian-gated at `{#if $librarianStore === 'librarian' && editionNodeStatus.get(work.id) === 'idle'}` (:1403): a button `create-edition-button-{work.id}` (:1408) toggles to a non-modal `role=\"group\"` inline form `create-edition-form-{work.id}` (:1418, explicitly 'NOT role=\"dialog\" — same non-modal inline-form contract as #198's create-work form', comment :1415-1416), fields use `focusOnMount` (:1426) + per-field aria-invalid/aria-describedby wiring to an error paragraph (:1456-1465), submit is disabled while `createEditionPending.has(work.id)` (:1471), and there's a dedicated `aria-live=\"polite\" sr-only` status region `create-edition-status-{work.id}` (:1489-1496) for async result announcement. This whole shape (per-work-id Maps for name/publisher/errors/pending/status, keyed the same way) is the direct template for a per-EDITION file-attach affordance one level down.",
+    "files": [
+     "src/routes/library/+page.svelte"
+    ]
+   },
+   {
+    "title": "(d) Librarian gate idiom — single store, reused verbatim across every write affordance on the page",
+    "detail": "`$librarianStore === 'librarian'` (imported from src/lib/library/librarianStore.ts at +page.svelte:32) is the ONE gate checked before every write control on the page: create-edition button (:1403), inline-checkout select (:1319), return button (:1360). A file-attach control would gate identically.",
+    "files": [
+     "src/routes/library/+page.svelte",
+     "src/lib/library/librarianStore.ts"
+    ]
+   },
+   {
+    "title": "(e) Upload-shaped idioms confirmed absent app-wide",
+    "detail": "grep across all .svelte/.ts under src/ (excluding *.spec.ts) for `type=\"file\"`, `<progress`, and `FileReader` returned zero matches — no file input element, no progress bar, no FileReader usage exists anywhere in the app today. The closest structural analog for an in-flight-write pending/disabled state is the create-edition block's per-workId Maps (`createEditionPending`, `createEditionStatuses`, `createEditionErrors` — all keyed by work.id, +page.svelte ~lines 405-550 region), which an equivalent per-edition-id set of Maps would mirror for upload state.",
+    "files": [
+     "src/routes/library/+page.svelte"
+    ]
+   },
+   {
+    "title": "(f) i18n family naming — established pattern, no file-upload keys exist yet in any locale",
+    "detail": "messages/en.json (4 locale files exist: en/et/lv/uk in messages/) shows the pattern `library_create_<type>_<field-or-action>`: library_create_edition_button/name_label/publisher_label/submit/cancel/name_required/created/error (lines 565-572), mirrored by library_create_work_* (557-564). grep for `library_edition_file`/`library_attach`/`library_upload` across all four locale files returns nothing — no file-upload strings exist yet. The natural extension is a `library_edition_file_*` or `library_attach_file_*` family following this exact shape (button/label/submit/cancel/error/status keys), but that naming choice itself is not yet made anywhere in the codebase.",
+    "files": [
+     "messages/en.json",
+     "messages/et.json",
+     "messages/lv.json",
+     "messages/uk.json"
+    ]
+   }
+  ]
+ },
+ "b275": {
+  "findings": [
+   {
+    "title": "DELETE /property/{id} IS the documented, user-facing cleanup for a failed file upload — team memory calling it \"admin/teardown\" is stale and contradicted by current docs",
+    "detail": "entu-www/src/api/files/index.md:72-74 (the upload-flow doc itself) instructs: \"If the upload URL expires before you complete the S3 PUT, delete the property and start over\" — i.e. DELETE /api/{db}/property/{_id} is the canonical recovery for exactly the phantom-property scenario #275 is worried about. properties/index.md:124-141 confirms DELETE /api/{db}/property/{_id} is the general property-removal endpoint, soft-deletes (marks deleted.at/deleted.by, entity's aggregated view drops it immediately), and its Restrictions table only requires _owner for the named system-rights properties (_owner/_editor/_expander/_viewer/_noaccess/_sharing/_inheritrights/_parent) plus _parent (needs _expander on the target too). A plain `file` property is NOT in that restricted list, so ordinary write access applies: overview/entities/index.md:42 defines `_editor` as \"can view and edit all properties except the rights properties themselves\" — file props included. Since a librarian already has whatever rights let them POST-create the edition/file property in the first place (#271 shipped edition-create; file-attach reuses the same entity), the SAME tier of rights (_editor, not _owner) covers DELETE-cleanup of their own failed upload — no elevated/admin path is needed.\nThis directly overturns memory/project_entu_clear_property_empty_list.md (\"there is no such thing in entu [DELETE /property/{id}]... admin primitive\", PO-asserted 2026-05-23, session 19) — that memory is 107 days stale and pre-dates the current entu-www docs (git log shows both files/index.md and properties/index.md last touched 2026-06-03, i.e. AFTER the memory was written). Per project rule \"docs first, probe second\" (divergence = bug report, not a reason to hedge), the current doc text wins: DELETE-by-_id is the right call for cleanup, not empty-list-POST.\nCaveat honestly documented in the same doc (files/index.md:131): DELETE only soft-deletes the PROPERTY record — \"the underlying file in object storage is not removed, only the property reference is deleted.\" So cleanup removes the dangling/unreachable metadata (satisfying the issue's \"no file property claiming a file that is not there\" done-criterion) but does NOT reclaim the orphaned S3 bytes — that's an invisible storage-cost detail, not a UX-correctness one, and matches the low-priority framing already in the same memory file.",
+    "files": [
+     "/home/ai-teams/projects/entu-www/src/api/files/index.md",
+     "/home/ai-teams/projects/entu-www/src/api/properties/index.md",
+     "/home/ai-teams/projects/entu-www/src/overview/entities/index.md",
+     "/home/ai-teams/.claude/projects/-home-ai-teams-workspace/memory/project_entu_clear_property_empty_list.md"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "Empty-list-POST clearing (the memory's recommended alternative) is not documented anywhere for file properties, or at all, in the current docs",
+    "detail": "Grepped the full entu-www doc tree (api/, overview/, db-mutations/) for any mention of clearing a property via empty-array POST: zero hits. properties/index.md's own \"Multi-Value Properties\" section (lines 90-102) documents exactly two multi-value operations — POST a new value to add, DELETE-by-_id to remove a specific value — and says nothing about POST-with-[] as a clearing idiom. db-mutations/index.md (the literal Mongo-write inventory for every API route) has no route that reads an empty array and soft-deletes existing rows on that basis; the only route that soft-deletes existing property records is `DELETE /api/[db]/property/[_id]` (line 60-63) and the superseded-value path inside `POST /api/[db]/entity/[_id]` when a POST includes an existing `_id` to overwrite (this REPLACES one value, not \"submit [] to clear all\"). So for `file` (list:true, no per-value `_id` semantics that would let one POST body express \"delete _id X\"), DELETE-by-_id is not just permitted but the ONLY documented mechanism — there is no doc-supported empty-list-clear path to use instead.",
+    "files": [
+     "/home/ai-teams/projects/entu-www/src/api/properties/index.md",
+     "/home/ai-teams/projects/entu-www/src/db-mutations/index.md"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "60s TTL: display of a just-uploaded (or any) file must mint a fresh signed URL per open, via GET /property/{_id} — not by reusing anything from the entity list fetch",
+    "detail": "files/index.md:76-86: \"To download a file, GET the property by ID: GET /api/{db}/property/{_id}\" — response's `url` field is \"valid for 60 seconds. Do not cache or share it; generate a fresh one each time.\" Corroborated by properties/index.md's property-field table (lines 3-19), which lists filename/filesize/filetype/created for file props but no `url` field — i.e. the entity-level GET (and by extension the app's existing `listEditions`/edition-list fetch) never carries a download URL at all; only `_thumbnail` (auto-signed, photo-property-only, overview/properties/index.md:106) is minted at entity-fetch time. mvox's own data layer confirms this shape today: src/lib/library/libraryData.ts:40-44,64,74-78 defines `EditionFile` with only `_id/filename/filesize/filetype` — no `url` — so the existing read model is already correctly TTL-safe by omission. Implication for the new UI: a file row's \"open/download\" control must trigger a GET /property/{_id} call AT CLICK TIME (not on row render, not cached from the upload response, not re-fetching the whole entity) to mint a live URL, then use it immediately. A just-finished upload is not special-cased — it's opened the exact same way as any pre-existing file, via its now-known `_id`.",
+    "files": [
+     "/home/ai-teams/projects/entu-www/src/api/files/index.md",
+     "/home/ai-teams/projects/entu-www/src/api/properties/index.md",
+     "/home/ai-teams/workspace-app/src/lib/library/libraryData.ts"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "happy-dom fully supports File/Blob/FormData/input.files construction (unit-testable), but its `fetch` performs REAL network I/O — the S3 PUT step needs the codebase's existing `fetchImpl` injection seam, not a raw `fetch()` call",
+    "detail": "Checked node_modules/.pnpm/happy-dom@20.11.1: File.js/Blob.js are plain in-memory Buffer wrappers (fully synchronous, no I/O) — trivially constructible and assertable in specs. HTMLInputElement.js:110-123 exposes a plain `files` getter/setter (backed by FileList.js, a bare Array subclass) with no validation, so a spec can do `input.files = [new File(['x'],'a.pdf',{type:'application/pdf'})]` directly and dispatch `change` — no special seam needed for the SELECTION step. FormData.js:44-53 also builds real File entries from `input.files` on form-associated inputs (moot here since Entu's actual wire flow is JSON POST + raw PUT --data-binary, not multipart — files/index.md:27-67 — so FormData isn't actually on the critical path). BUT fetch/Fetch.js:4-5 imports Node's `http`/`https` and issues genuine HTTP(S) requests (modeled on node-fetch) — happy-dom's `window.fetch` is not a mock. vitest.config.ts:16 confirms the project's default environment is `node` (happy-dom is opt-in per-file via `// @vitest-environment happy-dom` pragma per the comment at lines 6-7), so a RED spec that calls the real global `fetch` against a signed S3 URL would attempt a live network PUT under vitest — not testable/deterministic there. The codebase already has the right seam for this: every libraryData.ts read/write function takes `fetchImpl: typeof fetch = fetch` as an overridable last param (e.g. src/lib/library/libraryData.ts:21,86,105,133,160,190,278,299,322,351), mocked in specs. The new upload code (step 1 create-property via entuFetch, step 2 raw PUT to the signed URL) should follow the same `fetchImpl` injection convention so RED can assert the PUT call (method/headers/body) without touching the network; an actual live S3 PUT belongs in an integration/manual-smoke check, not vitest+happy-dom.",
+    "files": [
+     "/home/ai-teams/workspace-app/vitest.config.ts",
+     "/home/ai-teams/workspace-app/src/lib/library/libraryData.ts",
+     "/home/ai-teams/workspace-app/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/fetch/Fetch.js",
+     "/home/ai-teams/workspace-app/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/nodes/html-input-element/HTMLInputElement.js"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "The issue's \"existing read paths are unchanged\" done-criterion presumes an existing file list/download UI that does not exist — edition.files is never rendered anywhere in the app today",
+    "detail": "`grep -rn '\\.files\\b' src --include=*.svelte` returns zero hits, and `src/routes/library/+page.svelte` (the only library UI file, 1506 lines) has zero occurrences of `filename`/`filesize`/`filetype`/`EditionFile`/`.files`. The only file-shape coverage anywhere is a data-shape regression guard in src/routes/page.library.spec.ts:239-262, which asserts the edition row still renders name+publisher when the fetched edition object CARRIES a `files` array — it never asserts that files are listed, linked, or downloadable in the DOM. So issue #275's done-criterion \"Existing read paths are unchanged — the library still lists and downloads files exactly as before\" has no existing behavior to preserve: there is no current file list/download affordance in the UI to regress. This is good news for scope (nothing pre-existing to break) but means the RED suite for this issue is establishing a wholly new render path, not guarding one — worth flagging so the PO/dev framing doesn't imply a pre-existing display that must be kept working.",
+    "files": [
+     "/home/ai-teams/workspace-app/src/routes/library/+page.svelte",
+     "/home/ai-teams/workspace-app/src/routes/page.library.spec.ts",
+     "/home/ai-teams/workspace-app/src/lib/library/libraryData.ts"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "Established generation-guard idiom for mid-flight async ops already exists in this exact file — the multi-collective-switch-mid-upload axis should reuse it, not invent a new pattern",
+    "detail": "src/routes/library/+page.svelte already runs two independent generation counters guarding exactly this class of race: `librarianGen` (lines 730-769, incremented on every collective (re)selection, checked with `if (g !== librarianGen) return` before applying librarian-resolution results) and the create-edition flow's `routeLoad.isCurrent(g)` guard (lines 517-537, \"a mid-flight collective switch bumps the generation and resets... now belongs to a DIFFERENT collective\"). A file upload (two Entu round-trips: POST-create-property, then PUT-bytes, both async and slower than a click) is the same shape of hazard — a librarian could switch collectives mid-upload. The design should capture the active generation before starting the upload and gate BOTH the success-apply (add the new file row to `edition.files`) and the failure-apply (show the error, offer cleanup) on `g === <currentGen>`, exactly like the existing two call sites. Note this only guards UI-state application, not the write itself — the Entu POST already in flight when the switch happens still lands server-side regardless (same caveat the existing idiom already lives with).",
+    "files": [
+     "/home/ai-teams/workspace-app/src/routes/library/+page.svelte"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Librarian-gated UI in this file is uniformly \"absent when not librarian,\" never \"present-but-disabled\" — matches team memory, confirmed live in the target file",
+    "detail": "Every librarian-only control in +page.svelte is wrapped in `{#if $librarianStore === 'librarian'}` (e.g. lines 895-897 librarian-tools section, 1314/1319 inline-checkout controls, 1360 return button, 1403 create-edition affordance) — none render a disabled/greyed-out version for non-librarians. `librarianStore` itself (src/lib/library/librarianStore.ts:5) is a plain `'loading' | 'librarian' | 'not-librarian' | 'error'` union with no distinct \"present but read-only\" state. The new attach/upload control (and the phantom-attachment cleanup action) should follow the same convention: absent entirely for non-librarians, not shown-disabled.",
+    "files": [
+     "/home/ai-teams/workspace-app/src/routes/library/+page.svelte",
+     "/home/ai-teams/workspace-app/src/lib/library/librarianStore.ts"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Locale surface for new strings is exactly 4 files (en/et/lv/uk); nesting a files-subsection under the edition row adds a THIRD ml-4 indentation level, worth flagging for phone-width",
+    "detail": "`messages/{en,et,lv,uk}.json` (src/paraglide-consumed) are the full locale set — confirms the 4-locale axis with no surprises. Structurally, work→edition already nests two `ml-4` levels (`library-editions-{work.id}` at +page.svelte:1203, then `library-copies-{edition.id}` at 1239, both `ml-4`). A files list rendered as ANOTHER child section under the open edition (sibling to or nested with the copies block) adds a third `ml-4` step at the same visual level as work→edition→copy — on a narrow (phone-width) viewport this is exactly the kind of tree-depth issue the TRIGGER note anticipated. Options worth weighing at design time: render files inline in the edition's own header row (no extra nesting) vs. a genuinely separate `ml-4` block (matches existing idiom but adds depth) — this needs a concrete phone-width mock/decision before RED locks in a `data-testid` layout, not a default assumption either way.",
+    "files": [
+     "/home/ai-teams/workspace-app/messages/en.json",
+     "/home/ai-teams/workspace-app/src/routes/library/+page.svelte"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "No documented size or content-type restriction on uploads; docs explicitly say don't proxy through your own server — and mvox is already architected browser-direct, so no CF Workers body-size concern applies",
+    "detail": "Searched the full doc tree for size/MIME constraints: none. best-practices/index.md:46-53 only says to declare accurate `filetype`/`filesize` (matching the actual Content-Type/Content-Length the S3 PUT will carry) and explicitly instructs \"Upload directly to S3 using the signed URL — don't proxy files through your own server.\" This matters for mvox specifically because src/lib/entu/request.ts:1-4,8-11 documents that mvox is ALREADY architected as \"browser-direct\" calls carrying the localStorage Entu JWT — \"this app is a pure client-side SPA (ssr = false, localStorage JWT, no BFF/cookie/server load)\" (lines 9-11). So both upload steps (metadata POST via the existing entuFetch, and the raw PUT to the signed S3 URL) naturally happen client-side already, consistent with the docs' own recommendation — there is no CF Workers/Pages request-body-size ceiling in the critical path for this feature, since bytes never transit mvox's own server. No numeric size cap needs to be invented or enforced client-side beyond what Entu's S3 backend itself may reject (undocumented, and not mvox's concern to guess at).",
+    "files": [
+     "/home/ai-teams/projects/entu-www/src/api/best-practices/index.md",
+     "/home/ai-teams/workspace-app/src/lib/entu/request.ts"
+    ],
+    "severity": "info"
+   }
+  ]
+ }
+}
