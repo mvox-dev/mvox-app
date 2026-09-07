@@ -556,6 +556,53 @@ export async function createWork(
 	return postCreate(cfg, 'work', [libraryEntityId], props, fetchImpl);
 }
 
+interface CreateEditionInput {
+	/** Edition name (v4E required, non-blank). */
+	name: string;
+	/**
+	 * The v4E parent — THE WORK this edition belongs to (model: work → edition
+	 * → copy; `listEditions` selects on `_parent.reference=<workId>` with no
+	 * ancestor expansion, so any other parent makes the edition invisible).
+	 * NOT the library entity — createWork's parent is the wrong template one
+	 * level down. The caller (the /library page) holds the id from its own
+	 * #each loop over the tree — this module never looks it up or guesses it.
+	 */
+	workId: string;
+	/** Publisher — `publisher` `{ string }`; blank/omit → not sent (v4E optional). */
+	publisher?: string;
+}
+
+/**
+ * Create an `edition` entity under its WORK (one-element `_parent` = [workId]).
+ * Resolves to the new edition's entity id. Same module contract as
+ * createSeason/createEventSeries/createEvent/createWork above — #132 decision
+ * applies (NO `_sharing`, NO inherit-rights flag; rights propagate from the
+ * library entity down through the work). `edition_type` is deliberately NOT
+ * accepted: Entu `mandatory` is soft (never server-enforced — see this
+ * module's contract header), so the field stays with the out-of-scope private
+ * set (#271).
+ *
+ * #271 GREEN — same shared-layer shape as createSeason/createEventSeries/
+ * createEvent/createWork above.
+ */
+export async function createEdition(
+	cfg: EntuCfg,
+	input: CreateEditionInput,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	const fn = 'createEdition';
+	const name = requireText(fn, 'name', input.name);
+	const workId = requireText(fn, 'workId', input.workId);
+
+	const props: WireProp[] = [
+		{ type: 'name', string: name },
+		...optional('publisher', input.publisher)
+	];
+	return postCreate(cfg, 'edition', [workId], props, fetchImpl);
+}
+
 // (*MVOX:Tallis* — #132/T1 RED stubs + contract)
 // (*MVOX:Palestrina* — GREEN implementation + review-fix pass, #132/T1)
 // (*MVOX:Palestrina* — #198 GREEN: createWork joins the shared entity CREATE layer)
+// (*MVOX:Tallis* — #271 RED: createEdition contract + stub)
+// (*MVOX:Palestrina* — #271 GREEN: createEdition joins the shared entity CREATE layer)

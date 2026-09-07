@@ -33,7 +33,7 @@
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
 	import { findMyMemberId } from '$lib/rsvp/rsvpData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
-	import { createWork } from '$lib/entity/entityCreate';
+	import { createWork, createEdition } from '$lib/entity/entityCreate';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
 	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
@@ -401,6 +401,153 @@
 		expandedWorks = next;
 		if (editionsByWork.has(workId)) return; // cached
 		void loadEditionsFor(workId);
+	}
+
+	// #271 — librarian-only inline "create edition" affordance, one level down
+	// from #198's create-work. STATE IS KEYED PER WORK (Map/Set idiom, not
+	// #198's flat shape): expandedWorks is itself a Set, so several works can be
+	// open at once, and a flat createEditionOpen boolean would share one form
+	// (and one half-typed name) across every expanded work. Placement, gating
+	// and the generation guard are decided in the template / submit handler
+	// below — see entityCreate.ts createEdition contract for the write shape.
+	let createEditionOpen = $state<Set<string>>(new Set());
+	let createEditionName = $state<Map<string, string>>(new Map());
+	let createEditionPublisher = $state<Map<string, string>>(new Map());
+	let createEditionErrors = $state<Map<string, () => string>>(new Map());
+	let createEditionStatuses = $state<Map<string, string>>(new Map());
+	// #198 review's double-submit latch, keyed per work here.
+	let createEditionPending = $state<Set<string>>(new Set());
+
+	// Autofocus the name input the instant its form appears — same intent as
+	// #198's $effect(createWorkOpen && createWorkNameInput), reshaped as a
+	// mount action because several of these forms can exist at once (one per
+	// open work): the {#if} block that renders the form creates a FRESH input
+	// node each time it opens, so focusing on mount is exactly "the instant it
+	// opens", with no per-work ref map to keep in sync.
+	function focusOnMount(node: HTMLInputElement): void {
+		node.focus();
+	}
+
+	function openCreateEditionForm(workId: string): void {
+		createEditionName = new Map(createEditionName).set(workId, '');
+		createEditionPublisher = new Map(createEditionPublisher).set(workId, '');
+		const errs = new Map(createEditionErrors);
+		errs.delete(workId);
+		createEditionErrors = errs;
+		// A new attempt owns the live region too — the previous "X created."
+		// announcement must not sit there while a fresh form is open (#198 parity).
+		createEditionStatuses = new Map(createEditionStatuses).set(workId, '');
+		createEditionOpen = new Set(createEditionOpen).add(workId);
+	}
+
+	function closeCreateEditionForm(workId: string): void {
+		const next = new Set(createEditionOpen);
+		next.delete(workId);
+		createEditionOpen = next;
+		const nameMap = new Map(createEditionName);
+		nameMap.delete(workId);
+		createEditionName = nameMap;
+		const pubMap = new Map(createEditionPublisher);
+		pubMap.delete(workId);
+		createEditionPublisher = pubMap;
+		const errs = new Map(createEditionErrors);
+		errs.delete(workId);
+		createEditionErrors = errs;
+	}
+
+	// Escape closes from ANY control in the form, not just the inputs — same
+	// per-button wiring as #198 (a keydown listener on the non-interactive
+	// wrapper div would be an a11y violation).
+	function onCreateEditionEscapeKeydown(workId: string, event: KeyboardEvent): void {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		closeCreateEditionForm(workId);
+	}
+
+	function onCreateEditionNameKeydown(workId: string, event: KeyboardEvent): void {
+		if (event.key === 'Escape') {
+			onCreateEditionEscapeKeydown(workId, event);
+			return;
+		}
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		void submitCreateEdition(workId);
+	}
+
+	async function submitCreateEdition(workId: string): Promise<void> {
+		if (createEditionPending.has(workId)) return;
+		const errs0 = new Map(createEditionErrors);
+		errs0.delete(workId);
+		createEditionErrors = errs0;
+		createEditionStatuses = new Map(createEditionStatuses).set(workId, '');
+		const current = selected;
+		const token = getToken();
+		// Fail LOUDLY (house rule) — a librarian whose JWT expired while the tree
+		// is still on screen must see why the write did not happen, not get a
+		// silent no-op. Same three-way precondition guard as submitCreateWork;
+		// no explicit 401 branch — entuFetch's handleAuthExpired401 already owns
+		// that path for the write itself (request.ts).
+		if (!current || !token) {
+			console.error('library: create edition with no cfg', {
+				hasCollective: !!current,
+				hasToken: !!token,
+				workId
+			});
+			createEditionErrors = new Map(createEditionErrors).set(workId, m.library_create_edition_error);
+			return;
+		}
+		const name = (createEditionName.get(workId) ?? '').trim();
+		// Field-level validation BEFORE the write seam — the data layer's
+		// requireText would throw and land in the generic catch below, telling
+		// the librarian "could not create" for what is a missing required field.
+		if (!name) {
+			createEditionErrors = new Map(createEditionErrors).set(
+				workId,
+				m.library_create_edition_name_required
+			);
+			return;
+		}
+		const publisher = (createEditionPublisher.get(workId) ?? '').trim();
+		const cfg = { db: current.db, token };
+
+		// #271 GENERATION GUARD (new discipline here — createWork's own local
+		// insert LACKS this guard; the gap is flagged, not fixed, in this slice).
+		// Captured BEFORE the await via the shared route-load machine's external
+		// co-guard seam (routeLoad.generation / isCurrent — see routeLoad.ts):
+		// a mid-flight collective switch bumps the generation and resets
+		// editionsByWork, and re-checking after the await stops a stale create
+		// from phantom-inserting into (or re-poisoning the cache of) a work that
+		// now belongs to a DIFFERENT collective.
+		const g = routeLoad.generation;
+
+		let newId: string;
+		createEditionPending = new Set(createEditionPending).add(workId);
+		try {
+			newId = await createEdition(cfg, { name, publisher, workId });
+		} catch (e) {
+			console.error('library: create edition failed', workId, name, e);
+			createEditionErrors = new Map(createEditionErrors).set(workId, m.library_create_edition_error);
+			return;
+		} finally {
+			const next = new Set(createEditionPending);
+			next.delete(workId);
+			createEditionPending = next;
+		}
+
+		if (!routeLoad.isCurrent(g)) return; // superseded — the new collective owns this work id now
+
+		// LOCAL insertion — no listEditions refetch, same "never refetch"
+		// contract as #198's create-work.
+		const list = editionsByWork.get(workId) ?? [];
+		editionsByWork = new Map(editionsByWork).set(workId, [
+			...list,
+			{ id: newId, name, publisher, externalLinks: [], files: [] }
+		]);
+		createEditionStatuses = new Map(createEditionStatuses).set(
+			workId,
+			m.library_create_edition_created({ name })
+		);
+		closeCreateEditionForm(workId);
 	}
 
 	// Same fetch-only / toggle split as editions, one level down.
@@ -1243,6 +1390,111 @@
 											{/if}
 										</div>
 									{/each}
+								{/if}
+
+								<!-- #271 — librarian-only inline "create edition" affordance, a
+								     SIBLING after the loading/error/empty/list chain above — the
+								     ZERO-EDITIONS branch is mutually exclusive with the list
+								     branch, and a work with no editions yet is exactly the case
+								     that makes a newly created work usable at all, so the control
+								     must not live inside either branch. Gated on 'idle' (never
+								     'loading'/'error' — a local insert into a list that was never
+								     fetched would leave the work half-populated) AND librarian. -->
+								{#if $librarianStore === 'librarian' && editionNodeStatus.get(work.id) === 'idle'}
+									<div class="mt-1.5 flex flex-col gap-1.5">
+										{#if !createEditionOpen.has(work.id)}
+											<button
+												type="button"
+												data-testid="create-edition-button-{work.id}"
+												class="flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+												onclick={() => openCreateEditionForm(work.id)}
+											>
+												{m.library_create_edition_button()}
+											</button>
+										{:else}
+											<!-- `role="group"`, not `role="dialog"` — same non-modal
+											     inline-form contract as #198's create-work form. -->
+											<div
+												data-testid="create-edition-form-{work.id}"
+												role="group"
+												aria-label={m.library_create_edition_button()}
+												class="flex flex-col gap-1.5"
+											>
+												<input
+													type="text"
+													data-testid="create-edition-name-{work.id}"
+													use:focusOnMount
+													aria-label={m.library_create_edition_name_label()}
+													placeholder={m.library_create_edition_name_label()}
+													aria-invalid={createEditionErrors.has(work.id) ? true : undefined}
+													aria-describedby={createEditionErrors.has(work.id)
+														? `create-edition-error-${work.id}`
+														: undefined}
+													value={createEditionName.get(work.id) ?? ''}
+													oninput={(e) =>
+														(createEditionName = new Map(createEditionName).set(
+															work.id,
+															(e.currentTarget as HTMLInputElement).value
+														))}
+													onkeydown={(e) => onCreateEditionNameKeydown(work.id, e)}
+													class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+												/>
+												<input
+													type="text"
+													data-testid="create-edition-publisher-{work.id}"
+													aria-label={m.library_create_edition_publisher_label()}
+													placeholder={m.library_create_edition_publisher_label()}
+													value={createEditionPublisher.get(work.id) ?? ''}
+													oninput={(e) =>
+														(createEditionPublisher = new Map(createEditionPublisher).set(
+															work.id,
+															(e.currentTarget as HTMLInputElement).value
+														))}
+													onkeydown={(e) => onCreateEditionNameKeydown(work.id, e)}
+													class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
+												/>
+												{#if createEditionErrors.get(work.id)}
+													<p
+														id="create-edition-error-{work.id}"
+														role="alert"
+														data-testid="create-edition-error-{work.id}"
+														class="text-xs text-red-700"
+													>
+														{createEditionErrors.get(work.id)!()}
+													</p>
+												{/if}
+												<div class="flex gap-2">
+													<button
+														type="button"
+														data-testid="create-edition-submit-{work.id}"
+														class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
+														disabled={createEditionPending.has(work.id)}
+														onclick={() => void submitCreateEdition(work.id)}
+														onkeydown={(e) => onCreateEditionEscapeKeydown(work.id, e)}
+													>
+														{m.library_create_edition_submit()}
+													</button>
+													<button
+														type="button"
+														data-testid="create-edition-cancel-{work.id}"
+														class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink"
+														onclick={() => closeCreateEditionForm(work.id)}
+														onkeydown={(e) => onCreateEditionEscapeKeydown(work.id, e)}
+													>
+														{m.library_create_edition_cancel()}
+													</button>
+												</div>
+											</div>
+										{/if}
+										<div
+											data-testid="create-edition-status-{work.id}"
+											role="status"
+											aria-live="polite"
+											class="sr-only"
+										>
+											{createEditionStatuses.get(work.id) ?? ''}
+										</div>
+									</div>
 								{/if}
 							</div>
 						{/if}

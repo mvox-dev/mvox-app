@@ -47,6 +47,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_work_composer_label: () => 'Composer',
 		library_create_work_submit: () => 'Create work',
 		library_create_work_error: () => 'Could not create the work.',
+		// #271 — the create-edition button renders unconditionally in the
+		// librarian tree once a work's editions are idle, same as create-work's
+		// button above; this spec never opens the form, so only this one key
+		// is needed (same minimal footprint as the create-work set here).
+		library_create_edition_button: () => 'Add edition',
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
 		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
