@@ -2,6 +2,8 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
+### [LAW 20:05] Schema-commission closure sequencing: definition commits reference #N PLAIN (no Closes trailer) — a gate-bearing issue closes only via the completion comment AFTER provisioning + continuation-named (#282 reopen lesson; #265 precedent). #282 closed 3-for-3 (live a1eb46a, read-backs, #285 cut-by-Gama unready). Pipeline wf_f58472d3-792 RUNNING [272,273,271,283]; if dead: per-task branches feat/272-programme-control, fix/273-armed-pair-inflight, feat/271-create-edition, fix/283-phone-email-save-guards — delete incomplete, relaunch from committed args (4d223c1). Monitor bqt2mnib2 = landing notices.
+
 ### [LIVE — MVOX-17 19:10] FIVE ready surfaced (my 12:40/14:32 "zero ready" was a STALE SNAPSHOT — labels landed 01:09 UTC, 9 min after my 01:00 read; both later reports repeated it unqueried. STANDING FIX: fresh `gh issue list --label ready` immediately before ANY board-state claim in a report). Queue: #282 schema flow with Pérotin (GO'd — definition commit on chore/282 w/ 'id_code' in redact set SAME commit → Bentham scoped round → merge → dry-run both dbs → live ONLY behind my explicit auth). Pipeline pack [272→273→271(create-form only, files=#275 not-ready)→283(phone letters + email checkValidity per Gama's comment, [speculative] confirm-at-build)] in Gama's order — research wf_64d612d4-8fa running (8 agents); author 4 args files when it lands, launch AFTER Pérotin's tree work done; arm the landing-notice Monitor at launch (first live use).
 
 ### [SUPERSEDED-13:40] MVOX-17 wrap — board was believed empty (see stale-snapshot correction above)
