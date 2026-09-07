@@ -1,0 +1,521 @@
+{
+ "_meta": "research for #272/#273/#271/#283, run wf_64d612d4-8fa 2026-09-07 19:15. Contracts = issue bodies + all comments at read time. (*MVOX:Palestrina*)",
+ "r272": {
+  "surface": {
+   "findings": [
+    {
+     "title": "Block markup/logic at HEAD (main, d0d8f08)",
+     "detail": "src/lib/components/agenda/RepertoireElement.svelte lines 551-577, inside `{#snippet manageAddControls()}` (517-578), gated by `{#if canManageProgramme}` (551) — no gate on `pickableEditions.length` today, so the block (and its inner `<select>`) always renders once the caller is an event editor. The `<div data-testid=\"work-manage-add-programme\">` (552) wraps: a `<select data-testid=\"work-manage-add-programme-select\">` (553-565) bound to `selectedEditionForAdd` (556), `disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}` (557, NOT keyed on emptiness), `aria-label={m.repertoire_add_programme_select_aria_label()}` (558), first `<option value=\"\">{m.repertoire_add_programme_label()}</option>` (561) as the placeholder, then one `<option>` per `pickableEditions` entry (562-564, iterates `opt.id`/`opt.label`). Then a `<button data-testid=\"work-manage-add-programme-button\">` (566-575) with `disabled={pendingKeys.has(ADD_PROGRAMME_KEY) || !selectedEditionForAdd}` (570 — disabled-not-hidden today, contra issue part 3), `aria-label={m.repertoire_add_programme_aria_label()}` (571), text `{m.repertoire_add_programme_button()}` (574), `onclick={handleAddProgramItem}` (572) which no-ops if `!selectedEditionForAdd || pendingKeys.has(ADD_PROGRAMME_KEY)` (line 269) then calls `onaddprogramitem?.(selectedEditionForAdd, nextOrdinal)` and resets `selectedEditionForAdd = ''` (272-273). A load-bearing comment directly above the `{#if}` (545-550, verbatim in file) warns: this branch is deliberately NOT the `{:else}` of the repertoire-Add branch above it, because 'Add to programme' is the ONLY way to create an event's FIRST program_item, and gating on `context === 'programme'` previously broke that path — the exact scar the issue's 'Caution for the implementer' section references.",
+     "files": [
+      "src/lib/components/agenda/RepertoireElement.svelte"
+     ]
+    },
+    {
+     "title": "All four keys exist ×4 locales; wording matches issue's 'current state' claim exactly",
+     "detail": "messages/{en,et,lv,uk}.json all define the two visible-string keys (`repertoire_add_programme_label`, `repertoire_add_programme_button`) at lines 316-317/317-318/318-319 (en/et/lv/uk resp.) and the two aria-label keys (`repertoire_add_programme_select_aria_label`, `repertoire_add_programme_aria_label`) at lines 331-332/331-332/332-333/333-334. Current en values: label='Add to programme', button='Add' (confirms the issue's claimed swap — placeholder carries the action wording, button says only 'Add'). Current et: label='Lisa kavasse', button='Lisa'. Current select-aria-label en='Edition to add to tonight's programme'; et='Tänase kava trükiväljaanne' (confirms the issue's claim of a wrong-noun mistranslation — trükiväljaanne = printed publication, not musical edition) and confirms the 'tonight'/'tänase' date claim in both en and et aria strings that part of the issue also targets in lv/uk (lv 'Šā vakara...', uk 'сьогоднішньої...').",
+     "files": [
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json"
+     ]
+    },
+    {
+     "title": "Full consumer list of all four keys (repo-wide grep, no e2e/playwright hits)",
+     "detail": "Exactly 4 non-message files reference any of the four keys: (1) src/lib/components/agenda/RepertoireElement.svelte — the live consumer (lines 558,561,571,574). (2) src/routes/page.repertoire-manage-wiring.spec.ts — asserts the placeholder option text literally as `'[repertoire_add_programme_label]'` at lines 795 and 831 (m is mocked as a Proxy returning `[key]` for every key, so aria-label keys are implicitly exercised too wherever aria-label is read, but never asserted by literal string in this file). (3) src/routes/page.repertoire-a11y.spec.ts — mocks `repertoire_add_programme_label: () => 'Add to programme'` and `repertoire_add_programme_button: () => 'Add'` explicitly (lines 53-54), i.e. hardcodes today's wording into the mock itself. (4) src/lib/components/agenda/RepertoireElement.ux.spec.ts — asserts option list literally includes `'[repertoire_add_programme_label]'` at line 282 (same Proxy-mock pattern as file 2). No hits in any e2e/Playwright spec.",
+     "files": [
+      "src/routes/page.repertoire-manage-wiring.spec.ts",
+      "src/routes/page.repertoire-a11y.spec.ts",
+      "src/lib/components/agenda/RepertoireElement.ux.spec.ts",
+      "src/lib/components/agenda/RepertoireElement.svelte"
+     ]
+    },
+    {
+     "title": "Spec that WILL BREAK under rule 3 (hidden-not-disabled) — button asserted present with nothing selected",
+     "detail": "src/routes/page.repertoire-a11y.spec.ts lines 653-674, test \"the two Add buttons have distinct accessible names\": renders RepertoireElement with `rows: []`, both surfaces editor, and pickableEditions non-empty, does NOT select an edition, then asserts `container.querySelector('[data-testid=\"work-manage-add-programme-button\"]')` `.not.toBeNull()` (line 671) and compares its accessible name to the Add-work button's. Under the new rule ('the link is visible only when an edition is selected — hidden, not disabled'), with `selectedEditionForAdd === ''` (the component's initial `$state('')`, line 260) the button must not render at all, so this assertion flips to failing (querySelector returns null) — this test needs rewriting to select an edition first, or to assert absence pre-selection and presence post-selection.",
+     "files": [
+      "src/routes/page.repertoire-a11y.spec.ts"
+     ]
+    },
+    {
+     "title": "Every spec asserting current wording, disabled-when-unselected, or select-always-renders (full flip list)",
+     "detail": "Wording specs to update: page.repertoire-a11y.spec.ts lines 53-54 (mock hardcodes 'Add to programme'/'Add' — must become 'select edition'-flavoured mock text per issue's new copy, or be switched to the same Proxy-key pattern the other two spec files use). Visibility/disabled-behavior specs: page.repertoire-a11y.spec.ts lines 653-674 (see above — the only spec directly asserting the pre-selection-present behavior that rule 3 kills). Select-always-renders specs that pass NON-EMPTY pickableEditions (so rule 4's new emptiness gate does not visibly break them, but they implicitly assume the select is unconditionally reachable given editor rights and are the specs that need a NEW sibling case for the empty-pickableEditions/hidden-select path, which does not exist anywhere in the current suite): RepertoireElement.spec.ts lines 599-611, 613-628, 714-735, 747-755(`work-manage-add-programme` asserted present/absent purely by rights, never by pickableEditions emptiness), 757-765; RepertoireElement.ux.spec.ts lines 238-286 (native-picker/breakpoint specs, pickableEditions always 2 entries); page.repertoire-manage-wiring.spec.ts lines 657-684 ('an EVENT editor on an event with NO programme yet can still start one' — asserts the `work-manage-add-programme` div renders and is directly relevant to the issue's 'Caution for the implementer' about the new-programme path, but this test's fixture supplies a non-empty `pickableEditions` via its own `installWorld`, so it is not itself flipped by rule 4 — it is exactly the regression case the issue instructs to check explicitly, and no existing spec covers the genuinely-empty-pickableEditions variant of it). No spec anywhere currently exercises `pickableEditions = []` for this block, i.e. rule 4 (select hidden when empty) has zero existing coverage to flip — it needs new tests, not just edited ones.",
+     "files": [
+      "src/routes/page.repertoire-a11y.spec.ts",
+      "src/lib/components/agenda/RepertoireElement.spec.ts",
+      "src/lib/components/agenda/RepertoireElement.ux.spec.ts",
+      "src/routes/page.repertoire-manage-wiring.spec.ts"
+     ]
+    },
+    {
+     "title": "'dropdown displayed only if it has content' — pickableEditions provenance and its (non-)distinct empty states",
+     "detail": "Prop flows from src/routes/+page.svelte's `pickableEditionsByEventId` ($derived.by, lines 1800-1821) through `worksManage.pickableEditionsByEventId` (line 1848, per src/lib/repertoire/types.ts:97 `Record<string, PickerOption[]>`) down to this component's `pickableEditions` prop (default `[]`, RepertoireElement.svelte line 219/188). The derivation (lines 1800-1821) filters `libraryEditions` (state, line 381) against work names via `libraryWorks` (state, line 380) and excludes editions already programmed on that event; per-event arrays default to `[]` for any `eventId` not yet present in `worksByEventId` (state, line 314, initial `{}`). Critically, `libraryWorks`/`libraryEditions` are populated by `loadManagePickers` (lines 1271-1290): both the SUCCESS-with-zero-rows case and the FETCH-ERROR `.catch` case (lines 1283-1289, comment 'Empty pickers, not a broken page') set `libraryWorks = []; libraryEditions = []` — identical to their PRE-FETCH initial state (lines 380-381). There is no loading flag, error flag, or any other signal threaded into `pickableEditionsByEventId`/`pickableEditions` that distinguishes 'still loading', 'fetch failed', and 'catalog genuinely has zero editions' — all three collapse to the same empty array the new rule-4 gate would key off of. Concretely: a rule-4 implementation of 'select renders only if pickableEditions.length > 0' will also hide the dropdown during the brief window before `loadManagePickers` resolves, and permanently on a fetch error, exactly as it does for a genuinely-empty catalog — the issue's 'Caution for the implementer' (new-programme-must-stay-creatable) needs to be read against this: an event with a real, non-empty catalog will still show a blank/dropdown-less control for a moment on first paint.",
+     "files": [
+      "src/routes/+page.svelte",
+      "src/lib/repertoire/types.ts",
+      "src/lib/components/agenda/RepertoireElement.svelte"
+     ]
+    }
+   ]
+  },
+  "blast": {
+   "findings": [
+    {
+     "title": "WCAG 2.5.3 Label-in-Name test fails in ALL FOUR locales with the ruling's proposed aria wording",
+     "detail": "src/routes/page.repertoire-a11y.spec.ts:306-342 asserts, for every locale, that an `_aria_label` key CONTAINS its visible-text sibling key verbatim as a substring (`ariaPatterns.every(a => visiblePatterns.some(v => a.includes(v)))`, using src/lib/testing/messageFile.ts:60-63's exact `.includes()` semantics). It auto-pairs `repertoire_add_programme_aria_label` with `repertoire_add_programme_button` (messages/en.json:316-332). I ran the real substring check against the PO's proposed strings from issue #272 for all four locales: en `\"Add to programme\" in \"Add edition to this event's programme\"` -> False; et `\"Lisa kavasse\" in \"Lisa väljaanne sündmuse kavasse\"` -> False; lv `\"Pievienot programmai\" in \"Pievienot izdevumu šī pasākuma programmai\"` -> False; uk `\"Додати до програми\" in \"Додати видання до програми цієї події\"` -> False. Inserting \"edition\"/väljaanne/izdevumu/видання between the verb and \"to programme\" breaks contiguity in every locale, so this existing i18n guard will fail as soon as the PO's wording lands, regardless of implementation correctness elsewhere. The select's aria-label key (`repertoire_add_programme_select_aria_label`) has no visible-text sibling key, so it is NOT part of this pairing and is unaffected.",
+     "files": [
+      "src/routes/page.repertoire-a11y.spec.ts",
+      "src/lib/testing/messageFile.ts",
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json"
+     ]
+    },
+    {
+     "title": "a11y spec asserts the add-programme button exists with NO edition selected — contradicts Part 3 (hidden until selected)",
+     "detail": "src/routes/page.repertoire-a11y.spec.ts:653-674 (\"the two Add buttons have distinct accessible names\") renders RepertoireElement with `rows: []`, `eventRights: 'editor'`, and `pickableEditions` non-empty, but never fires a `change` on the select — `selectedEditionForAdd` stays `''`. It then asserts `container.querySelector('[data-testid=\"work-manage-add-programme-button\"]')` is `.not.toBeNull()` (line 671) and reads its accessible name. Once Part 3 ships (the link renders only when `selectedEditionForAdd` is truthy, i.e. an `{#if}` around the current unconditional button at RepertoireElement.svelte:566-576), the button will not exist in this render and the test fails. It needs a `fireEvent.change` on the select before the button query. Checked every other call site of `work-manage-add-programme-button` (RepertoireElement.spec.ts:608,626,731 and page.repertoire-manage-wiring.spec.ts:665-671) — all of them select an edition before touching the button, so only this one test is at risk.",
+     "files": [
+      "src/routes/page.repertoire-a11y.spec.ts",
+      "src/lib/components/agenda/RepertoireElement.svelte"
+     ]
+    },
+    {
+     "title": "Empty-dropdown gate collides with a real, repeated loading window — the control can vanish and reappear on every collective switch, not just first paint",
+     "detail": "`pickableEditions` (and thus, under Part 4, whether the select renders at all) is fed by `libraryWorks`/`libraryEditions`, which are populated by `loadManagePickers` — a promise SEPARATE from the one that populates `worksByEventId`/`workRows` and gates when the management row itself appears. Confirmed on both surfaces: src/routes/+page.svelte `loadWorksAndManagement`/`loadManagePickers` (lines 1222-1290) and src/routes/event/[id]/+page.svelte `loadManagePickers` (lines 875-921) both start `libraryWorks`/`libraryEditions` as `$state([])` and set them only when their own network read resolves. Worse, src/routes/+page.svelte's `resetManagement()` (lines 1075-1084) — which synchronously zeroes `libraryWorks`/`libraryEditions` back to `[]` — runs on EVERY `loadForSelected`, including every collective switch, per its own comment at line 1088 (\"the genuine collective switch still runs\"). So this is not a one-off race: each time an editor switches collectives (or the page reloads pickers for any reason) and then expands a row, she will see the management row/status controls render (those come from the other, independently-resolving load) while the entire \"select edition\"/\"add to programme\" area is blank, then have it pop in once editions land. Before this fix the same window instead showed a disabled, near-empty dropdown — visibly present, just inert. After the fix, per the ruling's own Part 3+4 logic, there is nothing to see there at all during that window, which is exactly the 'looks like the feature vanished' risk named in the task.",
+     "files": [
+      "src/routes/+page.svelte",
+      "src/routes/event/[id]/+page.svelte"
+     ]
+    },
+    {
+     "title": "Part 4's gate must land on the <select> itself, not the outer work-manage-add-programme wrapper div",
+     "detail": "src/routes/event/[id]/page.spec.ts's test \"a PROGRAMMED event shows the PROGRAMME surface\" (lines 2015-2035) renders an event editor against `programItemsFixture()` (2 program_items referencing ed-1/ed-2) but does NOT pass an `editions` fixture, so `composeWireStub`'s default `editions = fixtures.editions ?? []` (page.spec.ts:1826) serves an EMPTY edition list — meaning `pickableEditionsList` (event/[id]/+page.svelte:1444-1462) is genuinely `[]` in this scenario. The test still asserts `section.querySelector('[data-testid=\"work-manage-add-programme\"]')` is `.not.toBeNull()` (line 2030) — i.e. it only checks the OUTER wrapper div exists, never the select. If Part 4 is implemented by gating the whole `work-manage-add-programme` div on `pickableEditions.length > 0` (a plausible reading of \"dropdown displayed only if it has content\" if taken to mean the whole control-strip), this test breaks. Gating only the inner `<select>` (leaving the outer div, and its now-conditional link, to render as an otherwise-empty container) keeps this test green and matches the ruling's literal wording, which names the dropdown specifically.",
+     "files": [
+      "src/lib/components/agenda/RepertoireElement.svelte",
+      "src/routes/event/[id]/page.spec.ts"
+     ]
+    },
+    {
+     "title": "Sibling idiom named, not proposed for widening: 'Add work' keeps the disabled-not-hidden pattern this ruling replaces for 'Add to programme'",
+     "detail": "RepertoireElement.svelte:533-542 (\"Add work\" button) uses the identical `disabled={pendingKeys.has(addWorkKey) || !selectedWorkId}` idiom that line 570's \"Add to programme\" button currently uses and that Part 3 replaces with hide-until-selected. No key collision (`ADD_WORK_KEY` vs `ADD_PROGRAMME_KEY` are distinct sentinels) — this is purely an idiom/pattern match the issue's scope fence explicitly excludes from being widened. Flagging only so the implementer/reviewer knows the file will carry two visually-analogous 'Add' controls with two different disabled-vs-absent conventions after this ships.",
+     "files": [
+      "src/lib/components/agenda/RepertoireElement.svelte"
+     ]
+    },
+    {
+     "title": "Checked, no issue: no keyboard/focus-management code assumes the add-programme control is in the DOM",
+     "detail": "The only roving-focus/toolbar keydown handler in this component, `handleStatusGroupKeydown` (RepertoireElement.svelte:145-154), is scoped to the STATUS toggle `role=\"toolbar\"` group (querying `group.querySelectorAll('button:not([disabled])')` within that group's own container) and never touches the add-programme select/button. `handleAddProgramItem`'s own `if (!selectedEditionForAdd || pendingKeys.has(ADD_PROGRAMME_KEY)) return;` guard (line 269) becomes dead code for the 'clicked while empty' branch once the button can no longer render in that state — harmless residue, not a defect. Rights-tier and invite-vs-auto-provisioned-person axes are also unaffected: `canManageProgramme` and the whole block already fail-closed to fully ABSENT (never present-but-disabled) for any non-editor or rights-resolution error (repertoireActions.ts `manageRightsFrom`/`resolveManageRights`, lines 291-335, keyed purely on personId membership in `_owner`/`_editor` — no reference anywhere to how the person was provisioned).",
+     "files": [
+      "src/lib/components/agenda/RepertoireElement.svelte",
+      "src/lib/repertoire/repertoireActions.ts"
+     ]
+    }
+   ]
+  }
+ },
+ "r273": {
+  "surface": {
+   "findings": [
+    {
+     "title": "Line-number drift: issue's :3660 citation is now :4123 (post-#268/#269)",
+     "detail": "Issue #273 cites roster/+page.svelte:3660 for the KNOWN GAP comment. At HEAD of main (d0d8f08; current branch chore/282-id-code sits on the same commit, and this file has no uncommitted diff) the file is 4350 lines, and the KNOWN GAP comment text ('KNOWN GAP, NOT fixed here: this trigger's confirm/cancel siblings above carry no disabled/aria-busy wiring during an in-flight delete, unlike the agenda's') now starts at line 4123, inside a comment block spanning 4116-4127. Drift is explained by #268 (120d7d0, admin in-row member details) and #269 (5ee55eb, real-name rendering) landing after the issue was filed. The armed confirm/cancel pair itself is at lines 4096-4114; the disabled DeleteTrigger ({:else} branch) is at 4128-4136. A second, near-duplicate KNOWN GAP note also exists in the spec file (see next finding) and was not mentioned in the issue at all.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "Exact armed-pair markup and what structuralWritePending currently gates",
+     "detail": "Armed pair (lines 4096-4114): {#if pendingRemoveId === row.id} renders button data-testid=\"section-remove-confirm-{row.id}\" (onclick => void handleRemoveSection(row.id)) and button data-testid=\"section-remove-cancel-{row.id}\" (onclick => void disarmRemove(row.id)) -- NEITHER button carries a disabled or aria-busy attribute today. The {:else} DeleteTrigger (4128-4136) does carry disabled={structuralWritePending || renamingSectionId === row.id || !canDelete}, matching the issue's premise that the trigger itself is already gated. structuralWritePending is `$derived(reorderPending || renamePending || removePending)` (line 2170) and today gates: indent button (4051-4054), unindent button (4070-4073), rename button (3931), the DeleteTrigger (4132-4134), and drag-handle draggable/class (3840, 3895) -- but NOT the armed confirm/cancel pair. Mechanism behind the gap: handleRemoveSection (line 1403) sets pendingRemoveId = null at line 1421 and removePending = true at line 1449, both BEFORE the function's first await (deleteSection at line 1452) -- i.e. in one synchronous tick. So in application STATE the armed pair (pendingRemoveId===row.id) and the in-flight write (removePending===true) are never simultaneously true; the pair unmounts to the disabled DeleteTrigger branch on the very same render that starts the write. The residual live window is the render-flush lag between that synchronous state mutation and Svelte's DOM patch, during which the old (non-disabled) confirm/cancel buttons can still be clicked -- confirm is caught by the backstop guard `if (structuralWritePending) return;` at line 1409 (re-entrant second call is a no-op), but disarmRemove (line 1295) has NO such guard at all -- see next finding for why this matters less than it looks, and why it still needs fixing per the agenda model.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "The agenda's model: keep the armed id alive through the write, gate disabled/aria-busy off a SEPARATE pending-id flag",
+     "detail": "The agenda (src/routes/+page.svelte) implements the season-manage delete confirm/cancel with the pattern the issue asks the roster to copy, present identically at three sites: season row (5789-5830, testids season-manage-delete-season-confirm/-cancel), series row (6656-6690, season-manage-series-delete-confirm-{id}/-cancel-{id}), and event row (6795+, season-manage-event-delete-confirm-{id}/-cancel-{id}). Two SEPARATE state slots do the work: `seasonManageDeleteArmed` (armed-row id, the pendingRemoveId analogue, declared line 2528) and `seasonManageDeletePendingId` (in-flight id, the removePending analogue, declared line 2571, documented at 2568-2570 as existing precisely 'so a double-tap cannot fire two DELETEs'). Critically, the delete handlers (e.g. onSeasonManageSeriesDelete, lines 3751-3784) do NOT clear the armed id when the write starts -- only `seasonManageDeletePendingId = series.id` is set (line 3757), leaving `seasonManageDeleteArmed` untouched so the confirm/cancel pair STAYS MOUNTED, now real-DOM-disabled: both buttons carry disabled={seasonManageDeletePendingId !== null} (5801/5824, 6667/6683, 6802/6813) and the CONFIRM button additionally carries aria-busy={seasonManageDeletePendingId === <thisRowId>} (5802, 6668, 6803) -- cancel never gets aria-busy, only disabled. `seasonManageDeleteArmed` is cleared only on SUCCESS, inside the .then() (e.g. line 3763); on failure (catch block, 3776-3778) it is left untouched so the pair reappears live (now re-enabled once `finally` clears the pending id at 3781) for retry or cancel. disarmSeasonManageDelete (3628-3634) itself carries no internal pending-guard -- it doesn't need one because the cancel button it's bound to is unreachable while the DOM disabled attribute is set. This is the exact shape the roster needs to mirror: stop nulling pendingRemoveId synchronously inside handleRemoveSection; instead add disabled={removePending} (or structuralWritePending, matching the DeleteTrigger's own gate) to BOTH confirm and cancel, add aria-busy={removePending} to confirm only, and only clear pendingRemoveId on the success path (or leave it on failure the way the agenda does, rather than the current unconditional line-1421 clear).",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "Roster armed-pair spec coverage: existing tests assert arm/confirm/cancel behavior that the fix must not break",
+     "detail": "Only src/routes/page.roster-arrange-crud.spec.ts covers the section-remove-confirm/-cancel testids (grep confirms no other spec file references them). Relevant existing assertions: (1) line 345-360, 'tap X arms it, tap confirm deletes and the row disappears' -- clicks confirm-sec-bass, waits for deleteMock called then for arrange-row-sec-bass to be gone; does not assert disabled state mid-flight since deleteMock isn't deferred there, so this stays green under the fix. (2) line 362-375, 'cancel disarms the confirm -- nothing written, the row stays' -- clicks cancel-sec-bass, waits for section-remove-sec-bass (the idle trigger) to reappear, asserts deleteMock not called; also unaffected since no write is in flight in this test. (3) line 869-885 (#237 suite), 'the two-step survives the swap: arm -> confirm/cancel..., cancel restores a trigger that STILL renders the trashcan' -- same shape, no in-flight write. (4) line 473-496, 'while a DELETE is in flight, rename/indent/unindent on every OTHER row are disabled' -- uses a deferred deleteMock, clicks confirm-sec-bass, then asserts OTHER rows' controls (arrange-rename-sec-alto, arrange-indent-sec-alto, arrange-unindent-sec-sop1) are disabled and undraggable while the gate is held -- it does NOT query section-remove-confirm-sec-bass or section-remove-cancel-sec-bass at all during the in-flight window, so it is silent on (and will not break under) the fix, but also gives no coverage of the fixed behavior -- a new assertion is needed here. None of the four existing tests assert on the confirm/cancel pair's disabled or aria-busy state during removePending, so the fix does not contradict any current assertion, but nothing today locks in the new behavior either -- new specs are required.",
+     "files": [
+      "src/routes/page.roster-arrange-crud.spec.ts"
+     ]
+    },
+    {
+     "title": "A second, near-duplicate KNOWN-GAP comment lives in the spec file and is not named by the issue",
+     "detail": "src/routes/page.roster-arrange-crud.spec.ts lines 824-827 carry: 'KNOWN PRE-EXISTING GAP, flagged NOT fixed (out of this issue's scope): the confirm/cancel halves here carry no disabled/aria-busy wiring during the in-flight delete, unlike the agenda's. #237 is a glyph sweep; the gap predates it and stays as-is.' This is a second standing description of the exact gap #273 closes, sitting directly above the #237 describe block (829-886) that the KNOWN GAP text refers to. Issue #273's 'Done when' list only names the code comment at :3660 (now :4123) for removal; it does not mention this spec-file duplicate. Leaving this comment in place after the fix lands would reproduce precisely the 'a comment describing a closed gap' failure the issue itself calls out (#264/#261) -- so the fix's scope should be read to include this comment too, even though the issue's literal text doesn't cite it.",
+     "files": [
+      "src/routes/page.roster-arrange-crud.spec.ts"
+     ]
+    },
+    {
+     "title": "Agenda has 'double-tap' (confirm-disabled) specs but no cancel-mid-flight spec anywhere to mirror",
+     "detail": "src/routes/page.season-manage-delete.spec.ts has two direct precedents for confirm double-submit: line 735, 'the confirm is disabled while its DELETE is in flight -- a double-tap cannot fire two' (event row: arms, clicks confirm, waits for the confirm button's disabled===true, clicks confirm again, asserts deleteEventMock called exactly once, then releases the gate and asserts the row disappears); and line 1414, 'the season confirm is disabled while the cascade runs -- a double-tap cannot fire two cascades' (same shape for the season-level delete). There is no equivalent test for the SERIES row (only event and season have a double-tap spec) and, more importantly, a repo-wide grep of this spec file for 'cancel' near 'disabled'/'in flight' turns up no test that clicks Cancel while a delete is in flight and asserts anything -- the agenda side has never explicitly exercised cancel-mid-flight either. So the pattern to mirror on the CONFIRM/double-submit half is directly available (line 735's shape, using a held/deferred delete promise); the CANCEL/'cancel that does not cancel' half has no existing spec on either roster or agenda to copy -- that assertion (disabled attribute present + click is inert while removePending, i.e. the write still lands and no misleading UI state appears) will need to be written fresh, inferred only from the shared disabled={pendingId !== null} binding on the agenda's cancel buttons (5824, 6683, 6813), not from any existing behavioral test.",
+     "files": [
+      "src/routes/page.season-manage-delete.spec.ts"
+     ]
+    }
+   ]
+  },
+  "blast": {
+   "findings": [
+    {
+     "title": "Blast radius: a SECOND armed confirm/cancel pair on the SAME roster page shares the gap — and is actually exploitable (member-deactivate)",
+     "detail": "src/routes/roster/+page.svelte:3196-3213 renders `member-deactivate-confirm-{row.memberId}` / `member-deactivate-cancel-{row.memberId}` with no `disabled`/`aria-busy` at all, same as section-remove's pair. But unlike section-remove, this one is REALLY reachable during the in-flight write, not just theoretically: in `handleDeactivateConfirm` (:813-899) the arm flag `pendingDeactivateId` is NOT cleared until AFTER two awaited reads (`resolveMyLibraryId`, `listDeactivateBlockers`, :845-846) and the write itself (`deactivateMember`, :852) — it stays === row.memberId (buttons stay mounted, unguarded) through the whole async chain. `disarmDeactivate` (:804-808) has zero guard against `deactivatePending` — clicking Cancel while a deactivate is in flight silently disarms the UI immediately while the write keeps running. When it later resolves: a refusal sets `deactivateRefusal` (:848) or a failure sets `deactivateActionError` (:894-895) and RENDERS on the row (:3225-3252) regardless of arm state — i.e. an alert appears on a row the user believes they already cancelled out of. On success it silently reloads the roster and the member disappears. This is the exact 'half-landed-write / lying-affordance' shape #273 cites (#253/#264), and it is real here, not merely hypothetical. Per the issue's scope fence this is named, not fixed, here.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "The stated 'why' for section-remove (double-submit, cancel-that-doesn't-cancel) does not actually reproduce today — the real risk is a JS-level backstop, not a UI gap",
+     "detail": "In `handleRemoveSection` (src/routes/roster/+page.svelte:1403-1497), `pendingRemoveId = null` (:1421) runs SYNCHRONOUSLY at the top of the handler, BEFORE `removePending = true` (:1449) and before any `await`. So the moment Confirm is clicked, the armed confirm/cancel pair unmounts (replaced by the disabled DeleteTrigger, since `structuralWritePending` flips true in the same synchronous tick) — there is no rendered window where confirm/cancel coexist with an in-flight delete FOR THAT ROW. A genuine double-click (two separate browser click events) cannot double-submit: Svelte's microtask-flushed re-render always lands between two physical clicks. The `if (structuralWritePending) return;` guard at :1409 is a defensive backstop the code's own comment (:1404-1409) admits exists because 'the armed Confirm button renders unconditionally' — but given the synchronous unmount, that backstop is effectively unreachable via normal UI interaction for section-remove specifically (it is very much reachable for member-deactivate, see the other finding). Net: today, a hypothetical second DELETE never reaches the wire — the guard silently no-ops it (no second HTTP call, no 404, no console line) — because the confirm control is already gone by the time a second click could land.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "Delete wire trace: single idempotent-by-construction DELETE; a genuinely fired double-confirm would be a silent no-op, not a double network call or a 404",
+     "detail": "`deleteSection` (src/lib/sections/sectionActions.ts:465-484) does a pre-check (member/child count) then one `DELETE entity/{sectionId}`. There is no client-side dedup key or request-in-flight cache other than the `structuralWritePending` early-return in the handler (:1409). If that guard were ever bypassed, the SECOND call would re-run the emptiness pre-check against a section that may already be gone server-side; Entu's DELETE-on-already-deleted-entity behavior was not independently probed this session [unverified] — but the guard makes this moot in the current code path: with `pendingRemoveId` nulled synchronously (see prior finding), a second confirm click never even calls `handleRemoveSection` a second time through the UI, because the confirm button that would trigger it is unmounted.",
+     "files": [
+      "src/lib/sections/sectionActions.ts",
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "The 'agenda's equivalent' the issue points to is architecturally different, not just visually — matching it literally is a bigger change than adding two attributes",
+     "detail": "The season-manage delete pattern in src/routes/+page.svelte (armSeasonManageDelete :3591-3598 / disarmSeasonManageDelete :3628-3634 / onSeasonManageSeasonDelete :3798-3842) keeps the armed state (`seasonManageDeleteArmed`) SET for the entire duration of the write — it is only cleared on SUCCESS (:3763/:3852, inside `.then()`); on FAILURE it deliberately stays armed so the confirm/cancel pair remains visible next to the error, letting the user retry directly. Both buttons carry `disabled={seasonManageDeletePendingId !== null}` and the confirm additionally carries `aria-busy={seasonManageDeletePendingId === <thisRow>}` (:5801-5802, :5824, :6667-6668, :6683). event/[id]/+page.svelte's single delete pair follows the identical shape (:3181-3204, `disabled={deletePending}` on both, `aria-busy={deletePending}` on confirm). Roster's `pendingRemoveId`, by contrast, is unconditionally nulled at the TOP of the handler regardless of outcome (:1421) — confirm/cancel never survive into the write at all today. A fix that 'matches the agenda's treatment' literally (done-when bullet 1) therefore needs the arm-state lifecycle itself reworked (stop clearing `pendingRemoveId` before the await, clear it only on settle), not just `disabled={removePending}`/`aria-busy` slapped onto the existing buttons — the existing buttons are only ever rendered when neither `pendingRemoveId` nor `removePending` overlap, so today's `disabled` prop would always evaluate false. [speculative: this is about what the fix will need to do, not verified current behavior.]",
+     "files": [
+      "src/routes/+page.svelte",
+      "src/routes/event/[id]/+page.svelte",
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "AXES — multi-collective/stale-switch: `removePending`/`deactivatePending` are NOT reset on a collective switch, only the arm ids are — a real, pre-existing generation-guard gap the fix will touch",
+     "detail": "The route-load machine's `reset` callback (src/routes/roster/+page.svelte:111-134) clears `pendingRemoveId` (:124), `pendingDeactivateId`/`deactivateRefusal`/`deactivateActionError` (:127-129) on every load/switch, but never touches the boolean in-flight flags `removePending` (declared :1401, set :1449, cleared :1494) or `deactivatePending` (:782, :817, :897) — and neither flag's clearing `finally` block is generation-guarded. Concretely: arm+confirm a delete on collective A, switch to collective B before the DELETE settles — `structuralWritePending` (`reorderPending || renamePending || removePending`, :2170) is a single page-wide derived value, so B's freshly-loaded arrange view renders with EVERY structural control (rename/indent/unindent/delete-trigger, all gated on `structuralWritePending`) disabled from load, until A's stale promise finally resolves and unconditionally sets `removePending = false` in its `finally` (:1494) — no `if (g !== routeLoad.generation)` guard there, unlike the reconcile-after-failure branch a few lines up (:1481, :1485) which does check generation before touching `sections`. The SUCCESS path is worse: it is not generation-guarded at all — `removeStatus = m.roster_section_removed(...)` (:1465) fires into the live region even if B is now on screen, announcing a removal about a section that has nothing to do with what the screen currently shows. Same shape on `deactivatePending`/`handleDeactivateConfirm`: only the inactive-panel reload sub-branch (:877-886) is generation-guarded; the `deactivatePending = false` in its `finally` (:897) is not. Any disabled/aria-busy wiring the #273 fix adds will read off these same un-guarded flags, so it inherits this staleness — worth flagging to whoever picks up the fix, even though it predates #273 and is out of its scope fence.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "AXES — rights tiers: both pairs are correctly fail-closed ABSENT (not disabled) for non-privileged viewers, so the fix does not need to touch gating",
+     "detail": "Verified from source: the whole Arrange view (containing section-remove) only renders `{#if viewMode === 'arrange' && admin === 'admin'}` (:3606), and the Arrange toggle chip itself is admin-gated (:3589) — a non-admin never sees the confirm/cancel machinery, not even disabled. member-deactivate is gated `{#if admin === 'admin' && row.personId !== selected?.personId}` (:3189) — absent for non-admins AND absent on the viewer's own row (self-deactivation is unreachable at the UI, matching #255 done-when 7, and covered by page.roster-deactivate.spec.ts:177-192). This is the correct fail-closed=absent posture the task asked me to check; I found no leak.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "AXES — locales: full key coverage across en/et/lv/uk for both control pairs; no missing/placeholder strings, no new copy required for a disabled/aria-busy-only fix",
+     "detail": "Checked messages/en.json, et.json, lv.json, uk.json directly: all `roster_section_remove_*` (remove/cancel/cancel_short/confirm/confirm_short/failed/not_empty/removed) and `roster_member_deactivate_*` (deactivate/cancel/confirm/confirm_prompt/failed) keys are present and populated in all four locales — no fallback-to-English gaps. Since the agenda's matching pattern (event-detail-delete, season-manage-delete) changes only `disabled`/`aria-busy` booleans and keeps the SAME visible label during the pending window (no 'Removing…'-style busy text), a fix that mirrors that exactly needs no new translation keys. Short forms ('Remove?'/'Eemalda?'/'Noņemt?'/'Видалити?', 'Confirm'/'Kinnita'/'Apstiprināt'/'Підтвердити') are all short single-word-or-less strings already shipping today at the touch-target widths these buttons use — I found no new overflow risk introduced by adding `disabled`/`aria-busy` alone. If the eventual fix instead adds a distinct busy-state LABEL (unlike either reference pattern), that would need new keys × 4 locales and lv's participle-agreement convention (noted elsewhere in this codebase for season/event copy) would need checking — flagging as a scope risk to watch for, not a current defect.",
+     "files": [
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json"
+     ]
+    },
+    {
+     "title": "Test coverage gap: no test exercises 'cancel clicked while the write is genuinely in flight' for either pair — the exact scenario #273 is worried about",
+     "detail": "page.roster-deactivate.spec.ts's cancel test (:205-217, 'cancel disarms — the arm control returns, still nothing written') only arms then cancels — it never clicks Confirm first, so it never puts `deactivatePending` in flight before cancelling. No test in this file or page.roster-arrange-crud.spec.ts clicks Confirm, awaits the arm/pending window, and THEN clicks Cancel while the promise is still unresolved (the `deferred()` helper at roster-arrange-crud.spec.ts:462-470 is used for exactly this kind of gate elsewhere in the same file but never against the confirm/cancel pair itself). This is a real, verified absence, not a guess about untested code.",
+     "files": [
+      "src/routes/page.roster-deactivate.spec.ts",
+      "src/routes/page.roster-arrange-crud.spec.ts"
+     ]
+    },
+    {
+     "title": "Tests that would need rework if the fix adopts the agenda's full architecture (keep-armed-through-settle) rather than attribute-only patching",
+     "detail": "[speculative — depends on the implementation choice, not yet made] Three focus-management tests in page.roster-arrange-crud.spec.ts assume today's unmount-on-confirm architecture: 'a SUCCESSFUL delete lands focus on the PREVIOUS SIBLING arrange row' (:679-700), 'a FAILED delete returns focus to the RESTORED ✕ — never <body>' (:709-728), and 'a REFUSED delete whose refetched tree makes the ✕ INELIGIBLE lands focus on the row' (:730-770) — all three click Confirm then wait for focus to land on the (unarmed) trigger `section-remove-sec-bass`, not on a still-armed confirm button. The agenda's own failure-path convention (src/routes/+page.svelte, onSeasonManageSeasonDelete :3798-3842) deliberately does NOT disarm on failure — it leaves the confirm/cancel pair standing next to the error for a direct retry. If the #273 fix copies that failure-handling convention (not just the disabled/aria-busy attributes) onto roster, these three focus-target assertions would need updating to expect focus staying on/returning to the confirm button rather than the ✕. If instead the fix keeps roster's existing 'disarm on any settle' behavior and only adds disabled/aria-busy during the (now non-zero) window the pair is mounted while pending, these three tests likely survive unchanged.",
+     "files": [
+      "src/routes/page.roster-arrange-crud.spec.ts"
+     ]
+    },
+    {
+     "title": "No invite-provenance (invite-created vs auto-provisioned) branching found near either control pair",
+     "detail": "Checked the rendering conditions and handler bodies for both section-remove (:4090-4137) and member-deactivate (:3189-3253): gating is purely `admin === 'admin'` (+ not-self for deactivate) and structural eligibility (`canDelete`, `renamingSectionId`). No reference to invite-created vs auto-provisioned person/member provenance was found conditioning visibility or enablement of either pair, so this axis does not appear to introduce differential exposure for the #273 fix to worry about — noted as checked, not skipped.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    }
+   ]
+  }
+ },
+ "r271": {
+  "surface": {
+   "findings": [
+    {
+     "title": "REPO GUARD passed — origin is mvox-app.git; reads taken at main HEAD, not the checked-out branch",
+     "detail": "`git remote get-url origin` = https://github.com/mvox-dev/mvox-app.git. Working tree is on branch chore/282-id-code (HEAD 18c16ae) with one unrelated unstaged change (teams/mvox-dev/memory/team-lead.md) — untouched. Every file below was read via `git show main:<path>` against main's HEAD (d0d8f08), not the working tree, so line numbers are main-HEAD-accurate. No edits, commits, branch changes, or live API calls made.",
+     "files": [],
+     "severity": "info"
+    },
+    {
+     "title": "(a) #198 create-work affordance — file, state shape, gate, and the fail-loud/open/clear/insert mechanics",
+     "detail": "File: src/routes/library/+page.svelte. State is FLAT and page-level (one form, not keyed per anything): createWorkOpen/createWorkName/createWorkComposer/createWorkError/createWorkStatus/createWorkNameInput/createWorkPending, lines 195–204. openCreateWorkForm (206–214) clears name/composer/error/status THEN opens. closeCreateWorkForm (216–221) closes and clears name/composer/error. Escape is wired individually onto the name input's keydown and both buttons' keydown (227–241), never the wrapper <div> (a11y: non-interactive elements must not carry keyboard listeners). submitCreateWork (243–291): an in-flight latch (createWorkPending, line 244) blocks double-submit; a fail-loud guard on missing collective/token/libraryId logs console.error and sets createWorkError BEFORE any fetch (250–261); a client-side blank-name check rejects before the data-layer call so the message names the field rather than surfacing the data layer's generic throw (262–270); calls createWork(cfg,{name,composer,libraryEntityId}) (277); on success it LOCAL-inserts into `works` (288, no refetch), sets createWorkStatus via an i18n message with interpolated name (289), then closes the form (290). Auto-focus effect fires when the form opens (295–297). Librarian gate: create-work's ENTIRE UI (including bulk-checkout) lives inside a dedicated `{#if $librarianStore === 'librarian'}` block, lines 748–905 (closes 945), which is structurally separate from the works/editions tree (`{#if status === ...}` starting line 983). Inside that tree, librarian-only affordances are gated INLINE at each render site instead (e.g. availability badge line 1026, checkout controls 1167/1172/1213/1228) — this is the pattern #271's edition-create control must follow, since it lives inside the tree, not inside create-work's page-level section.",
+     "files": [
+      "src/routes/library/+page.svelte"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "(b) Edition list machinery — listEditions, editionNodeStatus states, editionsByWork insert point, expanded-work-node rendering incl. the zero-editions case",
+     "detail": "libraryData.ts: `listEditions(cfg, workId, fetchImpl)` (src/lib/library/libraryData.ts:83–96) GETs `entity?_type.string=edition&_parent.reference=<workId>&props=name,publisher,external_link,file&limit=500`; Edition shape at lines 44–55 (id/name/publisher/workId?/externalLinks[]/files[]). +page.svelte: `type NodeStatus = 'idle'|'loading'|'error'` (line 63). editionNodeStatus is `Map<string,NodeStatus>` (line 74), editionsByWork is `Map<string,Edition[]>` (line 72). loadEditionsFor(workId) (369–391) sets 'loading' (374), fetches, on success sets editionsByWork then 'idle' (377–378); on failure: isAuthExpiredError(e) → status='session-expired' (384–386, READ path so it collapses to the shared notice rather than a dead per-node error inside a tree about to unmount); otherwise sets 'error' (389). toggleWork(workId) (393–404) is the sole caller that also touches expandedWorks: on first expand it calls loadEditionsFor UNLESS editionsByWork already has the id cached (402–403, no refetch on re-expand). Template (1055–1072, inside `{#if isOpen}` under an expanded work li starting 1016): loading → skeleton pulse (1057–1058); error → message + retry button calling loadEditionsFor again (1059–1069); `(editionsByWork.get(work.id) ?? []).length === 0` → `{m.library_editions_empty()}` text only, NO control today (1070–1071) — this is #271's required zero-editions insertion point; else → `{#each editionsByWork.get(work.id) ?? [] as edition}` renders each edition (1073 onward). Because the non-empty branch is a SEPARATE `{:else}` from the zero-editions branch, #271's 'must still offer it' control needs to render in BOTH places (or be hoisted above/after both branches, inside the shared `id=\"library-editions-{work.id}\"` wrapper at 1056), not just appended to one.",
+     "files": [
+      "src/lib/library/libraryData.ts",
+      "src/routes/library/+page.svelte"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "(c) createWork in entityCreate.ts as the precedent — requireText/optional, parent wiring, and the actual #132 no-_sharing create body, quoted",
+     "detail": "src/lib/entity/entityCreate.ts:521–557. Input type (521–533): name (required), libraryEntityId (required — the LIBRARY entity, not the database entity), composer (optional). Body (543–557): `const name = requireText(fn,'name', input.name); const libraryEntityId = requireText(fn,'libraryEntityId', input.libraryEntityId); const props: WireProp[] = [{ type: 'name', string: name }, ...optional('composer', input.composer)]; return postCreate(cfg, 'work', [libraryEntityId], props, fetchImpl);` — parent is a ONE-element array `[libraryEntityId]`, not run through the module's `parentIdsFor` helper (that helper is only used by the season/series/event trio which take a required dbEntityId + extraParentIds). Shared helpers used: `requireText(fn,field,value)` (320–326) throws `${fn}: ${field} must not be empty` pre-fetch; `optional(type,value)` (280–289) trims and OMITS the prop entirely when blank (never sends `''`). `postCreate` (393–429) resolves the type id, builds `[ref('_type',typeId), ...parentIds.map(id=>ref('_parent',id)), ...domainProps]`, POSTs to the COLLECTION `entity` endpoint, throws on non-2xx (419–421) and on a 2xx response missing `_id` (422–427, the 'apparent-success trap'). NO `_sharing`/`_inheritrights` literal appears anywhere in this module by design (#132, module header 49–62): rights are trusted to propagate from the parent (library entity) down; a repo-wide grep guard (src/lib/profile/soleCreatePath.spec.ts, NEEDLE='_inheritrights', allowlist of exactly 3 files) would flag a new create function if it ever set that literal — entityCreate.ts is deliberately NOT on that allowlist because it never needs to be. The precedent test file is src/lib/entity/entityCreate.work.spec.ts; its '#198 critical: NO _sharing and NO inherit-rights flag' block (245–256) asserts `body.filter(p=>p.type==='_sharing')` and `_inheritrights` are both `[]` and the only `_`-prefixed props are `['_parent','_type']` — the exact assertion shape a createEdition spec should reuse.",
+     "files": [
+      "src/lib/entity/entityCreate.ts",
+      "src/lib/entity/entityCreate.work.spec.ts"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "(d) edition_type — honest answer from docs only, no live probe: Entu's 'required' is never server-enforced, so the technical premise of #271's Shape-section instruction resolves without needing to check live",
+     "detail": "SHAPE-OF-RECORD: `edition` is NOT in scripts/migrations/lib/mvox-schema-extensions.ts (grep confirms it has no `edition` entity def) — it is not an mvox app-extension type, so per the issue's own routing rule the historical v4E reference is the shape-of-record fallback. In ~/projects/entu-research/docs/schema/v4E/schema.ts, the `edition` EntityDef (lines 415–468) lists `{ name: 'edition_type', type: 'string', required: true, note: 'full_score | vocal_score | part | reduction | audio | video | supplementary' }` at lines 449–453 — this exactly matches what #271's body claims, confirmed rather than assumed. HOWEVER 'required:true' in that schema source is a DESIGN-DOC marker, not a live-platform enforcement claim, and team memory settles that question generically: project_entu_mandatory_soft.md states Entu's `mandatory`/`required` is a soft UI hint, PO-confirmed 2026-05-19, 'does NOT enforce at the API layer and does NOT retroactively invalidate existing entities that lack the property.' This app's OWN entityCreate.ts module contract independently documents the same platform fact in its own words (lines 69–73: 'REQUIRED MEANS REQUIRED — validated BEFORE any fetch... Entu's `mandatory` is a soft UI hint that rejects nothing server-side, so this module is the ONLY enforcement point.'). Because this is a platform-level mechanism (not something specific to how THIS db's edition type happens to be configured), it settles #271's Shape-section conditional ('if it does [enforce it], it belongs on this form...') in the negative WITHOUT a live probe: a create-edition write that omits edition_type will not be rejected by Entu regardless of the live type definition's mandatory flag. So including edition_type on the form is a pure PRODUCT/UX choice, not a technical necessity — and the issue's OWN 'Out of scope for v1' section already makes that product choice explicit: 'The private field set — edition_type, license, year, cost. Not domain-visible; not on this form.' NOTE — internal contradiction left unresolved in the issue text: the Shape section (mid-body) still reads as a conditional instruction to add edition_type pending verification, while the Out-of-scope section (later in the same body) unconditionally excludes it; none of the 3 comments explicitly reconciles the two (comment 1 raised the question — 'establish that before building the form... Added to the body' — but the split comment's 'unchanged otherwise' (comment 3) is ambiguous as to whether it re-confirms the Out-of-scope exclusion or merely leaves the Shape section's open question open). The honest, doc-grounded technical answer removes the blocking uncertainty either way: omitting edition_type is safe to ship, matching the Out-of-scope section and matching createWork's own precedent of never sending edition-type-shaped private fields.",
+     "files": [
+      "scripts/migrations/lib/mvox-schema-extensions.ts",
+      "src/lib/entity/entityCreate.ts"
+     ],
+     "severity": "notable"
+    },
+    {
+     "title": "(e) i18n key family — library_create_work_* as the naming template, present identically in all 4 locales",
+     "detail": "messages/en.json:555–562 (mirrored in et.json/lv.json/uk.json at the same key set, verified by grep across all four): library_create_work_button, _name_label, _composer_label, _submit, _cancel, _name_required, _created ('{name} created.', interpolated), _error. A create-edition form following this template would need library_create_edition_button/_name_label/_publisher_label/_submit/_cancel/_name_required/_created/_error at minimum, added to all four locale files (en/et/lv/uk) per the project's i18n convention — no edition_type-specific key needed given the (d) finding that the form omits that field.",
+     "files": [
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "Design gap not covered by the #198 precedent as-is: create-work's flat single-form state cannot represent 'a control per expanded work'",
+     "detail": "createWorkOpen/createWorkName/createWorkComposer/createWorkError/createWorkStatus/createWorkPending (src/routes/library/+page.svelte:195–204) are all FLAT $state — correct for create-work because there is exactly one such form on the page. #271 requires the control inside EVERY expanded work node, any number of which may be open simultaneously (expandedWorks is itself a `Set<string>`, line 70), so a literal copy of create-work's state shape would let only one work's create-edition form be open at a time app-wide, silently stealing focus/state across works. The codebase already has the needed keyed-Map precedent to follow instead, in the SAME file: editionNodeStatus/copyNodeStatus (`Map<string,NodeStatus>`, lines 74–75) and inlineCheckoutErrors (`Map<string,string>`, line 173, read via `inlineCheckoutErrors.get(copy.id)` at 1197–1198) both key per-parent-id state that must vary per tree node. A create-edition implementation should key its open/name/publisher/error/pending state by workId (e.g. `Map<string, {...}>` or parallel `Map<string, X>` state vars), not reuse createWork's flat-boolean shape verbatim.",
+     "files": [
+      "src/routes/library/+page.svelte"
+     ],
+     "severity": "notable"
+    },
+    {
+     "title": "Fail-loud-on-expired-JWT acceptance criterion is already satisfied for free by reusing entuFetch/postCreate — no extra code needed",
+     "detail": "src/lib/entu/request.ts:38–43 states the pinned contract explicitly: 'a 401 on a WRITE (POST) fires the same recovery as a read' — entuFetch's handleAuthExpired401 (referenced at request.ts:142, `if (res.status === 401) return handleAuthExpired401();`) ends the session and redirects to sign-in BEFORE postCreate's own `!res.ok` branch (entityCreate.ts:419–421) ever sees the response, for ANY caller including a future createEdition. submitCreateWork's own catch block (+page.svelte:278–284) does not special-case isAuthExpiredError at all — it doesn't need to, because the redirect already happened upstream by the time the catch runs; the local `createWorkError` message is just a fallback for non-401 failures. A create-edition submit handler should copy this exact shape (generic catch, no explicit 401 branching) rather than inventing new expired-JWT handling.",
+     "files": [
+      "src/lib/entu/request.ts",
+      "src/lib/entity/entityCreate.ts",
+      "src/routes/library/+page.svelte"
+     ],
+     "severity": "info"
+    }
+   ]
+  },
+  "blast": {
+   "findings": [
+    {
+     "title": "createWork's per-page $state shape cannot be copied verbatim — create-edition needs per-work (multi-instance) state",
+     "detail": "#198's create-work form is a single page-level affordance: `createWorkOpen`/`createWorkName`/`createWorkComposer`/`createWorkError`/`createWorkPending` are flat booleans/strings (+page.svelte:195-204), because there is only ever one 'create work' entry point on the page. But `expandedWorks` is a `Set<string>` (+page.svelte:70) — a librarian can expand MULTIPLE work nodes at once, and #271 puts the create-edition control inside EVERY expanded work node. A literal 'match #198's shape' reading (as the issue's precedent section suggests) would wire a single flat `createEditionOpen` boolean shared across all expanded works, so opening the form under Work A while Work B is also expanded would show the SAME open form under both (or none). The state needs to be keyed per work (e.g. `Map<workId, {open, name, publisher, error, pending}>` or a per-work `Set`/`Map`), following the same keyed-Map idiom this file already uses for `editionNodeStatus`/`copyNodeStatus` (+page.svelte:74-75), not the flat page-singular idiom #198 used.",
+     "files": [
+      "src/routes/library/+page.svelte"
+     ]
+    },
+    {
+     "title": "The editions-empty vs editions-list branches are mutually exclusive — a naive insert would hide the control exactly when it's most needed",
+     "detail": "The template is an if/elseif/else chain: loading -> error -> `{:else if (editionsByWork.get(work.id) ?? []).length === 0}` renders only `m.library_editions_empty()` -> `{:else}` renders the `#each` edition list (+page.svelte:1057-1246). The issue explicitly requires 'A work with zero editions must still offer it [the create-edition control] — that is the case that makes a newly created work usable at all.' Dropping the new control inside the populated `{:else}` branch (the natural place to put it 'alongside that work's edition list') would silently exclude the zero-editions case, which is the scenario the acceptance criteria call out by name. The control must render as a sibling AFTER this if/elseif/else chain (gated only on `editionNodeStatus.get(work.id) === 'idle'` and librarian), not nested inside the populated branch.",
+     "files": [
+      "src/routes/library/+page.svelte"
+     ]
+    },
+    {
+     "title": "createWork's local-insert has no generation guard against a mid-flight collective switch — the same gap would carry into createEdition",
+     "detail": "`submitCreateWork` captures `current = selected` at the top, awaits `createWork(...)`, then unconditionally does `works = [...works, {...}]` (+page.svelte:274-291) with NO check that `selected` (or a generation counter) still matches `current` when the await resolves. Contrast with every other async resolution in this same file — `librarianGen`/`copyNameGen`/`chainGen` (+page.svelte:482-568, 583-624) all guard their state writes with `if (g !== someGen) return`. If a librarian switches collective while a create-work/create-edition POST is in flight, the local insert lands in whichever `works`/`editionsByWork` array is on screen for the NEWLY selected collective, inserting a phantom row that actually belongs to the OLD collective's database. This is the exact 'multi-collective/stale-switch (generation-guard idiom)' axis called out as mandatory for this review, and it is a pre-existing, unguarded gap in the #198 precedent that #271's createEdition should not blindly inherit — worth a generation guard (or at minimum, re-checking `selected === current` before the local insert) on both, unless already accepted as a known gap.",
+     "files": [
+      "src/routes/library/+page.svelte"
+     ]
+    },
+    {
+     "title": "createEdition's parent id must be the work's id, NOT the library entity id — createWork's own shape is the wrong template to copy for the parent",
+     "detail": "`createWork` sends `_parent: [libraryEntityId]` only (entityCreate.ts:543-557, `postCreate(cfg, 'work', [libraryEntityId], ...)`), because a work's v4E parent IS the library entity. The issue's own text ('Write layer: a `createEdition`... joining the shared CREATE layer, parent = the work id') confirms editions parent to their WORK, matching `listEditions`'s read-side scoping (`_parent.reference=<workId>`, libraryData.ts:90). The rights gate is identical either way (librarian = `_editor`/`_owner` on the LIBRARY entity, checked once at page level via `librarianStore`/`resolveLibrarian`, librarianStore.ts:99-141) — so create-edition needs nothing extra from the rights side that create-work doesn't already prove — but the CREATE payload's `_parent` must NOT reuse `libraryEntityId` the way createWork's shape might tempt an implementer to copy; it must use the specific work's id from the loop context.",
+     "files": [
+      "src/lib/entity/entityCreate.ts",
+      "src/lib/library/libraryData.ts"
+     ]
+    },
+    {
+     "title": "No spec pins edition ordering; listEditions applies no sort — append-at-end (createWork's pattern) is safe for the local insert",
+     "detail": "`listEditions` (libraryData.ts:83-98) maps Entu's response verbatim with no client-side sort, and no spec in `src/routes/page.library*.spec.ts` asserts an ordering across multiple editions under one work (grep for editions-container child-order/count assertions returned nothing). `createWork`'s local insert appends to the end (`works = [...works, {...}]`, +page.svelte:288) and there's no evidence editions need different treatment — appending the new edition to the end of `editionsByWork.get(workId)` is consistent with both the read path and existing precedent, and no spec would need updating for ordering.",
+     "files": [
+      "src/lib/library/libraryData.ts",
+      "src/routes/library/+page.svelte"
+     ]
+    },
+    {
+     "title": "Exact fail-loud JWT-expiry precedent to mirror is submitCreateWork's three-way guard + its dedicated spec",
+     "detail": "The shape to copy: capture `current = selected`, `token = getToken()`, `libraryId = $libraryEntityIdStore`; if any is falsy, `console.error('library: create work with no cfg/library', {hasCollective, hasToken, libraryId})` then set the field-level error message and return BEFORE any write (+page.svelte:243-261). The exact test to mirror is 'a librarian whose token vanished (session expired under the open form) sees the error and no write is attempted' (page.library-create-work.spec.ts:582-607) — it types a name, then calls `clearAll({preserveProvider:false})` to drop the token mid-form, submits, and asserts the generic error text renders, `createWork` is never called, and the form stays open with what was typed. createEdition's equivalent test needs the same three preconditions (collective / token / **workId already in scope from the loop**, no separate store lookup needed there) plus the identical 'form survives, nothing lost, no write' assertions.",
+     "files": [
+      "src/routes/library/+page.svelte",
+      "src/routes/page.library-create-work.spec.ts"
+     ]
+    },
+    {
+     "title": "Locale coverage precedent: all 4 locales (en/et/lv/uk) fully land create-work's 8 message keys together, with material length variance to watch on the narrower, indented edition-row control",
+     "detail": "All four locale files carry the full 8-key `library_create_work_*` set with no gaps (verified via messages/{en,et,lv,uk}.json). lv and uk strings run noticeably longer than en (e.g. lv `library_create_work_name_required` = 'Darba nosaukums ir obligāts.' vs en 'Work title is required.'; uk button-length strings similarly longer). The create-work button/form sits in the full-width `librarian-tools` section; the new create-edition control instead sits inside the edition list `ml-4` (indented) under `max-w-md` page width (+page.svelte:1056), so it has strictly less horizontal room than create-work's entry point had — worth a length/wrap check on the lv/uk button label and error text at that narrower width, on top of the standard per-locale key-coverage and exact-text-pin discipline #198 established.",
+     "files": [
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json",
+      "src/routes/library/+page.svelte"
+     ]
+    },
+    {
+     "title": "The librarian-tools a11y interactive-reachability scan is scoped away from the browse tree — a new spec is needed, the existing one won't catch regressions",
+     "detail": "`page.library.a11y.spec.ts`'s keyboard-reachability check scopes to `[data-testid=\"librarian-tools\"]` only (`librarianSection.querySelectorAll('button, input, select, textarea, a[href]')`, lines 391-392). Since the create-edition control lives inside the work-tree markup (outside `librarian-tools`), this existing test provides ZERO coverage for the new control's focusability/labeling/touch-target discipline — a dedicated a11y test (or an extension of the existing `library-work-toggle-` keyboard-reachability test at line 402) is needed for parity with create-work's own dedicated touch-target/escape/labeling tests (page.library-create-work.spec.ts:438-538).",
+     "files": [
+      "src/routes/page.library.a11y.spec.ts"
+     ]
+    },
+    {
+     "title": "edition_type enforcement question is unresolved and explicitly gates the form shape per the issue text",
+     "detail": "The issue states v4E marks `edition_type` `required: true` and instructs implementers to 'Establish whether the live `edition` type enforces it before shipping a form that omits it' — if enforced server-side, the form (currently scoped to just name+publisher per the confirmed stated choices) would need a third required field with enum `full_score | vocal_score | part | reduction | audio | video | supplementary`. Nothing in the current codebase (entityCreate.ts, libraryData.ts) resolves or checks this live; it is an open pre-implementation verification step named directly in the issue body, not something this review can settle by reading source.",
+     "files": []
+    }
+   ]
+  }
+ },
+ "r283": {
+  "surface": {
+   "findings": [
+    {
+     "title": "REPO GUARD passed — HEAD confirmed post-#268",
+     "detail": "`git remote get-url origin` = https://github.com/mvox-dev/mvox-app.git. HEAD = 18c16aedcde3b4a07016dd2accb61b3489be5e81 (working tree has only an unrelated `teams/mvox-dev/memory/team-lead.md` modification, no code changes). All findings below are read-only, no edits made.",
+     "files": []
+    },
+    {
+     "title": "(a) name-required guard's exact shape and slot — new guards go directly after it, still before recordSavingMemberId / the fresh-lookup await",
+     "detail": "`saveRecordEditor` (src/routes/roster/+page.svelte:1152). Idiom to copy, lines 1183-1186:\n```\nif (recordForm.name.trim() === '') {\n\trecordSaveError = { memberId, kind: 'name-required' };\n\treturn;\n}\n```\nThis sits after the single-flight/lookup/error-reset preamble (lines 1157-1173: `recordSavingMemberId !== null` early-return, cfg/lookup guards, `recordSaveError = null`, `recordStatus = ''`) and immediately BEFORE `const g = routeLoad.generation;` (1187) and `recordSavingMemberId = memberId;` (1188) — i.e. before the in-flight guard is armed. The fresh `loadMemberRecord` re-read await is further down at line 1201, inside the try block, gated behind `recordSavingMemberId = memberId`. Per #268 review F2's comment (1174-1182), the reason this all lives in the handler rather than `required`/native validation is stated explicitly: the editor is a `<div>` not a `<form>`, save is `type=\"button\"` + onclick, so browser constraint validation never runs automatically here — Gama's comment 1 in #283 confirms the same for `type=\"email\"`.\nThe phone and email guards must slot in the SAME spot as name-required — after line 1186's `return}` and before line 1187 — so they run before `recordSavingMemberId` is set and before the fresh-lookup suspension point, exactly as the task specifies.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "(b) phone/email inputs — bind:value + testid exist for both; NO bind:this on either; the file's own bind:this idiom is elsewhere",
+     "detail": "Phone input (src/routes/roster/+page.svelte:3058-3064): `type=\"tel\"`, `data-testid=\"roster-record-phone\"`, `bind:value={recordForm.phone}`, `disabled={recordSavingMemberId !== null}` — no `bind:this`.\nEmail input (3068-3074): `type=\"email\"`, `data-testid=\"roster-record-email\"`, `bind:value={recordForm.email}`, `disabled={recordSavingMemberId !== null}` — no `bind:this`.\nThe phone guard needs no element reference (it's a plain string/regex check on `recordForm.phone`). The email guard per Gama's design (`emailInputEl.checkValidity()`) needs an element reference that does not exist yet and must be added. The file's existing bind:this idiom (for `renameInputEl` at 2148/3818 and `pageCreateNameInput` at 1586/4182) is: declare `let xInputEl = $state<HTMLInputElement | null>(null);` near the other editor state (e.g. beside `recordEditorOriginal` around line 1061), then `bind:this={xInputEl}` on the `<input>` (would go on the email input, alongside its existing `bind:value`).",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "(c) CRITICAL — happy-dom (not jsdom) is the suite's DOM environment; checkValidity() for type=email genuinely works there — verified both by reading source and by running it live",
+     "detail": "vitest.config.ts default `environment: 'node'` (no DOM at all); individual specs opt into DOM per-file. src/routes/page.roster-record-editor.spec.ts:1 has `// @vitest-environment happy-dom` — confirmed this is happy-dom, not jsdom. No prior `checkValidity`/`validity`/`reportValidity` usage exists anywhere in src/ (grep across .ts/.svelte returned nothing) — this would be the first use in the codebase.\nRead the pinned happy-dom source (package.json `\"happy-dom\": \"^20.11.1\"`, node_modules resolves to 20.11.1 exactly): `HTMLInputElement.checkValidity()` (node_modules/happy-dom/lib/nodes/html-input-element/HTMLInputElement.js:1195-1206) returns `disabled || readOnly || type in {hidden,reset,button} || validity.valid`. `ValidityState.typeMismatch` (node_modules/happy-dom/lib/validity-state/ValidityState.js:120-127) runs a real HTML5-spec-style `EMAIL_REGEXP` (line 2) against `element.value` when `type === 'email'` and `value.length > 0` — this is NOT a stub, it's a functioning (deliberately permissive, RFC-5322-violating-by-design, matching the actual browser behavior Gama's comment describes) email format check. `.valid` (line 161) combines it with the other validity flags.\nEmpirically ran this exact happy-dom version standalone (node -e requiring the installed `happy-dom` package, creating a real `<input type=\"email\">`):\n```\n\"not an email\" -> false\n\"a@b\"          -> true\n\"joosep@example.com\" -> true\n\"\"             -> true   (empty passes — matches the optional-field requirement)\n\"a@b@c\"        -> false\n```\nThis matches Gama's stated design exactly: catches the reported hole (`not an email`), does not reject `a@b` (the weakest-fallback-rule floor Gama drew), and treats empty as valid (field stays optional, same as phone). At the point `saveRecordEditor` would call `emailInputEl.checkValidity()` (per finding (a), before `recordSavingMemberId = memberId` is set), the input's `disabled` binding (`recordSavingMemberId !== null`) is `false` — confirmed by re-reading the guard order in (a) — so the disabled-short-circuit in `checkValidity()` does not mask the real check.\nHonest answer to the [speculative] grade: it graduates to CONFIRMED. This was read from source AND executed live against the exact pinned version/environment the suite uses — not just consulted from memory. No fallback hand-regex is needed; Gama's `emailInputEl.checkValidity()` design works as specified in this codebase's actual test environment.",
+     "files": [
+      "vitest.config.ts",
+      "src/routes/page.roster-record-editor.spec.ts",
+      "node_modules/happy-dom/lib/nodes/html-input-element/HTMLInputElement.js",
+      "node_modules/happy-dom/lib/validity-state/ValidityState.js"
+     ]
+    },
+    {
+     "title": "(d) i18n idiom for the refusal messages — key family, alert rendering, 4 locales, 2 new keys needed (none exist yet)",
+     "detail": "Key family: `roster_record_<condition>` in messages/{en,et,lv,uk}.json, consumed via generated paraglide `m.roster_record_<condition>()` calls (e.g. `m.roster_record_name_required()` at +page.svelte:1127... actually used at render, line 3127). Existing sibling keys at messages/en.json:238-246 (`roster_record_name_required`, `roster_record_save_failed`, `roster_record_save_partial`) each have parallel entries at the same line numbers in et.json/lv.json/uk.json (verified: et.json:238, lv.json:238, uk.json:238 all carry `roster_record_name_required`).\nRendering idiom (+page.svelte:3112-3132): a single `<p data-testid=\"roster-record-save-error\" role=\"alert\">` block keyed off `recordSaveError.kind` via an `{#if}/{:else if}` chain, one branch per `RecordSaveError` variant. `RecordSaveError` is a discriminated union (+page.svelte:1044-1051) currently `'failed' | 'partial' | 'name-required'`; two new variants (e.g. `'phone-invalid'`, `'email-invalid'`) need adding to the union, a `recordSaveError = { memberId, kind: '...' }` set in each new guard, and a matching `{:else if recordSaveError.kind === '...'}  {m.roster_record_..._invalid()}` branch. Confirmed no `roster_record_phone_*` or `roster_record_email_*` keys exist yet in messages/en.json (only the field labels `roster_record_phone_label`/`roster_record_email_label` at lines 239-240) — the two new refusal messages are net-new, ×4 locales = 8 new JSON entries total, following the exact copy pattern already used by `roster_record_name_required` (state what's wrong, state nothing was saved, tell the admin what to do).",
+     "files": [
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json",
+      "src/routes/roster/+page.svelte"
+     ]
+    }
+   ]
+  },
+  "blast": {
+   "findings": [
+    {
+     "title": "Premise correction: NO existing #268 spec touching saveRecordEditor asserts save proceeds with a letter-containing phone or an invalid-format email — none will flip",
+     "detail": "Only src/routes/page.roster-record-editor.spec.ts exercises saveRecordEditor's phone/email inputs (grep across all *.spec.ts for phoneInput/emailInput/roster-record-phone/roster-record-email/saveRecordEditor confirms this — the other two hits, page.profile-whole-field.spec.ts and page.profile-first-save-tier-reactivity.spec.ts, drive a *different* editor entirely, the Profile page's own field-by-field editor, not the roster admin_member_record editor). Every `fireEvent.input(phoneInput(...))` call in that file uses digit/space/+ only: '+372 5559876' (lines 475, 764, 966), '+372 5550000' (lines 579, 649), '+372 5559876' (604) — none contain a letter. Every `fireEvent.input(emailInput(...))` call uses a well-formed address: 'failed@secret.example' (623), 'kept@example.com' (792). A phone guard that excludes `\\p{L}` and an email guard via `checkValidity()`/a weak one-`@` check would both pass every one of these values unchanged. So the #268 spec suite as it stands today has ZERO tests asserting save proceeds with a value the proposed guards would refuse — the task brief's premise that such specs 'will flip' does not hold against current HEAD; the follow-up work is pure addition (new guard-refusal tests, same shape as the existing name-required ones), not spec repair.",
+     "files": [
+      "src/routes/page.roster-record-editor.spec.ts"
+     ],
+     "severity": "notable"
+    },
+    {
+     "title": "Unicode letter class (\\p{L}) has zero precedent in this codebase but the toolchain supports it cleanly",
+     "detail": "grep -rn '\\\\p{' src/ returns nothing — no existing regex in the app uses Unicode property escapes. tsconfig target is 'esnext' (.svelte-kit/tsconfig.json), Node runtime is v22.14.0, and a direct probe confirms `/\\p{L}/u` matches Estonian õ/š and Cyrillic А, and correctly excludes digits and '+': `/\\p{L}/u.test('õ')===true`, `.test('š')===true`, `.test('А')===true`, `.test('5')===false`, `.test('+')===false`. No browserslist config, no vite `build.target` override in vite.config.ts, and no esbuild target override in svelte.config.js — Vite (^8.2.0, package.json:38) applies its default modern baseline target, under which esbuild does not down-level regex literal syntax, and unicode property escapes have shipped in all evergreen browsers since ~2018-2020. So a `\\p{L}`-based phone guard is toolchain-safe, but is genuinely new ground for this project: it should ship with its own direct smoke assertion (not just inference from this audit) confirming behavior inside the actual vitest/browser-condition test environment (vite.config.ts sets `resolve.conditions: ['browser']` under VITEST — worth confirming the regex behaves identically there, not just under plain Node).",
+     "files": [
+      "tsconfig.json",
+      ".svelte-kit/tsconfig.json",
+      "vite.config.ts",
+      "package.json"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "Guard placement contract: the new phone/email guard MUST sit where name-required sits — before recordSavingMemberId/generation capture — or it will corrupt the partial-save/damaged/stale-switch contracts",
+     "detail": "The only existing save-time guard (`recordForm.name.trim() === ''`) lives at +page.svelte:1183-1186, AFTER `recordStatus = ''` (line 1173, which owns clearing the live region before any gate) but BEFORE `const g = routeLoad.generation` and `recordSavingMemberId = memberId` (lines 1187-1188) — i.e. it returns early, never entering the single-flight/generation-guarded async block that does the fresh re-read (1201), the damaged-path branch (1208-1215), or the MemberRecordPartialSaveError handling (1252-1270). A phone/email guard added anywhere inside or after that async block — e.g. after the fresh lookup — would risk two distinct corruptions: (1) conflating a guard refusal with the `damaged`/`partial`/`failed` recordSaveError kinds that are reserved for wire-level and check-then-create outcomes (the union at 1044-1051 has no slot that means 'refused before any write attempt' other than name-required's own kind — a new guard needs its OWN kind, exactly as name-required got its own rather than reusing 'failed'), and (2) letting a guard refusal enter the single-flight lock (`recordSavingMemberId`) even though nothing was ever sent to the wire, which would incorrectly disable other rows' save controls (per the review-F3 comment at 1153-1157, that lock is meant to represent an in-flight WRITE, not a local refusal). Both the status-region-cleared-before-gate contract and the not-a-write single-flight contract are pinned by the existing name-required tests at page.roster-record-editor.spec.ts:690-708 and 761-783 — the same test shapes must be written for the new guard(s), asserting `recordSavingMemberId`/save-button stay enabled and `createMemberRecordMock`/`updateMemberRecordMock` are never called.",
+     "files": [
+      "src/routes/roster/+page.svelte",
+      "src/routes/page.roster-record-editor.spec.ts"
+     ],
+     "severity": "notable"
+    },
+    {
+     "title": "Typed-values-survive-failure pins DO already cover guard refusals, not just wire failures — this is the template the phone/email guard tests must copy",
+     "detail": "Two distinct categories exist today in page.roster-record-editor.spec.ts: wire-failure pins (lines 569, 600, 614, 638, 668 — MemberRecordPartialSaveError / rejected promise cases) and guard-refusal pins for name-required (lines 690-708, 761-783 CREATE path, 785-802 UPDATE path, 804-811 whitespace, 813+ retry-after-fix). The guard-refusal tests specifically assert: the sibling typed field (phone at 764/780, email at 792/801) survives untouched; the error copy is the guard's OWN string, explicitly asserted NOT to contain '[roster_record_save_failed]' (line 775); createMemberRecordMock/updateMemberRecordMock are never called; the save control re-enables (`disabled` is `false`, line 781); and the status region stays empty/silent (line 782, and line 706 for the 'clear happens before the gate' ordering). No equivalent tests exist yet for phone or email format — confirmed by grepping messages/{en,et,lv,uk}.json: each carries exactly 12 `roster_record_*` keys (grep -c), an exact 1:1 match with the 12-entry EXACT table in page.roster-record-i18n.spec.ts (lines 17-101), with no phone-invalid/email-invalid/phone-format-style key present in any locale. The i18n spec's own header (lines 83-87) documents WHY this matters: the editor spec's paraglide mock synthesizes `[key]` from the key name alone, so a missing or wrong translation would pass silently there — only the i18n spec's direct locale-file read catches it, meaning new guard-copy keys are unverified until they get their own EXACT-table entries across all 4 locales.",
+     "files": [
+      "src/routes/page.roster-record-editor.spec.ts",
+      "src/routes/page.roster-record-i18n.spec.ts",
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json"
+     ],
+     "severity": "notable"
+    },
+    {
+     "title": "AXIS — multi-collective/stale-switch generation-guard idiom: currently unexercised for any future guard, by construction of guard placement",
+     "detail": "The `g = routeLoad.generation` / `routeLoad.isCurrent(g)` / `recordEditorMemberId !== memberId` staleness checks (+page.svelte:1187, 1207, 1245, 1251) all live AFTER the generation capture, which itself comes after the name-required gate. Tests at lines 725-751 (collective-switch-mid-edit, held-success-settling-after-switch) exercise this machinery but never type an invalid phone/email, so they cannot currently regress from adding the new guard — PROVIDED the new guard is placed before line 1187 per the finding above (it never reaches the generation-guarded zone, so there is nothing for a stale switch to interact with). This is a placement-dependent non-issue rather than a live gap, but is worth a dedicated new test once the guard exists: confirm a guard refusal typed on a now-stale row (after a collective switch) does not surface anywhere, matching the discipline `cancelRecordEditor`/`openRecordEditor` already apply.",
+     "files": [
+      "src/routes/roster/+page.svelte",
+      "src/routes/page.roster-record-editor.spec.ts"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "AXIS — rights tiers: whole editor (and therefore any new guard) is already fail-closed as ABSENT for non-admin, no new exposure",
+     "detail": "Confirmed via page.roster-record-editor.spec.ts:264 ('a non-admin sees NO pencil anywhere — absent, not disabled (whole-block gating)') and :984 ('no editor field testid exists anywhere for a non-admin'), both driven by the `admin === 'admin'` gate wrapping the whole record-editor block in +page.svelte. Since saveRecordEditor and any guard added inside it are only reachable through that same gated UI, the fail-closed-as-absent contract is inherited automatically — this axis needs no new code and no new test to hold; it was already re-verified here directly against source, not assumed.",
+     "files": [
+      "src/routes/page.roster-record-editor.spec.ts",
+      "src/routes/roster/+page.svelte"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "AXIS — invite-created vs auto-provisioned persons: no differentiation exists or is needed in this save path",
+     "detail": "grep for auto-provision/invite-created terminology (auto-provision, autoProvision, invite-created, inviteCreated) only hits invite-flow-specific files (src/lib/invite/selfLink.spec.ts, src/lib/invite/redeem.ts, src/lib/invite/inviteData.ts, docs/architecture/invite-flow.md, docs/architecture/entu-rights-and-visibility-model.md) — none of which src/lib/roster/memberRecord.ts or the roster record editor reference. memberRecord.ts's own header (lines 1-47) keys everything off `personId` alone, with no branch on provisioning origin. The proposed phone/email guard, wherever it lands, will apply uniformly to every person regardless of how they were provisioned — this axis was checked and found not applicable, not overlooked.",
+     "files": [
+      "src/lib/roster/memberRecord.ts",
+      "src/lib/invite/inviteData.ts"
+     ],
+     "severity": "info"
+    },
+    {
+     "title": "New guard copy must follow the established never-echo-the-value idiom (crede carries real PII)",
+     "detail": "memberRecord.ts's header (lines 44-46) states the privacy rule explicitly for this exact surface: 'real member PII on a live pilot (crede). Thrown messages and any logging carry STATIC strings + status codes ONLY, never a field value.' The existing partial-save copy (roster_record_save_partial) interpolates `{saved}` with FIELD LABELS via `RECORD_FIELD_LABEL` (+page.svelte:3121-3125), never the typed value itself, and the name-required copy is a static string with no interpolation at all. Any new phone-invalid/email-invalid copy must follow the same shape — name the field, never echo what was typed — consistent with Gama's own comment in the issue that a refusal 'names the field' only.",
+     "files": [
+      "src/lib/roster/memberRecord.ts",
+      "src/routes/roster/+page.svelte"
+     ],
+     "severity": "info"
+    }
+   ]
+  }
+ }
+}
