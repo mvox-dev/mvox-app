@@ -250,6 +250,14 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		// appears if GREEN actually passes it into the refusal copy.
 		expect(refused.textContent).toContain('Polyphony');
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
+		// #286 done-when 5 — the refusal does NOT disarm: the pair stays ARMED
+		// beside the alert (blockers listed; the admin cancels out or retries
+		// after removing the grant). Pre-#286 the refusal branch nulled the arm
+		// id in the same breath it set the refusal, so the alert stood against a
+		// disarmed row — the exact done-when-4 lie, on EVERY refusal.
+		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
 	it('FAIL-CLOSED: when the rights read itself rejects, deactivate does NOT proceed', async () => {
@@ -264,6 +272,11 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		// settle any pending microtasks — the write must still not have fired
 		await new Promise((r) => setTimeout(r, 0));
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
+		// #286 done-when 5 — a failed check leaves the pair ARMED beside its
+		// alert, never a silently disarmed rest state.
+		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
 	// #255 review r3 F1 — the id fed to the rights read used to be
@@ -294,6 +307,11 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		expect(resolveMyLibraryId).not.toHaveBeenCalled();
 		expect(listDeactivateBlockersMock).not.toHaveBeenCalled();
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
+		// #286 done-when 5 — the early bail-out is a FAILURE path like any other:
+		// the pair stays armed beside the alert.
+		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
 	// #255 review round 2 F1 — the LIBRARY lookup is part of the same fail-closed
@@ -320,6 +338,10 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		// Never reached the rights read, never reached the write.
 		expect(listDeactivateBlockersMock).not.toHaveBeenCalled();
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
+		// #286 done-when 5 — the pair stays armed beside the alert.
+		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
 	// The one factual emptiness `resolveMyLibraryId` may assert still skips the
@@ -563,6 +585,15 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		// Names the member — the alert renders in a list of rows.
 		expect(alert.textContent).toContain('Berta Bass');
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
+		// #286 done-when 5 — the alert stands NEXT TO the still-armed pair,
+		// re-enabled for direct retry; the rest-state trigger never returned.
+		const confirmAfter = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-confirm-m2"]'
+		);
+		expect(confirmAfter).not.toBeNull();
+		expect(confirmAfter!.disabled).toBe(false);
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
 	it('a rejected STATUS WRITE surfaces the same alert, and the roster is NOT refetched as if it worked', async () => {
@@ -578,9 +609,23 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).not.toBeNull()
 		);
 		expect(loadRosterMock.mock.calls.length).toBe(rosterLoadsBefore);
+		// #286 done-when 5 — the failed write leaves the pair ARMED and
+		// re-enabled beside the error, for direct retry (the #273 lifecycle).
+		const confirmAfter = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-confirm-m2"]'
+		);
+		expect(confirmAfter).not.toBeNull();
+		expect(confirmAfter!.disabled).toBe(false);
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
-	it('re-arming the confirm clears a previous failure alert — it is about the tap that just failed, not the row', async () => {
+	// #286 REWORK — this test used to click the plain trigger post-failure to
+	// clear the alert. Under the stays-armed lifecycle (done-when 5) that
+	// trigger no longer exists post-failure: the pair sits armed next to the
+	// error. The alert is still about the tap, not the row — so leaving the
+	// lifecycle (explicit cancel) clears it, and a FRESH arm starts clean.
+	it('cancel-then-rearm after a failure: cancel disarms AND clears the alert; a fresh arm starts with no stale alert', async () => {
 		deactivateMemberMock.mockRejectedValue(new Error('403'));
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
@@ -591,10 +636,23 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).not.toBeNull()
 		);
+		// Post-flight cancel: disarms AND clears the alert (done-when 4 — no
+		// alert may stand against a disarmed row). Under the stays-armed
+		// lifecycle the cancel is still on screen next to the error.
+		const cancel = container.querySelector('[data-testid="member-deactivate-cancel-m2"]');
+		expect(cancel, 'the pair must still be armed beside the failure alert').not.toBeNull();
+		await fireEvent.click(cancel!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-m2"]')).not.toBeNull()
+		);
+		expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull();
+		// Re-arm: a clean pair, no stale alert riding along.
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
-			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).toBeNull()
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
 		);
+		expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).toBeNull();
 	});
 
 	it('a rejected REINSTATE surfaces a role=alert next to that inactive row — otherwise the tap produces no visible change at all', async () => {
@@ -630,6 +688,344 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		expect(alert.textContent).toContain('Gone Girl');
 		// She is still inactive — the row stays exactly where it was.
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).not.toBeNull();
+	});
+});
+
+// ── #286 RED — the armed deactivate pair stays HONEST through the in-flight
+// chain (the #273 arm-state lifecycle, on this page's OTHER armed pair) ──
+//
+// Premise on record (issue #286 + pre-build research, drift-checked against
+// roster/+page.svelte at branch base):
+//
+//   - `pendingDeactivateId` stays SET through the whole async chain (two
+//     awaited reads — resolveMyLibraryId, listDeactivateBlockers — then the
+//     write), so the pair stays MOUNTED in flight... carrying no `disabled`
+//     and no `aria-busy`: a live cancel sits under the admin's finger while
+//     the deactivation lands. Cancel mid-flight disarms the UI and the write
+//     lands anyway — the #253/#264 lying-affordance shape.
+//   - WIDER than the issue's cancel-race framing (research finding): the
+//     refusal branch nulls `pendingDeactivateId` in the same synchronous
+//     block that sets `deactivateRefusal`, and the failure catch nulls it
+//     before setting `deactivateActionError` — while both alerts render
+//     purely by memberId match, never checking arm state. So done-when 4
+//     ("an error or refusal cannot surface against a row the admin has
+//     disarmed") is violated today on EVERY refusal and EVERY failure, not
+//     only via a cancel race. The reworked refusal/fail-closed/fail-loud
+//     specs above pin the stays-armed half; this block pins the in-flight
+//     half and the cancel semantics.
+//   - The binding invariant is `deactivatePending` ITSELF — deliberately NOT
+//     `structuralWritePending` (deactivation is not a section-structural
+//     write; the page's own `reinstatePending`-gated member-reinstate button
+//     is the precedent for a lifecycle write carrying its own flag).
+//   - SECOND VECTOR (research-found, same lie, this control's surface):
+//     `pendingDeactivateId` is a SINGLE slot, and `armDeactivate` is
+//     unguarded — arming a DIFFERENT row mid-flight steals the slot and
+//     orphans the in-flight row's UI. Pinned below: no second row can be
+//     armed while a deactivation is in flight.
+//   - Labels UNCHANGED during pending — no new i18n keys (the agenda model
+//     disables in place, it does not swap copy).
+//   - SCOPE-FENCE ANSWER (the issue asks whether a THIRD armed pair exists):
+//     none — the section-remove pair (#273) and this one are the only two;
+//     the record-editor and section-create cancels are direct-write forms (a
+//     different class) and inline rename is a different UI shape.
+//
+// Timing proofs are deterministic (house method): release-controlled mocks,
+// held at BOTH suspension kinds — the blocker read and the write.
+describe('(A) #286 — the armed pair through the in-flight deactivate: mounted, disabled, aria-busy; cancel inert; one write; one arm slot', () => {
+	function deferred<T = void>() {
+		let resolve!: (v: T) => void;
+		let reject!: (e: unknown) => void;
+		const promise = new Promise<T>((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		return { promise, resolve, reject };
+	}
+
+	it('while the BLOCKER READ is in flight the pair stays mounted — both halves disabled, confirm aria-busy, labels unchanged', async () => {
+		const gate = deferred<{ role: string }[]>();
+		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(listDeactivateBlockersMock).toHaveBeenCalledTimes(1));
+
+		// Suspended INSIDE the read — the whole chain is one in-flight state.
+		const confirm = await waitFor(() => {
+			const el = container.querySelector<HTMLButtonElement>(
+				'[data-testid="member-deactivate-confirm-m2"]'
+			);
+			expect(el, 'confirm must stay mounted through the chain').not.toBeNull();
+			expect(el!.disabled).toBe(true);
+			return el!;
+		});
+		expect(confirm.getAttribute('aria-busy')).toBe('true');
+		const cancel = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-cancel-m2"]'
+		);
+		expect(cancel, 'cancel must stay mounted through the chain').not.toBeNull();
+		expect(cancel!.disabled).toBe(true);
+		// No new i18n keys: the pending face keeps the SAME labels (the Proxy
+		// message mock renders key names, so these pin the keys themselves).
+		expect(confirm.textContent).toContain('roster_member_deactivate_confirm');
+		expect(cancel!.textContent).toContain('roster_member_deactivate_cancel');
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
+
+		// Release with no blockers: the chain completes honestly.
+		gate.resolve([]);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
+	});
+
+	it('while the WRITE is in flight the pair is disabled + confirm aria-busy — a double-tap cannot fire two writes; release → she leaves the roster and the pair disarms', async () => {
+		const gate = deferred();
+		deactivateMemberMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		const loadsBefore = loadRosterMock.mock.calls.length;
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
+
+		const confirm = await waitFor(() => {
+			const el = container.querySelector<HTMLButtonElement>(
+				'[data-testid="member-deactivate-confirm-m2"]'
+			);
+			expect(el, 'confirm must stay mounted through the write').not.toBeNull();
+			expect(el!.disabled).toBe(true);
+			return el!;
+		});
+		expect(confirm.getAttribute('aria-busy')).toBe('true');
+		expect(
+			container.querySelector<HTMLButtonElement>('[data-testid="member-deactivate-cancel-m2"]')!
+				.disabled
+		).toBe(true);
+
+		// Double-tap (the #273 spec shape): attribute AND guard — a second tap
+		// on the still-mounted confirm writes nothing more.
+		await fireEvent.click(confirm);
+		confirm.click();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(deactivateMemberMock).toHaveBeenCalledTimes(1);
+
+		// SUCCESS is the ONE outcome that disarms: from the write onward she is
+		// out of the active reads — refetch, row gone, pair gone with it.
+		loadRosterMock.mockResolvedValue([rosterTwo[0]]);
+		gate.resolve();
+		await waitFor(() =>
+			expect(loadRosterMock.mock.calls.length).toBeGreaterThan(loadsBefore)
+		);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull()
+		);
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).toBeNull();
+		expect(deactivateMemberMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('CANCEL during the held BLOCKER READ is INERT — no disarm, the pair stays mounted; release → the outcome lands honestly', async () => {
+		const gate = deferred<{ role: string }[]>();
+		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(listDeactivateBlockersMock).toHaveBeenCalledTimes(1));
+
+		// The "cancel that does not cancel" (#253/#264 shape): mid-read, cancel
+		// must do NOTHING — attribute and guard both.
+		const cancel = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-cancel-m2"]'
+		)!;
+		await fireEvent.click(cancel);
+		cancel.click();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(
+			container.querySelector('[data-testid="member-deactivate-confirm-m2"]'),
+			'the pair must not disarm while the chain is in flight'
+		).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
+		expect(
+			container.querySelector('[data-testid="member-deactivate-m2"]'),
+			'the rest-state trigger must never render while the chain is running'
+		).toBeNull();
+
+		// Release: the chain proceeds to the write — the tap changed nothing.
+		gate.resolve([]);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
+	});
+
+	it('CANCEL during the held WRITE is INERT — release → the deactivation LANDS: refetch, row gone, never "stopped"', async () => {
+		const gate = deferred();
+		deactivateMemberMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		const loadsBefore = loadRosterMock.mock.calls.length;
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
+
+		const cancel = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-cancel-m2"]'
+		)!;
+		await fireEvent.click(cancel);
+		cancel.click();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(
+			container.querySelector('[data-testid="member-deactivate-confirm-m2"]'),
+			'cancel mid-write must not imply the deactivation was stopped'
+		).not.toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
+
+		// Release: the write LANDS and the UI says so — refetch, she is gone.
+		// Nothing about the mid-flight cancel tap changed the outcome.
+		loadRosterMock.mockResolvedValue([rosterTwo[0]]);
+		gate.resolve();
+		await waitFor(() =>
+			expect(loadRosterMock.mock.calls.length).toBeGreaterThan(loadsBefore)
+		);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-row-m2"]')).toBeNull()
+		);
+		expect(deactivateMemberMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('a SECOND row cannot be armed mid-flight — the single arm slot is never stolen from the in-flight row', async () => {
+		loadRosterMock.mockResolvedValue([
+			...rosterTwo,
+			{ memberId: 'm3', personId: 'pp-3', name: 'Carla Cantus', email: 'carla@example.com', sectionIds: [], dbEntityId: 'db-1' }
+		]);
+		const gate = deferred();
+		deactivateMemberMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-m3"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
+
+		// Arming m3 while m2's write is in flight would repoint the single
+		// `pendingDeactivateId` slot and ORPHAN m2's in-flight UI. Attribute
+		// and guard both — a disabled attr alone does not stop a direct click.
+		const trigger3 = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-m3"]'
+		)!;
+		await fireEvent.click(trigger3);
+		trigger3.click();
+		await new Promise((r) => setTimeout(r, 0));
+		expect(
+			container.querySelector('[data-testid="member-deactivate-confirm-m3"]'),
+			'no second row may arm while a deactivation is in flight'
+		).toBeNull();
+		expect(
+			container.querySelector('[data-testid="member-deactivate-confirm-m2"]'),
+			"the in-flight row's pair must survive the attempted steal"
+		).not.toBeNull();
+
+		gate.resolve();
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull()
+		);
+	});
+
+	it('REFUSAL (held read): the pair stays ARMED and re-enabled beside the refusal — explicit cancel disarms AND clears it (done-when 4)', async () => {
+		const gate = deferred<{ role: string }[]>();
+		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(listDeactivateBlockersMock).toHaveBeenCalledTimes(1));
+
+		gate.resolve([{ role: 'admin' }]);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-refused-m2"]')).not.toBeNull()
+		);
+		// Blockers listed, pair armed and re-enabled: the admin cancels out, or
+		// removes the grant elsewhere and retries through the SAME confirm.
+		const confirm = await waitFor(() => {
+			const el = container.querySelector<HTMLButtonElement>(
+				'[data-testid="member-deactivate-confirm-m2"]'
+			);
+			expect(el).not.toBeNull();
+			expect(el!.disabled).toBe(false);
+			return el!;
+		});
+		expect(confirm.getAttribute('aria-busy')).not.toBe('true');
+		const cancel = container.querySelector<HTMLButtonElement>(
+			'[data-testid="member-deactivate-cancel-m2"]'
+		)!;
+		expect(cancel.disabled).toBe(false);
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
+		expect(deactivateMemberMock).not.toHaveBeenCalled();
+
+		// Post-flight cancel: disarm AND clear — no refusal may stand against a
+		// disarmed row (done-when 4, by construction not by luck).
+		await fireEvent.click(cancel);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-m2"]')).not.toBeNull()
+		);
+		expect(container.querySelector('[data-testid="member-deactivate-refused-m2"]')).toBeNull();
+		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull();
+	});
+
+	it('FAILURE (held write): the pair stays ARMED and re-enabled beside the error — direct retry through the SAME confirm succeeds', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const gate = deferred();
+		deactivateMemberMock.mockImplementation(() => gate.promise);
+		const { container } = await renderRosterAs('admin');
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
+		);
+		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
+
+		gate.reject(new Error('500'));
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).not.toBeNull()
+		);
+		// The #273 retry convention: armed id cleared ONLY on success — the pair
+		// sits re-enabled next to the error, aria-busy gone, trigger never back.
+		const confirm = await waitFor(() => {
+			const el = container.querySelector<HTMLButtonElement>(
+				'[data-testid="member-deactivate-confirm-m2"]'
+			);
+			expect(el).not.toBeNull();
+			expect(el!.disabled).toBe(false);
+			return el!;
+		});
+		expect(confirm.getAttribute('aria-busy')).not.toBe('true');
+		expect(
+			container.querySelector<HTMLButtonElement>('[data-testid="member-deactivate-cancel-m2"]')!
+				.disabled
+		).toBe(false);
+		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
+
+		// Direct retry — the SAME still-armed confirm, no re-arming dance. The
+		// retry's own start clears the stale failure alert.
+		deactivateMemberMock.mockResolvedValue(undefined);
+		loadRosterMock.mockResolvedValue([rosterTwo[0]]);
+		await fireEvent.click(confirm);
+		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(2));
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull()
+		);
+		expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).toBeNull();
+		consoleSpy.mockRestore();
 	});
 });
 
@@ -889,3 +1285,4 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 // (*MVOX:Tallis*)
 // (*MVOX:Josquin* — fail-LOUD regression block, #255 review F2)
 // (*MVOX:Tallis* — #259 in-flight-guard RED block)
+// (*MVOX:Tallis* — #286 in-flight armed-pair RED block + stays-armed reworks)

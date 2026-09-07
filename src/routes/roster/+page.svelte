@@ -793,7 +793,20 @@
 		null
 	);
 
+	// #286 — entry guard closes the SECOND-ARM vector: `pendingDeactivateId` is
+	// a single $state slot (same shape as `pendingRemoveId`), so arming a
+	// DIFFERENT row while one is in flight would repoint the slot and orphan
+	// the in-flight row's confirm/cancel. The trigger's own
+	// `disabled={deactivatePending}` at the render site is the visible,
+	// render-level closure (matches every other trigger on this page); this
+	// guard is the backstop for a click that reaches the handler regardless of
+	// that attribute — the same "twice over" shape `handleRemoveSection`'s own
+	// `if (structuralWritePending) return` already is for confirm double-tap
+	// (#273). STATED CHOICE: both, not one — the issue's "(or an entry guard)"
+	// alternative is not an either/or here, because the trigger's `disabled`
+	// alone does not guarantee a direct `.click()` call is inert.
 	async function armDeactivate(memberId: string): Promise<void> {
+		if (deactivatePending) return;
 		deactivateRefusal = null;
 		deactivateActionError = null;
 		pendingDeactivateId = memberId;
@@ -801,19 +814,68 @@
 		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-confirm-${memberId}"]`)?.focus();
 	}
 
+	/** #286 — no in-flight guard added here: the cancel button that calls this
+	 *  is itself `disabled={deactivatePending}` at the render site, so a
+	 *  disabled control cannot dispatch the click that would reach this
+	 *  function while a deactivation is in flight — the same reasoning #273's
+	 *  own `disarmRemove` relies on (and the agenda's `disarmSeasonManageDelete`
+	 *  before it, which carries no pending-guard either).
+	 *
+	 *  What #286 ADDS here: `deactivateRefusal`/`deactivateActionError` are now
+	 *  cleared too, not just `pendingDeactivateId`. Done-when 4 says no alert
+	 *  may stand against a row the admin has disarmed — and unlike #273's
+	 *  remove (whose failure/refusal alert is impossible to orphan because the
+	 *  pair and the error live under the SAME `pendingRemoveId` gate), this
+	 *  page's deactivate alerts render off `.memberId` alone (see the
+	 *  `{#if deactivateRefusal?.memberId === row.memberId}` /
+	 *  `{#if deactivateActionError?.memberId === row.memberId …}` blocks below,
+	 *  now further gated on `pendingDeactivateId === row.memberId` for the
+	 *  in-flight half of the same guarantee) — an explicit cancel is the other
+	 *  half: it must not merely swap the trigger back in, it must retire the
+	 *  alert with it, so a fresh arm never inherits a stale one. */
 	async function disarmDeactivate(memberId: string): Promise<void> {
 		pendingDeactivateId = null;
+		deactivateRefusal = null;
+		deactivateActionError = null;
 		await tick();
 		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-${memberId}"]`)?.focus();
 	}
 
 	/** Confirm branch of the two-step deactivate. FAIL-CLOSED throughout: the
 	 *  rights read (`listDeactivateBlockers`) rejecting, or any other failure,
-	 *  must never let the write proceed — caught below, nothing sent. */
+	 *  must never let the write proceed — caught below, nothing sent.
+	 *
+	 *  #286 — BINDING INVARIANT: the pair is disabled/aria-busy on
+	 *  `deactivatePending` itself, DELIBERATELY not `structuralWritePending`.
+	 *  Deactivation is not a section-structural write (it doesn't touch
+	 *  `sections`/`_parent`); the page's own `reinstatePending`-gated
+	 *  member-reinstate button is the existing precedent for a lifecycle write
+	 *  carrying its own flag rather than borrowing the arrange-mode one.
+	 *
+	 *  #286 — the arm-state lifecycle (#273, adopted): `pendingDeactivateId`
+	 *  now clears in exactly ONE place — the SUCCESS path below. Every failure
+	 *  path leaves it set, INCLUDING the refusal branch (previously nulled in
+	 *  the same breath `deactivateRefusal` was set) and the outer catch
+	 *  (previously nulled before `deactivateActionError`) — both of those
+	 *  `pendingDeactivateId = null` lines are gone. The pair stays ARMED,
+	 *  re-enabled, next to whichever alert fired, for direct retry through the
+	 *  SAME confirm — no re-arming dance. */
 	async function handleDeactivateConfirm(row: RosterRow): Promise<void> {
 		if (deactivatePending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
+		// #286 — captured BEFORE `deactivatePending` disables the button: real
+		// browsers blur a focused control the instant it goes `disabled`, so by
+		// the time this settles the confirm that was just tapped may already
+		// have lost focus to <body>. Only RESTORE it in the `finally` below if
+		// this write is what owns it — the same `ownsFocus` discipline
+		// `handleRemoveSection` (#273) uses before its own await.
+		const activeAtStart = document.activeElement;
+		const ownsFocus =
+			!activeAtStart ||
+			activeAtStart === document.body ||
+			activeAtStart ===
+				document.querySelector(`[data-testid="member-deactivate-confirm-${row.memberId}"]`);
 		deactivatePending = true;
 		deactivateRefusal = null;
 		deactivateActionError = null;
@@ -845,8 +907,11 @@
 			const libraryId = await resolveMyLibraryId(cfg, undefined, dbEntityId);
 			const blockers = await listDeactivateBlockers(cfg, row.personId, dbEntityId, libraryId);
 			if (blockers.length > 0) {
+				// #286 — `pendingDeactivateId` is DELIBERATELY left set: the refusal
+				// is the designed outcome of the normal mistake (#255's
+				// refuse-don't-strip rule), and it must not disarm the pair it
+				// stands beside (done-when 4/5, #273 lifecycle).
 				deactivateRefusal = { memberId: row.memberId, blockers };
-				pendingDeactivateId = null;
 				return;
 			}
 			await deactivateMember(cfg, row.memberId);
@@ -891,10 +956,25 @@
 			// And fail-LOUD (#255 review F2): the confirm disarms itself and the row
 			// is unchanged, so without this alert the tap reads as "nothing happened".
 			console.error('roster: deactivate failed', row.memberId, e);
-			pendingDeactivateId = null;
+			// #286 — `pendingDeactivateId` is left set here too (the #273 retry
+			// convention): the pair sits armed beside `deactivateActionError`
+			// above for a direct retry through the same confirm.
 			deactivateActionError = { memberId: row.memberId, kind: 'deactivate' };
 		} finally {
 			deactivatePending = false;
+			// #286 — land focus back on the (now re-enabled) confirm for the two
+			// outcomes that leave the pair mounted — refusal and failure — the
+			// same landing `focusableByTestId` already gives `disarmRemove`/
+			// `placeFocusAfterFailedRemove` (#273). Gated on `pendingDeactivateId`
+			// still matching this row: on SUCCESS it is already null and the row
+			// is on its way out via `loadForSelected()` above — a different shape
+			// (async full-roster reload, not a local splice) with no same-render
+			// neighbour to land on, so it is left untouched here, unchanged from
+			// pre-#286 behaviour.
+			if (ownsFocus && pendingDeactivateId === row.memberId) {
+				await tick();
+				focusableByTestId(`member-deactivate-confirm-${row.memberId}`)?.focus();
+			}
 		}
 	}
 
@@ -3285,14 +3365,28 @@
 			     (done-when 7: a member cannot deactivate herself or anyone else via
 			     a control she can't even see for her own row). Two-step confirm
 			     reusing the page's existing destructive idiom (see `pendingRemoveId`
-			     above) rather than inventing a new shape. -->
+			     above) rather than inventing a new shape.
+			     #286 — the armed pair now adopts the agenda's arm-state lifecycle
+			     (#273, `onSeasonManageSeriesDelete`/`section-remove`): stays MOUNTED
+			     through the in-flight read-then-write chain rather than carrying no
+			     wiring at all. `disabled` on all three controls binds to
+			     `deactivatePending` — NOT `structuralWritePending` (deactivation is
+			     not a structural write; the page's own `reinstatePending`-gated
+			     button is the precedent for a lifecycle write's own flag) — so the
+			     confirm/cancel freeze for the whole chain and the plain trigger
+			     (else branch) can't steal the single `pendingDeactivateId` slot out
+			     from under an in-flight row (the second-arm vector; `armDeactivate`
+			     itself backstops this too, see its own comment). `aria-busy` on
+			     confirm alone: this row's own write, mirroring #273. -->
 			<div class="flex flex-wrap items-center gap-2 pt-1">
 				{#if pendingDeactivateId === row.memberId}
 					<span class="text-xs text-ink-2">{m.roster_member_deactivate_confirm_prompt()}</span>
 					<button
 						type="button"
 						data-testid="member-deactivate-confirm-{row.memberId}"
-						class="rounded-md border border-red-700 px-2 py-1 text-xs text-red-700 hover:bg-red-700 hover:text-paper"
+						disabled={deactivatePending}
+						aria-busy={deactivatePending}
+						class="rounded-md border border-red-700 px-2 py-1 text-xs text-red-700 hover:bg-red-700 hover:text-paper disabled:opacity-50"
 						onclick={() => handleDeactivateConfirm(row)}
 					>
 						{m.roster_member_deactivate_confirm()}
@@ -3300,7 +3394,8 @@
 					<button
 						type="button"
 						data-testid="member-deactivate-cancel-{row.memberId}"
-						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink"
+						disabled={deactivatePending}
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 						onclick={() => disarmDeactivate(row.memberId)}
 					>
 						{m.roster_member_deactivate_cancel()}
@@ -3309,17 +3404,23 @@
 					<button
 						type="button"
 						data-testid="member-deactivate-{row.memberId}"
-						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink"
+						disabled={deactivatePending}
+						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 						onclick={() => armDeactivate(row.memberId)}
 					>
 						{m.roster_member_deactivate()}
 					</button>
 				{/if}
 			</div>
-			{#if deactivateRefusal?.memberId === row.memberId}
+			{#if pendingDeactivateId === row.memberId && deactivateRefusal?.memberId === row.memberId}
 				<!-- Gama binding: the refusal NAMES THE REMEDY — who holds what role
 				     and where to remove it — never a bare "cannot deactivate" (the
-				     #252 failure in message form). -->
+				     #252 failure in message form).
+				     #286 — gated on `pendingDeactivateId === row.memberId` too (not
+				     `deactivateRefusal.memberId` alone): a disarmed row can never
+				     carry this alert, by construction of the render condition itself,
+				     not merely by `disarmDeactivate` remembering to clear the state
+				     (done-when 4). -->
 				<p
 					data-testid="member-deactivate-refused-{row.memberId}"
 					role="alert"
@@ -3332,10 +3433,14 @@
 					{/each}
 				</p>
 			{/if}
-			{#if deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'deactivate'}
+			{#if pendingDeactivateId === row.memberId && deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'deactivate'}
 				<!-- #255 review F2 — the loud failure, mirroring `removeError`'s alert
-				     over the section groups. The row is unchanged and the confirm has
-				     disarmed itself, so the copy says exactly that: nothing moved. -->
+				     over the section groups.
+				     #286 — the pair no longer disarms itself on failure (the #273
+				     lifecycle): it stays ARMED and re-enabled next to this alert for a
+				     direct retry, so the copy's "nothing moved" claim stays honest.
+				     Gated on `pendingDeactivateId === row.memberId` for the same
+				     by-construction reason as the refusal alert above. -->
 				<p
 					data-testid="member-deactivate-failed-{row.memberId}"
 					role="alert"
