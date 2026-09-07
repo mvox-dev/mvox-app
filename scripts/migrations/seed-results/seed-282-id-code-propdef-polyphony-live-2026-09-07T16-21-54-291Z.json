@@ -1,0 +1,36 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "authorization": "PO-Approved 2026-09-07 mvox-app#282 comment 5573048456 (Gama, Mihkel verbatim GO)",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "adminMemberRecordTypeId": "6a9dcbc9ca67df980f417470",
+  "idCodePropDefId": "6a9ee4a1ca67df980f417d20",
+  "idCodeOrdinal": 6,
+  "idCodeExpectedSharing": "private",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.id_code",
+      "id": "6a9ee4a1ca67df980f417d20",
+      "outcome": "created",
+      "after": {
+        "type": "string",
+        "sharing": "private",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "admin_member_record.id_code.sharing-readback",
+      "id": "6a9ee4a1ca67df980f417d20",
+      "outcome": "found",
+      "after": {
+        "sharing": "private"
+      }
+    }
+  ],
+  "exitCode": 0
+}
