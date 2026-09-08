@@ -1,0 +1,186 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "purpose": "mvox-app#293 — Crede 2026/27 season repertoire: 5 works + editions, attached to the season and (if found) today's rehearsal. Repertoire/org data only, no personal data — per-instance say-so recorded on the issue.",
+  "libraryId": "6a92a587ca67df980f4156f7",
+  "seasonId": "6a9ab0feca67df980f416b4e",
+  "rehearsalEventId": "6a9ab884ca67df980f416b73",
+  "results": [
+    {
+      "work": "Kadakad",
+      "workId": null,
+      "editionId": null,
+      "repertoireItemId": null,
+      "programItemId": null
+    },
+    {
+      "work": "Von alten Liebesliedern, op. 62 no. 2",
+      "workId": null,
+      "editionId": null,
+      "repertoireItemId": null,
+      "programItemId": null
+    },
+    {
+      "work": "Taaveti laul nr 121",
+      "workId": "6a9de017ca67df980f417522",
+      "editionId": null,
+      "repertoireItemId": null,
+      "programItemId": null
+    },
+    {
+      "work": "O magnum mysterium",
+      "workId": null,
+      "editionId": null,
+      "repertoireItemId": null,
+      "programItemId": null
+    },
+    {
+      "work": "The Deer's Cry",
+      "workId": null,
+      "editionId": null,
+      "repertoireItemId": null,
+      "programItemId": null
+    }
+  ],
+  "ledger": [
+    {
+      "step": "resolve-library",
+      "outcome": "found",
+      "id": "6a92a587ca67df980f4156f7",
+      "entityName": "Polyphony Library"
+    },
+    {
+      "step": "resolve-season",
+      "outcome": "found",
+      "id": "6a9ab0feca67df980f416b4e",
+      "entityName": "2026/2027"
+    },
+    {
+      "step": "resolve-rehearsal-event",
+      "outcome": "found",
+      "id": "6a9ab884ca67df980f416b73",
+      "startDatetime": "2026-09-08T15:00:00.000Z"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "dry-run-would-create",
+      "entityName": "Kadakad",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "Kadakad"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "Kadakad"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "skipped",
+      "reason": "dry-run: edition not yet created",
+      "entityName": "Kadakad"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "dry-run-would-create",
+      "entityName": "Von alten Liebesliedern, op. 62 no. 2",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "Von alten Liebesliedern, op. 62 no. 2"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "Von alten Liebesliedern, op. 62 no. 2"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "skipped",
+      "reason": "dry-run: edition not yet created",
+      "entityName": "Von alten Liebesliedern, op. 62 no. 2"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "found",
+      "id": "6a9de017ca67df980f417522",
+      "entityName": "Taaveti laul nr 121"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "dry-run-would-create",
+      "entityName": "Taaveti laul nr 121",
+      "parentId": "6a9de017ca67df980f417522"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "dry-run-would-create",
+      "entityName": "repertoire_item: Taaveti laul nr 121",
+      "parentId": "6a9ab0feca67df980f416b4e"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "skipped",
+      "reason": "dry-run: edition not yet created",
+      "entityName": "Taaveti laul nr 121"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "dry-run-would-create",
+      "entityName": "O magnum mysterium",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "O magnum mysterium"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "O magnum mysterium"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "skipped",
+      "reason": "dry-run: edition not yet created",
+      "entityName": "O magnum mysterium"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "dry-run-would-create",
+      "entityName": "The Deer's Cry",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "The Deer's Cry"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "skipped",
+      "reason": "dry-run: work not yet created",
+      "entityName": "The Deer's Cry"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "skipped",
+      "reason": "dry-run: edition not yet created",
+      "entityName": "The Deer's Cry"
+    }
+  ]
+}
