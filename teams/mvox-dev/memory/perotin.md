@@ -2,6 +2,57 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] #294 — admin-invite cascade: `_owner` on db entity works, `_editor` doesn't; append-semantics confirmed live (2026-09-09)
+
+Team-lead dispatch, gates #294's roster admin controls ("kutsu"/"saada uuesti"). Question: can a
+collective admin, holding rights ONLY via `_inheritrights` cascade from the DATABASE ENTITY (never
+a direct grant on the target person — `createInvite` only ever plants self-`_editor` on the person
+itself, inviteData.ts:252-271), mint/resend an invite on someone else? Team-lead named this "the
+untested inference" — research flagged [unverified] and refused to assume.
+
+**Live-confirmed on polyphony (synthetic), both grant levels tested, same rig each time**: create
+throwaway synthetic "Caller B" + entu_api_key, grant Caller B a rights level on the DATABASE ENTITY
+itself (before creating the target, so the target's own create-time aggregation already merges
+Caller B in — avoids the async rights-changed-propagation timing question entirely), create the
+target via the REAL `createInvite()`, confirm the cascade materialized in the target's own private
+`_editor` (read-back showed `inherited:true` both times), then call the REAL
+`mintSelfLinkInvite(callerBCfg, targetId)` as Caller B.
+
+- **`_editor` on db entity → REFUSED.** Raw diagnostic POST (identical body, run before the library
+  call to capture Entu's own literal text, since mintSelfLinkInvite's catch only ever reports a
+  fixed string on any 403): HTTP 403, `statusText: "User not in _owner property"`. This is
+  `checkEntityAccess`'s SECOND gate (entu-api utils/entity.js:113-121) by name, but that gate should
+  only fire for rights-type properties per this repo's local `entu-api` clone's `rightTypes` list —
+  `entu_user` isn't in it. **Flagging a local-source-vs-live discrepancy, not resolved**: either the
+  live deployment treats `entu_user` as owner-gated (sensible — minting one IS an account-linking
+  operation) and the local clone is stale, or something else is at play. Not chased further — the
+  live behavior is unambiguous regardless of mechanism.
+- **`_owner` on db entity → SUCCEEDED.** Same rig, only the grant level changed: HTTP 200, token
+  returned (never logged, per the module's own bearer-secret discipline).
+- **Append-semantics, corroborated live (team-lead: "confirm if cheap")**: after the clean
+  `mintSelfLinkInvite` call (which runs its own stale-cleanup first), exactly 1 `entu_user` entry.
+  A deliberate raw bypass POST (skipping the library's cleanup) added a SECOND entry — 2 after,
+  confirmed via fresh GET. Matches source on both counts: Entu POSTs append not replace
+  (`entu_post_appends_multi_value` memory) and `findStoredInvite` (entu-api routes/auth/
+  index.get.js:270-277, independently re-read, matches inviteData.ts's own cited line numbers)
+  takes the FIRST entry carrying `.invite` with no check against the presented token — exactly why
+  `mintSelfLinkInvite`'s stale-cleanup step is load-bearing, not defensive excess.
+
+**Verdict for #294**: an admin-driven "kutsu"/"saada uuesti" control CAN reuse `mintSelfLinkInvite`
+as-is (no library change needed) — but ONLY if the admin's cascade-granting rights on the
+collective are `_owner`, not merely `_editor`. If #294's actual admin model only guarantees editor-
+level rights at the collective, this path is NOT sufficient and the control needs either an
+explicit per-person grant step or an owner-level admin model — team-lead/PO's call, not mine.
+
+Full teardown both runs, independently re-verified (fresh 404s on target + Caller B, fresh GET
+confirms the db-entity grant fully reverted) — zero residue on polyphony.
+
+Script: `scripts/migrations/probes/probe-294-admin-invite-cascade-2026-09-09.ts` (env
+`ADMIN_GRANT_LEVEL=_editor|_owner`, default `_editor`). Results: `scripts/migrations/seed-results/
+probe-294-admin-invite-cascade-{dry,live}-2026-09-08T*.json` — **UNCOMMITTED**, held per team-lead's
+instruction (tree is on `fix/287-roster-pending-collective-switch`, commit only after it lands on
+`main`).
+
 ## [PROBE-RESULT] #294 — viewer-alone CAN read private entu_user; auto-grant-to-creator confirmed (2026-09-08)
 
 PO-team probe commission (polyphony, synthetic, read-then-authorized-write).

@@ -1,0 +1,116 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#294 follow-up (team-lead authorized 2026-09-09) — does a collective-admin grant on the DATABASE ENTITY cascade (via _inheritrights) to authorize mintSelfLinkInvite on ANOTHER person, when no direct grant exists on that person? Plus a cheap live corroboration of entu_user append-semantics.",
+  "ledger": [
+    {
+      "step": "create-caller-b",
+      "outcome": "created",
+      "callerBId": "6aa07a3b20ebf490c690a9ac"
+    },
+    {
+      "step": "mint-caller-b-key",
+      "outcome": "minted",
+      "callerBId": "6aa07a3b20ebf490c690a9ac",
+      "note": "raw key never logged or persisted"
+    },
+    {
+      "step": "grant-caller-b-db-editor",
+      "outcome": "granted",
+      "dbEntityId": "69bcfd8e9c031ab8e6ce807a",
+      "propId": "6aa07a3c20ebf490c690a9b4"
+    },
+    {
+      "step": "create-target-via-createInvite",
+      "outcome": "created",
+      "targetId": "6aa07a3c20ebf490c690a9b5",
+      "memberId": "6aa07a3c20ebf490c690a9be"
+    },
+    {
+      "step": "confirm-cascade-in-rights",
+      "outcome": "inherited-confirmed",
+      "callerBId": "6aa07a3b20ebf490c690a9ac",
+      "targetId": "6aa07a3c20ebf490c690a9b5",
+      "callerBEditorRow": {
+        "_id": "6aa07a3c20ebf490c690a9b4",
+        "reference": "6aa07a3b20ebf490c690a9ac",
+        "property_type": "_editor",
+        "string": null,
+        "entity_type": "person",
+        "inherited": true
+      }
+    },
+    {
+      "step": "raw-diagnostic-post",
+      "outcome": "403",
+      "status": 403,
+      "body": {
+        "error": true,
+        "url": "https://api.entu.app/polyphony/entity/6aa07a3c20ebf490c690a9b5",
+        "status": 403,
+        "statusText": "User not in _owner property",
+        "message": "User not in _owner property"
+      }
+    },
+    {
+      "step": "admin-cascade-mint-test",
+      "outcome": "refused",
+      "detail": "self-link mint refused: HTTP 403 — the person lacks self-_editor",
+      "callerBId": "6aa07a3b20ebf490c690a9ac",
+      "targetId": "6aa07a3c20ebf490c690a9b5"
+    },
+    {
+      "step": "post-mint-read",
+      "outcome": "200",
+      "shape": {
+        "entity": {
+          "_id": "6aa07a3c20ebf490c690a9b5"
+        }
+      }
+    },
+    {
+      "step": "append-check-skipped",
+      "outcome": "skipped",
+      "reason": "mint test did not succeed"
+    },
+    {
+      "step": "cleanup-delete-member",
+      "outcome": "deleted",
+      "memberId": "6aa07a3c20ebf490c690a9be",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-person",
+      "outcome": "deleted",
+      "targetId": "6aa07a3c20ebf490c690a9b5",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-db-grant",
+      "outcome": "deleted",
+      "propId": "6aa07a3c20ebf490c690a9b4",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-caller-b",
+      "outcome": "deleted",
+      "callerBId": "6aa07a3b20ebf490c690a9ac",
+      "status": 200
+    },
+    {
+      "step": "verify-target-gone",
+      "outcome": "404",
+      "expected": 404
+    },
+    {
+      "step": "verify-caller-b-gone",
+      "outcome": "404",
+      "expected": 404
+    },
+    {
+      "step": "verify-db-grant-reverted",
+      "outcome": "fully-reverted"
+    }
+  ]
+}

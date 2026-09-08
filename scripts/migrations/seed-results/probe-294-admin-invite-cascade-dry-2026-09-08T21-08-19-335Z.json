@@ -1,0 +1,12 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#294 follow-up (team-lead authorized 2026-09-09) — does a collective-admin grant on the DATABASE ENTITY cascade (via _inheritrights) to authorize mintSelfLinkInvite on ANOTHER person, when no direct grant exists on that person? Plus a cheap live corroboration of entu_user append-semantics.",
+  "ledger": [
+    {
+      "step": "dry-run",
+      "outcome": "dry-run-would-run"
+    }
+  ]
+}
