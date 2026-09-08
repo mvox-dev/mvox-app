@@ -2,6 +2,65 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] #294 — viewer-alone CAN read private entu_user; auto-grant-to-creator confirmed (2026-09-08)
+
+PO-team probe commission (polyphony, synthetic, read-then-authorized-write).
+Two durable platform findings, both live-confirmed not inferred:
+
+1. **A caller holding EXACTLY `_viewer` (nothing else — no owner/editor/
+   expander) reads a `_sharing:private` PROPERTY (`entu_user`) in full.**
+   Entity-level rights admit to the private bucket independent of
+   property-tier sharing — property sharing does not filter on top of
+   entity rights, it's superseded by them. Tested via a throwaway synthetic
+   caller holding a freshly-minted `entu_api_key` and exactly one explicit
+   grant. Sequential design (viewer→expander→editor, stop-at-first-
+   positive, per PO ruling): viewer alone already answered positive, so
+   expander/editor were never reached — rights are monotonic, a stronger
+   level would only confirm the same thing. **Stakes**: #181 flipped 14
+   person prop-defs domain->private on crede as a privacy control; if a
+   domain-tier viewer bypasses it, the control may be inert against its
+   intended readers. Reported factually, NOT acted on — crede's actual
+   grant configuration is a separate, untouched question, routed to
+   Mihkel. Independently corroborated by the ORIGINAL #294 probe's
+   inherited-omnibus case (person 6a2fc05e, pure `inherited:true` rights,
+   also read in full) — direct and inherited grant construction both
+   converge on the same answer.
+2. **Entu auto-grants the CREATING CALLER direct (non-inherited)
+   `_owner`/`_editor`/`_viewer`/`_expander` on a newly-created entity, at
+   create time, regardless of what the client payload requests.**
+   `inviteData.ts`'s `createInvite()` sends the CALLER nothing explicitly
+   (only self-`_editor` to the new PERSON) — yet a fresh mint's rights
+   showed all four as `direct` for the caller, reproduced on two
+   independent runs. This explains the "observed not intended" surprise
+   from the ORIGINAL #294 probe (two persons showed a direct caller-grant
+   despite invite's described shape) — not a different code path, just
+   this platform behavior nobody had isolated before. `#264`-class lesson:
+   what the client sends and what the platform grants are different
+   questions.
+
+**Gotcha, folded into the PO team's docs-report bundle (their routing,
+not filed by me)**: entu-www's own doc (`api/authentication/index.md:114`)
+says "create the `entu_api_key` property with no value" — a bare
+`{type:'entu_api_key'}` 400s live ("Property must have at least one
+value"). `{type:'entu_api_key', string:''}` works — the doc's INTENT
+(no meaningful value needed) is right, its literal wire example isn't.
+
+**Method note for future rights-level probes**: a clean, minimal-blast-
+radius rig — one throwaway synthetic person (`_parent`=db-root only, no
+`entu_user`, no `_inheritrights`) + one freshly-minted `entu_api_key` +
+exactly one explicit grant on the target — isolates a single rights level
+without touching real data. Full teardown (grant-property DELETE +
+tester-entity DELETE) leaves zero residue, independently re-verified via
+fresh 404 GETs both times, not just trusted from the script's own
+self-report.
+
+Scripts: `probe-294-entu-user-cross-admin-read-2026-09-08.ts` (first
+round — caller-rights characterization, population gaps, anonymous-403
+shape), `probe-294-gap-a-b-rights-level-2026-09-08.ts` (Gap A: 3-state
+distinguishability + auto-grant discriminator; Gap B: per-level rights
+isolation). Both fully idempotent/re-runnable, zero standing fixtures —
+every live entity created was deleted and verified gone.
+
 ## [WIP] #278 full round landed (PR #281), holding for Bentham review (2026-09-07)
 
 Scoping resolved fast: Gama confirmed the guard (issue comment 5564100053)

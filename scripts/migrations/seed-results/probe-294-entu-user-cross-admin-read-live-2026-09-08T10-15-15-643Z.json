@@ -1,0 +1,496 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#294 — PO-team probe: does an entity-rights-holding caller read another person's private-tier entu_user? READ-ONLY, zero mutation.",
+  "callerIdentity": "69bcfd8e9c031ab8e6ce8079",
+  "callerIntegrityNote": "This key resolves to the polyphony account owner (Mihkel) — functionally db-root. A positive result is an UPPER BOUND, not proof a lesser-privileged real admin gets the same access. No second, lower-privileged API key was available to test with.",
+  "populationInventory": {
+    "totalPersons": 4,
+    "redeemedCount": 4,
+    "unredeemedCount": 0,
+    "liveInvitationEntities": 0
+  },
+  "unredeemedPopulationGap": "CONFIRMED GAP — zero unredeemed-invite persons exist on polyphony. Not created (read-only commission). A write-probe would need PO authorization for one throwaway person via inviteData.ts's INVITE_MINT_TRIGGER, under Pérotin's standing polyphony synthetic-data pre-authorization.",
+  "crossReadResults": [
+    {
+      "personId": "6a2fc05e4cd971291c5d5ddc",
+      "sharing": "domain",
+      "parentIsDbRoot": true,
+      "inheritrights": true,
+      "matchesInviteShapeMarkers": true,
+      "createdByCaller": false,
+      "callerOwnerGrantKind": "inherited",
+      "callerEditorGrantKind": "inherited",
+      "callerViewerGrantKind": "inherited",
+      "entuUserReadStatus": 200,
+      "entuUserReadShape": {
+        "entity": {
+          "_id": "6a2fc05e4cd971291c5d5ddc",
+          "entu_user": [
+            {
+              "_id": "6a2fc05e4cd971291c5d5de0",
+              "uid": "people/103228544448049423783",
+              "email": "[REDACTED]",
+              "provider": "google"
+            }
+          ]
+        }
+      },
+      "fullRawRightsView": {
+        "entity": {
+          "_id": "6a2fc05e4cd971291c5d5ddc",
+          "_created": [
+            {
+              "_id": "6a2fc05e4cd971291c5d5de4",
+              "datetime": "2026-06-15T09:05:34.146Z"
+            }
+          ],
+          "_editor": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a78a88623dc1d97bb8f16c3",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a2fc05e4cd971291c5d5de5",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_editor",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person"
+            }
+          ],
+          "_inheritrights": [
+            {
+              "_id": "6a2fc05e4cd971291c5d5ddf",
+              "boolean": true
+            }
+          ],
+          "_parent": [
+            {
+              "_id": "6a2fc05e4cd971291c5d5dde",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_parent",
+              "string": "polyphony",
+              "entity_type": "database"
+            }
+          ],
+          "_sharing": [
+            {
+              "_id": "6a2fc05e4cd971291c5d5de3",
+              "string": "domain"
+            }
+          ],
+          "_owner": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a78a88623dc1d97bb8f16c3",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            }
+          ],
+          "_viewer": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a78a88623dc1d97bb8f16c3",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a2fc05e4cd971291c5d5de5",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_editor",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "personId": "6a7591cc36c951d9114ec8de",
+      "sharing": "domain",
+      "parentIsDbRoot": true,
+      "inheritrights": true,
+      "matchesInviteShapeMarkers": true,
+      "createdByCaller": true,
+      "callerOwnerGrantKind": "direct",
+      "callerEditorGrantKind": "direct",
+      "callerViewerGrantKind": "direct",
+      "entuUserReadStatus": 200,
+      "entuUserReadShape": {
+        "entity": {
+          "_id": "6a7591cc36c951d9114ec8de",
+          "entu_user": [
+            {
+              "_id": "6a75923036c951d9114ec8f3",
+              "uid": "people/106923723141768648958",
+              "email": "[REDACTED]",
+              "provider": "google"
+            }
+          ]
+        }
+      },
+      "fullRawRightsView": {
+        "entity": {
+          "_id": "6a7591cc36c951d9114ec8de",
+          "_created": [
+            {
+              "_id": "6a7591cc36c951d9114ec8e5",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "datetime": "2026-08-07T08:05:32.733Z",
+              "property_type": "_created",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_editor": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a7591cc36c951d9114ec8e6",
+              "reference": "6a7591cc36c951d9114ec8de",
+              "property_type": "_editor",
+              "string": "Testprivname",
+              "entity_type": "person"
+            },
+            {
+              "_id": "6a7591cc36c951d9114ec8e4",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_inheritrights": [
+            {
+              "_id": "6a7591cc36c951d9114ec8e3",
+              "boolean": true
+            }
+          ],
+          "_owner": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a7591cc36c951d9114ec8e4",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_parent": [
+            {
+              "_id": "6a7591cc36c951d9114ec8e0",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_parent",
+              "string": "polyphony",
+              "entity_type": "database"
+            }
+          ],
+          "_sharing": [
+            {
+              "_id": "6a76a89136c951d9114ecff3",
+              "string": "domain"
+            }
+          ],
+          "_viewer": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a7591cc36c951d9114ec8e6",
+              "reference": "6a7591cc36c951d9114ec8de",
+              "property_type": "_editor",
+              "string": "Testprivname",
+              "entity_type": "person"
+            },
+            {
+              "_id": "6a7591cc36c951d9114ec8e4",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "personId": "6a7e24bd23dc1d97bb8f20d9",
+      "sharing": "domain",
+      "parentIsDbRoot": true,
+      "inheritrights": true,
+      "matchesInviteShapeMarkers": true,
+      "createdByCaller": true,
+      "callerOwnerGrantKind": "direct",
+      "callerEditorGrantKind": "direct",
+      "callerViewerGrantKind": "direct",
+      "entuUserReadStatus": 200,
+      "entuUserReadShape": {
+        "entity": {
+          "_id": "6a7e24bd23dc1d97bb8f20d9",
+          "entu_user": [
+            {
+              "_id": "6a7e253223dc1d97bb8f20ec",
+              "uid": "38510170212",
+              "email": "[REDACTED]",
+              "provider": "mobile-id"
+            }
+          ]
+        }
+      },
+      "fullRawRightsView": {
+        "entity": {
+          "_id": "6a7e24bd23dc1d97bb8f20d9",
+          "_created": [
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20e0",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "datetime": "2026-08-13T20:10:37.051Z",
+              "property_type": "_created",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_editor": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20e1",
+              "reference": "6a7e24bd23dc1d97bb8f20d9",
+              "property_type": "_editor",
+              "string": "Joosep Loidap",
+              "entity_type": "person"
+            },
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20df",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_inheritrights": [
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20de",
+              "boolean": true
+            }
+          ],
+          "_owner": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20df",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_parent": [
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20db",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_parent",
+              "string": "polyphony",
+              "entity_type": "database"
+            }
+          ],
+          "_sharing": [
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20dd",
+              "string": "domain"
+            }
+          ],
+          "_viewer": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20e1",
+              "reference": "6a7e24bd23dc1d97bb8f20d9",
+              "property_type": "_editor",
+              "string": "Joosep Loidap",
+              "entity_type": "person"
+            },
+            {
+              "_id": "6a7e24bd23dc1d97bb8f20df",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "anonymousResults": [
+    {
+      "personId": "6a2fc05e4cd971291c5d5ddc",
+      "filteredGet": {
+        "status": 403,
+        "body": {
+          "error": true,
+          "url": "https://api.entu.app/polyphony/entity/6a2fc05e4cd971291c5d5ddc?props=entu_user",
+          "status": 403,
+          "statusText": "No accessible properties",
+          "message": "No accessible properties"
+        }
+      },
+      "fullGetStatus": 403
+    },
+    {
+      "personId": "6a7591cc36c951d9114ec8de",
+      "filteredGet": {
+        "status": 403,
+        "body": {
+          "error": true,
+          "url": "https://api.entu.app/polyphony/entity/6a7591cc36c951d9114ec8de?props=entu_user",
+          "status": 403,
+          "statusText": "No accessible properties",
+          "message": "No accessible properties"
+        }
+      },
+      "fullGetStatus": 403
+    },
+    {
+      "personId": "6a7e24bd23dc1d97bb8f20d9",
+      "filteredGet": {
+        "status": 403,
+        "body": {
+          "error": true,
+          "url": "https://api.entu.app/polyphony/entity/6a7e24bd23dc1d97bb8f20d9?props=entu_user",
+          "status": 403,
+          "statusText": "No accessible properties",
+          "message": "No accessible properties"
+        }
+      },
+      "fullGetStatus": 403
+    }
+  ],
+  "crossAdminTestable": true,
+  "crossAdminGapNote": null
+}

@@ -1,0 +1,133 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#294 follow-up (PO-authorized 2026-09-08) — Gap A: unredeemed-invite population + 3-state distinguishability. Gap B: per-rights-level (_viewer/_expander/_editor) private-property read test. Question (1) polyphony platform behavior settled here; question (2) crede configuration NOT touched, NOT inferred.",
+  "keepGapAFixture": false,
+  "ledger": [
+    {
+      "step": "gap-a-create-invite",
+      "outcome": "created",
+      "personId": "6a9fe33020ebf490c690a829",
+      "memberId": "6a9fe33020ebf490c690a832"
+    },
+    {
+      "step": "gap-a-auto-grant-discriminator",
+      "outcome": "auto-grant-confirmed",
+      "callerId": "69bcfd8e9c031ab8e6ce8079",
+      "callerGrants": {
+        "_owner": "direct",
+        "_editor": "direct",
+        "_viewer": "direct",
+        "_expander": "direct"
+      }
+    },
+    {
+      "step": "gap-a-state-unredeemed",
+      "outcome": "200",
+      "shape": {
+        "entity": {
+          "_id": "6a9fe33020ebf490c690a829",
+          "entu_user": [
+            {
+              "_id": "6a9fe33020ebf490c690a82c",
+              "invite": "***"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": "gap-a-state-absent-via-member",
+      "outcome": "200",
+      "shape": {
+        "entity": {
+          "_id": "6a9fe33020ebf490c690a832"
+        }
+      }
+    },
+    {
+      "step": "gap-a-state-redeemed",
+      "outcome": "200",
+      "personId": "69bcfd8e9c031ab8e6ce8079",
+      "shape": {
+        "entity": {
+          "_id": "69bcfd8e9c031ab8e6ce8079",
+          "entu_user": [
+            {
+              "_id": "69bcfdb69c031ab8e6ce84a3",
+              "uid": "people/103779930399101381938",
+              "email": "[REDACTED]",
+              "provider": "google"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": "gap-b-_viewer-create-tester",
+      "outcome": "created",
+      "testerId": "6a9fe33120ebf490c690a83b"
+    },
+    {
+      "step": "gap-b-_viewer-mint-key",
+      "outcome": "minted",
+      "testerId": "6a9fe33120ebf490c690a83b",
+      "note": "raw key never logged or persisted"
+    },
+    {
+      "step": "gap-b-_viewer-grant",
+      "outcome": "granted",
+      "targetId": "6a9fe33020ebf490c690a829",
+      "propId": "6a9fe33220ebf490c690a843"
+    },
+    {
+      "step": "gap-b-_viewer-read",
+      "outcome": "200",
+      "level": "_viewer",
+      "targetId": "6a9fe33020ebf490c690a829",
+      "shape": {
+        "entity": {
+          "_id": "6a9fe33020ebf490c690a829",
+          "entu_user": [
+            {
+              "_id": "6a9fe33020ebf490c690a82c",
+              "invite": "***"
+            }
+          ]
+        }
+      },
+      "canRead": true
+    },
+    {
+      "step": "gap-b-early-stop",
+      "outcome": "stopped",
+      "atLevel": "_viewer",
+      "reason": "positive result — further escalation adds no new information"
+    },
+    {
+      "step": "cleanup-delete-grant-_viewer",
+      "outcome": "deleted",
+      "status": 200,
+      "propId": "6a9fe33220ebf490c690a843"
+    },
+    {
+      "step": "cleanup-delete-tester",
+      "outcome": "deleted",
+      "status": 200,
+      "testerId": "6a9fe33120ebf490c690a83b"
+    },
+    {
+      "step": "cleanup-delete-gap-a-member",
+      "outcome": "deleted",
+      "status": 200,
+      "memberId": "6a9fe33020ebf490c690a832"
+    },
+    {
+      "step": "cleanup-delete-gap-a-person",
+      "outcome": "deleted",
+      "status": 200,
+      "targetId": "6a9fe33020ebf490c690a829"
+    }
+  ]
+}

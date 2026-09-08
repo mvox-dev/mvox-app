@@ -1,0 +1,24 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#294 follow-up (PO-authorized 2026-09-08) — Gap A: unredeemed-invite population + 3-state distinguishability. Gap B: per-rights-level (_viewer/_expander/_editor) private-property read test. Question (1) polyphony platform behavior settled here; question (2) crede configuration NOT touched, NOT inferred.",
+  "keepGapAFixture": false,
+  "ledger": [
+    {
+      "step": "gap-a",
+      "outcome": "dry-run-would-run"
+    },
+    {
+      "step": "gap-b",
+      "outcome": "dry-run-would-run",
+      "levels": [
+        "_viewer",
+        "_expander",
+        "_editor"
+      ],
+      "ordering": "sequential-stop-at-first-positive",
+      "grantKind": "direct"
+    }
+  ]
+}
