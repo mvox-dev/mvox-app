@@ -19,7 +19,7 @@
 - The INFERENCE section of `docs/migration/findings/entu-property-bucket-visibility-2026-07-19.md` (the "0 of 21 prop-defs have sharing" claim and the stale-bucket explanation built on it — **wrong**; the SOURCE-VERIFIED and LIVE-MEASURED sections of that doc stand)
 - Any "no entity-to-entity grants" claim stated as a source-enforced rule (see §6 for the accurate version)
 
-**Provenance key:** [P] = read directly by Palestrina this pass · [F] = read directly from source by Finn this pass (auth chain). No third category — if it isn't one of these, it isn't in this document.
+**Provenance key:** [P] = read directly by Palestrina this pass · [F] = read directly from source by Finn this pass (auth chain) · [PE] = live-probe verified by Pérotin (2026-09-08 addition, §7) — observed wire behavior against live Entu, not a source `file:line` read; narrower confidence than [P]/[F], flagged as such at point of use.
 
 ---
 
@@ -134,6 +134,28 @@ But such a grant is inert. The read gate matches a reader's own person id (`user
 
 ---
 
+## 7. Live-probe corroboration — `_viewer`-alone read + create-time caller auto-grant  [PE]
+
+Two additional platform facts, established empirically against live Entu (polyphony db, synthetic data, 2026-09-08) rather than by source read. `[PE]` claims carry narrower confidence than `[P]`/`[F]` — treat as behavior observed, not mechanism confirmed line-by-line; a source read would be the higher bar if ever needed.
+
+### 7.1 A `_viewer`-alone grant already suffices for full private-bucket read
+
+Corroborates §2's `cleanupEntity` branch (line 42-43: any grant matching `access` → full `private` bucket) rather than adding a new mechanism — but makes explicit a consequence not spelled out there: the branch fires on **any** explicit grant type, so a caller holding only `_viewer` (no `_owner`/`_editor`/`_expander`) reads the entire `private` bucket of a `_sharing:private` entity, including individual properties whose own prop-def `_sharing` is more restrictive than the entity's. Tested directly on a `_sharing:private` `entu_user` property with a throwaway synthetic caller holding exactly one explicit `_viewer` grant (sequential viewer→expander→editor probe design, stopped at first positive per rights being monotonic — expander/editor were never reached).
+
+**Property-tier `_sharing` (§3) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole bucket is exposed once any grant admits the caller to it.** Stakes, reported as a mechanism fact only, not acted on: a domain-tier control intended to hide a property from ordinary rights-holders (e.g. mvox-app#181's person-prop-def domain→private flip) is not defended by property-tier sharing alone if those same holders carry any explicit grant. Whether this changes crede's actual grant configuration is a separate, live-data question routed to Mihkel — untouched here.
+
+Probe artifacts: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`, `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`, `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`.
+
+### 7.2 Entity CREATE auto-grants the creating caller all four direct rights, regardless of payload
+
+Not covered by §1-§6 (those describe read-time bucket exposure; this is a create-time grant-assignment fact). Observed: a fresh entity created via `inviteData.ts`'s `createInvite()` — whose payload sends the CALLER no explicit rights at all (only `_editor: self` to the newly-created person) — nonetheless shows the creating caller holding `_owner`/`_editor`/`_viewer`/`_expander` all as **direct** (non-inherited) grants immediately after create, reproduced on two independent runs.
+
+Consequence: **what a create payload sends and what the platform actually grants the creator are different questions** — don't infer a caller's post-create rights from the payload alone; read them back if the answer matters.
+
+Probe artifact: `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`; result `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`.
+
+---
+
 ## What this changes for the single-collective design
 
 - In-collective visibility = `domain` sharing, gated by the db boundary (§4). One install = one collective = one visibility domain. No org entity, no grants, no cascade needed for basic member visibility.
@@ -150,3 +172,5 @@ Between 2026-07-17 and 2026-07-19 the same rights/sharing questions produced thr
 > **Claims about Entu mechanics cite `entu-api` source `file:line`, or are marked unverified. Repo docs — including findings docs — are summaries, not authority.**
 
 (*MVOX:Palestrina*) — auth-chain verification (§4) by Finn, same pass.
+
+(*MVOX:Perotin*) — §7 live-probe corroboration added 2026-09-08, per #294.

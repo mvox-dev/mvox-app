@@ -61,7 +61,7 @@ distinguishability + auto-grant discriminator; Gap B: per-level rights
 isolation). Both fully idempotent/re-runnable, zero standing fixtures —
 every live entity created was deleted and verified gone.
 
-## [WIP] #278 full round landed (PR #281), holding for Bentham review (2026-09-07)
+## [DONE] #278 full round landed — PR #281 merged+closed, issue #278 closed (confirmed by team-lead 2026-09-08) (2026-09-07)
 
 Scoping resolved fast: Gama confirmed the guard (issue comment 5564100053)
 mid-window; Bentham ruled the design (act-and-report) — enumerated
