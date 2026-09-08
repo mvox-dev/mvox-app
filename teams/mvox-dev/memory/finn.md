@@ -73,6 +73,37 @@ sits locally: `~/projects/polyphony/apps/vault/production-backup.sql` (D1 dump, 
 confirm freshness before any real migration run). 22 `members` rows, single org `org_crede_001`.
 `profileData.ts` `createProfile()` does NOT take name/email — separate property POST needed per profile.
 
+## [PATTERN] Invite redemption writes NOTHING admin-readable — two distinct code paths, only one runs per session (2026-09-08, #294)
+
+Source-cited, `~/projects/entu-api`. Two entity-write paths in `routes/auth/index.get.js`, mutually
+exclusive per exchange (`inviteAttempted` flag gates which runs):
+
+- **Invite-redemption path** — `replaceInviteWithCredentials` (L279-287), called at L216/L223 when
+  `query.invite` present. `setEntity` call's properties array is `[{type:'entu_user', _id:<placeholder
+  id>, uid, email, provider}]` — ONLY the `entu_user` property (private-tier, unchanged from creation)
+  is touched. No `name`/`email` top-level props, no rights props (`_editor`/`_owner`/etc — none in the
+  array `checkEntityAccess`/`validatePropertyTypes` would gate on). `setEntity` given a non-null
+  `entityId` skips ALL creation-only logic (`applyDefaultParents`/`inheritParentProperties`/
+  `applyPropertyDefaults` — `entity.js` L44-48 gate on `!entityId`) — update path has zero implicit
+  rights escalation, confirmed by reading `setEntity` itself.
+- **No-invite auto-provision path** — `createUserForAccount` (L289-333), only reachable when
+  `!inviteAttempted` (L236) — i.e. NEVER runs if `query.invite` was present, success or fail. This path
+  DOES write `email` (L318) and conditionally `name` (L321-323) as top-level string props, AND grants
+  `_editor` natively in a second `setEntity` call (L330) — but this is categorically the OTHER path,
+  irrelevant to mvox's invite flow.
+
+**Conclusion for #294**: invite redemption changes nothing an admin can already read — `name`/`email`
+stay empty (matches `createInvite` sending neither), rights stay exactly as `createInvite` set them
+(self-`_editor` only). The three-state discriminator (never-invited / invited-placeholder / redeemed)
+lives ONLY inside `entu_user`'s contents, which is private-tier in every state — no existing mechanism
+surfaces it to an admin. A real fix needs a NEW mechanism: e.g. a domain/public-readable boolean/state
+prop written at redemption time (would need mvox's own redemption-adjacent code, since entu-api's own
+redemption touches nothing else), or a formula computing an aggregate join-state (formulas bypass rights
+— usable for aggregates/booleans, NOT for projecting `entu_user`'s raw contents — see the formula
+mechanics finding cited in common-prompt.md "v4E/Entu" pitfalls; genuinely a candidate worth naming to
+Mihkel, but unverified whether mvox has any redemption-time hook to write it from, since entu-api's
+redemption is a black box mvox doesn't get to run code inside).
+
 ## [DEFERRED] /library filter voicing/language field name mismatch (still open, low priority)
 
 `work.voicing`/`work.language` fetched but schema fields are `original_voicing`/`original_language`. Needs
