@@ -24,8 +24,12 @@
 // repertoireActions.ts before writing this):
 //   - work: parent=library, NO _sharing/_inheritrights (inherits domain).
 //   - edition: parent=work, same no-explicit-sharing rule. Kept MINIMAL —
-//     name + publisher-where-verified only (Pärt: 'UE33723', confirmed).
-//     The other four editions' identity is genuinely unverified pending
+//     name + publisher-where-verified only (Pärt: 'Universal Edition
+//     (UE33723)' — team-lead precision, 2026-09-08: UE33723 alone is a
+//     catalog number, not a publisher name; the combined string keeps both
+//     facts in the field the commission named, without inventing
+//     catalog-field usage nobody asked for). The other four editions'
+//     identity is genuinely unverified pending
 //     Mihkel's PDF upload — that caveat lives in the ledger, not invented
 //     into a field the shape doesn't offer a natural home for.
 //   - repertoire_item: child of SEASON, {work: ref, status:'active'
@@ -93,7 +97,7 @@ const WORKS: WorkDef[] = [
 ];
 
 const EDITION_PUBLISHERS: Record<string, string | undefined> = {
-	"The Deer's Cry": 'UE33723'
+	"The Deer's Cry": 'Universal Edition (UE33723)'
 };
 
 interface LedgerStep {
