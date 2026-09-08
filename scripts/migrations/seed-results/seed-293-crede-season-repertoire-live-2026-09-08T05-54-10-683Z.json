@@ -1,0 +1,205 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "purpose": "mvox-app#293 — Crede 2026/27 season repertoire: 5 works + editions, attached to the season and (if found) today's rehearsal. Repertoire/org data only, no personal data — per-instance say-so recorded on the issue.",
+  "libraryId": "6a92a587ca67df980f4156f7",
+  "seasonId": "6a9ab0feca67df980f416b4e",
+  "rehearsalEventId": "6a9ab884ca67df980f416b73",
+  "results": [
+    {
+      "work": "Kadakad",
+      "workId": "6a9fa2f820ebf490c690a623",
+      "editionId": "6a9fa2f920ebf490c690a62c",
+      "repertoireItemId": "6a9fa2fb20ebf490c690a634",
+      "programItemId": "6a9fa2fb20ebf490c690a63d"
+    },
+    {
+      "work": "Von alten Liebesliedern, op. 62 no. 2",
+      "workId": "6a9fa2fc20ebf490c690a646",
+      "editionId": "6a9fa2fc20ebf490c690a64f",
+      "repertoireItemId": "6a9fa2fd20ebf490c690a657",
+      "programItemId": "6a9fa2fd20ebf490c690a660"
+    },
+    {
+      "work": "Taaveti laul nr 121",
+      "workId": "6a9de017ca67df980f417522",
+      "editionId": "6a9fa2fe20ebf490c690a669",
+      "repertoireItemId": "6a9fa2fe20ebf490c690a671",
+      "programItemId": "6a9fa2fe20ebf490c690a67a"
+    },
+    {
+      "work": "O magnum mysterium",
+      "workId": "6a9fa2ff20ebf490c690a683",
+      "editionId": "6a9fa2ff20ebf490c690a68c",
+      "repertoireItemId": "6a9fa30020ebf490c690a694",
+      "programItemId": "6a9fa30020ebf490c690a69d"
+    },
+    {
+      "work": "The Deer's Cry",
+      "workId": "6a9fa30120ebf490c690a6a6",
+      "editionId": "6a9fa30120ebf490c690a6af",
+      "repertoireItemId": "6a9fa30220ebf490c690a6b8",
+      "programItemId": "6a9fa30220ebf490c690a6c1"
+    }
+  ],
+  "ledger": [
+    {
+      "step": "resolve-library",
+      "outcome": "found",
+      "id": "6a92a587ca67df980f4156f7",
+      "entityName": "Polyphony Library"
+    },
+    {
+      "step": "resolve-season",
+      "outcome": "found",
+      "id": "6a9ab0feca67df980f416b4e",
+      "entityName": "2026/2027"
+    },
+    {
+      "step": "resolve-rehearsal-event",
+      "outcome": "found",
+      "id": "6a9ab884ca67df980f416b73",
+      "startDatetime": "2026-09-08T15:00:00.000Z"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "created",
+      "id": "6a9fa2f820ebf490c690a623",
+      "entityName": "Kadakad",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "created",
+      "id": "6a9fa2f920ebf490c690a62c",
+      "entityName": "Kadakad",
+      "parentId": "6a9fa2f820ebf490c690a623"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "created",
+      "id": "6a9fa2fb20ebf490c690a634",
+      "entityName": "repertoire_item: Kadakad",
+      "parentId": "6a9ab0feca67df980f416b4e"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "created",
+      "id": "6a9fa2fb20ebf490c690a63d",
+      "entityName": "program_item: Kadakad",
+      "parentId": "6a9ab884ca67df980f416b73"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "created",
+      "id": "6a9fa2fc20ebf490c690a646",
+      "entityName": "Von alten Liebesliedern, op. 62 no. 2",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "created",
+      "id": "6a9fa2fc20ebf490c690a64f",
+      "entityName": "Von alten Liebesliedern, op. 62 no. 2",
+      "parentId": "6a9fa2fc20ebf490c690a646"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "created",
+      "id": "6a9fa2fd20ebf490c690a657",
+      "entityName": "repertoire_item: Von alten Liebesliedern, op. 62 no. 2",
+      "parentId": "6a9ab0feca67df980f416b4e"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "created",
+      "id": "6a9fa2fd20ebf490c690a660",
+      "entityName": "program_item: Von alten Liebesliedern, op. 62 no. 2",
+      "parentId": "6a9ab884ca67df980f416b73"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "found",
+      "id": "6a9de017ca67df980f417522",
+      "entityName": "Taaveti laul nr 121"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "created",
+      "id": "6a9fa2fe20ebf490c690a669",
+      "entityName": "Taaveti laul nr 121",
+      "parentId": "6a9de017ca67df980f417522"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "created",
+      "id": "6a9fa2fe20ebf490c690a671",
+      "entityName": "repertoire_item: Taaveti laul nr 121",
+      "parentId": "6a9ab0feca67df980f416b4e"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "created",
+      "id": "6a9fa2fe20ebf490c690a67a",
+      "entityName": "program_item: Taaveti laul nr 121",
+      "parentId": "6a9ab884ca67df980f416b73"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "created",
+      "id": "6a9fa2ff20ebf490c690a683",
+      "entityName": "O magnum mysterium",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "created",
+      "id": "6a9fa2ff20ebf490c690a68c",
+      "entityName": "O magnum mysterium",
+      "parentId": "6a9fa2ff20ebf490c690a683"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "created",
+      "id": "6a9fa30020ebf490c690a694",
+      "entityName": "repertoire_item: O magnum mysterium",
+      "parentId": "6a9ab0feca67df980f416b4e"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "created",
+      "id": "6a9fa30020ebf490c690a69d",
+      "entityName": "program_item: O magnum mysterium",
+      "parentId": "6a9ab884ca67df980f416b73"
+    },
+    {
+      "step": "ensure-work",
+      "outcome": "created",
+      "id": "6a9fa30120ebf490c690a6a6",
+      "entityName": "The Deer's Cry",
+      "parentId": "6a92a587ca67df980f4156f7"
+    },
+    {
+      "step": "ensure-edition",
+      "outcome": "created",
+      "id": "6a9fa30120ebf490c690a6af",
+      "entityName": "The Deer's Cry",
+      "parentId": "6a9fa30120ebf490c690a6a6"
+    },
+    {
+      "step": "ensure-repertoire-item",
+      "outcome": "created",
+      "id": "6a9fa30220ebf490c690a6b8",
+      "entityName": "repertoire_item: The Deer's Cry",
+      "parentId": "6a9ab0feca67df980f416b4e"
+    },
+    {
+      "step": "ensure-program-item",
+      "outcome": "created",
+      "id": "6a9fa30220ebf490c690a6c1",
+      "entityName": "program_item: The Deer's Cry",
+      "parentId": "6a9ab884ca67df980f416b73"
+    }
+  ]
+}
