@@ -1,0 +1,186 @@
+{
+ "_meta": "research for #285, run wf_54fcb537-137 2026-09-08. (*MVOX:Palestrina*)",
+ "surface": {
+  "findings": [
+   {
+    "title": "(a) Editor's four fields — exact markup + testid/label idiom",
+    "detail": "src/routes/roster/+page.svelte:3246-3257 is the Sünnikuupäev (birthdate) field block — the slot for id_code (ordinal 6) goes immediately AFTER this closing </label> (line 3257) and BEFORE the button row div at line 3258. Exact birthdate block:\n```\n<label class=\"flex flex-col gap-1 text-xs\">\n  {m.roster_record_birthdate_label()}\n  <!-- #207 — the platform's OWN date picker, never a custom calendar. -->\n  <input type=\"date\" data-testid=\"roster-record-birthdate\" bind:value={recordForm.birthdate} disabled={recordSavingMemberId !== null} class=\"rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50\" />\n</label>\n```\nThe #239 idiom (cited/tested at src/routes/page.roster-record-editor.spec.ts:350-379, describe block '(B) four fields — #239 idiom') is: a wrapping <label> whose visible text-node child IS the sole accessible name (no aria-label anywhere, verified via `.closest('label')` + `getAttribute('aria-label')).toBeNull()`).\nTestid convention: every multi-word testid in this file is hyphen-separated kebab-case with NO exception — confirmed by exhaustively listing every data-testid in +page.svelte (e.g. roster-new-section-name, roster-new-section-submit, member-deactivate-confirm-, roster-row-record-edit-, roster-record-save-error). The four existing record-field testids (roster-record-name/phone/email/birthdate) are single-word fields, so there's no in-family precedent for a compound field name, but the file-wide convention is unambiguous: the new field's testid must be `roster-record-id-code` (hyphenated), NOT `roster-record-idcode` (mashed together) — the latter would be the only non-kebab testid in the entire file.",
+    "files": [
+     "src/routes/roster/+page.svelte",
+     "src/routes/page.roster-record-editor.spec.ts"
+    ]
+   },
+   {
+    "title": "(b) #283 guard slot — exact lines, RecordSaveError union, alert chain, never-echo pins",
+    "detail": "saveRecordEditor lives at src/routes/roster/+page.svelte:1243-1396. The phone guard is lines 1278-1290 (`/\\p{L}/u.test(recordForm.phone)` → `recordSaveError = { memberId, kind: 'phone-invalid' }; return;`), the email guard is lines 1291-1304 (`emailInputEl.checkValidity()`). Both sit AFTER the name-required gate (1274-1277) and strictly BEFORE `const g = routeLoad.generation; recordSavingMemberId = memberId;` at 1305-1306 — i.e. before generation capture and single-flight arm, exactly as #285's promotion comment specifies. The checksum guard is the natural third member of this same before-arm block, inserted after line 1304 and before line 1305.\nRecordSaveError union is at lines 1124-1137: `{memberId,kind:'failed'} | {memberId,kind:'partial',savedFields:string[]} | {memberId,kind:'name-required'} | {memberId,kind:'phone-invalid'} | {memberId,kind:'email-invalid'}` — a sixth member `{memberId,kind:'idcode-invalid'}` (or matching field-name convention, see finding on i18n) joins here.\nThe alert-branch chain is lines 3290-3304 (`{#if recordSaveError.kind === 'partial'}...{:else if kind==='name-required'}...{:else if kind==='phone-invalid'}...{:else if kind==='email-invalid'}...{:else}...save_failed{/if}`) — a new `{:else if recordSaveError.kind === 'idcode-invalid'}` branch slots before the final `{:else}` catch-all, rendering a new message key.\nNever-echo pins: page.roster-record-editor.spec.ts has a dedicated PRIVACY test (~line 1093 onward, 'PRIVACY (crede real-PII law): the refusal copy is a STATIC string naming the field — the typed value appears in no alert and no console output') and the i18n spec (page.roster-record-i18n.spec.ts, describe '#283 — the two refusal messages are STATIC: no placeholder...') asserts `messagePatterns(messages[key]).join(' ')).not.toMatch(/\\{[^}]*\\}/)` for phone/email invalid keys across all 4 locales — the new checksum-invalid key must join this same no-placeholder list.",
+    "files": [
+     "src/routes/roster/+page.svelte",
+     "src/routes/page.roster-record-editor.spec.ts",
+     "src/routes/page.roster-record-i18n.spec.ts"
+    ]
+   },
+   {
+    "title": "(c) Wire shape — memberRecord.ts create/update, changes-detection map, form shapes, reset()",
+    "detail": "memberRecord.ts (src/lib/roster/memberRecord.ts):\n- MemberRecord interface (55-61) needs `id_code: string;` (matches phone/email string shape, not birthdate's datetime).\n- CreateMemberRecordInput (70-79) needs `id_code?: string;` alongside the other optional fields (76-78).\n- loadMemberRecord's query string (117) `props=name,phone,email,birthdate` needs `,id_code` appended; the response-body type (123-131) needs an `id_code?: Array<{string:string}>` member; the returned record object (141-147) needs `id_code: raw.id_code?.[0]?.string ?? ''`.\n- createMemberRecord's optional-field push (169-171) — id_code follows the exact `if (input.phone) props.push({type:'phone',string:input.phone})` shape (168-169): `if (input.id_code) props.push({ type: 'id_code', string: input.id_code });`.\n- FIELD_ORDER (192-197) needs `'id_code'` appended (last, after birthdate) for deterministic partial-failure description in updateMemberRecord (199-245).\n\nIn +page.svelte: recordForm (1107-1112) and recordEditorOriginal (1152-1153) type literals both need `id_code: string` added and `id_code: ''` in every object literal that constructs them (1177, 1191-1196, 1200-1206, 1355). RECORD_FIELD_LABEL (1155-1160) needs an `id_code: m.roster_record_id_code_label` entry — this map is read at 3291-3294 to render field names in the partial-save copy. The changes-detection map in saveRecordEditor (1355-1360) needs `if (recordForm.id_code !== original.id_code) changes.id_code = recordForm.id_code;` added after the birthdate line (1360). The create call (1339-1346) needs `id_code: recordForm.id_code` added to the object literal passed to createMemberRecord.\nreset({isSwitch}) (lines 111-159) does NOT need a per-field id_code entry: it clears `recordEditorMemberId/recordEditorLookup/recordSaveError/recordStatus` wholesale (138-146), which already covers any id_code-specific transient state without enumeration.",
+    "files": [
+     "src/lib/roster/memberRecord.ts",
+     "src/routes/roster/+page.svelte"
+    ]
+   },
+   {
+    "title": "(d) Full-shape toEqual pins that flip when id_code joins",
+    "detail": "Enumerated pins that must be widened:\n1. src/lib/roster/memberRecord.spec.ts:61 — `expect(url).toContain('props=name,phone,email,birthdate')` must become `...birthdate,id_code`.\n2. memberRecord.spec.ts:155-164 — the 'POST entity with the FULL pinned payload... (full-shape toEqual)' test's input object (128-140) omits id_code entirely; per its own stated purpose ('and each optional field') it should gain `id_code: '...'` in the input and a matching `{ type: 'id_code', string: '...' }` 9th array entry after birthdate (163).\n3. memberRecord.spec.ts:184-190 — 'optional fields ride along ONLY when non-empty' twin test: adding `id_code: ''` to its input (181) requires no array change (still 5 entries) but should be extended with an id_code-empty case for parity.\n4. src/routes/page.roster-record-editor.spec.ts:478-485 — 'no record + save → createMemberRecord ONCE with the full input' toEqual pin (currently 6 keys: dbEntityId, personId, name, phone, email, birthdate) gains a 7th key `id_code: ''` because +page.svelte's create call (1339-1346) always passes all record-form fields regardless of emptiness — this pin WILL fail with an extra key unless updated.\n5. page.roster-record-editor.spec.ts:952-955 — the raced-create-becomes-update toEqual (`{name:'Berta Bass', email:'berta@example.com'}`) stays unaffected (id_code untouched/empty on both sides of the diff, so it's never added to `changes`), but should be checked once the field lands.\nSingle-field toEqual pins (550, 564, 897) are unaffected — they only assert the ONE changed key.",
+    "files": [
+     "src/lib/roster/memberRecord.spec.ts",
+     "src/routes/page.roster-record-editor.spec.ts"
+    ]
+   },
+   {
+    "title": "(e) #269 exposure fence — id_code MUST join the negative list, and a naming mismatch already blinds the existing fence",
+    "detail": "Two negative-assertion sites must add id_code:\n- src/lib/roster/rosterData.spec.ts:409-419 (member-visible `loadRoster` profile-read fence) — regex at line 417: `expect(url).not.toMatch(/props=[^&]*\\b(notes|idcode|birthdate|phone)\\b/);`\n- src/lib/roster/rosterData.realNames.spec.ts:339-354 (#269 overlay `listRecordNamesByPerson` fence, positive pin `props=person,name` plus the negative loop) — regex at line 350: `expect(u).not.toMatch(/props=[^&]*\\b(phone|birthdate|notes|idcode)\\b/);`\n\nReal gap found: both regexes already contain the literal alternative `idcode` (no underscore) — apparently someone anticipated this field pre-#282. But the schema settled on the wire/prop name `id_code` (underscore) — confirmed live at scripts/migrations/lib/mvox-schema-extensions.ts:275 (`name: 'id_code'`), matching DEFAULT_REDACT_FIELDS at scripts/migrations/lib/ledger-writer.ts:67 (`'id_code'`). The string `'id_code'` does NOT contain the substring `'idcode'` (there's an underscore between them), so neither existing regex would catch a future `props=...id_code...` leak — the fence has a live blind spot for the actual field name. Both regexes must be corrected to `\\b(notes|idcode|id_code|birthdate|phone)\\b` (or simply replace `idcode` with `id_code`) as part of this work, not just have their surrounding tests pass by accident.",
+    "files": [
+     "src/lib/roster/rosterData.spec.ts",
+     "src/lib/roster/rosterData.realNames.spec.ts",
+     "scripts/migrations/lib/mvox-schema-extensions.ts",
+     "scripts/migrations/lib/ledger-writer.ts"
+    ]
+   },
+   {
+    "title": "(f) i18n — roster_record_* key family, EXACT-table row count, et register",
+    "detail": "The EXACT-text pin lives in src/routes/page.roster-record-i18n.spec.ts (the `EXACT` object, lines ~15-134), currently 14 keys × 4 locales: roster_record_edit_label, name_label, phone_label, email_label, birthdate_label, save, cancel, saved, save_failed, save_partial, name_required, phone_invalid, email_invalid, damaged. Two new keys join this table: a label key and an invalid/checksum-refusal key for the new field — by the file's own naming convention (`roster_record_<field>_label`, `roster_record_<field>_invalid`, matching phone_label/phone_invalid at messages/et.json:239,241) these should be `roster_record_id_code_label` and `roster_record_id_code_invalid` (matching the schema's `id_code` field name, not `idcode`) — bringing the EXACT table to 16 keys × 4 locales.\nmessages/et.json currently defines the sibling keys at lines 236-249 (verified read); et register for the four existing refusal messages follows the pattern '<subject> ei tohi/ei tundu... — midagi ei salvestatud. <action juhis> ja salvesta uuesti.' (e.g. et.json:239-240) — a checksum-invalid message should match this exact register, e.g. something in the shape 'Isikukood ei tundu õige — midagi ei salvestatud. Kontrolli isikukoodi ja salvesta uuesti.' (draft only, PO/Tallis's call to finalize, not mine). New keys must also be added to the '#283 — the two refusal messages are STATIC: no placeholder' describe block (page.roster-record-i18n.spec.ts, near the end) since the checksum guard, like phone/email, must never echo the typed value.",
+    "files": [
+     "src/routes/page.roster-record-i18n.spec.ts",
+     "messages/et.json"
+    ]
+   },
+   {
+    "title": "Schema is already live — no provisioning step remains",
+    "detail": "The id_code prop-def (string, private sharing, ordinal 6) is already commissioned and LIVE on both mvox_crede and mvox_polyphony (git log: 54fe654 definition, 7828060 dry-run ledgers, a1eb46a 'LIVE provisioning complete — id_code on admin_member_record, both dbs, 0 failures'). Definition source: scripts/migrations/lib/mvox-schema-extensions.ts:274-282. This is schema-side context only, confirming #285's field slot is ready to be wired — not itself a defect.",
+    "files": [
+     "scripts/migrations/lib/mvox-schema-extensions.ts"
+    ]
+   }
+  ]
+ },
+ "blast": {
+  "findings": [
+   {
+    "title": "Checksum algorithm as stated is correct — verified against EVS 585 (not just training recall)",
+    "detail": "Stage 1 weights [1,2,3,4,5,6,7,8,9,1] mod 11 on digits 1-10; if remainder=10, stage 2 weights [3,4,5,6,7,8,9,1,2,3] mod 11; if that is also 10, check digit=0; otherwise the remainder itself is the check digit. Cross-checked via WebSearch/WebFetch against et.wikipedia.org/wiki/Isikukood and EVS 585:2007 references — matches exactly, so this is VERIFIED, not merely [unverified-from-training] as the task's fallback framing anticipated. Hand-computed RED-suite vectors (synthetic, non-real dates): '50001010017' (valid, stage-1-only, digits→sum 18→rem 7→check 7); '10000000098' (valid, forces stage-1 rem=10 then stage-2 rem=8→check 8); '80001010010' (valid, forces stage-1 rem=10 AND stage-2 rem=10→check digit 0, exercising the double-fallback branch — the branch most likely to be missed); '50001010011' (invalid — same digits as vector 1 with a wrong check digit). These three branches (plain mod11<10, stage-2<10, stage-2==10→0) should all be pinned; only testing the common case would leave the rarest, easiest-to-miscode branch unverified.",
+    "files": [
+     "issue #285 body"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "11-digit + valid-check-digit is the WHOLE contract — no century/sex-range or date-plausibility check belongs in this slice",
+    "detail": "Issue #285's own 'Rule:' line states only 'exactly 11 digits and a valid check digit, per the Estonian isikukood standard' and its Done-when list has no date-validity or first-digit-range criterion. Adding a check on the century/sex digit (1-8) or on digits 2-7 forming a plausible calendar date would be scope creep beyond what was commissioned — the same weakest-rule-fence discipline #283 already established for email (browser checkValidity(), not a hand-rolled stricter regex) and phone (reject-letters-only, no allowlist). The RED suite should therefore include a case that is 11 digits with a mathematically valid check digit but an implausible/out-of-range leading digit or date, asserting it still SAVES — a canary against an implementer 'improving' the guard past its mandate.",
+    "files": [
+     "issue #285 body (Rule + Done when)"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "No checksum/validation code exists anywhere in the repo to reuse — confirmed by grep",
+    "detail": "grep -rn 'checksum|check.digit|mod11|mod 11|isValidIsikukood|validateIsikukood' across src/ and scripts/ returns zero hits in application code (only unrelated AWS x-amz-checksum-crc32 URL noise in a seed-results JSON log). #282's three commits (54fe654, 7828060, a1eb46a) touched only the schema-definition/provisioning/redaction layer (scripts/migrations/lib/mvox-schema-extensions.ts:275,286,292; scripts/migrations/lib/ledger-writer.ts:51-67 DEFAULT_REDACT_FIELDS) — no UI, no memberRecord.ts, no id_code anywhere in src/. grep -rni 'id_code|isikukood' src/ is empty. #285 is a from-scratch build, not an extension of partial work; no branch/worktree for it exists yet (git branch -a / git worktree list both clean of any 285 reference).",
+    "files": [
+     "src/lib/roster/memberRecord.ts",
+     "scripts/migrations/lib/ledger-writer.ts:67",
+     "scripts/migrations/lib/mvox-schema-extensions.ts:275"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Validator placement is a real, currently-unsettled choice — the two live precedents point different ways",
+    "detail": "#283's phone/email guards are NOT extracted functions — they are inline one-liners at the call site inside saveRecordEditor (+page.svelte:1274 `/\\p{L}/u.test(recordForm.phone)`, :1296 `emailInputEl.checkValidity()`). memberRecord.ts's own module header (lines 1-46) enumerates exactly READ/CREATE/UPDATE/BIRTHDATE/CLEARING/PRIVACY as its scope — no 'VALIDATION' bullet — so dropping a checksum function in there is a scope addition to a file that currently deliberately excludes format-validation concerns. But memberRecord.ts already hosts small pure, independently-unit-tested helpers for a field's own semantics (birthdateToWire/birthdateFromWire, lines 101-108, tested in memberRecord.spec.ts) — which is the closer shape-match for a multi-branch mod-11 algorithm than inlining ~15-20 lines of arithmetic directly in a Svelte onclick handler. Recommend: a small pure exported function (new file, e.g. src/lib/roster/idCode.ts, mirroring the one-concern-per-file convention already used for memberLifecycle.ts/memberRecord.ts/rosterData.ts in src/lib/roster/) doing ONLY the checksum math — imported into +page.svelte and called from a guard placed inline in saveRecordEditor in the same slot as phone/email (before generation capture + single-flight arm), keeping the call-site idiom consistent with #283 while making the arithmetic itself unit-testable in isolation the way birthdateToWire/FromWire are.",
+    "files": [
+     "src/lib/roster/memberRecord.ts:1-46",
+     "src/lib/roster/memberRecord.ts:101-108",
+     "src/routes/roster/+page.svelte:1274",
+     "src/routes/roster/+page.svelte:1296"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "Four concrete +page.svelte touchpoints the checksum guard must wire into, beyond the guard itself",
+    "detail": "(1) `RecordSaveError` union type (+page.svelte:~1122-1135) needs a new `| { memberId: string; kind: 'id_code-invalid' }` variant alongside 'phone-invalid'/'email-invalid'. (2) `recordForm` state object literal (+page.svelte:1107-1113) and every place it's reset to a literal — at minimum the collective-switch/load reset (~1177 `recordForm = { name: '', phone: '', email: '', birthdate: '' }`) and the prefill assignments (~1191, ~1200) — all need `id_code: ''` added or TS will reject the new interface field as missing. (3) `recordEditorOriginal`'s type alias (~1148) needs the same shape update, since the create-turned-update diff logic depends on it matching MemberRecord. (4) `RECORD_FIELD_LABEL` map (~1150-1155) needs an `id_code: m.roster_record_id_code_label` entry — without it, a partial-save error that includes id_code in `landedFields` cannot render a label for it in the `roster_record_save_partial` message.",
+    "files": [
+     "src/routes/roster/+page.svelte"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "Three memberRecord.ts touchpoints for the data layer, beyond the interface's own id_code field",
+    "detail": "`MemberRecord` interface (memberRecord.ts:55-61) needs `id_code: string`. The read query's `props=` list (memberRecord.ts:117, `props=name,phone,email,birthdate`) needs `,id_code` appended, plus the wire-shape destructure type (124-131) and the mapped return object (141-147). `CreateMemberRecordInput` (70-79) needs an optional `id_code?: string`, wired into the optional-fields-ride-along-only-when-non-empty block (169-171) the same way phone/email/birthdate are. `FIELD_ORDER` (192-197) needs 'id_code' appended so update's fixed-order-per-field write (name→phone→email→birthdate→id_code) stays deterministic for partial-failure reporting, per the module header's own stated contract. DEFAULT_REDACT_FIELDS already covers 'id_code' (ledger-writer.ts:67, landed in #282) — that piece is done and does not need touching.",
+    "files": [
+     "src/lib/roster/memberRecord.ts:55-61",
+     "src/lib/roster/memberRecord.ts:117",
+     "src/lib/roster/memberRecord.ts:70-79",
+     "src/lib/roster/memberRecord.ts:192-197"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "The existing i18n placeholder-free static-copy check hardcodes exactly two keys — a new id_code_invalid key will silently go unchecked unless the array is extended",
+    "detail": "src/routes/page.roster-record-i18n.spec.ts's '#283 — the two refusal messages are STATIC' describe block (~163-172) iterates `for (const key of ['roster_record_phone_invalid', 'roster_record_email_invalid'])` — a literal 2-element array, not derived from EXACT's keys or a naming convention. Adding `roster_record_id_code_invalid` to the EXACT table (which the generic per-key it.each loop at ~128-135 DOES cover automatically) is not enough to also get the no-placeholder/value-safety guarantee — that second, privacy-critical assertion (crede real-PII law: refusal copy must never echo the typed value) needs the id_code key added to this hardcoded array explicitly, or it silently passes with zero coverage. Current key count is 14 (12 from #268 baseline + 2 from #283), confirmed by `grep -c '\"roster_record_' messages/et.json` = 14; #285 adds 2 more (id_code_label + id_code_invalid) → 16.",
+    "files": [
+     "src/routes/page.roster-record-i18n.spec.ts:163-172",
+     "messages/et.json:236-249"
+    ],
+    "severity": "notable"
+   },
+   {
+    "title": "#280 (untouched-prefill overwrite bug) does not expose id_code — confirmed by the issue's own text, not inference",
+    "detail": "#280 is OPEN, unmerged, explicitly 'Not ready' — its bug is that #265-prefilled name/email are indistinguishable from admin-typed values on the create-turned-update path, so an untouched prefill can silently overwrite another admin's entry. #285's body states plainly under 'Prefill: none. Nothing to prefill from; the profile layer has no such field' — id_code has zero prefill surface, so it cannot enter #280's failure class (which requires a non-empty untouched value from prefill). This is stated in the issue text, not something I inferred.",
+    "files": [
+     "issue #285 body"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "#268 damaged-data (>1 record) detection is unaffected by adding a 5th field",
+    "detail": "loadMemberRecord's damaged-state branch (memberRecord.ts:136, `if (entities.length > 1) return { state: 'damaged', count: entities.length }`) triggers on entity COUNT from the entu query, independent of which/how-many props are requested — adding id_code to the props list changes nothing about this check. #268's #264 pins (loud alert, no write, no self-repair) hold regardless of field count.",
+    "files": [
+     "src/lib/roster/memberRecord.ts:132-136"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Rights axis confirmed: whole-block admin gate is sufficient, no per-field gate needed",
+    "detail": "`{#if admin === 'admin'}` (+page.svelte:3174) wraps the entire pencil button AND the editor form (including all of name/phone/email/birthdate at 3216-3253) as one block — absent, not merely disabled, for non-admins (matching the fail-closed precedent noted in the file's own #268 comment). id_code sitting inside this same block inherits the same absent-not-disabled treatment automatically; no new gating logic is needed.",
+    "files": [
+     "src/routes/roster/+page.svelte:3174",
+     "src/routes/roster/+page.svelte:3211-3253"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Collective-switch reset axis confirmed safe, contingent on the recordForm literal update already flagged above",
+    "detail": "The unconditional per-load reset (+page.svelte:130-138) nulls `recordEditorMemberId`/`recordEditorLookup`/`recordSaveError` on EVERY load (not just an actual db switch), closing any open editor before a new tree renders — this already covers id_code with no changes needed, since it operates on the editor's open/closed state, not its field shape. The one place that DOES need the id_code field added is the `recordForm = { name: '', phone: '', email: '', birthdate: '' }` object literals (openRecordEditor ~1177 and prefill assignments ~1191/1200) already called out above — without `id_code: ''` there, TypeScript will reject the literal against the widened MemberRecord-shaped type.",
+    "files": [
+     "src/routes/roster/+page.svelte:130-138",
+     "src/routes/roster/+page.svelte:1177"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Phone-width (max-w-md viewport) height/scroll concern: none found — editor container has no height/overflow constraint",
+    "detail": "The page shell is `max-w-md` (+page.svelte:3537), constraining WIDTH only. The in-row editor's own container (+page.svelte:3212, `<div class=\"mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2\">`) has no `max-h-*`, `overflow-y-*`, or fixed-height class — it is plain vertical flex flow inside an `<li>` in the page's natural document scroll. Adding a 5th stacked `<label>` block (same shape as the existing phone/email/birthdate blocks, ~40px each) adds vertical height to that row's expansion with no clipping or new scroll region introduced; the page already scrolls as a whole. No design-blocking concern here.",
+    "files": [
+     "src/routes/roster/+page.svelte:3537",
+     "src/routes/roster/+page.svelte:3212"
+    ],
+    "severity": "info"
+   },
+   {
+    "title": "Locale axis is a genuinely open, unresolved design choice — not settled by any code precedent",
+    "detail": "#285's body cites 'en/lv/uk drafted at delivery, per #266's treatment' as the process, but #266's actual precedent (event types 'reis'/'teenistus') was to TRANSLATE the Estonian term into en/lv/uk equivalents ('Trip'/'Service'), flagged as refinable drafts for PO check — not to keep the Estonian word untranslated everywhere. Applied literally to id_code, that analogy would argue for translating the LABEL (e.g. an en/lv/uk phrase for 'national identification code') rather than displaying the bare word 'Isikukood' to non-Estonian-reading admins. But the field's actual nature — it IS specifically the Estonian isikukood (not a generic ID-code concept transferable to lv/uk equivalents like Latvia's 'personas kods') — is a real argument for keeping the proper-noun term untranslated in all locales, the way a country/currency name might stay untranslated. No code in the repo settles this either way (no id_code_label key exists yet in any locale file). This should go into the delivery report as a stated, flagged choice for Gama/PO sign-off, per #266's own precedent of proposing en/lv/uk copy in the delivery report rather than deciding it unilaterally.",
+    "files": [
+     "issue #285 body",
+     "issue #266 body"
+    ],
+    "severity": "notable"
+   }
+  ]
+ }
+}
