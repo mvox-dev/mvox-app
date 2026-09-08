@@ -347,7 +347,12 @@ describe('#269 loadRosterWithRealNames — the records read: ONE bulk query, nar
 		for (const u of all) {
 			// phone/birthdate (and the older private-tier fields) have NO legitimate
 			// carrier anywhere in a roster load — pinned across every URL.
-			expect(u).not.toMatch(/props=[^&]*\b(phone|birthdate|notes|idcode)\b/);
+			// #285 BLIND-SPOT FIX: 'idcode' (no underscore) never matched the REAL
+			// #282 prop-def name `id_code` — the fence was blind to the actual
+			// field. `id_code` added; `idcode` kept (belt). The #269 overlay query
+			// stays props=person,name exactly (pinned below), so id_code never
+			// rides in the admin overlay either.
+			expect(u).not.toMatch(/props=[^&]*\b(phone|birthdate|notes|idcode|id_code)\b/);
 		}
 		// email IS legitimately projected on the PROFILE read (the roster renders
 		// it) — so the email fence is pinned on the record query specifically:

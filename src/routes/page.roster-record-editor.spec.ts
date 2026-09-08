@@ -249,6 +249,10 @@ const emailInput = (c: HTMLElement) =>
 	c.querySelector('[data-testid="roster-record-email"]') as HTMLInputElement;
 const birthdateInput = (c: HTMLElement) =>
 	c.querySelector('[data-testid="roster-record-birthdate"]') as HTMLInputElement;
+// #285 — KEBAB testid, the file's unbroken convention ('roster-record-idcode'
+// would be its only violation).
+const idCodeInput = (c: HTMLElement) =>
+	c.querySelector('[data-testid="roster-record-id-code"]') as HTMLInputElement;
 
 describe('(A) pencil affordance — admin-only, whole-block, every display view', () => {
 	it("admin sees the pencil on another member's row", async () => {
@@ -481,7 +485,10 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 			name: 'Berta Bass',
 			phone: '+372 5559876',
 			email: 'berta@example.com',
-			birthdate: ''
+			birthdate: '',
+			// #285 — the fifth field rides in the create input, empty here (no
+			// prefill source exists for it; empty-as-empty like birthdate).
+			id_code: ''
 		});
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
 	});
@@ -987,6 +994,8 @@ describe('(F) privacy fence — non-admins never get the fields in the DOM', () 
 		expect(container.querySelector('[data-testid="roster-record-phone"]')).toBeNull();
 		expect(container.querySelector('[data-testid="roster-record-email"]')).toBeNull();
 		expect(container.querySelector('[data-testid="roster-record-birthdate"]')).toBeNull();
+		// #285 — the fifth field is fenced identically: absent, not disabled.
+		expect(container.querySelector('[data-testid="roster-record-id-code"]')).toBeNull();
 	});
 });
 
@@ -1126,7 +1135,8 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 			name: 'Berta Bass',
 			phone: '+372 5555 5555',
 			email: 'berta@example.com',
-			birthdate: ''
+			birthdate: '',
+			id_code: '' // #285 — 5-field create-input shape
 		});
 	});
 
@@ -1256,7 +1266,8 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 			name: 'Berta Bass',
 			phone: '',
 			email: 'a@b',
-			birthdate: ''
+			birthdate: '',
+			id_code: '' // #285 — 5-field create-input shape
 		});
 		expect(q(container, 'roster-record-save-error')).toBeNull();
 	});
@@ -1355,9 +1366,297 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 	});
 });
 
+describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom, no prefill', () => {
+	it('renders inside the open editor: type=text, kebab testid roster-record-id-code, wrapping label whose visible text ([roster_record_id_code_label]) is the SOLE accessible name — no aria-label', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		const input = idCodeInput(container);
+		expect(input).not.toBeNull();
+		expect(input.tagName).toBe('INPUT');
+		expect(input.type).toBe('text');
+		expect(input.getAttribute('aria-label')).toBeNull();
+		const label = input.closest('label');
+		expect(label).not.toBeNull();
+		expect(label!.textContent).toContain('[roster_record_id_code_label]');
+	});
+
+	it('sits INSIDE the same <li> as the rest of the editor (whole-block admin gate inherited — no per-field gating), AFTER the birthdate block in DOM order (ordinal 6)', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		const li = q(container, 'roster-row-m2')!;
+		const idCode = li.querySelector('[data-testid="roster-record-id-code"]');
+		expect(idCode).not.toBeNull();
+		const birthdate = li.querySelector('[data-testid="roster-record-birthdate"]')!;
+		expect(
+			birthdate.compareDocumentPosition(idCode!) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it('NO PREFILL on the no-record path: opens EMPTY (nothing to prefill from — the profile layer has no such field) even while name/email prefill from the row', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(nameInput(container).value).toBe('Berta Bass'); // siblings DO prefill
+		expect(idCodeInput(container).value).toBe('');
+	});
+
+	it('record path, record without an id_code: opens EMPTY too — never invented, never merged from anywhere', async () => {
+		loadMemberRecordMock.mockResolvedValue({
+			state: 'one',
+			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
+		});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(idCodeInput(container).value).toBe('');
+	});
+
+	it('record path, record WITH an id_code: the editor shows the RECORD value (record display, not prefill)', async () => {
+		loadMemberRecordMock.mockResolvedValue({
+			state: 'one',
+			record: {
+				_id: 'rec-1',
+				name: 'Recorded Name',
+				phone: '',
+				email: '',
+				birthdate: '',
+				id_code: '50001010017'
+			}
+		});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(idCodeInput(container).value).toBe('50001010017');
+	});
+
+	it('disabled while a save is in flight — same recordSavingMemberId binding as every sibling field', async () => {
+		let release!: () => void;
+		createMemberRecordMock.mockImplementation(
+			() => new Promise<string>((res) => (release = () => res('rec-new')))
+		);
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await tick();
+		expect(idCodeInput(container).disabled).toBe(true);
+		release();
+		await waitFor(() => expect(nameInput(container)).toBeNull());
+	});
+
+	it('UPDATE path: a changed id_code reaches updateMemberRecord as the single changed field (string shape — the changes-detection treats it like phone)', async () => {
+		loadMemberRecordMock.mockResolvedValue({
+			state: 'one',
+			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
+		});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010017' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(updateMemberRecordMock.mock.calls[0][1]).toBe('rec-1');
+		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({ id_code: '50001010017' });
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict where the spec is closed', () => {
+	// The promotion comment's framing, kept visible: this is a third guard in
+	// the ESTABLISHED slot (after the #283 email guard, BEFORE the generation
+	// capture and single-flight arm), not new machinery. And the strictness is
+	// deliberate where #283's email leniency was deliberate: an isikukood has a
+	// precise, closed, checksummable specification; an email address does not.
+	// Do NOT harmonise them — 'a@b' keeps saving three lines away while
+	// '5000101001' is refused here.
+	it("CREATE path: a wrong check digit ('50001010011' — stage 1 says 7) refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming; sibling typed fields survive", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1); // the editor open
+		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		const alert = await waitFor(() => {
+			const el = q(container, 'roster-record-save-error');
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		expect(alert.getAttribute('role')).toBe('alert');
+		// The guard's OWN copy — never the all-or-nothing failure message.
+		expect(alert.textContent).toContain('[roster_record_id_code_invalid]');
+		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
+		// A REFUSAL IS NOT A WRITE (the #283 shapes, all four):
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+		// …it never reaches the fresh-lookup re-read…
+		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
+		// …never arms the single-flight lock…
+		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
+		expect((q(container, 'roster-record-cancel') as HTMLButtonElement).disabled).toBe(false);
+		// …and keeps the editor open with everything typed still in it.
+		expect(phoneInput(container).value).toBe('+372 5559876');
+		expect(idCodeInput(container).value).toBe('50001010011');
+		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
+	});
+
+	it.each([
+		['5000101001', '10 digits'],
+		['500010100178', '12 digits'],
+		['5000101001a', 'a letter'],
+		[' 50001010017', 'a leading space — exact digits, no trimming leniency']
+	])("'%s' (%s) refuses the save — the format arm of the rule", async (typed) => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: typed } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_id_code_invalid]'
+		);
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+	});
+
+	it("a valid stage-1 code ('50001010017', remainder 7) SAVES — full create input, id_code carried", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010017' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual({
+			dbEntityId: 'db-1',
+			personId: 'pp-2',
+			name: 'Berta Bass',
+			phone: '',
+			email: 'berta@example.com',
+			birthdate: '',
+			id_code: '50001010017'
+		});
+		expect(q(container, 'roster-record-save-error')).toBeNull();
+	});
+
+	it("a valid stage-2 code ('10000000098': stage 1 remainder 10, stage 2 = 30 % 11 = 8) SAVES", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '10000000098' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ id_code: '10000000098' })
+		);
+	});
+
+	it("DOUBLE FALLBACK at the route: '80001010010' (stage 1 = 21 % 11 = 10, stage 2 = 43 % 11 = 10 → check digit 0) SAVES — the branch most likely miscoded, pinned end-to-end", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '80001010010' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ id_code: '80001010010' })
+		);
+	});
+
+	it("OVER-VALIDATION CANARY: '90002310022' — leading digit 9 (no assigned century/sex), \"31 February\", but checksum-VALID ([9,0,0,0,2,3,1,0,0,2]·[1,2,3,4,5,6,7,8,9,1] = 46; 46 % 11 = 2 = check digit) — MUST SAVE: plausibility checks are outside the commission", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '90002310022' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ id_code: '90002310022' })
+		);
+		expect(q(container, 'roster-record-save-error')).toBeNull();
+	});
+
+	it('an EMPTY isikukood still saves — the field is optional and stays so (the guard skips empty)', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		expect(idCodeInput(container).value).toBe('');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ id_code: '' })
+		);
+		expect(q(container, 'roster-record-save-error')).toBeNull();
+	});
+
+	it("UPDATE path: an invalid code on an EXISTING record refuses too — updateMemberRecord never fires, sibling typed change survives", async () => {
+		loadMemberRecordMock.mockResolvedValue({
+			state: 'one',
+			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
+		});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(emailInput(container), { target: { value: 'kept@example.com' } });
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_id_code_invalid]'
+		);
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(emailInput(container).value).toBe('kept@example.com');
+	});
+
+	it('NEVER-ECHO (crede real-PII law — this field needs it more than any other): the refusal copy is STATIC and the typed value appears in NO alert and NO console output', async () => {
+		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		const alert = await waitFor(() => {
+			const el = q(container, 'roster-record-save-error');
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		expect(alert.textContent).not.toContain('50001010011');
+		const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
+			.map((c) => c.map(String).join(' '))
+			.join(' ');
+		expect(logged).not.toContain('50001010011');
+		consoleErrorSpy.mockRestore();
+		consoleLogSpy.mockRestore();
+	});
+
+	it('the id-code REFUSAL owns the live region too: cleared-before-gate ordering — a stale "saved" cannot outlive it', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() =>
+			expect(q(container, 'roster-member-record-status')!.textContent).toContain(
+				'roster_record_saved'
+			)
+		);
+		await openEditor(container, 'm1');
+		await fireEvent.input(idCodeInput(container), { target: { value: '5000101001' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
+			'[roster_record_id_code_invalid]'
+		);
+		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
+		expect(createMemberRecordMock).toHaveBeenCalledTimes(1); // the FIRST save only
+	});
+
+	it('after fixing the code, the same save goes through — the refusal is a gate, not a dead end', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		await fireEvent.input(idCodeInput(container), { target: { value: '50001010017' } });
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
+			expect.objectContaining({ id_code: '50001010017' })
+		);
+	});
+});
+
 // (*MVOX:Tallis* — #268 RED, route-level)
 // (*MVOX:Josquin* — #268 review F1/F2/F3 pins)
 // (*MVOX:Josquin* — #268 review r3 pins: empty-landed failure copy, save-time
 //  existence check)
 // (*MVOX:Tallis* — #283 RED: phone letters + email checkValidity save guards,
 //  weakest-rule fence)
+// (*MVOX:Tallis* — #285 RED: Isikukood fifth field + checksum guard, third in
+//  the refusal slot; over-validation canary)

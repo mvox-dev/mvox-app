@@ -51,14 +51,14 @@ beforeEach(() => {
 // ── READ: check-then-create + editor load, ONE query ─────────────────────────
 
 describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor load share it)', () => {
-	it('URL: _type.string=admin_member_record, person.reference={personId}, props=name,phone,email,birthdate, limit=10, against cfg.db', async () => {
+	it('URL: _type.string=admin_member_record, person.reference={personId}, props=name,phone,email,birthdate,id_code, limit=10, against cfg.db (#285: the fifth field joins the ONE projection)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
 		await loadMemberRecord(cfg, 'pp-2', fetchImpl);
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=admin_member_record');
 		expect(url).toContain('person.reference=pp-2');
-		expect(url).toContain('props=name,phone,email,birthdate');
+		expect(url).toContain('props=name,phone,email,birthdate,id_code');
 		expect(url).toContain('limit=10');
 		// Db-scoped per call — per-collective isolation by construction (the
 		// record's required `database` parent + single-collective-per-db make a
@@ -72,14 +72,15 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 		await expect(loadMemberRecord(cfg, 'pp-2', fetchImpl)).resolves.toEqual({ state: 'none' });
 	});
 
-	it('1 result → { state: "one" } with the FULL record; birthdate is the stored string\'s DATE PART (split("T")[0]), absent props resolve to ""', async () => {
+	it('1 result → { state: "one" } with the FULL record (#285: id_code mapped as a plain string, like phone); birthdate is the stored string\'s DATE PART (split("T")[0]), absent props resolve to ""', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
 					{
 						_id: 'rec-1',
 						name: [{ string: 'Berta Real' }],
-						birthdate: [{ datetime: '1990-03-15T00:00:00.000Z' }]
+						birthdate: [{ datetime: '1990-03-15T00:00:00.000Z' }],
+						id_code: [{ string: '50001010017' }]
 						// phone/email absent → ''
 					}
 				]
@@ -92,7 +93,8 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 				name: 'Berta Real',
 				phone: '',
 				email: '',
-				birthdate: '1990-03-15'
+				birthdate: '1990-03-15',
+				id_code: '50001010017'
 			}
 		});
 	});
@@ -125,7 +127,7 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 // ── CREATE: lazy, first save ─────────────────────────────────────────────────
 
 describe('createMemberRecord — lazy create, entity-level _sharing asserted explicitly', () => {
-	it('POST entity with the FULL pinned payload: _type reference, _parent = database entity, _sharing domain, person, name, and each optional field (full-shape toEqual)', async () => {
+	it('POST entity with the FULL pinned payload: _type reference, _parent = database entity, _sharing domain, person, name, and each optional field — id_code LAST (full-shape toEqual, #285: the ninth entry)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'rec-new' }));
 		await expect(
 			createMemberRecord(
@@ -136,7 +138,8 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 					name: 'Berta Real',
 					phone: '+372 5551234',
 					email: 'berta@real.example',
-					birthdate: '1990-03-15'
+					birthdate: '1990-03-15',
+					id_code: '50001010017'
 				},
 				fetchImpl
 			)
@@ -160,7 +163,10 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 			{ type: 'name', string: 'Berta Real' },
 			{ type: 'phone', string: '+372 5551234' },
 			{ type: 'email', string: 'berta@real.example' },
-			{ type: 'birthdate', datetime: '1990-03-15T00:00:00.000Z' }
+			{ type: 'birthdate', datetime: '1990-03-15T00:00:00.000Z' },
+			// #285 — id_code rides LAST (FIELD_ORDER parity: a deterministic
+			// partial-failure order needs a deterministic payload order too).
+			{ type: 'id_code', string: '50001010017' }
 		]);
 	});
 
@@ -174,11 +180,11 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 		expect(body.some((e) => e.type === '_sharing' && e.string === 'domain')).toBe(true);
 	});
 
-	it('optional fields ride along ONLY when non-empty: name-only create sends exactly the five identity/required entries', async () => {
+	it('optional fields ride along ONLY when non-empty: name-only create (all four optionals empty, id_code included) sends exactly the five identity/required entries', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'rec-new' }));
 		await createMemberRecord(
 			cfg,
-			{ dbEntityId: 'db-1', personId: 'pp-2', name: 'Berta Real', phone: '', email: '', birthdate: '' },
+			{ dbEntityId: 'db-1', personId: 'pp-2', name: 'Berta Real', phone: '', email: '', birthdate: '', id_code: '' },
 			fetchImpl
 		);
 		expect(JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body))).toEqual([
@@ -237,6 +243,75 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 		await updateMemberRecord(cfg, 'rec-1', { phone: '' }, vi.fn());
 		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(1);
 		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'phone', string: '' });
+	});
+
+	// ── #285 — id_code on the update path: STRING shape (like phone), LAST in
+	// FIELD_ORDER ────────────────────────────────────────────────────────────
+	it('#285 — a changed id_code routes through replaceEntityProperty as { type: "id_code", string: … } — plain string shape like phone, NOT birthdate\'s datetime anchor', async () => {
+		const fetchImpl = vi.fn();
+		await updateMemberRecord(cfg, 'rec-1', { id_code: '50001010017' }, fetchImpl);
+		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(1);
+		expect(replaceEntityPropertyMock.mock.calls[0][1]).toBe('rec-1');
+		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({
+			type: 'id_code',
+			string: '50001010017'
+		});
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
+
+	it('#285 — id_code is LAST in the fixed write order: { id_code, name } writes name FIRST, id_code after, regardless of object key order (deterministic partial-failure order)', async () => {
+		await updateMemberRecord(cfg, 'rec-1', { id_code: '50001010017', name: 'New Name' }, vi.fn());
+		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(2);
+		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'name', string: 'New Name' });
+		expect(replaceEntityPropertyMock.mock.calls[1][2]).toEqual({
+			type: 'id_code',
+			string: '50001010017'
+		});
+	});
+
+	it('#285 — id_code comes after even BIRTHDATE (the previous last field): { id_code, birthdate } writes birthdate first', async () => {
+		await updateMemberRecord(
+			cfg,
+			'rec-1',
+			{ id_code: '50001010017', birthdate: '1990-03-15' },
+			vi.fn()
+		);
+		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(2);
+		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({
+			type: 'birthdate',
+			datetime: '1990-03-15T00:00:00.000Z'
+		});
+		expect(replaceEntityPropertyMock.mock.calls[1][2]).toEqual({
+			type: 'id_code',
+			string: '50001010017'
+		});
+	});
+
+	it('#285 — clearing id_code is an overwrite to "" through the atomic path (string semantics, like phone) — NEVER the birthdate-style GET+DELETE removal, no wire calls of its own', async () => {
+		const fetchImpl = vi.fn();
+		await updateMemberRecord(cfg, 'rec-1', { id_code: '' }, fetchImpl);
+		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(1);
+		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'id_code', string: '' });
+		// The removal path (clearEntityProperty's GET + DELETE) is birthdate's
+		// alone: '' is a legal string, so id_code stays on the overwrite path.
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
+
+	it('#285 — an id_code write that fails reports through the typed partial-save error naming the FIELD (landed siblings listed, value never)', async () => {
+		replaceEntityPropertyMock
+			.mockResolvedValueOnce(undefined)
+			.mockRejectedValueOnce(new Error('replaceEntityProperty POST failed: 500'));
+		const p = updateMemberRecord(
+			cfg,
+			'rec-1',
+			{ name: 'New Name', id_code: '50001010017' },
+			vi.fn()
+		);
+		await expect(p).rejects.toBeInstanceOf(MemberRecordPartialSaveError);
+		const err = (await p.catch((e) => e)) as MemberRecordPartialSaveError;
+		expect(err.landedFields).toEqual(['name']);
+		expect(err.failedField).toBe('id_code');
+		expect(err.message).not.toContain('50001010017');
 	});
 
 	// #268 review F1 — the ONE field where clearing is NOT an overwrite.
@@ -328,7 +403,9 @@ describe('birthdate round-trip — #207 no-day-shift idiom (pure string, never n
 // ── privacy: static errors, never a field value ──────────────────────────────
 
 describe('privacy — thrown messages carry static strings + status codes only, NEVER a field value', () => {
-	const PII = ['Berta Real', '+372 5551234', 'berta@real.example', '1990-03-15'];
+	// #285 — the isikukood joins the never-in-a-message set: it identifies a
+	// real person more precisely than any other field on this form.
+	const PII = ['Berta Real', '+372 5551234', 'berta@real.example', '1990-03-15', '50001010017'];
 
 	it('a failed create\'s thrown message contains none of the submitted values', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
@@ -340,7 +417,8 @@ describe('privacy — thrown messages carry static strings + status codes only, 
 				name: 'Berta Real',
 				phone: '+372 5551234',
 				email: 'berta@real.example',
-				birthdate: '1990-03-15'
+				birthdate: '1990-03-15',
+				id_code: '50001010017'
 			},
 			fetchImpl
 		).catch((e) => e)) as Error;
@@ -355,7 +433,7 @@ describe('privacy — thrown messages carry static strings + status codes only, 
 		const err = (await updateMemberRecord(
 			cfg,
 			'rec-1',
-			{ name: 'Berta Real', email: 'berta@real.example' },
+			{ name: 'Berta Real', email: 'berta@real.example', id_code: '50001010017' },
 			vi.fn()
 		).catch((e) => e)) as Error;
 		expect(err).toBeInstanceOf(Error);
@@ -364,3 +442,6 @@ describe('privacy — thrown messages carry static strings + status codes only, 
 });
 
 // (*MVOX:Tallis* — #268 RED)
+// (*MVOX:Tallis* — #285 RED: id_code joins the projection, the create payload
+//  (last), FIELD_ORDER (last), the string-shape update/clear path, and the PII
+//  never-in-a-message set)

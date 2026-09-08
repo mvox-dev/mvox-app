@@ -241,6 +241,8 @@
 	"roster_record_phone_label": "Phone",
 	"roster_record_email_label": "Email",
 	"roster_record_birthdate_label": "Date of birth",
+	"roster_record_id_code_label": "Isikukood",
+	"roster_record_id_code_invalid": "The isikukood is not valid — nothing was saved. Check the code, then save again.",
 	"roster_record_save": "Save",
 	"roster_record_cancel": "Cancel",
 	"roster_record_saved": "Member details saved.",

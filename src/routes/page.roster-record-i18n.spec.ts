@@ -110,6 +110,31 @@ const EXACT: Record<string, Record<string, string>> = {
 		lv: 'E-pasta adrese neizskatās derīga — nekas netika saglabāts. Pārbaudiet adresi un saglabājiet vēlreiz.',
 		uk: 'Адреса ел. пошти виглядає недійсною — нічого не збережено. Перевірте адресу та збережіть ще раз.'
 	},
+	// #285 — the fifth field's label. LOCALE STATED CHOICE, flagged for the
+	// PO/copy pass: the field IS specifically the Estonian isikukood (a member
+	// of an Estonian collective needs HER Estonian code — a translated label
+	// like "national ID code" invites entering some other country's number), so
+	// this RED drafts the proper-noun 'Isikukood' in ALL FOUR locales. #266's
+	// precedent translated; the field's nature argues proper-noun. GREEN /
+	// Comenius may flip en/lv/uk to the translated shape — updating these rows
+	// and the locale files TOGETHER, stating the pick and flagging it for the
+	// copy pass. The et row is not in question.
+	roster_record_id_code_label: {
+		en: 'Isikukood',
+		et: 'Isikukood',
+		lv: 'Isikukood',
+		uk: 'Isikukood'
+	},
+	// #285 — the checksum-guard refusal, name-required register: names the
+	// field, says nothing was saved, says what to do — and NEVER carries the
+	// typed value (no placeholder; the static-copy suite below pins that for
+	// this key too).
+	roster_record_id_code_invalid: {
+		en: 'The isikukood is not valid — nothing was saved. Check the code, then save again.',
+		et: 'Isikukood ei ole õige — midagi ei salvestatud. Kontrolli koodi ja salvesta uuesti.',
+		lv: 'Isikukood nav derīgs — nekas netika saglabāts. Pārbaudiet kodu un saglabājiet vēlreiz.',
+		uk: 'Isikukood недійсний — нічого не збережено. Перевірте код та збережіть ще раз.'
+	},
 	// Damaged data (#264): names the member, states that nothing was changed.
 	roster_record_damaged: {
 		en: 'The details for {name} are damaged — more than one record exists. Editing is disabled and nothing was changed.',
@@ -160,13 +185,22 @@ describe('#268 — terminology ruling: English says "date of birth", never "birt
 	});
 });
 
-describe('#283 — the two refusal messages are STATIC: no placeholder, so no path for a typed value into the copy', () => {
+describe('#283/#285 — the refusal messages are STATIC: no placeholder, so no path for a typed value into the copy', () => {
 	// The editor spec's paraglide proxy mock synthesises `[key]` from the key
 	// name alone, so it cannot see the shipped text at all — this direct file
-	// read is the only real check that the refusals stay value-free.
-	it.each(LOCALES)('%s: roster_record_phone_invalid and roster_record_email_invalid carry no {placeholder}', (locale) => {
+	// read is the only real check that the refusals stay value-free. The list
+	// is a HARDCODED literal, deliberately: the generic it.each over EXACT does
+	// not make this no-placeholder privacy assertion, so a new refusal key that
+	// skips this array is silently unfenced (#285 research: silent-pass trap).
+	// roster_record_id_code_invalid needs it more than any sibling — the value
+	// it must never echo identifies a real person exactly.
+	it.each(LOCALES)('%s: roster_record_phone_invalid, roster_record_email_invalid and roster_record_id_code_invalid carry no {placeholder}', (locale) => {
 		const messages = localeMessages(locale);
-		for (const key of ['roster_record_phone_invalid', 'roster_record_email_invalid']) {
+		for (const key of [
+			'roster_record_phone_invalid',
+			'roster_record_email_invalid',
+			'roster_record_id_code_invalid'
+		]) {
 			// Existence asserted here too — messagePatterns(undefined) is [], and a
 			// vacuous pass on a missing key is the partial-assertion trap.
 			expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
@@ -177,3 +211,5 @@ describe('#283 — the two refusal messages are STATIC: no placeholder, so no pa
 
 // (*MVOX:Tallis* — #268 RED, 4-locale exact-text pins)
 // (*MVOX:Tallis* — #283 RED: phone/email refusal keys ×4 locales, static-copy pins)
+// (*MVOX:Tallis* — #285 RED: id_code label + refusal keys ×4 locales; label
+//  locale choice drafted proper-noun, flagged for the copy pass)

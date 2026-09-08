@@ -406,7 +406,7 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		]);
 	});
 
-	it('never fetches private-tier data — no profile-read URL\'s props= param ever contains notes/idcode/birthdate/phone (query-shape proxy for the server-side boundary; live enforcement is T3.4)', async () => {
+	it('never fetches private-tier data — no profile-read URL\'s props= param ever contains notes/id_code/birthdate/phone (query-shape proxy for the server-side boundary; live enforcement is T3.4)', async () => {
 		const fetchImpl = makeFetchMock(
 			[{ _id: 'member-1', person: 'person-a' }],
 			{ 'person-a': [rawProfile('domain', 'Ada Lovelace', 'ada@example.com')] }
@@ -414,7 +414,11 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		await loadRoster(cfg, fetchImpl);
 		for (const call of fetchImpl.mock.calls as Array<[string]>) {
 			const url = String(call[0]);
-			expect(url).not.toMatch(/props=[^&]*\b(notes|idcode|birthdate|phone)\b/);
+			// #285 BLIND-SPOT FIX: the fence named only 'idcode' (no underscore) —
+			// but the REAL prop-def shipped by #282 is `id_code`, which that
+			// substring never matches, so the fence was blind to the one leak it
+			// exists to catch. `id_code` added; `idcode` kept too (belt).
+			expect(url).not.toMatch(/props=[^&]*\b(notes|idcode|id_code|birthdate|phone)\b/);
 		}
 	});
 

@@ -32,6 +32,11 @@
 		type MemberRecordLookup,
 		type MemberRecord
 	} from '$lib/roster/memberRecord';
+	// #285 — the pure EVS 585 checksum validator, called inline from the save
+	// handler's guard slot (the `birthdateToWire` precedent: one exported
+	// function, unit-tested in isolation, invoked from the page — no
+	// machinery of its own here).
+	import { isValidIdCode } from '$lib/roster/idCode';
 	import { resolveMyLibraryId } from '$lib/library/librarianStore';
 	import { listSections, groupBySection, type SectionNode, type SectionGroup } from '$lib/sections/sectionData';
 	import {
@@ -1104,11 +1109,18 @@
 	// `loadInactiveRoster`'s rows), where the two are equal by construction.
 	let recordEditorMemberId = $state<string | null>(null);
 	let recordEditorLookup = $state<MemberRecordLookup | null>(null);
-	let recordForm = $state<{ name: string; phone: string; email: string; birthdate: string }>({
+	let recordForm = $state<{
+		name: string;
+		phone: string;
+		email: string;
+		birthdate: string;
+		id_code: string;
+	}>({
 		name: '',
 		phone: '',
 		email: '',
-		birthdate: ''
+		birthdate: '',
+		id_code: ''
 	});
 	/** #268 review F3 — the in-flight guard is ROW-SCOPED, not a bare boolean:
 	 *  it names the member whose save is running, and ONLY that save's own
@@ -1134,7 +1146,13 @@
 		| { memberId: string; kind: 'phone-invalid' }
 		// #283 — email refusal, routed through the browser's OWN checkValidity()
 		// on the type=email element (Gama's ruling) — no regex of ours.
-		| { memberId: string; kind: 'email-invalid' };
+		| { memberId: string; kind: 'email-invalid' }
+		// #285 — isikukood checksum refusal. Third guard in the same slot, same
+		// "refuse loudly, write nothing, keep typed values" contract — strict
+		// where #283's email rule is deliberately permissive, because the
+		// isikukood has a precise, closed, checksummable specification and an
+		// email address does not.
+		| { memberId: string; kind: 'id-code-invalid' };
 	let recordSaveError = $state<RecordSaveError | null>(null);
 	// #283 — the email input element, bound so the save handler can ask the
 	// browser's own constraint validation `checkValidity()` rather than write a
@@ -1149,14 +1167,20 @@
 	 *  that differ from this. Read at save time only, never drives a render
 	 *  (same non-`$state` idiom as `currentCfg`). `null` on the lazy-create
 	 *  path (no baseline to diff against — every save there is a create). */
-	let recordEditorOriginal: { name: string; phone: string; email: string; birthdate: string } | null =
-		null;
+	let recordEditorOriginal: {
+		name: string;
+		phone: string;
+		email: string;
+		birthdate: string;
+		id_code: string;
+	} | null = null;
 
-	const RECORD_FIELD_LABEL: Record<'name' | 'phone' | 'email' | 'birthdate', () => string> = {
+	const RECORD_FIELD_LABEL: Record<'name' | 'phone' | 'email' | 'birthdate' | 'id_code', () => string> = {
 		name: m.roster_record_name_label,
 		phone: m.roster_record_phone_label,
 		email: m.roster_record_email_label,
-		birthdate: m.roster_record_birthdate_label
+		birthdate: m.roster_record_birthdate_label,
+		id_code: m.roster_record_id_code_label
 	};
 
 	/** Pencil tap: (re)loads the ONE db-scoped record lookup for `row` and opens
@@ -1174,7 +1198,7 @@
 		// write already in flight, and pretending otherwise re-enables a save
 		// button whose POST has not landed.
 		recordEditorOriginal = null;
-		recordForm = { name: '', phone: '', email: '', birthdate: '' };
+		recordForm = { name: '', phone: '', email: '', birthdate: '', id_code: '' };
 		const g = routeLoad.generation;
 		try {
 			const result = await loadMemberRecord(cfg, row.personId);
@@ -1192,7 +1216,10 @@
 					name: row.profileName ?? row.name,
 					phone: '',
 					email: row.email,
-					birthdate: ''
+					birthdate: '',
+					// #285 — no prefill: nothing to prefill from, the profile layer has
+					// no such field. Opens empty like phone/birthdate.
+					id_code: ''
 				};
 			} else if (result.state === 'one') {
 				// A record already exists — show THE RECORD, never the profile (R4):
@@ -1201,7 +1228,11 @@
 					name: result.record.name,
 					phone: result.record.phone,
 					email: result.record.email,
-					birthdate: result.record.birthdate
+					birthdate: result.record.birthdate,
+					// `?? ''` — defensive against pre-#285 fixtures/mocks whose record
+					// literal predates this field; the data layer itself always sends a
+					// string (memberRecord.ts's `raw.id_code?.[0]?.string ?? ''`).
+					id_code: result.record.id_code ?? ''
 				};
 				recordEditorOriginal = { ...recordForm };
 			}
@@ -1302,6 +1333,19 @@
 			recordSaveError = { memberId, kind: 'email-invalid' };
 			return;
 		}
+		// #285 — ISIKUKOOD CHECKSUM (issue #285 + Gama's promotion comment): the
+		// THIRD guard in this established slot, same placement reasoning as the
+		// two above — before the generation capture and single-flight arm,
+		// because a refusal is not a write and must never arm the lock or reach
+		// the fresh-lookup re-read. `isValidIdCode` is pure (idCode.ts) and
+		// already treats an empty value as valid, so the optional field passes
+		// through untouched. Unlike #283's deliberately-permissive email rule,
+		// this one is strict: the isikukood has a precise, closed, checksummable
+		// specification, so the rule follows the shape of the data.
+		if (!isValidIdCode(recordForm.id_code)) {
+			recordSaveError = { memberId, kind: 'id-code-invalid' };
+			return;
+		}
 		const g = routeLoad.generation;
 		recordSavingMemberId = memberId;
 		try {
@@ -1342,7 +1386,8 @@
 					name: recordForm.name,
 					phone: recordForm.phone,
 					email: recordForm.email,
-					birthdate: recordForm.birthdate
+					birthdate: recordForm.birthdate,
+					id_code: recordForm.id_code
 				});
 			} else {
 				// The record id comes from the FRESH read, never from the cached
@@ -1352,12 +1397,21 @@
 				// fields — the same set `createMemberRecord` would have sent, so a
 				// field the admin left empty never overwrites a value this editor
 				// never saw.
-				const original = recordEditorOriginal ?? { name: '', phone: '', email: '', birthdate: '' };
-				const changes: Partial<Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate'>> = {};
+				const original = recordEditorOriginal ?? {
+					name: '',
+					phone: '',
+					email: '',
+					birthdate: '',
+					id_code: ''
+				};
+				const changes: Partial<
+					Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate' | 'id_code'>
+				> = {};
 				if (recordForm.name !== original.name) changes.name = recordForm.name;
 				if (recordForm.phone !== original.phone) changes.phone = recordForm.phone;
 				if (recordForm.email !== original.email) changes.email = recordForm.email;
 				if (recordForm.birthdate !== original.birthdate) changes.birthdate = recordForm.birthdate;
+				if (recordForm.id_code !== original.id_code) changes.id_code = recordForm.id_code;
 				await updateMemberRecord(cfg, fresh.record._id, changes);
 			}
 			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return; // superseded — write nothing
@@ -3255,6 +3309,16 @@
 									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
 								/>
 							</label>
+							<label class="flex flex-col gap-1 text-xs">
+								{m.roster_record_id_code_label()}
+								<input
+									type="text"
+									data-testid="roster-record-id-code"
+									bind:value={recordForm.id_code}
+									disabled={recordSavingMemberId !== null}
+									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+								/>
+							</label>
 							<div class="flex items-center gap-2">
 								<button
 									type="button"
@@ -3299,6 +3363,8 @@
 										{m.roster_record_phone_invalid()}
 									{:else if recordSaveError.kind === 'email-invalid'}
 										{m.roster_record_email_invalid()}
+									{:else if recordSaveError.kind === 'id-code-invalid'}
+										{m.roster_record_id_code_invalid()}
 									{:else}
 										{m.roster_record_save_failed()}
 									{/if}

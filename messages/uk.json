@@ -241,6 +241,8 @@
 	"roster_record_phone_label": "Телефон",
 	"roster_record_email_label": "Ел. пошта",
 	"roster_record_birthdate_label": "Дата народження",
+	"roster_record_id_code_label": "Isikukood",
+	"roster_record_id_code_invalid": "Isikukood недійсний — нічого не збережено. Перевірте код та збережіть ще раз.",
 	"roster_record_save": "Зберегти",
 	"roster_record_cancel": "Скасувати",
 	"roster_record_saved": "Дані учасника збережено.",

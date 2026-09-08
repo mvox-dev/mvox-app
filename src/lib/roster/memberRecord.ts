@@ -58,6 +58,10 @@ export interface MemberRecord {
 	phone: string;
 	email: string;
 	birthdate: string;
+	/** #285 — Estonian isikukood. Plain string on the wire (like phone — NOT
+	 *  birthdate's datetime anchor); '' when unset. Private-tier prop-def
+	 *  (#282, ordinal 6, in DEFAULT_REDACT_FIELDS). */
+	id_code: string;
 }
 
 /** Check-then-create/load result. 'damaged' = more than one record found —
@@ -76,6 +80,9 @@ export interface CreateMemberRecordInput {
 	phone?: string;
 	email?: string;
 	birthdate?: string;
+	/** #285 — isikukood, checksum-validated by the PAGE before it ever reaches
+	 *  this layer (idCode.ts); rides along only when non-empty, like the rest. */
+	id_code?: string;
 }
 
 /**
@@ -114,7 +121,7 @@ export async function loadMemberRecord(
 ): Promise<MemberRecordLookup> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=admin_member_record&person.reference=${encodeURIComponent(personId)}&props=name,phone,email,birthdate&limit=10`,
+		`entity?_type.string=admin_member_record&person.reference=${encodeURIComponent(personId)}&props=name,phone,email,birthdate,id_code&limit=10`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -127,6 +134,7 @@ export async function loadMemberRecord(
 			phone?: Array<{ string: string }>;
 			email?: Array<{ string: string }>;
 			birthdate?: Array<{ datetime: string }>;
+			id_code?: Array<{ string: string }>;
 		}>;
 	};
 	const entities = body.entities ?? [];
@@ -143,7 +151,9 @@ export async function loadMemberRecord(
 			name: raw.name?.[0]?.string ?? '',
 			phone: raw.phone?.[0]?.string ?? '',
 			email: raw.email?.[0]?.string ?? '',
-			birthdate: wireBirthdate ? birthdateFromWire(wireBirthdate) : ''
+			birthdate: wireBirthdate ? birthdateFromWire(wireBirthdate) : '',
+			// #285 — string shape, like phone: mapped directly, no wire transform.
+			id_code: raw.id_code?.[0]?.string ?? ''
 		}
 	};
 }
@@ -169,6 +179,9 @@ export async function createMemberRecord(
 	if (input.phone) props.push({ type: 'phone', string: input.phone });
 	if (input.email) props.push({ type: 'email', string: input.email });
 	if (input.birthdate) props.push({ type: 'birthdate', datetime: birthdateToWire(input.birthdate) });
+	// #285 — id_code rides LAST (FIELD_ORDER parity: a deterministic
+	// partial-failure order needs a deterministic payload order too).
+	if (input.id_code) props.push({ type: 'id_code', string: input.id_code });
 
 	const res = await entuFetch(
 		cfg.db,
@@ -189,17 +202,21 @@ export async function createMemberRecord(
 /** Fixed write order (module header): a partial failure is then always
  *  described the same deterministic way regardless of the caller's object key
  *  order. */
-const FIELD_ORDER: Array<keyof Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate'>> = [
+const FIELD_ORDER: Array<keyof Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate' | 'id_code'>> = [
 	'name',
 	'phone',
 	'email',
-	'birthdate'
+	'birthdate',
+	// #285 — string shape (like phone/email/name), LAST in the fixed order:
+	// a deterministic partial-failure order needs id_code to land after every
+	// pre-existing field, matching the create payload's own ordering.
+	'id_code'
 ];
 
 export async function updateMemberRecord(
 	cfg: EntuCfg,
 	recordId: string,
-	changes: Partial<Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate'>>,
+	changes: Partial<Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate' | 'id_code'>>,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
 	const landed: string[] = [];
@@ -246,3 +263,6 @@ export async function updateMemberRecord(
 
 // (*MVOX:Tallis* — #268 RED stubs + interface)
 // (*MVOX:Josquin* — #268 GREEN implementation)
+// (*MVOX:Tallis* — #285 RED interface extension: id_code)
+// (*MVOX:Josquin* — #285 GREEN: id_code joins the projection, create payload
+//  (last), FIELD_ORDER (last) — string wire shape like phone throughout)

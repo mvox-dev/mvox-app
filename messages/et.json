@@ -241,6 +241,8 @@
 	"roster_record_phone_label": "Telefon",
 	"roster_record_email_label": "E-post",
 	"roster_record_birthdate_label": "Sünnikuupäev",
+	"roster_record_id_code_label": "Isikukood",
+	"roster_record_id_code_invalid": "Isikukood ei ole õige — midagi ei salvestatud. Kontrolli koodi ja salvesta uuesti.",
 	"roster_record_save": "Salvesta",
 	"roster_record_cancel": "Tühista",
 	"roster_record_saved": "Liikme andmed on salvestatud.",
