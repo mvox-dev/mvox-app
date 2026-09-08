@@ -2,6 +2,22 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
+### [SESSION MVOX-18 OPEN 2026-09-08 23:05 EEST — restart recovery via /mvox-wake]
+
+Restart happened as predicted. Team re-established under session `6009a78a`: finn + bentham + perotin respawned and registered in `~/.claude/teams/session-6009a78a/config.json`. Inbox drained via `mcp__comms__read_mail` — **zero waiting**; courier `company-courier.py` alive (PID 297674), config `team: mvox`. Repo inboxes restored into the new session dir with `cp -n` (historical archives; live team-lead.json left untouched).
+
+Board sweep confirms the checkpoint exactly: **#287 is the sole `ready` open item**, no comments on it (body is authoritative), and nothing was ever in flight — main clean, no feature branch, no residue.
+
+**#287 IN RESEARCH (not yet in a pipeline).** Dynamic workflow `research-287`, run id `wf_cff6e78f-a90`, script at `~/.claude/projects/-home-ai-teams-workspace/6009a78a-.../workflows/scripts/research-287-wf_cff6e78f-a90.js`. Seven read-only agents, all pinned `claude-sonnet-5[1m]`, all carrying the mvox-app repo guard: four verification agents (route-load `reset` callback + generation semantics; `removePending` full lifecycle; `deactivatePending` full lifecycle; **#260's guard idiom as it exists today** — done-when bullet 4 says reuse, not reinvent) and three blast agents (tests asserting current behaviour; the **exhaustive pending-flag inventory** that feeds the scope fence; the cross-cutting axes). Prior-research findings from `research-272-273-271-283.json` r273.blast were seeded into every prompt with an explicit warning that the cited lines predate #285/#286 and must be re-verified.
+
+Gama acked with queue position + run id (msg `87a1c471587b5e87`). **Slice entry notice still owed** — it goes out with the *pipeline* run id when the TDD chain launches, per the standing contract below.
+
+**NEXT: research lands → author `pipeline-args/args-287.json` → single-slice `tdd-slice-pipeline` run.** Bake in the standing rules (native `<select>`/native inputs; in-situ whole-field + tab activation; polyphony.uk as story source) and, since this touches a11y live regions and multi-collective state, the axes findings go into the review checklist verbatim.
+
+**Task-list snapshot is stale** (`task-list-snapshot.md` still reads 2026-09-07 / MVOX-16, the #267-269 queue). All of those closed; the live queue is #287 alone. Refresh the snapshot at next shutdown.
+
+---
+
 ### [CHECKPOINT 2026-09-08 23:00 — requested by Mihkel at the terminal; /login + model→Opus 5 ran just before, so A RESTART IS LIKELY IMMINENT]
 
 **FIRST ACTION NEXT SESSION: #287 — sole ready item, released 14:03, NEVER DISPATCHED (my miss).** My 14:05 board sweep returned zero (label landed ~14:03; propagation or a two-minute race), I went quiescent, and PO's 16:53 status ask arrived into a session that then sat through a ~6h gap + login. No run was ever launched — nothing is in flight, no branch exists, no research, no args. Deliberately NOT launched at checkpoint time: a pipeline started minutes before a restart dies mid-run and strands a branch. Pick it up cold: research → args → single-slice run.
