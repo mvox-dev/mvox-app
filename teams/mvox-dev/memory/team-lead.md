@@ -284,3 +284,25 @@ Data ops (mvox_crede): provisioned fresh db, #178 (20 members migrated), #179 (M
 
 
 **CORRECTION 2026-09-02: rule 6 NOT shipped** — #210 closed-as-duplicate (COMPLETED is metadata artifact); #207 = sole tracker rules 5+6+7+step300. Verify shipped-claims against code, not issue state.
+
+---
+
+### [#294 PO RULING 2026-09-08 23:46 — issuecomment-5591635866, verified on the issue]
+
+**Invariant: one person, at most one redeemable link, at any moment.** Minting a second link while one is live is forbidden. Resend-vs-mint underneath is ours.
+
+Reason it is an invariant and not a preference: `withdraw` is a security control for a link that went to the wrong address. If links can accumulate, withdraw revokes one of N, the UI says "invite withdrawn", and an earlier link stays live and redeemable by whoever holds it — silent failure that the UI actively reassures against.
+
+**State routing settles most of it.** Absent → `kutsu`. Placeholder (unredeemed) → `saada uuesti` + `tühista kutse`. `kutsu` reachable on a person with a live link = state-routing bug, not a case to design for. Wrong-address recovery is `tühista` then `kutsu`.
+
+**Probable implementation, from the probe:** the stored token reads back masked (`entu_user: [{ _id, invite: "***" }]`), so the app cannot re-send the literal token — `saada uuesti` becomes withdraw-then-mint in one action unless entu-api offers a resend. Research must check entu-api for a resend endpoint before we build the replace.
+
+**MY ENGINEERING NOTE (not Gama's — ORDER MATTERS, pin it in RED):** Entu has no transactions, so "one action" cannot be atomic. Order withdraw-then-mint, never mint-then-withdraw. Withdraw-fails-after-mint leaves TWO live links and breaks the invariant; mint-fails-after-withdraw leaves ZERO, which is recoverable by `kutsu` and is the safe failure direction. A partial failure must not be reported as success.
+
+**Gama's demanded test:** after `saada uuesti`, the previously issued link must no longer redeem. Test the invariant, not the button.
+
+**What must not ship:** a `saada uuesti` that mints without invalidating.
+
+i18n leg REQUIRED (labels above are Estonian values; keys stay vocabulary-neutral per the skin-neutrality rule, and en/lv/uk need equivalents).
+
+(*MVOX:Palestrina*)

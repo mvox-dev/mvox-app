@@ -127,16 +127,28 @@
 			// alongside the reorder pair, for the same reason.
 			removeError = null;
 			pendingRemoveId = null;
+			// #287 — a section-remove write armed/in-flight for the OLD collective
+			// must not keep the NEW collective's structural controls disabled via
+			// `structuralWritePending`; its own `finally` is separately
+			// generation-guarded (below) to close the late-settle half of the gap.
+			removePending = false;
 			// #255 (A) — same reasoning: a half-armed deactivate confirm or a stale
 			// refusal message is about a row the next tree may not even contain.
 			pendingDeactivateId = null;
 			deactivateRefusal = null;
 			deactivateActionError = null;
+			// #287 — mirrors `removePending` above: a deactivate write armed/in-flight
+			// for the OLD collective must not leave the NEW collective's confirm/
+			// cancel/trigger buttons disabled; its `finally` is separately
+			// generation-guarded (below).
+			deactivatePending = false;
 			// #268 — same reasoning as the deactivate trio above: an open editor,
 			// a mid-flight save, or a stale save error all describe a row the next
 			// tree may not even contain (or a rewritten `_id`). Reset unconditionally
-			// on EVERY load, not just an actual switch (matching `reorderStatus`/
-			// `removeStatus`/`pageCreateStatus`/`renameStatus` above, and unlike the
+			// on EVERY load, not just an actual switch (matching `reorderStatus`
+			// above and `recordStatus` below — `removeStatus`/`pageCreateStatus`/
+			// `renameStatus` are NOT cleared here, per #287 review; only
+			// `removePending` (this scope) is, above), and unlike the
 			// isSwitch-gated inactive-panel trio below): the record editor is a
 			// per-row transient exactly like the deactivate confirm/refusal it sits
 			// beside, not data keyed to the tree's identity.
@@ -881,6 +893,27 @@
 			activeAtStart === document.body ||
 			activeAtStart ===
 				document.querySelector(`[data-testid="member-deactivate-confirm-${row.memberId}"]`);
+		// #287 — captured at FUNCTION ENTRY, before `deactivatePending` is even
+		// set, so it can guard TWO things: the canonical #260 checkpoint right
+		// after `await deactivateMember(...)` below (before writing ANY success
+		// state — same shape as `handleRemoveSection`'s `g`), and the outer
+		// `finally`. Deliberately a DIFFERENT capture from `g` further down
+		// (which reads `routeLoad.generation` only after `loadForSelected()` has
+		// already bumped it — scoped narrowly to the inner inactive-panel
+		// reload; reusing it here would either not compile in `finally` or,
+		// mid-refactor, silently defeat the guard). `gEntry` is intentionally
+		// left UN-rebased past `loadForSelected()`'s own self-bump: on the
+		// success path, once the checkpoint below passes, `reset()` (above) has
+		// already unconditionally cleared `deactivatePending` for THIS load
+		// before the fetch even started, so the `finally` reading `gEntry` as
+		// stale afterward is harmless (redundant, not a gap) — and is exactly
+		// what stops this stale `finally` from clobbering a DIFFERENT write's
+		// `deactivatePending = true` if one legitimately starts before it runs.
+		// A rebased capture was tried and rejected: two DIFFERENT deactivates on
+		// the same collective, with no reload between them, share one
+		// generation number, so a rebased guard cannot tell them apart and can
+		// clobber the second one's flag out from under it.
+		const gEntry = routeLoad.generation;
 		deactivatePending = true;
 		deactivateRefusal = null;
 		deactivateActionError = null;
@@ -920,6 +953,19 @@
 				return;
 			}
 			await deactivateMember(cfg, row.memberId);
+			// #287 — the canonical #260 checkpoint, right after the write settles
+			// and before writing ANY state: a first pass guarded only the outer
+			// `finally` and reasoned `pendingDeactivateId = null` below was a safe
+			// no-op against a switched-to collective — that reasoning missed the
+			// LATE-SETTLE CLOBBER case (pinned in
+			// page.roster-pending-collective-switch.spec.ts): if a GENUINE new
+			// deactivate has since armed a DIFFERENT row on the collective now on
+			// screen, this unconditional null would unmount THAT write's own armed
+			// confirm/cancel pair mid-write. Also skips this stale write's own
+			// `loadForSelected()` call below entirely — reloading for a collective
+			// that is no longer selected would only flicker the newer collective's
+			// screen with the old one's (momentarily bumped-then-irrelevant) load.
+			if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
 			pendingDeactivateId = null;
 			// She drops out of every active-scoped read — re-derive from the
 			// server rather than patch a local delta (same discipline the section
@@ -966,7 +1012,17 @@
 			// above for a direct retry through the same confirm.
 			deactivateActionError = { memberId: row.memberId, kind: 'deactivate' };
 		} finally {
-			deactivatePending = false;
+			// #287 — a stale settle must not flip `deactivatePending` back to false
+			// out from under a write that has since become the current one —
+			// another collective's (the reset() callback above already owns
+			// clearing it on an actual switch, this closes the LATE-settle half)
+			// or even another write on THIS SAME collective started after this
+			// one's own reload already released the flag. On the refusal/failure
+			// paths (no `loadForSelected()` call, so no self-bump) `gEntry` still
+			// equals `routeLoad.generation` here in the ordinary case, so the
+			// clear still fires exactly as before #287. Reuse of the #260 idiom,
+			// same shape as `handleRemoveSection`'s `finally`.
+			if (gEntry === routeLoad.generation) deactivatePending = false;
 			// #286 — land focus back on the (now re-enabled) confirm for the two
 			// outcomes that leave the pair mounted — refusal and failure — the
 			// same landing `focusableByTestId` already gives `disarmRemove`/
@@ -1659,6 +1715,17 @@
 		removePending = true;
 		try {
 			await deleteSection(cfg, id);
+			// #287 — the canonical #260 checkpoint: compare BEFORE writing ANY
+			// state. A first pass at this fix guarded only the `removeStatus`
+			// announcement below, reasoning the sibling writes were harmless no-ops
+			// against a switched-to tree — that reasoning missed the LATE-SETTLE
+			// CLOBBER case (pinned in page.roster-pending-collective-switch.spec.ts):
+			// if a GENUINE new remove has since armed a section on the collective
+			// now on screen, `pendingRemoveId = null` below is not a no-op at all —
+			// it unmounts that OTHER write's own armed confirm/cancel pair
+			// mid-write. A stale settle must write NOTHING once superseded, full
+			// stop; the `finally` (guarded separately, same `g`) still runs.
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			// #273 — the tree mutation MOVES here, from before the `await`: agenda
 			// parity (`onSeasonManageSeriesDelete` splices its list only in
 			// `.then()`, never optimistically) means the write is now PESSIMISTIC,
@@ -1714,7 +1781,12 @@
 			// `pendingRemoveId` is left set — #273's retry convention: the pair
 			// stays armed beside `removeError` above.
 		} finally {
-			removePending = false;
+			// #287 — a stale settle must not flip `removePending` back to false for
+			// a collective that isn't the one this write belongs to; the reset()
+			// callback (above) already owns clearing it on an actual switch. `g` was
+			// captured before the write started, so this is a straight reuse of the
+			// #260 idiom already applied to this same function's reconcile branches.
+			if (g === routeLoad.generation) removePending = false;
 			if (ownsFocus && failedRemoveId !== null) await placeFocusAfterFailedRemove(failedRemoveId);
 		}
 	}
