@@ -495,6 +495,7 @@
 	"event_create_datetime_required": "A date and time are required.",
 	"event_create_name_required": "An event without a series needs a name.",
 	"event_created": "{name} created for {when}.",
+	"event_created_hidden_by_filter": "{name} created for {when}. Hidden by the current filter.",
 	"season_manage_event_convert": "Convert {name} to a series",
 	"event_convert_form_label": "Convert to series",
 	"event_convert_interval_label": "Repeat every (days)",

@@ -495,6 +495,7 @@
 	"event_create_datetime_required": "Kuupäev ja kellaaeg on kohustuslikud.",
 	"event_create_name_required": "Seeriata sündmus vajab nime.",
 	"event_created": "{name} loodud ajaks {when}.",
+	"event_created_hidden_by_filter": "{name} loodud ajaks {when}. Praegune filter peidab selle.",
 	"season_manage_event_convert": "Muuda {name} seeriaks",
 	"event_convert_form_label": "Muuda seeriaks",
 	"event_convert_interval_label": "Kordub iga (päeva)",

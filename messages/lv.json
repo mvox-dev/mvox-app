@@ -496,6 +496,7 @@
 	"event_create_datetime_required": "Datums un laiks ir obligāti.",
 	"event_create_name_required": "Notikumam bez sērijas ir vajadzīgs nosaukums.",
 	"event_created": "{name} izveidots {when}.",
+	"event_created_hidden_by_filter": "{name} izveidots {when}. Pašreizējais filtrs to slēpj.",
 	"season_manage_event_convert": "Pārvērst {name} par sēriju",
 	"event_convert_form_label": "Pārvērst par sēriju",
 	"event_convert_interval_label": "Atkārtojas ik pēc (dienām)",

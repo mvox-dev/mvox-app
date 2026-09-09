@@ -3368,6 +3368,11 @@
 		closeEventConvertForm();
 		eventCreateLoadId += 1; // review F3 — a new form; nothing the last one asked for belongs here
 		eventCreateOrigin = origin;
+		// #298 — a fresh open owns the status slot too, same discipline as
+		// `openSeasonCreateForm`'s `seasonCreateStatus = ''` right below: a
+		// stale "Event X created" must not sit visible over a form the viewer
+		// re-opened to do something else.
+		eventCreateStatus = '';
 		const prefillSeasonId = manageableSeasonId ?? '';
 		eventCreateSeasonId = prefillSeasonId;
 		eventCreateSeriesId = '';
@@ -4541,13 +4546,26 @@
 			}
 
 			const origin = eventCreateOrigin;
+			// #298 — moved ABOVE the status write: the announcement's WORDING
+			// depends on this outcome (below), so it must be known before the
+			// status is set, not after. Reads only — `agendaTypeFilter` stays a
+			// five-writer variable (declaration / the user's own chip / a
+			// vanished chip / collective switch / no-agenda); this create path
+			// still never narrows it to fit a new event.
+			const showableUnderFilter =
+				agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter;
 			// #132/T4 review F3 — say what happened BEFORE the form unmounts. An
 			// own name wins; a series occurrence has none of its own, so the
 			// inherited series name (or, failing that, the type) names it.
-			eventCreateStatus = m.event_created({
-				name: trimmedName || eventCreateSeriesDefaults?.name || typeValue,
-				when: eventCreateStatusFmt(new Date(startDatetime))
-			});
+			// #244 / #298 Done-when #6 — when the active filter would hide the
+			// new event from the list the viewer is looking at, plain
+			// "created" is a lie of omission: say BOTH halves, created AND why
+			// it will not appear.
+			const createdName = trimmedName || eventCreateSeriesDefaults?.name || typeValue;
+			const createdWhen = eventCreateStatusFmt(new Date(startDatetime));
+			eventCreateStatus = showableUnderFilter
+				? m.event_created({ name: createdName, when: createdWhen })
+				: m.event_created_hidden_by_filter({ name: createdName, when: createdWhen });
 			closeEventCreateForm();
 			// The write just changed the world this page reads — refresh for real
 			// (same discipline as season create). `loadForSelected` bumps
@@ -4569,23 +4587,16 @@
 
 			// #244 (amended by issuecomment-5594475154) — the panel gets out of
 			// the way only when there is a result to uncover. That is decided in
-			// two stages, and only the FIRST of them is here:
+			// two stages:
 			//
-			//   1. the cheap early-out: the created event's own bucket must be
-			//      admitted by the ACTIVE agenda filter. `agendaTypeFilter` is
-			//      only ever READ here — this create path must not become a
-			//      sixth site that writes it, alongside the five genuine ones
-			//      (declaration / the user's own chip / a vanished chip /
-			//      collective switch / no-agenda), none of which narrow the
-			//      filter to fit a new event.
+			//   1. the cheap early-out: `showableUnderFilter`, computed above
+			//      (now also driving the announcement's wording, #298).
 			//   2. the actual decision, later and elsewhere: `surfaceCreatedEvent`
 			//      arms a watcher that collapses the panel when the created row
 			//      is OBSERVED on the agenda. See its declaration for why a
 			//      synchronous collapse here both dropped focus at <body> for
 			//      the length of the reload and could collapse over nothing at
 			//      all (#244 review F1/F3).
-			const showableUnderFilter =
-				agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter;
 			if (origin === 'panel' && showableUnderFilter) {
 				surfaceCreatedEvent(newEventId);
 			}
@@ -5672,6 +5683,15 @@
 	// explicit `selected` read below.
 	$effect(() => {
 		selected;
+		// #298 — a genuine collective switch (or a deselection) makes any
+		// surviving create announcement untrue: this effect is the ONE site
+		// that fires only on a real context change, unlike `loadForSelected()`
+		// itself, which also runs right after a SAME-collective create success
+		// (see `submitSeasonCreate`/`submitEventCreate`) — clearing inside that
+		// function would erase the message the create just wrote. No timer:
+		// this fires on the context change, never on a clock.
+		seasonCreateStatus = '';
+		eventCreateStatus = '';
 		untrack(() => loadForSelected());
 	});
 
@@ -7218,8 +7238,21 @@
 						<!-- #132/T2 — page-level [+ Season] creation form. The trigger button
 						     now lives in the #149 admin toolbar above; this block is the
 						     form only. The status region is mounted from first render (a
-						     live region announces only CHANGES to its contents). -->
-						<div data-testid="season-create-status" role="status" aria-live="polite" class="sr-only">
+						     live region announces only CHANGES to its contents).
+						     #298 — visibility comes from styling on content presence, never
+						     from `{#if}` (a live region inserted already-populated is not
+						     announced): `sr-only` toggles off the SAME state the text binds
+						     to, on this SAME node. `mb-2` is static (present whether or not
+						     `sr-only` is) — harmless while out-of-flow, and gives the newly
+						     visible line breathing room from the form/cards below instead of
+						     landing flush against them. -->
+						<div
+							data-testid="season-create-status"
+							role="status"
+							aria-live="polite"
+							class="mb-2 text-xs text-ink-2"
+							class:sr-only={!seasonCreateStatus}
+						>
 							{seasonCreateStatus}
 						</div>
 						{#if showSeasonCreate}
@@ -7385,8 +7418,18 @@
 						     the form only. -->
 						<!-- #132/T4 review F3 — mounted from FIRST render, like
 						     `season-create-status`: a live region inserted already-populated
-						     is generally not announced; only a change to a present one is. -->
-						<div data-testid="event-create-status" role="status" aria-live="polite" class="sr-only">
+						     is generally not announced; only a change to a present one is.
+						     #298 — same visibility mechanism as `season-create-status`: a
+						     reactive `sr-only` toggle on this SAME node, off the SAME state
+						     the text binds to, never an `{#if}`. `mb-2` gives the visible
+						     line space before the event form/season cards below. -->
+						<div
+							data-testid="event-create-status"
+							role="status"
+							aria-live="polite"
+							class="mb-2 text-xs text-ink-2"
+							class:sr-only={!eventCreateStatus}
+						>
 							{eventCreateStatus}
 						</div>
 						{#if eventCreateOpen}

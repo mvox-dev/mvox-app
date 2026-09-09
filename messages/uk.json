@@ -497,6 +497,7 @@
 	"event_create_datetime_required": "Дата й час є обов’язковими.",
 	"event_create_name_required": "Подія без серії потребує назви.",
 	"event_created": "{name} створено на {when}.",
+	"event_created_hidden_by_filter": "{name} створено на {when}. Поточний фільтр приховує цю подію.",
 	"season_manage_event_convert": "Перетворити {name} на серію",
 	"event_convert_form_label": "Перетворити на серію",
 	"event_convert_interval_label": "Повторюється кожні (днів)",
