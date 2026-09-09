@@ -172,6 +172,15 @@
 			// alongside the reorder pair, for the same reason.
 			removeError = null;
 			pendingRemoveId = null;
+			// #299 — `sectionWriteError` (the picker-create per-member error) and
+			// `pageCreateError` (the page-level create's error) are the same shape
+			// as `removeError` immediately above: each names a member/section the
+			// next tree may not even contain. Neither was in this callback at all
+			// before #299 — a create failure from a previous visit to this
+			// collective, or from the collective just left, would otherwise
+			// resurface as if it just happened.
+			sectionWriteError = null;
+			pageCreateError = null;
 			// #287 — a section-remove write armed/in-flight for the OLD collective
 			// must not keep the NEW collective's structural controls disabled via
 			// `structuralWritePending`; its own `finally` is separately
@@ -187,12 +196,10 @@
 			// rename for the OLD collective must not leave the NEW collective's
 			// structural controls disabled via `structuralWritePending`, and its
 			// own `finally` is separately generation-guarded (below) for the
-			// late-settle half. `renameStatus` is deliberately NOT included here —
-			// see the #287-era comment below, which this keeps following rather
-			// than overturning: it is an "invisible success" announcement naming a
-			// past action by value, not by on-screen tree position, so a switch
-			// does not make it wrong the way `reorderStatus`'s position-describing
-			// text would be.
+			// late-settle half. `renameStatus` itself is cleared alongside
+			// `removeStatus`/`pageCreateStatus`/`reorderStatus`/`recordStatus`
+			// below, not here — see the comment at that block (#299 review
+			// superseded the #287-era "invisible success" exception).
 			renamingSectionId = null;
 			renameValue = '';
 			renamePending = false;
@@ -228,12 +235,7 @@
 			// a mid-flight save, or a stale save error all describe a row the next
 			// tree may not even contain (or a rewritten `_id`). Reset unconditionally
 			// on EVERY load, not just an actual switch (matching `reorderStatus`
-			// above and `recordStatus` below — `removeStatus`/`pageCreateStatus`/
-			// `renameStatus` are NOT cleared here, per #287 review, a decision
-			// #297 read and kept for `renameStatus` rather than overturning; the
-			// rename trio's other four vars (`renamingSectionId`/`renameValue`/
-			// `renamePending`/`renameError`) ARE cleared, alongside `removePending`,
-			// above), and unlike the
+			// above and `recordStatus` below), and unlike the
 			// isSwitch-gated inactive-panel trio below): the record editor is a
 			// per-row transient exactly like the deactivate confirm/refusal it sits
 			// beside, not data keyed to the tree's identity.
@@ -246,6 +248,23 @@
 			// this scope fixes. The save's own `finally` clears it (and only when it
 			// still names that save's row), so it self-heals on settle.
 			recordStatus = '';
+			// #299 (PO amendment, issue comment) — `removeStatus`/`renameStatus`/
+			// `pageCreateStatus` join `reorderStatus`/`recordStatus` above: all four
+			// status regions now behave identically. The #287-era exception kept a
+			// surviving `renameStatus` on the stated belief that it could otherwise
+			// swallow the NEXT announcement (identical-string, no DOM change, no
+			// re-announce) — that belief was checked and refuted on the issue
+			// (`startRename` already clears `renameStatus` before arming, so the
+			// success write is always a genuine '' → text change; no announcement is
+			// ever missed) and is not the reason for this clear. The reason is
+			// narrower: a status region carries no collective identity of its own,
+			// so "Tenor removed"/"Sopranos renamed"/"Chorus created" left over from
+			// collective A reads, inside B, as a statement about B. Unconditional
+			// (every load, not `isSwitch`-gated), matching `reorderStatus`/
+			// `recordStatus` exactly.
+			removeStatus = '';
+			renameStatus = '';
+			pageCreateStatus = '';
 			// #255 review r3 F2 — the inactive panel is the one surface this function
 			// does NOT re-derive, so without this a switch left collective A's inactive
 			// members rendered under B's roster, each with a live Reinstate button
@@ -268,6 +287,24 @@
 				inviteLinkByMemberId = {};
 				inviteErrorByMemberId = {};
 				withdrawErrorByMemberId = {};
+				// #299 (PO ruling, Gama) — `pageCreateParentId` is not cosmetic form
+				// state: it is a cross-collective reference. The parent `<select>`'s
+				// options rebuild from the new collective's `ownOrgFlatSections`, so
+				// after a switch no option matches the retained id and the select
+				// DISPLAYS "top level" while the variable still names a section in
+				// the collective just left; `submitPageCreate` reads the VARIABLE,
+				// not the select, so a submit from that state would parent a new
+				// section in B into a tree that only exists in A. Scoped to an actual
+				// SWITCH (not every load) — a same-collective refresh (e.g. another
+				// admin's deactivate calling `loadForSelected()`) must not slam an
+				// in-progress draft shut. Once `pageCreateParentId` must go,
+				// `pageCreateOpen`/`pageCreateName` go with it: keeping the form open
+				// and named without a parent that still matches would hand the user
+				// a half-form pointing at the wrong tree, which is worse than losing
+				// an unsaved draft on an explicit context switch.
+				pageCreateOpen = false;
+				pageCreateName = '';
+				pageCreateParentId = '';
 			}
 		},
 		onNoCollective: () => {
@@ -2077,6 +2114,11 @@
 				if (g !== routeLoad.generation) return;
 				sections = before;
 			}
+			// #299 — the refetch/reconcile branches above already return early on a
+			// stale generation; this is the terminal write itself, reusing the same
+			// `g` captured at entry (no second capture) rather than relying on the
+			// two branches above having covered every path here by position.
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			// #110 review F1/F3 — say it, don't just log it. `section-not-empty` is
 			// its own message: nothing was written, and "it's not actually empty" is
 			// a different instruction to the user than "the delete was refused".
@@ -2108,6 +2150,12 @@
 			sectionWriteError = { memberId, kind: 'create' };
 			return;
 		}
+		// #299 — captured before the FIRST await (there are two: `createSection`
+		// below and `assignMemberSection` further down), same #155/S4 idiom as
+		// `handleRemoveSection`'s `g`. Neither await previously had any guard at
+		// all — a create confirmed on this collective but settling after the user
+		// switched away must not touch the new collective's tree or state.
+		const g = routeLoad.generation;
 
 		// TU.1/#109 (finding #10 root cause A) — the page threads the MEMBER'S OWN
 		// org id into every create (the data layer ignores it when parentId is
@@ -2123,9 +2171,11 @@
 			newId = await createSection(cfg, { ...input, dbEntityId });
 		} catch (e) {
 			console.error('roster: section create failed', memberId, input, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			sectionWriteError = { memberId, kind: 'create' };
 			return;
 		}
+		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 
 		const depth = input.parentId ? (findSectionNode(sections, input.parentId)?.depth ?? 0) + 1 : 0;
 		const newNode: SectionNode = {
@@ -2155,11 +2205,13 @@
 			await assignMemberSection(cfg, memberId, newId);
 		} catch (e) {
 			console.error('roster: assigning the newly-created section failed', memberId, newId, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			// The section itself is real and already in the tree — say precisely that,
 			// so the user doesn't retry the create and end up with a duplicate.
 			sectionWriteError = { memberId, kind: 'assign' };
 			return;
 		}
+		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), newId]);
 	}
 
@@ -2266,15 +2318,20 @@
 			pageCreateError = m.roster_section_create_failed;
 			return;
 		}
+		// #299 — captured before the ONLY await, same idiom as `handleCreate`
+		// above. This function previously carried no guard of any kind.
+		const g = routeLoad.generation;
 
 		let newId: string;
 		try {
 			newId = await createSection(cfg, { name, parentId, dbEntityId: currentDbEntityId });
 		} catch (e) {
 			console.error('roster: page-level section create failed', name, parentId, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			pageCreateError = m.roster_section_create_failed;
 			return;
 		}
+		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 
 		// LOCAL insertion — same "never refetch" contract as `handleCreate` above.
 		// There is no MEMBER context here (this is the page-level control, not a
