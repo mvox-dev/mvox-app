@@ -310,12 +310,35 @@
 		setStatus: (s) => {
 			status = s;
 		},
-		reset: () => {
+		reset: ({ isSwitch }) => {
 			expandedWorks = new Set();
 			expandedEditions = new Set();
 			editionsByWork = new Map();
 			copiesByEdition = new Map();
 			repertoireByWorkId = new Map();
+
+			// #300 — bulk-checkout selection is per-collective state. Options
+			// come from THIS collective's works/editions/copies/members, so a
+			// retained id/Set from the collective just left names nothing here
+			// (or, worse, coincidentally names something else in the new one).
+			// The two #74 $effects below only fire when the WORK id *changes
+			// value* — a switch does not change the value, so neither one runs,
+			// and this reset is the one place a switch is actually observed.
+			// Scoped to isSwitch (not every same-collective refresh) for the
+			// same reason roster's #299 fix is: a refresh must not slam an
+			// in-progress selection shut out from under the librarian making it.
+			if (isSwitch) {
+				bulkCheckoutWorkId = '';
+				bulkCheckoutEditionId = '';
+				bulkCheckoutCheckedMembers = new Set();
+				// bulkCheckoutDueDate: cleared too, explicitly — it is
+				// per-transaction state (handleBulkCheckout already resets it
+				// after a successful submit, treating it the same way), and an
+				// abandoned switch is an abandoned transaction. Left in place it
+				// would silently ride into the next collective's POST as
+				// assignedUntil the moment a work+edition get re-picked there.
+				bulkCheckoutDueDate = '';
+			}
 		},
 		onNoCollective: () => {
 			works = [];
