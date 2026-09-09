@@ -1211,6 +1211,15 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		// agenda reload (which otherwise tears it down via resetSeasonManage),
 		// keeping its already-seeded fields; focus lands back in it rather than
 		// on <body>.
+		//
+		// #244 review F3 — and it STILL stays open here, which is the point:
+		// this fixture's reload lists no new row (its agenda is empty either
+		// way), so there is nothing for a collapse to uncover. The collapse
+		// follows the RENDERED ROW, not the created event's type — a
+		// type-only prediction collapsed the panel over an empty agenda and
+		// removed the last thing on screen. The collapse itself is covered
+		// end-to-end in page.event-create-collapse.spec.ts, on a world whose
+		// reload actually carries the new event.
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 		expect(
 			(q(container, 'season-manage-name') as HTMLElement | null)?.textContent ?? ''
@@ -1578,6 +1587,11 @@ describe("agenda — a panel-born create refreshes the PANEL's season, not the f
 		await flush();
 
 		// The panel survived (review F2) — and its lists still belong to it.
+		// #244 review F3 — it survives here BECAUSE this fixture's reload
+		// lists no new row: the collapse follows the rendered row, not the
+		// created event's type, so there is nothing to uncover and nothing is
+		// torn down. (The collapse's own coverage lives in
+		// page.event-create-collapse.spec.ts.)
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
 		expect(q(container, 'season-manage-series-series-9')).toBeNull();

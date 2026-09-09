@@ -3440,6 +3440,123 @@
 		});
 	}
 
+	// #244 — the id of a just-created event whose agenda row this page is
+	// waiting to see ACTUALLY rendered, so it can collapse the season panel off
+	// it and mark it. Set only on the panel-born success path (see
+	// `submitEventCreate`); the post-create `loadForSelected` reload it waits
+	// on is a `.then()` chain the caller does not await, so the row is not in
+	// `filteredAgendaItems`/`filteredRecentItems` at the moment of the create.
+	//
+	// #244 review F1/F3 — the COLLAPSE lives here, not in `submitEventCreate`,
+	// and it is decided from the rendered row rather than from the created
+	// event's type. Both halves of that are load-bearing:
+	//
+	//   * FOCUS. `loadForSelected({ keepSeasonManage: true })` runs
+	//     `resetManagement()` SYNCHRONOUSLY, blanking `manageableSeasonId` /
+	//     `manageableSeasonRights` for the whole `loadFullAgenda()` round trip
+	//     — so `showSeasonCard` is false for its duration. Collapsing inside
+	//     that window makes BOTH disjuncts of
+	//     `{#if showSeasonCard || seasonManageOpen}` false, the entire
+	//     `agenda-admin-card` unmounts, and `closeSeasonManagePanel`'s own
+	//     `tick()` focus finds no `season-card-expand` to land on: focus drops
+	//     to <body> and is never recovered. Waiting for the row means the
+	//     reload has landed, the rights are back, and the collapsed card the
+	//     close focuses actually mounts.
+	//
+	//   * TRUTH. The filter admitting the created type is not the same claim
+	//     as "the row will be listed": `listFullAgenda` builds `upcoming` from
+	//     FUTURE events and `recent` from the CURRENT season only (returning
+	//     `recent: []` outright when no season is current), so a past-dated
+	//     create in a non-current season lands in neither list. Collapsing on
+	//     that prediction removes the last thing on screen — the exact
+	//     regression the amendment (issuecomment-5594475154) exists to
+	//     prevent. Observed-and-then-collapse cannot make that mistake.
+	let pendingSurfaceEventId = $state<string | null>(null);
+	let pendingSurfaceGiveUpTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Bounded give-up. A reload that never lists the row must not leave the
+	 *  arming live: a LATER reload or filter change would otherwise fire a
+	 *  stale "just created" scroll-and-highlight long after the fact. */
+	const SURFACE_GIVE_UP_MS = 10000;
+	// The transient mark on that row, and its own clear timer. DECORATIVE
+	// ONLY — `event-create-status` (sr-only) already announces the create to
+	// assistive tech (#132/T4 review F3) — so it carries no new copy and
+	// needs no i18n key. It clears on a timeout rather than lingering: a
+	// highlight that never times out is a different bug.
+	let justCreatedEventId = $state<string | null>(null);
+	let justCreatedEventMarkTimer: ReturnType<typeof setTimeout> | null = null;
+	const JUST_CREATED_MARK_MS = 3000;
+
+	function surfaceCreatedEvent(eventId: string): void {
+		if (pendingSurfaceGiveUpTimer !== null) clearTimeout(pendingSurfaceGiveUpTimer);
+		pendingSurfaceEventId = eventId;
+		pendingSurfaceGiveUpTimer = setTimeout(() => {
+			pendingSurfaceGiveUpTimer = null;
+			// Gave up: the row never showed. The panel stays exactly as it is —
+			// open, and still holding the focus `restoreEventCreateFocus` put on
+			// it synchronously at the end of the create — so there is nothing to
+			// recover here and nothing worth stealing back from wherever the
+			// viewer has moved in the meantime.
+			pendingSurfaceEventId = null;
+		}, SURFACE_GIVE_UP_MS);
+	}
+
+	$effect(() => {
+		const id = pendingSurfaceEventId;
+		if (!id) return;
+		// #244 review F2 — WHICH rows exist, and under which testid, depends on
+		// the view: `agendaViewStore` is a PERSISTED preference, so month mode
+		// is an ordinary state a viewer can be sitting in, not an edge. Month
+		// mode renders `filteredAgendaItems` ONLY (Gama's #247 scope ruling —
+		// no Recent section exists there), so a create that lands in `recent`
+		// genuinely is not on screen in that view and must not be treated as
+		// surfaced.
+		const monthMode = $agendaViewStore === 'month';
+		// Fires again every time the agenda's own state changes; a miss just
+		// means the reload has not landed yet (or never will — the give-up
+		// timer above owns that end).
+		const present = monthMode
+			? filteredAgendaItems.some((it) => it.id === id)
+			: filteredAgendaItems.some((it) => it.id === id) ||
+				filteredRecentItems.some((it) => it.id === id);
+		if (!present) return;
+		pendingSurfaceEventId = null;
+		if (pendingSurfaceGiveUpTimer !== null) {
+			clearTimeout(pendingSurfaceGiveUpTimer);
+			pendingSurfaceGiveUpTimer = null;
+		}
+		// The row is up: collapse the panel off it. The mid-run refusal
+		// (`seriesRunUnfinished || eventConvertRunUnfinished`, #135/#196) lives
+		// in EXACTLY ONE place — routing the auto-collapse through it, instead
+		// of assigning `seasonManageOpen` directly, inherits that refusal
+		// rather than re-deriving it: a run still unfinished leaves
+		// `seasonManageOpen` untouched and this call is a no-op, with focus
+		// staying on the still-open panel. (Arming only ever happens from the
+		// panel-born success path, so there is no case where this fires with
+		// no panel to close; if the viewer collapsed it by hand meanwhile, the
+		// call re-lands focus where it already is.)
+		closeSeasonManagePanel();
+		// AttendanceSurface.svelte:89-97's shape: the row is addressed by its
+		// existing testid (+page.svelte already does this cross-component at
+		// `closeAttendancePanel`, above) rather than a new prop/ref, and the
+		// scroll waits a `tick()` for THIS render — the collapse included — to
+		// land.
+		tick().then(() => {
+			document
+				.querySelector<HTMLElement>(
+					monthMode
+						? `[data-testid="agenda-month-row-${id}"]`
+						: `[data-testid="agenda-row-${id}"], [data-testid="agenda-recent-row-${id}"]`
+				)
+				?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+		});
+		if (justCreatedEventMarkTimer !== null) clearTimeout(justCreatedEventMarkTimer);
+		justCreatedEventId = id;
+		justCreatedEventMarkTimer = setTimeout(() => {
+			justCreatedEventId = null;
+			justCreatedEventMarkTimer = null;
+		}, JUST_CREATED_MARK_MS);
+	});
+
 	/** Cancel / Escape: dismiss WITHOUT writing, and give focus somewhere real.
 	 *
 	 *  #132/T6 review F2 — refused while the create is on the wire, for the same
@@ -4411,8 +4528,12 @@
 				...(capacityValue !== undefined ? { capacity: capacityValue } : {})
 			};
 
+			let newEventId: string;
 			try {
-				await createEvent(cfg, input);
+				// #244 — the return value used to be discarded; it is the new
+				// event's entity id, and both the row-surfacing and the
+				// filter-admits-the-type check below need it.
+				newEventId = await createEvent(cfg, input);
 			} catch (e) {
 				console.error('agenda: event create failed', e);
 				setEventCreateError(m.event_create_failed, null);
@@ -4445,6 +4566,35 @@
 			if (origin === 'panel' && panelSeasonId === seasonId) {
 				refreshSeasonManageLists(cfg, panelSeasonId);
 			}
+
+			// #244 (amended by issuecomment-5594475154) — the panel gets out of
+			// the way only when there is a result to uncover. That is decided in
+			// two stages, and only the FIRST of them is here:
+			//
+			//   1. the cheap early-out: the created event's own bucket must be
+			//      admitted by the ACTIVE agenda filter. `agendaTypeFilter` is
+			//      only ever READ here — this create path must not become a
+			//      sixth site that writes it, alongside the five genuine ones
+			//      (declaration / the user's own chip / a vanished chip /
+			//      collective switch / no-agenda), none of which narrow the
+			//      filter to fit a new event.
+			//   2. the actual decision, later and elsewhere: `surfaceCreatedEvent`
+			//      arms a watcher that collapses the panel when the created row
+			//      is OBSERVED on the agenda. See its declaration for why a
+			//      synchronous collapse here both dropped focus at <body> for
+			//      the length of the reload and could collapse over nothing at
+			//      all (#244 review F1/F3).
+			const showableUnderFilter =
+				agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter;
+			if (origin === 'panel' && showableUnderFilter) {
+				surfaceCreatedEvent(newEventId);
+			}
+			// The panel is still open on EVERY path at this instant — the
+			// collapse, if it comes at all, comes later — so it remains the
+			// deliberate focus target now, and the reload window is never spent
+			// with focus at <body>. When the collapse does land,
+			// `closeSeasonManagePanel()` hands focus on to the collapsed card's
+			// own `season-card-expand` control (#261).
 			restoreEventCreateFocus(origin);
 		} finally {
 			// Released on every path — a stuck `true` would leave the form
@@ -7728,6 +7878,7 @@
 								{worksManage}
 								scheduleItemsByEventId={scheduleByEventId}
 								{attendancePanel}
+								{justCreatedEventId}
 								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 								recentEmptyState={agendaTypeFilter !== 'all' && recentItems.length > 0
 									? agendaRecentFilterEmptyState
@@ -7759,6 +7910,7 @@
 							<AgendaMonthView
 								items={filteredAgendaItems}
 								loading={agendaLoading}
+								{justCreatedEventId}
 								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 							/>
 						{/if}

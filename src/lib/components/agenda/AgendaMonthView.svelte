@@ -35,9 +35,18 @@
 		// agenda_empty_no_events message, whenever items is empty and loading is
 		// false. Omitted = the original default paragraph.
 		emptyState?: Snippet;
+		// #244 review F2 — the id of a just-created event to mark transiently.
+		// The month view is a PERSISTED view choice (`agendaViewStore`), so a
+		// create made while it is active must be surfaced here too, not only in
+		// the day list: without this prop the page's scroll query found no row
+		// and the mark rendered nowhere while its timer ran invisibly. Same
+		// contract as AgendaList's prop of the same name — this component stays
+		// filter/timing-agnostic, the page owns when it is set and when it
+		// clears.
+		justCreatedEventId?: string | null;
 	}
 
-	const { items, loading = false, emptyState }: Props = $props();
+	const { items, loading = false, emptyState, justCreatedEventId = null }: Props = $props();
 
 	const TZ = 'Europe/Tallinn';
 	const dayKeyFmt = isoDateFormatter(TZ);
@@ -149,7 +158,18 @@
 					<div
 						data-testid="agenda-month-row-{item.id}"
 						class="border-b border-dashed border-ink-5 py-1.5 last:border-b-0"
+						class:bg-highlight={item.id === justCreatedEventId}
 					>
+						{#if item.id === justCreatedEventId}
+							<!-- #244 — the day list's `agenda-row-created-mark` twin, same
+							     testid on purpose: "the just-created row" is one page-level
+							     fact, and the page addresses it without re-deriving the
+							     highlight condition per view. Purely decorative — the
+							     sr-only `event-create-status` already announces the create
+							     to assistive tech (#132/T4 review F3) — and it clears with
+							     `justCreatedEventId` on the page's own timer. -->
+							<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
+						{/if}
 						<a
 							href="/event/{item.id}"
 							aria-label={rowLinkLabel(item.name)}

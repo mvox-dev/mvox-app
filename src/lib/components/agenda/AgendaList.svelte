@@ -148,6 +148,12 @@
 		// would put the #247 month view one naive edit away from rendering them
 		// too, which Mihkel's own grooming ruling keeps four-elements-per-row.
 		scheduleItemsByEventId?: Record<string, ScheduleItem[]>;
+		// #244 — the id of a just-created event to mark transiently (a
+		// decorative `agenda-row-created-mark` + the existing `bg-highlight`
+		// token, same shade as the day-group "today" header) on whichever row
+		// family it lives in. This component stays filter/timing-agnostic: the
+		// page owns when it is set and when it clears.
+		justCreatedEventId?: string | null;
 	}
 	const {
 		items,
@@ -168,7 +174,8 @@
 		worksManage,
 		emptyState,
 		recentEmptyState,
-		scheduleItemsByEventId = {}
+		scheduleItemsByEventId = {},
+		justCreatedEventId = null
 	}: Props = $props();
 
 	/** The compact times line's full text — computed as ONE string (never a
@@ -395,7 +402,17 @@
 			<div
 				data-testid="agenda-recent-row-{item.id}"
 				class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+				class:bg-highlight={item.id === justCreatedEventId}
 			>
+				{#if item.id === justCreatedEventId}
+					<!-- #244 — purely decorative: `event-create-status` (sr-only)
+					     already announces a successful create to assistive tech
+					     (#132/T4 review F3). This only lets the page address "the
+					     just-created row" without re-deriving the highlight
+					     condition, and it clears with `justCreatedEventId` on the
+					     page's own timer. -->
+					<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
+				{/if}
 				<!-- #101 TE.1 -- a decorative, non-focusable twin of the named link below
 				     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
 				     second tab stop announcing the same destination. -->
@@ -541,7 +558,16 @@
 					<span>{group.header}</span>
 				</div>
 				{#each group.rows as item (item.id)}
-					<div data-testid="agenda-row-{item.id}" class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0">
+					<div
+						data-testid="agenda-row-{item.id}"
+						class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+						class:bg-highlight={item.id === justCreatedEventId}
+					>
+						{#if item.id === justCreatedEventId}
+							<!-- #244 — see the Recent row's identical marker above for the
+							     rationale: decorative only, clears on the page's timer. -->
+							<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
+						{/if}
 						<!-- #101 TE.1 — a decorative, non-focusable twin of the named link below
 						     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
 						     second tab stop announcing the same destination. -->
