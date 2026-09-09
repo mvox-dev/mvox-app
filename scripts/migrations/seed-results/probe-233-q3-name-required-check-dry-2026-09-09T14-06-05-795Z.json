@@ -1,0 +1,12 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#233 Q3 — does v4E reject an event create with no `name` sent, once `name` is slated to become formula-owned? Source read (entity.js:30-40) says no; this corroborates live on polyphony.",
+  "ledger": [
+    {
+      "step": "dry-run",
+      "outcome": "dry-run-would-run"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#233 Q3 — does v4E reject an event create with no `name` sent, once `name` is slated to become formula-owned? Source read (entity.js:30-40) says no; this corroborates live on polyphony.",
+  "ledger": [
+    {
+      "step": "create-no-name",
+      "outcome": "200",
+      "status": 200,
+      "body": {
+        "_id": "6aa167d720ebf490c690aa6d",
+        "properties": [
+          {
+            "_id": "6aa167d720ebf490c690aa6e",
+            "type": "_type",
+            "reference": "69c7ea548489bfcb0e81a0a2"
+          },
+          {
+            "_id": "6aa167d720ebf490c690aa6f",
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          },
+          {
+            "_id": "6aa167d720ebf490c690aa70",
+            "type": "start_datetime",
+            "datetime": "2026-09-09T14:06:14.929Z"
+          },
+          {
+            "_id": "6aa167d720ebf490c690aa71",
+            "type": "_sharing",
+            "string": "domain"
+          },
+          {
+            "_id": "6aa167d720ebf490c690aa72",
+            "type": "_inheritrights",
+            "boolean": true
+          },
+          {
+            "_id": "6aa167d720ebf490c690aa73",
+            "type": "_owner",
+            "reference": "69bcfd8e9c031ab8e6ce8079"
+          },
+          {
+            "_id": "6aa167d720ebf490c690aa74",
+            "type": "_created",
+            "reference": "69bcfd8e9c031ab8e6ce8079",
+            "datetime": "2026-09-09T14:06:15.056Z"
+          }
+        ]
+      }
+    },
+    {
+      "step": "cleanup-delete",
+      "outcome": "deleted",
+      "status": 200,
+      "id": "6aa167d720ebf490c690aa6d"
+    },
+    {
+      "step": "verify-gone",
+      "outcome": "404",
+      "expected": 404
+    }
+  ]
+}
