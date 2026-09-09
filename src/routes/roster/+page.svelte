@@ -171,6 +171,26 @@
 			// `structuralWritePending`; its own `finally` is separately
 			// generation-guarded (below) to close the late-settle half of the gap.
 			removePending = false;
+			// #297 — the rename trio gets the identical treatment, one write seam
+			// over: `renamingSectionId` is a half-armed per-row input id exactly
+			// like `pendingRemoveId` above, `renameValue` is its paired typed-but-
+			// unsaved text (cleared together, same pairing `cancelRename` already
+			// enforces), and `renameError` names a section the next tree may not
+			// even contain, exactly `removeError`'s reasoning. `renamePending`
+			// mirrors `removePending` immediately above it: an armed/in-flight
+			// rename for the OLD collective must not leave the NEW collective's
+			// structural controls disabled via `structuralWritePending`, and its
+			// own `finally` is separately generation-guarded (below) for the
+			// late-settle half. `renameStatus` is deliberately NOT included here —
+			// see the #287-era comment below, which this keeps following rather
+			// than overturning: it is an "invisible success" announcement naming a
+			// past action by value, not by on-screen tree position, so a switch
+			// does not make it wrong the way `reorderStatus`'s position-describing
+			// text would be.
+			renamingSectionId = null;
+			renameValue = '';
+			renamePending = false;
+			renameError = null;
 			// #255 (A) — same reasoning: a half-armed deactivate confirm or a stale
 			// refusal message is about a row the next tree may not even contain.
 			pendingDeactivateId = null;
@@ -197,8 +217,11 @@
 			// tree may not even contain (or a rewritten `_id`). Reset unconditionally
 			// on EVERY load, not just an actual switch (matching `reorderStatus`
 			// above and `recordStatus` below — `removeStatus`/`pageCreateStatus`/
-			// `renameStatus` are NOT cleared here, per #287 review; only
-			// `removePending` (this scope) is, above), and unlike the
+			// `renameStatus` are NOT cleared here, per #287 review, a decision
+			// #297 read and kept for `renameStatus` rather than overturning; the
+			// rename trio's other four vars (`renamingSectionId`/`renameValue`/
+			// `renamePending`/`renameError`) ARE cleared, alongside `removePending`,
+			// above), and unlike the
 			// isSwitch-gated inactive-panel trio below): the record editor is a
 			// per-row transient exactly like the deactivate confirm/refusal it sits
 			// beside, not data keyed to the tree's identity.
@@ -2729,6 +2752,7 @@
 		sections = renameSectionNode(sections, id, name);
 		try {
 			await renameSection(cfg, id, name);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			renameStatus = m.roster_section_renamed({ name });
 		} catch (e) {
 			console.error('roster: section rename failed', id, e);
@@ -2748,13 +2772,22 @@
 				if (g !== routeLoad.generation) return;
 				sections = before;
 			}
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			renameError = { id, name };
 		} finally {
-			renamePending = false;
-			// The rename input unmounts the instant `renamingSectionId` cleared
+			// Flag-clear only, generation-guarded (#297): an in-flight rename
+			// superseded by a newer collective selection must not clear
+			// `renamePending` for a tree it no longer belongs to — that would
+			// re-enable the NEW collective's structural controls mid-write.
+			if (g === routeLoad.generation) renamePending = false;
+			// The focus restoration below stays UNCONDITIONAL, never gated: the
+			// rename input unmounts the instant `renamingSectionId` cleared
 			// above — same WCAG 2.4.3 concern `armRemove`/`disarmRemove` already
-			// carry on this page: land focus back on the trigger that opened it,
-			// success or failure alike, rather than dropping it to <body>.
+			// carry on this page — so on EVERY settle, superseded or not, the
+			// input is already gone and focus must land back on the trigger that
+			// opened it rather than drop to <body>. An early `return` here would
+			// both skip this restoration and discard a pending return/throw from
+			// the `try`/`catch` above — gate the write, never the block.
 			await tick();
 			document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
 		}
