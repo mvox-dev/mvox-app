@@ -1,0 +1,194 @@
+{
+ "issue280": [
+  {
+   "key": "prefill",
+   "findings": [
+    {
+     "title": "Record editor open + prefill (create path, result.state === 'none')",
+     "detail": "openRecordEditor (src/routes/roster/+page.svelte:1464-1522) is the only place the editor opens (pencil tap, wired at line 3533: `onclick={() => openRecordEditor(row)}`). It resets `recordEditorLookup = null`, `recordEditorOriginal = null` (line 1474), and `recordForm = { name: '', phone: '', email: '', birthdate: '', id_code: '' }` (line 1475) BEFORE the async lookup settles. On `result.state === 'none'` (lines 1484-1497) it prefills:\n```\nrecordForm = {\n    name: row.profileName ?? row.name,\n    phone: '',\n    email: row.email,\n    birthdate: '',\n    id_code: ''\n};\n```\nSo on first open (no record yet): `name` and `email` are prefilled non-empty from the profile/row; `phone`, `birthdate`, `id_code` open blank. `recordEditorOriginal` stays `null` on this branch \u2014 it is set only in the `result.state === 'one'` branch (line 1511: `recordEditorOriginal = { ...recordForm }`, after prefilling from the existing record at lines 1501-1510). Comment at 1484-1488 confirms intent: 'First open, no record yet (R4) \u2014 prefill from the ROW... name/email from the roster's own resolution, phone/date of birth start empty.'",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "recordEditorOriginal \u2014 declaration, setter, and null-on-create-turned-update confirmed",
+     "detail": "Declared at lines 1430-1436 as `{ name; phone; email; birthdate; id_code } | null`, initialized to `null`. Its doc comment (1425-1429) states it is 'Read at save time only, never drives a render... null on the lazy-create path (no baseline to diff against \u2014 every save there is a create).' It is set to `{ ...recordForm }` ONLY inside the `result.state === 'one'` branch of `openRecordEditor` (line 1511) \u2014 i.e. only when a record already existed at open time. It is explicitly nulled in `openRecordEditor` (1474), in `cancelRecordEditor` (1531), and after a successful save (1694). On the create-turned-update path \u2014 editor opened when `loadMemberRecord` returned `state: 'none'` (so `recordEditorOriginal` was never set, stays null from line 1474), but the save-time fresh re-read (`saveRecordEditor`, line 1637) finds `fresh.state === 'one' \\| 'damaged'` (record was created by someone else in between) \u2014 `recordEditorOriginal` IS null, confirmed. The save handler's own code (line 1674) falls back to an all-empty baseline when it is null: `const original = recordEditorOriginal ?? { name: '', phone: '', email: '', birthdate: '', id_code: '' };` This is exactly the bug issue #280 describes: the empty fallback baseline can't distinguish 'admin typed this' from 'this arrived via prefill'.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "Save handler quoted in full \u2014 fresh.state !== 'none' branch, diff computation, fields sent",
+     "detail": "Full function is `saveRecordEditor` (src/routes/roster/+page.svelte:1548-1724). Key excerpt, the create-turned-update / existing-record branch (lines 1652-1690):\n```\nif (fresh.state === 'none') {\n    const dbEntityId = row.dbEntityId ?? currentDbEntityId;\n    if (!dbEntityId) {\n        throw new Error(`roster: cannot resolve the database entity id for member ${memberId}`);\n    }\n    await createMemberRecord(cfg, {\n        dbEntityId,\n        personId: row.personId,\n        name: recordForm.name,\n        phone: recordForm.phone,\n        email: recordForm.email,\n        birthdate: recordForm.birthdate,\n        id_code: recordForm.id_code\n    });\n} else {\n    // The record id comes from the FRESH read, never from the cached\n    // lookup \u2014 on the create-turned-update path there is no cached id at\n    // all. `recordEditorOriginal` is null there too, and the empty\n    // baseline it falls back to makes the diff send exactly the non-empty\n    // fields \u2014 the same set `createMemberRecord` would have sent, so a\n    // field the admin left empty never overwrites a value this editor\n    // never saw.\n    const original = recordEditorOriginal ?? {\n        name: '',\n        phone: '',\n        email: '',\n        birthdate: '',\n        id_code: ''\n    };\n    const changes: Partial<\n        Pick<MemberRecord, 'name' | 'phone' | 'email' | 'birthdate' | 'id_code'>\n    > = {};\n    if (recordForm.name !== original.name) changes.name = recordForm.name;\n    if (recordForm.phone !== original.phone) changes.phone = recordForm.phone;\n    if (recordForm.email !== original.email) changes.email = recordForm.email;\n    if (recordForm.birthdate !== original.birthdate) changes.birthdate = recordForm.birthdate;\n    if (recordForm.id_code !== original.id_code) changes.id_code = recordForm.id_code;\n    await updateMemberRecord(cfg, fresh.record._id, changes);\n}\n```\nThe `else` branch fires for `fresh.state === 'one'` (create-turned-update, the case #280 targets) AND ALSO would be reachable structurally for `fresh.state === 'damaged'` were it not intercepted earlier \u2014 but `damaged` is handled and returned at lines 1644-1651 before reaching this `if/else`, so in practice this `else` only runs for `state: 'one'`. The diff is computed field-by-field against `original` (real baseline when `recordEditorOriginal` was set at open time i.e. record pre-existed; empty-string baseline when it was null i.e. create-turned-update). Every field whose current `recordForm` value differs from `original` is included in `changes` and sent via `updateMemberRecord`. On the create-turned-update path with prefilled-but-untouched `name`/`email`: `original.name === ''` and `original.email === ''`, but `recordForm.name`/`recordForm.email` are the non-empty prefilled values \u2014 so `recordForm.name !== original.name` and `recordForm.email !== original.email` are both true, and BOTH prefilled fields get included in `changes` and sent to `updateMemberRecord`, even though the admin never typed into them. This is the exact overwrite issue #280 reports.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "No existing touched/dirty tracking anywhere in the editor \u2014 would be new",
+     "detail": "Searched the whole file for 'touched'/'dirty' (case-sensitive and via grep) \u2014 every hit is either an unrelated comment about other code paths ('leaves the tree untouched', 'children untouched', etc.) or the save-handler's own prose describing outcomes, never a piece of state. There is no boolean flag, Set, or per-field marker recording whether the admin edited a given input. The editor's only per-field state is `recordForm` itself (declared 1372-1384, a plain `$state<{name,phone,email,birthdate,id_code}>` object) and, when a record pre-existed at open time, `recordEditorOriginal` as the load-time snapshot. Each field input uses a bare two-way `bind:value={recordForm.<field>}` (verified at lines 3564, 3574, 3585, 3597, 3607 for name/phone/email/birthdate/id_code respectively) \u2014 nothing intercepts input events to flip a dirty flag. So implementing #280's fix (excluding untouched-but-prefilled fields from the create-turned-update diff) requires NEW per-field touched tracking; nothing to wire into exists today.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "Every field the editor manages, and prefill status of each",
+     "detail": "The editor manages exactly five fields, per the `recordForm` type (1372-1384) and the `RECORD_FIELD_LABEL` lookup table (1438-1444): `name`, `phone`, `email`, `birthdate`, `id_code`. Prefill behavior on first open (`result.state === 'none'`, lines 1489-1497): `name` \u2014 prefilled from `row.profileName ?? row.name` (non-empty, profile-derived). `email` \u2014 prefilled from `row.email` (non-empty, profile-derived). `phone` \u2014 opens empty (`''`); comment: 'the profile holds neither' (referring to phone/birthdate). `birthdate` \u2014 opens empty (`''`), same reason. `id_code` \u2014 opens empty (`''`); comment at 1494-1496 explicitly notes 'no prefill: nothing to prefill from, the profile layer has no such field.' So the bug's scope is exactly the two profile-sourced fields (`name`, `email`); the other three (`phone`, `birthdate`, `id_code`) are never silently non-empty on open and are already covered correctly by the existing 'diff against empty baseline' logic issue #280's own text confirms ('a field the admin left empty never overwrites a value this editor never saw' \u2014 true for those three, false for the two prefilled ones).",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "save-path",
+   "findings": [
+    {
+     "title": "The write function and wire shape",
+     "detail": "saveRecordEditor (src/routes/roster/+page.svelte:1548-1724) performs the save. It re-reads the record fresh at save time (loadMemberRecord, line 1637) and branches: fresh.state === 'none' -> createMemberRecord (line 1657, full non-empty input); otherwise (both create-turned-update and the normal update path go through the `else` starting at line 1666) -> a diff is built (lines 1674-1688) against `original` (recordEditorOriginal, or an all-empty fallback object at 1674-1680 when null), producing a `changes` object containing only fields whose current form value !== the baseline, then updateMemberRecord(cfg, fresh.record._id, changes) (line 1689). Wire shape: updateMemberRecord (src/lib/roster/memberRecord.ts:216-262) is property-level, NOT an atomic full-entity overwrite -- it walks FIELD_ORDER (name->phone->email->birthdate->id_code) and for each field literally present as a key in `changes` (`if (!(field in changes)) continue;`, memberRecord.ts:224) calls replaceEntityProperty (src/lib/entu/replaceProperty.ts:60-80ish) which does its own GET-then-POST-with-old-_id atomic overwrite of that ONE named property only (module header comments, replaceProperty.ts:7-21, confirm the entity POST body carries only the single prop entry). A field never added as a key to `changes` is therefore never sent in any POST and is left completely untouched server-side. So 'don't send it' (omit the key from the diff/changes object) IS sufficient to leave a field alone; no field is ever cleared by omission. Unit-confirmed at src/lib/roster/memberRecord.spec.ts:214-231: calling updateMemberRecord with only {email, name} yields exactly 2 replaceEntityProperty calls (never phone/birthdate/id_code).",
+     "files": [
+      "src/routes/roster/+page.svelte",
+      "src/lib/roster/memberRecord.ts",
+      "src/lib/entu/replaceProperty.ts",
+      "src/lib/roster/memberRecord.spec.ts"
+     ]
+    },
+    {
+     "title": "The bug's exact location",
+     "detail": "The bug is in the diff baseline, not the write layer. recordEditorOriginal is populated only when the editor opens with the lookup already showing state:'one' (+page.svelte:1498-1511). On the create-turned-update path -- editor opened while state was 'none' (prefilled from row.name/row.email, lines 1489-1497), and by save time a fresh lookup finds state:'one' (someone else created the record meanwhile) -- recordEditorOriginal is still null, so the fallback all-empty baseline is used (lines 1674-1680). Diffing form values against an EMPTY baseline means the untouched prefilled name/email (non-empty strings the admin never edited) count as 'changed' and ARE included in `changes`, so they get sent via updateMemberRecord and silently overwrite whatever the other writer already saved into those two fields. The code's own comment at lines 1669-1673 states the (incorrect) guarantee that this is safe.",
+     "files": [
+      "src/routes/roster/+page.svelte"
+     ]
+    },
+    {
+     "title": "Specs covering the record editor / create-turned-update / #268 save-time existence check",
+     "detail": "All in src/routes/page.roster-record-editor.spec.ts (component-level: `// @vitest-environment happy-dom` pragma at line 1, `@testing-library/svelte` render of the actual route, line 38). Relevant blocks: (C) prefill, lines 386-444 -- prefill-only assertions (name=row.name/email=row.email on 'none'; record wins on 'one'), no diff assertions. (E) save, lines 465-573: lines 476-494 assert the create-path full input; lines 546-559 cover the NORMAL update path (editor opened already on state:'one', so recordEditorOriginal is a real baseline) -- asserts updateMemberRecord sent ONLY {name:'Uus Nimi'}; correct, unaffected by the bug. (E) review r3 F2, lines 927-987, is #268's save-time existence check block: lines 933-941 assert the save re-reads before writing; lines 943-968 is the create-turned-update test and it ENCODES THE CURRENT BUGGY BEHAVIOUR -- it opens the editor on state:'none' (prefill fires), then makes the fresh save-time lookup return state:'one' with a different existing record, and asserts (lines 959-962) `updateMemberRecordMock.mock.calls[0][2]).toEqual({ name: 'Berta Bass', email: 'berta@example.com' })` -- i.e. it currently REQUIRES the untouched prefilled name+email be sent as 'changes'. Its own comment (956-958) states the guarantee that is wrong for non-empty prefills. This test will need its expectation rewritten (e.g. to `{}`) once the fix tracks touched-ness. Lines 970-987 cover the damaged-at-save-time branch, unaffected by this bug (no diff involved). src/lib/roster/memberRecord.spec.ts only unit-tests memberRecord.ts given an already-built `changes` object and never constructs the page-level diff, so it cannot encode this bug either way.",
+     "files": [
+      "src/routes/page.roster-record-editor.spec.ts",
+      "src/lib/roster/memberRecord.spec.ts"
+     ]
+    },
+    {
+     "title": "Existing spec already drives two overlapping writers",
+     "detail": "Yes -- src/routes/page.roster-record-editor.spec.ts:943-968 is the only spec that does. Its own comments (lines 930, 947) name the scenario explicitly: 'a retry after an ambiguous create failure, or a second admin saving the same pre-record member' / '...or a second admin's save'. Mechanically: editor A's prefilled form state is held by the component while the mocked loadMemberRecord return value is swapped mid-test to simulate a record that appeared from elsewhere between open and save -- exactly the two-writer race. Grepped src/routes/*.spec.ts and src/lib/roster/*.spec.ts for 'second admin'/'two admin'/'overlap': the only other hit is an unrelated replaceEntityProperty race note at page.roster-record-editor.spec.ts:837 (a different mechanism, the property-level concurrent-replace race, not the prefill-diff bug).",
+     "files": [
+      "src/routes/page.roster-record-editor.spec.ts"
+     ]
+    },
+    {
+     "title": "#265 and #268 commits -- what each actually changed",
+     "detail": "#265 (issue, CLOSED, task label) is the SCHEMA COMMISSION only: Mihkel's ruling defining the admin_member_record entity shape, per-field sharing tiers (name domain; phone/email/birthdate private), the R2 display-toggle, and the prefill-with-independence rule (R4: 'tuginedes, aga mitte s\u00f5ltudes' -- seeded from profile but never live-dependent). It produced schema/migration commits only (cb43a29 'feat(schema): admin_member_record + roster_show_real_names definitions (#265)', 452dfd8 provisioning scripts, plus dry-run/live-provisioning commits through b4c7530/8b5ae8d) -- NONE touch src/routes/roster/+page.svelte or memberRecord.ts. #268 (issue, CLOSED, ready+task) is 'Admin member records: create and edit real name, phone, email, date of birth' -- its single GREEN commit is 120d7d0 'feat(#268): admin records member details in-row on the roster ...' (Mon Sep 7 09:57:20 2026), which added the entire in-row editor end to end: the pencil affordance, openRecordEditor/cancelRecordEditor/saveRecordEditor in +page.svelte, and the whole memberRecord.ts data layer (loadMemberRecord/createMemberRecord/updateMemberRecord/birthdateToWire/birthdateFromWire/MemberRecordPartialSaveError). That commit's own message point (5) already flags the prefill-source choice for PO review, and explicitly states the create-turned-update deviation as deliberate and reviewer-endorsed: 'create-turned-update sends the non-empty field set against the fresh _id ... pushing empty fields would blank a concurrent admin's freshly-created values' -- this is precisely the mechanism #280 narrows. Consequence for the fix: reuse saveRecordEditor's existing create-turned-update branch and fresh-lookup discipline as-is (it is otherwise sound, reviewer-endorsed, and #264-compliant for the damaged case); the fix is scoped to how the `original` baseline / touched-ness is tracked (lines 1674-1688) plus updating the test at page.roster-record-editor.spec.ts:943-968, not re-deriving the create-vs-update branching or the memberRecord.ts write layer.",
+     "files": [
+      "src/routes/roster/+page.svelte",
+      "src/lib/roster/memberRecord.ts",
+      "src/routes/page.roster-record-editor.spec.ts"
+     ]
+    },
+    {
+     "title": "Runner / unit vs component",
+     "detail": "Single command for everything: `pnpm test` -> `vitest run` (package.json:13), one shared vitest.config.ts (mergeConfig over vite.config.ts), default environment 'node', include glob `src/**/*.spec.ts` + `scripts/**/*.spec.ts`, with global networkGuard.setup.ts blocking any real fetch. Unit vs component is per-file, not a separate runner/config: src/lib/roster/memberRecord.spec.ts carries no `@vitest-environment` pragma (runs under default 'node') and is a pure unit test of the memberRecord.ts module with resolveTypeId/replaceEntityProperty mocked -- no DOM, no Svelte rendering. src/routes/page.roster-record-editor.spec.ts opens with `// @vitest-environment happy-dom` (line 1) and uses `render`/`fireEvent`/`waitFor` from `@testing-library/svelte` (line 38) to mount the actual roster route component with its data-layer calls mocked -- genuine component-level testing of +page.svelte.",
+     "files": [
+      "package.json",
+      "vitest.config.ts",
+      "src/lib/roster/memberRecord.spec.ts",
+      "src/routes/page.roster-record-editor.spec.ts"
+     ]
+    }
+   ]
+  }
+ ],
+ "issue244": [
+  {
+   "key": "panel",
+   "findings": [
+    {
+     "title": "Issue #244's gear/`seasonManageGearDisabled` references are stale \u2014 replaced by #261 rework",
+     "detail": "Issue #244 (opened before #261 landed, commit b58d334) cites `season-manage-gear` at `src/routes/+page.svelte:5749` and a `seasonManageGearDisabled` variable. Neither exists at HEAD. `grep -rn seasonManageGearDisabled` and a grep for the identifier `season-manage-gear` in +page.svelte both return nothing. The #261 rework ('season card rework: + Hooaeg above, name-only collapsed card, title-row trashcan, gear removed') removed the gear entirely for everyone. Test files confirm removal, e.g. `src/routes/page.season-card.spec.ts:565` `expect(q(container, 'season-manage-gear'), 'the gear is removed').toBeNull();` and `src/lib/testing/seasonCard.ts:3` comment 'the [\u2699] `season-manage-gear` ... is REMOVED'.\n\nThe successor mechanism is explicit in code comments at `src/routes/+page.svelte:4713-4712` area: 'the title-row COLLAPSE control (the gear's successor as the only close control left) ... #213 Gama ruling (1), retargeted #261'. So every place #244 says 'gear' / `seasonManageGearDisabled` now means the `season-card-collapse` button and `seasonCardCollapseDisabled` derived value respectively. This does not change the required behaviour (the same refusal condition must still be respected), but an implementation referencing the issue's literal identifiers won't match current code \u2014 worth flagging in any implementation PR so a reviewer doesn't think the issue went unread.",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "(1) Panel open/collapsed state variable and its two toggle controls",
+     "detail": "State variable: `let seasonManageOpen = $state(false);` \u2014 `src/routes/+page.svelte:2481`.\n\nThere is no single 'gear' any more; two separate buttons toggle it depending on current state:\n- Collapsed face \u2014 opens the panel: `data-testid=\"season-card-expand\"` button at `src/routes/+page.svelte:5704`, `onclick={openSeasonManagePanel}` at `:5708`. `openSeasonManagePanel()` (starts `:2862`) sets `seasonManageOpen = true` at `:2868`.\n- Opened face \u2014 collapses the panel: `data-testid=\"season-card-collapse\"` button at `:5763`, `onclick={closeSeasonManagePanel}` at `:5768`, gated by `disabled={seasonCardCollapseDisabled}` at `:5766`. `closeSeasonManagePanel()` (starts `:2936`) sets `seasonManageOpen = false` at `:2959`, after checking the refusal condition at `:2958`: `if (seriesRunUnfinished || eventConvertRunUnfinished) return;`.\n\nWhich face renders is driven by `{#if !seasonManageOpen}` / `{:else}` around `:5666-5668` / `:5717`.",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "(2) Successor to `seasonManageGearDisabled` is `seasonCardCollapseDisabled` \u2014 exact refusal condition",
+     "detail": "Defined at `src/routes/+page.svelte:4710-4712`:\n```\nconst seasonCardCollapseDisabled = $derived(\n\tseasonManageOpen && (seriesRunUnfinished || eventConvertRunUnfinished)\n);\n```\nWhere (both also `$derived`): `seriesRunUnfinished = seriesCreateSubmitting || seriesCreateResume !== null` (`:4678`) and `eventConvertRunUnfinished = eventConvertSubmitting || eventConvertResume !== null` (`:4684`).\n\nSo the toggle is refused exactly when the panel is open AND (a bulk event-series create is in flight or stopped-but-not-resolved) OR (a bulk event-type conversion run is in flight or stopped-but-not-resolved). `closeSeasonManagePanel` re-checks the same `seriesRunUnfinished || eventConvertRunUnfinished` pair itself at `:2958` before actually collapsing (the disabled attribute and the handler both enforce it). Deliberately narrower than `anyCreateSubmitting` \u2014 an in-flight plain season/event create does NOT block the collapse, per the doc comment at `:4696-4699`.\n\nAn automatic collapse-on-success (issue #244 half 1) must gate on this same condition \u2014 equivalently, calling `closeSeasonManagePanel()` itself (which already enforces it) rather than setting `seasonManageOpen = false` directly is the safe implementation, since the event-create success path can run while the panel is showing a live series/conversion run and an auto-collapse that skipped this check could tear down the only visible 'N of M remaining' progress state.",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "(3) Event-create handler `submitEventCreate` \u2014 success/failure branches and collapse attach point",
+     "detail": "Handler: `async function submitEventCreate(): Promise<void>` \u2014 `src/routes/+page.svelte:4305-4454`.\n\nFailure branches (each sets an error and `return`s, leaving `seasonManageOpen` untouched, panel/form open with state intact): field-validation refusals at `:4326-4368` (season/type/datetime/end-before-start/name), the `resolveDatabaseEntityId` catch at `:4383-4386`, the 'no resolvable database entity' branch at `:4388-4391`, and the `createEvent` call's own catch at `:4416-4419` \u2014 each calls `setEventCreateError(...)` then `return`s before touching the panel.\n\nSuccess branch begins right after `createEvent` resolves without throwing, at `:4422`: captures `origin = eventCreateOrigin`, sets success status (`:4426-4429`), `closeEventCreateForm()` (`:4430` \u2014 unmounts the create FORM, not the season-management panel), `loadForSelected({ keepSeasonManage: origin === 'panel' })` (`:4440`, explicitly keeps the panel mounted for a panel-born create), conditionally `refreshSeasonManageLists(cfg, panelSeasonId)` (`:4445-4447`), then `restoreEventCreateFocus(origin)` (`:4448`) \u2014 all with no early return in between. This is where a `closeSeasonManagePanel()` call (or a condition-respecting collapse) attaches, e.g. right after `:4448`, still inside the `try`, before the `finally` at `:4449-4452` that releases `eventCreateSubmitting`. Attaching it there guarantees it fires only on success, never on any failure `return` above.",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "(4) Current focus handling on the create-success path, and existing focus helpers",
+     "detail": "Today, on a successful create, focus is restored to the season-management PANEL itself, not <body> and not the collapse/expand button. `restoreEventCreateFocus(origin)` called at `:4448` is defined `:3437-3441`:\n```\nfunction restoreEventCreateFocus(origin: 'panel' | null): void {\n\ttick().then(() => {\n\t\tif (origin === 'panel') seasonManagePanelEl?.focus();\n\t});\n}\n```\n`eventCreateOrigin` is typed `'panel' | null` (`:3232`); every call to `openEventCreateForm` passes the literal `'panel'` (signature `function openEventCreateForm(origin: 'panel'): void` at `:3355`) \u2014 per the doc comment at `:3428-3436`, '#213 removed the page-level [+ Event], every open is PANEL-born', so `origin` is effectively always `'panel'` for a real create, meaning focus today always lands on `seasonManagePanelEl`.\n\nExisting focus helpers on this page, for reuse:\n- `restoreEventCreateFocus(origin)` \u2014 `:3437-3441` (focuses the panel, `tick()`-deferred).\n- `closeSeasonManagePanel()`'s own focus restoration at `:2978`: `tick().then(() => seasonManageExpandEl?.focus());` \u2014 returns focus to the collapsed card's `season-card-expand` button (`bind:this={seasonManageExpandEl}` at `:5705`). This is the natural landing spot if the new auto-collapse routes through `closeSeasonManagePanel()` \u2014 but that function unconditionally focuses `seasonManageExpandEl`, so if it fires alongside/after `restoreEventCreateFocus`'s panel-focus, ordering on the microtask queue decides which wins; the issue's 'gear-successor or the created event's agenda row' requirement means this ordering needs deliberate handling, not just calling both helpers back-to-back.\n- The `$effect` at `:2989-2991` re-focuses `seasonManagePanelEl` whenever `seasonManageOpen` is true and the element exists.\n\nNo existing helper focuses an agenda ROW (the issue's other named target, 'the created event's agenda row') \u2014 no `data-testid`/element-ref for a just-created agenda row was found in this file, so that would be new code for half 1 (or shared with half 2's row-highlight work).",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "agenda",
+   "findings": [
+    {
+     "title": "Agenda row keying/testid \u2014 the scroll/highlight target",
+     "detail": "Rows render inside `src/lib/components/agenda/AgendaList.svelte`, not directly in `+page.svelte`. Upcoming rows: `{#each group.rows as item (item.id)}` keyed by `item.id`, testid `agenda-row-{item.id}` (AgendaList.svelte:543-544). Recent rows: `{#each recentItems as item (item.id)}`, testid `agenda-recent-row-{item.id}` (AgendaList.svelte:394,396) \u2014 this exact pattern is already used for cross-component DOM addressing, e.g. `+page.svelte:1957` builds the selector `[data-testid=\"agenda-recent-row-${closedItemId}\"] [data-testid=\"take-attendance-btn\"]`. So a created event's row is addressable purely via `document.querySelector('[data-testid=\"agenda-row-' + id + '\"]')` (or the recent variant) without AgendaList exposing any new prop or element ref \u2014 `item.id` is the event entity id. `+page.svelte` passes `filteredAgendaItems` (the #214-filtered set) into `<AgendaList items={filteredAgendaItems} .../>` (+page.svelte:7717-7718): if the active filter excludes the new event's type, its row will not be in the DOM at all, so scrollIntoView would have nothing to target \u2014 this is the exact case the ruling says to surface via the toast instead of chasing with a filter write.",
+     "files": [
+      "src/lib/components/agenda/AgendaList.svelte",
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "#214 filter chips \u2014 state shape and why the ruling forbids writing them",
+     "detail": "`agendaTypeFilter` is a plain component-local `$state<AgendaTypeFilter>('all')` (+page.svelte:220-221), NOT a persisted store (unlike `$agendaViewStore`, #247's list/month toggle, which IS a persisted preference store). Reading it: `agendaFilterChips` is a `$derived.by(...)` list of types that have events (+page.svelte:233); `filteredAgendaItems` (+page.svelte:239-243) is the `$derived` filtered array actually handed to `<AgendaList>`. Writing it is mechanically a one-line assignment via `selectAgendaTypeFilter()` (+page.svelte:267-269) or direct assignment \u2014 trivially easy, which is exactly why the ruling calls it out: nothing technically stops a create-success handler from doing `agendaTypeFilter = typeValue`, but that would silently overwrite state the user set on purpose. The three EXISTING writes to `agendaTypeFilter = 'all'` (+page.svelte:277, 652, 714, plus the auto-reset `$effect` at ~262-266 when the active chip's type disappears from the season) are all legitimate resets tied to a genuine collective switch / no-agenda state / vanishing chip \u2014 none of them is 'narrow the filter to fit a new event,' confirming the create path has no precedent for touching this state and should not start one.",
+     "files": [
+      "src/routes/+page.svelte"
+     ]
+    },
+    {
+     "title": "No transient 'just-created' highlight pattern exists anywhere in the codebase",
+     "detail": "Broad search (justCreated/transient/highlight/flash/pulse-once/setTimeout-driven visual markers/keyframes) across `src/lib` and `src/routes` (excluding specs) found no timed/decaying highlight of any kind. The two nearest precedents, neither a true match: (a) `class:bg-highlight={group.relative === 'today'}` in AgendaList.svelte:515 \u2014 a STATIC condition-based class (stays highlighted as long as the condition holds; never times out), used for the 'today' day-group header, not a per-event transient marker. (b) the scroll-into-view pattern below. No shared 'flash this element then clear' utility exists to reuse \u2014 a genuinely new (small) pattern has to be built, following the nearest analog rather than reinventing scroll mechanics.",
+     "files": [
+      "src/lib/components/agenda/AgendaList.svelte"
+     ]
+    },
+    {
+     "title": "Scroll-into-view precedent \u2014 inline component pattern, not an extracted helper",
+     "detail": "The only existing scrollIntoView call in the app is in `src/lib/components/attendance/AttendanceSurface.svelte:89-97`: a `panelEl = $state<HTMLDivElement|undefined>()` bound to the target div, a plain (untracked, non-`$state`) `let hasScrolled` guard, and a `$effect` that \u2014 once `loading` flips false \u2014 sets `hasScrolled = true` and does `tick().then(() => panelEl?.scrollIntoView({ block: 'start', behavior: 'smooth' }))`. There is no shared `src/lib` scroll/dom utility module (confirmed: no file matching `*scroll*`/`*dom*` outside that component's own spec) \u2014 this is a pattern to replicate inline, not a helper to import. Given the agenda row is addressable by its existing testid selector (finding 1), the created-event scroll could instead go through a plain `document.querySelector(...)?.scrollIntoView(...)` call from `+page.svelte`'s own create-success handler, without needing AttendanceSurface's bind:this machinery, since AgendaList does not expose per-row element refs to its parent.",
+     "files": [
+      "src/lib/components/attendance/AttendanceSurface.svelte"
+     ]
+    },
+    {
+     "title": "Created-toast surface \u2014 screen-reader-only live region, single interpolated string",
+     "detail": "The only status surface on the event-create path is `<div data-testid=\"event-create-status\" role=\"status\" aria-live=\"polite\" class=\"sr-only\">{eventCreateStatus}</div>` (+page.svelte:7239-7241) \u2014 visually hidden (`sr-only`), announced to assistive tech only; there is no visible toast. `eventCreateStatus` is a plain `let eventCreateStatus = $state('')` (+page.svelte:3304), set on success (+page.svelte:4426-4429) to `m.event_created({ name, when })`, a single i18n message string with no existing slot for an extra clause. Because it's a plain string assignment (not a fixed-shape typed formula), the ruling's 'say so in the created-toast' is mechanically easy: concatenate a second sentence (from a new message key) onto `eventCreateStatus` when the created event's type is not in the currently-effective filter \u2014 e.g. `eventCreateStatus = m.event_created({...}) + ' ' + m.event_created_filtered_out()`. Note: the season-create path has the exact same shape (`season-create-status`, `seasonCreateStatus`, +page.svelte:7072-7073) as an explicit sibling precedent for this kind of sr-only live-region status message. Also note: `await createEvent(cfg, input)` (+page.svelte:4415) currently DISCARDS the return value \u2014 `createEvent`'s own contract (`src/lib/entity/entityCreate.ts:492`) says it 'Resolves to the new event's entity id,' so the fix must capture that id (e.g. `const newEventId = await createEvent(cfg, input);`) to know which row to scroll/highlight and which type to check against the filter.",
+     "files": [
+      "src/routes/+page.svelte",
+      "src/lib/entity/entityCreate.ts"
+     ]
+    },
+    {
+     "title": "i18n \u2014 message-key convention and the four bundle files",
+     "detail": "Convention observed in neighbouring keys is `<domain>_<subject>[_<detail>]` snake_case: `agenda_filter_all`, `agenda_filter_group_label`, `agenda_filter_empty`, `agenda_filter_recent_empty` (messages/en.json:4-7); `event_created` (messages/en.json:497, et.json:497: `\"{name} loodud ajaks {when}.\"`); `season_created` (messages/en.json:426). New copy for this fix (the extra created-toast sentence, and/or a highlight-related aria-label if one is needed) should follow that pattern, e.g. an `event_created_filtered_out`-shaped key, added under the `event_create*`/`agenda_filter*` neighbourhood for discoverability. The four bundle paths requiring the identical new key(s) are `messages/en.json`, `messages/et.json`, `messages/lv.json`, `messages/uk.json` (confirmed present via `find`).",
+     "files": [
+      "messages/en.json",
+      "messages/et.json",
+      "messages/lv.json",
+      "messages/uk.json"
+     ]
+    }
+   ]
+  }
+ ]
+}
