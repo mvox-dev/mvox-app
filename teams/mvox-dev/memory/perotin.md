@@ -2,6 +2,35 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #233 Q1-Q5 answered, posted, no schema mutation (2026-09-09)
+
+Read-only formula-engine + entu.app-frontend source read (complete OPERATORS registry, exact
+formulaField branches), one cheap live corroboration on polyphony. Posted:
+https://github.com/mvox-dev/mvox-app/issues/233#issuecomment-5603223040
+
+- **Q1 (date truncation)**: no formula op truncates a `datetime`; `.date`-typed fields DO get
+  auto-sliced to YYYY-MM-DD by `getValueArray`, `datetime` doesn't. App needs a date-only
+  companion prop for a clean date.
+- **Q2 (blank concat)**: cleaner than assumed — an ABSENT field contributes an empty slot,
+  `flattenSlots` drops it, no stray separator. Only an EXPLICIT empty string would leave one
+  (no collapse op exists). `entityCreate.ts`'s `optional()` already drops-not-empties, so the app
+  path is clean by construction.
+- **Q3 (name still required?)**: NO — source (`entity.js:30-40`, only `_type` is enforced) +
+  LIVE (bare polyphony event, no `name` sent, HTTP 200, deleted+reverified). Halt condition does
+  NOT trigger. Script: `scripts/migrations/probes/probe-233-q3-name-required-check-2026-09-09.ts`,
+  committed `d5849f6`.
+- **Q4 (parent series name)**: YES, precisely — `_parent.event_series.name` (type-filtered
+  reference branch, `formula.js:398-431`) resolves cleanly; verified `event_series` is the live
+  literal type name on polyphony. Source-confirmed, not separately live-formula-tested.
+- **Q5 (entu-side sort)**: checked `~/projects/webapp` (entu.app's own frontend) —
+  `child-list.vue`'s default sort is whichever `table`-linked prop-def has the lowest `ordinal`
+  (fallback: literally-named `name`). Same mechanism A.3 already configures — ordinal choice on
+  `event_name` vs. formula `name` decides chronological-vs-alphabetical default sort, worth a
+  deliberate call in A.3, not a blocker.
+
+Issue stays PARKED until Mihkel dispatches the schema mutation itself — this comment only answers,
+doesn't unblock work on its own.
+
 ## [PROBE-RESULT] crede db-entity rights, read-only, Mihkel-authorized (2026-09-09)
 
 Real PII db. Read-only, single GET (`entity/{dbEntityId}?props=_owner,_editor,name`), no fixtures,
