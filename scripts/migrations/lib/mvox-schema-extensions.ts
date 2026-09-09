@@ -340,4 +340,102 @@ export const roster_show_real_names: PropertyAdditionDef = {
 	]
 };
 
+/**
+ * A named URL kept for a collective's members — an external resource the
+ * choir shares (e.g. a recordings archive). One collection per collective.
+ *
+ * Settled mvox-app#256 (Gama, 2026-09-09, quoting Mihkel verbatim: "link
+ * entity is app extension. we are free from v4E."): app extension type, no
+ * `entu/research` PR, Gama's three defaults stand unopposed as the spec —
+ * admins add/remove, members read-only; ordered via `display_order`; name +
+ * url + optional description, nothing else. Placement: collective-level,
+ * "mirrors `repertoire_item` and `section` so it introduces no new pattern."
+ *
+ * **Parent corrected from the issue thread's own wording** (same correction
+ * `admin_member_record` needed on #265): the thread says "organization-
+ * parented" / "parented by the collective" throughout, but `organization`
+ * was retired in #161 (org -> database-entity migration, 2026-08) — the
+ * collective root is the `database` entity on both live databases. Verified
+ * empirically, not assumed: `probe-256-link-premise-check-2026-09-10.ts`
+ * confirms `organization` NOT FOUND on either db, and — checking whether
+ * the "mirrors section/repertoire_item" language extends to the type-level
+ * sharing tier too — both sibling type-defs are live `domain` on both dbs.
+ * `sharing: 'domain'` below matches that empirical sibling pattern (not
+ * `database`'s OWN type-def sharing, which is `public` — the same
+ * omission-inherits-the-wrong-thing trap #265's `roster_show_real_names`
+ * hit first; avoided here by setting the type tier explicitly from the
+ * sibling reading rather than any inherit-from-parent mechanism).
+ */
+export const link: MvoxEntityDef = {
+	name: 'link',
+	blurb: "A named URL kept for the collective's members — an external resource the choir shares (e.g. a recordings archive).",
+	// Verified live (probe-256-link-premise-check-2026-09-10.ts): section and
+	// repertoire_item type-defs are both `domain` on polyphony AND mvox_crede —
+	// the empirical sibling pattern this type mirrors, per the ruling's own
+	// framing. NOT `database`'s own type-def sharing (`public`, a platform-
+	// generic constant, same trap as #265's toggle).
+	sharing: 'domain',
+	inheritsRights: true,
+	parents: [
+		{
+			entity: 'database', required: true, parentCard: '1', childCard: '0..N', verb: 'has',
+			note: "the collective root IS the database entity (post-#161 org->db-entity migration, both databases) — 'organization-parented' in the issue thread resolves to this live type, same correction admin_member_record needed on #265. `entity: 'database'` here resolves the 'database' TYPE-DEF, not a specific instance."
+		}
+	],
+	addFrom: 'database',
+	properties: [
+		{
+			name: 'name',
+			type: 'string',
+			required: true,
+			note: 'what the link is',
+			descriptionEn: 'What this link is.',
+			descriptionEt: 'Mis link see on.',
+			ordinal: 1,
+			table: true,
+			search: true
+		},
+		{
+			name: 'url',
+			type: 'string',
+			required: true,
+			note: "stored as given — Gama's explicit ruling (mvox-app#256): no normalising, no scheme-guessing, no validation beyond non-empty; inventing rules about what a URL may look like risks rejecting valid ones",
+			descriptionEn: 'The target URL, stored exactly as given — no normalising or validation.',
+			descriptionEt: 'Sihtaadress, salvestatud täpselt sellisena kui sisestatud — normaliseerimata, valideerimata.',
+			ordinal: 2,
+			table: true
+		},
+		{
+			name: 'description',
+			type: 'string',
+			required: false,
+			note: 'one line, optional',
+			descriptionEn: 'An optional one-line note about the link.',
+			descriptionEt: 'Valikuline üherealine märkus lingi kohta.',
+			ordinal: 3
+		},
+		{
+			name: 'display_order',
+			type: 'number',
+			required: false,
+			note: 'manual arrangement, same shape as `section` / `repertoire_item` — a collection of links has no inherent order',
+			descriptionEn: 'Manual display order among the collective’s links.',
+			descriptionEt: 'Käsitsi määratud kuvamisjärjekord kollektiivi linkide seas.',
+			ordinal: 4
+		}
+	],
+	creators: [{ kind: 'parent_right', right: '_editor' }],
+	notes: [
+		'mvox app extension — not part of the canonical v4E schema (Mihkel, 2026-09-09, verbatim: "link entity is app extension. we are free from v4E."). No entu/research PR.',
+		'Admins add/edit/reorder/remove (`parent_right _editor`, same tier as `program_item`/`repertoire_item`/`admin_member_record`). Members read only. Widening to a members-can-add model is a deliberately open future change, not foreclosed (Mihkel ruling 2026-09-05).',
+		'`_sharing` cascades from the parent `database` entity at create time (domain-tier in practice — members-only, not public-internet) — matches `section`/`repertoire_item` precedent, verified live (both `domain` on both dbs).',
+		'Ordered via `display_order` (Gama: "a collection past five items without ordering becomes a pile") — same shape as `section`/`repertoire_item`, no new pattern.',
+		'Title + URL + optional description only. No date, no type marker — both would be guesses about a use nobody has had yet (Gama’s explicit ruling).',
+		'Domain-tier visibility inside mvox is not a privacy guarantee over the URL’s destination (Mihkel, 2026-09-05) — the app keeps a members-only pointer; what it points at is governed elsewhere.',
+		'Placement: collective-level, one collection per collective. Event-level attachment is deliberately not designed for (Gama, 2026-09-05).',
+		'Parent premise-checked live, not assumed from the issue thread\'s prose: `organization` NOT FOUND on either db (probe-256-link-premise-check-2026-09-10.ts) — resolves to `database`, the post-#161 collective root.'
+	],
+	commissionedBy: 'mvox-app#256'
+};
+
 // (*MVOX:Perotin*)

@@ -24,6 +24,10 @@ is the first type to land with its definition here, mvox-side, front door.
 `admin_member_record` (mvox-app#265) is the second, and the first to use
 per-property sharing and the `PropertyAdditionDef` shape (for the R2 toggle,
 added to the existing `database` type rather than a new type of its own).
+`link` (mvox-app#256) is the third, and the first commissioned entirely under
+the standing schema-independence ruling with no upstream path ever considered
+— Mihkel's own words settled the canonical-vs-extension question in one
+sentence rather than a shape review.
 
 ---
 
@@ -158,12 +162,69 @@ this commit) is what calls it.
 
 **mvox app extension** — not part of the canonical v4E schema.
 
+### `link`
+
+A named URL kept for a collective's members — an external resource the choir
+shares (e.g. a recordings archive). One collection per collective. Commissioned
+[mvox-app#256](https://github.com/mvox-dev/mvox-app/issues/256): Joosep asked
+for a place to point Crede's members at a Google Drive recordings archive.
+**Signed off as an app extension type** (Gama, 2026-09-09, quoting Mihkel
+verbatim: *"link entity is app extension. we are free from v4E."*) — no
+`entu/research` PR.
+
+**Parent**: `database` (single, required) — the collective root, the same
+correction `admin_member_record` needed on #265. The issue thread's own prose
+says "organization-parented" / "parented by the collective" throughout, but
+`organization` was retired in #161 (org→db-entity migration); resolved here
+against the live shape, not the thread's wording — verified empirically via
+`probe-256-link-premise-check-2026-09-10.ts` (`organization` NOT FOUND on
+either db).
+
+**`add_from`**: `database` type.
+
+**`_sharing`**: cascades from the parent `database` entity at create-time
+(domain-tier in practice — members-only, not public-internet). The type-def's
+own `_sharing` is set to `domain` explicitly, matching `section` and
+`repertoire_item`'s live type-defs (checked empirically on both databases via
+the same premise-check probe, not assumed from "mirrors section and
+repertoire_item" being about ordering alone).
+
+| Property        | Type   | Required | Notes                                                                                  |
+| ---------------- | ------ | -------- | ----------------------------------------------------------------------------------------- |
+| `name`           | string | yes      | what the link is                                                                           |
+| `url`            | string | yes      | the target, stored **exactly as given** — no normalising, no scheme-guessing, no validation beyond non-empty (Gama's explicit ruling: inventing URL-shape rules risks rejecting valid ones) |
+| `description`    | string | no       | one optional line of free text                                                             |
+| `display_order`  | number | no       | manual arrangement, same shape as `section`/`repertoire_item` — a collection of links has no inherent order |
+
+**Rights posture**: `creators: parent_right _editor` — admins add, edit,
+reorder, and remove; members read only. Matches the tier already used by
+`program_item`/`repertoire_item`/`admin_member_record`, no new mechanism.
+Widening to a members-can-add model later is a deliberately open question,
+not foreclosed (Mihkel, 2026-09-05): narrowing after members have started
+adding links is the harder direction, so admins-only is the smaller claim for
+now.
+
+**Placement**: collective-level, one collection per collective — "the choir's
+recordings live here," one obvious place to look (Gama). Event-level
+attachment is deliberately not designed for; a genuinely useful later
+addition, not solved today.
+
+**Domain-tier visibility is not a privacy guarantee over the destination**
+(Mihkel, 2026-09-05): the app keeps a members-only *pointer*; the link's
+target may itself be a public-internet resource (e.g. Mihkel's planned
+`crede.ee/salvestused` redirect) with its own, separately-governed sharing
+rules.
+
+**mvox app extension** — not part of the canonical v4E schema. No
+`entu/research` PR; the remote team seeds the type directly.
+
 ### Org tree (excerpt)
 
 ```
 polyphony database root (= the collective root, post-#161: organization retired)
         ├── member
         ├── admin_member_record    ← mvox extension, one per person
+        ├── link                   ← mvox extension, one collection per collective
         ├── roster_show_real_names  (property on the database entity itself, not a child type)
         ├── event_series
         ├── event (multi-parent: db + season + section(s) + event_series)
@@ -180,6 +241,7 @@ polyphony database root (= the collective root, post-#161: organization retired)
 | `program_item`          | read      | read                           | read                                       | full (if conductor of parent event scope)    | full                     |
 | `schedule_item`         | read      | read                           | read                                       | full (if conductor of parent event scope)    | full                     |
 | `admin_member_record`   | none      | none                           | read `name`/`person` only, rest invisible  | none (not an org-editor role by default)     | full                     |
+| `link`                  | none      | read                           | read                                       | read (unless also holding admin rights)      | full                     |
 
 ### Bucket exposure (excerpt)
 
@@ -190,6 +252,7 @@ BFF acts in the authenticated user's rights by default.
 | `program_item`          | domain                            | matches event       | name, edition, ordinal, notes                         |
 | `schedule_item`         | domain                            | matches event       | name, datetime                                        |
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
+| `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only
@@ -284,5 +347,18 @@ the shape itself:
   mixed-sharing type read back by a genuinely non-privileged, unauthenticated
   caller, torn down clean afterward) — not by further verification against a
   second real member seat, which this ruling explicitly says not to build.
+
+`link` was commissioned, shaped, and settled entirely within
+[mvox-app#256](https://github.com/mvox-dev/mvox-app/issues/256) (2026-09-05
+through 2026-09-09) — a chain of PO comments (Gama sketch → Gama
+endorsed-with-two-questions → Mihkel ruled both → Gama surfaced the
+canonical-vs-extension boundary as the one remaining blocker → Mihkel's
+one-line answer settled it). Gama's three product defaults — admins-only
+write, `display_order`, name+url+optional-description — stood unopposed
+through the whole chain and are the spec verbatim. The parent-entity
+correction (`organization` → `database`) was caught by this same team at
+definition time, following the identical trap `admin_member_record` hit on
+#265, and verified empirically before the definition was written rather than
+copied from the issue thread's prose.
 
 (*MVOX:Perotin*)

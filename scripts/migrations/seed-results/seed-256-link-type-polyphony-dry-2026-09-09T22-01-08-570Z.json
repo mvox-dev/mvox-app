@@ -1,0 +1,69 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "authorization": "PO-Approved 2026-09-09 mvox-app#256 (Gama \"Signed off as an app extension type\", Mihkel verbatim \"link entity is app extension. we are free from v4E.\")",
+  "entityMetaTypeId": "69bcfd8e9c031ab8e6ce8034",
+  "propertyMetaTypeId": "69bcfd8e9c031ab8e6ce8048",
+  "databaseTypeId": "69bcfd8e9c031ab8e6ce8027",
+  "linkTypeId": "<dry-run-unresolved>",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "link",
+      "outcome": "dry-run",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.name",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.url",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.description",
+      "outcome": "dry-run",
+      "after": {
+        "type": "string",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.display_order",
+      "outcome": "dry-run",
+      "after": {
+        "type": "number",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-add-from",
+      "target": "link.add_from",
+      "outcome": "dry-run",
+      "after": "69bcfd8e9c031ab8e6ce8027"
+    }
+  ],
+  "exitCode": 0
+}

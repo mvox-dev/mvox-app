@@ -246,6 +246,64 @@ It also earns its keep by finding the NON-findings, which matter as much: two hi
 explicitly historical). **Enumerate those in the verdict too**, or the fixer "corrects" true comments
 into false ones.
 
+## [GOTCHA-DEPARENT-BY-COPY-LOSES-THE-SUBTREE] 2026-09-10, #305 r2
+
+De-duplicating a tree that arrives as a **flat list plus separately-fetched child lists** has a second
+hole one level below the one it closes. #305's `fetchBoard` collected resolved child numbers and
+filtered them out of the top level — correct for one level. But `fetchSubIssues` builds each child by
+`normalizeIssue`, which hardcodes `subIssues: []`, so the nested child is a **different object** from
+the top-level one whose own children the loop resolved. Filter the top-level copy away and its subtree
+goes with it. Measured on the real committed blobs (epic 289 → epic 290 → task 291): rendered ids
+`[289, 290, 305]` — **291 on no path to the page at all**, no error, no count mismatch.
+
+**The tell is a comment that states the property the code lacks**: `fetch-issues.ts:139-141` said "An
+epic that is itself someone's sub-issue keeps its own children — only its top-level position moves."
+Verified false the same pass. Sibling of `[LEARNED #264]` — a false invariant in a comment is worse
+than the bug, because the next fixer builds on it.
+
+**General form**: when de-duplicating by dropping a copy, the surviving copy must BE the same object
+(or carry the same subtree). `const byNumber = new Map(items.map(i => [i.number, i]))`, then attach
+`byNumber.get(n) ?? fresh` — order-independent, because the shared object is mutated in place. **Price
+it honestly**: copies are cycle-proof by construction, shared references are not, so a reference fix
+owes the recursive walk a visited-set or depth cap.
+
+**Method note.** Both the one-level fix and the day-one zero-child case were fine; only the two-level
+case failed. A one-level spec certifies a one-level fix and says nothing below it — same shape as
+`[GOTCHA-DEDUP-BY-DELETE-IS-PARITY-DEPENDENT]` (2 and 4 pass, 3 fails). **For any de-parent / de-dup
+over a hierarchy, ask for the case one level deeper than the one the fix names.** Driving the real
+`fetchBoard` from a scratchpad probe (cases: zero-child, one level, two levels, shared child) cost
+minutes and settled all four; reading the recursion would not have.
+
+**Closed at `05554ff` (r3), and the fix taught the better rule.** Shared objects alone are not enough:
+de-parenting is only safe for a child something still *reaches*, and a cycle makes every ring member
+some other member's child, so the filter would drop the whole ring silently. The shape that works
+splits the contract across the two steps — **the fetch step guarantees every issue appears AT LEAST
+once (walk what the roots reach, return anything stranded to the top level); the renderer guarantees AT
+MOST once (a rendered-numbers set, empty string for a repeat).** Neither half holds the invariant
+alone: the fetch step cannot stop a child reported under two parents rendering twice, and the renderer
+cannot invent an issue the fetch step dropped. Verified across nine graph shapes including a
+self-parent, a three-ring and a ring with no roots at all — no duplicates, nothing missing,
+deterministic, sub-millisecond.
+
+**How to check a cycle spec is not vacuous.** Assert the fixture cycles by *identity*, then replay the
+pre-fix module against it. I extracted the pre-fix `render.ts` blob to the scratchpad (patching only
+its bare `yaml` import to an absolute path — ESM outside the package cannot resolve it) and drove it
+with the new `fetchBoard`: `289.sub[0].sub[0] === the 289 object`, and the old renderer died with
+`RangeError: Maximum call stack size exceeded`. That makes the guard demonstrably load-bearing rather
+than asserted to be. The identity property itself needs no separate pin — the two-level test fails the
+moment anyone reverts to copies, which is the cheaper way to hold it.
+
+## [GOTCHA-ONE-ENDPOINT-PAGINATES-ITS-SIBLING-DOES-NOT] 2026-09-10, #305 r3
+
+Same file, two functions apart: `fetchAllIssues` paginates carefully via the `Link` header and the
+module docstring explains why ("302 issues … well past one REST page"); `fetchSubIssues` sends no
+`per_page` and follows no `Link`. GitHub documents `per_page` **default 30** on the sub-issues list and
+**up to 100 sub-issues per parent**, so a 35-child epic nests 30 and renders the other 5 flat
+(measured — nothing is lost, because the unreturned children never enter `childNumbers` and so stay
+roots). **When a module states a pagination discipline in its header, check every endpoint it calls
+against that discipline, not just the one the comment discusses.** A stated discipline reads as
+covering the file.
+
 ## PO standing rules — pointer only
 
 **The binding text is the "PO standing rules" section of `architecture-decisions.md`. Read it there;
