@@ -121,7 +121,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
-import { MemberRecordPartialSaveError } from '$lib/roster/memberRecord';
+import { MemberRecordPartialSaveError, type MemberRecordLookup } from '$lib/roster/memberRecord';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import {
@@ -321,7 +321,7 @@ describe('(B) editor opens IN PLACE — #222 same-frame idiom, one at a time', (
 		expect(container.querySelector('[role="dialog"]')).toBeNull();
 	});
 
-	it('opening runs the ONE record lookup for that member (check-then-create + editor load share the query)', async () => {
+	it('opening runs the ONE record lookup for that member (the editor-open read only — since 0d1af3d the save re-reads independently)', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
@@ -755,6 +755,50 @@ describe('(E) collective switch — #259 generation discipline', () => {
 		await tick();
 		expect((q(container, 'roster-member-record-status')?.textContent ?? '').trim()).toBe('');
 		expect(container.querySelector('[data-testid="roster-record-name"]')).toBeNull();
+	});
+
+	// #279 — pins the PRE-write guard on the save's fresh RE-READ, one suspension
+	// point EARLIER than the test above (which holds the create — the write
+	// itself — and exercises the POST-write guard). Since 0d1af3d the
+	// one-record-per-person check lives in `saveRecordEditor`: it re-reads the
+	// record via `loadMemberRecord` before branching create-vs-update, and that
+	// await is a second window a collective switch can open. The guard under
+	// test sits immediately after the re-read in roster/+page.svelte
+	// (`if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;`).
+	//
+	// WHY THIS PIN IS LOAD-BEARING (fails if that guard line is deleted): the
+	// switch bumps the route-load generation, so with the guard present the
+	// resumed save returns early and no write is attempted. With the guard line
+	// deleted, execution falls through to `if (fresh.state === 'none')` — true
+	// for the released value — and calls `createMemberRecord` (the fixture's
+	// `row.dbEntityId` is populated, so that branch does not throw first). The
+	// `not.toHaveBeenCalled()` assertion on the create then FAILS.
+	//
+	// HONEST LIMIT: a collective switch bumps the generation AND nulls
+	// `recordEditorMemberId` in the same reset() pass, so this scenario cannot
+	// isolate the guard's two `||` disjuncts — deleting either clause alone
+	// leaves the other catching this exact race. The pin proves the guard LINE
+	// must exist; it does not prove both disjuncts are independently
+	// load-bearing.
+	it('a held save RE-READ settling after the switch writes NOTHING: neither create nor update fires (the pre-write guard on the fresh lookup, #279)', async () => {
+		let release!: (v: MemberRecordLookup) => void;
+		loadMemberRecordMock
+			.mockResolvedValueOnce({ state: 'none' }) // the editor-open read
+			.mockImplementationOnce(
+				// the save's re-read — held open across the collective switch
+				() => new Promise<MemberRecordLookup>((res) => (release = res))
+			);
+		const { container } = await renderTwoCollectivesAsAdmin();
+		await openEditor(container, 'm2');
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await tick(); // the save handler is now suspended on the held re-read
+		selectedCollectiveDbStore.set('other-choir');
+		await waitFor(() => expect(q(container, 'roster-row-m2')).toBeNull());
+		release({ state: 'none' });
+		await flush();
+		await tick();
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock).not.toHaveBeenCalled();
 	});
 });
 
