@@ -159,6 +159,12 @@
 			// outright).
 			reorderError = false;
 			reorderStatus = '';
+			// #296 — mirrors `removePending`/`renamePending` below: a reorder or
+			// reparent armed/in-flight for the OLD collective must not leave the
+			// NEW collective's structural controls disabled via
+			// `structuralWritePending`; each writer's own `finally` is separately
+			// generation-guarded (below) to close the late-settle half of the gap.
+			reorderPending = false;
 			// #110 review F1/F4 — the remove path's two pieces of transient state are
 			// about a tree that is being replaced: a failure message naming a section
 			// the next tree may not even contain, and a half-armed confirm on a header
@@ -201,6 +207,12 @@
 			// cancel/trigger buttons disabled; its `finally` is separately
 			// generation-guarded (below).
 			deactivatePending = false;
+			// #296 — `reinstatePending` gets the identical treatment: it names the
+			// memberId a reinstate write is in flight for, and `handleReinstate`
+			// gains its own entry-level generation capture (below) so its
+			// `finally` can close the late-settle half the same way
+			// `deactivatePending`'s already does, immediately above.
+			reinstatePending = null;
 			// #294 review — the other half of #287's two-part discipline, for the
 			// invite controls' shared in-flight flag. Its `finally` clears it only
 			// when the generation still matches (closing the LATE-settle half), so
@@ -1080,6 +1092,12 @@
 			const libraryId = await resolveMyLibraryId(cfg, undefined, dbEntityId);
 			const blockers = await listDeactivateBlockers(cfg, row.personId, dbEntityId, libraryId);
 			if (blockers.length > 0) {
+				// #296 — the rights read above (`listDeactivateBlockers`) is an
+				// await this write can outlive: a refusal settling after a
+				// collective switch must write nothing for the stale collective,
+				// same #260 checkpoint `gEntry` already gives the success path
+				// below.
+				if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
 				// #286 — `pendingDeactivateId` is DELIBERATELY left set: the refusal
 				// is the designed outcome of the normal mistake (#255's
 				// refuse-don't-strip rule), and it must not disarm the pair it
@@ -1142,6 +1160,10 @@
 			// And fail-LOUD (#255 review F2): the confirm disarms itself and the row
 			// is unchanged, so without this alert the tap reads as "nothing happened".
 			console.error('roster: deactivate failed', row.memberId, e);
+			// #296 — same #260 checkpoint as the refusal branch above: a failure
+			// settling after a collective switch must not raise a banner against
+			// whatever collective is now on screen.
+			if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
 			// #286 — `pendingDeactivateId` is left set here too (the #273 retry
 			// convention): the pair sits armed beside `deactivateActionError`
 			// above for a direct retry through the same confirm.
@@ -1232,6 +1254,18 @@
 		if (reinstatePending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
+		// #296 — captured at FUNCTION ENTRY, before `reinstatePending` is even
+		// set, mirroring the placement `handleDeactivateConfirm`'s `gEntry`
+		// (#287) established: this handler had NO usable capture at all before
+		// this fix — the only existing `const g = routeLoad.generation` below
+		// is captured AFTER `loadForSelected()` has already bumped the
+		// generation, so it is scoped narrowly to the inner inactive-panel
+		// reload and cannot guard the outer flag or the catch without falling
+		// into the same always-true trap #287 rejected there. `gEntry` guards
+		// the catch-write and the `finally` clear; it is deliberately a
+		// DIFFERENT capture from `g` further down, same reasoning as
+		// `handleDeactivateConfirm`.
+		const gEntry = routeLoad.generation;
 		reinstatePending = memberId;
 		deactivateActionError = null;
 		try {
@@ -1262,9 +1296,17 @@
 			// otherwise (the row is already in the inactive panel and stays there),
 			// so the tap is silently indistinguishable from a dead button.
 			console.error('roster: reinstate failed', memberId, e);
+			// #296 — same #260 checkpoint `handleDeactivateConfirm`'s catch now
+			// carries: a failure settling after a collective switch must not
+			// raise a banner against whatever collective is now on screen.
+			if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
 			deactivateActionError = { memberId, kind: 'reinstate' };
 		} finally {
-			reinstatePending = null;
+			// #296 — a stale settle must not flip `reinstatePending` back to
+			// null out from under a GENUINE reinstate that has since started on
+			// the collective now on screen (the LATE-SETTLE CLOBBER shape #287
+			// already closed for `deactivatePending`'s own `finally`).
+			if (gEntry === routeLoad.generation) reinstatePending = null;
 		}
 	}
 
@@ -2442,6 +2484,13 @@
 			return true;
 		} catch (e) {
 			console.error('roster: section reorder failed', e);
+			// #296 — same #260/#264-item-4 checkpoint the success branch already
+			// carries above: a failure settling after a collective switch must
+			// write NOTHING for the stale collective, banner included. The
+			// refetch reconcile below is for THIS write's own tree, which is
+			// only relevant while `g` is still current, so this one check covers
+			// both.
+			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
 			reorderError = true;
 			try {
 				const fresh = await listSections(cfg);
@@ -2452,7 +2501,13 @@
 				if (g === routeLoad.generation) sections = applySiblingOrder(sections, beforeIds);
 			}
 		} finally {
-			reorderPending = false;
+			// #296 — the finally's own late-settle half: a stale settle must not
+			// flip `reorderPending` back to false out from under a GENUINE
+			// reorder/reparent that has since started on the collective now on
+			// screen. Nothing else in this block needs to run unconditionally
+			// (no focus restoration here, unlike `submitRename`'s finally), so
+			// the write itself is what's gated.
+			if (g === routeLoad.generation) reorderPending = false;
 		}
 		return false;
 	}
@@ -2599,6 +2654,13 @@
 					: 'roster: section reparent failed',
 				e
 			);
+			// #296 — same #260/#264-item-4 checkpoint the success branch already
+			// carries above: a failure settling after a collective switch must
+			// write NOTHING for the stale collective. `reparentPartial` rides
+			// along here since it decides the SAME banner as `reorderError`
+			// (which of the two failure states renders) and neither means
+			// anything against a collective that is no longer on screen.
+			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
 			reorderError = true;
 			reparentPartial = moveLanded;
 			try {
@@ -2610,7 +2672,13 @@
 				if (g === routeLoad.generation) sections = before;
 			}
 		} finally {
-			reorderPending = false;
+			// #296 — the finally's own late-settle half, same reasoning as
+			// `performReorder`'s: a stale settle must not flip `reorderPending`
+			// back to false out from under a GENUINE reorder/reparent that has
+			// since started on the collective now on screen. This block does
+			// nothing else that needs to run unconditionally, so the write
+			// itself is what's gated.
+			if (g === routeLoad.generation) reorderPending = false;
 		}
 		return false;
 	}
