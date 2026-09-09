@@ -1,0 +1,108 @@
+# #305 — Roadmap board: renders a static page from this repo's issues and
+# publishes it to GitHub Pages at docs.mvox.eu/roadmap.
+#
+# First Actions workflow in this repo — no in-repo precedent to follow, so
+# this is built on GitHub's own configure-pages / upload-pages-artifact /
+# deploy-pages reference pattern.
+#
+# Test-before-deploy: the "build" job runs `pnpm test` (the full suite,
+# including scripts/roadmap/cli.spec.ts's real end-to-end build over a
+# fixture) BEFORE fetching live issues or rendering. Any failure there stops
+# the job, so `deploy` (which `needs: build`) never runs and the live page
+# stays as it was — never replaced by a broken build.
+#
+# Node version: pinned via `node-version-file: package.json`, which reads
+# the repo's `engines.node` field (set to "22.x" — see package.json). One
+# source of truth for the pin; nothing in the workflow hardcodes a version.
+#
+# (*MVOX:Palestrina*)
+name: Roadmap board
+
+on:
+  issues:
+    types: [opened, edited, labeled, unlabeled, closed, reopened]
+  workflow_dispatch: {}
+
+# Serializes deploys so stacked issue events (e.g. a label flip right after
+# an edit) queue rather than race each other for the live Pages deployment.
+# Matches GitHub's own reference Pages workflow: queue, don't cancel — a
+# cancelled mid-deploy run is the one way this could ship a half-written
+# page, which the render step's atomicity (whole HTML string, one write)
+# does not protect against on its own.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+# Scoped to what the `build` job below actually calls. Job-level `permissions:`
+# REPLACE this block rather than merging with it, so the write scopes the deploy
+# stays with deploy (see its own block) instead of riding along on the job that
+# runs `pnpm test` and a live fetch.
+permissions:
+  contents: read
+  # Needed for the fetch step's authenticated issue reads (open + closed +
+  # sub-issues). Not in the issue's own literal permissions list, but the
+  # fetch step cannot read issues at all without it once a `permissions:`
+  # block is declared — an explicit block replaces the default token scopes
+  # rather than narrowing them.
+  issues: read
+  # actions/configure-pages reads the site config (GET /repos/{owner}/{repo}/pages),
+  # which GitHub classifies as Pages READ. It does not create the site here:
+  # the action's `enablement` input defaults to false and would need a token
+  # other than GITHUB_TOKEN anyway. Read is therefore the whole requirement —
+  # dropping `pages` altogether would leave the token at `none` and 403 the
+  # Configure Pages step.
+  pages: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Gate: a failing suite stops here, before any live fetch or render —
+      # the deploy job below never starts, and the current live page stays up.
+      - name: Test (gate before any deploy)
+        run: pnpm test
+
+      - name: Fetch issues
+        run: node --import tsx scripts/roadmap/fetch-issues.ts --out ./roadmap-build/issues.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Render board
+        run: node --import tsx scripts/roadmap/render.ts --input ./roadmap-build/issues.json --out ./roadmap-build/site
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./roadmap-build/site
+
+  deploy:
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

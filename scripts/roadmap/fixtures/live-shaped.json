@@ -1,0 +1,74 @@
+[
+	{
+		"number": 305,
+		"title": "[TASK] Roadmap board on mvox.eu, read live from this board's issues",
+		"state": "open",
+		"stateReason": null,
+		"labels": ["task", "ready", "in process"],
+		"body": "## The design\n\nA page on mvox.eu that reads this board live. No generated data file, no build step in the app.",
+		"subIssues": []
+	},
+	{
+		"number": 289,
+		"title": "[EPIC] Library lending 1.0",
+		"state": "open",
+		"stateReason": null,
+		"labels": ["epic"],
+		"body": "## Tasks\n\n- [ ] slice one\n- [ ] slice two",
+		"subIssues": []
+	},
+	{
+		"number": 301,
+		"title": "[TASK] Score detail page shows lending state",
+		"state": "open",
+		"stateReason": null,
+		"labels": ["task", "ready"],
+		"body": null,
+		"subIssues": []
+	},
+	{
+		"number": 298,
+		"title": "[TASK] Frontmatter research spike",
+		"state": "open",
+		"stateReason": null,
+		"labels": ["task", "in research"],
+		"body": "Part of #289",
+		"subIssues": []
+	},
+	{
+		"number": 262,
+		"title": "[BUG] Login redirect loops on expired session",
+		"state": "open",
+		"stateReason": null,
+		"labels": ["bug"],
+		"body": "Steps to reproduce: open /login with an expired cookie.",
+		"subIssues": []
+	},
+	{
+		"number": 304,
+		"title": "[TASK] Seed polyphony with lending fixtures",
+		"state": "closed",
+		"stateReason": "completed",
+		"labels": ["task"],
+		"body": "Done.",
+		"subIssues": []
+	},
+	{
+		"number": 291,
+		"title": "[EPIC] Roadmap data file published at build time",
+		"state": "closed",
+		"stateReason": "not_planned",
+		"labels": ["epic"],
+		"body": "Superseded by #305.",
+		"subIssues": []
+	},
+	{
+		"number": 210,
+		"title": "[TASK] Legacy import spike",
+		"state": "closed",
+		"stateReason": "not_planned",
+		"labels": ["task", "wontfix"],
+		"body": null,
+		"subIssues": []
+	}
+]

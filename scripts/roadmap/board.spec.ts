@@ -1,0 +1,173 @@
+// @vitest-environment happy-dom
+/**
+ * #305 — the fetch → render seam.
+ *
+ * render.spec.ts pins the renderer against hand-built input; fetch-issues.spec.ts
+ * pins the pure fetch-step helpers. Neither sees the shape fetchBoard actually
+ * PRODUCES, and that gap hid two real defects in a row: sub-issues rendered
+ * twice (they are ordinary repo issues, so `/issues?state=all` returns them at
+ * top level as well as under their epic), and then, once de-parented, a
+ * two-level chain silently lost its grandchild. Live today every epic has zero
+ * sub-issues, so neither showed on the page — these specs drive the real
+ * fetchBoard so they cannot hide again.
+ *
+ * The network seam is the house `fetchImpl` parameter (see
+ * src/lib/testing/networkGuard.setup.ts): the stub below is passed in
+ * explicitly, so the global fetch guard is never touched.
+ *
+ * (*MVOX:Byrd*)
+ */
+import { describe, expect, it } from 'vitest';
+import { fetchBoard } from './fetch-issues';
+import { renderBoard } from './render';
+
+const GENERATED_AT = '2026-09-10T12:34:56Z';
+const REPO = 'mvox-dev/mvox-app';
+
+/** A GitHub REST issue payload, in the shape `/issues?state=all` really returns. */
+interface RawIssue {
+	number: number;
+	title: string;
+	state: string;
+	state_reason: null;
+	labels: { name: string }[];
+	body: null;
+}
+
+function raw(number: number, labels: string[]): RawIssue {
+	return {
+		number,
+		title: `Issue ${number}`,
+		state: 'open',
+		state_reason: null,
+		labels: labels.map((name) => ({ name })),
+		body: null
+	};
+}
+
+function jsonResponse(body: unknown): Response {
+	return new Response(JSON.stringify(body), {
+		status: 200,
+		headers: { 'content-type': 'application/json' }
+	});
+}
+
+/**
+ * Stands in for the GitHub REST API: `list` is the repo's issues (which always
+ * includes every sub-issue, since sub-issues are ordinary issues), and `subs`
+ * maps an epic's number to the children its sub_issues endpoint reports. No
+ * `Link` header — one page, so pagination stops after it.
+ */
+function githubStub(list: RawIssue[], subs: Record<number, RawIssue[]> = {}): typeof fetch {
+	return (async (input: RequestInfo | URL) => {
+		const url = String(input);
+		const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
+		if (match) return jsonResponse(subs[Number(match[1])] ?? []);
+		if (url.includes('/issues?')) return jsonResponse(list);
+		throw new Error(`unexpected request: ${url}`);
+	}) as unknown as typeof fetch;
+}
+
+function parse(html: string): Document {
+	return new DOMParser().parseFromString(html, 'text/html');
+}
+
+function board(list: RawIssue[], subs: Record<number, RawIssue[]> = {}) {
+	return fetchBoard(REPO, 'test-token', githubStub(list, subs));
+}
+
+describe('fetchBoard → renderBoard — one level', () => {
+	const list = [raw(289, ['epic']), raw(290, ['task']), raw(305, ['task'])];
+	const subs = { 289: [raw(290, ['task'])] };
+
+	it('de-parents resolved sub-issues from the top level', async () => {
+		const result = await board(list, subs);
+		expect(result.map((i) => i.number)).toEqual([289, 305]);
+		expect(result[0].subIssues?.map((s) => s.number)).toEqual([290]);
+	});
+
+	it('renders each issue exactly once — nested under its epic, not also flat', async () => {
+		const doc = parse(renderBoard(await board(list, subs), GENERATED_AT));
+		expect(doc.querySelectorAll('[data-issue="290"]')).toHaveLength(1);
+		expect(doc.querySelector('[data-issue="289"] [data-issue="290"]')).not.toBeNull();
+	});
+
+	it('leaves issues with no epic parent at the top level', async () => {
+		const doc = parse(renderBoard(await board(list, subs), GENERATED_AT));
+		const el = doc.querySelector('[data-issue="305"]');
+		expect(el).not.toBeNull();
+		expect(el?.closest('[data-issue="289"]')).toBeNull();
+	});
+});
+
+describe('fetchBoard → renderBoard — two levels', () => {
+	// epic 289 → epic 290 → task 291. De-parenting must not strand 291: the
+	// nested 290 has to be the same object whose children were resolved.
+	const list = [raw(289, ['epic']), raw(290, ['epic']), raw(291, ['task']), raw(305, ['task'])];
+	const subs = { 289: [raw(290, ['epic'])], 290: [raw(291, ['task'])] };
+
+	it('keeps a nested epic\'s own children reachable', async () => {
+		const result = await board(list, subs);
+		expect(result.map((i) => i.number)).toEqual([289, 305]);
+		expect(result[0].subIssues?.[0].subIssues?.map((s) => s.number)).toEqual([291]);
+	});
+
+	it('renders the grandchild exactly once, nested two deep', async () => {
+		const doc = parse(renderBoard(await board(list, subs), GENERATED_AT));
+		expect(doc.querySelectorAll('[data-issue="291"]')).toHaveLength(1);
+		expect(
+			doc.querySelector('[data-issue="289"] [data-issue="290"] [data-issue="291"]')
+		).not.toBeNull();
+	});
+
+	it('renders every issue on the page — nothing silently dropped', async () => {
+		const html = renderBoard(await board(list, subs), GENERATED_AT);
+		const ids = [...html.matchAll(/data-issue="(\d+)"/g)].map((m) => Number(m[1]));
+		expect([...ids].sort((a, b) => a - b)).toEqual([289, 290, 291, 305]);
+	});
+});
+
+describe('fetchBoard — request shape', () => {
+	it('asks for a parent\'s whole 100-sub-issue ceiling in one page', async () => {
+		// GitHub caps a parent at 100 sub-issues and this endpoint's page size at
+		// 100, so one page always covers a parent. The endpoint's own default is
+		// 30: without per_page a 35-child epic would nest 30 and strand the rest.
+		const urls: string[] = [];
+		const inner = githubStub([raw(289, ['epic']), raw(290, ['task'])], { 289: [raw(290, ['task'])] });
+		const recording = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			urls.push(String(input));
+			return inner(input, init);
+		}) as unknown as typeof fetch;
+
+		await fetchBoard(REPO, 'test-token', recording);
+
+		const subUrl = urls.find((u) => u.includes('/sub_issues')) ?? '';
+		expect(subUrl, 'no sub_issues request was made').not.toBe('');
+		expect(new URL(subUrl).searchParams.get('per_page')).toBe('100');
+	});
+});
+
+describe('fetchBoard → renderBoard — graphs that are not trees', () => {
+	it('renders a child reported under two epics once, not once per parent', async () => {
+		// GitHub allows one parent per sub-issue; the code does not assume it.
+		const result = await board([raw(289, ['epic']), raw(292, ['epic']), raw(290, ['task'])], {
+			289: [raw(290, ['task'])],
+			292: [raw(290, ['task'])]
+		});
+		const doc = parse(renderBoard(result, GENERATED_AT));
+		expect(doc.querySelectorAll('[data-issue="290"]')).toHaveLength(1);
+		expect(doc.querySelectorAll('[data-issue="292"]')).toHaveLength(1);
+	});
+
+	it('terminates on a parent cycle instead of hanging the build', async () => {
+		// 289 and 290 each claim the other as a sub-issue. Shared objects make this
+		// an infinite walk without the renderer's guard; the build must not hang.
+		const result = await board([raw(289, ['epic']), raw(290, ['epic']), raw(305, ['task'])], {
+			289: [raw(290, ['epic'])],
+			290: [raw(289, ['epic'])]
+		});
+		const html = renderBoard(result, GENERATED_AT);
+		const ids = [...html.matchAll(/data-issue="(\d+)"/g)].map((m) => Number(m[1]));
+		expect([...ids].sort((a, b) => a - b)).toEqual([289, 290, 305]);
+	});
+});
