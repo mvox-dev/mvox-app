@@ -953,13 +953,15 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock.mock.calls[0][1]).toBe('rec-raced');
-		// No cached baseline on this path (the editor opened expecting a create),
-		// so the write carries the prefilled values it holds — and nothing more:
-		// a field left empty never blanks a value this editor never saw.
-		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({
-			name: 'Berta Bass',
-			email: 'berta@example.com'
-		});
+		// #280 REWROTE this expectation. It used to require the prefilled
+		// name/email be sent ("the write carries the prefilled values it
+		// holds") — a guarantee that is right for the three fields that open
+		// EMPTY but wrong for the two #265 prefills: an untouched prefill is a
+		// DISPLAY of the profile, not an assertion about the record, and
+		// sending it here silently overwrote whatever the other writer had
+		// saved into name/email. Nothing in this scenario was touched, so the
+		// update asserts NOTHING and every raced-record value survives.
+		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({});
 		// Server-confirmed all the same: editor collapses, success announced.
 		await waitFor(() => expect(nameInput(container)).toBeNull());
 		expect(q(container, 'roster-member-record-status')!.textContent).toContain(
@@ -984,6 +986,93 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 		// Nothing pretends to have been saved, and the save guard frees itself.
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 		expect(q(container, 'roster-record-save-error')).toBeNull();
+	});
+});
+
+describe('(E) #280 — create-turned-update asserts ONLY touched fields; an untouched prefill never wins a write', () => {
+	// #265 prefills name+email from the profile on first open, so on the
+	// create-turned-update path those two are non-empty WITHOUT the admin
+	// having typed anything. Diffed against the empty fallback baseline they
+	// counted as "changed", and the untouched prefill silently overwrote the
+	// other writer's admin-entered values. The discriminator is not "does a
+	// record exist" but WHICH FIELDS THE SAVER ACTUALLY ASSERTED (#280 —
+	// superseding the PO's earlier refuse-the-save ruling: the save must
+	// still complete, because the commonest cause of a record existing at
+	// save time is the admin's own retry).
+	//
+	// The raced record deliberately carries values that DIFFER from the
+	// prefill in every field: an implementation that diffs the form against
+	// the FRESH record instead of tracking what the admin touched would still
+	// send the untouched prefill here, and must fail these pins. The write
+	// layer needs no help — updateMemberRecord skips absent keys, so omission
+	// leaves a field untouched server-side and can never clear it.
+	const racedRecord = {
+		state: 'one' as const,
+		record: {
+			_id: 'rec-raced',
+			name: 'Bertha B. Bass', // the other admin's entry — NOT the profile name
+			phone: '+372 5550001',
+			email: 'bertha@other.example',
+			birthdate: '1980-01-02',
+			id_code: '48001020001'
+		}
+	};
+
+	it("nothing touched → updateMemberRecord carries {} — the other writer's name and email survive, and the save still COMPLETES (refusal was withdrawn)", async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2'); // 'none' — prefill fires on name+email
+		loadMemberRecordMock.mockResolvedValue(racedRecord);
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(createMemberRecordMock).not.toHaveBeenCalled();
+		expect(updateMemberRecordMock.mock.calls[0][1]).toBe('rec-raced');
+		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({});
+		// Not refused, not stranded: the editor collapses and success announces.
+		await waitFor(() => expect(nameInput(container)).toBeNull());
+		expect(q(container, 'roster-member-record-status')!.textContent).toContain(
+			'roster_record_saved'
+		);
+	});
+
+	it('a TYPED name IS sent and wins; the still-untouched email prefill rides along with NOTHING', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(nameInput(container), { target: { value: 'Corrected Name' } });
+		loadMemberRecordMock.mockResolvedValue(racedRecord);
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
+		// toEqual is exact: name present, email ABSENT — the admin asserted one
+		// field, the other is still only a display of the profile.
+		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({ name: 'Corrected Name' });
+	});
+
+	it('a TYPED blank field (phone) is sent; the untouched prefills AND the untouched blanks (birthdate, id code) all stay out', async () => {
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(phoneInput(container), { target: { value: '+372 5559876' } });
+		loadMemberRecordMock.mockResolvedValue(racedRecord);
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({ phone: '+372 5559876' });
+	});
+
+	it('edit-then-REVERT: a name typed and then restored to the exact prefilled value is NOT sent — the final value equals the display, so it asserts nothing (#280 pinned choice)', async () => {
+		// PINNED CHOICE, not an accident of implementation: the diff is by
+		// VALUE against the prefilled baseline, not by input-event history. An
+		// admin who typed and then put back exactly what was shown ended on
+		// the profile display — sending it would overwrite the other writer's
+		// entry with a profile value nobody chose for the RECORD, which is the
+		// precise harm #280 forbids. The failure asymmetry seals it: not
+		// sending a re-affirmed display loses nothing (the record keeps the
+		// other admin's real entry); sending it destroys data silently.
+		const { container } = await renderRosterAs('admin');
+		await openEditor(container, 'm2');
+		await fireEvent.input(nameInput(container), { target: { value: 'Corrected Name' } });
+		await fireEvent.input(nameInput(container), { target: { value: 'Berta Bass' } });
+		loadMemberRecordMock.mockResolvedValue(racedRecord);
+		await fireEvent.click(q(container, 'roster-record-save')!);
+		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
+		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({});
 	});
 });
 

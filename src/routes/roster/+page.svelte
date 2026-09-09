@@ -1487,11 +1487,16 @@
 	// #268 (E) — the fifth sr-only role="status" region's text, same contract as
 	// `reorderStatus`/`removeStatus`/`pageCreateStatus`/`renameStatus` above.
 	let recordStatus = $state('');
-	/** The loaded record's field values, R4's "independent from the moment a
-	 *  record exists" baseline — `updateMemberRecord` is sent ONLY the fields
-	 *  that differ from this. Read at save time only, never drives a render
-	 *  (same non-`$state` idiom as `currentCfg`). `null` on the lazy-create
-	 *  path (no baseline to diff against — every save there is a create). */
+	/** The diff baseline `updateMemberRecord` is sent ONLY the fields that
+	 *  differ from — either the loaded record's own field values (R4's
+	 *  "independent from the moment a record exists"), or, when no record
+	 *  existed yet at open time, the PREFILL `openRecordEditor` showed (#280):
+	 *  an untouched prefill is a display of the profile, not an assertion
+	 *  about the record, and must diff as unchanged even if the save turns
+	 *  out to be a create-turned-update. Read at save time only, never drives
+	 *  a render (same non-`$state` idiom as `currentCfg`). `null` only while
+	 *  no editor is open, or on the `damaged` open branch (no form, nothing to
+	 *  diff — that branch never reaches a save). */
 	let recordEditorOriginal: {
 		name: string;
 		phone: string;
@@ -1560,6 +1565,17 @@
 					// no such field. Opens empty like phone/birthdate.
 					id_code: ''
 				};
+				// #280 — capture the PREFILL itself as the diff baseline, not just the
+				// loaded-record case below. name/email are non-empty here without the
+				// admin having typed anything; an untouched prefill is a DISPLAY of the
+				// profile, not an assertion about the record, and must diff as
+				// unchanged if a save-time re-read later finds a record was created by
+				// someone else (the create-turned-update path in `saveRecordEditor`).
+				// Reusing the same `recordEditorOriginal` slot the loaded-record branch
+				// already populates, rather than adding a second piece of state, is the
+				// point: the prefill object above already IS the exact baseline this
+				// path needs — nothing else to build.
+				recordEditorOriginal = { ...recordForm };
 			} else if (result.state === 'one') {
 				// A record already exists — show THE RECORD, never the profile (R4):
 				// no re-prefill, no merge, a deliberately-cleared field stays cleared.
@@ -1731,11 +1747,16 @@
 			} else {
 				// The record id comes from the FRESH read, never from the cached
 				// lookup — on the create-turned-update path there is no cached id at
-				// all. `recordEditorOriginal` is null there too, and the empty
-				// baseline it falls back to makes the diff send exactly the non-empty
-				// fields — the same set `createMemberRecord` would have sent, so a
-				// field the admin left empty never overwrites a value this editor
-				// never saw.
+				// all. `recordEditorOriginal` there is the PREFILL baseline
+				// `openRecordEditor` captured on the `state === 'none'` open (#280):
+				// diffing against it — rather than against empty strings — is what
+				// keeps an untouched prefilled name/email out of `changes`, since
+				// they equal their own baseline, while a typed value still differs
+				// and still wins. The `?? { all-empty }` fallback below is now only a
+				// defensive backstop (every reachable open branch sets a real
+				// baseline before a save can fire); it is kept rather than asserted
+				// away because it costs nothing and a future open branch that forgot
+				// to set one would otherwise silently regress to sending everything.
 				const original = recordEditorOriginal ?? {
 					name: '',
 					phone: '',
