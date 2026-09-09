@@ -345,6 +345,7 @@
 			eventRights={eventRightsFor(item.id)}
 			pickableWorksList={worksManage?.pickableWorksList ?? NO_OPTIONS}
 			pickableEditions={worksManage?.pickableEditionsByEventId[item.id] ?? NO_OPTIONS}
+			pickableEditionsVisible={worksManage?.pickableEditionsVisibleByEventId[item.id]}
 			editionOptionsByRowId={worksManage?.editionOptionsByRowId ?? NO_OPTIONS_BY_ID}
 			pendingKeys={worksManage?.pendingKeys ?? NO_KEYS}
 			onaddwork={(workId) => worksManage?.onaddwork(workId)}

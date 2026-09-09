@@ -304,21 +304,91 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 	// is a translation-shape rule, not a markup one, so it is checked against
 	// the message files in every locale: an aria-label key must be the visible
 	// key's string plus context, never a reworded or reordered variant.
-	it('every aria-label whose control has visible text CONTAINS that visible text verbatim, in all four locales (WCAG 2.5.3)', () => {
-		// An aria-label key names its visible sibling by convention: strip
-		// `_aria_label` and the base (or base + `_button`) is the visible key.
-		// Keys with no such sibling (selects, the badge, the domain-texted
-		// external links) label controls with no visible text of their own —
-		// nothing to contain, so they're skipped here.
-		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
-		const pairs = Object.keys(en)
+	// ── #288 — the guard's scope, stated where it binds ──────────────────────
+	// The rule rides in the failure messages below (not only in a comment): the
+	// previous boundary lived solely in a comment beside the check, so "selects
+	// are excluded" was re-derived from behaviour and hardened into a rule
+	// rather than the case it actually was.
+	const LABEL_IN_NAME_SCOPE =
+		'Scope (#288, PO ruling): a control is IN scope when its default visible text ' +
+		'INSTRUCTS the user to choose (e.g. a select showing "Select edition" — that prompt ' +
+		"functions as the control's label, and a speech-input user will say it); it is OUT " +
+		'of scope when the default visible text is itself a valid, keepable choice (e.g. the ' +
+		'section-parent selects\' "Top level" — an answer, not a prompt), or when the control ' +
+		'has no visible text of its own (nothing to contain).';
+
+	/**
+	 * The pairing convention: an aria-label key names its visible sibling.
+	 * Strip `_aria_label`; the base (or base + `_button`) is the visible key.
+	 * A `_select`-suffixed base is a prompt-default SELECT: its visible default
+	 * text is its placeholder <option>, keyed `<base minus _select>_label`
+	 * (e.g. `repertoire_add_programme_select_aria_label` ↔
+	 * `repertoire_add_programme_label`, whose "Select edition" instructs the
+	 * user to choose — the scope test applied: prompt, not answer, so IN scope
+	 * per LABEL_IN_NAME_SCOPE). #288: the old base/base_button-only lookup
+	 * dropped these three before the content check ever ran — the guard never
+	 * evaluated them; they were not passing, they were invisible.
+	 * Keys with no such sibling (the badge, the domain-texted external links,
+	 * blank-default selects) label controls with no visible text of their own —
+	 * nothing to contain, so they yield no pair.
+	 */
+	function labelInNamePairs(en: MessageFile): Array<{ ariaKey: string; visibleKey: string }> {
+		return Object.keys(en)
 			.filter((k) => k.startsWith('repertoire_') && k.endsWith('_aria_label'))
 			.map((ariaKey) => {
 				const base = ariaKey.slice(0, -'_aria_label'.length);
-				const visibleKey = [base, `${base}_button`].find((c) => c in en);
+				const candidates = base.endsWith('_select')
+					? [`${base.slice(0, -'_select'.length)}_label`]
+					: [base, `${base}_button`];
+				const visibleKey = candidates.find((c) => c in en);
 				return visibleKey ? { ariaKey, visibleKey } : null;
 			})
 			.filter((p): p is { ariaKey: string; visibleKey: string } => p !== null);
+	}
+
+	// #288 — proves the pairing actually reaches the three prompt-default
+	// selects. Against the old base/base_button-only lookup this FAILS with an
+	// empty array: the keys strip to `repertoire_*_select` bases that exist
+	// under no visible key, so they were dropped before the content check ever
+	// ran. A guard that skips its subject reports success indistinguishable
+	// from real success — this pin is what keeps that from regressing.
+	//
+	// #288 review F2 — two of the three keys named below are DELIBERATELY kept
+	// as guard subjects rather than as rendered names. The add-work and
+	// add-programme selects render their PLACEHOLDER key as the aria-label
+	// (RepertoireElement.svelte — the cheapest compliant shape the #288 GREEN
+	// brief sanctioned: an identical string contains itself), so
+	// `repertoire_add_work_select_aria_label` and
+	// `repertoire_add_programme_select_aria_label` are referenced by no
+	// production code today. They stay because the pairing rule is what this pin
+	// asserts, and dropping them would shrink the guard to a single subject
+	// (`repertoire_pin_edition_select_aria_label`, the one still rendered — it
+	// carries `{work}`, so it cannot collapse to its placeholder key). Do not
+	// delete them as "orphans": this pin names all three by hand and will fail.
+	it('#288 — the three prompt-default select aria-labels are PAIRED with their placeholder keys (the guard really evaluates them)', () => {
+		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
+		const selectPairs = labelInNamePairs(en)
+			.filter(({ ariaKey }) => ariaKey.endsWith('_select_aria_label'))
+			.sort((a, b) => a.ariaKey.localeCompare(b.ariaKey));
+		expect(selectPairs, LABEL_IN_NAME_SCOPE).toEqual([
+			{
+				ariaKey: 'repertoire_add_programme_select_aria_label',
+				visibleKey: 'repertoire_add_programme_label'
+			},
+			{
+				ariaKey: 'repertoire_add_work_select_aria_label',
+				visibleKey: 'repertoire_add_work_label'
+			},
+			{
+				ariaKey: 'repertoire_pin_edition_select_aria_label',
+				visibleKey: 'repertoire_pin_edition_label'
+			}
+		]);
+	});
+
+	it('every aria-label whose control has visible text CONTAINS that visible text verbatim, in all four locales (WCAG 2.5.3)', () => {
+		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
+		const pairs = labelInNamePairs(en);
 		expect(pairs.length, 'no visible-text/aria-label pairs found — the scan is vacuous').toBeGreaterThan(0);
 
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
@@ -338,7 +408,11 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 					({ ariaKey, visibleKey }) =>
 						`${locale}: ${JSON.stringify(messages[ariaKey])} (${ariaKey}) does not contain ${JSON.stringify(messages[visibleKey])} (${visibleKey})`
 				);
-			expect(violations, `${locale}.json breaks Label in Name`).toEqual([]);
+			expect(
+				violations,
+				`${locale}.json breaks Label in Name (WCAG 2.5.3): the accessible name must ` +
+					`CONTAIN the control's visible default text verbatim. ${LABEL_IN_NAME_SCOPE}`
+			).toEqual([]);
 		}
 	});
 });
@@ -802,3 +876,4 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 });
 
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #288 review F2: why two select aria-label keys are kept)

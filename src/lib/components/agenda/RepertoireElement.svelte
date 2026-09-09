@@ -186,6 +186,22 @@
 		addWorkKey?: string;
 		/** 'programme' context only — editions not yet on tonight's programme. */
 		pickableEditions?: PickerOption[];
+		/** #288 — whether "Add to programme" (the select built from
+		 *  `pickableEditions`) should render. Defaults to
+		 *  `pickableEditions.length > 0`, the original pre-#288 rule, for any
+		 *  caller that hands this component an already-resolved list (every
+		 *  component-level spec does, synchronously, with no page async in
+		 *  play). A page-level caller juggling an async, resettable picker
+		 *  SOURCE overrides this explicitly and STICKILY: `libraryWorks`/
+		 *  `libraryEditions` (which `pickableEditions` is derived from) get
+		 *  blanked synchronously on every reload and refilled async, so
+		 *  `pickableEditions.length === 0` alone cannot tell "confirmed empty"
+		 *  apart from "not back yet" — the override lets the caller key
+		 *  visibility off "no options once loading has COMPLETED" instead,
+		 *  computed and held by the caller (survives this component
+		 *  remounting on an agenda-skeleton flip, which loses any state kept
+		 *  in here). */
+		pickableEditionsVisible?: boolean;
 		/** Per-row edition choices for "Pin edition" ('repertoire' context). A row
 		 *  id absent (or mapped to []) hides that row's pin control — nothing to
 		 *  pick from. */
@@ -217,6 +233,7 @@
 		pickableWorksList = [],
 		addWorkKey = ADD_WORK_KEY,
 		pickableEditions = [],
+		pickableEditionsVisible: pickableEditionsVisibleProp,
 		editionOptionsByRowId = {},
 		pendingKeys = new Set<string>(),
 		expanded: forceExpanded = false,
@@ -237,6 +254,12 @@
 		(eventRights ?? (context === 'programme' ? manageRights : 'not-editor')) === 'editor'
 	);
 	const canManage = $derived(canManageRepertoire || canManageProgramme);
+
+	/** #288 — see the `pickableEditionsVisible` prop doc: fall back to the
+	 *  original rule when no caller override is given. */
+	const pickableEditionsVisible = $derived(
+		pickableEditionsVisibleProp ?? pickableEditions.length > 0
+	);
 
 	/** Repertoire ops (status / pin / remove) may touch this row: the surface is
 	 *  the repertoire one AND the row is genuinely a repertoire_item. */
@@ -522,7 +545,7 @@
 				class="w-full sm:w-auto"
 				value={selectedWorkId}
 				disabled={pendingKeys.has(addWorkKey)}
-				aria-label={m.repertoire_add_work_select_aria_label()}
+				aria-label={m.repertoire_add_work_label()}
 				onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
 			>
 				<option value="">{m.repertoire_add_work_label()}</option>
@@ -550,13 +573,13 @@
 	     season-only editor does not. -->
 	{#if canManageProgramme}
 		<div data-testid="work-manage-add-programme" class="flex flex-wrap items-center gap-2 pt-1">
-			{#if pickableEditions.length > 0}
+			{#if pickableEditionsVisible}
 				<select
 					data-testid="work-manage-add-programme-select"
 					class="w-full sm:w-auto"
 					value={selectedEditionForAdd}
 					disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
-					aria-label={m.repertoire_add_programme_select_aria_label()}
+					aria-label={m.repertoire_add_programme_label()}
 					onchange={(e) => (selectedEditionForAdd = (e.currentTarget as HTMLSelectElement).value)}
 				>
 					<option value="">{m.repertoire_add_programme_label()}</option>

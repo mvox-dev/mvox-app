@@ -24,6 +24,17 @@
 // (page.repertoire-a11y.spec.ts), the button's aria-label must CONTAIN the new
 // visible button text verbatim in all four locales.
 //
+// SUPERSEDED IN PART by #288's PO ruling (item 2): for the SELECT, "names this
+// event's programme" gave way to prompt-CONTAINMENT — a prompt-default select's
+// accessible name must contain its placeholder text verbatim, because that
+// prompt is what a speech-input user says. `repertoire_add_programme_label`
+// ("Select edition") is now BOTH the placeholder and the select's rendered
+// aria-label, so the select deliberately no longer names the event's programme.
+// The BUTTON half of Gama's addition stands unchanged, and the date-claim ban
+// still binds both keys. `repertoire_add_programme_select_aria_label` survives
+// as the a11y guard's pairing SUBJECT rather than as a rendered name — see the
+// #288 review F2 note in page.repertoire-a11y.spec.ts before deleting it.
+//
 // Regression fence carried here as a sibling of the manage-wiring
 // first-program_item spec: the `work-manage-add-programme` block is
 // deliberately NOT gated on `context === 'programme'` (see the scar comment in
@@ -203,25 +214,25 @@ describe('#272 — programme-control wording (messages/*.json, all four locales)
 		en: {
 			repertoire_add_programme_label: 'Select edition',
 			repertoire_add_programme_button: 'Add to programme',
-			repertoire_add_programme_select_aria_label: "Edition to add to this event's programme",
+			repertoire_add_programme_select_aria_label: 'Select edition',
 			repertoire_add_programme_aria_label: 'Add to programme: the selected edition'
 		},
 		et: {
 			repertoire_add_programme_label: 'Vali väljaanne',
 			repertoire_add_programme_button: 'Lisa kavasse',
-			repertoire_add_programme_select_aria_label: 'Väljaanne, mille sündmuse kavasse lisada',
+			repertoire_add_programme_select_aria_label: 'Vali väljaanne',
 			repertoire_add_programme_aria_label: 'Lisa kavasse: valitud väljaanne'
 		},
 		lv: {
 			repertoire_add_programme_label: 'Izvēlieties izdevumu',
 			repertoire_add_programme_button: 'Pievienot programmai',
-			repertoire_add_programme_select_aria_label: 'Izdevums, ko pievienot šī pasākuma programmai',
+			repertoire_add_programme_select_aria_label: 'Izvēlieties izdevumu',
 			repertoire_add_programme_aria_label: 'Pievienot programmai: izvēlētais izdevums'
 		},
 		uk: {
 			repertoire_add_programme_label: 'Виберіть видання',
 			repertoire_add_programme_button: 'Додати до програми',
-			repertoire_add_programme_select_aria_label: 'Видання для додавання до програми цієї події',
+			repertoire_add_programme_select_aria_label: 'Виберіть видання',
 			repertoire_add_programme_aria_label: 'Додати до програми: вибране видання'
 		}
 	};
@@ -275,3 +286,4 @@ describe('#272 — programme-control wording (messages/*.json, all four locales)
 });
 
 // (*MVOX:Tallis* — #272 RED: programme control — conditional select + link, new wording)
+// (*MVOX:Josquin* — #288 review F2: the select aria-label contract, as superseded)

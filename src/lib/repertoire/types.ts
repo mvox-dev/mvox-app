@@ -95,6 +95,15 @@ export interface WorksManage {
 	pickableWorksList: Work[];
 	/** Per EVENT id: editions not already on that event's programme. */
 	pickableEditionsByEventId: Record<string, PickerOption[]>;
+	/** #288 — per EVENT id: should "Add to programme" render? STICKY across a
+	 *  same-collective reload: the page only re-decides an entry once its own
+	 *  picker fetch (which `pickableEditionsByEventId` is built from) has
+	 *  actually settled, rather than re-deriving straight off `.length` on
+	 *  every render — which cannot tell "still loading" apart from "confirmed
+	 *  empty" during the reload's synchronous reset-then-async-refill window.
+	 *  Absent entry = not yet decided (never-yet-shown default, per
+	 *  RepertoireElement's own fallback). */
+	pickableEditionsVisibleByEventId: Record<string, boolean>;
 	/** Per ROW id: the editions of that row's work, for "pin edition". */
 	editionOptionsByRowId: Record<string, PickerOption[]>;
 	/** Write-queue keys currently in flight (row ids + the ADD_* sentinels). */

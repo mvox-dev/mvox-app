@@ -379,6 +379,39 @@
 	let seasonRepertoire = $state<RepertoireItem[]>([]);
 	let libraryWorks = $state<Work[]>([]);
 	let libraryEditions = $state<Edition[]>([]);
+	// #288 — is the `libraryWorks`/`libraryEditions` fetch (loadManagePickers)
+	// currently in flight? `resetManagement()` blanks those two synchronously on
+	// EVERY `loadForSelected` (including same-collective refreshes: season
+	// create, event create, series bulk, convert resume, agenda retry — see the
+	// #288 research), and the refill is async, so `.length === 0` alone cannot
+	// tell "not back yet" apart from "confirmed empty". This distinguishes them.
+	let libraryPickersLoading = $state(false);
+	// #288 review F1 — the SECOND async source the visibility decision reads.
+	// `pickableEditionsByEventId` iterates `worksByEventId` — both its per-event
+	// KEYS and each event's already-programmed exclusion set come from there —
+	// and `loadForSelected` blanks THAT synchronously too, while its refill
+	// rides a SEPARATE read (`loadWorksByEventId`, dispatched after
+	// `loadManagePickers`). So gating the sticky effect on
+	// `libraryPickersLoading` alone did not close the vanish window, it MOVED
+	// it: whenever the picker reads settle before the row read — the likelier
+	// ordering, 3 GETs against 4+ including the per-event program_item fanout —
+	// the effect ran over a still-empty `worksByEventId`, wrote `{}` and wiped
+	// every sticky entry for the whole remaining duration of the row load. Both
+	// flags gate the effect; each is cleared only by the settle of the read that
+	// owns it (under that read's own staleness ticket).
+	let worksRowsLoading = $state(false);
+	// #288 — "Add to programme" visibility, per event id, held STICKY across a
+	// same-collective reload: re-decided only once BOTH `libraryPickersLoading`
+	// and `worksRowsLoading` go false again, so an already-visible control does
+	// not vanish and reappear
+	// while its source is mid-refetch (Mihkel's #272 rule — no options once
+	// loading has COMPLETED, not no options right now — stays intact: an entry
+	// still resolves to hidden once loading settles empty). A never-yet-shown
+	// event id (first render, or a genuinely different collective's event ids)
+	// simply has no entry yet, which RepertoireElement's own fallback treats as
+	// its original `pickableEditions.length > 0` — false while nothing has ever
+	// loaded, exactly the "first render is unaffected" half of the ruling.
+	let pickableEditionsVisibleByEventId = $state<Record<string, boolean>>({});
 	// Write-queue keys in flight: row ids (and the ADD_* sentinels) the controls
 	// disable on — the #15 double-tap guard.
 	let managePendingKeys = $state<Set<string>>(new Set());
@@ -654,6 +687,10 @@
 			scheduleByEventId = {};
 			pdfError = false;
 			resetManagement();
+			// #288 — deselection: no agenda load follows, so nothing else would
+			// ever flip `resetManagement`'s two loading flags back off.
+			libraryPickersLoading = false;
+			worksRowsLoading = false;
 			resetConductor();
 			closeAttendancePanel();
 			rosterCache = null;
@@ -923,6 +960,15 @@
 				worksByEventId = {};
 				scheduleByEventId = {};
 				resetManagement();
+				// #288 review F1 — the agenda load FAILED, so neither the picker read
+				// nor the row read is ever dispatched for this cycle and nothing else
+				// would flip `resetManagement`'s two loading flags back off. Leaving
+				// them true froze the sticky visibility map for the rest of the page's
+				// life: a Retry that succeeded then re-derived rows and pickers that
+				// the effect was no longer allowed to read. Blank-and-settled is the
+				// truth here, and the effect resolving over it is correct.
+				libraryPickersLoading = false;
+				worksRowsLoading = false;
 				resetConductor();
 				// #196 review F2 — NO `dropConvertRun`: this is the SAME collective and
 				// a transient read failure, often the very flakiness that stopped an
@@ -1082,6 +1128,25 @@
 		seasonRepertoire = [];
 		libraryWorks = [];
 		libraryEditions = [];
+		// #288 — flips true in the SAME synchronous pass that blanks the two
+		// arrays above, so the `pickableEditionsVisibleByEventId` effect never
+		// observes them blanked while still reading `libraryPickersLoading` as
+		// its own stale (pre-reload) `false` — which would make it recompute
+		// the sticky map off a momentarily-empty picker source and wipe every
+		// entry. `loadWorksAndManagement` is what flips it back once it knows
+		// whether a fetch is even coming (rights-gated: someone with no manage
+		// rights anywhere never calls `loadManagePickers`, so nothing else
+		// would ever flip this back).
+		libraryPickersLoading = true;
+		// #288 review F1 — the row source's twin, flipped in the same synchronous
+		// pass for the same reason. Every caller that reaches `resetManagement`
+		// has just blanked `worksByEventId` (the deselect path, the main
+		// `loadForSelected` body, the agenda-load rejection), and the refill —
+		// where one comes at all — is `loadWorksByEventId`, which settles
+		// independently of the pickers. Cleared by whichever works read holds the
+		// newest `worksLoadId` ticket when it settles, or explicitly by the two
+		// paths above where no works read follows at all.
+		worksRowsLoading = true;
 		managePendingKeys = new Set();
 		manageError = false;
 		// #234 review 2 F1 — the panel's own repertoire state is NOT reset here.
@@ -1193,13 +1258,21 @@
 	) {
 		loadManagePickers(cfg, seasonId, thisRequest);
 		const thisWorksLoad = ++worksLoadId;
+		// #288 review F1 — this dispatch takes the newest `worksLoadId` ticket, so
+		// the first load's settle will no longer clear `worksRowsLoading`: this one
+		// owns the flag from here on, and must both raise it (the rows are being
+		// replaced under the upgraded rights) and clear it on either outcome.
+		worksRowsLoading = true;
 		loadWorksByEventId(cfg, eventIds, seasonId, fetch, { includeInactive: true })
 			.then((byEvent) => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = mergePendingRows(byEvent);
+				worksRowsLoading = false;
 			})
 			.catch(() => {
 				/* keep the filtered rows the first load produced */
+				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
+				worksRowsLoading = false;
 			});
 	}
 
@@ -1228,19 +1301,35 @@
 		const canManage =
 			seasonManageRights === 'editor' ||
 			Object.values(eventManageRights).some((right) => right === 'editor');
-		if (canManage) loadManagePickers(cfg, seasonId, thisRequest);
+		if (canManage) {
+			loadManagePickers(cfg, seasonId, thisRequest);
+		} else {
+			// #288 — nothing else will ever flip `resetManagement`'s synchronous
+			// `libraryPickersLoading = true` back off for this cycle: without
+			// this, a viewer with no manage rights anywhere would freeze the
+			// sticky visibility map (harmlessly for them — the control never
+			// renders without rights — but permanently, and wrongly, for
+			// anyone who gains rights later without a full page reload).
+			libraryPickersLoading = false;
+		}
 
 		const thisWorksLoad = ++worksLoadId;
+		// #288 review F1 — already true from `resetManagement`; re-asserted here so
+		// the raise sits next to the read that owns it and survives any future
+		// caller that reaches this function without the reset.
+		worksRowsLoading = true;
 		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = byEvent;
+				worksRowsLoading = false;
 			})
 			.catch(() => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = {};
+				worksRowsLoading = false;
 			});
 	}
 
@@ -1269,6 +1358,12 @@
 
 	/** The picker sources — only fetched for someone who can actually write. */
 	function loadManagePickers(cfg: ManageCfg, seasonId: string | null, thisRequest: number) {
+		// #288 — flips true for the WINDOW this specific fetch is in flight;
+		// `pickableEditionsVisibleByEventId`'s own effect (below, near its
+		// declaration) re-decides visibility only once this goes false again AND
+		// `worksRowsLoading` — the row source's twin flag — has too (#288 review
+		// F1: this read is one of TWO the decision depends on).
+		libraryPickersLoading = true;
 		Promise.all([
 			listWorks(cfg),
 			listAllEditions(cfg),
@@ -1279,6 +1374,7 @@
 				libraryWorks = works;
 				libraryEditions = editions;
 				seasonRepertoire = repertoire;
+				libraryPickersLoading = false;
 			})
 			.catch(() => {
 				if (thisRequest !== requestId) return;
@@ -1286,6 +1382,7 @@
 				libraryWorks = [];
 				libraryEditions = [];
 				seasonRepertoire = [];
+				libraryPickersLoading = false;
 			});
 	}
 
@@ -1352,9 +1449,18 @@
 			.then((byEvent) => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = mergePendingRows(byEvent);
+				// #288 review F1 — this re-read does NOT raise `worksRowsLoading` (it
+				// blanks nothing: the optimistic rows stay on screen throughout, so
+				// there is no empty window to hold the sticky map across). But it DOES
+				// take the newest `worksLoadId` ticket, which silences an in-flight
+				// reload's own settle — so if one was mid-flight, this settle is the
+				// only one left that can hand the flag back.
+				worksRowsLoading = false;
 			})
 			.catch(() => {
 				/* keep the optimistic rows; the next load reconciles */
+				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
+				worksRowsLoading = false;
 			});
 		if (seasonId !== null && seasonManageRights === 'editor') {
 			listRepertoireItems(cfg, seasonId)
@@ -1820,6 +1926,32 @@
 		return out;
 	});
 
+	// #288 — the STICKY half of `pickableEditionsVisibleByEventId`: re-decide an
+	// event's visibility only once BOTH of `pickableEditionsByEventId`'s async
+	// sources have settled — never off `pickableEditionsByEventId` alone, which
+	// recomputes to `{}` the instant a reload's synchronous reset blanks either
+	// of them. `libraryPickersLoading` covers `libraryWorks`/`libraryEditions`
+	// (the option list); `worksRowsLoading` covers `worksByEventId` (the per-
+	// event KEYS and each event's already-programmed exclusion set). Gating on
+	// only one of the two does not close the window, it MOVES it to whichever
+	// read settles second — see the `worksRowsLoading` declaration (#288 review
+	// F1) for the ordering that made that visible.
+	//
+	// While either is loading, this leaves every existing entry exactly as it
+	// was — an already-visible control stays visible through the window; an
+	// event id with no entry yet (never shown) stays absent, which
+	// RepertoireElement's own fallback reads as hidden. The reads are all
+	// reactive, so the moment the second one settles the effect runs once over
+	// two complete sources and writes the real answer.
+	$effect(() => {
+		if (libraryPickersLoading || worksRowsLoading) return;
+		const next: Record<string, boolean> = {};
+		for (const [eventId, options] of Object.entries(pickableEditionsByEventId)) {
+			next[eventId] = options.length > 0;
+		}
+		pickableEditionsVisibleByEventId = next;
+	});
+
 	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
 
 	// #234 — the panel's own row-building, joined against the panel's OWN
@@ -1846,6 +1978,7 @@
 			eventRightsByEventId: eventManageRights,
 			pickableWorksList,
 			pickableEditionsByEventId,
+			pickableEditionsVisibleByEventId,
 			editionOptionsByRowId,
 			pendingKeys: managePendingKeys,
 			onaddwork: handleAddWork,
