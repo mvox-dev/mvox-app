@@ -2,6 +2,100 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] Case A/B split: same-entity supersession reproduces, propagation-driven revocation does NOT (2026-09-09)
+
+Team-lead/Mihkel's split hypothesis, bug-report evidence gathering (not drafted by me). Full raw
+request+response bodies captured for both, plus the live/local entu-api commit mismatch (live
+`e0ce555...`, local reference clone `82cb25b...` @ 2026-06-09 — explains why case A's mechanism
+isn't in the local source).
+
+**Case A (same-entity supersession): REPRODUCED.** Bare `_editor` then bare `_owner`, same
+reference, same (db) entity: 200 before, 404 after — third independent confirmation.
+
+**Case B (propagation-driven revocation): DID NOT REPRODUCE — and propagation was confirmed to
+have actually reached the child**, ruling out "just too early to see it." Standalone `_editor` on
+a CHILD person (`_inheritrights:true`, parent=db entity) survived, byte-identical, after granting
+`_owner` on the PARENT for the same reference — even after independently confirming the child's own
+aggregated rights now show that reference as an inherited editor. Mihkel's propagation hypothesis is
+refuted; the mechanism is specifically same-entity, same-reference supersession, not a
+propagation-time side effect.
+
+Full teardown, zero orphans, independently re-verified. Script: `scripts/migrations/probes/
+probe-entu-rights-supersession-cases-2026-09-09.ts`. Uncommitted (tree on `feat/298-...`), held.
+
+## [PROBE-RESULT] Entu auto-retires a reference's prior direct rights-tier grant on ANY new one — non-monotonic, source mechanism not located (2026-09-09)
+
+Team-lead-authorized reproduction on polyphony (synthetic), following crede's unexplained Joosep-
+`_editor`-disappearance. **[GOTCHA] corrects `project_entu_post_appends_multi_value` for rights-type
+properties specifically**: bare independent POSTs (NO `_id` in either payload) still cause this —
+it is NOT the entu.app Rights-drawer's `_id`-carrying "change tier" convenience call (my first
+hypothesis, checked and set aside; that call WOULD also produce it, redundantly, but isn't needed
+to explain it).
+
+**Confirmed, 3x independently, clean isolated instrumentation each time (immediate GET before AND
+after the second grant, ruling out a scripting mixup)**:
+- Bare `_editor` then bare `_owner` (same reference, same entity, no `_id` on either): the editor
+  property is 200 immediately after its own grant, 404 after the SEPARATE owner grant.
+- **Non-monotonic — this is the surprising part**: bare `_owner` then bare `_editor` (lower tier
+  SECOND): the OWNER property disappears too. Not "keeps the strongest," not "keeps the first" —
+  **a reference can hold at most ONE active direct rights-tier grant per entity; ANY new one retires
+  whichever one was there before, regardless of relative tier.** This can silently DOWNGRADE (owner
+  -> editor) as an unintended side effect of an admin action that looks unrelated.
+- Also reproduces across a different tier pair (viewer -> expander), so not owner/editor-specific.
+
+**Mechanism NOT found in this repo's local `entu-api` clone** — read `insertProperties`,
+`markPropertiesDeleted`, `checkEntityAccess`, `validatePropertyTypes`, all of `aggregate.js` (no
+writes to the `property` collection there at all). Two live possibilities, neither chased further
+per the standing "docs/source say what's true, live divergence is a bug report" discipline:
+(a) the deployed entu-api differs from this local reference clone, or (b) a DB-level mechanism
+outside the entu-api codebase entirely. Not theorized past this — team-lead/Argo's call.
+
+Also confirms, separately, that **Entu retains history for deleted properties**: crede's OWN
+`/history` read (read-only, no write) showed the EXACT SAME pattern occurring twice already —
+Mihkel's own `_editor`->`_owner` on 2026-08-31, Joosep's just now — both with `old`/`new`/`at`/`by`
+intact on the deletion entry. `markPropertiesDeleted` soft-deletes (`deleted:{at,by}`), never a hard
+delete; `/history` unions live + deleted views.
+
+All fixtures torn down + independently re-verified across all runs; nothing orphaned. Script:
+`scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts` (the committed script
+covers scenarios A-D; 2 further ad-hoc isolated checks were run inline, not saved as files, to rule
+out a scripting bug — same cleanup discipline applied). Uncommitted (tree on `feat/298-...`), held.
+
+## [DONE] #301 — blank createInvite() succeeds for `_editor`, not owner-only (2026-09-09)
+
+Team-lead authorized, polyphony synthetic, same rig shape as #294's admin-invite-cascade probe.
+Question: does the BLANK `createInvite()` path (person-create -> self-editor -> member-create) need
+`_owner` like the update-path `mintSelfLinkInvite` did, or does `_editor` succeed (create-time
+auto-grant might cover it, per Gama's own hypothesis on #301)?
+
+**FULL SUCCESS for an `_editor`-only caller.** Caller B held EXACTLY `_editor` on the polyphony
+database entity, nothing else, nothing on any person. `createInvite(callerBCfg, {dbEntityId})`
+completed end-to-end — person created, member created, invite token returned. No partial failure,
+no owner-gate hit anywhere in the sequence. Full teardown, zero orphans, independently re-verified
+(fresh 404 on the created person).
+
+**Answer for #301**: blank-invite is NOT owner-only — the whole admin-invite section does NOT need
+to become owner-gated. Only the NEW person-targeted dropdown (which calls `mintSelfLinkInvite`,
+owner-gated per #294) needs the `_owner`-only restriction; the existing blank-invite button keeps
+working for editor-admins exactly as #301's body hoped but didn't assume.
+
+Script: `scripts/migrations/probes/probe-301-blank-invite-editor-2026-09-09.ts`. Uncommitted (tree
+on `feat/298-...`), held per team-lead's instruction.
+
+## [DONE] #295 — crede members hold NO rights on other members' persons (2026-09-09)
+
+Read-only, Mihkel-authorized direct (relayed by team-lead), no writes, no fixtures. Queried all 23
+`person` entities on crede, rights-metadata props only (`_owner/_editor/_viewer/_expander/_id`) —
+no property values requested/logged. Posted:
+https://github.com/mvox-dev/mvox-app/issues/295#issuecomment-5604465948
+
+**Clean negative, exhaustive not sampled**: 23/23 persons show ONLY {own self-`_editor`, the
+db-entity's own bootstrap self-reference (structural, not a person), Mihkel `_owner`, Joosep
+`_editor` — both inherited via the same db-entity `_inheritrights` cascade already known from #294}.
+Zero cross-member grants of any kind. #181's domain->private flip stands as an effective control;
+not rendered inert. No file/script artifact produced (in-memory analysis of a temp scratch file,
+deleted after) — nothing held for team-lead to land, nothing to commit.
+
 ## [DONE] #233 Q1-Q5 answered, posted, no schema mutation (2026-09-09)
 
 Read-only formula-engine + entu.app-frontend source read (complete OPERATORS registry, exact

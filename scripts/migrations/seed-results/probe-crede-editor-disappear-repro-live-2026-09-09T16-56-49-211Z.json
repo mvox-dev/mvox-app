@@ -1,0 +1,95 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Reproduction (team-lead authorized 2026-09-09) of crede's Joosep-editor-disappearance: does an upsert-by-old-_id (entu.app's own Rights-drawer 'change tier' shape) delete the old property, vs a bare append which should not. Polyphony only, synthetic.",
+  "ledger": [
+    {
+      "step": "scenario-A-bare-append",
+      "outcome": "unexpected",
+      "editorPropId": "6aa18fca20ebf490c690aab2",
+      "ownerPropId": "6aa18fcb20ebf490c690aab3",
+      "statusAfterOwnerGrant": 404
+    },
+    {
+      "step": "scenario-B-reproduction",
+      "outcome": "reproduced-as-predicted",
+      "editorPropId": "6aa18fcb20ebf490c690aabb",
+      "ownerPropId": "6aa18fcc20ebf490c690aabc",
+      "statusAfterUpsert": 404
+    },
+    {
+      "step": "scenario-C-order-flip",
+      "outcome": "symmetric-as-predicted",
+      "ownerPropId": "6aa18fcd20ebf490c690aac4",
+      "editorPropId": "6aa18fcd20ebf490c690aac5",
+      "statusAfterUpsert": 404
+    },
+    {
+      "step": "scenario-D-different-tier-pair",
+      "outcome": "tier-agnostic-as-predicted",
+      "viewerPropId": "6aa18fce20ebf490c690aacd",
+      "expanderPropId": "6aa18fce20ebf490c690aace",
+      "statusAfterUpsert": 404
+    },
+    {
+      "step": "cleanup-delete-property",
+      "outcome": "deleted-or-already-gone",
+      "propId": "6aa18fca20ebf490c690aab2",
+      "status": 404
+    },
+    {
+      "step": "cleanup-delete-property",
+      "outcome": "deleted-or-already-gone",
+      "propId": "6aa18fcb20ebf490c690aab3",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-property",
+      "outcome": "deleted-or-already-gone",
+      "propId": "6aa18fcc20ebf490c690aabc",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-property",
+      "outcome": "deleted-or-already-gone",
+      "propId": "6aa18fcd20ebf490c690aac5",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-property",
+      "outcome": "deleted-or-already-gone",
+      "propId": "6aa18fce20ebf490c690aace",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-tester",
+      "outcome": "deleted",
+      "testerId": "6aa18fca20ebf490c690aaab",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-tester",
+      "outcome": "deleted",
+      "testerId": "6aa18fcb20ebf490c690aab4",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-tester",
+      "outcome": "deleted",
+      "testerId": "6aa18fcc20ebf490c690aabd",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-tester",
+      "outcome": "deleted",
+      "testerId": "6aa18fcd20ebf490c690aac6",
+      "status": 200
+    },
+    {
+      "step": "orphan-summary",
+      "outcome": "clean",
+      "orphans": []
+    }
+  ]
+}

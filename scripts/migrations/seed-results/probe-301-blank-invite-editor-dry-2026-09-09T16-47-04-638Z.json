@@ -1,0 +1,13 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#301 — does the blank createInvite() path require _owner on the database entity, or does _editor succeed? Team-lead authorized 2026-09-09, same shape as the #294 admin-invite-cascade probe. Polyphony only.",
+  "orphans": [],
+  "ledger": [
+    {
+      "step": "dry-run",
+      "outcome": "dry-run-would-run"
+    }
+  ]
+}

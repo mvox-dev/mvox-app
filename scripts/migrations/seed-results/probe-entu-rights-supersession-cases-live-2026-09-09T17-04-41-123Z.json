@@ -1,0 +1,519 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Bug-report evidence (team-lead authorized 2026-09-09): does a new direct rights grant retire a caller's prior standalone direct grant on (A) the SAME entity, or (B) a CHILD entity via parent-propagation? Kept separate — different bugs. Polyphony only, synthetic. NOT a drafted bug report — team-lead drafts from this evidence.",
+  "liveEntuApiCommit": "e0ce5559c3ca1d63036a36bfe82adc414a2c827b",
+  "localReferenceCloneHead": "82cb25b843daf4a1be30354d4aa2869e542d34f7 (2026-06-09)",
+  "evidence": [
+    {
+      "step": "live-entu-api-version",
+      "responseBody": {
+        "version": "e0ce5559c3ca1d63036a36bfe82adc414a2c827b"
+      },
+      "note": "local reference clone HEAD 82cb25b843daf4a1be30354d4aa2869e542d34f7 (2026-06-09) differs from this"
+    },
+    {
+      "step": "case-A-create-caller",
+      "request": {
+        "path": "entity",
+        "body": [
+          {
+            "type": "_type",
+            "reference": "69bcfd8e9c031ab8e6ce805f"
+          },
+          {
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a420ebf490c690aaed",
+        "properties": [
+          {
+            "_id": "6aa191a420ebf490c690aaee",
+            "type": "_type",
+            "reference": "69bcfd8e9c031ab8e6ce805f"
+          },
+          {
+            "_id": "6aa191a420ebf490c690aaef",
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          },
+          {
+            "_id": "6aa191a420ebf490c690aaf0",
+            "type": "_sharing",
+            "string": "domain"
+          },
+          {
+            "_id": "6aa191a420ebf490c690aaf1",
+            "type": "_inheritrights",
+            "boolean": true
+          },
+          {
+            "_id": "6aa191a420ebf490c690aaf2",
+            "type": "_owner",
+            "reference": "69bcfd8e9c031ab8e6ce8079"
+          },
+          {
+            "_id": "6aa191a420ebf490c690aaf3",
+            "type": "_created",
+            "reference": "69bcfd8e9c031ab8e6ce8079",
+            "datetime": "2026-09-09T17:04:36.370Z"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-A-grant-editor",
+      "request": {
+        "path": "entity/69bcfd8e9c031ab8e6ce807a",
+        "body": [
+          {
+            "type": "_editor",
+            "reference": "6aa191a420ebf490c690aaed"
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "69bcfd8e9c031ab8e6ce807a",
+        "properties": [
+          {
+            "_id": "6aa191a420ebf490c690aaf4",
+            "type": "_editor",
+            "reference": "6aa191a420ebf490c690aaed"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-A-check-editor-before-owner-grant",
+      "request": {
+        "path": "property/6aa191a420ebf490c690aaf4"
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a420ebf490c690aaf4",
+        "type": "_editor",
+        "reference": "6aa191a420ebf490c690aaed",
+        "entity": "69bcfd8e9c031ab8e6ce807a",
+        "created": {
+          "at": "2026-09-09T17:04:36.909Z",
+          "by": "69bcfd8e9c031ab8e6ce8079"
+        }
+      }
+    },
+    {
+      "step": "case-A-grant-owner",
+      "request": {
+        "path": "entity/69bcfd8e9c031ab8e6ce807a",
+        "body": [
+          {
+            "type": "_owner",
+            "reference": "6aa191a420ebf490c690aaed"
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "69bcfd8e9c031ab8e6ce807a",
+        "properties": [
+          {
+            "_id": "6aa191a520ebf490c690aaf5",
+            "type": "_owner",
+            "reference": "6aa191a420ebf490c690aaed"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-A-check-editor-after-owner-grant",
+      "request": {
+        "path": "property/6aa191a420ebf490c690aaf4"
+      },
+      "status": 404,
+      "responseBody": {
+        "error": true,
+        "url": "https://api.entu.app/polyphony/property/6aa191a420ebf490c690aaf4",
+        "status": 404,
+        "statusText": "Property not found",
+        "message": "Property not found"
+      }
+    },
+    {
+      "step": "case-A-verdict",
+      "note": "reproduced"
+    },
+    {
+      "step": "case-B-create-child",
+      "request": {
+        "path": "entity",
+        "body": [
+          {
+            "type": "_type",
+            "reference": "69bcfd8e9c031ab8e6ce805f"
+          },
+          {
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          },
+          {
+            "type": "_inheritrights",
+            "boolean": true
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a620ebf490c690aaf6",
+        "properties": [
+          {
+            "_id": "6aa191a620ebf490c690aaf7",
+            "type": "_type",
+            "reference": "69bcfd8e9c031ab8e6ce805f"
+          },
+          {
+            "_id": "6aa191a620ebf490c690aaf8",
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          },
+          {
+            "_id": "6aa191a620ebf490c690aaf9",
+            "type": "_inheritrights",
+            "boolean": true
+          },
+          {
+            "_id": "6aa191a620ebf490c690aafa",
+            "type": "_sharing",
+            "string": "domain"
+          },
+          {
+            "_id": "6aa191a620ebf490c690aafb",
+            "type": "_owner",
+            "reference": "69bcfd8e9c031ab8e6ce8079"
+          },
+          {
+            "_id": "6aa191a620ebf490c690aafc",
+            "type": "_created",
+            "reference": "69bcfd8e9c031ab8e6ce8079",
+            "datetime": "2026-09-09T17:04:38.044Z"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-B-create-caller",
+      "request": {
+        "path": "entity",
+        "body": [
+          {
+            "type": "_type",
+            "reference": "69bcfd8e9c031ab8e6ce805f"
+          },
+          {
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a620ebf490c690aafd",
+        "properties": [
+          {
+            "_id": "6aa191a620ebf490c690aafe",
+            "type": "_type",
+            "reference": "69bcfd8e9c031ab8e6ce805f"
+          },
+          {
+            "_id": "6aa191a620ebf490c690aaff",
+            "type": "_parent",
+            "reference": "69bcfd8e9c031ab8e6ce807a"
+          },
+          {
+            "_id": "6aa191a620ebf490c690ab00",
+            "type": "_sharing",
+            "string": "domain"
+          },
+          {
+            "_id": "6aa191a620ebf490c690ab01",
+            "type": "_inheritrights",
+            "boolean": true
+          },
+          {
+            "_id": "6aa191a620ebf490c690ab02",
+            "type": "_owner",
+            "reference": "69bcfd8e9c031ab8e6ce8079"
+          },
+          {
+            "_id": "6aa191a620ebf490c690ab03",
+            "type": "_created",
+            "reference": "69bcfd8e9c031ab8e6ce8079",
+            "datetime": "2026-09-09T17:04:38.252Z"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-B-grant-editor-on-child",
+      "request": {
+        "path": "entity/6aa191a620ebf490c690aaf6",
+        "body": [
+          {
+            "type": "_editor",
+            "reference": "6aa191a620ebf490c690aafd"
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a620ebf490c690aaf6",
+        "properties": [
+          {
+            "_id": "6aa191a620ebf490c690ab04",
+            "type": "_editor",
+            "reference": "6aa191a620ebf490c690aafd"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-B-check-child-editor-before-parent-grant",
+      "request": {
+        "path": "property/6aa191a620ebf490c690ab04"
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a620ebf490c690ab04",
+        "type": "_editor",
+        "reference": "6aa191a620ebf490c690aafd",
+        "entity": "6aa191a620ebf490c690aaf6",
+        "created": {
+          "at": "2026-09-09T17:04:38.427Z",
+          "by": "69bcfd8e9c031ab8e6ce8079"
+        }
+      }
+    },
+    {
+      "step": "case-B-grant-owner-on-parent",
+      "request": {
+        "path": "entity/69bcfd8e9c031ab8e6ce807a",
+        "body": [
+          {
+            "type": "_owner",
+            "reference": "6aa191a620ebf490c690aafd"
+          }
+        ]
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "69bcfd8e9c031ab8e6ce807a",
+        "properties": [
+          {
+            "_id": "6aa191a620ebf490c690ab05",
+            "type": "_owner",
+            "reference": "6aa191a620ebf490c690aafd"
+          }
+        ]
+      }
+    },
+    {
+      "step": "case-B-propagation-check-attempt-1",
+      "request": {
+        "path": "entity/6aa191a620ebf490c690aaf6?props=_owner,_editor"
+      },
+      "status": 200,
+      "responseBody": {
+        "entity": {
+          "_id": "6aa191a620ebf490c690aaf6",
+          "_editor": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6aa191a520ebf490c690aaf5",
+              "reference": "6aa191a420ebf490c690aaed",
+              "property_type": "_owner",
+              "string": null,
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6aa191a620ebf490c690ab04",
+              "reference": "6aa191a620ebf490c690aafd",
+              "property_type": "_editor",
+              "string": null,
+              "entity_type": "person"
+            },
+            {
+              "_id": "6aa191a620ebf490c690aafb",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ],
+          "_owner": [
+            {
+              "_id": "69bd0b0827c417eed6f8a64b",
+              "reference": "69bcfd8e9c031ab8e6ce807a",
+              "property_type": "_owner",
+              "string": "polyphony",
+              "entity_type": "database",
+              "inherited": true
+            },
+            {
+              "_id": "6a8968f5ac0a9c7d5f122dd6",
+              "reference": "6a2fc05e4cd971291c5d5ddc",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL]",
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6aa191a520ebf490c690aaf5",
+              "reference": "6aa191a420ebf490c690aaed",
+              "property_type": "_owner",
+              "string": null,
+              "entity_type": "person",
+              "inherited": true
+            },
+            {
+              "_id": "6aa191a620ebf490c690aafb",
+              "reference": "69bcfd8e9c031ab8e6ce8079",
+              "property_type": "_owner",
+              "string": "[REDACTED-EMAIL] Mihkel Putrinš",
+              "entity_type": "person"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": "case-B-check-child-editor-after-parent-grant",
+      "propagationConfirmed": true,
+      "request": {
+        "path": "property/6aa191a620ebf490c690ab04"
+      },
+      "status": 200,
+      "responseBody": {
+        "_id": "6aa191a620ebf490c690ab04",
+        "type": "_editor",
+        "reference": "6aa191a620ebf490c690aafd",
+        "entity": "6aa191a620ebf490c690aaf6",
+        "created": {
+          "at": "2026-09-09T17:04:38.427Z",
+          "by": "69bcfd8e9c031ab8e6ce8079"
+        }
+      }
+    },
+    {
+      "step": "case-B-verdict",
+      "note": "did-not-reproduce (propagation confirmed, property survived)"
+    },
+    {
+      "step": "cleanup-delete-property",
+      "status": 200,
+      "responseBody": {
+        "deleted": true
+      },
+      "note": "6aa191a520ebf490c690aaf5"
+    },
+    {
+      "step": "cleanup-delete-property",
+      "status": 200,
+      "responseBody": {
+        "deleted": true
+      },
+      "note": "6aa191a620ebf490c690ab05"
+    },
+    {
+      "step": "cleanup-delete-property",
+      "status": 200,
+      "responseBody": {
+        "deleted": true
+      },
+      "note": "6aa191a620ebf490c690ab04"
+    },
+    {
+      "step": "cleanup-delete-entity",
+      "status": 200,
+      "responseBody": {
+        "deleted": true
+      },
+      "note": "6aa191a420ebf490c690aaed"
+    },
+    {
+      "step": "cleanup-verify-entity-gone",
+      "status": 404,
+      "responseBody": {
+        "error": true,
+        "url": "https://api.entu.app/polyphony/entity/6aa191a420ebf490c690aaed",
+        "status": 404,
+        "statusText": "Entity 6aa191a420ebf490c690aaed not found",
+        "message": "Entity 6aa191a420ebf490c690aaed not found"
+      },
+      "note": "6aa191a420ebf490c690aaed"
+    },
+    {
+      "step": "cleanup-delete-entity",
+      "status": 200,
+      "responseBody": {
+        "deleted": true
+      },
+      "note": "6aa191a620ebf490c690aaf6"
+    },
+    {
+      "step": "cleanup-verify-entity-gone",
+      "status": 404,
+      "responseBody": {
+        "error": true,
+        "url": "https://api.entu.app/polyphony/entity/6aa191a620ebf490c690aaf6",
+        "status": 404,
+        "statusText": "Entity 6aa191a620ebf490c690aaf6 not found",
+        "message": "Entity 6aa191a620ebf490c690aaf6 not found"
+      },
+      "note": "6aa191a620ebf490c690aaf6"
+    },
+    {
+      "step": "cleanup-delete-entity",
+      "status": 200,
+      "responseBody": {
+        "deleted": true
+      },
+      "note": "6aa191a620ebf490c690aafd"
+    },
+    {
+      "step": "cleanup-verify-entity-gone",
+      "status": 404,
+      "responseBody": {
+        "error": true,
+        "url": "https://api.entu.app/polyphony/entity/6aa191a620ebf490c690aafd",
+        "status": 404,
+        "statusText": "Entity 6aa191a620ebf490c690aafd not found",
+        "message": "Entity 6aa191a620ebf490c690aafd not found"
+      },
+      "note": "6aa191a620ebf490c690aafd"
+    },
+    {
+      "step": "orphan-summary",
+      "note": "clean"
+    }
+  ]
+}

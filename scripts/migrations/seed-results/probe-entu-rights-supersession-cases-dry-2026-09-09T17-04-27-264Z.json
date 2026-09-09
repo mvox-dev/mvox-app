@@ -1,0 +1,21 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Bug-report evidence (team-lead authorized 2026-09-09): does a new direct rights grant retire a caller's prior standalone direct grant on (A) the SAME entity, or (B) a CHILD entity via parent-propagation? Kept separate — different bugs. Polyphony only, synthetic. NOT a drafted bug report — team-lead drafts from this evidence.",
+  "liveEntuApiCommit": "e0ce5559c3ca1d63036a36bfe82adc414a2c827b",
+  "localReferenceCloneHead": "82cb25b843daf4a1be30354d4aa2869e542d34f7 (2026-06-09)",
+  "evidence": [
+    {
+      "step": "live-entu-api-version",
+      "responseBody": {
+        "version": "e0ce5559c3ca1d63036a36bfe82adc414a2c827b"
+      },
+      "note": "local reference clone HEAD 82cb25b843daf4a1be30354d4aa2869e542d34f7 (2026-06-09) differs from this"
+    },
+    {
+      "step": "dry-run",
+      "note": "would run both cases"
+    }
+  ]
+}

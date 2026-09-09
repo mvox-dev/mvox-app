@@ -1,0 +1,12 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Reproduction (team-lead authorized 2026-09-09) of crede's Joosep-editor-disappearance: does an upsert-by-old-_id (entu.app's own Rights-drawer 'change tier' shape) delete the old property, vs a bare append which should not. Polyphony only, synthetic.",
+  "ledger": [
+    {
+      "step": "dry-run",
+      "outcome": "dry-run-would-run"
+    }
+  ]
+}

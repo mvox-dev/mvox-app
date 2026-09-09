@@ -1,0 +1,67 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#301 — does the blank createInvite() path require _owner on the database entity, or does _editor succeed? Team-lead authorized 2026-09-09, same shape as the #294 admin-invite-cascade probe. Polyphony only.",
+  "orphans": [],
+  "ledger": [
+    {
+      "step": "create-caller-b",
+      "outcome": "created",
+      "callerBId": "6aa18d9020ebf490c690aa8a"
+    },
+    {
+      "step": "mint-caller-b-key",
+      "outcome": "minted",
+      "callerBId": "6aa18d9020ebf490c690aa8a"
+    },
+    {
+      "step": "grant-caller-b-db-editor",
+      "outcome": "granted",
+      "dbEntityId": "69bcfd8e9c031ab8e6ce807a",
+      "propId": "6aa18d9120ebf490c690aa92"
+    },
+    {
+      "step": "blank-invite-editor-test",
+      "outcome": "full-success",
+      "detail": "createInvite SUCCEEDED end-to-end as an _editor-only caller: person 6aa18d9320ebf490c690aa93, member 6aa18d9420ebf490c690aa9c, invite token returned (never logged). An _editor admin CAN blank-invite.",
+      "callerBId": "6aa18d9020ebf490c690aa8a",
+      "createdPersonId": "6aa18d9320ebf490c690aa93",
+      "createdMemberId": "6aa18d9420ebf490c690aa9c"
+    },
+    {
+      "step": "cleanup-delete-member",
+      "outcome": "deleted",
+      "memberId": "6aa18d9420ebf490c690aa9c",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-person",
+      "outcome": "deleted",
+      "personId": "6aa18d9320ebf490c690aa93",
+      "status": 200
+    },
+    {
+      "step": "verify-person-gone",
+      "outcome": "404",
+      "expected": 404
+    },
+    {
+      "step": "cleanup-delete-db-grant",
+      "outcome": "deleted",
+      "propId": "6aa18d9120ebf490c690aa92",
+      "status": 200
+    },
+    {
+      "step": "cleanup-delete-caller-b",
+      "outcome": "deleted",
+      "callerBId": "6aa18d9020ebf490c690aa8a",
+      "status": 200
+    },
+    {
+      "step": "orphan-summary",
+      "outcome": "clean",
+      "orphans": []
+    }
+  ]
+}
