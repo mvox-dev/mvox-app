@@ -306,3 +306,24 @@ Reason it is an invariant and not a preference: `withdraw` is a security control
 i18n leg REQUIRED (labels above are Estonian values; keys stay vocabulary-neutral per the skin-neutrality rule, and en/lv/uk need equivalents).
 
 (*MVOX:Palestrina*)
+
+---
+
+### [SESSION MVOX-18 — queue + open items, 2026-09-09 ~04:35 EEST]
+
+**Merged this session:** #287 `859f6a4` (review GREEN r1), #294 `c2829ea` (review GREEN r2).
+
+**#294's round-1 YELLOW is the finding worth carrying forward: #294 REINTRODUCED #287's bug.** Its new `inviteActionPending` was cleared only inside a generation-guarded `finally`, with nothing clearing it on a collective switch — half of the two-part discipline #287 had just established, same file, one slice later. Also the join-state fan-out assigned before checking its guard while every other settle seam in the file checks first. Both fixed r2; `inviteActionPending` now clears in `reset`. **Lesson: this class must be CHECKED FOR, not remembered.** It was only caught because #287's shape sat in the review checklist. Keep it there for every roster slice.
+
+**QUEUE, serialized (one branch at a time):**
+1. **#297 + #296** — one run, two tasks, #297 first. Research `wf_d89f5516-337` running.
+2. **#280** — untouched-prefill overwrite on the create-turned-update path. Research `wf_27f367c5-be9` running.
+3. **#244** — collapse season panel + surface created event. Same research run. Build scroll-and-highlight, NO filter write (Gama ruling; Mihkel overrule offer stands, flip is one behaviour at the end of the create path).
+
+**GUARD SPELLING vs SHAPE — my amendment on #296 (issuecomment-5594407204), applies to #297 too.** Counted at HEAD: `isCurrent(g)` 18, `if (g !== routeLoad.generation) return;` 10, `if (g === routeLoad.generation) <write>;` 3. Gama's "no third spelling" line would forbid the third form, which is NOT a spelling but a SHAPE and is REQUIRED in a `finally` — an early `return` there skips the rest of the block (`handleRemoveSection`'s does focus restoration after the clear) and discards a pending return/throw from the `try`. Rule: **spelling is cosmetic, match local neighbours; shape follows position — early return in try/catch, conditional write in finally.** No normalisation passes; cosmetic guard rewrites hide the fix.
+
+**BLOCKED — crede grant.** Mihkel authorized giving Joosep `_owner` on crede's db entity (confirmed to me directly, re-authorized from my side). Pérotin's dry-run is clean; the LIVE run was refused by **his session's permission classifier**, not by any authorization gate. I refused both his proposed workarounds (me running it; loosening settings) — that is permission laundering regardless of how well-authorized the action is. Surfaced to Mihkel with the exact command. Script committed, idempotent, no-write-if-already-granted, independent read-back GETs, append-not-replace invariant stated. **#294 ships correctly without it; the three controls just sit dormant until an `_owner` uses them — today that is Mihkel.**
+
+**Open, non-blocking:** source-vs-live discrepancy on the `entu_user` 403 owner-gate (trust live, note kept, no upstream thread — PO ruling). Invite token lifetime 7d source vs 24h measured (#23) — unresolved, no spec may assert either.
+
+(*MVOX:Palestrina*)

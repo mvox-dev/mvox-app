@@ -2,6 +2,23 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] crede db-entity rights, read-only, Mihkel-authorized (2026-09-09)
+
+Real PII db. Read-only, single GET (`entity/{dbEntityId}?props=_owner,_editor,name`), no fixtures,
+nothing to clean up. Gates #294 (invite controls ship to `_owner` only, per my polyphony cascade
+probe above).
+
+`_owner`: Mihkel Putrinš (`mitselek@gmail.com`) + the db entity's own self-reference (platform
+bootstrap pattern). `_editor`: Joosep Loidap, DIRECT, NOT in `_owner` at all — plus the two owner
+entries (owner folds into editor per the aggregate.js merge, not a second distinct grant).
+
+**Answer for team-lead**: NOT the "every admin is owner" good case. Joosep Loidap holds editor-only
+rights on crede — under #294's ship-to-owner-only design, he sees the join-state display but not
+the three invite controls. Matches my own #264 stage-1 finding (Joosep = `_editor` uniformly,
+granted once at root) — this is the same fact re-confirmed, now specifically tied to the #294
+gate. Not committed (tree on `feat/294-...` per team-lead) — nothing to commit anyway, no files
+written for this one.
+
 ## [PROBE-RESULT] #294 — admin-invite cascade: `_owner` on db entity works, `_editor` doesn't; append-semantics confirmed live (2026-09-09)
 
 Team-lead dispatch, gates #294's roster admin controls ("kutsu"/"saada uuesti"). Question: can a
