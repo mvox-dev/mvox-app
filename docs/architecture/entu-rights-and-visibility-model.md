@@ -146,13 +146,27 @@ Corroborates §2's `cleanupEntity` branch (line 42-43: any grant matching `acces
 
 Probe artifacts: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`, `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`, `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`.
 
-### 7.2 Entity CREATE auto-grants the creating caller all four direct rights, regardless of payload
+### 7.2 Entity CREATE auto-grants the creating caller `_owner` — ONE direct document, aggregating as all four tiers
 
 Not covered by §1-§6 (those describe read-time bucket exposure; this is a create-time grant-assignment fact). Observed: a fresh entity created via `inviteData.ts`'s `createInvite()` — whose payload sends the CALLER no explicit rights at all (only `_editor: self` to the newly-created person) — nonetheless shows the creating caller holding `_owner`/`_editor`/`_viewer`/`_expander` all as **direct** (non-inherited) grants immediately after create, reproduced on two independent runs.
 
+**Corrected 2026-09-09** (Nunes found the apparent conflict with §7.3's one-direct-tier-per-reference rule; settled by observation, not left as an open question): this is **ONE `_owner` property document**, not four separate ones — `_owner` folds into `_editor`/`_expander`/`_viewer` at read time (§3's cap logic, the same fold that makes an owner grant show up as "editor" everywhere else in this doc), so the SAME document's `_id` appears in all four aggregated arrays. Confirmed directly: created a bare entity, read `_owner`/`_editor`/`_viewer`/`_expander` raw, deduped every row referencing the creating caller by `_id` — exactly one distinct document, `property_type: "_owner"`, present in all four arrays. §7.3's rule is not contradicted; create-time auto-grant was never four documents to begin with.
+
 Consequence: **what a create payload sends and what the platform actually grants the creator are different questions** — don't infer a caller's post-create rights from the payload alone; read them back if the answer matters.
 
-Probe artifact: `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`; result `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`.
+Probe artifacts: `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`, `scripts/migrations/probes/probe-create-auto-grant-doc-count-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`, `scripts/migrations/seed-results/probe-create-auto-grant-doc-count-live-2026-09-09T17-59-10-718Z.json`.
+
+### 7.3 One direct rights-tier per (reference, entity) — new direct grant replaces, propagation never touches a child's own grant
+
+**Ruled INTENDED, not a bug** (Mihkel, 2026-09-09, on the crede Joosep-`_editor`-disappearance investigation): *"new direct grant should replace previous one... I expect entity grant (in aggregation) to be combination of inherited and direct grants."* No upstream report — this is design, not a defect.
+
+**The model**: a reference can hold at most one active **direct** rights-tier grant per entity. Granting a new direct tier (`_owner`/`_editor`/`_viewer`/`_expander`) for a reference that already holds a direct tier on that same entity retires (soft-deletes) the old one — even via a bare, independent POST carrying no prior `_id`. Confirmed non-monotonic: a lower tier granted second retires a higher one too, not just the reverse. An entity's aggregated rights are the **combination of its own direct grant(s) plus whatever cascades in as inherited** from `_inheritrights` parents (§1-§2) — direct and inherited are separate, additive layers; only the direct layer is single-tier-per-reference.
+
+**Distinguished from a second, refuted hypothesis** — this replace-on-new-direct-grant behavior is strictly **same-entity, same-reference**. It does **not** extend to parent→child propagation: granting a reference `_owner` on a parent, which propagates down and covers a child via `_inheritrights`, does **not** delete that child's own pre-existing standalone direct grant for the same reference — live-confirmed with propagation's actual arrival at the child independently verified before checking the child's property survived. A propagation pass never touches a grant document on an entity it merely reaches; it only ever affects the entity actually being written to.
+
+Live-confirmed 2026-09-09 on polyphony (synthetic), both halves, full raw request/response evidence: `scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts`, `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-crede-editor-disappear-repro-live-2026-09-09T16-56-49-211Z.json`, `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`. Corroborated independently on crede's own read-only `/history` audit log (same pattern, twice, pre-dating this investigation).
+
+**Practical consequence**: never assume a rights-tier grant is additive-only for a reference that might already hold a different tier on the same entity. Read back after any rights write if a prior grant's survival matters.
 
 ---
 
@@ -173,4 +187,4 @@ Between 2026-07-17 and 2026-07-19 the same rights/sharing questions produced thr
 
 (*MVOX:Palestrina*) — auth-chain verification (§4) by Finn, same pass.
 
-(*MVOX:Perotin*) — §7 live-probe corroboration added 2026-09-08, per #294.
+(*MVOX:Perotin*) — §7 live-probe corroboration added 2026-09-08, per #294; §7.3 added 2026-09-09, ruled intended by Mihkel same day.

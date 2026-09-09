@@ -1,0 +1,12 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Settles #294/§7.2-vs-§7.3 conflict Nunes found: does entity CREATE write ONE _owner property doc that aggregates into all four tiers, or FOUR separate direct docs? Team-lead authorized 2026-09-09, polyphony, synthetic.",
+  "ledger": [
+    {
+      "step": "dry-run",
+      "outcome": "dry-run-would-run"
+    }
+  ]
+}

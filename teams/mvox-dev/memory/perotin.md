@@ -2,6 +2,37 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] Create-seeded grant has NO exemption from §7.3 supersession (2026-09-09)
+
+Gama's extension via team-lead, same fixture shape, polyphony. After confirming the create-seeded
+`_owner` doc (1 doc, established earlier same session), wrote ONE explicit `_editor` grant for the
+SAME caller on the SAME entity and read back again. **Create-exempt REFUTED, one-doc-everywhere
+CONFIRMED**: the create-seeded doc is gone (delete-attempt on cleanup returned 404, already gone),
+exactly the new `_editor` doc remains as the caller's sole direct grant. No special case for how the
+first direct grant got there (create-time auto-seed vs. an explicit POST) — §7.3 applies uniformly.
+Script extended in place: `scripts/migrations/probes/probe-create-auto-grant-doc-count-2026-09-09.ts`.
+Torn down, independently re-verified gone.
+
+## [DONE] §7.2-vs-§7.3 settled: create writes ONE `_owner` doc, folds into all four (2026-09-09)
+
+Nunes-found conflict, team-lead-authorized observation, polyphony. Created a bare entity (no rights
+in payload), read `_owner/_editor/_viewer/_expander` raw, deduped every row referencing the creating
+caller by `_id`. **Exactly one distinct document, `property_type:"_owner"`, present in all four
+arrays** — team-lead's [speculative] expectation confirmed, matches crede's own owner-echoes-into-
+editor pattern already on record. No exception to §7.3 needed. Corrected §7.2's wording in
+`docs/architecture/entu-rights-and-visibility-model.md` in place (held, same uncommitted batch).
+Script: `scripts/migrations/probes/probe-create-auto-grant-doc-count-2026-09-09.ts`. Torn down,
+independently re-verified 404.
+
+## [DONE] Rights supersession ruled INTENDED — doc fold §7.3 (2026-09-09)
+
+Mihkel ruled: not a bug, no upstream report. Folded the settled model into `docs/architecture/
+entu-rights-and-visibility-model.md` §7.3 under [PE]: one direct tier per (reference, entity), new
+direct grant replaces old (non-monotonic), aggregate = direct + inherited (additive layers), and
+the refuted half (propagation never touches a child's own grant) stated explicitly alongside the
+confirmed half — both cite their probe ledgers + the ruling date. Uncommitted (tree on
+`test/279-save-reread-race-pin`), held per standing instruction.
+
 ## [PROBE-RESULT] Case A/B split: same-entity supersession reproduces, propagation-driven revocation does NOT (2026-09-09)
 
 Team-lead/Mihkel's split hypothesis, bug-report evidence gathering (not drafted by me). Full raw

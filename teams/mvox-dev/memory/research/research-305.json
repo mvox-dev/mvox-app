@@ -1,0 +1,77 @@
+{
+ "issue305": [
+  {
+   "key": "infra",
+   "findings": [
+    {
+     "title": "Zero existing GitHub Actions in repo \u2014 no precedent to follow",
+     "detail": "`main` has no `.github` directory at all (`git ls-tree -r main --name-only | grep '^\\.github'` \u2192 empty). `gh workflow list --repo mvox-dev/mvox-app` and `gh api repos/mvox-dev/mvox-app/actions/workflows` both confirm `total_count: 0`. There is no existing permissions/concurrency/deploy-step pattern in this repo to model the new workflow on \u2014 the Pages-deploy Action for #305 would be the first Actions workflow ever added here. Whoever builds it should reach for GitHub's own `actions/deploy-pages` + `actions/configure-pages` reference workflow (external, not verified in-repo) rather than an in-repo precedent.",
+     "files": []
+    },
+    {
+     "title": "GitHub Pages not configured \u2014 matches issue's own claim",
+     "detail": "`gh api repos/mvox-dev/mvox-app/pages` \u2192 404 Not Found. This is consistent with the issue body's own statement: \"Checked today; Pages is not yet enabled, so nothing is exposed right now.\" Confirmed independently, not just taking the issue's word.",
+     "files": []
+    },
+    {
+     "title": "docs.mvox.eu does not resolve today; mvox.eu is Cloudflare-proxied",
+     "detail": "`docs.mvox.eu` \u2192 NXDOMAIN, confirmed two ways: `python3 socket.gethostbyname('docs.mvox.eu')` raised `gaierror: Name or service not known`, and `getent hosts docs.mvox.eu` exited 2 (not found). `mvox.eu` itself resolves to 188.114.96.3, which is in Cloudflare's 188.114.96.0/20 range, and `curl -sI https://mvox.eu` returns `server: cloudflare` + `cf-ray` headers \u2014 confirming the zone is Cloudflare-proxied (orange-cloud), consistent with the team's CF-managed-zone memory. Adding a `docs` CNAME is a new record name, distinct from the existing MX/TXT/ai records the team must never touch \u2014 it should not collide with those. [speculative] One real operational risk not verified here: GitHub Pages custom-domain HTTPS provisioning can be finicky behind a Cloudflare-proxied (orange-cloud) CNAME \u2014 Pages' own cert issuance sometimes needs the record DNS-only (grey-cloud) or specific CF SSL-mode settings. This needs to be checked against GitHub's Pages docs before assuming an orange-cloud CNAME will just work.",
+     "files": []
+    },
+    {
+     "title": "Repo is PUBLIC \u2014 the issue's public-by-mechanism premise holds",
+     "detail": "`gh api repos/mvox-dev/mvox-app --jq .private` \u2192 `false`. The issue body itself states \"mvox-dev/mvox-app is public, and GitHub Pages serves a public repo publicly\" as a settled (not open) point \u2014 verified true, not a stale assumption. Since the repo is public, Pages-for-a-public-repo is publicly served with no extra gating step; the premise does NOT fail.",
+     "files": []
+    },
+    {
+     "title": "Issue #305 body diverges sharply from the task brief's framing \u2014 re-read before scoping work",
+     "detail": "Issue #305's actual title is \"[TASK] Roadmap board on mvox.eu, read live from this board's issues\" (PO:Gama, 2026-09-09). It supersedes #291 (closed as invalid). Design per Mihkel: an `issues`-event-triggered GitHub Action renders a static page to **docs.mvox.eu/roadmap** via GitHub Pages CNAME \u2014 no client-side GH API calls, no server, build-tested before deploy, plus a same-origin cache-busted stamp file so open tabs auto-refresh on redeploy without losing scroll position. YAML frontmatter (Estonian slugline) sits at the head of the issue body; issues without it still render using the English title. Sub-issues: native GH sub-issues are recommended as the indenting mechanism (issue notes epic #289 currently has zero native sub-issues in use \u2014 task lists live in comments/`## Tasks` checklists instead). Explicit content constraint: sluglines must name no person, member count, or customer (crede is real PII) \u2014 there is no generator/filter to strip a slip, unlike #291's design. **Priority section explicitly says \"Not ready\" \u2014 app functionality outranks this per Mihkel's standing direction, filed only so the design isn't re-derived later.**",
+     "files": []
+    },
+    {
+     "title": "Label contradiction: issue carries the `ready` label despite its own text saying \"Not ready\"",
+     "detail": "GitHub labels on #305 (via `gh api repos/mvox-dev/mvox-app/issues/305`) are `task`, `ready`, and `in research`. But the issue body's own \"## Priority\" section states in bold: \"**Not `ready`.** Mihkel's standing direction is that app functionality outranks this. Filed so the design is not re-derived later.\" Per the team's own dispatch-gate rule (ready label = pickup signal), this is a live contradiction between the label state and the authored intent \u2014 worth flagging loudly before this gets auto-picked-up by a board sweep. [unverified] whether the `ready` label was applied by template default and simply not removed, or is intentional and the body text is stale relative to a later label change \u2014 the comments list is empty (0 comments), so there's no discussion resolving this either way.",
+     "files": []
+    },
+    {
+     "title": "vitest already globs scripts/**/*.spec.ts; tsx-based standalone-script convention exists but no YAML lib and no Node version pin",
+     "detail": "`vitest.config.ts:15` sets `include: ['src/**/*.spec.ts', 'scripts/**/*.spec.ts']`, environment `node`. The repo has an established pattern for standalone testable node scripts under `scripts/migrations/` \u2014 e.g. `scripts/migrations/lib/script-runner.ts` + colocated `script-runner.spec.ts`, `scripts/migrations/lib/ledger-writer.ts` + `.spec.ts`, run via `node --import tsx --import ./scripts/migrations/lib/register-loader.mjs <script>.ts` (see `package.json:13-14` for the vitest run/watch scripts, and the `migrate:*` scripts further down for the tsx-execution pattern). `tsx ^4.20.6` and `vitest ^4.1.10` are devDependencies (`package.json:36,39`). A #305 renderer following this precedent (e.g. `scripts/roadmap/render.ts` + `render.spec.ts`) is directly testable via `pnpm test`. Two gaps: (1) no YAML-parsing library (no `js-yaml`/`gray-matter`/similar in dependencies) \u2014 needed for the frontmatter feature and would have to be added; (2) no `.nvmrc`/`.node-version`/`engines` field anywhere \u2014 only `packageManager: pnpm@10.30.1` is pinned \u2014 so the new GitHub Action's `actions/setup-node` step would need an explicit Node version with nothing in-repo to derive it from.",
+     "files": [
+      "vitest.config.ts",
+      "package.json"
+     ]
+    }
+   ]
+  },
+  {
+   "key": "api-shape",
+   "findings": [
+    {
+     "title": "Sub-issues API works on this repo but returns zero everywhere checked",
+     "detail": "Both surfaces confirmed live and working: REST `GET repos/mvox-dev/mvox-app/issues/289/sub_issues` returns HTTP 200 with body `[]` (verified with -i, full 200 response, no 404/preview-header requirement observed). GraphQL `issue(number:289){ subIssuesSummary{total} subIssues{nodes{...}} }` returns `subIssuesSummary.total: 0, subIssues.nodes: []` \u2014 consistent with REST. Checked every issue currently labeled `epic` (20 issues: #1,8,16,21,49,54,71,77,78,79,80,81,108,116,132,156,176,223,289,291) via GraphQL `subIssuesSummary.total` \u2014 every single one returns 0. So #305's claim ('our one live epic, #289, reports zero') is correct and, per this check, generalizes: no issue on the board currently carries a native sub-issue link. The renderer should treat 'epic has sub-issues' as a branch that will render nothing (flat list) for every current epic \u2014 correct per #305's own spec ('Where an epic has none, it renders flat \u2014 which is correct, not a gap'), not yet exercised with real indented data.",
+     "files": []
+    },
+    {
+     "title": "Zero issues carry YAML frontmatter today",
+     "detail": "Checked all 302 issues (open+closed, via `gh issue list --state all --limit 500 --json body`) for a body starting with `---`: zero matches. Confirms #305's own stated expectation ('on day one the board is entirely English titles... No issue carries a slugline yet'). Parse rule the renderer needs, as specified in #305 itself and matching what's observable: split the body on a leading `---\\n...\\n---\\n` block if present; parse as YAML; if absent (true for all 302 current issues) fall back to the issue's English `title` with no error; unknown keys inside a present frontmatter block should be ignored rather than rejected (per #305's own checklist item, not independently testable since no issue has frontmatter yet to probe against).",
+     "files": []
+    },
+    {
+     "title": "stateReason is live and both values have real examples on this board",
+     "detail": "REST field `state_reason` confirmed present (checked `gh api repos/mvox-dev/mvox-app/issues/291` \u2192 `{state: closed, state_reason: not_planned}`). Pulled `state_reason` for all 288 closed issues (REST `/issues?state=closed&per_page=100 --paginate`, filtered out pull_request entries): 284 `completed`, 4 `not_planned` (#291, #254, #210, #64). #291 is directly relevant \u2014 it's the epic #305 explicitly says was 'closed as invalid' and replaced; confirmed its API state_reason is indeed `not_planned`, not `completed`.",
+     "files": []
+    },
+    {
+     "title": "Label taxonomy: 13 labels defined, all 6 board-relevant ones live and populated",
+     "detail": "Full label list (`gh label list`): bug(14), documentation(0), duplicate(0), enhancement(9), invalid(0), question(1), wontfix(0), epic(21), task(257), blocked(1), ready(213), needs-po(1), \"in process\"(3), \"in research\"(4) \u2014 counts are total (open+closed) via `search/issues` per-label query. Open-only counts for the state-dependent ones the board cares about: epic 1/21 open, task 12/257 open, blocked 0/1 open, ready 12/213 open, needs-po 0/1 open, \"in process\" 2/3 open, \"in research\" 4/4 open, bug 1/14 open, enhancement 1/9 open, question 0/1 open. All six labels #305 needs to map to columns/badges (ready, in research, in process, epic, bug, task) exist and are actively applied on open issues today, so the board has real data to render against for every one of them.",
+     "files": []
+    },
+    {
+     "title": "Board size: 302 issues total; needs multiple API pages regardless of page-size choice",
+     "detail": "`search/issues` with `is:issue`: total_count 302 (14 open, 288 closed) \u2014 confirmed by two independent counts (`gh issue list --state all --limit 500` also returns exactly 302). Note the plain REST `GET /repos/.../issues?state=all` endpoint mixes in pull requests (305 items returned, not 302) \u2014 the renderer must filter `pull_request == null` or use the `is:issue` search endpoint / GraphQL `issues` connection to avoid counting PRs as board items. At GitHub's REST max `per_page=100`, one page returns a `Link: rel=\"next\"` header (confirmed via `gh api -i`), so 302-305 items need at least 4 pages at per_page=100, or ~11 pages at the REST default per_page=30. Not a single-page fetch under any pagination setting \u2014 the build step (GitHub Action, using its own `GITHUB_TOKEN`) needs to loop pages (`gh api --paginate` or manual Link-header following) rather than assume one response covers the board.",
+     "files": []
+    }
+   ]
+  }
+ ]
+}

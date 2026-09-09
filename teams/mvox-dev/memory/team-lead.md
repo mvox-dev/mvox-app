@@ -2,6 +2,36 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
+### [CHECKPOINT 2026-09-09 ~23:00 EEST — MVOX-18 close; restart requested by Mihkel "at the next comfortable seam"]
+
+**THE SEAM: when run `wf_36335e5d-51e` (#279+#288+#300) LANDS.** If restart happened before it landed: check `git log origin/main` for test(#279)/fix(#288)/fix(#300) merge commits; any missing task relaunches from `teams/mvox-dev/memory/pipeline-args/args-279-288-300.json` (committed) — resumeFromRunId does NOT survive restart. Landing notices to gama@po-team per contract; remove `in process` labels after.
+
+**10 MERGED this session:** #287 `859f6a4` · #294 `c2829ea` · #297 `8122e3c` · #296 `dde5515` · #280 `4e5ebc8` · #244 `c89f219` · #299 `d158b09` · #298 `7fe4f33` (+ #295 closed by probe, #263-era items before). Landing notice contract: entry + landing, every run, to gama@po-team.
+
+**QUEUE (all `ready`, args/research state per issue):**
+1. **#305 roadmap board** — NEXT (Mihkel wants it; no app-file overlap). Research `wf_fd634d0a-526` launched 23:00, output lands in `scratchpad/` or relaunch from the script in `workflows/scripts/`. Args not yet written.
+2. **#301+#302** — one run, args COMMITTED (`args-301-302.json`). #301 first. Key: one-doc rights fence commented on #301; #302 spec rule = drive-path edits allowed / assertion edits forbidden / delete-guard-confirm-fail-restore per relocated test (ruled on-issue).
+3. **#304 event-series picker** — research DONE (`scratchpad/research-304.json`, held; commit to memory/research/ at next gap). Args not written. Key hazards: `_parent` holds season+series under one prop name — replace helpers pick "first value" and could overwrite the SEASON; inherits = raw-prop-absent not displays-blank; `seriesId` missing from EventDetail contract.
+4. **#303 rename commit-on-blur** — Mihkel ruled (b) both-commit, Escape only discard. Research DELIBERATELY not dispatched — waits for #302 to land (same file, rename machinery). Sharp edge: switch-commits→unmount→blur→double-commit; criterion = CALL COUNT.
+5. **#233 entu schema** — UNBLOCKED (Mihkel Q1 ruling: NO companion field, full ISO timestamp in formula, upstream SUBSTRING feature request drafted+sent to PO). A.4 migration BEFORE formula (destroys names otherwise); my explicit live-run authorization step stands. Q1-Q5 answered on-issue by Pérotin.
+
+**LABEL CONTRACT (Mihkel request, in durable memory `feedback_board_state_labels`):** `in research` at research dispatch → `in process` at slice entry → removed after landing notice. Label follows the fact. Readers deciding actions confirm per-issue (`gh issue view`), never trust `gh issue list --label` (lagging index, both directions). `ready` stays on throughout. Current: #279/#288/#300 in process; #301/#302/#304/#305 in research; #303/#233 bare ready.
+
+**RIGHTS MODEL — settled by observation, all in durable memory + Pérotin's held §7.2/§7.3 doc edits:** one direct rights DOC per (reference, entity); any new direct grant REPLACES it (any tier direction, any origin — create's `_owner` seed included); inherited = separate additive layer, propagation never writes; aggregate = direct masks inherited. Mihkel ruled it INTENDED — no upstream bug report (draft shelved in scratchpad). Trap: create-then-grant-creator-lower silently demotes from owner. Read back after any rights write that matters.
+
+**CREDE:** Joosep is `_owner` (Mihkel ran the grant; read-back verified; his old standalone `_editor` retired by the supersession semantics — expected under the ruled model). #294 controls live for him. #295 closed: no member holds rights on another's person.
+
+**UNCOMMITTED ON DISK (tree was on pipeline branches; commit at next main gap):** Pérotin's doc edits (`docs/architecture/entu-rights-and-visibility-model.md` §7.2 correction + §7.3) + his scratchpad; probe-create-auto-grant-doc-count script+ledgers; probe-crede-editor-disappear repro (COMMITTED already — check `git status` for the rest); `scratchpad/research-304.json`, `research-305 output`, `args-...` drafts; this checkpoint itself.
+
+**SCRATCHPAD (session-local `/tmp/claude-1000/.../scratchpad/`) — dies with container, copy anything needed:** `entu-substring-formula-feature-request.md` (sent to PO in full text), `entu-rights-retirement-bug-report.md` (SHELVED — ruled intended), research/args working copies, `tdd-slice-pipeline.js` template copy.
+
+**STANDING (this session's additions):** voice rule in `~/.claude/CLAUDE.md` (spare words, no jargon — Mihkel). Plain-speech section same file. `negative-from-the-instrument` memory: prove a clean negative could have failed; fix the instrument before what it catches. #288 scope rule: default text that INSTRUCTS = in guard scope; default that IS a choice = out.
+
+**PO relationship:** Gama trusted proxy; Henry couriers; release notices now arrive on promotion (both directions of the board-change gap closed). My classifier blocks `gh gist create` and live crede writes — surface to Mihkel, never route around.
+
+(*MVOX:Palestrina*)
+
+---
 ### [SESSION MVOX-18 OPEN 2026-09-08 23:05 EEST — restart recovery via /mvox-wake]
 
 Restart happened as predicted. Team re-established under session `6009a78a`: finn + bentham + perotin respawned and registered in `~/.claude/teams/session-6009a78a/config.json`. Inbox drained via `mcp__comms__read_mail` — **zero waiting**; courier `company-courier.py` alive (PID 297674), config `team: mvox`. Repo inboxes restored into the new session dir with `cp -n` (historical archives; live team-lead.json left untouched).
