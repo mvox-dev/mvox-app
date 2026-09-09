@@ -79,4 +79,46 @@ export async function listLinkedIdentities(
 	return { identities, pendingInvites };
 }
 
+// ── #294 — the roster's three-state join read ───────────────────────────────
+//
+// Mihkel (issue #294, verbatim): "Just check the person.entu_user. missing ->
+// invite / present invite hash -> uninvite/reinvite / present username ->
+// good!" — discriminated on the entry's CONTENTS, never on the property's
+// presence (a presence check would badge an invited-but-never-joined member
+// as "joined" — precisely the population the roster's controls exist for).
+//
+// Deliberately REUSES `listLinkedIdentities` per personId rather than a
+// second discriminator: `identities.length > 0` is exactly "joined" (an entry
+// carries `uid`), `pendingInvites > 0` is exactly "invited" (an entry carries
+// only the masked `invite`), and neither is exactly "absent". Fanned out with
+// `Promise.all`, mirroring the per-member profile fan-out `loadRoster` already
+// does (rosterData.ts) — one read per row, genuinely independent.
+//
+// FAIL LOUD: a rejection on ANY person propagates out of `Promise.all` and
+// rejects the whole call. The live probe (issue #294) observed a zero-rights
+// caller get a clean TOTAL 403, never a 200 with the key silently omitted —
+// so "absent" must mean OBSERVED absent, never "not returned" (the
+// rosterData.ts:123 class of trap, kept out of this layer by refusing to
+// guess).
+export type JoinState = 'absent' | 'invited' | 'joined';
+
+export async function listJoinStates(
+	cfg: EntuCfg,
+	personIds: string[],
+	fetchImpl: typeof fetch = fetch
+): Promise<Record<string, JoinState>> {
+	const entries = await Promise.all(
+		personIds.map(async (personId) => {
+			const { identities, pendingInvites } = await listLinkedIdentities(cfg, personId, fetchImpl);
+			const state: JoinState =
+				identities.length > 0 ? 'joined' : pendingInvites > 0 ? 'invited' : 'absent';
+			return [personId, state] as const;
+		})
+	);
+	const result: Record<string, JoinState> = {};
+	for (const [personId, state] of entries) result[personId] = state;
+	return result;
+}
+
 // (*MVOX:Josquin* — #193 GREEN: linked-identities display producer)
+// (*MVOX:Palestrina* — #294 GREEN: listJoinStates, reusing listLinkedIdentities)

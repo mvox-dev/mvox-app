@@ -361,19 +361,33 @@ interface StoredEntuUserEntry {
 	invite?: string;
 }
 
-/**
- * Mint a fresh self-link invite on the caller's OWN person, under the caller's
- * own JWT. All reads precede all writes; stale un-redeemed invite placeholders
- * are swept first (in order) so the fresh mint is the ONLY value carrying
- * `invite` afterward. Every failure is a named, loud `SelfLinkMintError` — never
- * a silent fallback.
- */
-export async function mintSelfLinkInvite(
+// ── #294 — the sweep, extracted so BOTH mintSelfLinkInvite (sweep-then-mint)
+// and withdrawInvite (sweep, no mint) share the ONE implementation — never a
+// duplicated loop. All-or-report: any single DELETE failure aborts
+// immediately and throws named, because a surviving placeholder after a
+// reported failure is a live credential (a link sent to a mistyped address
+// stays redeemable until it is redeemed or revoked). A bound identity
+// (carries `uid`, never `invite`) is excluded by the filter and is NEVER
+// touched — this is what makes `withdrawInvite` safe to call on a member who
+// has actually joined (it becomes a no-op, never an unlink).
+type SweepPhase = 'identity-read' | 'stale-invite-cleanup';
+
+class InvitePlaceholderSweepError extends Error {
+	readonly phase: SweepPhase;
+
+	constructor(message: string, phase: SweepPhase) {
+		super(message);
+		this.name = 'InvitePlaceholderSweepError';
+		this.phase = phase;
+	}
+}
+
+async function sweepStaleInvitePlaceholders(
 	cfg: EntuCfg,
 	personId: string,
-	fetchImpl: typeof fetch = fetch
-): Promise<{ inviteToken: string }> {
-	// ── 1. identity read — source of truth for the stale-placeholder sweep ──────
+	fetchImpl: typeof fetch
+): Promise<{ sweptCount: number }> {
+	// ── 1. identity read — source of truth for the sweep ────────────────────────
 	const readRes = await entuFetch(
 		cfg.db,
 		`entity/${personId}?props=entu_user`,
@@ -382,9 +396,9 @@ export async function mintSelfLinkInvite(
 		fetchImpl
 	);
 	if (!readRes.ok) {
-		throw new SelfLinkMintError(
-			`self-link identity read failed: HTTP ${readRes.status}`,
-			{ phase: 'identity-read', reason: 'http' }
+		throw new InvitePlaceholderSweepError(
+			`invite placeholder sweep: identity read failed: HTTP ${readRes.status}`,
+			'identity-read'
 		);
 	}
 	const readBody = (await readRes.json()) as {
@@ -395,9 +409,8 @@ export async function mintSelfLinkInvite(
 		(e) => typeof e.invite === 'string' && e.invite.length > 0
 	);
 
-	// ── 2. stale-invite cleanup BEFORE mint — sequential, ordered; a bound
-	// identity (carries `uid`, never `invite`) is excluded by the filter above and
-	// is NEVER deleted here.
+	// ── 2. cleanup — sequential, ordered; a bound identity is excluded by the
+	// filter above and is NEVER deleted here.
 	for (const stale of stalePlaceholders) {
 		const delRes = await entuFetch(
 			cfg.db,
@@ -407,14 +420,87 @@ export async function mintSelfLinkInvite(
 			fetchImpl
 		);
 		if (!delRes.ok) {
-			throw new SelfLinkMintError(
-				`self-link stale invite cleanup failed: HTTP ${delRes.status} on property ${stale._id} — aborting before mint (no mint on top of an unconsumed stale invite)`,
-				{ phase: 'stale-invite-cleanup', reason: 'http' }
+			throw new InvitePlaceholderSweepError(
+				`invite placeholder sweep: cleanup failed: HTTP ${delRes.status} on property ${stale._id} — aborting (a surviving placeholder after a reported failure is a live credential)`,
+				'stale-invite-cleanup'
 			);
 		}
 	}
+	return { sweptCount: stalePlaceholders.length };
+}
 
-	// ── 3. the mint — POST to the entity UPDATE endpoint (the existing person),
+type InviteWithdrawPhase = SweepPhase;
+
+export class InviteWithdrawError extends Error {
+	readonly phase: InviteWithdrawPhase;
+
+	constructor(message: string, phase: InviteWithdrawPhase) {
+		super(message);
+		this.name = 'InviteWithdrawError';
+		this.phase = phase;
+	}
+}
+
+/**
+ * Withdraw every un-redeemed invite placeholder on `personId` — the sweep
+ * WITHOUT the mint (#294, `tühista kutse`). A revocation, not tidiness: an
+ * un-redeemed link binds whoever clicks it, not whoever it was addressed to
+ * (#23/#28/#30), so a link sent to a mistyped address is a live credential in
+ * a stranger's inbox until it is redeemed or revoked — this is the one action
+ * that un-arms it. Leaves NO marker behind (Mihkel ruling: withdrawn and
+ * never-invited are the SAME state) — resolves only when no entry carrying
+ * `invite` survives; a bound identity is never touched, and any single DELETE
+ * failure rejects loudly rather than reporting a partial sweep as done.
+ */
+export async function withdrawInvite(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	try {
+		await sweepStaleInvitePlaceholders(cfg, personId, fetchImpl);
+	} catch (e) {
+		if (e instanceof InvitePlaceholderSweepError) {
+			throw new InviteWithdrawError(e.message, e.phase);
+		}
+		throw e;
+	}
+}
+
+/**
+ * Mint a fresh self-link invite on the caller's OWN person, under the caller's
+ * own JWT. All reads precede all writes; stale un-redeemed invite placeholders
+ * are swept first (in order) so the fresh mint is the ONLY value carrying
+ * `invite` afterward. Every failure is a named, loud `SelfLinkMintError` — never
+ * a silent fallback.
+ *
+ * #294 — ALSO the roster's admin-facing producer for BOTH `kutsu` (mint onto a
+ * never-invited person) and `saada uuesti` (sweep-then-mint onto an already-
+ * invited one): the sweep already makes this the atomic replace Gama's
+ * one-live-link invariant requires, and the same call serves both roster
+ * states — only the label differs by which state routed the admin here. The
+ * doc-comment's "caller's OWN person" reflects #193's original self-link call
+ * site; the 2026-09-09 admin-cascade probe confirmed this same function also
+ * mints onto ANOTHER person's entity for a caller holding db-entity `_owner`
+ * (HTTP 200) — refused at `_editor` (HTTP 403, "User not in _owner
+ * property"), which is exactly why the roster gates these controls on
+ * `_owner`, not merely `admin`.
+ */
+export async function mintSelfLinkInvite(
+	cfg: EntuCfg,
+	personId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<{ inviteToken: string }> {
+	try {
+		await sweepStaleInvitePlaceholders(cfg, personId, fetchImpl);
+	} catch (e) {
+		if (e instanceof InvitePlaceholderSweepError) {
+			throw new SelfLinkMintError(e.message, { phase: e.phase, reason: 'http' });
+		}
+		throw e;
+	}
+
+	// ── the mint — POST to the entity UPDATE endpoint (the existing person),
 	// body is EXACTLY the one trigger property (the sole-mint-mechanism literal).
 	const mintRes = await entuFetch(
 		cfg.db,
@@ -461,4 +547,7 @@ export async function mintSelfLinkInvite(
 
 	return { inviteToken };
 }
+
+// (*MVOX:Palestrina* — #294 GREEN: sweep extracted to sweepStaleInvitePlaceholders,
+//  shared by mintSelfLinkInvite and the new withdrawInvite)
 

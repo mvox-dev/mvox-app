@@ -17,6 +17,15 @@
 	// other consumers (agenda, event detail, admin roles) per Henry's 2026-09-06
 	// roster-only scope ruling; see rosterData.ts for both functions' contracts.
 	import { loadRosterWithRealNames, type RosterRow } from '$lib/roster/rosterData';
+	// #294 — join-state read (per-row, three states) + the two write producers
+	// the roster's controls reuse verbatim: mintSelfLinkInvite serves BOTH
+	// `kutsu` and `saada uuesti` (sweep-then-mint is the atomic replace), and
+	// withdrawInvite is that sweep WITHOUT the mint (`tühista kutse`). The
+	// roster NEVER calls createInvite — that mints a SECOND person+member,
+	// and every row here already has a person.
+	import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
+	import { mintSelfLinkInvite, withdrawInvite } from '$lib/invite/inviteData';
+	import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
 	import {
 		deactivateMember,
 		reinstateMember,
@@ -66,6 +75,36 @@
 
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<RosterRow[]>([]);
+
+	// #294 — the three-state join read, keyed by personId (the producer's own
+	// `Record<string, JoinState>` shape — see linkedIdentities.ts). Every
+	// row's controls are a PURE function of this record: there is no separate
+	// "which button" flag, so a mint/withdraw success routes the row to its
+	// next control set for free the moment the record is re-read.
+	let joinStates = $state<Record<string, JoinState>>({});
+	// PO ruling 2026-09-09 (issue #294): the three-state DISPLAY is for every
+	// admin; the three CONTROLS (kutsu/saada uuesti/tühista kutse) gate on
+	// `_owner` alone (probe-observed: `_owner` mint → HTTP 200, `_editor` →
+	// HTTP 403 "User not in _owner property"). 'loading' fails CLOSED — same
+	// discipline as `adminStore`'s own initial state — so a control never
+	// renders ahead of knowing whether this caller actually holds it.
+	let ownerTier = $state<OwnerTier | 'loading'>('loading');
+	// Per-row transient UI state for the three write actions — NOT part of
+	// `RosterRow` (that stays the profile-names producer's own shape; #294's
+	// read is a genuinely separate fetch, mirroring `loadRoster`'s own
+	// per-member profile fan-out rather than widening it). Reset on an actual
+	// collective SWITCH only (routeLoad's `reset({isSwitch})` below) — the
+	// underlying identity property is PER-COLLECTIVE (a person entity exists
+	// per db), so nothing minted or erred under one collective may leak into
+	// another's rows (the #287 bug class, kept out of this feature).
+	let inviteLinkByMemberId = $state<Record<string, string>>({});
+	let inviteErrorByMemberId = $state<Record<string, boolean>>({});
+	let withdrawErrorByMemberId = $state<Record<string, boolean>>({});
+	// A single shared in-flight guard, mirroring `deactivatePending`'s
+	// whole-block shape rather than a per-row map: #294 has no requirement for
+	// concurrent invite actions across rows, and one flag is the smaller
+	// surface.
+	let inviteActionPending = $state(false);
 	let sections = $state<SectionNode[]>([]);
 	// F3 code-review fix: the two loads are DECOUPLED (Promise.allSettled, not
 	// Promise.all) — a section-tree failure must not black out a roster the app
@@ -142,6 +181,17 @@
 			// cancel/trigger buttons disabled; its `finally` is separately
 			// generation-guarded (below).
 			deactivatePending = false;
+			// #294 review — the other half of #287's two-part discipline, for the
+			// invite controls' shared in-flight flag. Its `finally` clears it only
+			// when the generation still matches (closing the LATE-settle half), so
+			// without an unconditional clear here a generation bump during an
+			// in-flight mint/withdraw — a collective switch, or simply a
+			// deactivate/reinstate on the SAME collective, both of which call
+			// `loadForSelected()` — would strand `inviteActionPending` true for the
+			// life of the page, rendering kutsu/saada uuesti/tühista kutse
+			// permanently `disabled` on rows whose state is perfectly actionable.
+			// Unconditional (not under `isSwitch`), exactly like the two above.
+			inviteActionPending = false;
 			// #268 — same reasoning as the deactivate trio above: an open editor,
 			// a mid-flight save, or a stale save error all describe a row the next
 			// tree may not even contain (or a rewritten `_id`). Reset unconditionally
@@ -172,6 +222,17 @@
 				showInactive = false;
 				inactiveRows = [];
 				inactiveLoadError = false;
+				// #294 — a minted link or a mint/withdraw error names a row from the
+				// OLD collective; the underlying identity property is PER-COLLECTIVE
+				// (a person entity exists per db), so nothing minted or erred under A
+				// may leak onto B's rows (the #287 bug class, kept out of this
+				// feature). `joinStates` and `ownerTier` are NOT reset here — `load`
+				// below overwrites both on every load, same as `rows`/`sections`, and
+				// each of those writes is generation-guarded so a superseded load's
+				// tail can no longer be the one that writes last.
+				inviteLinkByMemberId = {};
+				inviteErrorByMemberId = {};
+				withdrawErrorByMemberId = {};
 			}
 		},
 		onNoCollective: () => {
@@ -185,6 +246,12 @@
 			expandedIds = new Set();
 			sectionsError = false;
 			currentCfg = null;
+			// #294 — no collective, no rights/state to claim.
+			joinStates = {};
+			ownerTier = 'loading';
+			inviteLinkByMemberId = {};
+			inviteErrorByMemberId = {};
+			withdrawErrorByMemberId = {};
 		},
 		onNoToken: () => {
 			// F3 code-review fix: drop `currentCfg` too — a write cfg must never
@@ -193,11 +260,21 @@
 			// page).
 			currentCfg = null;
 		},
-		async load({ cfg, isCurrent }) {
+		async load({ cfg, selected, isCurrent }) {
 			currentCfg = cfg;
-			const [rowResult, sectionResult] = await Promise.allSettled([
+			// #294 — `resolveOwnerTier` depends only on `cfg` + the VIEWER's own
+			// personId (never on `rows`), so it runs in the SAME parallel batch as
+			// the roster/section reads rather than after them — one fewer
+			// sequential round-trip. `listJoinStates` (below) is different: its
+			// input is the set of personIds `loadRosterWithRealNames` resolves, so
+			// it structurally CANNOT start until `rows` is known — the fan-out
+			// mirrors `loadRoster`'s own per-member profile fan-out (rosterData.ts)
+			// in STYLE (Promise.all, one read per row), not in literal parallelism
+			// with the row list itself.
+			const [rowResult, sectionResult, ownerTierResult] = await Promise.allSettled([
 				loadRosterWithRealNames(cfg),
-				listSections(cfg)
+				listSections(cfg),
+				resolveOwnerTier(cfg, selected.personId)
 			]);
 			if (!isCurrent()) return; // superseded by a newer collective selection
 
@@ -216,6 +293,41 @@
 				return;
 			}
 			rows = rowResult.value;
+
+			// #294 — the owner-tier read is a DIFFERENT admin-boundary question from
+			// the roster/section reads above (see `ownerTier`'s own doc comment) and
+			// fails CLOSED on its own: a rejected/unresolved read never takes the
+			// roster itself down, it just means no invite control renders this load.
+			ownerTier = ownerTierResult.status === 'fulfilled' ? ownerTierResult.value : 'error';
+
+			// #294 — join-state fan-out, now that `rows` (and therefore every row's
+			// personId) is known. Degrades on failure rather than taking the whole
+			// roster down with it — same precedent `loadRosterWithRealNames`'s own
+			// overlay sets (rosterData.ts): the base roster (names/emails, already
+			// resolved above) is the critical read; the join-state badge/controls
+			// are supplementary admin information layered over it. A failed read
+			// here logs loudly and leaves `joinStates` empty, so no row shows a
+			// badge or a control this reader couldn't verify — never a WRONG one.
+			//   The `isCurrent()` guard goes BEFORE each write, never after: this
+			// fan-out is the one await in this body that outlives `rows` (loads are
+			// not cancelled — routeLoad only bumps a generation counter), so a
+			// superseded load's tail settles LAST and would otherwise overwrite the
+			// CURRENT collective's `joinStates` with a personId-keyed record from
+			// the old db. No key would match, so every badge and every
+			// invite/reinvite/withdraw control would vanish from the new roster
+			// until the next load, with nothing to heal it. Same for the catch: a
+			// superseded load's FAILURE must not blank the current collective's
+			// states (nor log about a page nobody is looking at — matching
+			// `handleDeactivate`'s stale-failure convention below).
+			try {
+				const states = await listJoinStates(cfg, rows.map((r) => r.personId));
+				if (!isCurrent()) return;
+				joinStates = states;
+			} catch (e) {
+				if (!isCurrent()) return;
+				console.error('roster: join-state load failed, showing no join-state badges', e);
+				joinStates = {};
+			}
 
 			if (sectionResult.status === 'rejected') {
 				if (isAuthExpiredError(sectionResult.reason)) {
@@ -1133,6 +1245,98 @@
 		}
 	}
 
+	// ── #294 — invite / re-send / withdraw, owner-gated ─────────────────────────
+	//
+	// Re-reads THIS ROW's join state after a write settles rather than patching
+	// it locally: the controls that render next are a pure function of
+	// `joinStates`, so the re-read IS the state-routing (kutsu → saada
+	// uuesti/tühista kutse, or the reverse on withdraw) — no separate "which
+	// button" flag to keep in sync. A single shared `inviteActionPending` flag
+	// (mirroring `deactivatePending`'s whole-block shape) blocks a second tap
+	// while one write is in flight; each row's OWN link/error state is keyed by
+	// `memberId` so one row's outcome never overwrites another's.
+
+	/** Re-reads one person's join state and merges it in — used after every
+	 *  successful mint/withdraw so the row's controls follow the CONTENTS,
+	 *  never an optimistic local guess. */
+	async function refreshJoinState(cfg: EntuCfg, personId: string, g: number): Promise<void> {
+		const updated = await listJoinStates(cfg, [personId]);
+		if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
+		joinStates = { ...joinStates, ...updated };
+	}
+
+	/** `kutsu` (absent → invited) AND `saada uuesti` (invited → invited, atomic
+	 *  replace) are THE SAME call: `mintSelfLinkInvite` sweeps any stale
+	 *  placeholder before minting, so it is already the one-live-link
+	 *  invariant Gama's ruling requires, regardless of which state routed the
+	 *  admin here. NEVER `createInvite` — every row already has a person; that
+	 *  function mints a SECOND one. */
+	async function handleMintInvite(row: RosterRow): Promise<void> {
+		if (inviteActionPending) return;
+		const cfg = currentCfg;
+		if (!cfg) return;
+		inviteActionPending = true;
+		const g = routeLoad.generation;
+		try {
+			const { inviteToken } = await mintSelfLinkInvite(cfg, row.personId);
+			if (!routeLoad.isCurrent(g)) return;
+			const { [row.memberId]: _dropped, ...restErrors } = inviteErrorByMemberId;
+			inviteErrorByMemberId = restErrors;
+			inviteLinkByMemberId = { ...inviteLinkByMemberId, [row.memberId]: inviteToken };
+			await refreshJoinState(cfg, row.personId, g);
+		} catch (e) {
+			if (!routeLoad.isCurrent(g)) return;
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
+			// #294 item 6 — a 403 (missing owner-rights on the target person) or any
+			// other failure surfaces as a NAMED, visible alert on the row — never a
+			// button that silently does nothing. `kutsu` stays put for a retry.
+			console.error('roster: invite mint failed', row.memberId, e);
+			inviteErrorByMemberId = { ...inviteErrorByMemberId, [row.memberId]: true };
+		} finally {
+			if (routeLoad.isCurrent(g)) inviteActionPending = false;
+		}
+	}
+
+	/** `tühista kutse` — the sweep WITHOUT the mint (`withdrawInvite`, #294).
+	 *  All-or-report is enforced entirely BY `withdrawInvite` itself: it either
+	 *  resolves (every placeholder gone) or rejects (nothing here is treated as
+	 *  a partial success). On success the row's next read comes back `absent`
+	 *  — withdrawn and never-invited are the SAME state (Mihkel ruling); no
+	 *  local "withdrawn" flag is set, because there is no state left to flag. */
+	async function handleWithdrawInvite(row: RosterRow): Promise<void> {
+		if (inviteActionPending) return;
+		const cfg = currentCfg;
+		if (!cfg) return;
+		inviteActionPending = true;
+		const g = routeLoad.generation;
+		try {
+			await withdrawInvite(cfg, row.personId);
+			if (!routeLoad.isCurrent(g)) return;
+			const { [row.memberId]: _droppedW, ...restWithdrawErrors } = withdrawErrorByMemberId;
+			withdrawErrorByMemberId = restWithdrawErrors;
+			const { [row.memberId]: _droppedLink, ...restLinks } = inviteLinkByMemberId;
+			inviteLinkByMemberId = restLinks;
+			await refreshJoinState(cfg, row.personId, g);
+		} catch (e) {
+			if (!routeLoad.isCurrent(g)) return;
+			if (isAuthExpiredError(e)) {
+				status = 'session-expired';
+				return;
+			}
+			// A surviving placeholder is a live credential the admin has just been
+			// told is dead — so this MUST render loudly, and the row's controls
+			// (driven by `joinStates`, left untouched here) truthfully stay exactly
+			// as they were: still `invited`, still offering `tühista kutse` again.
+			console.error('roster: withdraw failed', row.memberId, e);
+			withdrawErrorByMemberId = { ...withdrawErrorByMemberId, [row.memberId]: true };
+		} finally {
+			if (routeLoad.isCurrent(g)) inviteActionPending = false;
+		}
+	}
+
 	// ── #268 — admin member records: the in-row editor (real name, phone,
 	// email, date of birth). Release ruling (2026-09-07): in-row expansion,
 	// roster only, "labels as proposed". ONE editor open at a time — a single
@@ -1237,6 +1441,20 @@
 		email: m.roster_record_email_label,
 		birthdate: m.roster_record_birthdate_label,
 		id_code: m.roster_record_id_code_label
+	};
+
+	// #294 — the three-state badge, same lookup-table-keyed-by-state idiom as
+	// the event/library badges (event/[id]/+page.svelte, library/+page.svelte)
+	// rather than an ad hoc conditional chain.
+	const JOIN_STATE_LABEL: Record<JoinState, () => string> = {
+		absent: m.roster_member_join_state_absent,
+		invited: m.roster_member_join_state_invited,
+		joined: m.roster_member_join_state_joined
+	};
+	const JOIN_STATE_BADGE_CLASS: Record<JoinState, string> = {
+		joined: 'border-emerald-700 text-emerald-700',
+		invited: 'border-amber-700 text-amber-700',
+		absent: 'border-ink-4 text-ink-2'
 	};
 
 	/** Pencil tap: (re)loads the ONE db-scoped record lookup for `row` and opens
@@ -3447,6 +3665,100 @@
 				{/if}
 			</div>
 		{/if}
+		{#if admin === 'admin' && joinStates[row.personId] !== undefined}
+			<!-- #294 — the three-state badge: EVERY admin sees it (PO ruling
+			     2026-09-09 — the display is a rights ANSWER read the same way for
+			     owner and editor; the probe showed a `_viewer`-level read already
+			     returns the placeholder shape). Discriminated on the underlying identity
+			     property's CONTENTS by `listJoinStates`, never on presence — this span only
+			     renders the state the data layer already resolved, it makes no
+			     judgement of its own. `data-join-state` carries the raw value for
+			     the test surface; the visible text is the i18n label, matching the
+			     event/library badge idiom (lookup-table CSS class keyed by state). -->
+			{@const state = joinStates[row.personId]}
+			<span
+				data-testid="roster-row-join-state-{row.memberId}"
+				data-join-state={state}
+				class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {JOIN_STATE_BADGE_CLASS[
+					state
+				]}"
+			>
+				{JOIN_STATE_LABEL[state]()}
+			</span>
+			{#if ownerTier === 'owner'}
+				<!-- The three controls, `_owner` ONLY (PO ruling — the platform
+				     itself enforces this: the 2026-09-09 admin-cascade probe minted
+				     onto another person as a db-entity `_owner`, HTTP 200; refused as
+				     `_editor`, HTTP 403 "User not in _owner property"). Routed PURELY
+				     off `state` — `kutsu` on a live-link row would be a state-routing
+				     bug, not a case handled here. An editor-admin gets the single
+				     global note below instead of THIS block; see its own comment. -->
+				<div class="flex flex-wrap items-center gap-2">
+					{#if state === 'absent'}
+						<button
+							type="button"
+							data-testid="roster-member-invite-{row.memberId}"
+							disabled={inviteActionPending}
+							class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+							onclick={() => handleMintInvite(row)}
+						>
+							{m.roster_member_invite()}
+						</button>
+					{:else if state === 'invited'}
+						<button
+							type="button"
+							data-testid="roster-member-reinvite-{row.memberId}"
+							disabled={inviteActionPending}
+							class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+							onclick={() => handleMintInvite(row)}
+						>
+							{m.roster_member_reinvite()}
+						</button>
+						<button
+							type="button"
+							data-testid="roster-member-withdraw-{row.memberId}"
+							disabled={inviteActionPending}
+							class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+							onclick={() => handleWithdrawInvite(row)}
+						>
+							{m.roster_member_withdraw()}
+						</button>
+					{/if}
+				</div>
+			{/if}
+			{#if inviteLinkByMemberId[row.memberId]}
+				<!-- `kutsu` and `saada uuesti` share this same producer and this same
+				     render — the fresh token IS the deliverable of both. Reuses the
+				     standalone invite page's own copy (`admin_invite_link_label`,
+				     `admin_invite_bearer_warning`) rather than duplicating it: the
+				     bearer-secret risk is identical, this is the same mechanism. -->
+				<p
+					data-testid="roster-invite-link-{row.memberId}"
+					class="rounded-md border border-ink-5 p-2 text-xs break-all text-ink-2"
+				>
+					{m.admin_invite_link_label()}: {inviteLinkByMemberId[row.memberId]}
+				</p>
+				<p class="text-xs text-ink-3">{m.admin_invite_bearer_warning()}</p>
+			{/if}
+			{#if inviteErrorByMemberId[row.memberId]}
+				<p
+					data-testid="roster-invite-error-{row.memberId}"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{m.admin_invite_error()}
+				</p>
+			{/if}
+			{#if withdrawErrorByMemberId[row.memberId]}
+				<p
+					data-testid="roster-withdraw-error-{row.memberId}"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{m.roster_member_withdraw_failed()}
+				</p>
+			{/if}
+		{/if}
 		{#if admin === 'admin' && !sectionsError}
 			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. The
 			     picker's option list would hold only "(Unassigned)" (its sole reachable
@@ -3797,6 +4109,19 @@
 				<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
 			</div>
 		{:else}
+			{#if admin === 'admin' && ownerTier !== 'owner' && ownerTier !== 'loading'}
+				<!-- #294 — PO ruling 2026-09-09: the three controls (kutsu/saada
+				     uuesti/tühista kutse) gate on `_owner`, but an editor-admin must
+				     never see three disabled buttons, three failing buttons, or
+				     silence where they'd be — she gets exactly this ONE LINE instead.
+				     Rendered ONCE for the whole page (not per row): the fact being
+				     stated ("you don't hold this") is the same wherever a control
+				     would have sat, so one line says it once rather than repeating
+				     itself once per not-yet-invited/invited row. -->
+				<p data-testid="roster-invite-owner-note" class="text-xs text-ink-2">
+					{m.roster_member_invite_owner_only()}
+				</p>
+			{/if}
 			{#if sectionsError}
 				<!-- F3 code-review fix: the section-tree load failed but the roster
 				     itself loaded fine — render loudly (banner + the already-logged
