@@ -28,6 +28,7 @@ import liveShapedJson from './fixtures/live-shaped.json';
 import {
 	buildStamp,
 	displayTitle,
+	formatGeneratedAt,
 	parseFrontmatter,
 	renderBoard,
 	type RoadmapIssue,
@@ -607,5 +608,41 @@ describe('stamp + self-refresh', () => {
 	it('a failed stamp fetch changes nothing — the poll is error-tolerant', () => {
 		const script = scriptText(parse(renderBoard(liveShaped, GENERATED_AT)));
 		expect(script).toMatch(/\.catch\(|try\s*\{/);
+	});
+});
+
+describe('formatGeneratedAt — Estonian local time (#308)', () => {
+	it('formats an EEST (summer) instant as dd.MM.yyyy HH:mm with a +3 zone marker', () => {
+		expect(formatGeneratedAt('2026-07-01T12:00:00Z')).toBe('01.07.2026 15:00 GMT +3');
+	});
+
+	it('formats an EET (winter) instant as dd.MM.yyyy HH:mm with a +2 zone marker — the DST flip, not a hardcoded offset', () => {
+		expect(formatGeneratedAt('2026-01-15T12:00:00Z')).toBe('15.01.2026 14:00 GMT +2');
+	});
+
+	it('matches the issue\'s own example exactly', () => {
+		expect(formatGeneratedAt('2026-09-10T03:33:16.799Z')).toBe('10.09.2026 06:33 GMT +3');
+	});
+});
+
+describe('renderBoard — generated-at display (#308)', () => {
+	it('the visible <time> text is the Tallinn-local rendering, distinct from the raw ISO datetime attribute', () => {
+		const doc = parse(renderBoard(liveShaped, GENERATED_AT));
+		const time = doc.querySelector('time');
+		expect(time?.getAttribute('datetime')).toBe(GENERATED_AT);
+		expect(time?.textContent).toBe(formatGeneratedAt(GENERATED_AT));
+		expect(time?.textContent).not.toBe(GENERATED_AT);
+	});
+
+	it('datetime attribute and stamp.txt still carry the raw ISO instant unchanged', () => {
+		const doc = parse(renderBoard(liveShaped, GENERATED_AT));
+		expect(doc.querySelector('time')?.getAttribute('datetime')).toBe(GENERATED_AT);
+		expect(buildStamp(GENERATED_AT)).toBe(GENERATED_AT);
+	});
+
+	it('REFRESH_SCRIPT\'s CURRENT still carries the raw ISO instant, not the display string', () => {
+		const script = scriptText(parse(renderBoard(liveShaped, GENERATED_AT)));
+		expect(script).toContain(JSON.stringify(GENERATED_AT));
+		expect(script).not.toContain(formatGeneratedAt(GENERATED_AT));
 	});
 });

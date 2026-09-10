@@ -56,6 +56,24 @@ describe('roadmap build CLI (integration)', () => {
 		expect(html).toContain('stamp.txt');
 	});
 
+	it('#308: the deployed <time> shows Tallinn local time in its text while datetime and stamp.txt stay ISO', () => {
+		// Wiring check on the file the Action actually deploys. The CLI reads
+		// the real clock, so the exact string is pinned by generated-at.spec.ts;
+		// here the SHAPE proves main() formats generatedAt for display without
+		// touching the machine identity: datetime attr === stamp.txt content,
+		// text is dd.MM.yyyy HH:mm + "GMT +N" (single space, no comma, no
+		// seconds, no milliseconds), and the two renderings differ.
+		const html = readFileSync(join(outDir, 'roadmap', 'index.html'), 'utf-8');
+		const stamp = readFileSync(join(outDir, 'roadmap', 'stamp.txt'), 'utf-8').trim();
+		const match = /<time datetime="([^"]+)">([^<]+)<\/time>/.exec(html);
+		expect(match, 'no <time datetime="…">…</time> element on the deployed page').not.toBeNull();
+		const [, datetime, text] = match as RegExpExecArray;
+		expect(datetime).toBe(stamp);
+		expect(datetime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+		expect(text).toMatch(/^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2} GMT [+-]\d{1,2}$/);
+		expect(text).not.toBe(datetime);
+	});
+
 	it('ships the CNAME file for docs.mvox.eu', () => {
 		const cnamePath = join(outDir, 'CNAME');
 		expect(existsSync(cnamePath), `missing ${cnamePath}`).toBe(true);

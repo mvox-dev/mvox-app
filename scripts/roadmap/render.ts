@@ -91,6 +91,44 @@ export function buildStamp(generatedAt: string): string {
 	return generatedAt;
 }
 
+/**
+ * Format an ISO instant as the human-facing generated-at time: Estonian
+ * convention, `Europe/Tallinn`, to the minute, with a zone marker (#308).
+ *
+ * No `Intl.DateTimeFormat` preset produces the target punctuation — `dateStyle`
+ * / `timeStyle` presets insert a comma before the time and a two-digit year
+ * (verified live: `01.07.26, 15:00`, not `01.07.2026 15:00`). So this builds
+ * the string from `formatToParts` instead of trusting any preset: pull
+ * day/month/year and hour/minute/zone-name parts out and join them with the
+ * exact literal punctuation the issue's example uses (single space, not a
+ * comma) — `10.09.2026 06:33 GMT +3`.
+ *
+ * `hourCycle: 'h23'` (not `hour12: false`) is deliberate — Node's ICU can
+ * resolve `hour12: false` to `hourCycle: 'h24'`, which renders midnight as
+ * `24:00` instead of `00:00`; `h23` pins the 00–23 range explicitly.
+ *
+ * The IANA zone name `Europe/Tallinn` is the whole point: this is an offset
+ * conversion by zone rule, not a fixed number, so the same code renders
+ * `GMT +3` (EEST) in summer and `GMT +2` (EET) in winter with zero changes —
+ * `timeZoneName: 'shortOffset'` computes that offset from the zone and the
+ * instant, never hardcoded. The literal space inside `GMT +3` / `GMT +2` is
+ * Intl's own output for this zone/locale, kept as-is rather than stripped.
+ */
+export function formatGeneratedAt(generatedAt: string): string {
+	const parts = new Intl.DateTimeFormat('et-EE', {
+		timeZone: 'Europe/Tallinn',
+		day: '2-digit',
+		month: '2-digit',
+		year: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23',
+		timeZoneName: 'shortOffset'
+	}).formatToParts(new Date(generatedAt));
+	const part = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+	return `${part('day')}.${part('month')}.${part('year')} ${part('hour')}:${part('minute')} ${part('timeZoneName')}`;
+}
+
 // Untrusted content (titles, sluglines, labels) is only ever placed inside
 // element text content below, never inside an attribute value — so escaping
 // &, < and > is sufficient to stop markup injection. Quotes are left alone
@@ -272,7 +310,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 <body>
 <header>
 	<h1>mvox roadmap</h1>
-	<p class="meta">Generated at <time datetime="${escapeHtml(generatedAt)}">${escapeHtml(generatedAt)}</time></p>
+	<p class="meta">Generated at <time datetime="${escapeHtml(generatedAt)}">${escapeHtml(formatGeneratedAt(generatedAt))}</time></p>
 </header>
 <main>
 ${groupsHtml}
