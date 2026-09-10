@@ -98,6 +98,7 @@
 	// byte-unchanged.
 	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
 	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
+	import { rovingNextIndex } from '$lib/a11y/roving';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	// #209 (PO standing rule 1) — the three conductor pickers are NATIVE
 	// <select> elements, fed in ROSTER ORDER (Gama ruling 3) by the SAME
@@ -267,6 +268,30 @@
 	function selectAgendaTypeFilter(value: AgendaTypeFilter) {
 		agendaTypeFilter = agendaTypeFilter === value ? 'all' : value;
 	}
+
+	// #312 — view toggle roving tabindex. Radiogroup semantics (arrow moves
+	// AND selects), same shape as roster's handleViewModeKeydown
+	// (roster/+page.svelte:683-695): a LOCAL wrapper around the shared
+	// rovingNextIndex index math (src/lib/a11y/roving.ts), not a call into
+	// roster's own handler — roving.ts's header comment states every group
+	// hand-writes its own membership/activate/focus wrapper by design.
+	// `agendaViewStore` already models single selection, so there is no
+	// separate roving $state to keep in sync — the checked segment IS the
+	// tab stop.
+	function handleAgendaViewKeydown(e: KeyboardEvent): void {
+		const group = e.currentTarget as HTMLElement;
+		const segments = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
+		const idx = segments.indexOf(e.target as HTMLButtonElement);
+		if (idx < 0) return;
+		const next = rovingNextIndex(e.key, idx, segments.length);
+		if (next < 0) return;
+		e.preventDefault();
+		const view = segments[next].dataset.agendaView as 'list' | 'month' | undefined;
+		if (!view) return;
+		setAgendaView(view);
+		segments[next].focus();
+	}
+
 	// Gama ruling 1, consequence 2 — if the active type disappears from the
 	// list (its last event went away), the chip vanishes from
 	// `agendaFilterChips` above; this is what actually resets the filter so
@@ -7974,23 +7999,39 @@
 										</button>
 									{/each}
 								</div>
-								<!-- #247 — the Nimekiri|Kuu view toggle, sitting WITH the chips
-								     (Ruled 2026-09-06, item 9): a two-state segmented control of
-								     native buttons — day list is the default, the choice persists
-								     per-device via the #207-shaped agendaView preference store. -->
+								<!-- #247/#312 — the Nimekiri|Kuu view toggle, sitting WITH the
+								     chips (Ruled 2026-09-06, item 9): day list is the default, the
+								     choice persists per-device via the #207-shaped agendaView
+								     preference store. #312 reshapes the two independently-rounded
+								     chips into ONE segmented pill: the container carries the
+								     border+rounding (the LanguageSelector/RsvpControl/
+								     AttendanceSurface flush idiom — inline-flex overflow-hidden
+								     rounded-* border, segment border-r last:border-r-0), and the
+								     semantics become role="radiogroup"/role="radio"/aria-checked
+								     with roving tabindex, same house pattern as roster's
+								     roster-view-modes (#156): arrows both MOVE and SELECT via
+								     handleAgendaViewKeydown. aria-pressed is GONE — pressed-state on
+								     role="radio" is an invalid ARIA mix, the same trap
+								     page.sections-a11y.spec.ts caught on role="option". -->
 								<div
-									role="group"
+									data-testid="agenda-view-toggle"
+									role="radiogroup"
+									tabindex="-1"
 									aria-label={m.agenda_view_toggle_label()}
-									class="flex gap-1"
+									class="inline-flex overflow-hidden rounded-md border border-ink-4"
+									onkeydown={handleAgendaViewKeydown}
 								>
 									<button
 										type="button"
 										data-testid="agenda-view-list"
-										aria-pressed={$agendaViewStore === 'list' ? 'true' : 'false'}
-										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {$agendaViewStore ===
+										data-agenda-view="list"
+										role="radio"
+										aria-checked={$agendaViewStore === 'list' ? 'true' : 'false'}
+										tabindex={$agendaViewStore === 'list' ? 0 : -1}
+										class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
 										'list'
-											? 'border-ink bg-ink text-paper'
-											: 'border-ink-4 text-ink-2'}"
+											? 'bg-ink text-paper'
+											: 'text-ink-2'}"
 										onclick={() => setAgendaView('list')}
 									>
 										{m.agenda_view_list()}
@@ -7998,11 +8039,14 @@
 									<button
 										type="button"
 										data-testid="agenda-view-month"
-										aria-pressed={$agendaViewStore === 'month' ? 'true' : 'false'}
-										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {$agendaViewStore ===
+										data-agenda-view="month"
+										role="radio"
+										aria-checked={$agendaViewStore === 'month' ? 'true' : 'false'}
+										tabindex={$agendaViewStore === 'month' ? 0 : -1}
+										class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
 										'month'
-											? 'border-ink bg-ink text-paper'
-											: 'border-ink-4 text-ink-2'}"
+											? 'bg-ink text-paper'
+											: 'text-ink-2'}"
 										onclick={() => setAgendaView('month')}
 									>
 										{m.agenda_view_month()}

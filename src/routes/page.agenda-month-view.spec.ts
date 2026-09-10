@@ -14,6 +14,11 @@
 //     list stays the DEFAULT; the choice persists per-device via the #207
 //     idiom (src/lib/preferences/agendaView.ts — see agendaView.spec.ts for
 //     the store's own sanitize/SSR pins).
+//     #312 RESHAPES the toggle into ONE segmented pill: role="radiogroup" /
+//     role="radio" / aria-checked (the aria-pressed pins changed on purpose —
+//     a stated contract change, see the issue), roving tabindex + arrow keys.
+//     The behaviour pins (click switches, day-list default, persistence)
+//     stay byte-identical.
 //   - SCOPE (Gama's ruling comment): the month overview consumes `items`
 //     (upcoming) ONLY. recentItems are NEVER rendered in month mode — the
 //     current month deliberately shows only its remainder ("what's coming"),
@@ -38,7 +43,7 @@
 //     untouched. This spec only pins that toggling away and back restores
 //     the day list (Recent included).
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -217,11 +222,12 @@ const RECENT_CONCERT = item('rec-con', 'Talvekontsert', '2026-04-20T18:00:00.000
 
 const ALL_UPCOMING = [JUN_MON, JUN_WED, JUL_BOUNDARY, JUL_WED];
 
-/** The view toggle GROUP — pinned as a native role="group" whose accessible
- *  name is the localized agenda_view_toggle_label (the #214 chip-group idiom;
- *  standing rules 1/2 — native controls, no hand-rolled widget). */
+/** The view toggle GROUP — #312 makes it ONE segmented pill: a native
+ *  role="radiogroup" (was role="group" under #247) whose accessible name is
+ *  still the localized agenda_view_toggle_label (standing rules 1/2 — native
+ *  controls, no hand-rolled widget). */
 function viewToggle(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[role="group"][aria-label="[msg:view-toggle]"]');
+	return container.querySelector('[role="radiogroup"][aria-label="[msg:view-toggle]"]');
 }
 
 function viewButton(container: HTMLElement, testid: string): HTMLButtonElement {
@@ -318,7 +324,13 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		for (const btn of buttons) {
 			expect(btn.tagName).toBe('BUTTON');
 			expect(btn.getAttribute('type')).toBe('button');
-			expect(btn.getAttribute('aria-pressed')).not.toBeNull();
+			// #312 contract change, stated on purpose: one segmented pill = a radio
+			// group, so each segment is role="radio" + aria-checked. aria-pressed is
+			// GONE — pressed-state on role="radio" is an invalid ARIA mix (the
+			// role="option" trap's sibling, see roster's view-mode comment).
+			expect(btn.getAttribute('role')).toBe('radio');
+			expect(btn.getAttribute('aria-checked')).not.toBeNull();
+			expect(btn.getAttribute('aria-pressed')).toBeNull();
 		}
 		// The ruled labels arrive via the NEW keys, never hardcoded copy.
 		expect(buttons.map((b) => b.textContent?.trim())).toEqual([
@@ -326,9 +338,9 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 			'[msg:view-month]'
 		]);
 
-		// Default = the day list (ruling 9), month not pressed.
-		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-pressed')).toBe('true');
-		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('false');
+		// Default = the day list (ruling 9), month not checked.
+		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
+		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('false');
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="agenda-recent"]')).not.toBeNull();
 		expect(monthGroups(container)).toEqual([]);
@@ -357,8 +369,8 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 
 		await switchToMonth(container);
 
-		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('true');
-		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-pressed')).toBe('false');
+		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
+		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('false');
 		expect(monthGroups(container).length).toBeGreaterThan(0);
 		// The day-grouped list is fully gone in month mode — groups, headers, rows.
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).toBeNull();
@@ -368,7 +380,7 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		await fireEvent.click(viewButton(container, 'agenda-view-list'));
 
 		// Back exactly as it was — the mode is additive, the day list untouched.
-		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-pressed')).toBe('true');
+		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
 		expect(monthGroups(container)).toEqual([]);
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).not.toBeNull();
 		expect(dayListRowIds(container)).toEqual(['jun-mon', 'jun-wed', 'jul-boundary', 'jul-wed']);
@@ -630,7 +642,7 @@ describe('#247 — per-device persistence (the #207 idiom, ruling 9)', () => {
 		// the store itself initializes from a sanitized, SSR-safe localStorage
 		// read, so together this closes the reload loop.
 		const container = await renderAgenda(ALL_UPCOMING);
-		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('true');
+		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
 		expect(monthGroups(container).length).toBeGreaterThan(0);
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).toBeNull();
 	});
@@ -694,5 +706,111 @@ describe('#247 — the new locale keys exist in all four locales', () => {
 	);
 });
 
+// ── #312: one segmented pill — radiogroup semantics + roving tabindex ────────
+// The #247 two-chip toggle becomes ONE pill: the CONTAINER carries the border
+// and the rounding, the segments sit flush inside it (the LanguageSelector /
+// RsvpControl / AttendanceSurface flush idiom), and the semantics become a
+// radio group — arrows MOVE focus AND SELECT. Same house pattern
+// page.roster-arrange.spec.ts pins for roster-view-modes (#156): radiogroup of
+// radios, exactly one Tab stop (the checked segment), wrapping arrows,
+// Tab/Enter/Space never swallowed.
+
+describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving tabindex)', () => {
+	function segments(container: HTMLElement): HTMLButtonElement[] {
+		return [viewButton(container, 'agenda-view-list'), viewButton(container, 'agenda-view-month')];
+	}
+	function stops(container: HTMLElement): HTMLButtonElement[] {
+		return segments(container).filter((s) => s.getAttribute('tabindex') === '0');
+	}
+
+	it('the group is a role="radiogroup" of role="radio" segments, keeping its accessible name', async () => {
+		const container = await renderAgenda(ALL_UPCOMING);
+		const group = viewToggle(container);
+		expect(group, 'radiogroup with the localized label must exist').not.toBeNull();
+		// The old role="group" wrapper is GONE, not merely doubled up.
+		expect(container.querySelector('[role="group"][aria-label="[msg:view-toggle]"]')).toBeNull();
+		for (const s of segments(container)) {
+			expect(s.getAttribute('role'), s.getAttribute('data-testid') ?? '').toBe('radio');
+			expect(s.closest('[role="radiogroup"]')).toBe(group);
+		}
+	});
+
+	it('exactly ONE segment is the Tab stop, and it is the checked one', async () => {
+		const container = await renderAgenda(ALL_UPCOMING);
+		expect(stops(container)).toEqual([viewButton(container, 'agenda-view-list')]);
+
+		await switchToMonth(container);
+		expect(stops(container)).toEqual([viewButton(container, 'agenda-view-month')]);
+	});
+
+	it('ArrowRight moves focus AND selects the next segment — through the store, so it persists', async () => {
+		const container = await renderAgenda(ALL_UPCOMING);
+		const [list, month] = segments(container);
+
+		list.focus();
+		await fireEvent.keyDown(list, { key: 'ArrowRight' });
+		await waitFor(() => {
+			expect(month.getAttribute('aria-checked')).toBe('true');
+		});
+		expect(document.activeElement).toBe(month);
+		// Arrow selection is a REAL selection: it lands in the month view and in
+		// the #207 preference — never a parallel local state beside the store.
+		expect(monthGroups(container).length).toBeGreaterThan(0);
+		expect(localStorage.getItem('mvox.agenda_view')).toBe('month');
+
+		// …and wraps round the end back to the first segment.
+		await fireEvent.keyDown(month, { key: 'ArrowRight' });
+		await waitFor(() => {
+			expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
+		});
+	});
+
+	it('ArrowLeft wraps backwards from the first segment to the last', async () => {
+		const container = await renderAgenda(ALL_UPCOMING);
+		const list = viewButton(container, 'agenda-view-list');
+		list.focus();
+		await fireEvent.keyDown(list, { key: 'ArrowLeft' });
+		await waitFor(() => {
+			expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
+		});
+	});
+
+	it('Tab, Enter and Space are NOT preventDefault-ed — focus can leave and the segment still activates', async () => {
+		const container = await renderAgenda(ALL_UPCOMING);
+		const list = viewButton(container, 'agenda-view-list');
+		for (const key of ['Tab', 'Enter', ' ']) {
+			const event = createEvent.keyDown(list, { key });
+			fireEvent(list, event);
+			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		}
+	});
+
+	it('ONE pill visually: the container carries the border and rounding; segments sit flush — no gap, no per-segment chip rounding', async () => {
+		const container = await renderAgenda(ALL_UPCOMING);
+		const group = viewToggle(container) as HTMLElement;
+		const tokens = [...group.classList];
+
+		// The flush idiom (LanguageSelector.svelte:96 and kin): the container
+		// clips, borders and rounds; the segments are NOT independent chips.
+		expect(tokens).toContain('overflow-hidden');
+		expect(tokens).toContain('border');
+		expect(
+			tokens.some((t) => t.startsWith('rounded')),
+			'container must carry the rounding'
+		).toBe(true);
+		expect(
+			tokens.some((t) => t.startsWith('gap-')),
+			'segments sit flush — no gap on the container'
+		).toBe(false);
+		for (const s of segments(container)) {
+			expect(
+				[...s.classList],
+				`${s.getAttribute('data-testid')} must not be its own fully-rounded chip`
+			).not.toContain('rounded-full');
+		}
+	});
+});
+
 // (*MVOX:Tallis* — #247 RED)
 // (*MVOX:Byrd* — #247 review fixes: filter-empty in month mode + date-column width)
+// (*MVOX:Tallis* — #312 RED: one segmented pill — radiogroup + roving tabindex; aria-pressed→aria-checked is the issue's stated contract change)
