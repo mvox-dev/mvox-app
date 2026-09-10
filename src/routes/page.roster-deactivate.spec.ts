@@ -40,7 +40,8 @@ const {
 	listInactiveMembersMock,
 	listDeactivateBlockersMock,
 	createInviteMock,
-	mintSelfLinkInviteMock
+	mintSelfLinkInviteMock,
+	loadMemberRecordMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
@@ -50,7 +51,8 @@ const {
 	listInactiveMembersMock: vi.fn(),
 	listDeactivateBlockersMock: vi.fn(),
 	createInviteMock: vi.fn(),
-	mintSelfLinkInviteMock: vi.fn()
+	mintSelfLinkInviteMock: vi.fn(),
+	loadMemberRecordMock: vi.fn()
 }));
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
 // profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
@@ -85,6 +87,12 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+// #302 — opening a card runs the editor's record lookup; resolve it so the
+// editor (and the deactivate controls now inside it) can mount.
+vi.mock('$lib/roster/memberRecord', async (importActual) => ({
+	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
+	loadMemberRecord: loadMemberRecordMock
+}));
 
 import Page from './roster/+page.svelte';
 import { LibraryLookupError, resolveMyLibraryId } from '$lib/library/librarianStore';
@@ -140,6 +148,7 @@ beforeEach(() => {
 	listInactiveMembersMock.mockResolvedValue([]);
 	// Restored per-test: the fail-closed case below makes it REJECT.
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
+	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
 afterEach(() => {
@@ -173,14 +182,40 @@ async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	return utils;
 }
 
+// #302 drive-path step (Gama's on-issue ruling): the deactivate controls
+// render inside the OPENED record editor, so reaching them takes an
+// open-the-card step first. Reaching a control is navigation — changed on
+// purpose by #302; every behaviour assertion below is untouched. Idempotent:
+// re-opening an already-open editor is skipped so mid-test re-drives are safe.
+async function openCard(container: HTMLElement, memberId: string) {
+	const li = container.querySelector(`[data-testid="roster-row-${memberId}"]`);
+	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
+	if (li!.querySelector('[data-testid="roster-record-name"]')) return; // already open
+	const card = container.querySelector(`[data-testid="roster-row-card-${memberId}"]`);
+	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
+	await fireEvent.click(card!);
+	await waitFor(() =>
+		expect(
+			container
+				.querySelector(`[data-testid="roster-row-${memberId}"]`)!
+				.querySelector('[data-testid="roster-record-name"]')
+		).not.toBeNull()
+	);
+}
+
 describe('(A) deactivate — admin-only, never self (done-when 7)', () => {
 	it('a collective admin sees the deactivate control on ANOTHER member\'s row', async () => {
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit: control lives in the opened editor
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).not.toBeNull();
 	});
 
 	it("the viewer's OWN row never carries a deactivate control — self-deactivation is impossible at the UI", async () => {
 		const { container } = await renderRosterAs('admin');
+		// #302 drive-path edit: the OWN card opens (the editor keeps no self-row
+		// exclusion) — and the deactivate control is still absent INSIDE it. The
+		// self-row asymmetry does not merge into the shared container.
+		await openCard(container, 'm1');
 		expect(container.querySelector('[data-testid="member-deactivate-m1"]')).toBeNull();
 	});
 
@@ -194,6 +229,7 @@ describe('(A) deactivate — admin-only, never self (done-when 7)', () => {
 describe('(A) two-step confirm — the page\'s existing destructive idiom, reused', () => {
 	it('arming swaps in confirm + cancel and writes NOTHING', async () => {
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -204,6 +240,7 @@ describe('(A) two-step confirm — the page\'s existing destructive idiom, reuse
 
 	it('cancel disarms — the arm control returns, still nothing written', async () => {
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull()
@@ -219,6 +256,7 @@ describe('(A) two-step confirm — the page\'s existing destructive idiom, reuse
 	it('confirm calls deactivateMember for THAT member and refetches the roster (she drops out of the active reads)', async () => {
 		const { container } = await renderRosterAs('admin');
 		const loadsBefore = loadRosterMock.mock.calls.length;
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -236,6 +274,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 	it('an admin-grant blocker REFUSES: no write, and the message carries the collective so it can say where to remove the role — never a bare "cannot deactivate"', async () => {
 		listDeactivateBlockersMock.mockResolvedValue([{ role: 'admin' }]);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -263,6 +302,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 	it('FAIL-CLOSED: when the rights read itself rejects, deactivate does NOT proceed', async () => {
 		listDeactivateBlockersMock.mockRejectedValue(new Error('rights read failed'));
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -292,6 +332,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [] }
 		]);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -324,6 +365,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 			new LibraryLookupError('library lookup failed: HTTP 500', 500)
 		);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -349,6 +391,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 	it('a genuine null library id still proceeds — no library is a FACT, not a failure', async () => {
 		vi.mocked(resolveMyLibraryId).mockResolvedValue(null);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -518,6 +561,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		loadInactiveRosterMock.mockResolvedValue([
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
 		]);
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -539,6 +583,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 		loadInactiveRosterMock.mockRejectedValue(new Error('inactive read failed'));
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -571,6 +616,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 	it('a rejected RIGHTS READ surfaces a role=alert on that row (not just a console line)', async () => {
 		listDeactivateBlockersMock.mockRejectedValue(new Error('rights read failed'));
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -600,6 +646,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		deactivateMemberMock.mockRejectedValue(new Error('403'));
 		const { container } = await renderRosterAs('admin');
 		const rosterLoadsBefore = loadRosterMock.mock.calls.length;
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -628,6 +675,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 	it('cancel-then-rearm after a failure: cancel disarms AND clears the alert; a fresh arm starts with no stale alert', async () => {
 		deactivateMemberMock.mockRejectedValue(new Error('403'));
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -648,6 +696,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull();
 		// Re-arm: a clean pair, no stale alert riding along.
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -746,6 +795,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -784,6 +834,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		deactivateMemberMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
 		const loadsBefore = loadRosterMock.mock.calls.length;
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -830,6 +881,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -865,6 +917,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		deactivateMemberMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
 		const loadsBefore = loadRosterMock.mock.calls.length;
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -897,6 +950,21 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		expect(deactivateMemberMock).toHaveBeenCalledTimes(1);
 	});
 
+	// #302 GUARD-DELETION CHECK (not a collective-switch test, so outside the
+	// on-issue ruling's letter — done anyway because its drive path gained an
+	// `openCard(container, 'm3')` that CLOSES m2's editor, materially changing
+	// what the frozen assertions below run against). Guard pinned: the #286
+	// single-arm-slot pair — `disabled={deactivatePending}` on
+	// `member-deactivate-{memberId}` (roster/+page.svelte:4066) AND the
+	// `if (deactivatePending) return;` first line of `armDeactivate` (:1010).
+	// [GREEN 2026-09-10 (review F2): deleting EITHER alone leaves the test
+	// green — each covers the other, exactly as the drive-path comment below
+	// claims ("a disabled attr alone does not stop a direct click", and the
+	// attribute alone stops `fireEvent`). Deleting BOTH — `disabled={false}`
+	// plus the `armDeactivate` early return commented out — made this test FAIL
+	// ("no second row may arm while a deactivation is in flight": m3's confirm
+	// button rendered where null was expected, at the steal assertion below). Restored — test
+	// PASSES. The added `openCard` steps still reach the guarded behaviour.]
 	it('a SECOND row cannot be armed mid-flight — the single arm slot is never stolen from the in-flight row', async () => {
 		loadRosterMock.mockResolvedValue([
 			...rosterTwo,
@@ -905,9 +973,12 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
+		// #302 drive-path edit: readiness was a wait on m3's row-level trigger,
+		// which no longer renders on a collapsed row — wait on m3's card instead.
 		await waitFor(() =>
-			expect(container.querySelector('[data-testid="member-deactivate-m3"]')).not.toBeNull()
+			expect(container.querySelector('[data-testid="roster-row-card-m3"]')).not.toBeNull()
 		);
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -915,6 +986,12 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
 		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
 
+		// #302 drive-path edit: reaching m3's trigger means opening m3's editor —
+		// which closes m2's (one editor at a time). The frozen assertions below
+		// therefore ALSO pin that an in-flight armed pair stays MOUNTED when its
+		// editor closes: destructive in-flight UI never silently unmounts. (See
+		// the armed-pair-exception note in page.roster-card-interaction.spec.ts.)
+		await openCard(container, 'm3');
 		// Arming m3 while m2's write is in flight would repoint the single
 		// `pendingDeactivateId` slot and ORPHAN m2's in-flight UI. Attribute
 		// and guard both — a disabled attr alone does not stop a direct click.
@@ -943,6 +1020,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -987,6 +1065,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
@@ -1165,6 +1244,19 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
 	});
 
+	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN, per
+	// relocated switch-guard test): after the drive-path edit below, delete the
+	// guard this test pins — the post-deactivate panel reload's settle guard,
+	// `if (!routeLoad.isCurrent(g)) return;` on the `loadInactiveRoster` await
+	// inside `handleDeactivateConfirm` (roster/+page.svelte:1187) — confirm
+	// THIS test FAILS, restore, confirm it passes. A frozen assertion proves
+	// nobody weakened the claim; only this check proves the open-editor step
+	// didn't detach the test from the guard (opening the editor could bump the
+	// sequence the test was written to exercise).
+	// [GREEN 2026-09-10 (review F2): guard commented out — this test FAILED at
+	// the reopen-on-B assertion (`inactive-member-row-m2` rendered on B where
+	// null was expected, at the reopen-on-B assertion below). Restored — test PASSES. The
+	// `openCard(container, 'm2')` drive-path edit still reaches the guard.]
 	it('a POST-DEACTIVATE panel reload that settles after a switch writes NOTHING', async () => {
 		const settlers = holdInactiveLoads();
 		const { container } = await renderTwoCollectiveRoster();
@@ -1184,6 +1276,7 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 
 		// Deactivate m2 with the panel open — the write lands, the roster
 		// refetches, and the panel reload (the vulnerable await) goes in flight.
+		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()

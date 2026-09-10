@@ -85,7 +85,8 @@ const {
 	listInactiveMembersMock,
 	listDeactivateBlockersMock,
 	createInviteMock,
-	mintSelfLinkInviteMock
+	mintSelfLinkInviteMock,
+	loadMemberRecordMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
@@ -102,7 +103,8 @@ const {
 	listInactiveMembersMock: vi.fn(),
 	listDeactivateBlockersMock: vi.fn(),
 	createInviteMock: vi.fn(),
-	mintSelfLinkInviteMock: vi.fn()
+	mintSelfLinkInviteMock: vi.fn(),
+	loadMemberRecordMock: vi.fn()
 }));
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
@@ -139,6 +141,12 @@ vi.mock('$lib/library/librarianStore', async (importActual) => ({
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+// #302 — opening a card runs the editor's record lookup; resolve it so the
+// editor (and the deactivate controls now inside it) can mount.
+vi.mock('$lib/roster/memberRecord', async (importActual) => ({
+	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
+	loadMemberRecord: loadMemberRecordMock
+}));
 
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
@@ -244,6 +252,7 @@ beforeEach(() => {
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 	vi.mocked(resolveLibrarian).mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
 afterEach(() => {
@@ -372,9 +381,29 @@ async function openInactivePanel(container: HTMLElement, memberId: string) {
 	});
 }
 
+// #302 drive-path step (Gama's on-issue ruling): the deactivate controls
+// render inside the OPENED record editor, so reaching them takes an
+// open-the-card step first. Idempotent — an already-open editor is left alone.
+async function openCard(container: HTMLElement, memberId: string) {
+	const li = q(container, `roster-row-${memberId}`);
+	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
+	if (li!.querySelector('[data-testid="roster-record-name"]')) return; // already open
+	const card = q(container, `roster-row-card-${memberId}`);
+	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
+	await fireEvent.click(card as HTMLElement);
+	await waitFor(() => {
+		expect(
+			q(container, `roster-row-${memberId}`)!.querySelector('[data-testid="roster-record-name"]')
+		).not.toBeNull();
+	});
+}
+
 // Arms the row's deactivate and confirms it (blocker read + library lookup
 // resolve from the beforeEach mocks unless a test holds them itself).
+// #302 drive-path edit: opens the row's card first — the trigger lives inside
+// the opened editor now. Everything the helper CLAIMS is unchanged.
 async function armAndConfirmDeactivate(container: HTMLElement, memberId: string) {
+	await openCard(container, memberId);
 	await fireEvent.click(q(container, `member-deactivate-${memberId}`) as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, `member-deactivate-confirm-${memberId}`)).not.toBeNull();
@@ -755,6 +784,16 @@ describe('/roster — #296 deactivateActionError writer catches across a collect
 		expect(q(container, 'member-reinstate-failed-m-ina')).toBeNull();
 	});
 
+	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN): after the
+	// drive-path edit (armAndConfirmDeactivate now opens the card first),
+	// delete the guard this test pins — the generation check on
+	// `handleDeactivateConfirm`'s CATCH-write of `deactivateActionError`
+	// (roster/+page.svelte, #296) — confirm THIS test FAILS, restore, confirm
+	// it passes. Opening editors must not have detached the race from the
+	// guard. [GREEN 2026-09-10: guard (line 1203, `if (gEntry !== routeLoad.generation)
+	// return;` before the catch-write of `deactivateActionError`) commented
+	// out — this test FAILED ("B's own failure alert must survive A's stale
+	// settle" — null). Restored — test PASSES.]
 	it("NO CROSS-COLLECTIVE CLOBBER (handleDeactivateConfirm's catch): B's OWN deactivate-failure alert survives A's stale deactivate failure settling after the switch", async () => {
 		const gateA = deferred();
 		deactivateMemberMock
@@ -796,6 +835,15 @@ describe('/roster — #296 deactivateActionError writer catches across a collect
 });
 
 describe('/roster — #296 amendment: deactivateRefusal refusal branch across a collective switch', () => {
+	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN): after the
+	// drive-path edit, delete the guard this test pins — the generation check
+	// on the REFUSAL-branch write of `deactivateRefusal` in
+	// `handleDeactivateConfirm` (roster/+page.svelte, #296 amendment) —
+	// confirm THIS test FAILS, restore, confirm it passes.
+	// [GREEN 2026-09-10: guard (line 1137, `if (gEntry !== routeLoad.generation)
+	// return;` before the refusal-branch write of `deactivateRefusal`)
+	// commented out — this test FAILED ("B's own refusal must survive A's
+	// stale refusal settle" — null). Restored — test PASSES.]
 	it("NO CROSS-COLLECTIVE CLOBBER (the REFUSAL branch, not the catch): B's OWN grant-holder refusal survives A's stale refusal settling after the switch", async () => {
 		// The refusal is the designed NON-ERROR outcome: the blockers read
 		// resolves non-empty and the write is refused before it starts. A spec

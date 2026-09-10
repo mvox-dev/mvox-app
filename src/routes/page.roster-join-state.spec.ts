@@ -41,6 +41,13 @@
 //
 // Copy (kutsu / saada uuesti / tühista kutse) rides the paraglide keys the
 // i18n phase adds; the testids below are this suite's contract.
+//
+// #302 (Gama's on-issue ruling): the invite controls moved INSIDE the opened
+// record editor and the JOINED badge went silent. Drive paths below gained an
+// `openCard` step (reaching a control is navigation, changed on purpose);
+// behaviour assertions are untouched — EXCEPT the joined-badge existence
+// pins, which #302 item 2 falsifies by design (joined = no chip at all) and
+// which are rewritten here against the new display contract.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -66,7 +73,8 @@ const {
 	mintSelfLinkInviteMock,
 	withdrawInviteMock,
 	listJoinStatesMock,
-	resolveOwnerTierMock
+	resolveOwnerTierMock,
+	loadMemberRecordMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
@@ -79,7 +87,8 @@ const {
 	mintSelfLinkInviteMock: vi.fn(),
 	withdrawInviteMock: vi.fn(),
 	listJoinStatesMock: vi.fn(),
-	resolveOwnerTierMock: vi.fn()
+	resolveOwnerTierMock: vi.fn(),
+	loadMemberRecordMock: vi.fn()
 }));
 
 vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
@@ -106,6 +115,12 @@ vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 vi.mock('$lib/nav/adminStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/nav/adminStore')>()),
 	resolveOwnerTier: resolveOwnerTierMock
+}));
+// #302 — opening a card runs the editor's record lookup; resolve it so the
+// editor (and the controls now inside it) can mount.
+vi.mock('$lib/roster/memberRecord', async (importActual) => ({
+	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
+	loadMemberRecord: loadMemberRecordMock
 }));
 vi.mock('$lib/library/librarianStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/library/librarianStore')>()),
@@ -219,6 +234,7 @@ beforeEach(() => {
 	loadInactiveRosterMock.mockResolvedValue([]);
 	listInactiveMembersMock.mockResolvedValue([]);
 	listDeactivateBlockersMock.mockResolvedValue([]);
+	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
 afterEach(() => {
@@ -273,15 +289,37 @@ async function switchToOtherChoir(container: HTMLElement) {
 	await waitFor(() => expect(q(container, 'roster-row-m-bob')).not.toBeNull());
 }
 
+// #302 drive-path step: the invite controls render inside the opened record
+// editor, so reaching them takes an open-the-card step first. Idempotent —
+// re-opening an already-open editor is skipped so mid-test re-drives are safe.
+async function openCard(container: HTMLElement, memberId: string) {
+	const li = q(container, `roster-row-${memberId}`);
+	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
+	if (li!.querySelector('[data-testid="roster-record-name"]')) return; // already open
+	const card = q(container, `roster-row-card-${memberId}`);
+	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
+	await fireEvent.click(card!);
+	await waitFor(() =>
+		expect(
+			q(container, `roster-row-${memberId}`)!.querySelector('[data-testid="roster-record-name"]')
+		).not.toBeNull()
+	);
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('(A) three-state display — every admin, contents not presence', () => {
-	it('an owner-admin sees one badge per row, each carrying the state read from entu_user CONTENTS', async () => {
+	// #302 item 2 REWRITE (the one assertion class this issue falsifies by
+	// design): joined is the SILENT default — no chip at all — while
+	// not-invited and invited-awaiting keep their distinct chips. The old
+	// existence pin on m2's 'joined' badge is replaced, not weakened: the
+	// distinguishability claim #294 made now lives in the two chips that stay.
+	it('an owner-admin sees chips read from entu_user CONTENTS on the non-joined rows — and NO chip on a joined row', async () => {
 		const { container } = await renderRoster();
 		await waitFor(() =>
-			expect(q(container, 'roster-row-join-state-m2')).not.toBeNull()
+			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
 		);
-		expect(q(container, 'roster-row-join-state-m2')!.getAttribute('data-join-state')).toBe('joined');
+		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
 	});
@@ -298,13 +336,14 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).not.toBe('joined');
 	});
 
-	it('an EDITOR-admin sees the same three badges — the display is for every admin (PO ruling 2026-09-09)', async () => {
+	it('an EDITOR-admin sees the same chips — the display is for every admin (PO ruling 2026-09-09; #302: readiness gate repointed at a chip that still renders)', async () => {
 		const { container } = await renderRoster({ tier: 'editor' });
 		await waitFor(() =>
-			expect(q(container, 'roster-row-join-state-m2')).not.toBeNull()
+			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
 		);
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
+		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
 	});
 
 	it('a NON-admin sees no join-state badge on any row', async () => {
@@ -326,6 +365,7 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 describe('(B) controls route by state — owner-admin', () => {
 	it('never-invited row (m4): kutsu, and ONLY kutsu', async () => {
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		expect(q(container, 'roster-member-reinvite-m4')).toBeNull();
 		expect(q(container, 'roster-member-withdraw-m4')).toBeNull();
@@ -333,15 +373,19 @@ describe('(B) controls route by state — owner-admin', () => {
 
 	it('invited row (m3): saada uuesti AND tühista kutse — and kutsu is UNREACHABLE (a kutsu on a live-link row is a state-routing bug)', async () => {
 		const { container } = await renderRoster();
+		await openCard(container, 'm3'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull());
 		expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull();
 		expect(q(container, 'roster-member-invite-m3')).toBeNull();
 	});
 
-	it('joined rows (m1, m2): no controls at all', async () => {
+	it('joined rows (m1, m2): no controls at all — even with their own editors OPEN (#302: the absence must be meaningful, not just the closed-editor default)', async () => {
 		const { container } = await renderRoster();
-		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
+		// Readiness: the fan-out landed (an invited row's chip is on screen), so
+		// an absence below is the CONTRACT, not an unresolved load.
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		for (const memberId of ['m1', 'm2']) {
+			await openCard(container, memberId); // #302 drive-path edit (one at a time)
 			expect(q(container, `roster-member-invite-${memberId}`)).toBeNull();
 			expect(q(container, `roster-member-reinvite-${memberId}`)).toBeNull();
 			expect(q(container, `roster-member-withdraw-${memberId}`)).toBeNull();
@@ -357,6 +401,9 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 		await waitFor(() =>
 			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
 		);
+		// #302 drive-path edit: the controls' new home is the opened editor —
+		// open one so the absence is asserted where they would render.
+		await openCard(container, 'm3');
 		expect(allControls(container)).toHaveLength(0);
 		const notes = container.querySelectorAll('[data-testid="roster-invite-owner-note"]');
 		expect(notes.length).toBeGreaterThanOrEqual(1);
@@ -365,6 +412,7 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 
 	it('an owner-admin gets the controls and NO owner-rights note', async () => {
 		const { container } = await renderRoster({ tier: 'owner' });
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		expect(q(container, 'roster-invite-owner-note')).toBeNull();
 	});
@@ -380,6 +428,7 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 		await waitFor(() =>
 			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
 		);
+		await openCard(container, 'm3'); // #302 drive-path edit
 		expect(allControls(container)).toHaveLength(0);
 	});
 
@@ -397,6 +446,7 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 	it('calls mintSelfLinkInvite (sweep-then-mint) for THAT person, NEVER createInvite, and surfaces the fresh link — the token is the deliverable', async () => {
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
@@ -418,6 +468,7 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 			return { inviteToken: 'tok-fresh-1' };
 		});
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(q(container, 'roster-member-reinvite-m4')).not.toBeNull());
@@ -431,6 +482,7 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 			new Error('self-link mint refused: HTTP 403 — the person lacks self-_editor')
 		);
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		const alertEl = await waitFor(() => {
@@ -447,6 +499,7 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 describe('(E) saada uuesti — atomic replace via the sweep-then-mint producer', () => {
 	it('calls mintSelfLinkInvite for the invited person (the invariant — old link dies in the same action — is pinned at the wire in inviteData.withdraw.spec.ts), never createInvite, and surfaces the fresh link', async () => {
 		const { container } = await renderRoster();
+		await openCard(container, 'm3'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-reinvite-m3')!);
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
@@ -467,6 +520,7 @@ describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invi
 			joinStatesByDb.polyphony[personId] = 'absent';
 		});
 		const { container } = await renderRoster();
+		await openCard(container, 'm3'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-withdraw-m3')!);
 		await waitFor(() => expect(withdrawInviteMock).toHaveBeenCalledTimes(1));
@@ -484,6 +538,7 @@ describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invi
 			new Error('withdraw failed: HTTP 500 on property eu-old-2 — a placeholder survives')
 		);
 		const { container } = await renderRoster();
+		await openCard(container, 'm3'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-withdraw-m3')!);
 		const alertEl = await waitFor(() => {
@@ -507,6 +562,7 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		// state belongs in routeLoad's reset({isSwitch}) block
 		// (roster/+page.svelte:116) alongside the #287 resets.
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(q(container, 'roster-invite-link-m4')).not.toBeNull());
@@ -563,6 +619,7 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
 		await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
 		await waitFor(() => expect(q(utils.container, 'roster-row-join-state-m-bob')).not.toBeNull());
+		await openCard(utils.container, 'm-bob'); // #302 drive-path edit
 		expect(q(utils.container, 'roster-member-invite-m-bob')).not.toBeNull();
 		return { ...utils, settleA };
 	}
@@ -609,6 +666,15 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 	});
 });
 
+// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN, both tests
+// below — their drive paths gained openCard steps): delete the guard each
+// pins — the route-load reset callback's unconditional
+// `inviteActionPending = false` clear (roster/+page.svelte, #294 review
+// block) — confirm BOTH tests FAIL, restore, confirm they pass. Opening
+// editors before/after the bump must not have detached the tests from the
+// guard. [GREEN 2026-09-10: guard (line 233, reset callback's unconditional
+// `inviteActionPending = false`) commented out — BOTH tests below FAILED
+// (`disabled` stayed `true` instead of `false`). Restored — both PASS.]
 describe('(I) a generation bump during an in-flight invite write re-enables the controls (#287 discipline)', () => {
 	/** Holds mintSelfLinkInvite open so `inviteActionPending` is true across the
 	 *  bump; the write's own `finally` is generation-guarded and will not clear
@@ -627,11 +693,13 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 	it('a COLLECTIVE SWITCH mid-mint leaves the new roster\'s controls enabled, not permanently disabled', async () => {
 		const release = heldMint();
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 
 		await switchToOtherChoir(container);
+		await openCard(container, 'm-bob'); // #302 drive-path edit (switch closed any editor)
 		release();
 		await new Promise((r) => setTimeout(r, 0));
 		await tick();
@@ -644,12 +712,17 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 	it('a SAME-COLLECTIVE refresh mid-mint (a deactivate reload) leaves the controls enabled too', async () => {
 		const release = heldMint();
 		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 
 		// Any successful deactivate calls loadForSelected() — a generation bump
 		// with no collective switch at all.
+		// #302 drive-path edit: the deactivate trigger lives inside m2's opened
+		// editor now (opening it closes m4's — one editor at a time; the held
+		// mint is page-level state, untouched by which editor is open).
+		await openCard(container, 'm2');
 		await fireEvent.click(q(container, 'member-deactivate-m2')!);
 		await waitFor(() => expect(q(container, 'member-deactivate-confirm-m2')).not.toBeNull());
 		await fireEvent.click(q(container, 'member-deactivate-confirm-m2')!);
@@ -664,6 +737,9 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 		}
 		await waitFor(() => expect(q(container, 'roster-row-m4')).not.toBeNull());
 
+		// #302 drive-path edit: the reload's reset closed every editor — reopen
+		// m4's to reach the control the assertion pins.
+		await openCard(container, 'm4');
 		const control = q(container, 'roster-member-invite-m4');
 		expect(control).not.toBeNull();
 		expect((control as HTMLButtonElement).disabled).toBe(false);

@@ -6,14 +6,16 @@
 // Contract: issue #268 body + release comment ("in-row expansion, roster only,
 // labels as proposed").
 //
-//   (A) Pencil affordance `roster-row-record-edit-{memberId}` on the member
-//       row, admin-only via whole-block gating (ABSENT — not disabled — for
-//       non-admin/loading/error, the page's fail-closed precedent). NO
-//       self-row exclusion: the contract doesn't ask for one, so the pencil is
-//       pinned PRESENT on the admin's OWN row (guards against copy-pasting the
-//       deactivate control's self-exclusion). Accessible name per the #262
-//       lesson: static sr-only label composed with the row's visible name
-//       INSIDE the button — never a templated aria-label.
+//   (A) Activator affordance on the member row — since #302 the WHOLE
+//       collapsed card (`roster-row-card-{memberId}`, replacing the retired
+//       pencil `roster-row-record-edit-{memberId}`), admin-only via
+//       whole-block gating (ABSENT — not disabled — for non-admin/loading/
+//       error, the page's fail-closed precedent). NO self-row exclusion: the
+//       contract doesn't ask for one, so the activator is pinned PRESENT on
+//       the admin's OWN row (guards against copy-pasting the deactivate
+//       control's self-exclusion). Accessible name per the #262 lesson:
+//       static sr-only label composed with the row's visible name INSIDE the
+//       button — never a templated aria-label.
 //   (B) Editor opens IN PLACE inside the same <li> (#222 same-frame idiom —
 //       no drawer/dialog/overlay; SectionPicker's dropdown is the WRONG
 //       precedent). One editor open at a time. Close-without-save creates
@@ -233,8 +235,12 @@ async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	return utils;
 }
 
+// #302 drive-path edit (Gama's on-issue ruling): the activator is the whole
+// collapsed card now — same one-click open, new target. Assertions untouched.
 async function openEditor(container: HTMLElement, memberId: string) {
-	await fireEvent.click(q(container, `roster-row-record-edit-${memberId}`)!);
+	const card = q(container, `roster-row-card-${memberId}`);
+	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
+	await fireEvent.click(card!);
 	await waitFor(() => {
 		const li = q(container, `roster-row-${memberId}`)!;
 		expect(li.querySelector('[data-testid="roster-record-name"]')).not.toBeNull();
@@ -254,39 +260,44 @@ const birthdateInput = (c: HTMLElement) =>
 const idCodeInput = (c: HTMLElement) =>
 	c.querySelector('[data-testid="roster-record-id-code"]') as HTMLInputElement;
 
-describe('(A) pencil affordance — admin-only, whole-block, every display view', () => {
-	it("admin sees the pencil on another member's row", async () => {
+// #302 — these existence pins were written against the pencil, an element the
+// issue deletes on purpose; they are REWRITTEN against the whole-card
+// activator (`roster-row-card-{memberId}`), which inherits the pencil's whole
+// contract: admin-only, no self-row exclusion, #262 content-derived name,
+// present in every display view that renders member rows.
+describe('(A) card activator — admin-only, whole-block, every display view (#302: pencil retired)', () => {
+	it("admin sees the card activator on another member's row", async () => {
 		const { container } = await renderRosterAs('admin');
-		expect(q(container, 'roster-row-record-edit-m2')).not.toBeNull();
+		expect(q(container, 'roster-row-card-m2')).not.toBeNull();
 	});
 
-	it("the pencil IS present on the admin's OWN row — the contract has no self-row exclusion (deactivate-guard copy-paste trap)", async () => {
+	it("the activator IS present on the admin's OWN row — the contract has no self-row exclusion (deactivate-guard copy-paste trap)", async () => {
 		const { container } = await renderRosterAs('admin');
-		expect(q(container, 'roster-row-record-edit-m1')).not.toBeNull();
+		expect(q(container, 'roster-row-card-m1')).not.toBeNull();
 	});
 
-	it('a non-admin sees NO pencil anywhere — absent, not disabled (whole-block gating)', async () => {
+	it('a non-admin sees NO activator anywhere — absent, not disabled (whole-block gating)', async () => {
 		const { container } = await renderRosterAs('not-admin');
-		expect(container.querySelector('[data-testid^="roster-row-record-edit-"]')).toBeNull();
+		expect(container.querySelector('[data-testid^="roster-row-card-"]')).toBeNull();
 	});
 
 	it('accessible name per #262: a static sr-only label composed with the row\'s visible member name INSIDE the button — never a templated aria-label', async () => {
 		const { container } = await renderRosterAs('admin');
-		const btn = q(container, 'roster-row-record-edit-m2')!;
+		const btn = q(container, 'roster-row-card-m2')!;
 		expect(btn.textContent).toContain('[roster_record_edit_label]');
 		expect(btn.textContent).toContain('Berta Bass');
 		// aria-label would OVERRIDE descendant content and swallow the name.
 		expect(btn.getAttribute('aria-label')).toBeNull();
 	});
 
-	it('flat (alphabetical) list call site: the pencil renders there too', async () => {
+	it('flat (alphabetical) list call site: the activator renders there too', async () => {
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-flat-list')).not.toBeNull());
-		expect(q(container, 'roster-row-record-edit-m2')).not.toBeNull();
+		expect(q(container, 'roster-row-card-m2')).not.toBeNull();
 	});
 
-	it('section-group call site: a member inside an expanded section group carries the pencil', async () => {
+	it('section-group call site: a member inside an expanded section group carries the activator', async () => {
 		listSectionsMock.mockResolvedValue([altoSection]);
 		loadRosterMock.mockResolvedValue([
 			...rosterTwo,
@@ -298,14 +309,14 @@ describe('(A) pencil affordance — admin-only, whole-block, every display view'
 		await waitFor(() => expect(q(utils.container, 'section-toggle-sec-alto')).not.toBeNull());
 		await fireEvent.click(q(utils.container, 'section-toggle-sec-alto')!);
 		await waitFor(() => expect(q(utils.container, 'roster-row-m3')).not.toBeNull());
-		expect(q(utils.container, 'roster-row-record-edit-m3')).not.toBeNull();
+		expect(q(utils.container, 'roster-row-card-m3')).not.toBeNull();
 	});
 
-	it('arrange mode renders no member rows — no pencil by construction', async () => {
+	it('arrange mode renders no member rows — no activator by construction', async () => {
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(q(container, 'roster-view-chip-arrange')!);
 		await waitFor(() => expect(q(container, 'roster-arrange-list')).not.toBeNull());
-		expect(container.querySelector('[data-testid^="roster-row-record-edit-"]')).toBeNull();
+		expect(container.querySelector('[data-testid^="roster-row-card-"]')).toBeNull();
 	});
 });
 
@@ -446,7 +457,9 @@ describe('(D) damaged data — more than one record (#264: loud, no guessing, no
 	it('surfaces a role=alert naming the member, renders NO editor fields, and never writes', async () => {
 		loadMemberRecordMock.mockResolvedValue({ state: 'damaged', count: 2 });
 		const { container } = await renderRosterAs('admin');
-		await fireEvent.click(q(container, 'roster-row-record-edit-m2')!);
+		// #302 drive-path edit: inline (helper's waitFor on roster-record-name
+		// never resolves on damaged data) — same new activator target.
+		await fireEvent.click(q(container, 'roster-row-card-m2')!);
 		const alert = await waitFor(() => {
 			const el = q(container, 'roster-record-damaged-m2');
 			expect(el).not.toBeNull();

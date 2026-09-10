@@ -65,7 +65,8 @@ const {
 	listInactiveMembersMock,
 	listDeactivateBlockersMock,
 	createInviteMock,
-	mintSelfLinkInviteMock
+	mintSelfLinkInviteMock,
+	loadMemberRecordMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
@@ -82,7 +83,8 @@ const {
 	listInactiveMembersMock: vi.fn(),
 	listDeactivateBlockersMock: vi.fn(),
 	createInviteMock: vi.fn(),
-	mintSelfLinkInviteMock: vi.fn()
+	mintSelfLinkInviteMock: vi.fn(),
+	loadMemberRecordMock: vi.fn()
 }));
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
@@ -119,6 +121,12 @@ vi.mock('$lib/library/librarianStore', async (importActual) => ({
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+// #302 — opening a card runs the editor's record lookup; resolve it so the
+// editor (and the deactivate controls now inside it) can mount.
+vi.mock('$lib/roster/memberRecord', async (importActual) => ({
+	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
+	loadMemberRecord: loadMemberRecordMock
+}));
 
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
@@ -209,6 +217,7 @@ beforeEach(() => {
 	listInactiveMembersMock.mockResolvedValue([]);
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
+	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
 afterEach(() => {
@@ -310,9 +319,29 @@ async function switchToOtherChoirGroups(container: HTMLElement) {
 	});
 }
 
+// #302 drive-path step (Gama's on-issue ruling): the deactivate controls
+// render inside the OPENED record editor, so reaching them takes an
+// open-the-card step first. Idempotent — an already-open editor is left alone.
+async function openCard(container: HTMLElement, memberId: string) {
+	const li = q(container, `roster-row-${memberId}`);
+	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
+	if (li!.querySelector('[data-testid="roster-record-name"]')) return; // already open
+	const card = q(container, `roster-row-card-${memberId}`);
+	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
+	await fireEvent.click(card as HTMLElement);
+	await waitFor(() => {
+		expect(
+			q(container, `roster-row-${memberId}`)!.querySelector('[data-testid="roster-record-name"]')
+		).not.toBeNull();
+	});
+}
+
 // Arms the row's deactivate and confirms it into the HELD write (the blocker
 // read and the library lookup resolve immediately from the beforeEach mocks).
+// #302 drive-path edit: opens the row's card first — the trigger lives inside
+// the opened editor now. Everything the helper CLAIMS is unchanged.
 async function startHeldDeactivate(container: HTMLElement, memberId: string, nthWrite: number) {
+	await openCard(container, memberId);
 	await fireEvent.click(q(container, `member-deactivate-${memberId}`) as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, `member-deactivate-confirm-${memberId}`)).not.toBeNull();
@@ -450,6 +479,18 @@ describe('/roster — #287 removePending across a collective switch', () => {
 });
 
 describe('/roster — #287 deactivatePending across a collective switch', () => {
+	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN, per
+	// relocated switch-guard test): after the drive-path edit below, delete the
+	// guard this test pins — the route-load reset callback's unconditional
+	// `deactivatePending = false` clear (roster/+page.svelte, #287 block) —
+	// confirm THIS test FAILS, restore, confirm it passes. A frozen assertion
+	// proves nobody weakened the claim; only this check proves the
+	// open-editor step didn't detach the test from the guard (opening the
+	// editor could bump the sequence the test was written to exercise).
+	// [GREEN 2026-09-10: guard (line 216, reset callback's unconditional
+	// `deactivatePending = false`) commented out — this test FAILED
+	// ("B's deactivate trigger must not be disabled..." false→true).
+	// Restored — test PASSES. The drive-path edit still reaches the guard.]
 	it("STALE DISABLE: with collective A's deactivate WRITE still in flight, collective B's deactivate trigger renders ENABLED from load", async () => {
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
@@ -457,6 +498,9 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 
 		await startHeldDeactivate(container, 'm-ada', 1);
 		await switchToOtherChoirGroups(container);
+		// #302 drive-path edit: the switch closed every editor — open Bob's card
+		// to reach the trigger the assertion pins.
+		await openCard(container, 'm-bob');
 
 		// Pre-fix `deactivatePending` is still true (never cleared on switch),
 		// so Bob's trigger — `disabled={deactivatePending}` — renders disabled
@@ -472,6 +516,16 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 		await flush();
 	});
 
+	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN): after the
+	// drive-path edit below, delete the guard this test pins — the
+	// generation-guarded `finally` (and the guarded success writes) in
+	// `handleDeactivateConfirm` (roster/+page.svelte, #287) — confirm THIS
+	// test FAILS, restore, confirm it passes. Opening Bob's editor before
+	// arming must not have bumped the generation sequence this race is built
+	// on. [GREEN 2026-09-10: guard (line 1219, `if (gEntry === routeLoad.generation)
+	// deactivatePending = false` in handleDeactivateConfirm's finally) made
+	// unconditional — this test FAILED ("B's write is STILL in flight — confirm
+	// stays disabled" true→false). Restored — test PASSES.]
 	it("LATE-SETTLE CLOBBER: A's stale settle lands AFTER a genuine new deactivate has started on B — B's armed pair stays mounted, disabled and aria-busy; no double-fire; B then completes honestly", async () => {
 		const gateA = deferred();
 		const gateB = deferred();
@@ -482,6 +536,10 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 
 		await startHeldDeactivate(container, 'm-ada', 1);
 		await switchToOtherChoirGroups(container);
+		// #302 drive-path edit: open Bob's card so the precondition can read his
+		// trigger (startHeldDeactivate below would open it anyway — the
+		// precondition assert just comes first).
+		await openCard(container, 'm-bob');
 
 		// Precondition (= the STALE DISABLE pin).
 		expect(

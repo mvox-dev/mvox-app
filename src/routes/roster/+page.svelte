@@ -3678,183 +3678,24 @@
 	});
 </script>
 
-{#snippet memberRow(row: RosterRow, showSection: boolean)}
-	{@const rowSectionNames = (row.sectionIds ?? [])
-		.map((id) => sectionNameById.get(id))
-		.filter((name): name is string => Boolean(name))}
-	<li
-		data-testid="roster-row-{row.memberId}"
-		class="flex flex-col gap-0.5 border-b border-dashed border-ink-5 py-2 last:border-b-0"
-	>
-		<span data-testid="roster-row-name" class="text-sm text-ink">{row.name}</span>
-		{#if row.email}
-			<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
-		{/if}
-		{#if showSection && rowSectionNames.length > 0}
-			<span data-testid="roster-row-section" class="text-xs text-ink-2">{rowSectionNames.join(', ')}</span>
-		{/if}
-		{#if admin === 'admin'}
-			<!-- #268 — the admin member-record editor. Whole-block gated on `admin`
-			     alone: the contract has NO self-row exclusion (unlike the deactivate
-			     block below, which never lets an admin act on her own row), so the
-			     pencil renders on EVERY row including the admin's own — deliberately
-			     not copy-pasting the `row.personId !== selected?.personId` guard. -->
-			<div>
-				<!-- #262 lesson: the accessible name is content-derived (sr-only
-				     action label + the row's own name), NEVER a templated aria-label
-				     — an aria-label would compute the SAME literal text for every row
-				     (a static i18n string has no room for `{name}`), leaving a
-				     screen reader unable to tell rows' pencils apart. -->
-				<button
-					type="button"
-					data-testid="roster-row-record-edit-{row.memberId}"
-					class="group flex items-center gap-1 rounded-md border border-transparent px-1 py-0.5 text-xs text-ink-2 hover:border-ink-4 hover:text-ink"
-					onclick={() => openRecordEditor(row)}
-				>
-					<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
-					<!-- #269 — this label is OUT of the contracted surface (the roster-only
-					     scope ruling names the `roster-row-name` span alone); it keeps
-					     naming the member by her PROFILE name even while her row shows a
-					     real one. -->
-					<span class="sr-only">{m.roster_record_edit_label()} {row.profileName ?? row.name}</span>
-				</button>
-				{#if recordEditorMemberId === row.memberId}
-					{#if recordEditorLookup?.state === 'damaged'}
-						<!-- (D) #264 — damaged data: loud, names the member, refuses to
-						     guess. No form renders; nothing is ever written from here.
-						     #269 — profile name (see the pencil label's note above). -->
-						<p
-							data-testid="roster-record-damaged-{row.memberId}"
-							role="alert"
-							class="mt-1 text-xs text-red-700"
-						>
-							{m.roster_record_damaged({ name: row.profileName ?? row.name })}
-						</p>
-					{:else if recordEditorLookup !== null}
-						<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
-						     this <li>, not a dialog/drawer/overlay. -->
-						<div class="mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2">
-							<label class="flex flex-col gap-1 text-xs">
-								{m.roster_record_name_label()}
-								<input
-									type="text"
-									required
-									data-testid="roster-record-name"
-									bind:value={recordForm.name}
-									disabled={recordSavingMemberId !== null}
-									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-								/>
-							</label>
-							<label class="flex flex-col gap-1 text-xs">
-								{m.roster_record_phone_label()}
-								<input
-									type="tel"
-									data-testid="roster-record-phone"
-									bind:value={recordForm.phone}
-									disabled={recordSavingMemberId !== null}
-									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-								/>
-							</label>
-							<label class="flex flex-col gap-1 text-xs">
-								{m.roster_record_email_label()}
-								<input
-									type="email"
-									data-testid="roster-record-email"
-									bind:this={emailInputEl}
-									bind:value={recordForm.email}
-									disabled={recordSavingMemberId !== null}
-									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-								/>
-							</label>
-							<label class="flex flex-col gap-1 text-xs">
-								{m.roster_record_birthdate_label()}
-								<!-- #207 — the platform's OWN date picker, never a custom
-								     calendar. -->
-								<input
-									type="date"
-									data-testid="roster-record-birthdate"
-									bind:value={recordForm.birthdate}
-									disabled={recordSavingMemberId !== null}
-									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-								/>
-							</label>
-							<label class="flex flex-col gap-1 text-xs">
-								{m.roster_record_id_code_label()}
-								<input
-									type="text"
-									data-testid="roster-record-id-code"
-									bind:value={recordForm.id_code}
-									disabled={recordSavingMemberId !== null}
-									class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-								/>
-							</label>
-							<div class="flex items-center gap-2">
-								<button
-									type="button"
-									data-testid="roster-record-save"
-									disabled={recordSavingMemberId !== null}
-									class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
-									onclick={() => saveRecordEditor(row)}
-								>
-									{m.roster_record_save()}
-								</button>
-								<!-- Review F3 — cancel stays live while ANOTHER row's write is in
-								     flight: closing this editor writes nothing and cancels nothing
-								     already on the wire, so trapping the admin behind an unrelated
-								     save would be worse than useless. -->
-								<button
-									type="button"
-									data-testid="roster-record-cancel"
-									disabled={recordSavingMemberId === row.memberId}
-									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-									onclick={cancelRecordEditor}
-								>
-									{m.roster_record_cancel()}
-								</button>
-							</div>
-							{#if recordSaveError?.memberId === row.memberId}
-								<!-- (E) failure tells the truth (#253): a plain failure says
-								     nothing was saved; a MemberRecordPartialSaveError gets its
-								     OWN copy naming exactly which fields landed — never the
-								     all-or-nothing message, and never a field VALUE. Typed
-								     values stay in the inputs above either way (they're
-								     `bind:value`d to `recordForm`, untouched by either branch). -->
-								<p data-testid="roster-record-save-error" role="alert" class="text-xs text-red-700">
-									{#if recordSaveError.kind === 'partial'}
-										{m.roster_record_save_partial({
-											saved: recordSaveError.savedFields
-												.map((f) => RECORD_FIELD_LABEL[f as keyof typeof RECORD_FIELD_LABEL]())
-												.join(', ')
-										})}
-									{:else if recordSaveError.kind === 'name-required'}
-										{m.roster_record_name_required()}
-									{:else if recordSaveError.kind === 'phone-invalid'}
-										{m.roster_record_phone_invalid()}
-									{:else if recordSaveError.kind === 'email-invalid'}
-										{m.roster_record_email_invalid()}
-									{:else if recordSaveError.kind === 'id-code-invalid'}
-										{m.roster_record_id_code_invalid()}
-									{:else}
-										{m.roster_record_save_failed()}
-									{/if}
-								</p>
-							{/if}
-						</div>
-					{/if}
-				{/if}
-			</div>
-		{/if}
-		{#if admin === 'admin' && joinStates[row.personId] !== undefined}
-			<!-- #294 — the three-state badge: EVERY admin sees it (PO ruling
-			     2026-09-09 — the display is a rights ANSWER read the same way for
-			     owner and editor; the probe showed a `_viewer`-level read already
-			     returns the placeholder shape). Discriminated on the underlying identity
-			     property's CONTENTS by `listJoinStates`, never on presence — this span only
-			     renders the state the data layer already resolved, it makes no
-			     judgement of its own. `data-join-state` carries the raw value for
-			     the test surface; the visible text is the i18n label, matching the
-			     event/library badge idiom (lookup-table CSS class keyed by state). -->
-			{@const state = joinStates[row.personId]}
+{#snippet rowInfo(row: RosterRow, showSection: boolean, rowSectionNames: string[])}
+	<!-- #302 item 2 — the join-state badge moved here, directly under name +
+	     email, BEFORE the section name. Joined is the SILENT default (no chip
+	     at all); not-invited and invited-awaiting keep DISTINCT chips — if both
+	     were silent the two states #294 exists to distinguish would collapse
+	     into one. Still contents-derived via `listJoinStates` (never presence),
+	     still every admin tier (PO ruling 2026-09-09) — unchanged, only moved
+	     and the joined case gone quiet. Shared between the collapsed card
+	     (rendered as this snippet's caller, wrapped in the activator button)
+	     and the non-admin/open-editor callers, so the info itself is defined
+	     exactly once regardless of which state renders it. -->
+	<span data-testid="roster-row-name" class="text-sm text-ink">{row.name}</span>
+	{#if row.email}
+		<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
+	{/if}
+	{#if admin === 'admin' && joinStates[row.personId] !== undefined}
+		{@const state = joinStates[row.personId]}
+		{#if state !== 'joined'}
 			<span
 				data-testid="roster-row-join-state-{row.memberId}"
 				data-join-state={state}
@@ -3864,150 +3705,340 @@
 			>
 				{JOIN_STATE_LABEL[state]()}
 			</span>
-			{#if ownerTier === 'owner'}
-				<!-- The three controls, `_owner` ONLY (PO ruling — the platform
-				     itself enforces this: the 2026-09-09 admin-cascade probe minted
-				     onto another person as a db-entity `_owner`, HTTP 200; refused as
-				     `_editor`, HTTP 403 "User not in _owner property"). Routed PURELY
-				     off `state` — `kutsu` on a live-link row would be a state-routing
-				     bug, not a case handled here. An editor-admin gets the single
-				     global note below instead of THIS block; see its own comment. -->
-				<div class="flex flex-wrap items-center gap-2">
-					{#if state === 'absent'}
-						<button
-							type="button"
-							data-testid="roster-member-invite-{row.memberId}"
-							disabled={inviteActionPending}
-							class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-							onclick={() => handleMintInvite(row)}
-						>
-							{m.roster_member_invite()}
-						</button>
-					{:else if state === 'invited'}
-						<button
-							type="button"
-							data-testid="roster-member-reinvite-{row.memberId}"
-							disabled={inviteActionPending}
-							class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-							onclick={() => handleMintInvite(row)}
-						>
-							{m.roster_member_reinvite()}
-						</button>
-						<button
-							type="button"
-							data-testid="roster-member-withdraw-{row.memberId}"
-							disabled={inviteActionPending}
-							class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-							onclick={() => handleWithdrawInvite(row)}
-						>
-							{m.roster_member_withdraw()}
-						</button>
+		{/if}
+	{/if}
+	{#if showSection && rowSectionNames.length > 0}
+		<span data-testid="roster-row-section" class="text-xs text-ink-2">{rowSectionNames.join(', ')}</span>
+	{/if}
+{/snippet}
+
+{#snippet memberRow(row: RosterRow, showSection: boolean)}
+	{@const rowSectionNames = (row.sectionIds ?? [])
+		.map((id) => sectionNameById.get(id))
+		.filter((name): name is string => Boolean(name))}
+	<!-- #302 review F1 — `relative` is what makes the card activator below a
+	     STRETCHED OVERLAY (`absolute inset-0`) rather than a strip of its own:
+	     the whole card area activates while the name/email/chip stay plain,
+	     unwrapped text. `min-h-11` keeps the 44px touch-target floor on the
+	     row itself now that the activator contributes no height of its own
+	     (a name-only row would otherwise fall under it). -->
+	<li
+		data-testid="roster-row-{row.memberId}"
+		class="relative flex min-h-11 flex-col gap-0.5 border-b border-dashed border-ink-5 py-2 last:border-b-0"
+	>
+		<!-- #302 — name/email/badge/section render exactly once, unconditionally,
+		     as the FIRST children of this <li> regardless of admin tier or
+		     editor state (the #269 widget-detail pin: `roster-row-name` is
+		     `li.firstElementChild` on every row, always — a card activator that
+		     WRAPPED this content would silently break that pin the moment a row
+		     went from non-admin-shaped to admin-shaped). The activator below is
+		     therefore a SEPARATE sibling control, never a wrapper. -->
+		{@render rowInfo(row, showSection, rowSectionNames)}
+		<!-- #302 item 1 — the collapsed card IS the activator now (the ✎ pencil
+		     is retired). The record editor renders inside this same <li>, so a
+		     naive "wrap everything in a button" refactor would nest interactive
+		     controls inside a button (WCAG 4.1.2) the moment it opens — the
+		     arrange-row lesson (below, #152/#205) this page already learned.
+		     The fix mirrors this file's OWN two precedents for
+		     activator-with-nested-editor rather than inventing a third: the
+		     collapsed state and the open state are mutually exclusive
+		     alternatives (button XOR form), swapped by this `{#if}`, never one
+		     wrapping the other. Whole-block gated on `admin` alone — the
+		     contract has NO self-row exclusion (unlike the deactivate block
+		     below, which never lets an admin act on her own row), so the card
+		     activator renders on EVERY row including the admin's own —
+		     deliberately not copy-pasting the `row.personId !== selected?.personId`
+		     guard. -->
+		{#if admin === 'admin' && recordEditorMemberId !== row.memberId}
+			<!-- #262 lesson, now scaled to the whole card: the accessible name is
+			     content-derived (an sr-only action label plus the row's own
+			     name), NEVER a templated aria-label — an aria-label would compute
+			     the SAME literal text for every row (a static i18n string has no
+			     room for `{name}`), leaving a screen reader unable to tell cards
+			     apart. A real `<button>` gives native Enter/Space activation and
+			     tab order for free — no hand-rolled keydown handler needed.
+			     REVIEW F1 — it is a STRETCHED OVERLAY, not a strip. As a
+			     self-sized sibling (`block w-full min-h-11`) it painted as an
+			     empty 44px box BETWEEN the section name and the picker: the only
+			     clickable thing on the row was blank space, and clicking the
+			     member's own name did nothing — "the whole card is active" was
+			     false. `absolute inset-0` over the `relative` <li> above gives
+			     the card its whole area as the hit region while keeping the text
+			     out of the button (so `roster-row-name` stays
+			     `li.firstElementChild`, #269) and keeping the activator free of
+			     nested interactive content (WCAG 4.1.2). The two controls that
+			     can render on a COLLAPSED row — the SectionPicker and an
+			     armed/in-flight deactivate pair — are lifted above the overlay
+			     at their own render sites with a bare `relative` (positioned,
+			     `z-index: auto`, written AFTER this button, so tree order puts
+			     them on top — no z-index, which would make each row a stacking
+			     context and trap the picker's drop-down menu inside it).
+			     Anything else added to a collapsed row needs the same lift, and
+			     must be written after this button, or it becomes unclickable.
+			     The resting border is the affordance the retired ✎ glyph used
+			     to be: an overlay with no box of its own would leave
+			     the card looking inert, so it carries a visible border at rest,
+			     a darker one on hover, and its own focus-visible state (the
+			     button has no other visible box to take the focus ring). -->
+			<button
+				type="button"
+				data-testid="roster-row-card-{row.memberId}"
+				class="absolute inset-0 rounded-md border border-ink-5 text-left hover:border-ink-3 focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
+				onclick={() => openRecordEditor(row)}
+			>
+				<!-- #269 — this label is OUT of the contracted surface (the roster-only
+				     scope ruling names the `roster-row-name` span alone); it keeps
+				     naming the member by her PROFILE name even while her row shows a
+				     real one. -->
+				<span class="sr-only">{m.roster_record_edit_label()} {row.profileName ?? row.name}</span>
+			</button>
+		{/if}
+		{#if admin === 'admin' && recordEditorMemberId === row.memberId}
+			<!-- #268 — the admin member-record editor, open state. -->
+			<div class="mt-1 flex flex-col gap-2">
+				{#if recordEditorLookup?.state === 'damaged'}
+					<!-- (D) #264 — damaged data: loud, names the member, refuses to
+					     guess. No form renders; nothing is ever written from here.
+					     #269 — profile name (see the pencil label's note above). -->
+					<p
+						data-testid="roster-record-damaged-{row.memberId}"
+						role="alert"
+						class="mt-1 text-xs text-red-700"
+					>
+						{m.roster_record_damaged({ name: row.profileName ?? row.name })}
+					</p>
+				{:else if recordEditorLookup !== null}
+					<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
+					     this <li>, not a dialog/drawer/overlay. -->
+					<div class="mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2">
+						<label class="flex flex-col gap-1 text-xs">
+							{m.roster_record_name_label()}
+							<input
+								type="text"
+								required
+								data-testid="roster-record-name"
+								bind:value={recordForm.name}
+								disabled={recordSavingMemberId !== null}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-xs">
+							{m.roster_record_phone_label()}
+							<input
+								type="tel"
+								data-testid="roster-record-phone"
+								bind:value={recordForm.phone}
+								disabled={recordSavingMemberId !== null}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-xs">
+							{m.roster_record_email_label()}
+							<input
+								type="email"
+								data-testid="roster-record-email"
+								bind:this={emailInputEl}
+								bind:value={recordForm.email}
+								disabled={recordSavingMemberId !== null}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-xs">
+							{m.roster_record_birthdate_label()}
+							<!-- #207 — the platform's OWN date picker, never a custom
+							     calendar. -->
+							<input
+								type="date"
+								data-testid="roster-record-birthdate"
+								bind:value={recordForm.birthdate}
+								disabled={recordSavingMemberId !== null}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
+						</label>
+						<label class="flex flex-col gap-1 text-xs">
+							{m.roster_record_id_code_label()}
+							<input
+								type="text"
+								data-testid="roster-record-id-code"
+								bind:value={recordForm.id_code}
+								disabled={recordSavingMemberId !== null}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
+						</label>
+						<div class="flex items-center gap-2">
+							<button
+								type="button"
+								data-testid="roster-record-save"
+								disabled={recordSavingMemberId !== null}
+								class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
+								onclick={() => saveRecordEditor(row)}
+							>
+								{m.roster_record_save()}
+							</button>
+							<!-- Review F3 — cancel stays live while ANOTHER row's write is in
+							     flight: closing this editor writes nothing and cancels nothing
+							     already on the wire, so trapping the admin behind an unrelated
+							     save would be worse than useless. -->
+							<button
+								type="button"
+								data-testid="roster-record-cancel"
+								disabled={recordSavingMemberId === row.memberId}
+								class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+								onclick={cancelRecordEditor}
+							>
+								{m.roster_record_cancel()}
+							</button>
+						</div>
+						{#if recordSaveError?.memberId === row.memberId}
+							<!-- (E) failure tells the truth (#253): a plain failure says
+							     nothing was saved; a MemberRecordPartialSaveError gets its
+							     OWN copy naming exactly which fields landed — never the
+							     all-or-nothing message, and never a field VALUE. Typed
+							     values stay in the inputs above either way (they're
+							     `bind:value`d to `recordForm`, untouched by either branch). -->
+							<p data-testid="roster-record-save-error" role="alert" class="text-xs text-red-700">
+								{#if recordSaveError.kind === 'partial'}
+									{m.roster_record_save_partial({
+										saved: recordSaveError.savedFields
+											.map((f) => RECORD_FIELD_LABEL[f as keyof typeof RECORD_FIELD_LABEL]())
+											.join(', ')
+									})}
+								{:else if recordSaveError.kind === 'name-required'}
+									{m.roster_record_name_required()}
+								{:else if recordSaveError.kind === 'phone-invalid'}
+									{m.roster_record_phone_invalid()}
+								{:else if recordSaveError.kind === 'email-invalid'}
+									{m.roster_record_email_invalid()}
+								{:else if recordSaveError.kind === 'id-code-invalid'}
+									{m.roster_record_id_code_invalid()}
+								{:else}
+									{m.roster_record_save_failed()}
+								{/if}
+							</p>
+						{/if}
+					</div>
+				{/if}
+				<!-- #302 item 3 — invite controls, RELOCATED here from the collapsed
+				     row (render-location move only: `handleMintInvite`/
+				     `handleWithdrawInvite`, `inviteActionPending` and every generation
+				     guard behind them are byte-untouched — see the module doc by their
+				     definitions). Same gate shape as before
+				     (`joinStates[row.personId] !== undefined`, admin already
+				     guaranteed true by the enclosing block) — only the badge itself
+				     moved OUT to `rowInfo` above; this is the owner-only control
+				     cluster plus its link/error paragraphs, unchanged otherwise. -->
+				{#if joinStates[row.personId] !== undefined}
+					{@const state = joinStates[row.personId]}
+					{#if ownerTier === 'owner'}
+						<!-- The three controls, `_owner` ONLY (PO ruling — the platform
+						     itself enforces this: the 2026-09-09 admin-cascade probe minted
+						     onto another person as a db-entity `_owner`, HTTP 200; refused as
+						     `_editor`, HTTP 403 "User not in _owner property"). Routed PURELY
+						     off `state` — `kutsu` on a live-link row would be a state-routing
+						     bug, not a case handled here. An editor-admin gets the single
+						     global note below instead of THIS block; see its own comment. -->
+						<div class="flex flex-wrap items-center gap-2">
+							{#if state === 'absent'}
+								<button
+									type="button"
+									data-testid="roster-member-invite-{row.memberId}"
+									disabled={inviteActionPending}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+									onclick={() => handleMintInvite(row)}
+								>
+									{m.roster_member_invite()}
+								</button>
+							{:else if state === 'invited'}
+								<button
+									type="button"
+									data-testid="roster-member-reinvite-{row.memberId}"
+									disabled={inviteActionPending}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+									onclick={() => handleMintInvite(row)}
+								>
+									{m.roster_member_reinvite()}
+								</button>
+								<button
+									type="button"
+									data-testid="roster-member-withdraw-{row.memberId}"
+									disabled={inviteActionPending}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+									onclick={() => handleWithdrawInvite(row)}
+								>
+									{m.roster_member_withdraw()}
+								</button>
+							{/if}
+						</div>
 					{/if}
-				</div>
-			{/if}
-			{#if inviteLinkByMemberId[row.memberId]}
-				<!-- `kutsu` and `saada uuesti` share this same producer and this same
-				     render — the fresh token IS the deliverable of both. Reuses the
-				     standalone invite page's own copy (`admin_invite_link_label`,
-				     `admin_invite_bearer_warning`) rather than duplicating it: the
-				     bearer-secret risk is identical, this is the same mechanism. -->
-				<p
-					data-testid="roster-invite-link-{row.memberId}"
-					class="rounded-md border border-ink-5 p-2 text-xs break-all text-ink-2"
-				>
-					{m.admin_invite_link_label()}: {inviteLinkByMemberId[row.memberId]}
-				</p>
-				<p class="text-xs text-ink-3">{m.admin_invite_bearer_warning()}</p>
-			{/if}
-			{#if inviteErrorByMemberId[row.memberId]}
-				<p
-					data-testid="roster-invite-error-{row.memberId}"
-					role="alert"
-					class="text-xs text-red-700"
-				>
-					{m.admin_invite_error()}
-				</p>
-			{/if}
-			{#if withdrawErrorByMemberId[row.memberId]}
-				<p
-					data-testid="roster-withdraw-error-{row.memberId}"
-					role="alert"
-					class="text-xs text-red-700"
-				>
-					{m.roster_member_withdraw_failed()}
-				</p>
-			{/if}
+					{#if inviteLinkByMemberId[row.memberId]}
+						<!-- `kutsu` and `saada uuesti` share this same producer and this same
+						     render — the fresh token IS the deliverable of both. Reuses the
+						     standalone invite page's own copy (`admin_invite_link_label`,
+						     `admin_invite_bearer_warning`) rather than duplicating it: the
+						     bearer-secret risk is identical, this is the same mechanism. -->
+						<p
+							data-testid="roster-invite-link-{row.memberId}"
+							class="rounded-md border border-ink-5 p-2 text-xs break-all text-ink-2"
+						>
+							{m.admin_invite_link_label()}: {inviteLinkByMemberId[row.memberId]}
+						</p>
+						<p class="text-xs text-ink-3">{m.admin_invite_bearer_warning()}</p>
+					{/if}
+					{#if inviteErrorByMemberId[row.memberId]}
+						<p
+							data-testid="roster-invite-error-{row.memberId}"
+							role="alert"
+							class="text-xs text-red-700"
+						>
+							{m.admin_invite_error()}
+						</p>
+					{/if}
+					{#if withdrawErrorByMemberId[row.memberId]}
+						<p
+							data-testid="roster-withdraw-error-{row.memberId}"
+							role="alert"
+							class="text-xs text-red-700"
+						>
+							{m.roster_member_withdraw_failed()}
+						</p>
+					{/if}
+				{/if}
+			</div>
 		{/if}
-		{#if admin === 'admin' && !sectionsError}
-			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. The
-			     picker's option list would hold only "(Unassigned)" (its sole reachable
-			     action being the destructive clear-all) and its trigger label — built
-			     from names the empty tree can't resolve — would collapse to a
-			     zero-width unlabeled button. The section-load-error banner above
-			     already explains the absence; hide the write control rather than
-			     offer one whose options are known-incomplete. -->
-			<!-- #155/S4 review F4 — SCOPE CALL, recorded so code and acceptance text
-			     agree. S4's "collapsed/expanded are display-only — no add/rename/
-			     delete" is about the SECTION-TREE management controls that used to sit
-			     on every section header (drag handle, ✕, and the page-level "+ New
-			     section"); all three moved into Arrange mode. This picker is a
-			     different thing: MEMBER→section ASSIGNMENT, which has no home in
-			     arrange mode at all (arrange renders no member rows), so it stays on
-			     the member row in Expanded view.
-			     Its inline `section-picker-new` → `section-create-form` create entry
-			     stays WITH it, deliberately: it exists so an admin assigning a member
-			     to a section that doesn't exist yet can make it in place (#111/#120),
-			     and pulling it out would mean leaving the assignment flow, switching
-			     view mode, creating, and coming back. The S4 acceptance wording is
-			     therefore read as "the PAGE-LEVEL add entry moved to arrange mode";
-			     the picker's assignment-scoped create is out of that scope.
-			     `page.roster-arrange-crud.spec.ts`'s STRIP suite asserts this
-			     explicitly (present in Expanded, absent in Collapsed where no member
-			     rows render) so the choice is visible to the gate rather than
-			     invisible to it. -->
-			<SectionPicker
-				memberId={row.memberId}
-				memberName={row.profileName ?? row.name}
-				{sections}
-				selectedIds={row.sectionIds ?? []}
-				dbEntityId={row.dbEntityId}
-				onpick={(sectionId) => handlePick(row.memberId, sectionId)}
-				oncreate={(input) => handleCreate(row.memberId, input)}
-			/>
-			{#if sectionWriteError?.memberId === row.memberId}
-				<!-- F5 code-review fix — the create path's loud failure (see
-				     `sectionWriteError` above). role="alert" because it appears after the
-				     picker has already closed, with nothing else on screen changing. -->
-				<p
-					data-testid="section-write-error-{row.memberId}"
-					role="alert"
-					class="text-xs text-red-700"
-				>
-					{sectionWriteError.kind === 'create'
-						? m.roster_section_create_failed()
-						: m.roster_section_assign_failed()}
-				</p>
-			{/if}
-		{/if}
-		{#if admin === 'admin' && row.personId !== selected?.personId}
-			<!-- #255 (A) — deactivate, admin-only and NEVER on the viewer's own row
-			     (done-when 7: a member cannot deactivate herself or anyone else via
-			     a control she can't even see for her own row). Two-step confirm
-			     reusing the page's existing destructive idiom (see `pendingRemoveId`
-			     above) rather than inventing a new shape.
-			     #286 — the armed pair now adopts the agenda's arm-state lifecycle
-			     (#273, `onSeasonManageSeriesDelete`/`section-remove`): stays MOUNTED
-			     through the in-flight read-then-write chain rather than carrying no
-			     wiring at all. `disabled` on all three controls binds to
-			     `deactivatePending` — NOT `structuralWritePending` (deactivation is
-			     not a structural write; the page's own `reinstatePending`-gated
-			     button is the precedent for a lifecycle write's own flag) — so the
-			     confirm/cancel freeze for the whole chain and the plain trigger
-			     (else branch) can't steal the single `pendingDeactivateId` slot out
-			     from under an in-flight row (the second-arm vector; `armDeactivate`
-			     itself backstops this too, see its own comment). `aria-busy` on
-			     confirm alone: this row's own write, mirroring #273. -->
-			<div class="flex flex-wrap items-center gap-2 pt-1">
+		<!-- #302 item 3 — deactivate armed-pair, RELOCATED here from the
+		     collapsed row (render-location move only:
+		     `handleDeactivateConfirm`/`armDeactivate`/`disarmDeactivate`,
+		     `deactivatePending` and every #286/#287/#296 generation guard
+		     behind them are byte-untouched). The SELF-ROW ASYMMETRY survives
+		     the shared container on purpose: this gate
+		     (`row.personId !== selected?.personId`, #255 done-when 7) does NOT
+		     merge with the editor's own deliberate no-self-row-exclusion gate —
+		     the editor opens on the admin's own row, but this block still
+		     refuses to render there, exactly as before the move.
+		     ARMED-PAIR EXCEPTION (#286, pinned by
+		     page.roster-deactivate.spec.ts "a SECOND row cannot be armed
+		     mid-flight"): the normal path to this control is the editor
+		     (`recordEditorMemberId === row.memberId`), but an ARMED or
+		     in-flight pair (`pendingDeactivateId === row.memberId`) must stay
+		     MOUNTED even after the admin opens a DIFFERENT row's editor (one
+		     editor open at a time closes this one) — destructive in-flight UI
+		     never silently unmounts out from under its own write. Hence the OR:
+		     the block is NOT nested inside the editor's own `{#if}` above. -->
+		{#if admin === 'admin' && row.personId !== selected?.personId && (recordEditorMemberId === row.memberId || pendingDeactivateId === row.memberId)}
+			<!-- #302 review F1 — `relative` because of the armed-pair exception
+			     directly above: this block CAN render on a collapsed row (armed
+			     or in-flight while another row's editor is open), and on a
+			     collapsed row the card activator is an `absolute inset-0`
+			     overlay covering the whole <li>. Without the lift, confirm and
+			     cancel sit UNDER that overlay and a tap on either would open the
+			     editor instead of firing — the in-flight UI that "never silently
+			     unmounts" would instead be silently unusable. No z-index on
+			     purpose: this and the overlay are both positioned at
+			     `z-index: auto`, so they paint in TREE order and this block,
+			     written after the activator, is already on top; a z-index would
+			     make the row a stacking context and trap the SectionPicker's
+			     drop-down menu inside it. -->
+			<div class="relative mt-1 flex flex-wrap items-center gap-2">
 				{#if pendingDeactivateId === row.memberId}
 					<span class="text-xs text-ink-2">{m.roster_member_deactivate_confirm_prompt()}</span>
 					<button
@@ -4050,10 +4081,14 @@
 				     carry this alert, by construction of the render condition itself,
 				     not merely by `disarmDeactivate` remembering to clear the state
 				     (done-when 4). -->
+				<!-- `relative` for the same reason as the pair above: an armed
+				     row can be collapsed, and text sitting under the full-card
+				     overlay is unselectable and swallows clicks into "open the
+				     editor". -->
 				<p
 					data-testid="member-deactivate-refused-{row.memberId}"
 					role="alert"
-					class="text-xs text-red-700"
+					class="relative text-xs text-red-700"
 				>
 					{#each deactivateRefusal.blockers as blocker (blocker.role)}
 						{blocker.role === 'admin'
@@ -4073,11 +4108,78 @@
 				<p
 					data-testid="member-deactivate-failed-{row.memberId}"
 					role="alert"
-					class="text-xs text-red-700"
+					class="relative text-xs text-red-700"
 				>
 					{m.roster_member_deactivate_failed({ name: row.profileName ?? row.name })}
 				</p>
 			{/if}
+		{/if}
+		{#if admin === 'admin' && !sectionsError}
+			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. The
+			     picker's option list would hold only "(Unassigned)" (its sole reachable
+			     action being the destructive clear-all) and its trigger label — built
+			     from names the empty tree can't resolve — would collapse to a
+			     zero-width unlabeled button. The section-load-error banner above
+			     already explains the absence; hide the write control rather than
+			     offer one whose options are known-incomplete. -->
+			<!-- #155/S4 review F4 — SCOPE CALL, recorded so code and acceptance text
+			     agree. S4's "collapsed/expanded are display-only — no add/rename/
+			     delete" is about the SECTION-TREE management controls that used to sit
+			     on every section header (drag handle, ✕, and the page-level "+ New
+			     section"); all three moved into Arrange mode. This picker is a
+			     different thing: MEMBER→section ASSIGNMENT, which has no home in
+			     arrange mode at all (arrange renders no member rows), so it stays on
+			     the member row in Expanded view.
+			     Its inline `section-picker-new` → `section-create-form` create entry
+			     stays WITH it, deliberately: it exists so an admin assigning a member
+			     to a section that doesn't exist yet can make it in place (#111/#120),
+			     and pulling it out would mean leaving the assignment flow, switching
+			     view mode, creating, and coming back. The S4 acceptance wording is
+			     therefore read as "the PAGE-LEVEL add entry moved to arrange mode";
+			     the picker's assignment-scoped create is out of that scope.
+			     `page.roster-arrange-crud.spec.ts`'s STRIP suite asserts this
+			     explicitly (present in Expanded, absent in Collapsed where no member
+			     rows render) so the choice is visible to the gate rather than
+			     invisible to it. -->
+			<!-- #302 review F1 — `relative` wrapper (deliberately NO z-index). The
+			     picker renders on every COLLAPSED admin row, where the card activator
+			     is an `absolute inset-0` overlay across the whole <li>; unlifted, the
+			     picker's trigger would sit under it and a tap meant for "assign a
+			     section" would open the record editor instead. `relative` alone is
+			     enough: both this and the overlay are positioned with `z-index: auto`,
+			     so they paint in TREE order and this block — written after the
+			     activator — wins. A z-index here would be actively wrong: it would make
+			     each row a stacking context, and the picker's own `absolute z-10` menu
+			     (which must hang over the FOLLOWING rows) would be trapped inside it,
+			     painting under the next row's contents. Same reason the deactivate
+			     block above uses bare `relative`. The wrapper rather than a prop keeps
+			     SectionPicker presentational, and keeps the roster off the assumption
+			     that the component's own root happens to be positioned. -->
+			<div class="relative flex flex-col gap-0.5">
+				<SectionPicker
+					memberId={row.memberId}
+					memberName={row.profileName ?? row.name}
+					{sections}
+					selectedIds={row.sectionIds ?? []}
+					dbEntityId={row.dbEntityId}
+					onpick={(sectionId) => handlePick(row.memberId, sectionId)}
+					oncreate={(input) => handleCreate(row.memberId, input)}
+				/>
+				{#if sectionWriteError?.memberId === row.memberId}
+					<!-- F5 code-review fix — the create path's loud failure (see
+					     `sectionWriteError` above). role="alert" because it appears after the
+					     picker has already closed, with nothing else on screen changing. -->
+					<p
+						data-testid="section-write-error-{row.memberId}"
+						role="alert"
+						class="text-xs text-red-700"
+					>
+						{sectionWriteError.kind === 'create'
+							? m.roster_section_create_failed()
+							: m.roster_section_assign_failed()}
+					</p>
+				{/if}
+			</div>
 		{/if}
 	</li>
 {/snippet}

@@ -391,8 +391,9 @@ describe('#269 toggle OFF — identical to the toggle-less behavior on this tree
 		).toHaveLength(1);
 
 		// Post-#268 baseline: toggle-off is fenced against TOGGLE-ON, not against
-		// a historical snapshot — the record-editor pencil belongs to both sides.
-		expect(q(container, 'roster-row-record-edit-m2')).not.toBeNull();
+		// a historical snapshot — the record-editor activator belongs to both
+		// sides (#302: the whole-card activator replaced the pencil).
+		expect(q(container, 'roster-row-card-m2')).not.toBeNull();
 	});
 
 	it('toggle key ABSENT (never set) → false: same rendering, same absence of any records fetch', async () => {
@@ -471,7 +472,8 @@ describe('#269 scope — every other member-name surface keeps the PROFILE name'
 		const { container } = await renderRosterAs('admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
-		await fireEvent.click(q(container, 'roster-row-record-edit-m2')!);
+		// #302 drive-path edit: the whole-card activator replaced the pencil.
+		await fireEvent.click(q(container, 'roster-row-card-m2')!);
 		await waitFor(() => expect(q(container, 'roster-record-name')).not.toBeNull());
 		expect((q(container, 'roster-record-name') as HTMLInputElement).value).toBe('Berta Bass');
 	});
