@@ -1,0 +1,56 @@
+{
+ "success": true,
+ "results": {
+  "verify-312": {
+   "success": true,
+   "summary": "Verified all five points of #312 against main. Current agenda toggle (+page.svelte:7982-8006) matches the issue's description exactly. Roster's radiogroup pattern (roster/+page.svelte:4497-4553, keydown at 637-648) is real and matches the issue's claims about role/aria-checked/roving-tabindex/the role=\"option\" precedent comment. Two notable drifts from the issue text: (a) FOUR specs reach for the agenda-view testids, not three — page.agenda-schedule.spec.ts and page.agenda-trip-service.spec.ts also click/query them, though only page.agenda-month-view.spec.ts carries CONTRACT (aria-pressed) assertions; (b) that same spec's viewToggle() helper hardcodes a role=\"group\" selector used across every test in its describe block, an assertion the issue's markup section doesn't mention needs to change but GREEN will break unless it does. The roving keydown handler is NOT reusable as an import — only the pure rovingNextIndex index-math (src/lib/a11y/roving.ts) is shared; every call site (roster, library copy-sort, LanguageSelector, RsvpControl, AttendanceSurface, NavShell, ProfileField) writes its own local wrapper by deliberate design (roving.ts's own header comment says so). Styling: the container-rounds/segments-flush idiom the issue wants already exists in-app (LanguageSelector.svelte:96, RsvpControl.svelte:102, AttendanceSurface.svelte:260 — all `inline-flex overflow-hidden rounded-md border border-ink-4` + segment `border-r border-ink-4 last:border-r-0`) but only on role=\"toolbar\" controls; both existing role=\"radiogroup\" controls (roster-view-modes, library copy-sort) instead use gapped, individually-rounded chips. #312's GREEN is the first place radiogroup semantics and flush-segment styling meet in this codebase — it borrows the visual idiom cross-role, not from another radiogroup.",
+   "findings": [
+    {
+     "claim": "The #247 agenda toggle markup matches the issue's description: role=\"group\" wrapper with class=\"flex gap-1\", two buttons each rounded-full border px-2 py-0.5, aria-pressed, testids agenda-view-list/agenda-view-month, onclick calling setAgendaView, day-list default via the agendaView preference store.",
+     "verdict": "CONFIRMED",
+     "evidence": "src/routes/+page.svelte:7978-8006 (git show main): `<div role=\"group\" aria-label={m.agenda_view_toggle_label()} class=\"flex gap-1\">` wrapping two `<button>`s with `data-testid=\"agenda-view-list\"`/`\"agenda-view-month\"`, `aria-pressed={$agendaViewStore === 'list' ? 'true' : 'false'}`, class `rounded-full border px-2 py-0.5 ...`, `onclick={() => setAgendaView('list')}`. src/lib/preferences/agendaView.ts:29-36 defines the writable store + setAgendaView(value) writing to localStorage key mvox.agenda_view, sanitize() defaulting anything but 'month' to 'list'."
+    },
+    {
+     "claim": "The roster-view-modes radiogroup pattern is role=\"radiogroup\"/role=\"radio\"/aria-checked with roving tabindex and an arrow-key handler that both moves and selects, and its comment records the role=\"option\" trap page.sections-a11y.spec.ts caught.",
+     "verdict": "CONFIRMED",
+     "evidence": "src/routes/roster/+page.svelte:4497-4553 — `role=\"radiogroup\"` container (`tabindex=\"-1\"`, `onkeydown={handleViewModeKeydown}`), three `role=\"radio\"` buttons each with `aria-checked` and `tabindex={viewMode === X ? 0 : -1}`. Comment at 4489-4492: \"aria-checked REPLACES aria-pressed: pressed-state on role=\\\"radio\\\" is an invalid ARIA mix, the same trap page.sections-a11y.spec.ts caught on role=\\\"option\\\".\" handleViewModeKeydown at lines 637-648: resolves group's buttons, finds focused index, calls rovingNextIndex, then calls setViewMode(mode) (arrows both move AND select) and refocuses — matching the issue's claim."
+    },
+    {
+     "claim": "The roving keydown handler is reusable as an importable function/component.",
+     "verdict": "REFUTED",
+     "evidence": "Only rovingNextIndex(key, idx, length) — pure index arithmetic — lives in the shared module src/lib/a11y/roving.ts, imported at 9 call sites (roster/+page.svelte:12, library/+page.svelte:9, LanguageSelector.svelte:42, RsvpControl.svelte:24, RepertoireElement.svelte:113, AttendanceSurface.svelte:20, NavShell.svelte:5, ProfileField.svelte:7). roving.ts's own header comment (lines 1-22) states this is deliberate: \"Everything else (which elements count as members, whether the roving stop lives in $state or derives from existing selection state, whether arrows also ACTIVATE...) stays local to each component.\" Each call site (e.g. roster's handleViewModeKeydown at 637-648, library's handleCopySortKeydown at 94-106) hand-writes its own DOM-query + preventDefault + activate + focus wrapper around rovingNextIndex. For #312, reuse means importing rovingNextIndex into +page.svelte and writing a new local handleAgendaViewKeydown following the same shape — not calling into roster's code."
+    },
+    {
+     "claim": "Three specs reach for agenda-view-list/agenda-view-month testids.",
+     "verdict": "DRIFTED",
+     "evidence": "Four files reach for them on main: src/routes/page.agenda-month-view.spec.ts (many CONTRACT + behaviour assertions, lines 279-633), src/routes/page.agenda-schedule.spec.ts:370 (click only, no aria-pressed check), src/routes/page.agenda-trip-service.spec.ts:219-220 (existence check + click helper, no aria-pressed check), src/routes/page.event-create-collapse.spec.ts:694 (click only). Only page.agenda-month-view.spec.ts asserts aria-pressed; the other three are pure BEHAVIOUR call sites and need no edits."
+    },
+    {
+     "claim": "page.agenda-month-view.spec.ts's aria-pressed assertions are the only contract-shaped thing that needs to move to aria-checked.",
+     "verdict": "NEW-HAZARD",
+     "evidence": "src/routes/page.agenda-month-view.spec.ts:223-225 — `function viewToggle(container) { return container.querySelector('[role=\"group\"][aria-label=\"[msg:view-toggle]\"]'); }` — hardcodes role=\"group\" in its selector. This helper is called from every test in the '#247 — the Nimekiri|Kuu toggle' and '#247 — per-device persistence' describe blocks (e.g. lines 306, 337, 355, 611). Once the markup becomes role=\"radiogroup\", this selector silently returns null and every dependent test breaks — not just the explicit aria-pressed lines (330-331, 360-361, 371, 633). RED for #312 needs to update this helper's role token too, in addition to the individual aria-pressed→aria-checked lines the issue calls out."
+    },
+    {
+     "claim": "No spec asserts the role=\"group\" wrapper or the gap-1/rounded-full container classes directly (only testid/aria-pressed/click behaviour), aside from the viewToggle() selector hazard above.",
+     "verdict": "CONFIRMED",
+     "evidence": "Grep of 'rounded-full|gap-1|role=\\\"group\\\"' across all four consuming spec files found only the viewToggle() helper's role=\"group\" selector noted above; no test asserts the button's className string or a gap/border-radius class value directly. The BEHAVIOUR assertions untouched by #312 (localStorage persistence at 611-620, re-mount survival at 622-634 minus its aria-pressed line, day-list default content, 'sits WITH the #214 filter chips' sibling-parity at 337-352) do not reference the two-chip visual shape."
+    },
+    {
+     "claim": "page.roster-arrange.spec.ts's '#156: roving tabindex on the chip selector' describe block (~line 565) is the pattern-pinning spec #312's RED should mirror — radiogroup/radio roles, aria-checked, exactly-one-tabstop roving, wrap-around arrow selection, Tab/Enter/Space left un-prevented.",
+     "verdict": "CONFIRMED",
+     "evidence": "src/routes/page.roster-arrange.spec.ts:565-650+: 'the group is a role=\"radiogroup\" of role=\"radio\" chips' (581-589), 'exactly ONE chip is the Tab stop, and it is the checked one' (609-613), 'ArrowRight moves focus AND selects the next chip, wrapping at the end' (600-622), 'ArrowLeft wraps backwards from the first chip to the last' (624-631), plus a non-admin two-member wrap test and a 'Tab, Enter and Space are NOT preventDefault-ed' test. Note: page.sections-a11y.spec.ts itself contains zero references to roster-view-modes or role=\"radiogroup\" (grep empty) — it pins the SectionPicker listbox pattern, referenced by roster/+page.svelte's comment only as historical precedent for the aria-pressed+role=\"radio\" invalid-mix lesson, not as a spec that directly tests roster-view-modes."
+    },
+    {
+     "claim": "The target one-pill styling (container border+rounding, flush segments, selected filled) already has an in-app Tailwind idiom to follow.",
+     "verdict": "CONFIRMED",
+     "evidence": "src/lib/components/LanguageSelector.svelte:96 — container `class=\"inline-flex flex-wrap overflow-hidden rounded-md border border-ink-4\"`; each segment button (108) `class=\"flex min-h-11 items-center justify-center border-r border-ink-4 px-2 py-1 text-sm last:border-r-0\"` plus `bg-ink`/`text-paper` when selected. Identical shape in RsvpControl.svelte:102 and AttendanceSurface.svelte:260. This is the exact container-rounds/overflow-clips-flush-segments/last:border-r-0 idiom #312 wants, ready to reuse — but all three current users are role=\"toolbar\" (arrows-move-only, aria-pressed), not role=\"radiogroup\"."
+    },
+    {
+     "claim": "Both existing radiogroup controls in the app (roster-view-modes, library copy-sort) already use this flush-segment container styling, so #312 can copy their classes directly.",
+     "verdict": "REFUTED",
+     "evidence": "roster-view-modes container: src/routes/roster/+page.svelte:4496-4502, `class=\"inline-flex flex-wrap items-center gap-1.5 self-start\"` — no border/rounding on the container; each chip independently `rounded-full border ...` (4508-4517 etc.), gapped, not flush. library copy-sort container: src/routes/library/+page.svelte:1467-1473, `class=\"mb-1 flex items-center gap-1\"` — likewise no container border/rounding; each chip independently `rounded border px-1.5 py-0.5 ...` (1482-1483). Neither existing radiogroup pairs radiogroup semantics with the flush-segment container idiom; #312's GREEN is the first to combine radiogroup ARIA (borrowed from roster/library) with flush-pill styling (borrowed cross-role from LanguageSelector/RsvpControl/AttendanceSurface)."
+    }
+   ]
+  }
+ }
+}
