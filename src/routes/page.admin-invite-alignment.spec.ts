@@ -77,7 +77,18 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_copy_error: () => "Couldn't copy the link.",
 		admin_invite_partial_failure: (p: { personId: string }) =>
 			`A person entity (${p.personId}) was already created and carries a live invite token.`,
-		admin_invite_create_another: () => 'Create another invite'
+		admin_invite_create_another: () => 'Create another invite',
+		// #301 — the embedded InviteSurface now also resolves an owner-tier +
+		// uninvited-list prerequisite pair on every mount; this file has no
+		// opinion on that feature (kept inert below) but needs every key the
+		// component can reach in ANY of its states.
+		admin_invite_person_label: () => 'Who are you inviting?',
+		admin_invite_person_new: () => 'A new person',
+		admin_invite_submit_person: (p: { name: string }) => `Invite ${p.name}`,
+		admin_invite_person_list_error: () => 'Could not load the list of uninvited people.',
+		admin_invite_mint_error: (p: { name: string }) => `Could not invite ${p.name}.`,
+		admin_invite_mint_owner_only: () => 'Inviting an existing person requires owner rights.',
+		roster_member_invite_owner_only: () => 'Managing invites requires owner rights.'
 	}
 }));
 
@@ -122,6 +133,11 @@ const h = vi.hoisted(() => {
 		addLibrarianMock: vi.fn(),
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
+		// #301 — the embedded InviteSurface's owner-tier gate. Defaulted to
+		// 'error' HERE (not reset per-test — this file has no opinion on the
+		// feature) so the new person-select stays inert and this pin's own
+		// class-string assertions are unaffected.
+		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
@@ -129,6 +145,9 @@ const h = vi.hoisted(() => {
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
+		// #301 — InviteSurface's uninvited-list read. Defaulted here, same
+		// reasoning as resolveOwnerTierMock above.
+		listJoinStatesMock: vi.fn().mockResolvedValue({}),
 		resolveCollectiveNameMarkerMock: vi.fn(),
 		updateCollectiveNameMock: vi.fn()
 	};
@@ -145,10 +164,15 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	removeLibrarian: h.removeLibrarianMock
 }));
 vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock
+	resolveAdmin: h.resolveAdminMock,
+	resolveOwnerTier: h.resolveOwnerTierMock
 }));
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
+}));
+// #301 — InviteSurface's uninvited-list seam.
+vi.mock('$lib/profile/linkedIdentities', () => ({
+	listJoinStates: h.listJoinStatesMock
 }));
 vi.mock('$lib/collective/databaseEntity', () => ({
 	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock

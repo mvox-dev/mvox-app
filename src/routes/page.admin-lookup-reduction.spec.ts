@@ -153,6 +153,20 @@ beforeEach(() => {
 			// Factual "no library in this collective" — refreshLibrarians is skipped.
 			return Promise.resolve(json({ entities: [] }));
 		}
+		if (path.includes('props=entu_user')) {
+			// #301 — the embedded InviteSurface's own uninvited-list read
+			// (listJoinStates, one GET per roster person). Anna already JOINED
+			// (a `uid` entry) — this file has no opinion on the person-select
+			// feature, so this keeps her out of the uninvited list and the
+			// select stays absent, same rendered surface as before #301.
+			return Promise.resolve(
+				json({
+					entity: {
+						entu_user: [{ _id: 'eu-anna', uid: 'u-anna', provider: 'google', email: 'a@x.test' }]
+					}
+				})
+			);
+		}
 		return Promise.reject(
 			new Error(`unexpected wire traffic during admin load: ${path} (#173 harness)`)
 		);
@@ -208,14 +222,21 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 		expect(h.listAdminsMock).toHaveBeenCalled();
 		expect(h.listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
-		// …and the resolution seams' REAL downstream reads still ran: exactly
-		// one rights read on the database entity + one library search. No other
-		// wire traffic (a leftover redundant lookup would have rejected loudly
-		// in the router above and failed renderReady).
+		// …and the resolution seams' REAL downstream reads still ran: one rights
+		// read on the database entity + one library search, exactly as before.
+		// #301 adds TWO more, each its OWN legitimate seam, not a #173
+		// regression: the embedded InviteSurface's owner-tier gate re-reads the
+		// SAME rights property (resolveAdmin and resolveOwnerTier are two
+		// independent callers over the same read, per adminStore.ts — #173 only
+		// pins `resolveDatabaseEntityId` to one call, never rights reads), and
+		// its uninvited-list read is one GET per roster person (ROSTER has 1).
+		// No OTHER wire traffic (a leftover redundant lookup would have
+		// rejected loudly in the router above and failed renderReady).
 		const paths = h.entuFetchMock.mock.calls.map((c) => String(c[1]));
-		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(1);
+		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(2);
 		expect(paths.filter((p) => p.includes('_type.string=library'))).toHaveLength(1);
-		expect(paths).toHaveLength(2);
+		expect(paths.filter((p) => p.includes('props=entu_user'))).toHaveLength(1);
+		expect(paths).toHaveLength(4);
 	});
 });
 

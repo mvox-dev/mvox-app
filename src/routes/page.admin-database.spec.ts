@@ -28,6 +28,8 @@ const h = vi.hoisted(() => ({
 	addLibrarianMock: vi.fn(),
 	removeLibrarianMock: vi.fn(),
 	resolveAdminMock: vi.fn(),
+	resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
+	listJoinStatesMock: vi.fn().mockResolvedValue({}),
 	resolveLibrarianMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
@@ -59,7 +61,11 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => {
 });
 vi.mock('$lib/nav/adminStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/nav/adminStore')>();
-	return { ...actual, resolveAdmin: h.resolveAdminMock };
+	// #301 — the embedded InviteSurface's owner-tier gate is a NEW seam this
+	// file predates; mocked inert here (same posture as resolveAdmin above) so
+	// "every seam mocked, the page has no business on the wire" (line ~191)
+	// keeps meaning what it says.
+	return { ...actual, resolveAdmin: h.resolveAdminMock, resolveOwnerTier: h.resolveOwnerTierMock };
 });
 vi.mock('$lib/library/librarianStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/library/librarianStore')>();
@@ -76,6 +82,8 @@ vi.mock('$lib/entu/request', async (importOriginal) => {
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+// #301 — InviteSurface's uninvited-list seam, mocked inert (see adminStore note).
+vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStatesMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
 	listSections: h.listSectionsMock

@@ -12,9 +12,22 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { collectiveState } from '$lib/collectives/store';
-	import { createInvite, InviteCreateError, resolveInviteParentId } from '$lib/invite/inviteData';
+	import {
+		createInvite,
+		InviteCreateError,
+		resolveInviteParentId,
+		mintSelfLinkInvite,
+		SelfLinkMintError
+	} from '$lib/invite/inviteData';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
+	// #301 — the owner-only person-targeted invite path: `resolveOwnerTier`
+	// gates the select (mint onto an existing person is owner-gated, #294's
+	// live 403), `listJoinStates` derives who counts as uninvited (contents of
+	// the linked-identity property, never presence — same #294 discipline the
+	// roster's badges use). Both REUSED verbatim, never reimplemented here.
+	import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
+	import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
 	// #107 review F2 — a 401 here used to land in the generic 'load-error'
 	// (Retry against a token already deleted from localStorage) or, on the write
 	// path, in 'create-error'. Both are misleading: the session is gone.
@@ -61,18 +74,31 @@
 	// AGAIN inside that column double-constrains the width and renders the
 	// invite section visibly narrower/indented vs. its siblings. `'embedded'`
 	// drops exactly those two tokens so it fills the column flush like them.
+	// #301 — an admin's OWN person id and the collective's roster, both
+	// OPTIONAL and CONTROLLED-MODE-only in effect: the person-select feature
+	// needs "who is the viewer" (for `resolveOwnerTier`) and "who could be
+	// invited" (to derive the uninvited list), and the embedding /admin page
+	// already has both loaded for its own purposes (see admin/+page.svelte).
+	// The standalone /admin/invite route supplies neither, so the feature is
+	// naturally absent there — no separate gate needed beyond `controlled`.
+	type InvitablePerson = { personId: string; name: string };
+
 	let {
 		presetDb = '',
 		presetDbEntityId = '',
 		presetDbName = '',
 		heading = 'h1',
-		layout = 'standalone'
+		layout = 'standalone',
+		viewerPersonId = '',
+		roster = []
 	}: {
 		presetDb?: string;
 		presetDbEntityId?: string;
 		presetDbName?: string;
 		heading?: 'h1' | 'h2';
 		layout?: 'standalone' | 'embedded';
+		viewerPersonId?: string;
+		roster?: InvitablePerson[];
 	} = $props();
 	const rootClasses = $derived(
 		layout === 'embedded' ? 'flex w-full flex-col gap-4' : 'mx-auto flex w-full max-w-md flex-col gap-4'
@@ -126,6 +152,122 @@
 	let createError = $state<{ personId?: string } | null>(null);
 
 	const canSubmit = $derived(dbId !== '' && dbEntityId !== '');
+
+	// #301 — the person-select's own prerequisite state. `ownerTier` starts
+	// 'loading' and — per the issue's explicit instruction — 'loading' AND
+	// 'error' both render as NOT-SHOWN (`showPersonSelect` below): a select
+	// that appeared before the tier is actually known would 403 on submit for
+	// a non-owner, and an unresolved answer is not the same claim as "not an
+	// owner".
+	let ownerTier = $state<OwnerTier | 'loading'>('loading');
+	let joinStates = $state<Record<string, JoinState>>({});
+	// STATED CHOICE (b): `listJoinStates` fails LOUD (any single person's HTTP
+	// failure rejects the whole fan-out — #294 discipline, never a partial
+	// list). Caught here as "we do not know who is uninvited": `joinStates`
+	// stays empty (the select stays absent, never stale or partial) and this
+	// flag renders one visible note. The blank-invite path does not read
+	// `joinStates` at all, so it is untouched by this failure. Reachable only
+	// on the owner path — see `loadPersonInviteData`, which does not read the
+	// list for a tier that could never render the select.
+	let personListError = $state(false);
+	// '' = the always-present default ("a new person" — today's behavior).
+	let selectedPersonId = $state('');
+	let personMintError = $state<{ name: string; ownerOnly: boolean } | null>(null);
+
+	const uninvitedPersons = $derived(roster.filter((p) => joinStates[p.personId] === 'absent'));
+	const selectedPerson = $derived(
+		uninvitedPersons.find((p) => p.personId === selectedPersonId) ?? null
+	);
+	// The select's OWN placement rule, independent of `canSubmit`: owner-tier
+	// AND at least one uninvited person, both required — see the issue's "(if
+	// any)" requirement (a control that can only be refused is never shown).
+	const showPersonSelect = $derived(controlled && ownerTier === 'owner' && uninvitedPersons.length > 0);
+	// #294's reused one-line explanation — a CONFIRMED non-owner tier only
+	// ('editor' or 'none'); 'loading'/'error' render neither this note nor the
+	// select (same STATED CHOICE (a) as above, applied consistently: an
+	// unresolved tier must never be presented as a positive claim either way).
+	const ownerNoteVisible = $derived(controlled && (ownerTier === 'editor' || ownerTier === 'none'));
+
+	// The submit button's visible text IS its accessible name (no aria-label
+	// anywhere on it) — STATED CHOICE (d): the label flip is driven by this ONE
+	// derived value the template renders verbatim, so "which behavior will
+	// fire" and "what the button says" can never drift apart.
+	const submitLabel = $derived(
+		status === 'creating'
+			? m.admin_invite_creating()
+			: selectedPerson
+				? m.admin_invite_submit_person({ name: selectedPerson.name })
+				: m.admin_invite_submit()
+	);
+
+	// Guards against re-fetching the SAME owner-tier/uninvited-list answer on
+	// every unrelated re-render — mirrors `resolvedForDb`'s role above, just
+	// keyed on the four inputs this read actually depends on.
+	let resolvedPersonDataKey = '';
+
+	async function loadPersonInviteData(
+		cfg: { db: string; token: string },
+		dbEntityIdForTier: string,
+		personIdForTier: string,
+		personIds: string[]
+	): Promise<void> {
+		personListError = false;
+		// #301 review F2 — SEQUENTIAL, not a `Promise.all` pair, for two reasons
+		// the coupling caused:
+		//   1. `listJoinStates` is a fan-out of ONE linked-identity-property GET
+		//      per roster person. The select it feeds can only ever render for
+		//      an owner (`showPersonSelect`), so for an editor-/none-tier admin
+		//      those N requests fired on every /admin load and their result was
+		//      discarded unread. The tier answer decides whether the list is
+		//      needed AT ALL, so it must come first.
+		//   2. `Promise.all` rejects as a unit: one person's failed read skipped
+		//      the `ownerTier` assignment entirely, stranding the tier at
+		//      'loading' — which made `ownerNoteVisible` false and showed a
+		//      non-owner admin the red list-failure note instead of #294's
+		//      owner-rights explanation. Assigning the tier first means a list
+		//      failure can no longer swallow it.
+		// `resolveOwnerTier` answers 'error' rather than throwing (adminStore.ts),
+		// so the assignment below always lands; the catch is belt-and-braces
+		// against an unexpected throw, and keeps the same "unresolved tier
+		// renders neither the select nor the note" meaning.
+		let tier: OwnerTier;
+		try {
+			tier = await resolveOwnerTier(cfg, personIdForTier, undefined, dbEntityIdForTier);
+		} catch (e) {
+			console.error('admin/invite: owner-tier read failed — the select stays absent', e);
+			tier = 'error';
+		}
+		ownerTier = tier;
+		if (tier !== 'owner') {
+			// Nothing to list for: the select cannot render for this tier.
+			joinStates = {};
+			return;
+		}
+		try {
+			joinStates = await listJoinStates(cfg, personIds);
+		} catch (e) {
+			console.error(
+				'admin/invite: person-select prerequisite read failed — the select stays absent',
+				e
+			);
+			joinStates = {};
+			personListError = true;
+		}
+	}
+
+	// #301 — `controlled`-only: the select's placement ("between invite-db-fixed
+	// and the submit button") only exists alongside the fixed collective line,
+	// which only renders in controlled mode.
+	$effect(() => {
+		if (!controlled || !presetDbEntityId || !viewerPersonId) return;
+		const token = getToken();
+		if (!token) return;
+		const personIds = roster.map((p) => p.personId);
+		const key = `${presetDb}|${presetDbEntityId}|${viewerPersonId}|${personIds.join(',')}`;
+		if (key === resolvedPersonDataKey) return;
+		resolvedPersonDataKey = key;
+		void loadPersonInviteData({ db: presetDb, token }, presetDbEntityId, viewerPersonId, personIds);
+	});
 
 	// Plain (non-reactive) flag, not $state — mirrors +layout.svelte's
 	// `lastAuthStatus`/`hydrating` pattern. Once the picker has been shown once
@@ -236,10 +378,71 @@
 			status = 'create-error';
 			return;
 		}
-		status = 'creating';
+		const cfg = { db: dbId, token };
+		// #301 review F1 — BOTH error surfaces clear at the single entry point,
+		// not one each inside its own branch. Each branch clearing only its own
+		// variable left the other one rendered: a failed mint naming Cilla stayed
+		// on screen under a button that now says "Create invite" (and the mirror
+		// case stacked `invite-admin-error` and `invite-mint-error` together). An
+		// error message must never outlive the action it describes.
 		createError = null;
+		personMintError = null;
+
+		// #301 — the person-targeted path. STATED CHOICE (c): `createInvite` is
+		// structurally UNREACHABLE from here — this branch returns before falling
+		// through to the blank-invite call below, on every exit (success,
+		// session-expiry, and the mint-failure catch). Selecting an existing
+		// person and calling `createInvite` would mint a SECOND person/member for
+		// someone who already exists (#294's central avoidance) — that duplicate
+		// -identity outcome is the reason this split exists at all.
+		if (selectedPersonId) {
+			const targetPersonId = selectedPersonId;
+			const targetName = selectedPerson?.name ?? '';
+			status = 'creating';
+			try {
+				const { inviteToken } = await mintSelfLinkInvite(cfg, targetPersonId);
+				inviteLink = buildInviteUrl(window.location.origin, inviteToken);
+				const parsed = parseInviteToken(inviteToken, Date.now());
+				inviteExpiryDate =
+					parsed.status === 'invalid' ? '' : inviteExpiryDateFmt.format(new Date(parsed.expMs));
+				copied = false;
+				copyFailed = false;
+				selectedPersonId = '';
+				try {
+					// Re-derive THIS person's state from the platform's own truth —
+					// never a local splice — same discipline the roster's
+					// `refreshJoinState` uses after its own mint/withdraw calls.
+					const updated = await listJoinStates(cfg, [targetPersonId]);
+					joinStates = { ...joinStates, ...updated };
+				} catch (refreshErr) {
+					console.error(
+						'admin/invite: post-mint join-state refresh failed — the list may show a stale entry until the next reload',
+						refreshErr
+					);
+				}
+				status = 'done';
+			} catch (e) {
+				if (isAuthExpiredError(e)) {
+					status = 'session-expired';
+					return;
+				}
+				// #301 — a DIFFERENT error class from `InviteCreateError` (item 5): its
+				// OWN error surface, never funneled through the createInvite
+				// partial-failure UI (that UI describes a person entity that got
+				// CREATED, which this path never does). 403/'missing-self-editor' is
+				// caught HERE too, surfaced as the owner-rights meaning rather than
+				// the raw platform text.
+				console.error('admin/invite: person-targeted mint failed', e);
+				const ownerOnly = e instanceof SelfLinkMintError && e.reason === 'missing-self-editor';
+				personMintError = { name: targetName, ownerOnly };
+				status = 'create-error';
+			}
+			return;
+		}
+
+		status = 'creating';
 		try {
-			const result = await createInvite({ db: dbId, token }, { dbEntityId });
+			const result = await createInvite(cfg, { dbEntityId });
 			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
 			// The shown expiry is the minted token's OWN exp — never an assumed +7d.
 			const parsed = parseInviteToken(result.inviteToken, Date.now());
@@ -285,6 +488,12 @@
 		copied = false;
 		copyFailed = false;
 		createError = null;
+		// #301 — back to the default selection too. `joinStates` itself is left
+		// untouched: a successful mint already re-derived the just-invited
+		// person's own entry (see `submit`), so the uninvited list here is
+		// already current, not a stale pre-mint snapshot.
+		selectedPersonId = '';
+		personMintError = null;
 		status = 'ready';
 	}
 </script>
@@ -373,6 +582,21 @@
 				{/if}
 			</div>
 		{/if}
+		{#if personMintError}
+			<!-- #301 item 5 — a SelfLinkMintError's OWN surface: a DIFFERENT
+			     operation (mint onto an EXISTING person) from createInvite's
+			     partial-failure case (a person entity that got CREATED), so it never
+			     shares that UI or its message. 403/'missing-self-editor' is caught
+			     HERE too and rendered as the owner-rights meaning, never the raw
+			     platform text — see the `submit()` catch branch. -->
+			<div data-testid="invite-mint-error" class="flex flex-col gap-1" role="alert">
+				<p class="text-sm text-red-700">
+					{personMintError.ownerOnly
+						? m.admin_invite_mint_owner_only()
+						: m.admin_invite_mint_error({ name: personMintError.name })}
+				</p>
+			</div>
+		{/if}
 		<div class="flex flex-col gap-3">
 			{#if controlled}
 				<!-- Controlled mode: the collective is FIXED by the embedding page
@@ -407,6 +631,48 @@
 					</select>
 				</label>
 			{/if}
+			<!-- #301 — the owner-only person select, "between the collective line and
+			     the submit button" (issue's own placement spec). Exactly one of the
+			     three states below is true at a time: the list read failed (loud
+			     note, blank invite still works), the select itself (owner + at least
+			     one uninvited person), or the #294 owner-rights note (a CONFIRMED
+			     non-owner tier). 'loading'/'error' render NONE of the three — an
+			     unresolved tier is not a positive claim in either direction. -->
+			{#if personListError}
+				<p data-testid="invite-person-list-error" class="text-sm text-red-700" role="alert">
+					{m.admin_invite_person_list_error()}
+				</p>
+			{:else if showPersonSelect}
+				<label class="flex flex-col gap-1 text-sm">
+					{m.admin_invite_person_label()}
+					<select
+						data-testid="invite-person-select"
+						value={selectedPersonId}
+						onchange={(e) => {
+							selectedPersonId = e.currentTarget.value;
+							// #301 review F1 — changing the selection changes WHICH action
+							// the button performs, so both error notes go with it: a note
+							// describing the previous action must not sit under a button
+							// now offering the other one.
+							createError = null;
+							personMintError = null;
+						}}
+						class="rounded-md border border-ink px-3 py-2"
+					>
+						<!-- The default is a REAL choice (today's unchanged behavior), never
+						     a `disabled hidden` prompt — issue #301, per the #288 rule: "a
+						     new person" is a thing an admin may deliberately want. -->
+						<option value="">{m.admin_invite_person_new()}</option>
+						{#each uninvitedPersons as p (p.personId)}
+							<option value={p.personId}>{p.name}</option>
+						{/each}
+					</select>
+				</label>
+			{:else if ownerNoteVisible}
+				<p data-testid="invite-owner-note" class="text-xs text-ink-2">
+					{m.roster_member_invite_owner_only()}
+				</p>
+			{/if}
 			<button
 				type="button"
 				data-testid="invite-admin-submit"
@@ -414,7 +680,7 @@
 				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:opacity-50"
 				onclick={submit}
 			>
-				{status === 'creating' ? m.admin_invite_creating() : m.admin_invite_submit()}
+				{submitLabel}
 			</button>
 		</div>
 	{/if}

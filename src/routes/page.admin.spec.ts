@@ -100,7 +100,19 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_copy_error: () => "Couldn't copy the link.",
 		admin_invite_partial_failure: (p: { personId: string }) =>
 			`A person entity (${p.personId}) was already created and carries a live invite token.`,
-		admin_invite_create_another: () => 'Create another invite'
+		admin_invite_create_another: () => 'Create another invite',
+		// #301 — the embedded InviteSurface now also resolves an owner-tier +
+		// uninvited-list prerequisite pair on every mount; this file has no
+		// opinion on that feature (pinned in page.admin-invite-person-select.spec.ts)
+		// and keeps it inert via `loadOk()` below, but every key the component
+		// can reach in ANY of its states still needs a stub here.
+		admin_invite_person_label: () => 'Who are you inviting?',
+		admin_invite_person_new: () => 'A new person',
+		admin_invite_submit_person: (p: { name: string }) => `Invite ${p.name}`,
+		admin_invite_person_list_error: () => 'Could not load the list of uninvited people.',
+		admin_invite_mint_error: (p: { name: string }) => `Could not invite ${p.name}.`,
+		admin_invite_mint_owner_only: () => 'Inviting an existing person requires owner rights.',
+		roster_member_invite_owner_only: () => 'Managing invites requires owner rights.'
 	}
 }));
 
@@ -148,6 +160,12 @@ const h = vi.hoisted(() => {
 		addLibrarianMock: vi.fn(),
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
+		// #301 — the embedded InviteSurface's owner-tier gate. Defaulted to
+		// 'error' HERE (not reset per-test — every test in this file wants the
+		// same inert answer) so the new person-select feature never renders:
+		// this file's contract is role management, not #301 (see
+		// page.admin-invite-person-select.spec.ts for that one).
+		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
@@ -158,6 +176,9 @@ const h = vi.hoisted(() => {
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
+		// #301 — InviteSurface's uninvited-list read. Defaulted here (not
+		// reset per-test), same reasoning as resolveOwnerTierMock above.
+		listJoinStatesMock: vi.fn().mockResolvedValue({}),
 		// #165 — the admin page's `load()` now also resolves the collective-name
 		// marker on every ready-path render (same house-rule failure handling as
 		// its sibling resolutions). Mocked here purely as scaffolding so THIS
@@ -180,10 +201,15 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	removeLibrarian: h.removeLibrarianMock
 }));
 vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock
+	resolveAdmin: h.resolveAdminMock,
+	resolveOwnerTier: h.resolveOwnerTierMock
 }));
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
+}));
+// #301 — InviteSurface's uninvited-list seam.
+vi.mock('$lib/profile/linkedIdentities', () => ({
+	listJoinStates: h.listJoinStatesMock
 }));
 vi.mock('$lib/collective/databaseEntity', () => ({
 	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
@@ -303,6 +329,10 @@ function loadOk() {
 	// 'ready' the same as before this dependency existed.
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	// #301 — inert by construction: 'error' tier renders neither the select nor
+	// the owner note (this file's own contract is unaffected either way).
+	h.resolveOwnerTierMock.mockResolvedValue('error');
+	h.listJoinStatesMock.mockResolvedValue({});
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {

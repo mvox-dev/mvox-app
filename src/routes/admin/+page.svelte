@@ -784,6 +784,8 @@
 					presetDb={cfg?.db ?? ''}
 					presetDbEntityId={dbEntityId ?? ''}
 					presetDbName={selected?.name ?? ''}
+					viewerPersonId={viewerId ?? ''}
+					roster={roster}
 					heading="h2"
 					layout="embedded"
 				/>
