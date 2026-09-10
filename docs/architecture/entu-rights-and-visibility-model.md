@@ -10,6 +10,9 @@
 > - **One mechanics addition pinned after this doc's pass** (cited per this doc's own discipline): entu-api copies a parent's `_sharing` onto a new child at create **when the payload omits `_sharing`** (`utils/entity.js:296-327`, source-pinned 2026-08-06) — a create-time server-side default, distinct from the read-time `_inheritrights` cascade. Full treatment: wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility).
 > - Canonical v4E is **no longer the reference schema** (Mihkel, 2026-08-06: schema freedom toward our own v5E) — schema-shape statements herein describe Entu mechanics, not a sync target.
 
+> **ER-13** — Entity CREATE copies a parent's `_sharing` onto a new child when the payload omits `_sharing`; a child created under a `domain` parent that does not set its own `_sharing` explicitly therefore silently becomes `domain`, not `private` by default.
+> Evidence: `utils/entity.js:296-327` (source-pinned 2026-08-06).
+
 **Status:** VERIFIED GROUND. Every claim below carries a `file:line` reference read directly from `entu-api` source (`~/projects/entu-api`) during the 2026-08-05 verification pass (Q1/Q1b) and the 2026-07-19 bucket review. Nothing here is inferred, and nothing is carried from a repo doc — repo docs are convenience summaries, not authority for Entu mechanics.
 
 **Scope:** the rights, sharing, and cross-database visibility mechanics that the mvox single-collective design rests on. This is the reference; when it and any older doc disagree, this wins.
@@ -20,6 +23,8 @@
 - Any "no entity-to-entity grants" claim stated as a source-enforced rule (see §6 for the accurate version)
 
 **Provenance key:** [P] = read directly by Palestrina this pass · [F] = read directly from source by Finn this pass (auth chain) · [PE] = live-probe verified by Pérotin (2026-09-08 addition, §7) — observed wire behavior against live Entu, not a source `file:line` read; narrower confidence than [P]/[F], flagged as such at point of use.
+
+**Identifier scheme (#317):** every citable rule below carries a stable identifier of the form `ER-<n>` — `n` a positive integer, no leading zeros, opaque and **creation-order only**. The number carries no positional meaning; it is never read as "lives in §n". An identifier is assigned once, is never reused, and is never renumbered. A superseded rule **keeps its identifier forever** and is marked `(superseded by ER-<m>, <date>)` on its definition's first line — superseding never frees the old number for reuse. **Where a rule carries a qualification — an exception, a boundary case, a direction it does not extend to — the qualification is itself a separately identified rule, and base and qualification name each other by ID: the qualification cites its base, and the base carries a `Qualifications: ER-<n>, …` line naming every rule that bounds it, so quoting the base whole shows that it is bounded. Never a clause, a parenthesis, or an "except" folded into the base rule's own sentence:** a qualifier living as a clause dies the moment anyone restates the sentence without it, which is exactly how the per-reference qualifier on the direct-grant-replacement rule was lost on 2026-09-10 (see ER-6 / ER-8 / ER-9 below, where the base rule and both its qualifications are three separate, cross-referenced identifiers). The existing `§1`…`§7.3` section numbers remain **navigation only** — how a human finds a rule by reading — and this scheme never renumbers them; the two numbering systems are independent and are never conflated.
 
 ---
 
@@ -86,6 +91,10 @@ A property whose definition is `private` (or unset) satisfies neither branch →
 
 **[LIVE] the "moot for mvox" assumption above is stale.** It read "moot for mvox because import is last, so prop-def sharing is set correctly at type-creation with no instances to re-aggregate" — true when written, false by mvox-app#20 (2026-08-07): the `member.person` and `member.section` prop-defs shipped with no explicit `_sharing` (silently defaulting out of the domain bucket per the first retention gate above), and by the time this surfaced, 245 live `member` instances existed. Confirmed by Pérotin's live probe (mvox-app#20, 2026-08-07 ~14:52 UTC): a `status:active` member's `person` reference existed and was entity-domain-shared, yet was unreadable to an ordinary domain-tier reader — the reproduction of exactly this doc's own re-aggregation warning. Fix in flight: two prop-def `_sharing:'domain'` writes + a touch-save re-aggregation pass across the 245 affected instances (§8.6 authorization chain, result ledger to follow). **Corrected operational guidance: once mvox has live instances of any type — which, contrary to the original assumption, happens well before "import" in the migration sense — a prop-def `_sharing` change is never moot. Budget the re-aggregation pass every time.**
 
+> **ER-1** — Bucket exposure is a three-gate AND, narrowest wins: (1) the prop-def's own `_sharing`, (2) the entity type's own `_sharing` as a cap, (3) the entity instance's own `_sharing` as a second retention gate. A property value reaches a **tier-admitted** reader — one admitted by the entity's `domain`/`public` sharing, holding no explicit rights grant — only if all three gates allow it. A reader admitted by an explicit grant is not bounded by these gates at all, and this formula does not hold for them: see ER-4.
+> Evidence: `aggregate.js:86,94,113-121` (gates 1–2); `aggregate.js:269-275` (gate 3); synthesized in `teams/mvox-dev/memory/perotin.md:1263-1272` (2026-08-08: "a visibility scope is only complete when it names all three"); the omitted-gate re-widening this caused is `scripts/migrations/lib/widen-member-refs-2026-08-07.ts`. Distills §3; adds no new claim.
+> Qualifications: ER-4.
+
 ---
 
 ## 4. The database boundary IS a read boundary  [F]
@@ -110,6 +119,9 @@ The domain read-gate needs `entu.userStr` truthy (§2). Its value:
 
 **Not "one JWT = one collective":** if the same OAuth identity has a real person in two dbs, one JWT carries `accounts` for both and reads `domain` in both. This is not a boundary bypass (each requires a genuine person in that db). Ruled out of scope for mvox 2026-08-05 (person-per-collective stands; cross-install identity is Entu's concern) — recorded here as a mechanism fact, not an open question.
 
+> **ER-10** — The database boundary is a read boundary: "One Entu install per collective → `domain` = in-collective visibility" holds, enforced by code, not by data state (§4). A user authenticated against install X cannot read `domain` entities in install Y unless they genuinely have a `person` entity in Y.
+> Evidence: `middleware/auth.js:21,31-33,46-48`; `routes/auth/index.get.js:132,141-190,254`.
+
 ---
 
 ## 5. Changing `_sharing` requires `_owner`  [P]
@@ -122,6 +134,13 @@ The domain read-gate needs `entu.userStr` truthy (§2). Its value:
 
 **Consequence:** an auto-provisioned person gets `_editor: self`, not `_owner`, so a user **cannot change their own person's `_sharing`** on their own JWT. Any runtime `_sharing` change needs the service key. *(Largely moot under single-collective: person sharing posture is set on the type's prop-defs at creation, §3, not per-instance at runtime.)*
 
+> **ER-11** — Changing `_sharing` requires `_owner`: `_sharing` is a rights-type property, and writing or deleting any rights-type property requires the caller be in the entity's `_owner` list.
+> Evidence: `entity.js:21-29,115-121`; `routes/[db]/property/[_id]/index.delete.js:140`.
+> Qualifications: ER-17.
+
+> **ER-17** — A `systemUser` (service-key) caller bypasses the `_owner` requirement of ER-11 on the WRITE path: the rights-property write check is skipped entirely for it. Claimed for the write path only — the DELETE gate (ER-11's DELETE citation) carries no such term.
+> Evidence: `entity.js:115-121` — the `&& !entu.systemUser` term at `entity.js:116`; `entu-api` source-read 2026-09-10.
+
 ---
 
 ## 6. Rights references are NOT type-constrained — but entity-to-entity grants confer nothing  [P]
@@ -131,6 +150,12 @@ The domain read-gate needs `entu.userStr` truthy (§2). Its value:
 But such a grant is inert. The read gate matches a reader's own person id (`userStr`) against `access` (§2), and `getAccessArray` pushes each grant's `reference` verbatim (`rights.js:84-94`). An org-entity id placed in `access` matches no reader's `userStr`, so it grants **no** transitive "anyone in org O can see this" access — it is a dead reference.
 
 **So:** there is no group/membership-expansion primitive. The only transitive-visibility mechanism is the `_inheritrights` parent→child cascade (a structural relationship, not a rights reference). A design needing "collective members can resolve person X" must use either `domain` sharing (§3, the single-collective answer) or per-person grants — not an org-as-viewer shortcut.
+
+> **ER-2** — `_viewer:<entity-id>` on a non-person entity (e.g. an org) is accepted by the write path but inert at read time: the reference is written into `access` verbatim, but no reader's own person id matches an org id, so the grant confers no transitive "anyone in this org can see this" access.
+> Evidence: `entity.js:138,141-153` (write path accepts any existing-entity reference); `rights.js:84-94` (reference pushed verbatim into `access`). Distills §6.
+
+> **ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property's value is written into (§1–§3); `_inheritrights` decides whether a parent's rights cascade onto a child (§7.3). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.
+> Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis, §1–§3); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over §1–§2 and §7.3; adds no new claim.
 
 ---
 
@@ -146,6 +171,12 @@ Corroborates §2's `cleanupEntity` branch (line 42-43: any grant matching `acces
 
 Probe artifacts: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`, `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`, `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`.
 
+> **ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (§3) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.
+> Evidence: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`.
+
+> **ER-4** — Tier-admitted and grant-admitted readers get different answers to "what can this person see?": for a tier-admitted reader (domain/public, no explicit grant), exposure is the gate conjunction stated in ER-1 (quote ER-1 for the gates; they are not re-enumerated here). For a grant-admitted reader (holds any explicit `_owner`/`_editor`/`_viewer`/`_expander` grant), that formula is wrong — ER-3 established a grant-admitted reader receives the entire private bucket, and prop-def-tier `_sharing` filters nothing.
+> Evidence: `aggregate.js:113-121,269-275` (the gates ER-1 enumerates); ER-3 above (§7.1's operative sentence). Distills §7.1 + §3.
+
 ### 7.2 Entity CREATE auto-grants the creating caller `_owner` — ONE direct document, aggregating as all four tiers
 
 Not covered by §1-§6 (those describe read-time bucket exposure; this is a create-time grant-assignment fact). Observed: a fresh entity created via `inviteData.ts`'s `createInvite()` — whose payload sends the CALLER no explicit rights at all (only `_editor: self` to the newly-created person) — nonetheless shows the creating caller holding `_owner`/`_editor`/`_viewer`/`_expander` all as **direct** (non-inherited) grants immediately after create, reproduced on two independent runs.
@@ -156,9 +187,13 @@ Consequence: **what a create payload sends and what the platform actually grants
 
 Probe artifacts: `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`, `scripts/migrations/probes/probe-create-auto-grant-doc-count-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`, `scripts/migrations/seed-results/probe-create-auto-grant-doc-count-live-2026-09-09T17-59-10-718Z.json`.
 
+> **ER-5** — Entity CREATE auto-grants the creating caller `_owner` as one direct document, aggregating as all four tiers (`_owner`/`_editor`/`_viewer`/`_expander`) at read time — not four separate grant documents. What a create payload sends and what the platform actually grants the creator are different questions.
+> Evidence: `scripts/migrations/probes/probe-create-auto-grant-doc-count-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-create-auto-grant-doc-count-live-2026-09-09T17-59-10-718Z.json`.
+> Qualifications: ER-9.
+
 ### 7.3 One direct rights-tier per (reference, entity) — new direct grant replaces, propagation never touches a child's own grant
 
-**Ruled INTENDED, not a bug** (Mihkel, 2026-09-09, on the crede Joosep-`_editor`-disappearance investigation): *"new direct grant should replace previous one... I expect entity grant (in aggregation) to be combination of inherited and direct grants."* No upstream report — this is design, not a defect.
+**Ruled INTENDED, not a bug** (Mihkel, 2026-09-09, on the crede editor-grant disappearance investigation): *"new direct grant should replace previous one... I expect entity grant (in aggregation) to be combination of inherited and direct grants."* No upstream report — this is design, not a defect.
 
 **The model**: a reference can hold at most one active **direct** rights-tier grant per entity. Granting a new direct tier (`_owner`/`_editor`/`_viewer`/`_expander`) for a reference that already holds a direct tier on that same entity retires (soft-deletes) the old one — even via a bare, independent POST carrying no prior `_id`. Confirmed non-monotonic: a lower tier granted second retires a higher one too, not just the reverse. An entity's aggregated rights are the **combination of its own direct grant(s) plus whatever cascades in as inherited** from `_inheritrights` parents (§1-§2) — direct and inherited are separate, additive layers; only the direct layer is single-tier-per-reference.
 
@@ -167,6 +202,26 @@ Probe artifacts: `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-
 Live-confirmed 2026-09-09 on polyphony (synthetic), both halves, full raw request/response evidence: `scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts`, `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-crede-editor-disappear-repro-live-2026-09-09T16-56-49-211Z.json`, `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`. Corroborated independently on crede's own read-only `/history` audit log (same pattern, twice, pre-dating this investigation).
 
 **Practical consequence**: never assume a rights-tier grant is additive-only for a reference that might already hold a different tier on the same entity. Read back after any rights write if a prior grant's survival matters.
+
+> **ER-6** — A reference can hold at most one active direct rights-tier grant per entity. Granting a new direct tier (`_owner`/`_editor`/`_viewer`/`_expander`) for a reference that already holds a direct tier on that same entity retires (soft-deletes) the old one — even via a bare, independent POST carrying no prior `_id`.
+> Evidence: `scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts`, `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-crede-editor-disappear-repro-live-2026-09-09T16-56-49-211Z.json`, `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.
+> Qualifications: ER-8, ER-9.
+
+> **ER-7** — Direct and inherited rights are separate, additive layers on an entity's aggregated rights: direct grants follow ER-6; inherited grants cascade in via `_inheritrights` from parents (§1–§2). Only the direct layer is single-tier-per-reference (ER-6); the inherited layer carries no such constraint.
+> Evidence: `aggregate.js:166-183` (with `_inheritrights` true and at least one parent reference, `getParentRights` fetches the parents' rights), `rights.js:14,40-44` (each fetched grant stamped `inherited: true`), `aggregate.js:185-209` (parent grants unioned with the entity's own into the aggregated tier arrays) — `entu-api` source-read 2026-09-10; direct-layer half per ER-6's probes.
+
+> **ER-8** — The replace-on-new-direct-grant behavior in ER-6 is strictly same-entity, same-reference; it does not extend to parent→child propagation. Granting a reference `_owner` on a parent, which propagates down and covers a child via `_inheritrights`, does not delete that child's own pre-existing standalone direct grant for the same reference — propagation never touches a grant document on an entity it merely reaches.
+> Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.
+
+> **ER-9** — Direct-grant replacement (ER-6) runs in both directions and is non-monotonic: a lower tier granted second retires a higher one, not just the reverse. Since entity CREATE grants the creating caller `_owner` as one direct document (ER-5), a later explicit lower-tier grant to that same caller on that same entity silently demotes the creator from owner — the replace happens with no error and no notice.
+> Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json` ("Confirmed non-monotonic: a lower tier granted second retires a higher one too, not just the reverse").
+
+### 7.4 The `_parent` gating asymmetry — scoped to one probe, not general
+
+**Fenced per the PO ruling on #317 (2026-09-10 15:27Z): either scoped to exactly what was probed, or left out entirely — a clean general rule on one narrow probe is forbidden.**
+
+> **ER-14** — On `event`'s `_parent` reference to its series parent (`polyphony` db, synthetic, probed 2026-09-10 under #304): a value DELETE was OWNER-gated (403 "User not in _owner property" for an editor-only caller, 200 for an owner caller) while a POST was EDITOR-gated (200 once editor-on-event plus expander-on-referenced were present) — the two write verbs on the same rights-type property answered differently. A control DELETE on a plain (non-`_parent`) property under the same editor-only caller returned 200, so the owner-gate is specific to `_parent`, not to DELETE generally. **Not established as general Entu behaviour** — one probe, one property, one entity type; no source `file:line` confirms the mechanism.
+> Evidence: `scripts/migrations/probes/probe-304-parent-rights-gate-2026-09-10.ts`; results `scripts/migrations/seed-results/probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json`.
 
 ---
 
@@ -183,7 +238,11 @@ Live-confirmed 2026-09-09 on polyphony (synthetic), both halves, full raw reques
 
 Between 2026-07-17 and 2026-07-19 the same rights/sharing questions produced three confident, published, and wrong conclusions in a row. Every failure began with a repo doc that read as authoritative and was not; every claim read directly from `entu-api` source held up. The structural fix is this document plus one rule:
 
-> **Claims about Entu mechanics cite `entu-api` source `file:line`, or are marked unverified. Repo docs — including findings docs — are summaries, not authority.**
+> **ER-15** — Claims about Entu mechanics cite `entu-api` source `file:line`, or are marked unverified. Repo docs — including findings docs — are summaries, not authority.
+> **[unverified]** as a documentation-governance convention: a stipulated discipline of this document, not an Entu mechanics fact with a source `file:line` of its own.
+
+> **ER-16** — Working notes and scratchpads cite a rule's stable identifier, never restate its content.
+> **[unverified]** as a documentation-governance convention: a stipulated discipline of this document, not an Entu mechanics fact with a source `file:line` of its own. Rationale: a restatement in a working note is exactly how the per-reference qualifier on ER-6 got lost on 2026-09-10, and leaving this instruction as unidentified prose would make it the one rule here that cannot be cited.
 
 (*MVOX:Palestrina*) — auth-chain verification (§4) by Finn, same pass.
 
