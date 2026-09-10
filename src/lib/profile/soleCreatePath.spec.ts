@@ -21,11 +21,20 @@ import { findSourceFiles, isSoleCreatePathViolation } from '$lib/testing/soleLit
 // - lib/sections/sectionActions.ts — createSection's explicit
 //   `_inheritrights: true` (#264 item 6); a section is not a profile, and this
 //   entry does not touch profileData.ts's sole-create-path guarantee.
+// - lib/links/linkActions.ts — createLink's explicit `_inheritrights: true`
+//   (#256, same #264-item-6 discipline as createSection); a link is not a
+//   profile either, and this entry does not touch profileData.ts's
+//   sole-create-path guarantee.
 // The predicate/walker now live in $lib/testing/soleLiteralGuard (shared with the
 // T4.5 guard — never import one spec file from another).
 
 const NEEDLE = '_inheritrights';
-const EXEMPT = ['lib/profile/profileData.ts', 'lib/invite/inviteData.ts', 'lib/sections/sectionActions.ts'];
+const EXEMPT = [
+	'lib/profile/profileData.ts',
+	'lib/invite/inviteData.ts',
+	'lib/sections/sectionActions.ts',
+	'lib/links/linkActions.ts'
+];
 
 describe('isSoleCreatePathViolation (guard predicate)', () => {
 	it('flags a non-exempt, non-spec file that contains the needle', () => {
@@ -91,11 +100,12 @@ describe('T4.7/#27 — the visibility-move modules compose on the sole create pa
 		});
 	}
 
-	it("the allowlist is still exactly the T4.4/T4.5/#264-item-6 entries — T4.7 added NO new create site", () => {
+	it("the allowlist is still exactly the T4.4/T4.5/#264-item-6/#256 entries — T4.7 added NO new create site", () => {
 		expect(EXEMPT).toEqual([
 			'lib/profile/profileData.ts',
 			'lib/invite/inviteData.ts',
-			'lib/sections/sectionActions.ts'
+			'lib/sections/sectionActions.ts',
+			'lib/links/linkActions.ts'
 		]);
 	});
 });

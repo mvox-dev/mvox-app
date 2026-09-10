@@ -26,6 +26,8 @@ const collectivesIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
 
 const adminIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"/></svg>';
 
+const linksIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+
 export const NAV_ENTRIES: NavEntry[] = [
 	{
 		key: 'agenda',
@@ -68,6 +70,17 @@ export const NAV_ENTRIES: NavEntry[] = [
 		route: '/collectives',
 		icon: collectivesIcon,
 		visible: (ctx) => ctx.hasMultipleCollectives,
+	},
+	{
+		// #256 — Lingikogu (link collection): members READ the collective's
+		// links, so this entry is visible to EVERYONE. Only the page's own
+		// add/edit/reorder/remove controls are admin-gated (absent, not
+		// disabled) — the nav tab itself carries no admin check.
+		key: 'links',
+		label: () => m.nav_links(),
+		route: '/links',
+		icon: linksIcon,
+		visible: () => true,
 	},
 ];
 

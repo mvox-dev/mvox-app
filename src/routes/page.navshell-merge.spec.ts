@@ -46,7 +46,9 @@ const msgs = vi.hoisted(() => {
 		nav_library: () => 'Library',
 		nav_invite: () => 'Invite',
 		nav_admin: () => 'Admin',
-		nav_collectives: () => 'Collectives'
+		nav_collectives: () => 'Collectives',
+		// #256 — the Lingikogu entry joins the nav (7th entry).
+		nav_links: () => 'Links'
 	};
 	const anyMessage = new Proxy({} as Record<string, (...args: unknown[]) => string>, {
 		get: (_t, prop) => {
@@ -267,8 +269,8 @@ afterEach(() => {
 // ── the entry list itself ───────────────────────────────────────────────────────
 
 describe('#140 — NAV_ENTRIES after the merge', () => {
-	it('carries exactly 6 entries — the separate invite entry is gone', () => {
-		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(6);
+	it('carries exactly 7 entries — the separate invite entry is gone; links joined (#256)', () => {
+		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(7);
 		expect(NAV_ENTRIES.find((e) => e.key === 'invite')).toBeUndefined();
 		expect(NAV_ENTRIES.find((e) => e.route === '/admin/invite')).toBeUndefined();
 	});
@@ -287,9 +289,9 @@ describe('#140 — NAV_ENTRIES after the merge', () => {
 // ── NavShell rendering the REAL entries (integration) ───────────────────────────
 
 describe('#140 — NavShell × real NAV_ENTRIES', () => {
-	it('renders exactly 6 top-level nav entries for a full-context admin (not 7)', () => {
+	it('renders exactly 7 top-level nav entries for a full-context admin (#256 added links)', () => {
 		const { container } = renderShell({ isAdmin: true, hasMultipleCollectives: true });
-		expect(navAnchors(container)).toHaveLength(6);
+		expect(navAnchors(container)).toHaveLength(7);
 	});
 
 	it('renders an Admin entry for admins — and NO separate Invite entry', () => {
@@ -302,7 +304,7 @@ describe('#140 — NavShell × real NAV_ENTRIES', () => {
 		).toHaveLength(0);
 	});
 
-	it('hides the Admin entry from non-admins — 4 member entries, no admin affordance', () => {
+	it('hides the Admin entry from non-admins — 5 member entries (#256: links is member-visible, members READ the collection), no admin affordance', () => {
 		const { container, queryByText } = renderShell({ isAdmin: false });
 		expect(queryByText('Admin')).toBeNull();
 		expect(queryByText('Invite')).toBeNull();
@@ -310,7 +312,8 @@ describe('#140 — NavShell × real NAV_ENTRIES', () => {
 			'/',
 			'/roster',
 			'/profile',
-			'/library'
+			'/library',
+			'/links'
 		]);
 	});
 
