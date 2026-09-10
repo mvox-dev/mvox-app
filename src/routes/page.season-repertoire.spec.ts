@@ -85,7 +85,10 @@ const {
 	listSectionsMock,
 	signFileUrlMock,
 	listEventsForSeasonMock,
-	deleteEventMock
+	deleteEventMock,
+	listEventSeriesForSeasonMock,
+	deleteEventSeriesMock,
+	countSeriesOccurrencesMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
@@ -94,7 +97,10 @@ const {
 	listSectionsMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
-	deleteEventMock: vi.fn()
+	deleteEventMock: vi.fn(),
+	listEventSeriesForSeasonMock: vi.fn(),
+	deleteEventSeriesMock: vi.fn(),
+	countSeriesOccurrencesMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -107,18 +113,19 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // way page.season-manage.spec.ts mocks them. The repertoire path (repertoireData,
 // workRows, libraryData, repertoireActions) stays REAL down to `fetch`.
 vi.mock('$lib/seasons/seasonManage', () => ({
-	listEventSeriesForSeason: vi.fn().mockResolvedValue([]),
+	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: vi.fn(),
 	addSeasonConductor: vi.fn(),
 	removeSeasonConductor: vi.fn(),
 	getSeriesDefaults: vi.fn(),
-	// Review 2 F1 — the panel-side standalone-event delete is the cheapest
-	// `loadForSelected({ keepSeasonManage: true })` trigger there is, and that
-	// panel-preserving reload is exactly what the reset pin below needs.
 	deleteEvent: deleteEventMock,
-	deleteEventSeries: vi.fn(),
-	countSeriesOccurrences: vi.fn(),
+	// Review 2 F1 (re-pointed by #313) — the panel-side SERIES delete is the
+	// surviving `loadForSelected({ keepSeasonManage: true })` trigger (the
+	// standalone-event rows are removed), and that panel-preserving reload is
+	// exactly what the reset pin below needs.
+	deleteEventSeries: deleteEventSeriesMock,
+	countSeriesOccurrences: countSeriesOccurrencesMock,
 	countSeasonScope: vi.fn(),
 	deleteSeason: vi.fn()
 }));
@@ -405,6 +412,9 @@ beforeEach(() => {
 	listSectionsMock.mockResolvedValue([]);
 	listEventsForSeasonMock.mockResolvedValue([]);
 	deleteEventMock.mockResolvedValue(undefined);
+	listEventSeriesForSeasonMock.mockResolvedValue([]);
+	deleteEventSeriesMock.mockResolvedValue(0);
+	countSeriesOccurrencesMock.mockResolvedValue(0);
 	// Never settles: the signing call is what the pin asserts, and letting it
 	// resolve would send happy-dom off navigating a stub tab.
 	signFileUrlMock.mockReturnValue(new Promise<string>(() => {}));
@@ -419,6 +429,9 @@ afterEach(() => {
 	signFileUrlMock.mockReset();
 	listEventsForSeasonMock.mockReset();
 	deleteEventMock.mockReset();
+	listEventSeriesForSeasonMock.mockReset();
+	deleteEventSeriesMock.mockReset();
+	countSeriesOccurrencesMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
 	clearAll({ preserveProvider: false });
@@ -958,18 +971,20 @@ describe('#234 review F4 — a failed panel read says so', () => {
 
 describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section standing', () => {
 	/** `loadForSelected({ keepSeasonManage: true })` is the reload every
-	 *  panel-born write issues (series/standalone-event delete, panel-born event
-	 *  create, series create, event convert): the panel deliberately stays open
-	 *  across it. The section's state must survive it too — resetting it on that
-	 *  path blanked the rows (reading as "this season has no repertoire") and
-	 *  emptied the add-work select down to its prompt, killing Done-when 2 until
-	 *  the editor closed and re-opened the gear.
+	 *  panel-born write issues (series delete, panel-born event create, series
+	 *  create): the panel deliberately stays open across it. The section's
+	 *  state must survive it too — resetting it on that path blanked the rows
+	 *  (reading as "this season has no repertoire") and emptied the add-work
+	 *  select down to its prompt, killing Done-when 2 until the editor closed
+	 *  and re-opened the panel.
 	 *
-	 *  Driven through the cheapest such reload there is: a panel-side standalone-
-	 *  event delete (`refreshAfterSeasonManageDelete`). */
-	const EV_ROW = { id: 'ev-9', name: 'Proov', startDatetime: '2027-05-01T17:00:00.000Z' };
+	 *  #313 removed the panel's standalone-event rows (the old cheapest
+	 *  trigger); this is now driven through the SURVIVING write-triggered
+	 *  reload — a series delete (`refreshAfterSeasonManageDelete`), the ONLY
+	 *  remaining coverage of the panel staying open across that reload. */
+	const SERIES_ROW = { id: 'series-9', name: 'Proovid', eventCount: 3 };
 
-	it('rows and the add-work select survive a standalone-event delete, with no repertoire refetch to hide a wipe', async () => {
+	it('rows and the add-work select survive a series delete, with no repertoire refetch to hide a wipe', async () => {
 		// The trap: from the moment the delete fires, every repertoire_item read
 		// hangs. Whatever the section shows afterwards is what the resets left.
 		const hold = { on: false };
@@ -978,10 +993,12 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 			holdRepertoireReads: () => hold.on
 		});
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
-		let standaloneEvents = [EV_ROW];
-		listEventsForSeasonMock.mockImplementation(async () => standaloneEvents);
-		deleteEventMock.mockImplementation(async (_cfg: unknown, id: string) => {
-			standaloneEvents = standaloneEvents.filter((e) => e.id !== id);
+		let seriesRows = [SERIES_ROW];
+		listEventSeriesForSeasonMock.mockImplementation(async () => seriesRows);
+		countSeriesOccurrencesMock.mockResolvedValue(3);
+		deleteEventSeriesMock.mockImplementation(async (_cfg: unknown, id: string) => {
+			seriesRows = seriesRows.filter((s) => s.id !== id);
+			return 3;
 		});
 		setAuthed();
 
@@ -991,20 +1008,22 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 			expect(qa(repertoireSection(container), 'work-row').length).toBe(2);
 		});
 		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
+			expect(q(container, 'season-manage-series-series-9')).not.toBeNull();
 		});
 
 		hold.on = true;
 
 		// Two-tap delete (#197 review F2) — only the confirm writes.
-		await fireEvent.click(q(container, 'season-manage-event-delete-ev-9') as HTMLElement);
+		await fireEvent.click(q(container, 'season-manage-series-delete-series-9') as HTMLElement);
 		await waitFor(() => {
-			expect(q(container, 'season-manage-event-delete-confirm-ev-9')).not.toBeNull();
+			expect(q(container, 'season-manage-series-delete-confirm-series-9')).not.toBeNull();
 		});
-		await fireEvent.click(q(container, 'season-manage-event-delete-confirm-ev-9') as HTMLElement);
+		await fireEvent.click(
+			q(container, 'season-manage-series-delete-confirm-series-9') as HTMLElement
+		);
 
 		await waitFor(() => {
-			expect(deleteEventMock).toHaveBeenCalledTimes(1);
+			expect(deleteEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
 		// The panel-preserving reload has actually run (a second agenda read).
 		await waitFor(() => {

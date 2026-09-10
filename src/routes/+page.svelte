@@ -113,16 +113,13 @@
 		generateIntervalDates,
 		type RepeatPattern
 	} from '$lib/events/recurrence';
-	import { convertEventToSeries, type ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import {
 		listEventSeriesForSeason,
-		listEventsForSeason,
 		updateSeasonField,
 		addSeasonConductor,
 		removeSeasonConductor as apiRemoveSeasonConductor,
 		getSeriesDefaults,
-		deleteEvent as apiDeleteEvent,
 		deleteEventSeries as apiDeleteEventSeries,
 		countSeriesOccurrences as apiCountSeriesOccurrences,
 		countSeasonScope as apiCountSeasonScope,
@@ -131,16 +128,20 @@
 	import type {
 		SeasonEditableField,
 		SeriesDefaults,
-		SeriesListItem,
-		StandaloneEvent
+		SeriesListItem
 	} from '$lib/seasons/seasonManage';
 	// #197 review F3/F5 — the delete-refusal discriminators live in their OWN
 	// module (see `deleteErrors.ts`'s header): the page's integration specs
 	// `vi.mock` `$lib/seasons/seasonManage` wholesale, so importing these from
 	// there would hand the page `undefined` under test.
+	// #313 — `isEventCascadePartial` left with `onSeasonManageEventDelete`: the
+	// panel's own cascades (series/season) never surface that error RAW at the
+	// top level (deleteEventSeries/deleteSeason always wrap a child's
+	// EventCascadePartialError inside their OWN tagged error — see
+	// seasonManage.ts), so the 'partial-event' branch was unreachable dead code
+	// the moment the standalone-event delete left.
 	import {
 		isDeleteForbidden,
-		isEventCascadePartial,
 		isSeriesCascadePartial,
 		isSeasonCascadePartial
 	} from '$lib/seasons/deleteErrors';
@@ -770,10 +771,7 @@
 			// the next one's picker.
 			rosterReadFailed = false;
 			sectionsReadFailed = false;
-			// #196 review F2 — a genuine collective switch (deselection) DOES drop an
-			// unfinished conversion run: its resume record names ids in a db that is no
-			// longer selected. `EventConvertResume` documents exactly this.
-			resetSeasonManage({ dropConvertRun: true });
+			resetSeasonManage();
 			attendanceFailedByEvent = new Map();
 			myAttendance = [];
 			seasonSummaryExpanded = false;
@@ -830,11 +828,7 @@
 			// the next one's picker.
 			rosterReadFailed = false;
 			sectionsReadFailed = false;
-			// #196 review F2 — see the deselection branch: a switch to a DIFFERENT
-			// collective drops the run record with the rest of the panel. Retries of the
-			// SAME collective never reach here — `retryAgenda` keeps the panel while a
-			// run is unfinished.
-			resetSeasonManage({ dropConvertRun: true });
+			resetSeasonManage();
 			// #132/T6 review F3 — the series form lives INSIDE the panel this branch
 			// tears down, and `resetSeasonManage` does not touch its state: the panel
 			// closed but `seriesCreateOpen`/`seriesCreateSeasonId` survived into the
@@ -1038,10 +1032,6 @@
 				libraryPickersLoading = false;
 				worksRowsLoading = false;
 				resetConductor();
-				// #196 review F2 — NO `dropConvertRun`: this is the SAME collective and
-				// a transient read failure, often the very flakiness that stopped an
-				// occurrence run. `resetSeasonManage` no-ops while that run is
-				// unfinished, so the resume record, the notice and the form survive.
 				resetSeasonManage();
 				seasons = [];
 			});
@@ -2509,12 +2499,10 @@
 		// #132/T6 — mutual exclusion: only one creation form is ever open at a
 		// time. The season-MANAGE panel is not a creation form (it coexists —
 		// see `closeSeasonManagePanel` is deliberately NOT called here), but the
-		// other two creation surfaces must yield. #196 review F4 — so must the
-		// panel's conversion form, the fourth one (it can only be open with no run
-		// outstanding: `createEntryPointsBlocked` above covers that case).
+		// other two creation surfaces must yield. #313 removed the fourth
+		// (the panel's conversion form, relocated to the event page).
 		closeEventCreateForm();
 		closeSeriesCreateForm();
-		closeEventConvertForm();
 		seasonCreateName = '';
 		seasonCreateStartDate = '';
 		seasonCreateEndDate = '';
@@ -2737,26 +2725,27 @@
 	let seasonManageConductorIds = $state<string[]>([]);
 	let seasonManageFieldsLoaded = $state(false);
 	let seasonManageSeries = $state<SeriesListItem[]>([]);
-	let seasonManageEvents = $state<StandaloneEvent[]>([]);
-	/** A FAILED series / standalone-event read is a state of its own, never an
-	 *  empty list (#132/T3 review F2). `seasonManageSeries = []` in a catch is
-	 *  indistinguishable from "this season genuinely has no series" — and the
-	 *  [+ Series] / [+ Event] buttons sit directly under those lists, so the
-	 *  silent-empty shape invites the editor to re-create series that already
-	 *  exist but failed to load. Fail loudly (house rule). */
+	/** A FAILED series read is a state of its own, never an empty list (#132/T3
+	 *  review F2). `seasonManageSeries = []` in a catch is indistinguishable
+	 *  from "this season genuinely has no series" — and [+ Series] sits
+	 *  directly under the list, so the silent-empty shape invites the editor to
+	 *  re-create series that already exist but failed to load. Fail loudly
+	 *  (house rule). #313 removed this list's standalone-event sibling
+	 *  (`seasonManageEvents`/`seasonManageEventsError`) along with the panel's
+	 *  event rows — events are managed on their own page now. */
 	let seasonManageSeriesError = $state(false);
-	let seasonManageEventsError = $state(false);
 	/** #197 — a failed series/event DELETE surfaces an inline slot (per-attempt,
 	 *  not sticky: cleared at the START of every delete tap, not just on
 	 *  success, so a second try — success or failure — always reflects the
 	 *  latest attempt). The row that failed to delete STAYS in its list; this
 	 *  state only controls the error slot.
 	 *
-	 *  #197 review F5 — `list` says WHICH sub-panel renders the message. One
-	 *  shared slot lived under the standalone-EVENTS list, so a failed SERIES
-	 *  delete printed "Couldn't delete" below a list that had nothing to do with
-	 *  it (role="alert" still announced it, so the damage was visual, not
-	 *  SR-blocking).
+	 *  #197 review F5 — `list` says WHICH sub-panel renders the message: the
+	 *  slot lives under the list that failed, never a shared one another list's
+	 *  delete could print under (role="alert" still announces it either way, so
+	 *  the damage of getting it wrong is visual, not SR-blocking). #313 removed
+	 *  the 'events' member (and the 'partial-event' reason it alone produced)
+	 *  along with the standalone-event rows and their delete.
 	 *
 	 *  #197 review F3 — `reason` distinguishes the ONE refusal the panel's own
 	 *  rights gate cannot predict. The gate is `_owner` OR `_editor` on the
@@ -2766,8 +2755,8 @@
 	 *  not be told to "try again". `partial` is the series cascade that stopped
 	 *  part-way (see `deleteEventSeries`' contract). */
 	let seasonManageDeleteError = $state<{
-		list: 'series' | 'events' | 'season';
-		reason: 'write' | 'forbidden' | 'partial' | 'partial-event' | 'partial-season';
+		list: 'series' | 'season';
+		reason: 'write' | 'forbidden' | 'partial' | 'partial-season';
 		deleted?: number;
 		total?: number;
 	} | null>(null);
@@ -2852,62 +2841,13 @@
 			seasonManageDeleteProgress = { current, total };
 		};
 	}
-	// #196 — the standalone-event → series conversion form, inline under the
-	// panel's own event row (`season-manage-event-convert-<id>` opens it). One
-	// slot for the whole panel — only one row's form is ever open, the same
-	// posture `seasonManageDeleteArmed` takes for the delete confirm.
-	let eventConvertOpenId = $state<string | null>(null);
-	let eventConvertIntervalDays = $state('7');
-	let eventConvertDuration = $state('');
-	let eventConvertEndDate = $state('');
-	let eventConvertSubmitting = $state(false);
-	/** Already the localized message (a failure's `{step}` / a count already
-	 *  filled in) — not a raw error, so the render side stays a plain string
-	 *  print. */
-	let eventConvertError = $state<string | null>(null);
-	/** Which box a refusal belongs to — the series form's `SeriesCreateErrorField`
-	 *  shape (#196 review F2). `null` = form-wide (a failed write, an event with
-	 *  no start) and names no box. */
-	type EventConvertErrorField = 'interval' | 'duration' | 'end' | null;
-	let eventConvertErrorField = $state<EventConvertErrorField>(null);
-	/** Non-null while the occurrence loop runs — `current` is the occurrence IN
-	 *  FLIGHT (1-based), the series form's own convention. */
-	let eventConvertProgress = $state<{ current: number; total: number } | null>(null);
-	/**
-	 * #196 review F1 — what a STOPPED occurrence run still owes. The conversion
-	 * itself already landed (the series exists and the event is linked to it), so
-	 * a re-submit must never re-convert: it picks up at the occurrence that
-	 * failed. Everything the resumed loop needs travels in here, because the
-	 * conversion that produced it does not run again.
-	 *
-	 * Single-slot, NOT keyed by db the way `seriesCreateResumeByDb` is (#138): a
-	 * collective switch stops the loop (`dbChanged()`) and `resetSeasonManage`
-	 * drops the record with the rest of the panel's state — but ONLY on a switch,
-	 * `dropConvertRun` in hand (#196 review F2). A run interrupted that way leaves
-	 * a series with fewer occurrences than asked for — visible on the agenda, and
-	 * re-addable once a series can be extended — never a duplicate series.
-	 * Carrying it across collectives is #138's whole machinery and is deliberately
-	 * not rebuilt here. Every OTHER caller of `resetSeasonManage` (the agenda
-	 * load's failure path) leaves this record, the form and the notice alone: they
-	 * are the only way an unfinished run can still be finished.
-	 */
-	type EventConvertResume = {
-		/** The row the form belongs to — a resume is only ever offered for it. */
-		eventId: string;
-		seriesId: string;
-		dbEntityId: string;
-		/** The converted event's own type, which every occurrence must carry. */
-		eventType: string;
-		/** 'YYYY-MM-DDTHH:MM' Tallinn wall-clock occurrences not yet written. */
-		remaining: string[];
-		/** The ORIGINAL occurrence count, so every count keeps describing the run. */
-		total: number;
-	};
-	let eventConvertResume = $state<EventConvertResume | null>(null);
-	/** The conversion form's own dialog element — focus moves into it on open and
-	 *  its Escape handler is what keeps the panel's own from firing (#196 review
-	 *  F3), the `series-create-form` contract verbatim. */
-	let eventConvertFormEl = $state<HTMLDivElement | null>(null);
+	// #313 — the #196 standalone-event → series conversion form (state,
+	// handlers, markup) RELOCATED to the event page
+	// (src/routes/event/[id]/+page.svelte, `event-detail-convert`): the panel's
+	// per-row entry point (`season-manage-event-convert-<id>`) went with the
+	// standalone-event rows it opened under. Nothing conversion-related is left
+	// on this page — see that file's own doc comments for the (unchanged)
+	// contract.
 	/** A failed conductor add/remove reverts the optimistic chip — and, without
 	 *  this, said nothing (#132/T3 review F1). Same contract the three text/date
 	 *  fields already keep: a silently snapped-back value reads as a bug. */
@@ -2991,25 +2931,13 @@
 	/**
 	 * Tear the season-management panel (and everything rendered inside it) down.
 	 *
-	 * #196 review F2 — REFUSED while a conversion run is unfinished, unless the
-	 * caller says the run itself is being dropped. `eventConvertResume` is the
-	 * ONLY record of what a stopped occurrence run still owes, and the converted
-	 * event has already left the standalone list, so losing it leaves a series
-	 * short of occurrences with no in-app way to finish it — the exact teardown
-	 * `closeSeasonManagePanel` already refuses for the same reason. This function
-	 * is not called only on a deliberate exit: the agenda load's `.catch` calls it
-	 * too, so a flaky read (the very flakiness that stopped the run) silently ate
-	 * the record. `dropConvertRun` is passed by the genuine collective-SWITCH
-	 * paths, where the record belongs to a db that is no longer selected and
-	 * `EventConvertResume`'s doc comment says it goes.
-	 *
-	 * `eventConvertSubmitting` is deliberately NOT reset here on any path — only
-	 * `submitEventConvert`'s own `finally` releases it. Clearing it from outside
-	 * unblocked `createEntryPointsBlocked` under a live loop, letting another
-	 * creation form open over POSTs still on the wire.
+	 * #313 — the #196 review F2 guard that used to stand here ("refused while a
+	 * conversion run is unfinished, unless the caller says the run itself is
+	 * being dropped") went with `eventConvertResume`/`dropConvertRun`: the
+	 * conversion state that guard protected no longer lives on this page at
+	 * all, so this reset is unconditional again.
 	 */
-	function resetSeasonManage(opts: { dropConvertRun?: boolean } = {}): void {
-		if (eventConvertRunUnfinished && opts.dropConvertRun !== true) return;
+	function resetSeasonManage(): void {
 		seasonManageOpen = false;
 		seasonManageFieldsLoaded = false;
 		seasonManageName = '';
@@ -3017,9 +2945,7 @@
 		seasonManageEndDate = '';
 		seasonManageConductorIds = [];
 		seasonManageSeries = [];
-		seasonManageEvents = [];
 		seasonManageSeriesError = false;
-		seasonManageEventsError = false;
 		seasonManageDeleteError = null;
 		seasonManageDeleteArmed = null;
 		seasonManageArmedSeriesCount = null;
@@ -3031,14 +2957,6 @@
 		// this reset just walked away from (a collective switch mid-cascade) is
 		// silently dropped instead of resurrecting the counter it just cleared.
 		seasonManageDeleteGeneration += 1;
-		eventConvertOpenId = null;
-		eventConvertIntervalDays = '7';
-		eventConvertDuration = '';
-		eventConvertEndDate = '';
-		eventConvertError = null;
-		eventConvertErrorField = null;
-		eventConvertProgress = null;
-		eventConvertResume = null;
 		seasonManageConductorError = false;
 		seasonManageRosterLoading = false;
 		seasonEditingField = null;
@@ -3046,11 +2964,10 @@
 		seasonEditErrors = {};
 		seasonEditPending = {};
 		// #234 review 2 F1 — the panel's repertoire section belongs to the PANEL's
-		// lifetime, exactly like the series/events lists three lines up, so it is
-		// cleared where they are. Reached only on a genuine collective switch (both
-		// `loadForSelected` teardowns, with `dropConvertRun: true`) and on the
-		// agenda-failure path — never on a `{ keepSeasonManage: true }` reload, which
-		// deliberately keeps the panel and everything it is showing.
+		// lifetime, exactly like the series list three lines up, so it is cleared
+		// where it is. Reached on a genuine collective switch and on the
+		// agenda-failure path — never on a `{ keepSeasonManage: true }` reload,
+		// which deliberately keeps the panel and everything it is showing.
 		panelRepertoire = [];
 		panelWorks = [];
 		panelEditions = [];
@@ -3175,7 +3092,6 @@
 		// the previous collective's series until the new fetches land.
 		const thisRequest = requestId;
 		seasonManageSeriesError = false;
-		seasonManageEventsError = false;
 		// #132/T2 review F1's cache-first `getRoster` — same lazy-on-open posture
 		// as the season-CREATE form (never a roster read on the plain agenda
 		// visit): the conductor chips/native select are the FIRST thing in this
@@ -3206,17 +3122,9 @@
 				seasonManageSeries = [];
 				seasonManageSeriesError = true;
 			});
-		listEventsForSeason(cfg, seasonId)
-			.then((list) => {
-				if (thisRequest !== requestId) return;
-				seasonManageEvents = list;
-			})
-			.catch((e) => {
-				if (thisRequest !== requestId) return;
-				console.error('agenda: loading the season\'s standalone events failed', e);
-				seasonManageEvents = [];
-				seasonManageEventsError = true;
-			});
+		// #313 — the panel no longer lists standalone events at all (they are
+		// managed on their own page); the `listEventsForSeason` read this list
+		// fired went with the rows it fed.
 		loadPanelRepertoire(cfg, seasonId);
 	}
 
@@ -3237,12 +3145,9 @@
 		// and event forms live at page level and survive the panel either way, so
 		// widening this costs nothing on their account.
 		//
-		// #196 review F1/F3 — the CONVERSION form lives inside this panel too, and
-		// its occurrence loop is the same many-serial-POSTs shape. Tearing the panel
-		// down around a run in flight (or around a stopped one whose "N of M" notice
-		// and Submit/Cancel are the only way to finish or abandon it) is the same
-		// bug, so it is refused the same way. Cancel inside the form is the exit.
-		if (seriesRunUnfinished || eventConvertRunUnfinished) return;
+		// #313 — the conversion-form guard that used to stand here left with the
+		// form itself, which no longer lives inside this panel.
+		if (seriesRunUnfinished) return;
 		seasonManageOpen = false;
 		seasonEditingField = null;
 		// #197 review F2 — a delete armed but never confirmed must not still be
@@ -3651,8 +3556,6 @@
 		// to still be there.
 		closeSeasonCreateForm();
 		closeSeriesCreateForm();
-		// #196 review F4 — the panel's conversion form is a creation surface too.
-		closeEventConvertForm();
 		eventCreateLoadId += 1; // review F3 — a new form; nothing the last one asked for belongs here
 		eventCreateOrigin = origin;
 		// #298 — a fresh open owns the status slot too, same discipline as
@@ -3817,8 +3720,8 @@
 			pendingSurfaceGiveUpTimer = null;
 		}
 		// The row is up: collapse the panel off it. The mid-run refusal
-		// (`seriesRunUnfinished || eventConvertRunUnfinished`, #135/#196) lives
-		// in EXACTLY ONE place — routing the auto-collapse through it, instead
+		// (`seriesRunUnfinished`, #135) lives in EXACTLY ONE place — routing the
+		// auto-collapse through it, instead
 		// of assigning `seasonManageOpen` directly, inherits that refusal
 		// rather than re-deriving it: a run still unfinished leaves
 		// `seasonManageOpen` untouched and this call is a no-op, with focus
@@ -3941,18 +3844,19 @@
 		return Number.isFinite(n) ? n : undefined;
 	}
 
-	/** Re-reads the panel's lists after a PANEL-born create — the new
+	/** Re-reads the panel's series list after a PANEL-born create — the new
 	 *  occurrence must land in the counts the panel already shows. Mirrors
 	 *  `openSeasonManagePanel`'s reads, minus the roster/open-state
-	 *  parts (this is a refresh, not a (re)open).
+	 *  parts (this is a refresh, not a (re)open). #313 removed this function's
+	 *  standalone-event sibling read along with the panel's event rows.
 	 *
 	 *  #234 review 2 F1 — the repertoire section rides along. Its state used to be
 	 *  wiped by `resetManagement` on every reload and rebuilt only by the next
 	 *  panel OPEN; now that it survives a `{ keepSeasonManage: true }` reload it
-	 *  needs the same re-read the two lists get, so the whole panel reconciles at
-	 *  one seam instead of one section quietly showing pre-write truth. Every
-	 *  caller passes the PANEL's own season (each one guards that), so this is
-	 *  always the section's own season. */
+	 *  needs the same re-read the list gets, so the whole panel reconciles at one
+	 *  seam instead of one section quietly showing pre-write truth. Every caller
+	 *  passes the PANEL's own season (each one guards that), so this is always
+	 *  the section's own season. */
 	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
 		const thisRequest = requestId;
 		loadPanelRepertoire(cfg, seasonId);
@@ -3967,24 +3871,10 @@
 				console.error('agenda: refreshing the season\'s event series after an event create failed', e);
 				seasonManageSeriesError = true;
 			});
-		listEventsForSeason(cfg, seasonId)
-			.then((list) => {
-				if (thisRequest !== requestId) return;
-				seasonManageEvents = list;
-				seasonManageEventsError = false;
-			})
-			.catch((e) => {
-				if (thisRequest !== requestId) return;
-				console.error(
-					"agenda: refreshing the season's standalone events after an event create failed",
-					e
-				);
-				seasonManageEventsError = true;
-			});
 	}
 
-	// #197 — per-row DELETE for the season-manage panel's series/standalone-event
-	// lists. The `seasonManageDeleteError` slot is reset at the START of every
+	// #197 — per-row DELETE for the season-manage panel's series list. The
+	// `seasonManageDeleteError` slot is reset at the START of every
 	// attempt so a second try, success or failure, always reflects the latest
 	// tap. A failed delete leaves the row exactly where it was — no optimistic
 	// removal (unlike the conductor chip above, there is nothing cheap to revert
@@ -4079,15 +3969,15 @@
 	 *  with (#197 review F3/F5). Duck-typed discriminators, never `instanceof`
 	 *  — the rejection crosses a mocked module boundary in the page's specs. */
 	function seasonManageDeleteFailure(
-		list: 'series' | 'events' | 'season',
+		list: 'series' | 'season',
 		reason: unknown
 	): NonNullable<typeof seasonManageDeleteError> {
 		if (isDeleteForbidden(reason)) return { list, reason: 'forbidden' };
-		// #217 — the season cascade's OWN partial shape, told apart from its
-		// series/event children's (a season failure can wrap either of those in
-		// its own `failure` chain, but `isDeleteForbidden`/the checks above
-		// already unwrapped a 403; anything else that reaches here for a season
-		// list is the season's own story, never a child's).
+		// #217 — the season cascade's OWN partial shape, told apart from a
+		// child series' (a season failure can wrap one of those in its own
+		// `failure` chain, but `isDeleteForbidden`/the check above already
+		// unwrapped a 403; anything else that reaches here for a season list is
+		// the season's own story, never a child's).
 		if (list === 'season' && isSeasonCascadePartial(reason)) {
 			const partial = reason as { deletedCount?: number; totalCount?: number };
 			return {
@@ -4097,14 +3987,20 @@
 				total: partial.totalCount ?? 0
 			};
 		}
-		// Both cascades report how far they got; only the NOUN differs — the
-		// series one counts occurrence events, the event one counts the event's
-		// own attendance/programme rows (#197 review 2nd pass F1).
-		if (isSeriesCascadePartial(reason) || isEventCascadePartial(reason)) {
+		// #313 — this used to also recognise `isEventCascadePartial(reason)`
+		// (the standalone-event delete's own partial shape, reason
+		// 'partial-event'). Removed as dead code, not merely unreachable: the
+		// series/season cascades below ALWAYS wrap a failing occurrence's
+		// EventCascadePartialError inside their OWN SeriesCascadePartialError /
+		// SeasonCascadePartialError (seasonManage.ts, `deleteEventSeries`/
+		// `deleteSeason`), so a RAW EventCascadePartialError could only ever
+		// reach here from `onSeasonManageEventDelete`'s own direct `deleteEvent`
+		// call — which left with the standalone-event rows.
+		if (isSeriesCascadePartial(reason)) {
 			const partial = reason as { deletedCount?: number; totalCount?: number };
 			return {
 				list,
-				reason: isSeriesCascadePartial(reason) ? 'partial' : 'partial-event',
+				reason: 'partial',
 				deleted: partial.deletedCount ?? 0,
 				total: partial.totalCount ?? 0
 			};
@@ -4122,11 +4018,6 @@
 				return m.season_manage_delete_forbidden();
 			case 'partial':
 				return m.season_manage_delete_partial({
-					deleted: failure.deleted ?? 0,
-					total: failure.total ?? 0
-				});
-			case 'partial-event':
-				return m.season_manage_event_delete_partial({
 					deleted: failure.deleted ?? 0,
 					total: failure.total ?? 0
 				});
@@ -4250,453 +4141,11 @@
 			});
 	}
 
-	function onSeasonManageEventDelete(event: StandaloneEvent): void {
-		if (!selected) return;
-		if (seasonManageDeletePendingId !== null) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		seasonManageDeleteError = null;
-		seasonManageDeletePendingId = event.id;
-		apiDeleteEvent(cfg, event.id)
-			.then(() => {
-				seasonManageDeleteArmed = null;
-				seasonManageArmedSeriesCount = null;
-				seasonManageEvents = seasonManageEvents.filter((row) => row.id !== event.id);
-				seasonManageDeleteStatus = m.season_manage_deleted({ name: event.name });
-				refreshAfterSeasonManageDelete(cfg);
-			})
-			.catch((e) => {
-				console.error('agenda: deleting standalone event failed', event.id, e);
-				seasonManageDeleteError = seasonManageDeleteFailure('events', e);
-			})
-			.finally(() => {
-				seasonManageDeletePendingId = null;
-			});
-	}
-
-	// #196 — standalone event → series conversion, panel-side wiring around the
-	// data layer in `$lib/events/eventConvert`.
-
-	/** The Tallinn wall-clock date + time a UTC instant reads as (the INVERSE of
-	 *  `tallinnLocalToUtcIso` above) — the series' `startTime`/`startDate` are
-	 *  derived from the EVENT's own `startDatetime`, not re-typed by the
-	 *  operator: TE.4's convention applied the other direction. A single
-	 *  `Intl.DateTimeFormat` pass suffices here (unlike the local→UTC direction,
-	 *  there is no ambiguity to resolve with a second pass). '' / '' on an
-	 *  unparseable instant. */
-	function tallinnWallClockParts(isoUtc: string): { date: string; time: string } {
-		const instant = new Date(isoUtc);
-		if (Number.isNaN(instant.getTime())) return { date: '', time: '' };
-		const parts = new Intl.DateTimeFormat('en-US', {
-			timeZone: EVENT_CREATE_TZ,
-			hourCycle: 'h23',
-			year: 'numeric',
-			month: '2-digit',
-			day: '2-digit',
-			hour: '2-digit',
-			minute: '2-digit'
-		}).formatToParts(instant);
-		const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-		return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
-	}
-
-	/** Opens the inline conversion form under the given standalone event's row —
-	 *  one slot for the whole panel, so opening a new one silently replaces
-	 *  whichever other row's form was open (there is only ever one at a time in
-	 *  the UI, nothing to lose). Interval defaults to 7 (weekly, the common
-	 *  case); duration/end-date start blank — the operator supplies those, the
-	 *  start itself comes from the event.
-	 *
-	 *  #196 review F4 — this is a CREATION entry point like the other three and
-	 *  keeps their two disciplines: it refuses while `createEntryPointsBlocked`
-	 *  (any create on the wire, or a stopped run that still owes occurrences —
-	 *  including this form's own), and it closes the other creation forms so only
-	 *  one is ever open at a time. Without the first, a conversion could start
-	 *  mid-bulk-run; without the second, two creation forms sat open together. */
-	function openEventConvertForm(event: StandaloneEvent): void {
-		if (createEntryPointsBlocked) return;
-		closeSeasonCreateForm();
-		closeEventCreateForm();
-		closeSeriesCreateForm();
-		// #212 — one action context at a time: an armed delete (event row OR
-		// series row — the two share this one flag) dies with every other row's
-		// buttons the moment the form opens. A direct reset, not
-		// `disarmSeasonManageDelete`: that helper also hands focus back to the
-		// `×` it restores, which is wrong here — focus is about to move INTO
-		// the conversion dialog (the `$effect` below), never back to a control
-		// this open is about to unmount.
-		seasonManageDeleteArmed = null;
-		seasonManageArmedSeriesCount = null;
-		eventConvertOpenId = event.id;
-		eventConvertIntervalDays = '7';
-		eventConvertDuration = '';
-		eventConvertEndDate = '';
-		eventConvertProgress = null;
-		clearEventConvertError();
-	}
-
-	/**
-	 * Unmounts the form AND forgets whatever a stopped run still owed.
-	 *
-	 * Unlike `closeSeriesCreateForm` (which had to split those two acts for
-	 * #138's cross-collective resume), the two are safe to keep together here
-	 * because a live `eventConvertResume` blocks every other entry point AND the
-	 * panel's own close: the only callers that can reach this with a record
-	 * outstanding are the operator's own exits (Cancel/Escape) and the clean
-	 * finish. That is also why there is no `restoreEventConvertRun` twin — a
-	 * record can never outlive the form that renders it.
-	 */
-	function closeEventConvertForm(): void {
-		eventConvertOpenId = null;
-		eventConvertProgress = null;
-		eventConvertResume = null;
-		clearEventConvertError();
-	}
-
-	function setEventConvertError(message: string, field: EventConvertErrorField): void {
-		eventConvertError = message;
-		eventConvertErrorField = field;
-	}
-
-	function clearEventConvertError(): void {
-		eventConvertError = null;
-		eventConvertErrorField = null;
-	}
-
-	/** `aria-describedby` for the field that currently owns the message. */
-	function eventConvertDescribedBy(field: EventConvertErrorField): string | undefined {
-		return eventConvertErrorField === field ? 'event-convert-error' : undefined;
-	}
-
-	function eventConvertInvalid(field: EventConvertErrorField): true | undefined {
-		return eventConvertErrorField === field ? true : undefined;
-	}
-
-	/** While a stopped run is resumable the recurrence boxes are INERT: submit
-	 *  finishes THAT run (the series is already on the wire, its `interval_days` /
-	 *  `end_date` already written), so an edit here would be silently discarded —
-	 *  `seriesCreateLocked`'s reasoning, verbatim. */
-	const eventConvertLocked = $derived(eventConvertResume !== null);
-
-	/** Hands focus back to the ⟳ that opened the form — it is still on screen
-	 *  whenever the form is dismissed rather than finished (a finished conversion
-	 *  takes the whole row away, and lands focus on the panel instead). */
-	function restoreEventConvertFocus(eventId: string): void {
-		tick().then(() =>
-			document
-				.querySelector<HTMLElement>(`[data-testid="season-manage-event-convert-${eventId}"]`)
-				?.focus()
-		);
-	}
-
-	/** Cancel/Escape — the operator's explicit exit, and the one place a stopped
-	 *  run may be ABANDONED (which frees every other entry point again). Refused
-	 *  while a write is on the wire, exactly as `dismissSeriesCreateForm` is. */
-	function dismissEventConvertForm(): void {
-		if (eventConvertSubmitting) return;
-		const openId = eventConvertOpenId;
-		closeEventConvertForm();
-		if (openId) restoreEventConvertFocus(openId);
-	}
-
-	/**
-	 * #196 review F3 — the form is a `role="dialog"` INSIDE the season-manage
-	 * panel, whose own Escape closes the panel. Without stopping propagation one
-	 * Escape dismissed BOTH — and `closeSeasonManagePanel` resets the conversion
-	 * state, so it could fire with a conversion still on the wire. The next
-	 * Escape reaches the panel because focus goes back to the ⟳ inside it: the
-	 * WAI-APG two-Escapes layering `onSeriesCreateFormKeydown` documents.
-	 */
-	function onEventConvertFormKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		event.stopPropagation();
-		dismissEventConvertForm();
-	}
-
-	/** Focus moves INTO the dialog the moment it opens — what `role="dialog"`
-	 *  promises a screen-reader user, and what makes the Escape handler above
-	 *  reachable at all (the ⟳ that opened it is a SIBLING of the form, so a
-	 *  keypress there never enters the form's subtree). The panel's own focus
-	 *  effect, one level down. */
-	$effect(() => {
-		if (eventConvertOpenId && eventConvertFormEl) eventConvertFormEl.focus();
-	});
-
-	/** The failed step, duck-typed off whatever `convertEventToSeries` rejected
-	 *  with (`EventConvertError#step`) — never `instanceof`, the same posture
-	 *  `seasonManageDeleteFailure` takes, and required here too: the page specs
-	 *  mock `$lib/events/eventConvert` at the module boundary, so a rejection
-	 *  built by hand in a test (`Object.assign(new Error(...), { step })`) must
-	 *  be recognised exactly like the real class.
-	 *
-	 *  #196 review F3 — the fallback is 'unknown', NOT 'read-event'. Naming the
-	 *  choreography's first step for a rejection that carries no step told the
-	 *  operator a step had failed that never ran (the same defect review F2 fixed
-	 *  at the data layer, re-introduced by the caller's own default). The
-	 *  pre-conversion failures that used to land here now name their own stage —
-	 *  see `EVENT_CONVERT_RESOLVE_STEP`. */
-	function eventConvertStepOf(e: unknown): string {
-		if (e && typeof e === 'object' && 'step' in e) {
-			const step = (e as { step?: unknown }).step;
-			if (typeof step === 'string' && step) return step;
-		}
-		return 'unknown';
-	}
-
-	/** #196 review F3 — the collective lookup runs BEFORE `convertEventToSeries`,
-	 *  so its failures belong to no conversion step. They get their own label
-	 *  rather than borrowing one; a reader following the message lands on the org
-	 *  lookup, which is where the failure actually is. */
-	const EVENT_CONVERT_RESOLVE_STEP = 'resolve-collective';
-
-	/** #196 review F1 — WHY a pre-write refusal happened, when the step alone
-	 *  cannot say it. `convertEventToSeries` refuses an event with no name and an
-	 *  event with no event_type in the same 'read-event' step, and both are
-	 *  permanent properties of the data — a retry never fixes either, so the
-	 *  retryable "Couldn't convert the event (read-event). Try again." is the
-	 *  wrong thing to say. Duck-typed for the same reason `eventConvertStepOf`
-	 *  is: the page specs mock the module at its boundary. */
-	function eventConvertRefusalMessage(e: unknown): string | null {
-		if (!e || typeof e !== 'object' || !('reason' in e)) return null;
-		const reason = (e as { reason?: unknown }).reason;
-		if (reason === 'missing-name') return m.event_convert_missing_name();
-		if (reason === 'missing-event-type') return m.event_convert_missing_type();
-		return null;
-	}
-
-	/**
-	 * Submit — the WHOLE conversion, which is two acts, not one (#196 review F1).
-	 *
-	 *   1. `convertEventToSeries` makes the event the first occurrence of a new
-	 *      series carrying the typed cadence: the event/season ids the panel
-	 *      already holds, the collective's database entity id
-	 *      (`resolveDatabaseEntityId`, never guessed), and the event's OWN start
-	 *      as a Tallinn wall clock (`tallinnWallClockParts`).
-	 *   2. the FURTHER occurrences are written — one serial `createEvent` per
-	 *      `generateIntervalDates` date after the event's own, the series-create
-	 *      bulk loop's contract verbatim (strictly serial, ascending, no
-	 *      rollback). Occurrences in this app are materialized `event` entities,
-	 *      not read-time-generated: without this loop the operator fills in
-	 *      "Repeat every (days)" and "Series ends", converts, and the agenda
-	 *      still shows exactly one event — the dead end #196 was filed about.
-	 *
-	 * Refusals come BEFORE any fetch, each naming its own box (the discipline
-	 * every sibling form on this page keeps) — so a blank field can no longer
-	 * reach the data layer and come back naming a step that never ran.
-	 *
-	 * A clean finish closes the form and refreshes the world (`loadForSelected` +
-	 * the panel's own list re-read) — the event moves from the standalone list
-	 * into the series' count. A conversion failure surfaces inline, loud, naming
-	 * the failed step, and refreshes NOTHING. An occurrence failure records what
-	 * the run still owes (`eventConvertResume`, so a re-submit finishes rather
-	 * than converting a second time) and deliberately refreshes only the AGENDA:
-	 * re-reading the panel's standalone list would drop the converted event's row
-	 * and unmount the very form showing the "N of M" notice.
-	 */
-	async function submitEventConvert(event: StandaloneEvent): Promise<void> {
-		if (eventConvertSubmitting) return; // no duplicate runs on the wire
-		if (!selected || manageableSeasonId === null) return;
-		clearEventConvertError();
-
-		// A resume belongs to ONE row; anything else is a fresh conversion.
-		const resume = eventConvertResume?.eventId === event.id ? eventConvertResume : null;
-
-		// The series' start is the EVENT's own — never re-typed, so it is validated
-		// here rather than refused by the data layer under a step name.
-		const { date: startDate, time: startTime } = tallinnWallClockParts(event.startDatetime);
-		if (!startDate || !startTime) {
-			console.error('agenda: converting an event with no readable start', event.id, event.startDatetime);
-			setEventConvertError(m.event_convert_start_missing(), null);
-			return;
-		}
-		const intervalDays = Number(eventConvertIntervalDays);
-		if (
-			!eventConvertIntervalDays.trim() ||
-			!Number.isFinite(intervalDays) ||
-			intervalDays < 1
-		) {
-			setEventConvertError(m.event_convert_interval_required(), 'interval');
-			return;
-		}
-		const durationMinutes = Number(eventConvertDuration);
-		if (!eventConvertDuration.trim() || !Number.isFinite(durationMinutes) || durationMinutes < 1) {
-			setEventConvertError(m.event_convert_duration_required(), 'duration');
-			return;
-		}
-		if (!eventConvertEndDate) {
-			setEventConvertError(m.event_convert_end_required(), 'end');
-			return;
-		}
-		if (eventConvertEndDate < startDate) {
-			setEventConvertError(m.event_convert_end_before_start(), 'end');
-			return;
-		}
-
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const seasonId = manageableSeasonId;
-		// #137's discipline, applied to this run: `selected` is live, so a
-		// collective switch mid-loop must stop it POSTing further occurrences into
-		// the db it just left, and must not write this run's outcome into the new
-		// collective's state.
-		const runDb = cfg.db;
-		const dbChanged = (): boolean => selected?.db !== runDb;
-
-		eventConvertSubmitting = true;
-		try {
-			let seriesId: string;
-			let dbEntityId: string;
-			let eventType: string;
-			let occurrences: string[];
-			let total: number;
-			let created: number;
-
-			if (resume) {
-				// The series is already on the wire — re-converting would leave a
-				// duplicate behind for every retry.
-				({ seriesId, dbEntityId, eventType, total } = resume);
-				occurrences = resume.remaining;
-				created = total - occurrences.length;
-			} else {
-				let resolvedDbEntityId: string | null;
-				try {
-					resolvedDbEntityId = await resolveDatabaseEntityId(cfg);
-				} catch (e) {
-					console.error('agenda: resolving the database entity for event conversion failed', e);
-					// #196 review F3 — NOT `eventConvertStepOf(e)`: this rejection comes
-					// from the org lookup, which runs before the conversion's first step.
-					if (!dbChanged())
-						setEventConvertError(
-							m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }),
-							null
-						);
-					return;
-				}
-				if (!resolvedDbEntityId) {
-					console.error(
-						'agenda: event conversion with no resolvable database entity',
-						selected.personId
-					);
-					if (!dbChanged())
-						setEventConvertError(
-							m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }),
-							null
-						);
-					return;
-				}
-				if (dbChanged()) return;
-				dbEntityId = resolvedDbEntityId;
-				const input: ConvertEventToSeriesInput = {
-					eventId: event.id,
-					dbEntityId,
-					seasonId,
-					intervalDays,
-					startTime,
-					startDate,
-					endDate: eventConvertEndDate,
-					durationMinutes
-				};
-				try {
-					const result = await convertEventToSeries(cfg, input);
-					seriesId = result.seriesId;
-					eventType = result.eventType;
-				} catch (e) {
-					console.error('agenda: event conversion failed', event.id, e);
-					// A pre-write REFUSAL (no name / no event_type) says what is actually
-					// wrong; everything else names the step that failed (#196 review F1).
-					if (!dbChanged())
-						setEventConvertError(
-							eventConvertRefusalMessage(e) ??
-								m.event_convert_failed({ step: eventConvertStepOf(e) }),
-							null
-						);
-					return;
-				}
-				if (dbChanged()) return;
-				// `[0]` is the converted event's own date — it IS the first
-				// occurrence and already exists, so the loop starts at `[1]`.
-				occurrences = generateIntervalDates({
-					startDate,
-					intervalDays,
-					timeOfDay: startTime,
-					until: eventConvertEndDate
-				}).slice(1);
-				total = occurrences.length;
-				created = 0;
-			}
-
-			// #196 review F1 — there is no "converted but typeless" case to handle
-			// here any more. Every occurrence carries its own `event_type` (#194/#202
-			// — no reader inherits it from the series) and `createEvent` requires one,
-			// so a typeless event cannot seed a run; the data layer now REFUSES such
-			// an event in `read-event`, before the series is created and before the
-			// event is reparented. The branch that used to stand here recorded a run
-			// that could never be finished, behind a series that violated v4E.
-			for (let i = 0; i < occurrences.length; i += 1) {
-				// Checked FIRST, every iteration (the series loop's shape): a switch
-				// between occurrences stops the run where it stands. The remainder is
-				// NOT recorded across collectives here — see `EventConvertResume`.
-				if (dbChanged()) {
-					console.warn(
-						'agenda: collective switched mid-conversion — the series keeps the occurrences already written',
-						runDb,
-						seriesId
-					);
-					return;
-				}
-				// Set BEFORE the await — "occurrence 1 of N" while the FIRST POST is
-				// in flight, the series form's own convention.
-				eventConvertProgress = { current: created + 1, total };
-				try {
-					await createEvent(cfg, {
-						dbEntityId,
-						seriesId,
-						extraParentIds: [seasonId],
-						eventType,
-						startDatetime: tallinnLocalToUtcIso(occurrences[i])
-					});
-					created += 1;
-				} catch (e) {
-					console.error('agenda: generating a converted series occurrence failed', seriesId, e);
-					eventConvertProgress = null;
-					if (dbChanged()) return;
-					// STOP at the failure — no further POSTs, no rollback. Remember
-					// exactly where it stopped so a re-submit RESUMES.
-					eventConvertResume = {
-						eventId: event.id,
-						seriesId,
-						dbEntityId,
-						eventType,
-						remaining: occurrences.slice(i),
-						total
-					};
-					setEventConvertError(m.event_convert_generate_failed({ created, total }), null);
-					// AGENDA only: the occurrences that DID land must become visible.
-					// `refreshSeasonManageLists` would re-read the standalone list, the
-					// converted event has left it, and its row — which renders this very
-					// form and its resume notice — would unmount mid-decision.
-					loadForSelected({ keepSeasonManage: true });
-					return;
-				}
-			}
-			// The last successful POST can itself straddle a switch (the check above
-			// only catches the NEXT iteration) — one more before the success writes.
-			if (dbChanged()) return;
-			eventConvertProgress = null;
-			closeEventConvertForm();
-			// Same discipline as `refreshAfterSeasonManageDelete`/the create path:
-			// the write just changed the world this page reads, both the agenda
-			// (the event now shows under its series) AND the panel's two lists (it
-			// leaves the standalone list, the series' count grows).
-			loadForSelected({ keepSeasonManage: true });
-			refreshSeasonManageLists(cfg, seasonId);
-			// The row that held the ⟳ is about to leave the standalone list, so
-			// focus lands on the still-open panel — `restoreSeriesCreateFocus`'s
-			// shape, for the same reason.
-			tick().then(() => seasonManagePanelEl?.focus());
-		} finally {
-			eventConvertSubmitting = false;
-		}
-	}
+	// #313 — the #196 standalone-event delete (`onSeasonManageEventDelete`) and
+	// the whole conversion wiring (`tallinnWallClockParts` through
+	// `submitEventConvert`) RELOCATED to the event page
+	// (src/routes/event/[id]/+page.svelte): the panel's per-row entry points
+	// they served are removed. See that file for the unchanged contract.
 
 	/**
 	 * Submit: `createEvent` is the ONE create seam (T1) — org from
@@ -5086,7 +4535,7 @@
 	 * module init, so the forward reference is only textual.
 	 */
 	const anyCreateSubmitting = $derived(
-		seasonCreateSubmitting || eventCreateSubmitting || seriesCreateSubmitting || eventConvertSubmitting
+		seasonCreateSubmitting || eventCreateSubmitting || seriesCreateSubmitting
 	);
 
 	/**
@@ -5124,18 +4573,12 @@
 	 * screen with the "N remaining of M" notice that explains the lock.
 	 */
 	const seriesRunUnfinished = $derived(seriesCreateSubmitting || seriesCreateResume !== null);
-	/** #196 review F1/F4 — the conversion's occurrence loop is the same shape as
-	 *  the series bulk run (many serial POSTs, resumable when it stops partway),
-	 *  so it blocks the other entry points for the same reasons: nothing else may
-	 *  open a creation form over a run still owing occurrences, and nothing may
-	 *  unmount the form holding the only record of what it owes. */
-	const eventConvertRunUnfinished = $derived(eventConvertSubmitting || eventConvertResume !== null);
 	/** What every OTHER entry point gates on: an in-flight write anywhere, or a
-	 *  stopped series/conversion run whose remainder is still recorded in the
-	 *  open form. */
-	const createEntryPointsBlocked = $derived(
-		anyCreateSubmitting || seriesRunUnfinished || eventConvertRunUnfinished
-	);
+	 *  stopped series run whose remainder is still recorded in the open form.
+	 *  #313 — the event-conversion run this used to OR in
+	 *  (`eventConvertRunUnfinished`) relocated to the event page with the rest
+	 *  of that flow. */
+	const createEntryPointsBlocked = $derived(anyCreateSubmitting || seriesRunUnfinished);
 
 	/** #213 Gama ruling (1), retargeted #261 — the title-row COLLAPSE control
 	 *  (the gear's successor as the only close control left) renders DISABLED
@@ -5149,15 +4592,11 @@
 	 *  #213 review F2 — the refusal covers the CLOSE direction ONLY, hence the
 	 *  `seasonManageOpen` conjunct: the collapse control only exists in the
 	 *  opened state anyway, but the conjunct also documents that a stopped
-	 *  series run can outlive the panel (`resetSeasonManage`, a failed agenda
-	 *  read on the same collective, guards only `eventConvertRunUnfinished`),
-	 *  closing the panel with `seriesRunUnfinished` still true — the
-	 *  COLLAPSED expand control (season-card-expand) is never gated on this,
-	 *  it stays live so the admin surface is never entirely dead (#138 review
-	 *  F2, #135). */
-	const seasonCardCollapseDisabled = $derived(
-		seasonManageOpen && (seriesRunUnfinished || eventConvertRunUnfinished)
-	);
+	 *  series run can outlive the panel, closing it with `seriesRunUnfinished`
+	 *  still true — the COLLAPSED expand control (season-card-expand) is never
+	 *  gated on this, it stays live so the admin surface is never entirely dead
+	 *  (#138 review F2, #135). */
+	const seasonCardCollapseDisabled = $derived(seasonManageOpen && seriesRunUnfinished);
 
 	// #261 (stated choice) — role="toolbar" and the #156 roving tabindex
 	// pattern retire with the gear: at 1–2 plain buttons (the title-row
@@ -5426,8 +4865,6 @@
 		// creation form.
 		closeSeasonCreateForm();
 		closeEventCreateForm();
-		// #196 review F4 — the panel's conversion form is a creation surface too.
-		closeEventConvertForm();
 		seriesCreateSeasonId = manageableSeasonId;
 		seriesCreateName = '';
 		seriesCreateType = 'rehearsal';
@@ -5983,10 +5420,10 @@
 	});
 
 	function retryAgenda() {
-		// #196 review F2 — a retry is the SAME collective, so it must not take the
-		// teardown branch while a conversion run is unfinished: that branch drops the
-		// run record (`dropConvertRun: true`), which only a real switch may do.
-		loadForSelected({ keepSeasonManage: eventConvertRunUnfinished });
+		// #313 — the conversion-run guard this used to key off
+		// (`eventConvertRunUnfinished`) relocated with the rest of that flow; a
+		// retry is a plain reload again.
+		loadForSelected();
 	}
 </script>
 
@@ -7105,56 +6542,57 @@
 												     client-side tally; while the read is in flight (or if it fails)
 												     the confirm quotes no number rather than a number the cascade
 												     never checks.
-												     #212 — one action context at a time: the open convert form
-												     unmounts every row's delete control (armed or not), the same
-												     `{#if !seriesCreateOpen}`/`{#if !eventCreateOpen}`
-												     mutual-exclusion precedent the panel's opener buttons use. -->
-												{#if eventConvertOpenId === null}
-													{#if seasonManageDeleteArmed === series.id}
-														<button
-															type="button"
-															data-testid="season-manage-series-delete-confirm-{series.id}"
-															aria-label={seasonManageArmedSeriesCount !== null &&
-															seasonManageArmedSeriesCount > 0
-																? m.season_manage_series_delete_confirm({
-																		name: series.name,
-																		count: seasonManageArmedSeriesCount
-																	})
-																: m.season_manage_delete_confirm({ name: series.name })}
-															disabled={seasonManageDeletePendingId !== null}
-															aria-busy={seasonManageDeletePendingId === series.id}
-															class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-															onclick={() => onSeasonManageSeriesDelete(series)}
-														>
-															{seasonManageArmedSeriesCount !== null &&
-															seasonManageArmedSeriesCount > 0
-																? m.season_manage_series_delete_confirm_short({
-																		count: seasonManageArmedSeriesCount
-																	})
-																: m.season_manage_delete_confirm_short()}
-														</button>
-														<button
-															type="button"
-															data-testid="season-manage-series-delete-cancel-{series.id}"
-															aria-label={m.season_manage_delete_cancel({ name: series.name })}
-															disabled={seasonManageDeletePendingId !== null}
-															class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-															onclick={() =>
-																void disarmSeasonManageDelete(
-																	`season-manage-series-delete-${series.id}`
-																)}
-														>
-															{m.season_manage_delete_cancel_short()}
-														</button>
-													{:else}
-														<!-- #237 — joins the shared red-trashcan unit; the old
-														     muted × leaves for TrashIcon + the destructive red pair. -->
-														<DeleteTrigger
-															data-testid="season-manage-series-delete-{series.id}"
-															aria-label={m.season_manage_series_delete({ name: series.name })}
-															onclick={() => void armSeasonManageSeriesDelete(series)}
-														/>
-													{/if}
+												     #313 — this used to also sit behind `{#if eventConvertOpenId
+												     === null}`: the open convert form (now relocated to the event
+												     page) used to unmount every row's delete control while it was
+												     open, the same `{#if !seriesCreateOpen}`/`{#if !eventCreateOpen}`
+												     mutual-exclusion precedent the panel's opener buttons use. No
+												     convert form lives in this panel any more, so the wrapper left
+												     with it. -->
+												{#if seasonManageDeleteArmed === series.id}
+													<button
+														type="button"
+														data-testid="season-manage-series-delete-confirm-{series.id}"
+														aria-label={seasonManageArmedSeriesCount !== null &&
+														seasonManageArmedSeriesCount > 0
+															? m.season_manage_series_delete_confirm({
+																	name: series.name,
+																	count: seasonManageArmedSeriesCount
+																})
+															: m.season_manage_delete_confirm({ name: series.name })}
+														disabled={seasonManageDeletePendingId !== null}
+														aria-busy={seasonManageDeletePendingId === series.id}
+														class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
+														onclick={() => onSeasonManageSeriesDelete(series)}
+													>
+														{seasonManageArmedSeriesCount !== null &&
+														seasonManageArmedSeriesCount > 0
+															? m.season_manage_series_delete_confirm_short({
+																	count: seasonManageArmedSeriesCount
+																})
+															: m.season_manage_delete_confirm_short()}
+													</button>
+													<button
+														type="button"
+														data-testid="season-manage-series-delete-cancel-{series.id}"
+														aria-label={m.season_manage_delete_cancel({ name: series.name })}
+														disabled={seasonManageDeletePendingId !== null}
+														class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+														onclick={() =>
+															void disarmSeasonManageDelete(
+																`season-manage-series-delete-${series.id}`
+															)}
+													>
+														{m.season_manage_delete_cancel_short()}
+													</button>
+												{:else}
+													<!-- #237 — joins the shared red-trashcan unit; the old
+													     muted × leaves for TrashIcon + the destructive red pair. -->
+													<DeleteTrigger
+														data-testid="season-manage-series-delete-{series.id}"
+														aria-label={m.season_manage_series_delete({ name: series.name })}
+														onclick={() => void armSeasonManageSeriesDelete(series)}
+													/>
 												{/if}
 											</div>
 										</div>
@@ -7180,283 +6618,22 @@
 									{/if}
 								</div>
 
-								<!-- standalone events -->
-								<div>
-									<div class="flex items-center justify-between">
-										<p class="text-xs tracking-wide text-ink-2 uppercase">
-											{m.season_manage_events_label()}
-										</p>
-										<!-- #132/T6 review F1 — gated on `!eventCreateOpen` like the other
-										     three entry points. Ungated, clicking it while the form it
-										     itself opened was half-filled silently wiped that form (the
-										     open path resets every field). `disabled` on
-										     `createEntryPointsBlocked` then keeps it off-limits while ANY
-										     create is on the wire OR a stopped series run still owes
-										     occurrences — visibly, rather than as a silent no-op click. -->
-										{#if !eventCreateOpen}
-											<button
-												type="button"
-												data-testid="season-manage-add-event"
-												disabled={createEntryPointsBlocked}
-												class="flex min-h-11 items-center text-xs text-ink underline disabled:opacity-50"
-												onclick={() => openEventCreateForm('panel')}
-											>
-												{m.season_manage_add_event()}
-											</button>
-										{/if}
-									</div>
-									{#if seasonManageEventsError}
-										<p
-											data-testid="season-manage-events-error"
-											role="alert"
-											class="mt-1 text-xs text-red-700"
-										>
-											{m.season_manage_list_load_error()}
-										</p>
-									{/if}
-									{#each seasonManageEvents as event (event.id)}
-										<div
-											data-testid="season-manage-event-{event.id}"
-											class="mt-1 flex items-center justify-between text-xs text-ink"
-										>
-											<span>{event.name}</span>
-											<!-- #197 review F2 — the same two-step confirm the series rows
-											     carry: an event delete is irreversible and there is no undo
-											     anywhere in the app.
-											     #212 — one action context at a time: while ANY row's convert
-											     form is open the panel is a single action context, so every
-											     row's ⟳/×/confirm/cancel (event rows AND series rows) unmounts,
-											     the same `{#if !seriesCreateOpen}`/`{#if !eventCreateOpen}`
-											     mutual-exclusion precedent the panel's own opener buttons use. -->
-											{#if eventConvertOpenId === null}
-												<div class="flex items-center gap-1">
-													<!-- #196 — the standalone → series conversion entry point.
-													     Icon-only like the `×` delete control beside it; the
-													     accessible name (with the event's own name) rides
-													     `aria-label`, not visible text (the delete-{event.id}
-													     button's own established shape).
-													     #196 review F4 — `disabled` on `createEntryPointsBlocked`
-													     like `season-manage-add-series`/`-add-event`: a creation
-													     entry point that is off-limits must LOOK off-limits, not
-													     be a silent no-op click. -->
-													<button
-														type="button"
-														data-testid="season-manage-event-convert-{event.id}"
-														aria-label={m.season_manage_event_convert({ name: event.name })}
-														disabled={createEntryPointsBlocked}
-														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-														onclick={() => openEventConvertForm(event)}
-													>
-														&#8635;
-													</button>
-													{#if seasonManageDeleteArmed === event.id}
-														<button
-															type="button"
-															data-testid="season-manage-event-delete-confirm-{event.id}"
-															aria-label={m.season_manage_event_delete_confirm({
-																name: event.name
-															})}
-															disabled={seasonManageDeletePendingId !== null}
-															aria-busy={seasonManageDeletePendingId === event.id}
-															class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-															onclick={() => onSeasonManageEventDelete(event)}
-														>
-															{m.season_manage_delete_confirm_short()}
-														</button>
-														<button
-															type="button"
-															data-testid="season-manage-event-delete-cancel-{event.id}"
-															aria-label={m.season_manage_delete_cancel({ name: event.name })}
-															disabled={seasonManageDeletePendingId !== null}
-															class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-															onclick={() =>
-																void disarmSeasonManageDelete(
-																	`season-manage-event-delete-${event.id}`
-																)}
-														>
-															{m.season_manage_delete_cancel_short()}
-														</button>
-												{:else}
-													<!-- #237 — joins the shared red-trashcan unit; the old
-													     muted × leaves for TrashIcon + the destructive red pair. -->
-													<DeleteTrigger
-														data-testid="season-manage-event-delete-{event.id}"
-														aria-label={m.season_manage_event_delete({ name: event.name })}
-														onclick={() =>
-															void armSeasonManageDelete(
-																event.id,
-																`season-manage-event-delete-confirm-${event.id}`
-															)}
-													/>
-												{/if}
-												</div>
-											{/if}
-										</div>
-										{#if eventConvertOpenId === event.id}
-											<!-- #196 review F3 — the full dialog contract its four siblings on
-											     this page keep: `tabindex="-1"` + the focus effect (a
-											     role="dialog" must actually take focus), and its OWN Escape
-											     handler, which stops propagation so one Escape no longer
-											     dismissed the whole season-manage panel around a conversion
-											     still on the wire. -->
-											<div
-												data-testid="event-convert-form"
-												role="dialog"
-												aria-label={m.event_convert_form_label()}
-												tabindex="-1"
-												bind:this={eventConvertFormEl}
-												class="mt-1 flex flex-col gap-1.5 border border-dashed border-ink-5 p-2"
-												onkeydown={onEventConvertFormKeydown}
-											>
-												<!-- Every box carries `disabled={eventConvertLocked}`: once the
-												     occurrence run has stopped partway the series exists with
-												     its cadence already written, so submit FINISHES that run and
-												     an edit here would be silently discarded. -->
-												<label class="flex w-full flex-col gap-0.5">
-													<span class="text-xs text-ink-2">
-														{m.event_convert_interval_label()}
-													</span>
-													<input
-														type="number"
-														min="1"
-														data-testid="event-convert-interval"
-														aria-label={m.event_convert_interval_label()}
-														aria-invalid={eventConvertInvalid('interval')}
-														aria-describedby={eventConvertDescribedBy('interval')}
-														disabled={eventConvertLocked}
-														value={eventConvertIntervalDays}
-														oninput={(e) => {
-															eventConvertIntervalDays = (
-																e.currentTarget as HTMLInputElement
-															).value;
-															clearEventConvertError();
-														}}
-														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-													/>
-												</label>
-												<label class="flex w-full flex-col gap-0.5">
-													<span class="text-xs text-ink-2">
-														{m.event_convert_duration_label()}
-													</span>
-													<input
-														type="number"
-														min="1"
-														data-testid="event-convert-duration"
-														aria-label={m.event_convert_duration_label()}
-														aria-invalid={eventConvertInvalid('duration')}
-														aria-describedby={eventConvertDescribedBy('duration')}
-														disabled={eventConvertLocked}
-														value={eventConvertDuration}
-														oninput={(e) => {
-															eventConvertDuration = (
-																e.currentTarget as HTMLInputElement
-															).value;
-															clearEventConvertError();
-														}}
-														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-													/>
-												</label>
-												<!-- #212 — the event's OWN date, derived (never a new $state) from
-												     `tallinnWallClockParts(event.startDatetime).date`: plain ISO
-												     TEXT, not an input, so the end-date picker below has visible
-												     context for what it cannot precede. -->
-												<p
-													data-testid="event-convert-start-date"
-													class="flex w-full flex-col gap-0.5"
-												>
-													<span class="text-xs text-ink-2">
-														{m.event_convert_start_date_label()}
-													</span>
-													<span class="text-ink">
-														{tallinnWallClockParts(event.startDatetime).date}
-													</span>
-												</p>
-												<label class="flex w-full flex-col gap-0.5">
-													<span class="text-xs text-ink-2">
-														{m.event_convert_end_date_label()}
-													</span>
-													<input
-														type="date"
-														data-testid="event-convert-end-date"
-														aria-label={m.event_convert_end_date_label()}
-														aria-invalid={eventConvertInvalid('end')}
-														aria-describedby={eventConvertDescribedBy('end')}
-														disabled={eventConvertLocked}
-														value={eventConvertEndDate}
-														oninput={(e) => {
-															eventConvertEndDate = (
-																e.currentTarget as HTMLInputElement
-															).value;
-															clearEventConvertError();
-														}}
-														class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-													/>
-												</label>
-												{#if eventConvertProgress}
-													<p
-														data-testid="event-convert-progress"
-														role="status"
-														aria-live="polite"
-														class="text-xs text-ink-2"
-													>
-														{m.event_convert_progress({
-															current: eventConvertProgress.current,
-															total: eventConvertProgress.total
-														})}
-													</p>
-												{/if}
-												{#if eventConvertResume}
-													<p data-testid="event-convert-resume-notice" class="text-xs text-ink-2">
-														{m.event_convert_resume_notice({
-															remaining: eventConvertResume.remaining.length,
-															total: eventConvertResume.total
-														})}
-													</p>
-												{/if}
-												{#if eventConvertError}
-													<p
-														id="event-convert-error"
-														data-testid="event-convert-error"
-														role="alert"
-														class="text-xs text-red-700"
-													>
-														{eventConvertError}
-													</p>
-												{/if}
-												<div class="flex gap-2">
-													<button
-														type="button"
-														data-testid="event-convert-submit"
-														disabled={eventConvertSubmitting}
-														aria-busy={eventConvertSubmitting}
-														class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-														onclick={() => void submitEventConvert(event)}
-													>
-														{m.event_convert_submit()}
-													</button>
-													<button
-														type="button"
-														data-testid="event-convert-cancel"
-														disabled={eventConvertSubmitting}
-														class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-														onclick={dismissEventConvertForm}
-													>
-														{m.event_convert_cancel()}
-													</button>
-												</div>
-											</div>
-										{/if}
-									{/each}
-									{#if seasonManageDeleteError?.list === 'events'}
-										<p
-											data-testid="season-manage-delete-error"
-											role="alert"
-											class="mt-1 text-xs text-red-700"
-										>
-											{seasonManageDeleteErrorText(seasonManageDeleteError)}
-										</p>
-									{/if}
-								</div>
+								<!-- #313 — [+ Event] SURVIVES the standalone-event LIST'S removal:
+								     creating an event from the panel is not the same affordance as
+								     listing them, and #313's ask ("we dont need to list events")
+								     never touched creation. Same `!eventCreateOpen`/
+								     `createEntryPointsBlocked` gating as before. -->
+								{#if !eventCreateOpen}
+									<button
+										type="button"
+										data-testid="season-manage-add-event"
+										disabled={createEntryPointsBlocked}
+										class="flex min-h-11 items-center text-xs text-ink underline disabled:opacity-50"
+										onclick={() => openEventCreateForm('panel')}
+									>
+										{m.season_manage_add_event()}
+									</button>
+								{/if}
 
 								<!-- season repertoire (#234 — Mihkel live-gate: "I cant see the
 								     programme management on season management card." Scoped to
@@ -7800,8 +6977,9 @@
 								<!-- #196 — the "wasted a standalone event, wanted it recurring"
 								     dead-end this hint heads off (Joosep, Crede pilot): visible only
 								     while the series select still reads "" (standalone). A standalone
-								     event created anyway is not lost either — the panel's per-row
-								     convert control (#196 phase 2) exists for exactly that. -->
+								     event created anyway is not lost either — #313 moved the convert
+								     control to the EVENT PAGE (event-detail-convert), so the hint below
+									     now points there, not at this panel. -->
 								{#if eventCreateSeriesId === ''}
 									<p data-testid="event-create-series-hint" class="text-xs text-ink-2">
 										{m.event_create_series_hint()}

@@ -1,9 +1,16 @@
 // @vitest-environment happy-dom
 //
-// #197 RED — DELETE affordances for event series and standalone events on the
-// ACTUAL agenda route (integration: real +page.svelte, real season-manage
-// panel; only the data seams are mocked — same harness family as
-// page.season-manage.spec.ts).
+// #197 RED — DELETE affordances for event series on the ACTUAL agenda route
+// (integration: real +page.svelte, real season-manage panel; only the data
+// seams are mocked — same harness family as page.season-manage.spec.ts).
+//
+// #313 — the panel's STANDALONE-EVENT list is REMOVED: delete lives on the
+// event page (event-detail-delete, untouched) and convert relocated there too
+// (src/routes/event/[id]/page.event-convert.spec.ts). The #197 event-row
+// delete tests and the #212 convert-disarm tests that drove through
+// `season-manage-event-*` died with the rows; the removal itself is pinned in
+// the "#313 — the standalone-event list is GONE" block below. Series rows and
+// the season's own delete are untouched.
 //
 // WHY (#197, Joosep / Crede pilot 2026-08-31): "I want to delete the 'Proov'
 // series to recreate it with the same name … and the standalone 'Proov' event
@@ -16,7 +23,6 @@
 //   DATA — through src/lib/seasons/seasonManage.ts (wire contract pinned in
 //   seasonManage.delete.spec.ts):
 //     - a series row's delete calls `deleteEventSeries(cfg, seriesId)`;
-//     - a standalone-event row's delete calls `deleteEvent(cfg, eventId)`;
 //     - cfg is the page's usual { db: selected.db, token: getToken() }.
 //
 //   TESTIDS
@@ -24,11 +30,8 @@
 //                                        (season-manage-series-<id>), with an
 //                                        accessible name — icon-only buttons
 //                                        announcing nothing are not shippable.
-//     season-manage-event-delete-<id>    delete BUTTON inside that standalone
-//                                        event's row (season-manage-event-<id>),
-//                                        same accessibility bar.
-//     season-manage-{series,event}-delete-confirm-<id>
-//     season-manage-{series,event}-delete-cancel-<id>
+//     season-manage-series-delete-confirm-<id>
+//     season-manage-series-delete-cancel-<id>
 //                                        the two-step confirm's halves (review
 //                                        F2), swapped IN for the × when armed.
 //     season-manage-delete-error         inline delete-failed error slot,
@@ -408,14 +411,12 @@ async function armAndConfirmDelete(
 }
 
 /** #261 — expand the season card (the gear is gone; routed through the ONE
- *  shared helper), wait for the panel AND its two lists. */
+ *  shared helper), wait for the panel AND its series list (#313: the panel
+ *  has no standalone-event list any more). */
 async function openPanelWithRows(container: HTMLElement): Promise<HTMLElement> {
 	await openSeasonCardPanel(container);
 	await waitFor(() => {
 		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
-	});
-	await waitFor(() => {
-		expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
 	});
 	return q(container, 'season-manage-panel') as HTMLElement;
 }
@@ -423,7 +424,7 @@ async function openPanelWithRows(container: HTMLElement): Promise<HTMLElement> {
 // ── #197: the delete affordances exist, inside the rights-gated panel ───────────
 
 describe('agenda — #197 delete buttons render in the season-manage panel (integration: real route)', () => {
-	it('editor expands the season card: EVERY series row and EVERY standalone-event row carries its own delete BUTTON with an accessible name, inside the panel; merely rendering deletes nothing', async () => {
+	it('editor expands the season card: EVERY series row carries its own delete BUTTON with an accessible name, inside the panel; merely rendering deletes nothing', async () => {
 		const container = await renderReady();
 		const panel = await openPanelWithRows(container);
 
@@ -438,16 +439,7 @@ describe('agenda — #197 delete buttons render in the season-manage panel (inte
 			expect(panel.contains(btn)).toBe(true);
 		}
 
-		// …and one per standalone event row.
-		const evBtn = q(container, 'season-manage-event-delete-ev-9') as HTMLElement;
-		expect(evBtn).not.toBeNull();
-		expect(evBtn.tagName).toBe('BUTTON');
-		expect(evBtn.getAttribute('aria-label') || evBtn.textContent?.trim()).toBeTruthy();
-		expect(evBtn.closest('[data-testid="season-manage-event-ev-9"]')).not.toBeNull();
-		expect(panel.contains(evBtn)).toBe(true);
-
 		// Rendering the affordances wrote nothing.
-		expect(deleteEventMock).not.toHaveBeenCalled();
 		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
 	});
 
@@ -458,14 +450,13 @@ describe('agenda — #197 delete buttons render in the season-manage panel (inte
 		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
 		expect(q(container, 'season-manage-gear')).toBeNull();
 		expect(container.querySelector('[data-testid^="season-manage-series-delete-"]')).toBeNull();
-		expect(container.querySelector('[data-testid^="season-manage-event-delete-"]')).toBeNull();
 	});
 });
 
 // ── #197: clicking delete calls the data layer and the row leaves ───────────────
 
 describe('agenda — #197 clicking delete removes the series / event', () => {
-	it('a series row’s delete calls deleteEventSeries(cfg, seriesId) ONCE; the row leaves the display, the OTHER series and the standalone event survive', async () => {
+	it('a series row’s delete calls deleteEventSeries(cfg, seriesId) ONCE; the row leaves the display, the OTHER series survives', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
@@ -487,26 +478,6 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 			expect(q(container, 'season-manage-series-series-1')).toBeNull();
 		});
 		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
-		expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
-	});
-
-	it('a standalone event’s delete calls deleteEvent(cfg, eventId) ONCE; the row leaves, BOTH series rows survive', async () => {
-		const container = await renderReady();
-		await openPanelWithRows(container);
-
-		await armAndConfirmDelete(container, 'event', 'ev-9');
-
-		await waitFor(() => {
-			expect(deleteEventMock).toHaveBeenCalledTimes(1);
-		});
-		expect(deleteEventMock).toHaveBeenCalledWith(CFG, 'ev-9');
-		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
-
-		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-9')).toBeNull();
-		});
-		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
-		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 	});
 
 	// #197 review F4 — the assertion this file used to carry was the INVERSE
@@ -520,7 +491,7 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 		await openPanelWithRows(container);
 		const agendaLoadsBefore = loadFullAgendaMock.mock.calls.length;
 
-		await armAndConfirmDelete(container, 'event', 'ev-9');
+		await armAndConfirmDelete(container, 'series', 'series-1');
 
 		await waitFor(() => {
 			expect(loadFullAgendaMock.mock.calls.length).toBeGreaterThan(agendaLoadsBefore);
@@ -528,7 +499,7 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 		// The panel the editor is standing in is NOT torn down by that reload.
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 		await waitFor(() => {
-			expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
+			expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 		});
 	});
 
@@ -563,12 +534,12 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 		expect(status.className).toContain('sr-only');
 		expect(status.textContent?.trim()).toBe(''); // mounted EMPTY — a live region announces changes
 
-		await armAndConfirmDelete(container, 'event', 'ev-9');
+		await armAndConfirmDelete(container, 'series', 'series-2');
 
 		await waitFor(() => {
 			expect(
 				(q(container, 'season-manage-delete-status') as HTMLElement).textContent
-			).toContain('Spring concert');
+			).toContain('Sectionals');
 		});
 	});
 
@@ -675,16 +646,6 @@ describe('agenda — #197 delete is a TWO-step confirm, never a single tap', () 
 		});
 	});
 
-	it('tapping the standalone event × writes nothing either', async () => {
-		const container = await renderReady();
-		await openPanelWithRows(container);
-
-		await fireEvent.click(q(container, 'season-manage-event-delete-ev-9') as HTMLElement);
-
-		expect(deleteEventMock).not.toHaveBeenCalled();
-		expect(q(container, 'season-manage-event-delete-confirm-ev-9')).not.toBeNull();
-	});
-
 	it('cancel disarms: the × comes back and nothing was written', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
@@ -734,34 +695,40 @@ describe('agenda — #197 delete is a TWO-step confirm, never a single tap', () 
 
 	it('the confirm is disabled while its DELETE is in flight — a double-tap cannot fire two', async () => {
 		let release: (() => void) | undefined;
-		deleteEventMock.mockImplementation(
+		deleteEventSeriesMock.mockImplementation(
 			async () =>
-				await new Promise<void>((resolve) => {
+				await new Promise<number>((resolve) => {
 					release = () => {
-						eventRows = eventRows.filter((row) => row.id !== 'ev-9');
-						resolve();
+						seriesRows = seriesRows.filter((row) => row.id !== 'series-1');
+						resolve(9);
 					};
 				})
 		);
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
-		await fireEvent.click(q(container, 'season-manage-event-delete-ev-9') as HTMLElement);
-		const confirm = q(container, 'season-manage-event-delete-confirm-ev-9') as HTMLButtonElement;
+		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-delete-confirm-series-1')).not.toBeNull();
+		});
+		const confirm = q(container, 'season-manage-series-delete-confirm-series-1') as HTMLButtonElement;
 		await fireEvent.click(confirm);
 
 		await waitFor(() => {
 			expect(
-				(q(container, 'season-manage-event-delete-confirm-ev-9') as HTMLButtonElement).disabled
+				(q(container, 'season-manage-series-delete-confirm-series-1') as HTMLButtonElement)
+					.disabled
 			).toBe(true);
 		});
 		// A second tap on the still-mounted confirm writes nothing more.
-		await fireEvent.click(q(container, 'season-manage-event-delete-confirm-ev-9') as HTMLElement);
-		expect(deleteEventMock).toHaveBeenCalledTimes(1);
+		await fireEvent.click(
+			q(container, 'season-manage-series-delete-confirm-series-1') as HTMLElement
+		);
+		expect(deleteEventSeriesMock).toHaveBeenCalledTimes(1);
 
 		release?.();
 		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-9')).toBeNull();
+			expect(q(container, 'season-manage-series-series-1')).toBeNull();
 		});
 	});
 });
@@ -801,24 +768,6 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 			q(container, 'season-manage-series-series-1') as HTMLElement
 		).parentElement;
 		expect(seriesSubPanel?.contains(alert)).toBe(true);
-		// …and NOT alongside the standalone events.
-		expect(
-			(q(container, 'season-manage-event-ev-9') as HTMLElement).parentElement?.contains(alert)
-		).toBe(false);
-	});
-
-	it('a rejected deleteEvent surfaces the same slot and the event row STAYS', async () => {
-		deleteEventMock.mockRejectedValue(new Error('boom'));
-		const container = await renderReady();
-		await openPanelWithRows(container);
-
-		await armAndConfirmDelete(container, 'event', 'ev-9');
-
-		await waitFor(() => {
-			expect(q(container, 'season-manage-delete-error')).not.toBeNull();
-		});
-		expect(q(container, 'season-manage-delete-error')?.getAttribute('role')).toBe('alert');
-		expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
 	});
 
 	// #197 review F3 — the panel gates on `_owner` OR `_editor` on the SEASON;
@@ -859,25 +808,8 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
 	});
 
-	// #197 review 2nd pass F1 — an EVENT cascades too (its attendance rows and
-	// programme items), and when THAT stops part-way the copy must say the EVENT
-	// is still standing, not the series.
-	it('an EVENT cascade that stopped part-way gets its own copy — how many child records went, and the event is still there', async () => {
-		deleteEventMock.mockRejectedValue(new EventCascadePartialError('ev-9', 2, 5, new Error('boom')));
-		const container = await renderReady();
-		await openPanelWithRows(container);
-
-		await armAndConfirmDelete(container, 'event', 'ev-9');
-
-		await waitFor(() => {
-			expect(q(container, 'season-manage-delete-error')).not.toBeNull();
-		});
-		const text = q(container, 'season-manage-delete-error')?.textContent ?? '';
-		expect(text).toContain('season_manage_event_delete_partial');
-		expect(text).toContain('2');
-		expect(text).toContain('5');
-		expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
-	});
+	// (#313 — the EVENT-cascade-partial copy lost its panel surface with the
+	// standalone-event rows; the event page's own delete carries that story.)
 
 	// A 403 nested inside a cascade failure is still a permission story, however
 	// deep it sits (series → occurrence → the occurrence's own child).
@@ -904,113 +836,62 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 	});
 
 	it('a SUCCESSFUL delete after a failed one clears the error — the slot is per-attempt, not sticky', async () => {
-		deleteEventMock.mockRejectedValueOnce(new Error('boom'));
-		deleteEventMock.mockImplementation(async (_cfg: unknown, eventId: string) => {
-			eventRows = eventRows.filter((row) => row.id !== eventId);
-		});
+		deleteEventSeriesMock.mockRejectedValueOnce(new Error('boom'));
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
-		await armAndConfirmDelete(container, 'event', 'ev-9');
+		await armAndConfirmDelete(container, 'series', 'series-1');
 		await waitFor(() => {
 			expect(q(container, 'season-manage-delete-error')).not.toBeNull();
 		});
 
 		// Second try — this one resolves. A failed delete leaves the row ARMED
 		// (nothing was destroyed), so the confirm is right there to re-tap.
-		await fireEvent.click(q(container, 'season-manage-event-delete-confirm-ev-9') as HTMLElement);
+		await fireEvent.click(
+			q(container, 'season-manage-series-delete-confirm-series-1') as HTMLElement
+		);
 		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-9')).toBeNull();
+			expect(q(container, 'season-manage-series-series-1')).toBeNull();
 		});
 		expect(q(container, 'season-manage-delete-error')).toBeNull();
 	});
 });
 
-// ── #212: the convert form owns the panel — any armed delete is DISARMED ────────
+// ── #313: the standalone-event list is GONE from the panel ──────────────────────
 //
-// Gama's ruling on #212 (last comment): while the event→series conversion form
-// is open the panel is ONE action context — every row's ⟳ and × (event rows
-// AND series rows) is gone and any armed delete confirmation is disarmed;
-// closing the form brings every row's buttons back in their DISARMED posture.
-// The "arming a SECOND row disarms the first" shape above, extended to the
-// convert form: only one destructive/creative intent is ever live.
+// COMMISSION (Mihkel, #313): "in season editor, we dont need to list events.
+// its redundant as events are already listed below and every event should
+// have these administrator controls on their page." The rows, their two
+// controls (convert ⟳ / delete ×), the `seasonManageEvents` state and its
+// fetch all leave; convert now lives on the event page
+// (src/routes/event/[id]/page.event-convert.spec.ts) and delete was already
+// there. The fixture below still ANSWERS the standalone-list read with a row
+// — the pin is that the page never even asks.
 
-describe('agenda — #212 opening the convert form disarms any armed delete', () => {
-	it('an armed EVENT row is disarmed by opening convert on ANOTHER row — no confirm survives the form, and the × comes back disarmed after it closes', async () => {
-		eventRows = [
-			...eventRows,
-			{ id: 'ev-10', name: 'Autumn concert', startDatetime: '2027-09-12T15:00:00.000Z' }
-		];
+describe('agenda — #313 the panel lists series only; the standalone-event rows are removed', () => {
+	it('opening the panel renders the series rows but NO season-manage-event-* node — and never reads the standalone list at all', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-10')).not.toBeNull();
-		});
 
-		// Arm delete on row B (ev-10).
-		await fireEvent.click(q(container, 'season-manage-event-delete-ev-10') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-event-delete-confirm-ev-10')).not.toBeNull();
-		});
-
-		// Open convert on row A (ev-9) — the armed confirm dies with every other
-		// row action: NO ⟳/×/confirm/cancel remains on ANY row while the form
-		// is open (prefix matching catches the confirm/cancel testids too).
-		await fireEvent.click(q(container, 'season-manage-event-convert-ev-9') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'event-convert-form')).not.toBeNull();
-		});
-		expect(
-			container.querySelectorAll('[data-testid^="season-manage-event-delete-"]').length
-		).toBe(0);
-		expect(
-			container.querySelectorAll('[data-testid^="season-manage-event-convert-"]').length
-		).toBe(0);
-		expect(
-			container.querySelectorAll('[data-testid^="season-manage-series-delete-"]').length
-		).toBe(0);
-
-		// Close the form: row B comes back DISARMED — the plain ×, never a
-		// primed confirm the operator did not just arm.
-		await fireEvent.click(q(container, 'event-convert-cancel') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'event-convert-form')).toBeNull();
-		});
-		await waitFor(() => {
-			expect(q(container, 'season-manage-event-delete-ev-10')).not.toBeNull();
-		});
-		expect(q(container, 'season-manage-event-delete-confirm-ev-10')).toBeNull();
-		expect(q(container, 'season-manage-event-delete-cancel-ev-10')).toBeNull();
-		expect(deleteEventMock).not.toHaveBeenCalled();
+		// No row, no convert ⟳, no delete ×/confirm/cancel — the trailing dash
+		// keeps `season-manage-events-error` (asserted separately) and
+		// `season-manage-add-event` out of the match.
+		expect(container.querySelectorAll('[data-testid^="season-manage-event-"]').length).toBe(0);
+		// The state and its fetch are gone with the rows, not merely hidden.
+		expect(listEventsForSeasonMock).not.toHaveBeenCalled();
+		// The standalone list's own error slot went with it.
+		expect(q(container, 'season-manage-events-error')).toBeNull();
 	});
 
-	it('an armed SERIES row is disarmed the same way — opening convert on an event row clears it', async () => {
+	it('the removal is surgical: [+ Event], [+ Series] and the series list still stand', async () => {
 		const container = await renderReady();
-		await openPanelWithRows(container);
+		const panel = await openPanelWithRows(container);
 
-		await fireEvent.click(q(container, 'season-manage-series-delete-series-1') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-series-delete-confirm-series-1')).not.toBeNull();
-		});
-
-		await fireEvent.click(q(container, 'season-manage-event-convert-ev-9') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'event-convert-form')).not.toBeNull();
-		});
-		expect(
-			container.querySelectorAll('[data-testid^="season-manage-series-delete-"]').length
-		).toBe(0);
-
-		await fireEvent.click(q(container, 'event-convert-cancel') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'event-convert-form')).toBeNull();
-		});
-		await waitFor(() => {
-			expect(q(container, 'season-manage-series-delete-series-1')).not.toBeNull();
-		});
-		expect(q(container, 'season-manage-series-delete-confirm-series-1')).toBeNull();
-		expect(q(container, 'season-manage-series-delete-cancel-series-1')).toBeNull();
-		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
+		expect(q(container, 'season-manage-add-event')).not.toBeNull();
+		expect(panel.contains(q(container, 'season-manage-add-event'))).toBe(true);
+		expect(q(container, 'season-manage-add-series')).not.toBeNull();
+		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
+		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 	});
 });
 
@@ -1242,7 +1123,7 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 		expect(deleteSeasonMock).not.toHaveBeenCalled();
 	});
 
-	it('ONE armed context: arming the season disarms an armed series row, and arming a series (or event) row disarms the armed season', async () => {
+	it('ONE armed context: arming the season disarms an armed series row, and arming a series row disarms the armed season', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
@@ -1256,15 +1137,14 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 		await armSeasonDelete(container);
 		expect(q(container, 'season-manage-series-delete-confirm-series-1')).toBeNull();
 
-		// …and an event row's arming kills the season confirm right back.
-		await fireEvent.click(q(container, 'season-manage-event-delete-ev-9') as HTMLElement);
+		// …and a series row's arming kills the season confirm right back.
+		await fireEvent.click(q(container, 'season-manage-series-delete-series-2') as HTMLElement);
 		await waitFor(() => {
-			expect(q(container, 'season-manage-event-delete-confirm-ev-9')).not.toBeNull();
+			expect(q(container, 'season-manage-series-delete-confirm-series-2')).not.toBeNull();
 		});
 		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
 		expect(deleteSeasonMock).not.toHaveBeenCalled();
 		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
-		expect(deleteEventMock).not.toHaveBeenCalled();
 	});
 
 	it('a failed scope read leaves a scope-free confirm (the existing name-only copy) that still deletes — a read must never block the delete', async () => {
@@ -1918,14 +1798,16 @@ describe('#217/#216 — i18n: the season-delete keys exist in en/et/lv/uk', () =
 // post-delete refresh, per-list error placement + status announcement)
 // (*MVOX:Palestrina* — #197 review 2nd pass F1/F2: live confirm count,
 // cascade-reported deletion count, event-cascade copy)
-// (*MVOX:Tallis* — #212 RED: convert form disarms any armed delete — one action
-// context at a time)
+// (*MVOX:Tallis* — #313: the standalone-event rows and their tests are removed
+// — the removal pins live in the "#313" block above; the #212 convert-disarm
+// tests moved with the convert flow to the event page)
 // (*MVOX:Tallis* — #217 RED (folds #216): season delete control + two-step
 // confirm quoting the live scope, deleteSeason wiring with onProgress, ONE
 // progress counter under the series list for both cascades, success close +
 // announcement, season-partial error branch, locale guard for the new keys)
 
-// ── #237: the red-trashcan sweep — series + event rows (panel internals) ────────
+// ── #237: the red-trashcan sweep — series rows (panel internals; #313 removed
+//    the event rows) ─────────────────────────────────────────────────────────────
 //
 // The idle × triggers become the SHARED delete-trigger unit (DeleteTrigger →
 // TrashIcon inside a red 44px button — see DeleteTrigger.spec.ts for the unit
@@ -1935,15 +1817,14 @@ describe('#217/#216 — i18n: the season-delete keys exist in en/et/lv/uk', () =
 // single-armed-slot rule are all byte-preserved — the existing #197/#212/#217
 // suites above locate by testid and must stay green through the swap.
 
-describe('agenda — #237 the series/event delete triggers render the shared red trashcan (integration: real route)', () => {
-	it('EVERY idle series + event trigger wraps an aria-hidden TrashIcon in the shared red 44px face — no × glyph left', async () => {
+describe('agenda — #237 the series delete triggers render the shared red trashcan (integration: real route)', () => {
+	it('EVERY idle series trigger wraps an aria-hidden TrashIcon in the shared red 44px face — no × glyph left', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
 		for (const testid of [
 			'season-manage-series-delete-series-1',
-			'season-manage-series-delete-series-2',
-			'season-manage-event-delete-ev-9'
+			'season-manage-series-delete-series-2'
 		]) {
 			const btn = q(container, testid) as HTMLElement;
 			expect(btn, `${testid} missing`).not.toBeNull();

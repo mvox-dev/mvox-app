@@ -668,7 +668,9 @@ describe('season card #261 — clicking the collapsed card expands it', () => {
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 		});
-		expect(listEventsForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+		// #313 — the standalone-event list is removed from the panel; the read
+		// went with it.
+		expect(listEventsForSeasonMock).not.toHaveBeenCalled();
 		// The collapsed-state control yields to the opened title row.
 		expect(q(container, SEASON_CARD_EXPAND), 'expand control is the COLLAPSED face').toBeNull();
 	});

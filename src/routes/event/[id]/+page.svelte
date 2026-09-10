@@ -33,6 +33,15 @@
 	// unassign = DELETE of the series `_parent` value id — see that module's
 	// header for the SPIKE-verified rights shape).
 	import { reassignEventSeries, unassignEventSeries } from '$lib/events/eventSeriesActions';
+	// #313 — the #196/#212 standalone-event → series conversion, relocated here
+	// from the season panel (routes/+page.svelte). `convertEventToSeries` makes
+	// THIS event the series' first occurrence; `createEvent` + `generateIntervalDates`
+	// write the further occurrences; `resolveDatabaseEntityId` is the collective's
+	// org lookup every write on this page ultimately needs.
+	import { convertEventToSeries, type ConvertEventToSeriesInput } from '$lib/events/eventConvert';
+	import { createEvent } from '$lib/entity/entityCreate';
+	import { generateIntervalDates } from '$lib/events/recurrence';
+	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -425,6 +434,83 @@
 		detail !== null && !isOwnerTier && detail.seriesId !== null
 	);
 
+	// ── #313 — the #196/#212 standalone-event → series conversion ─────────────
+	// RELOCATED here from the season panel's per-row `season-manage-event-
+	// convert-<id>` control (routes/+page.svelte): "every event should have
+	// these administrator controls on their page" (Mihkel, #313). One slot,
+	// not keyed by event id — this page ever shows exactly ONE event, unlike
+	// the panel's list.
+	//
+	// THE GATE — `isEditor`, deliberately NOT `isOwnerTier`: research-313
+	// confirmed the conversion's wire (a plain series CREATE + one `_parent`
+	// APPEND on the event, see eventConvert.ts) is editor-reachable, the SAME
+	// tier the panel's own gate (`manageableSeasonRights === 'editor'`) already
+	// required — unlike the #304 unassign beside it on this page, which is
+	// owner-gated because ITS wire op is a `_parent` value DELETE (isOwnerTier's
+	// own doc comment). Rendered only for a STANDALONE event
+	// (`detail.seriesId === null` — converting a series child is meaningless)
+	// that HAS a season (`detail.seasonId !== null` — the new series is
+	// parented to it; no season, nowhere to put it), and absent (never
+	// disabled) while `detail` itself is unresolved — the #301/#304 fail-closed
+	// posture every other rights-gated control on this page already follows.
+	const canConvert = $derived(
+		detail !== null && isEditor && detail.seriesId === null && detail.seasonId !== null
+	);
+
+	let eventConvertOpen = $state(false);
+	let eventConvertIntervalDays = $state('7');
+	let eventConvertDuration = $state('');
+	let eventConvertEndDate = $state('');
+	let eventConvertSubmitting = $state(false);
+	/** Already the localized message (a failure's `{step}` / a count already
+	 *  filled in) — not a raw error, so the render side stays a plain string
+	 *  print. */
+	let eventConvertError = $state<string | null>(null);
+	/** Which box a refusal belongs to (#196 review F2). `null` = form-wide (a
+	 *  failed write, an event with no start) and names no box. */
+	type EventConvertErrorField = 'interval' | 'duration' | 'end' | null;
+	let eventConvertErrorField = $state<EventConvertErrorField>(null);
+	/** Non-null while the occurrence loop runs — `current` is the occurrence IN
+	 *  FLIGHT (1-based). */
+	let eventConvertProgress = $state<{ current: number; total: number } | null>(null);
+	/**
+	 * #196 review F1 — what a STOPPED occurrence run still owes. The conversion
+	 * itself already landed (the series exists and the event is linked to it),
+	 * so a re-submit must never re-convert: it picks up at the occurrence that
+	 * failed. No `eventId` field (unlike the panel-era shape this relocates):
+	 * this page shows exactly one event, and `resetConvertState` below drops
+	 * the record the moment the route/collective moves to a different one.
+	 */
+	type EventConvertResume = {
+		seriesId: string;
+		dbEntityId: string;
+		/** The converted event's own type, which every occurrence must carry. */
+		eventType: string;
+		/** 'YYYY-MM-DDTHH:MM' Tallinn wall-clock occurrences not yet written. */
+		remaining: string[];
+		/** The ORIGINAL occurrence count, so every count keeps describing the run. */
+		total: number;
+	};
+	let eventConvertResume = $state<EventConvertResume | null>(null);
+	/** The conversion form's own dialog element — focus moves into it on open,
+	 *  and its Escape handler is what dismisses it (the panel-era
+	 *  `series-create-form` contract this relocates). */
+	let eventConvertFormEl = $state<HTMLDivElement | null>(null);
+
+	/** Mirrors `resetDeleteState`/`resetSeriesState`: a fresh (or superseded)
+	 *  load must not carry the PREVIOUS event's conversion state — armed form,
+	 *  in-flight submit, or a stopped run's resume record — across the switch. */
+	function resetConvertState(): void {
+		eventConvertOpen = false;
+		eventConvertIntervalDays = '7';
+		eventConvertDuration = '';
+		eventConvertEndDate = '';
+		eventConvertError = null;
+		eventConvertErrorField = null;
+		eventConvertProgress = null;
+		eventConvertResume = null;
+	}
+
 	async function loadForSelected(): Promise<void> {
 		const current = selected;
 		const id = eventId;
@@ -436,6 +522,7 @@
 			resetComposeState();
 			resetDeleteState();
 			resetSeriesState();
+			resetConvertState();
 			return;
 		}
 		status = 'loading';
@@ -443,6 +530,7 @@
 		resetRsvpState();
 		resetComposeState();
 		resetDeleteState();
+		resetConvertState();
 		try {
 			const cfg = { db: current.db, token: getToken() ?? '' };
 			const loaded = await loadEventDetail(cfg, id);
@@ -1209,6 +1297,344 @@
 		} catch (err) {
 			if (g !== generation) return;
 			console.error('event detail: post-series-write refresh failed', evId, err);
+		}
+	}
+
+	// ── #313 — the standalone-event → series conversion, wiring relocated ─────
+	// from the season panel (routes/+page.svelte's #196/#212 machinery). The
+	// #196/#212 behaviour contract (form, validation, occurrence loop, resume,
+	// dialog) is UNCHANGED — only the entry point, the route, and this event's
+	// own `detail` as the season source are new (see page.event-convert.spec.ts
+	// under this route for the pinned contract).
+
+	/** The Tallinn wall-clock date + time a UTC instant reads as — the series'
+	 *  `startTime`/`startDate` are derived from the EVENT's own `startDatetime`,
+	 *  not re-typed by the operator. '' / '' on an unparseable instant. */
+	function tallinnWallClockParts(isoUtc: string): { date: string; time: string } {
+		const instant = new Date(isoUtc);
+		if (Number.isNaN(instant.getTime())) return { date: '', time: '' };
+		const parts = new Intl.DateTimeFormat('en-US', {
+			timeZone: TZ,
+			hourCycle: 'h23',
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit'
+		}).formatToParts(instant);
+		const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+		return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
+	}
+
+	/** Opens the conversion form — interval defaults to 7 (weekly, the common
+	 *  case); duration/end-date start blank, the operator supplies those, the
+	 *  start itself comes from the event. The entry control it replaces is
+	 *  gone the instant this flips (the template's `{#if !eventConvertOpen}`),
+	 *  one entry, one meaning — the armed-delete swap idiom applied here. */
+	function openEventConvertForm(): void {
+		eventConvertOpen = true;
+		eventConvertIntervalDays = '7';
+		eventConvertDuration = '';
+		eventConvertEndDate = '';
+		eventConvertProgress = null;
+		clearEventConvertError();
+	}
+
+	/** Unmounts the form AND forgets whatever a stopped run still owed. Safe to
+	 *  do both together (unlike the series-create form's cross-collective
+	 *  resume): the only callers that reach this with a record outstanding are
+	 *  the operator's own exits (Cancel/Escape) and the clean finish. */
+	function closeEventConvertForm(): void {
+		eventConvertOpen = false;
+		eventConvertProgress = null;
+		eventConvertResume = null;
+		clearEventConvertError();
+	}
+
+	function setEventConvertError(message: string, field: EventConvertErrorField): void {
+		eventConvertError = message;
+		eventConvertErrorField = field;
+	}
+
+	function clearEventConvertError(): void {
+		eventConvertError = null;
+		eventConvertErrorField = null;
+	}
+
+	/** `aria-describedby` for the field that currently owns the message. */
+	function eventConvertDescribedBy(field: EventConvertErrorField): string | undefined {
+		return eventConvertErrorField === field ? 'event-convert-error' : undefined;
+	}
+
+	function eventConvertInvalid(field: EventConvertErrorField): true | undefined {
+		return eventConvertErrorField === field ? true : undefined;
+	}
+
+	/** While a stopped run is resumable the recurrence boxes are INERT: submit
+	 *  finishes THAT run (the series is already on the wire, its
+	 *  `interval_days`/`end_date` already written), so an edit here would be
+	 *  silently discarded. */
+	const eventConvertLocked = $derived(eventConvertResume !== null);
+
+	/** Hands focus back to the entry control — it is still on screen whenever
+	 *  the form is dismissed rather than finished (a finished conversion takes
+	 *  the control away with the rest of the standalone-only header). */
+	function restoreEventConvertFocus(): void {
+		tick().then(() =>
+			document.querySelector<HTMLElement>('[data-testid="event-detail-convert"]')?.focus()
+		);
+	}
+
+	/** Cancel/Escape — the operator's explicit exit, and the one place a
+	 *  stopped run may be ABANDONED. Refused while a write is on the wire. */
+	function dismissEventConvertForm(): void {
+		if (eventConvertSubmitting) return;
+		closeEventConvertForm();
+		restoreEventConvertFocus();
+	}
+
+	function onEventConvertFormKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		dismissEventConvertForm();
+	}
+
+	/** Focus moves INTO the dialog the moment it opens — what `role="dialog"`
+	 *  promises a screen-reader user. */
+	$effect(() => {
+		if (eventConvertOpen && eventConvertFormEl) eventConvertFormEl.focus();
+	});
+
+	/** The failed step, duck-typed off whatever `convertEventToSeries` rejected
+	 *  with (`EventConvertError#step`) — never `instanceof`: the page specs mock
+	 *  `$lib/events/eventConvert` at the module boundary, so a rejection built
+	 *  by hand in a test must be recognised exactly like the real class. The
+	 *  fallback is 'unknown', NOT 'read-event' — naming the choreography's first
+	 *  step for a rejection that carries no step would say a step failed that
+	 *  never ran. */
+	function eventConvertStepOf(e: unknown): string {
+		if (e && typeof e === 'object' && 'step' in e) {
+			const step = (e as { step?: unknown }).step;
+			if (typeof step === 'string' && step) return step;
+		}
+		return 'unknown';
+	}
+
+	/** The collective lookup runs BEFORE `convertEventToSeries`, so its
+	 *  failures belong to no conversion step. */
+	const EVENT_CONVERT_RESOLVE_STEP = 'resolve-collective';
+
+	/** WHY a pre-write refusal happened, when the step alone cannot say it.
+	 *  `convertEventToSeries` refuses an event with no name and an event with
+	 *  no event_type in the same 'read-event' step, and both are permanent
+	 *  properties of the data — a retry never fixes either, so the retryable
+	 *  "Couldn't convert the event (read-event). Try again." is the wrong thing
+	 *  to say. Duck-typed for the same reason `eventConvertStepOf` is. */
+	function eventConvertRefusalMessage(e: unknown): string | null {
+		if (!e || typeof e !== 'object' || !('reason' in e)) return null;
+		const reason = (e as { reason?: unknown }).reason;
+		if (reason === 'missing-name') return m.event_convert_missing_name();
+		if (reason === 'missing-event-type') return m.event_convert_missing_type();
+		return null;
+	}
+
+	/**
+	 * Submit — the WHOLE conversion, which is two acts, not one.
+	 *
+	 *   1. `convertEventToSeries` makes the event the first occurrence of a new
+	 *      series carrying the typed cadence: THIS event's own season
+	 *      (`detail.seasonId` — the relocation of the panel's
+	 *      `manageableSeasonId`), the collective's database entity id
+	 *      (`resolveDatabaseEntityId`, never guessed), and the event's OWN start
+	 *      as a Tallinn wall clock (`tallinnWallClockParts`).
+	 *   2. the FURTHER occurrences are written — one serial `createEvent` per
+	 *      `generateIntervalDates` date after the event's own. Occurrences in
+	 *      this app are materialized `event` entities, not read-time-generated.
+	 *
+	 * Refusals come BEFORE any fetch, each naming its own box. A clean finish
+	 * closes the form and re-reads THIS event (`refreshEventDetail`) — the
+	 * world refreshed, the event is a series child now. A conversion failure
+	 * surfaces inline, loud, naming the failed step, and refreshes nothing. An
+	 * occurrence failure records what the run still owes (`eventConvertResume`,
+	 * so a re-submit finishes rather than converting a second time) and
+	 * deliberately does NOT re-read the event: a refresh would show
+	 * `seriesId` set, unmount this very region (the gate is
+	 * `detail.seriesId === null`), and eat the only record of the unfinished
+	 * run — the relocation of the panel's "the standalone list is deliberately
+	 * NOT re-read" pin.
+	 */
+	async function submitEventConvert(): Promise<void> {
+		if (eventConvertSubmitting) return; // no duplicate runs on the wire
+		if (!selected || !detail || detail.seasonId === null) return;
+		clearEventConvertError();
+
+		// Single-slot, page-scoped to THIS event — no id check needed (unlike
+		// the panel-era shape, this page never shows a second event's form).
+		const resume = eventConvertResume;
+
+		// The series' start is the EVENT's own — never re-typed, so it is
+		// validated here rather than refused by the data layer under a step name.
+		const { date: startDate, time: startTime } = tallinnWallClockParts(detail.startDatetime);
+		if (!startDate || !startTime) {
+			console.error('event detail: converting an event with no readable start', detail.id, detail.startDatetime);
+			setEventConvertError(m.event_convert_start_missing(), null);
+			return;
+		}
+		const intervalDays = Number(eventConvertIntervalDays);
+		if (!eventConvertIntervalDays.trim() || !Number.isFinite(intervalDays) || intervalDays < 1) {
+			setEventConvertError(m.event_convert_interval_required(), 'interval');
+			return;
+		}
+		const durationMinutes = Number(eventConvertDuration);
+		if (!eventConvertDuration.trim() || !Number.isFinite(durationMinutes) || durationMinutes < 1) {
+			setEventConvertError(m.event_convert_duration_required(), 'duration');
+			return;
+		}
+		if (!eventConvertEndDate) {
+			setEventConvertError(m.event_convert_end_required(), 'end');
+			return;
+		}
+		if (eventConvertEndDate < startDate) {
+			setEventConvertError(m.event_convert_end_before_start(), 'end');
+			return;
+		}
+
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = detail.seasonId;
+		const eventId = detail.id;
+		// Same generation guard every other write on this page uses: a
+		// collective/route switch mid-run must stop it POSTing further
+		// occurrences into a screen the operator has since left, and must not
+		// paint this run's outcome onto whatever is now on screen.
+		const g = generation;
+
+		eventConvertSubmitting = true;
+		try {
+			let seriesId: string;
+			let dbEntityId: string;
+			let eventType: string;
+			let occurrences: string[];
+			let total: number;
+			let created: number;
+
+			if (resume) {
+				// The series is already on the wire — re-converting would leave a
+				// duplicate behind for every retry.
+				({ seriesId, dbEntityId, eventType, total } = resume);
+				occurrences = resume.remaining;
+				created = total - occurrences.length;
+			} else {
+				let resolvedDbEntityId: string | null;
+				try {
+					resolvedDbEntityId = await resolveDatabaseEntityId(cfg);
+				} catch (e) {
+					console.error('event detail: resolving the database entity for event conversion failed', e);
+					if (g === generation)
+						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
+					return;
+				}
+				if (!resolvedDbEntityId) {
+					console.error(
+						'event detail: event conversion with no resolvable database entity',
+						selected.personId
+					);
+					if (g === generation)
+						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
+					return;
+				}
+				if (g !== generation) return;
+				dbEntityId = resolvedDbEntityId;
+				const input: ConvertEventToSeriesInput = {
+					eventId,
+					dbEntityId,
+					seasonId,
+					intervalDays,
+					startTime,
+					startDate,
+					endDate: eventConvertEndDate,
+					durationMinutes
+				};
+				try {
+					const result = await convertEventToSeries(cfg, input);
+					seriesId = result.seriesId;
+					eventType = result.eventType;
+				} catch (e) {
+					console.error('event detail: event conversion failed', eventId, e);
+					// A pre-write REFUSAL (no name / no event_type) says what is
+					// actually wrong; everything else names the step that failed.
+					if (g === generation)
+						setEventConvertError(
+							eventConvertRefusalMessage(e) ?? m.event_convert_failed({ step: eventConvertStepOf(e) }),
+							null
+						);
+					return;
+				}
+				if (g !== generation) return;
+				// `[0]` is the converted event's own date — it IS the first
+				// occurrence and already exists, so the loop starts at `[1]`.
+				occurrences = generateIntervalDates({
+					startDate,
+					intervalDays,
+					timeOfDay: startTime,
+					until: eventConvertEndDate
+				}).slice(1);
+				total = occurrences.length;
+				created = 0;
+			}
+
+			for (let i = 0; i < occurrences.length; i += 1) {
+				// Checked FIRST, every iteration: a switch between occurrences
+				// stops the run where it stands. The remainder is NOT recorded
+				// across a switch — see `EventConvertResume`'s doc.
+				if (g !== generation) {
+					console.warn(
+						'event detail: collective/route switched mid-conversion — the series keeps the occurrences already written',
+						seriesId
+					);
+					return;
+				}
+				// Set BEFORE the await — "occurrence 1 of N" while the FIRST POST
+				// is in flight.
+				eventConvertProgress = { current: created + 1, total };
+				try {
+					await createEvent(cfg, {
+						dbEntityId,
+						seriesId,
+						extraParentIds: [seasonId],
+						eventType,
+						startDatetime: tallinnLocalToUtcIso(occurrences[i])
+					});
+					created += 1;
+				} catch (e) {
+					console.error('event detail: generating a converted series occurrence failed', seriesId, e);
+					eventConvertProgress = null;
+					if (g !== generation) return;
+					// STOP at the failure — no further POSTs, no rollback. Remember
+					// exactly where it stopped so a re-submit RESUMES.
+					eventConvertResume = {
+						seriesId,
+						dbEntityId,
+						eventType,
+						remaining: occurrences.slice(i),
+						total
+					};
+					setEventConvertError(m.event_convert_generate_failed({ created, total }), null);
+					// Deliberately NOT re-read — see this function's doc comment.
+					return;
+				}
+			}
+			// The last successful POST can itself straddle a switch (the check
+			// above only catches the NEXT iteration) — one more before the
+			// success writes.
+			if (g !== generation) return;
+			eventConvertProgress = null;
+			closeEventConvertForm();
+			// The write just changed the world this page reads: the event is a
+			// series child now. Re-read BEFORE anything else, same discipline as
+			// the series-picker's own commit (#289).
+			await refreshEventDetail(eventId, g);
+		} finally {
+			eventConvertSubmitting = false;
 		}
 	}
 
@@ -2677,6 +3103,180 @@
 							</p>
 						{/if}
 					</div>
+				{/if}
+				<!-- #313 — the standalone → series conversion control. STATED CHOICE:
+				     it sits directly UNDER the series picker (immediately above), not
+				     inside it — the picker offers "join an EXISTING series", this
+				     offers "become a NEW one", two different writes that happen to
+				     share a header region; keeping them as siblings rather than
+				     nesting one inside the other's `{#if}` keeps each gate legible on
+				     its own. Gate: `canConvert` — `isEditor` (NOT `isOwnerTier`; see
+				     that derived's doc above and `canConvert`'s own doc for why this
+				     control and the #304 unassign beside it are gated on two
+				     DIFFERENT tiers for two different wire ops), a STANDALONE event
+				     (`detail.seriesId === null`), and a season to parent the new
+				     series to. One entry, one meaning: the control is GONE while the
+				     form is open (`{#if !eventConvertOpen}`), same swap idiom as
+				     #237's armed-delete pair. -->
+				{#if canConvert}
+					{#if !eventConvertOpen}
+						<button
+							type="button"
+							data-testid="event-detail-convert"
+							class="flex min-h-11 w-fit items-center text-xs text-ink underline"
+							onclick={openEventConvertForm}
+						>
+							{m.event_detail_convert()}
+						</button>
+					{:else}
+						<!-- The #196/#212 form contract, relocated verbatim: role="dialog"
+						     + tabindex="-1" + the focus effect above, its OWN Escape
+						     handler, every box `disabled={eventConvertLocked}` once a
+						     stopped run is resumable, and the #212 start-date TEXT (never
+						     an input) above the end-date picker it precedes. -->
+						<div
+							data-testid="event-convert-form"
+							role="dialog"
+							aria-label={m.event_convert_form_label()}
+							tabindex="-1"
+							bind:this={eventConvertFormEl}
+							class="flex flex-col gap-1.5 border border-dashed border-ink-5 p-2"
+							onkeydown={onEventConvertFormKeydown}
+						>
+							<label class="flex w-full flex-col gap-0.5">
+								<span class="text-xs text-ink-2">
+									{m.event_convert_interval_label()}
+								</span>
+								<input
+									type="number"
+									min="1"
+									data-testid="event-convert-interval"
+									aria-label={m.event_convert_interval_label()}
+									aria-invalid={eventConvertInvalid('interval')}
+									aria-describedby={eventConvertDescribedBy('interval')}
+									disabled={eventConvertLocked}
+									value={eventConvertIntervalDays}
+									oninput={(e) => {
+										eventConvertIntervalDays = (
+											e.currentTarget as HTMLInputElement
+										).value;
+										clearEventConvertError();
+									}}
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+								/>
+							</label>
+							<label class="flex w-full flex-col gap-0.5">
+								<span class="text-xs text-ink-2">
+									{m.event_convert_duration_label()}
+								</span>
+								<input
+									type="number"
+									min="1"
+									data-testid="event-convert-duration"
+									aria-label={m.event_convert_duration_label()}
+									aria-invalid={eventConvertInvalid('duration')}
+									aria-describedby={eventConvertDescribedBy('duration')}
+									disabled={eventConvertLocked}
+									value={eventConvertDuration}
+									oninput={(e) => {
+										eventConvertDuration = (
+											e.currentTarget as HTMLInputElement
+										).value;
+										clearEventConvertError();
+									}}
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+								/>
+							</label>
+							<!-- #212 — the event's OWN date, derived (never a new $state)
+							     from `tallinnWallClockParts(detail.startDatetime).date`:
+							     plain ISO TEXT, not an input, so the end-date picker below
+							     has visible context for what it cannot precede. -->
+							<p
+								data-testid="event-convert-start-date"
+								class="flex w-full flex-col gap-0.5"
+							>
+								<span class="text-xs text-ink-2">
+									{m.event_convert_start_date_label()}
+								</span>
+								<span class="text-ink">
+									{tallinnWallClockParts(detail.startDatetime).date}
+								</span>
+							</p>
+							<label class="flex w-full flex-col gap-0.5">
+								<span class="text-xs text-ink-2">
+									{m.event_convert_end_date_label()}
+								</span>
+								<input
+									type="date"
+									data-testid="event-convert-end-date"
+									aria-label={m.event_convert_end_date_label()}
+									aria-invalid={eventConvertInvalid('end')}
+									aria-describedby={eventConvertDescribedBy('end')}
+									disabled={eventConvertLocked}
+									value={eventConvertEndDate}
+									oninput={(e) => {
+										eventConvertEndDate = (
+											e.currentTarget as HTMLInputElement
+										).value;
+										clearEventConvertError();
+									}}
+									class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+								/>
+							</label>
+							{#if eventConvertProgress}
+								<p
+									data-testid="event-convert-progress"
+									role="status"
+									aria-live="polite"
+									class="text-xs text-ink-2"
+								>
+									{m.event_convert_progress({
+										current: eventConvertProgress.current,
+										total: eventConvertProgress.total
+									})}
+								</p>
+							{/if}
+							{#if eventConvertResume}
+								<p data-testid="event-convert-resume-notice" class="text-xs text-ink-2">
+									{m.event_convert_resume_notice({
+										remaining: eventConvertResume.remaining.length,
+										total: eventConvertResume.total
+									})}
+								</p>
+							{/if}
+							{#if eventConvertError}
+								<p
+									id="event-convert-error"
+									data-testid="event-convert-error"
+									role="alert"
+									class="text-xs text-red-700"
+								>
+									{eventConvertError}
+								</p>
+							{/if}
+							<div class="flex gap-2">
+								<button
+									type="button"
+									data-testid="event-convert-submit"
+									disabled={eventConvertSubmitting}
+									aria-busy={eventConvertSubmitting}
+									class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+									onclick={() => void submitEventConvert()}
+								>
+									{m.event_convert_submit()}
+								</button>
+								<button
+									type="button"
+									data-testid="event-convert-cancel"
+									disabled={eventConvertSubmitting}
+									class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
+									onclick={dismissEventConvertForm}
+								>
+									{m.event_convert_cancel()}
+								</button>
+							</div>
+						</div>
+					{/if}
 				{/if}
 				<!-- #245 — event_type: the SIXTH #157 whole-field activator. Guarded
 				     like every other optional header field below: an event with no

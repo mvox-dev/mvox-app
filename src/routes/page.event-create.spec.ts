@@ -1185,11 +1185,10 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		});
 	});
 
-	it('a PANEL-born create refreshes the panel lists too: after success the season’s series + standalone lists re-read (the new occurrence must land in the counts), the panel is STILL OPEN to receive them, and the agenda refreshes', async () => {
+	it('a PANEL-born create refreshes the panel lists too: after success the season’s series list re-reads (the new occurrence must land in the counts; #313 — there is no standalone list any more), the panel is STILL OPEN to receive them, and the agenda refreshes', async () => {
 		const container = await renderReady();
 		await openFormFromPanel(container);
 		const seriesReadsBefore = listEventSeriesForSeasonMock.mock.calls.length;
-		const eventReadsBefore = listEventsForSeasonMock.mock.calls.length;
 
 		await selectValue(container, 'event-create-series', 'series-1');
 		await chooseType(container, 'rehearsal');
@@ -1202,7 +1201,6 @@ describe('agenda — submit calls createEvent with exactly what the viewer set',
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock.mock.calls.length).toBeGreaterThan(seriesReadsBefore);
 		});
-		expect(listEventsForSeasonMock.mock.calls.length).toBeGreaterThan(eventReadsBefore);
 		await waitFor(() => {
 			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
 		});
@@ -1595,8 +1593,6 @@ describe("agenda — a panel-born create refreshes the PANEL's season, not the f
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
 		expect(q(container, 'season-manage-series-series-9')).toBeNull();
-		expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
-		expect(q(container, 'season-manage-event-ev-77')).toBeNull();
 	});
 });
 

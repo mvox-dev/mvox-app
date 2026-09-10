@@ -62,7 +62,8 @@
 //                                 picker_everyone_added (Gama ruling 2)
 //     season-manage-series-<id>   one row per event series: name + event count
 //     season-manage-add-series    [+ Series] entry point (wired in T5)
-//     season-manage-event-<id>    one row per STANDALONE event: name
+//     season-manage-event-<id>    REMOVED by #313 — the panel no longer lists
+//                                 standalone events (managed on their pages)
 //     season-manage-add-event     [+ Event] entry point (wired in T4)
 //     season-manage-close         REMOVED by #213 — the gear is a TOGGLE now:
 //                                 a second gear click dismisses the panel
@@ -553,7 +554,7 @@ describe('agenda — the season-card season-manage entry point', () => {
 		});
 	});
 
-	it('clicking the collapsed card opens season-manage-panel INLINE (no route change), a dialog with an accessible name, and loads the series + standalone-event lists for THIS season', async () => {
+	it('clicking the collapsed card opens season-manage-panel INLINE (no route change), a dialog with an accessible name, and loads the series list for THIS season (#313: no standalone-event read any more)', async () => {
 		const container = await renderReady();
 		const panel = await openPanel(container);
 
@@ -582,7 +583,9 @@ describe('agenda — the season-card season-manage entry point', () => {
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 		});
-		expect(listEventsForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+		// #313 — the standalone-event list is removed; opening the panel must not
+		// read it at all.
+		expect(listEventsForSeasonMock).not.toHaveBeenCalled();
 	});
 
 	it('#238/#261 — the header leads with the season NAME: with the panel OPEN the title shows the name, and the retired gear/panel-label keys are consumed NOWHERE', async () => {
@@ -1132,16 +1135,13 @@ describe('agenda — the panel lists the season’s series and standalone events
 		expect(panel.contains(q(container, 'season-manage-add-series'))).toBe(true);
 	});
 
-	it('standalone events render one row each (name visible); [+ Event] — T4’s entry point — is present inside the panel', async () => {
+	it('[+ Event] — T4’s entry point — is present inside the panel (#313: the standalone-event LIST itself is gone; events are managed on their own pages)', async () => {
 		const container = await renderReady();
 		const panel = await openPanel(container);
 
 		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
+			expect(q(container, 'season-manage-add-event')).not.toBeNull();
 		});
-		expect(q(container, 'season-manage-event-ev-9')?.textContent).toContain('Spring concert');
-
-		expect(q(container, 'season-manage-add-event')).not.toBeNull();
 		expect(panel.contains(q(container, 'season-manage-add-event'))).toBe(true);
 	});
 
@@ -1159,28 +1159,11 @@ describe('agenda — the panel lists the season’s series and standalone events
 		});
 		expect(q(container, 'season-manage-series-error')?.getAttribute('role')).toBe('alert');
 		expect(q(container, 'season-manage-series-series-1')).toBeNull();
-		// The standalone-event list loaded fine — its failure is tracked separately.
-		await waitFor(() => {
-			expect(q(container, 'season-manage-event-ev-9')).not.toBeNull();
-		});
-		expect(q(container, 'season-manage-events-error')).toBeNull();
 	});
 
-	it('a FAILED standalone-event read surfaces its own error, and leaves the series list alone', async () => {
-		listEventsForSeasonMock.mockRejectedValue(new Error('read down'));
-		const container = await renderReady();
-		await openPanel(container);
-
-		await waitFor(() => {
-			expect(q(container, 'season-manage-events-error')).not.toBeNull();
-		});
-		expect(q(container, 'season-manage-events-error')?.getAttribute('role')).toBe('alert');
-		expect(q(container, 'season-manage-event-ev-9')).toBeNull();
-		await waitFor(() => {
-			expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
-		});
-		expect(q(container, 'season-manage-series-error')).toBeNull();
-	});
+	// (#313 — the "FAILED standalone-event read" test died with the list: the
+	// panel no longer reads standalone events at all; see the removal pins in
+	// page.season-manage-delete.spec.ts.)
 
 	it('a failed read does not stick: reopening after a recovery shows the rows and no error', async () => {
 		listEventSeriesForSeasonMock.mockRejectedValueOnce(new Error('read down'));
