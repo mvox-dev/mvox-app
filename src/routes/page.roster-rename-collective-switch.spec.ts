@@ -423,7 +423,7 @@ describe('/roster — #297 rename settle across a collective switch', () => {
 	});
 });
 
-describe('/roster — #297 rename state cleared on a collective switch', () => {
+describe('/roster — #297/#303 rename state across a collective switch: settled failures clear, open edits commit', () => {
 	it('CLEARED ON SWITCH (renameError): a rename failure fully settled ON A does not resurface on its row after a round-trip through B', async () => {
 		renameMock.mockRejectedValueOnce(new Error('403'));
 		const container = await renderInArrangeMode();
@@ -449,25 +449,43 @@ describe('/roster — #297 rename state cleared on a collective switch', () => {
 		).toBeNull();
 	});
 
-	it('CLEARED ON SWITCH (renamingSectionId/renameValue): an OPEN rename input abandoned at switch time does not re-mount on the row after a round-trip through B', async () => {
+	it('#303 COMMITTED ON SWITCH (renamingSectionId/renameValue): an OPEN rename abandoned at switch time commits ONCE to the outgoing collective, and no editor re-mounts after a round-trip through B', async () => {
+		// REWRITTEN under #303 ruling (b) [DECISION-Mihkel, 2026-09-09]: this
+		// test used to pin the switch's SILENT CLEAR of an open rename — that
+		// clear is the discard path the ruling removes. A switch now COMMITS
+		// the open rename; Escape is the only discard. The no-residue half of
+		// the old pin stands unchanged below: committed is not "still armed".
+		// (The full #303 suite is page.roster-rename-abandon-commits.spec.ts.)
 		const container = await renderInArrangeMode();
 
 		// Open the inline editor on A and type into it — do NOT submit.
 		await openRename(container, 'sec-alto', 'Half-typed');
 
-		// The switch replaces the tree; no row of B matches, so no input.
+		// The switch commits the open rename: exactly ONE write, to the
+		// OUTGOING collective's cfg, with the typed value. Call count, not
+		// final state — a double-commit rewrites the same value and passes any
+		// name assertion.
 		await switchToOtherChoirArrange(container);
+		await waitFor(() => {
+			expect(renameMock).toHaveBeenCalledTimes(1);
+		});
+		expect(renameMock).toHaveBeenCalledWith(
+			{ db: 'polyphony', token: 'jwt-abc' },
+			'sec-alto',
+			'Half-typed'
+		);
 		expect(anyRenameInput(container)).toBeNull();
 
-		// Pre-fix `renamingSectionId` still says 'sec-alto', so returning to A
-		// re-mounts the editor (with the stale half-typed value) on a row the
-		// user never touched this visit.
+		// Committed is not "still armed": returning to A re-mounts NO editor
+		// (same no-residue contract the old pin carried), and no further write
+		// fires on the round-trip.
 		await switchBackToPolyphonyArrange(container);
 		expect(
 			anyRenameInput(container),
-			'an abandoned rename editor must not survive a collective round-trip'
+			'a committed rename must not leave the editor armed across a collective round-trip'
 		).toBeNull();
 		expect(q(container, 'arrange-row-sec-alto')).not.toBeNull();
+		expect(renameMock).toHaveBeenCalledTimes(1);
 	});
 });
 
@@ -491,9 +509,16 @@ describe('/roster — #297 late settle vs a live write, and the focus contract',
 		).toBe(false);
 
 		// A GENUINE new rename on B, held on its own gate.
+		//
+		// #303 review F1 moved the freeze observable: the RENAME TRIGGER is no
+		// longer disabled by an in-flight rename (arming an editor is local state,
+		// not a write, and gating it page-wide made a blur-commit swallow the very
+		// click that caused it — a browser blurs the open input on MOUSEDOWN,
+		// before the next row's click handler runs). Every genuine WRITE control
+		// still freezes, and the write seam still refuses — both asserted below.
 		await submitHeldRename(container, 'sec-b1', 'Bass Uno', 2);
 		expect(
-			(q(container, 'arrange-rename-sec-b2') as HTMLButtonElement).disabled,
+			(q(container, 'section-remove-sec-b2') as HTMLButtonElement).disabled,
 			"B's own write is in flight — its structural controls are frozen"
 		).toBe(true);
 
@@ -508,18 +533,34 @@ describe('/roster — #297 late settle vs a live write, and the focus contract',
 		await flush();
 
 		expect(
-			(q(container, 'arrange-rename-sec-b2') as HTMLButtonElement).disabled,
+			(q(container, 'section-remove-sec-b2') as HTMLButtonElement).disabled,
 			"B's write is STILL in flight — structural controls stay frozen"
 		).toBe(true);
 		expect(q(container, 'arrange-row-sec-b2')?.getAttribute('draggable')).toBe('false');
 		expect(renameStatusText(container)).toBe('');
 
-		// Double-fire probe on the (still-disabled) trigger: no editor mounts,
-		// no third write fires.
+		// Double-fire probe, at the WRITE seam (#303 review F1): the editor may
+		// open on another row, but committing it while B's write is in flight is
+		// refused — no third write, and the refused text is kept, not discarded.
 		await fireEvent.click(q(container, 'arrange-rename-sec-b2') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'arrange-rename-input-sec-b2')).not.toBeNull();
+		});
+		const probeInput = q(container, 'arrange-rename-input-sec-b2') as HTMLInputElement;
+		await fireEvent.input(probeInput, { target: { value: 'Bass Due' } });
+		await fireEvent.keyDown(probeInput, { key: 'Enter' });
 		await flush();
-		expect(anyRenameInput(container)).toBeNull();
 		expect(renameMock).toHaveBeenCalledTimes(2);
+		expect(
+			(q(container, 'arrange-rename-input-sec-b2') as HTMLInputElement)?.value,
+			'the refused rename stays open — its text is not discardable'
+		).toBe('Bass Due');
+		// Escape out, so the trigger's own `renamingSectionId === row.id` disable
+		// cannot be mistaken for the in-flight freeze in the release check below.
+		await fireEvent.keyDown(probeInput, { key: 'Escape' });
+		await waitFor(() => {
+			expect(anyRenameInput(container)).toBeNull();
+		});
 
 		// B's own write completes HONESTLY: announced with B's name, controls
 		// released. (Trap detector: an over-broad guard — one consumed by A's
@@ -527,8 +568,9 @@ describe('/roster — #297 late settle vs a live write, and the focus contract',
 		gateB.resolve();
 		await flush();
 		await waitFor(() => {
-			expect((q(container, 'arrange-rename-sec-b2') as HTMLButtonElement).disabled).toBe(false);
+			expect((q(container, 'section-remove-sec-b2') as HTMLButtonElement).disabled).toBe(false);
 		});
+		expect((q(container, 'arrange-rename-sec-b2') as HTMLButtonElement).disabled).toBe(false);
 		expect(renameStatusText(container)).toContain('roster_section_renamed');
 		expect(renameStatusText(container)).toContain('Bass Uno');
 		expect(renameStatusText(container)).not.toContain('Contralto');

@@ -7,7 +7,7 @@
 	// application of #28 is the layout's redirect; the OTHER-members application (a
 	// nameless member never appearing as a row) lives entirely in `rosterData.ts`'s
 	// `toRosterRow` — this component only renders whatever the roster producer returns.
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
@@ -200,6 +200,52 @@
 			// `removeStatus`/`pageCreateStatus`/`reorderStatus`/`recordStatus`
 			// below, not here — see the comment at that block (#299 review
 			// superseded the #287-era "invisible success" exception).
+			//
+			// #303 [DECISION-Mihkel, 2026-09-09, via Gama]: this used to be an
+			// UNCONDITIONAL discard of an open rename — exactly the silent-drop
+			// ruling (b) removes. A reload (switch or same-db refresh alike, this
+			// block is unconditional) now COMMITS an open rename instead, through
+			// the same `submitRename()` guards blur and section-switch already
+			// reuse (never a parallel writer) — `submitRename` itself is a no-op
+			// when `renamingSectionId` is already null, so this fires exactly
+			// once whether or not something is actually open.
+			//
+			// THE GENERATION HAZARD (research-303, source-confirmed): routeLoad.ts
+			// bumps `generation` BEFORE calling this callback, so reading
+			// `routeLoad.generation` live here would capture the INCOMING
+			// collective's generation — the outgoing write's own `g !==
+			// routeLoad.generation` settle-guard would then never trip as
+			// superseded, and its success announcement would land in the NEW
+			// collective's live region, defeating #297's cross-collective guard by
+			// construction. `generation` only ever advances by exactly one full
+			// integer per load (`++generation`), so `routeLoad.generation - 1` at
+			// this exact point IS the pre-bump value the outgoing write's own
+			// callers saw. Passing it explicitly (the parameter shape) keeps this
+			// fix confined to this page; reordering routeLoad's shared
+			// bump-before-reset would touch roster/library/profile alike and is
+			// not proven safe for the other two.
+			//
+			// `refocus: false` — the whole tree is being replaced; there is
+			// nothing sensible to refocus back to.
+			//
+			// `untrack()` — this whole `reset` callback runs SYNCHRONOUSLY inside
+			// the page's own `$effect(() => { void selected; loadForSelected()… })`
+			// (routeLoad.ts calls `reset` before its first `await`), so any $state
+			// read here during that synchronous window — `submitRename`'s own
+			// `renamingSectionId`/`sections`/`currentCfg`/`structuralWritePending`
+			// reads included — would otherwise register as a DEPENDENCY of that
+			// effect. Without `untrack`, opening a rename (which writes
+			// `renamingSectionId`) would re-trigger the very effect that calls
+			// `loadForSelected()`, running THIS reset AGAIN with the just-opened
+			// row live — which promptly "switch-commits" and null-out-clears a
+			// rename the user only just started, on every keystroke's worth of
+			// re-render. (Caught empirically: `page.roster-arrange-crud.spec.ts`'s
+			// plain "tap to open" test failed until this was added — a second,
+			// spurious `reset()` fired the instant `startRename` wrote
+			// `renamingSectionId`, in the SAME synchronous tick as the click.)
+			untrack(() => {
+				void submitRename({ refocus: false, generation: routeLoad.generation - 1 });
+			});
 			renamingSectionId = null;
 			renameValue = '';
 			renamePending = false;
@@ -2852,7 +2898,45 @@
 	const structuralWritePending = $derived(reorderPending || renamePending || removePending);
 
 	function startRename(node: SectionNode): void {
-		if (structuralWritePending) return; // one structural write at a time
+		// #303 review F1 — `reorderPending || removePending`, NOT the page-wide
+		// `structuralWritePending`. ARMING an editor writes nothing: it sets
+		// `renamingSectionId`/`renameValue` and mounts an input. The single-flight
+		// rule (#155/S4 review F1) is about WRITES, and it is still enforced where
+		// it belongs — `submitRename`'s own `structuralWritePending` refusal, which
+		// keeps the input open with its text intact until the floor is free.
+		//
+		// Excluding `renamePending` here is what makes ruling (b)'s section-switch
+		// REACHABLE IN A BROWSER at all. A browser fires the open input's blur
+		// during MOUSEDOWN, before the click handler on the row being clicked runs
+		// — so by the time this function is entered, the blur-commit has already
+		// flipped `renamePending` true synchronously. Gating arming on that flag
+		// makes the outgoing commit eat the very click that caused it: the rename
+		// commits, but the new editor never opens and the user has to click again.
+		// (The pre-#303 gate was harmless only because nothing used to commit on
+		// blur.) The switch-commit branch below is likewise only reachable when no
+		// blur preceded the click — a programmatic/synthetic open — which is why
+		// it must not assume it is the only commit path.
+		if (reorderPending || removePending) return;
+		// #303 [DECISION-Mihkel, 2026-09-09, via Gama]: starting a rename on
+		// ANOTHER section used to silently overwrite the open edit — no write,
+		// the typed text evaporating. Ruling (b) removes that discard: commit
+		// the outgoing row first, through the same `submitRename()` guards blur
+		// and the reload-reset commit reuse (never a parallel writer) — it
+		// re-derives `id`/`name` from live state itself, so nothing here needs
+		// to name the outgoing row.
+		//
+		// `submitRename` runs every guard AND `renamingSectionId = null`
+		// SYNCHRONOUSLY, before its first `await` — so the moment this call
+		// returns, a still-non-null `renamingSectionId` means it REFUSED (another
+		// write holds the floor, or the value is blank). Reassigning below would
+		// then discard text the user typed, which is exactly what ruling (b)
+		// forbids — so leave the outgoing editor alone and do not arm the new row.
+		// `refocus: false` — the new editor's own autofocus effect (below) owns
+		// focus now; the settle must not yank it back to the row just committed.
+		if (renamingSectionId !== null && renamingSectionId !== node.id) {
+			void submitRename({ refocus: false });
+			if (renamingSectionId !== null) return;
+		}
 		renameError = null;
 		renameStatus = '';
 		renamingSectionId = node.id;
@@ -2867,21 +2951,83 @@
 		if (id) document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
 	}
 
-	async function submitRename(): Promise<void> {
+	async function submitRename(opts?: {
+		// #303 — blur's own reconciliation ("decide-and-pin", RED's exact pins):
+		// a blank value has nothing real to lose, a value equal to the section's
+		// CURRENT name has nothing to write — either way there is nothing to
+		// COMMIT, so the editor closes silently (no write, no error, no
+		// announcement). This differs from Enter/section-switch/collective-switch,
+		// which keep the pre-#303 blank refusal (stays open — the user is still
+		// IN the field there, unlike blur where they have already left it).
+		// Default false = every non-blur trigger.
+		blurTrigger?: boolean;
+		// #303 — Enter's `finally` unconditionally refocuses the trigger the user
+		// was just in (their own input unmounted under them — WCAG 2.4.3). Every
+		// trigger that puts focus somewhere else on the user's behalf — blur
+		// (they already moved focus away; "BLUR COMMIT DOES NOT STEAL FOCUS"),
+		// section-switch (the NEW row's input takes it), the reload-reset commit
+		// (the whole tree is gone) — must NOT yank it back. Default true = Enter's
+		// existing, unchanged contract.
+		refocus?: boolean;
+		// #303 THE GENERATION HAZARD (research-303, source-confirmed) — see the
+		// reload `reset` callback above for the full account. `routeLoad.ts` bumps
+		// `generation` BEFORE calling that callback, so a commit fired FROM it
+		// must not read `routeLoad.generation` live: that would capture the
+		// INCOMING collective's generation and its own settle-guard below would
+		// never trip as superseded. Every other trigger fires before any bump has
+		// happened this cycle, so the default (read live, at call time) is
+		// correct for them.
+		generation?: number;
+	}): Promise<void> {
+		const blurTrigger = opts?.blurTrigger ?? false;
+		const refocus = opts?.refocus ?? true;
 		const id = renamingSectionId;
-		if (id === null) return;
+		if (id === null) return; // nothing armed — every trigger's no-op case
 		const name = renameValue.trim();
-		if (!name) {
+		// #155/S4 review F1 — another structural write is outstanding (a reorder or
+		// reparent started on a NEIGHBOURING row, which stays live while this input
+		// is open). Refuse — nothing written, the input stays open exactly as it
+		// was, for the user to retry once it clears or Escape out of — never a
+		// silent discard of what they typed. #303: this refusal takes priority
+		// over every trigger's own reconciliation below, blur's included — "the
+		// refused rename stays open — its text is not discardable" (RED's pin).
+		//
+		// `pendingRemoveId !== null` joins `structuralWritePending` here (#303).
+		// Plainly, without dressing it up: an armed-but-unconfirmed remove HOLDS
+		// THE FLOOR, so EVERY rename trigger refuses while it is armed — blur and
+		// Enter alike, whichever row the remove is armed on. (#303 review F2
+		// struck the original justification, which claimed `armRemove`'s
+		// confirm-button autofocus is what blurs the open input: that is
+		// happy-dom's ordering only. A browser fires the input's blur on
+		// MOUSEDOWN, before `armRemove` runs at all.)
+		//
+		// Why keep it rather than let the rename commit: `pendingRemoveId` means
+		// the user has a confirm/cancel pair on screen waiting for an answer, and
+		// both of those buttons are `disabled={structuralWritePending}`. Letting
+		// blur (or Enter) start a rename write under an armed pair would disable
+		// the answer the user is reaching for — the same click-swallow F1 removed
+		// from the rename trigger, but on a control that cannot simply be
+		// relaxed, since confirming IS a write. Refusing is the cheap side:
+		// nothing is written and nothing is discarded — the input stays open with
+		// its text, exactly the `structuralWritePending` refusal's shape — and
+		// `armRemove`'s own success/cancel path clears `pendingRemoveId`, so it
+		// only ever blocks for as long as the pair is genuinely on screen.
+		// Pinned by "AN ARMED-BUT-UNCONFIRMED DELETE HOLDS THE FLOOR" in
+		// page.roster-rename-abandon-commits.spec.ts.
+		if (structuralWritePending || pendingRemoveId !== null) return;
+		if (blurTrigger) {
+			const original = findSectionNode(sections, id)?.name ?? '';
+			if (name === '' || name === original) {
+				renamingSectionId = null;
+				renameValue = '';
+				renameError = null;
+				return;
+			}
+		} else if (!name) {
 			// Empty name — same "nothing written" refusal as a blank create; the
 			// input just stays open for the user to fix or Escape out of.
 			return;
 		}
-		// #155/S4 review F1 — another structural write is outstanding (a reorder or
-		// reparent started on a NEIGHBOURING row, which stays live while this input
-		// is open). Refuse the same way a blank value is refused: nothing written,
-		// the input stays open for the user to retry or Escape out of — never a
-		// silent discard of what they typed.
-		if (structuralWritePending) return;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section rename with no cfg', id);
@@ -2890,8 +3036,10 @@
 		}
 		// #155/S4 review F1 — the collective-switch guard `performReparent` carries,
 		// for the same reason: a reconcile resolving after a switch must not clobber
-		// the newer collective's tree.
-		const g = routeLoad.generation;
+		// the newer collective's tree. #303 — `opts.generation` lets the
+		// reload-reset commit above pass its PRE-bump snapshot explicitly instead
+		// of this live read (see the generation-hazard comment on the parameter).
+		const g = opts?.generation ?? routeLoad.generation;
 		const before = sections;
 		renamePending = true;
 		renamingSectionId = null;
@@ -2926,16 +3074,27 @@
 			// `renamePending` for a tree it no longer belongs to — that would
 			// re-enable the NEW collective's structural controls mid-write.
 			if (g === routeLoad.generation) renamePending = false;
-			// The focus restoration below stays UNCONDITIONAL, never gated: the
-			// rename input unmounts the instant `renamingSectionId` cleared
-			// above — same WCAG 2.4.3 concern `armRemove`/`disarmRemove` already
-			// carry on this page — so on EVERY settle, superseded or not, the
-			// input is already gone and focus must land back on the trigger that
-			// opened it rather than drop to <body>. An early `return` here would
-			// both skip this restoration and discard a pending return/throw from
-			// the `try`/`catch` above — gate the write, never the block.
-			await tick();
-			document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
+			// The focus restoration below stays UNCONDITIONAL WITHIN ITSELF (never
+			// generation-gated): the rename input unmounts the instant
+			// `renamingSectionId` cleared above — same WCAG 2.4.3 concern
+			// `armRemove`/`disarmRemove` already carry on this page — so on every
+			// SUPERSEDED-OR-NOT settle of an Enter-triggered commit, the input is
+			// already gone and focus must land back on the trigger that opened it
+			// rather than drop to <body>. An early `return` above would both skip
+			// this restoration and discard a pending return/throw from the
+			// `try`/`catch` — gate the write, never the block.
+			//
+			// #303 — `refocus` (not generation) is the gate that changed: Enter's
+			// own trigger IS where focus belongs, but blur ("BLUR COMMIT DOES NOT
+			// STEAL FOCUS" — the user already moved focus elsewhere deliberately),
+			// section-switch (the NEW row's input owns it) and the reload-reset
+			// commit (the whole tree is gone) all pass `refocus: false` — stealing
+			// focus back to a row the settle finished committing, out from under
+			// wherever the user or the next editor already put it, is a focus trap.
+			if (refocus) {
+				await tick();
+				document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
+			}
 		}
 	}
 
@@ -4752,7 +4911,16 @@
 										     4.1.2 — review R2/F1 above already fixed for indent/unindent).
 										     Enter saves (`onRenameKeydown` → `submitRename`), Escape cancels;
 										     no Save/Cancel buttons — matches the issue's literal "tap the
-										     name → input → Enter saves → Escape cancels" contract. -->
+										     name → input → Enter saves → Escape cancels" contract. #303
+										     [DECISION-Mihkel, 2026-09-09, via Gama]: `onblur` COMMITS too now
+										     — Escape is the only remaining discard path. Calls `submitRename`
+										     directly (never a parallel writer) with NO closure over `row.id` —
+										     it re-derives `id` from live `renamingSectionId` state itself, so
+										     a blur delivered after the row already committed/cancelled (a
+										     real browser fires blur on an unmounting focused node; this
+										     input's own optimistic unmount after Enter/Escape/takeover is
+										     exactly that case) is a guaranteed no-op rather than a
+										     double-write racing the row's own id. -->
 										<div class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)}">
 											<span aria-hidden="true" class="w-4 shrink-0"></span>
 											<input
@@ -4763,6 +4931,7 @@
 												value={renameValue}
 												oninput={(e) => (renameValue = (e.currentTarget as HTMLInputElement).value)}
 												onkeydown={onRenameKeydown}
+												onblur={() => void submitRename({ blurTrigger: true, refocus: false })}
 												class="min-w-0 grow border border-ink-5 bg-paper px-1.5 py-0.5 text-ink"
 											/>
 										</div>
@@ -4866,12 +5035,23 @@
 									     gives "Rename Soprano", the same "<action> <value>" contract the
 									     admin/season/profile activators use. `title` keeps the full
 									     parameterised string for the mouse tooltip (it never reaches the
-									     accessible name — contents win over title). -->
+									     accessible name — contents win over title).
+									     #303 review F1 — `disabled` reads `reorderPending || removePending`,
+									     deliberately NOT the page-wide `structuralWritePending`: this trigger
+									     only ARMS an editor (local state, no write), and a browser fires the
+									     open input's blur — which starts the outgoing commit and flips
+									     `renamePending` synchronously — during MOUSEDOWN, before this
+									     button's click. Gated on the page-wide flag, a disabled button
+									     swallows the very click that caused the commit, so ruling (b)'s
+									     "switch commits the outgoing rename AND arms the new row" would only
+									     ever do the first half in a real browser. Single-flight stays where
+									     it belongs: on the WRITE seam, where `submitRename` refuses while
+									     `structuralWritePending` and leaves the input open, text intact. -->
 									<button
 										type="button"
 										data-testid="arrange-rename-{row.id}"
 										title={m.roster_section_rename({ name: row.name })}
-										disabled={structuralWritePending || renamingSectionId === row.id}
+										disabled={reorderPending || removePending || renamingSectionId === row.id}
 										class="group flex min-h-11 min-w-0 flex-1 appearance-none items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ink-2 hover:text-ink disabled:cursor-default"
 										onclick={() => startRename(node)}
 									>
