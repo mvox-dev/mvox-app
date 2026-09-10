@@ -271,7 +271,17 @@ describe('loadEventDetail — full header shape', () => {
 			// computation for the caller instead of another round-trip.
 			seasonId: 'season1',
 			seasonOwnerIds: [],
-			seasonEditorIds: []
+			seasonEditorIds: [],
+			// #304 — the contract grew again: the parent SERIES' id (computed
+			// internally since #101, then discarded — the picker needs it to
+			// preselect the current series; null when standalone, seasonId's
+			// rule) plus the raw-presence inheritance list (which of
+			// name/durationMinutes/location/description THIS event ACTUALLY
+			// inherits — the `event.<prop>?.[0]` raw-array test, never the
+			// displayed value's truthiness). This fixture event carries own
+			// values for all four, so it inherits nothing.
+			seriesId: 'series1',
+			inheritedFields: []
 		});
 	});
 

@@ -23,6 +23,12 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
 
+/**
+ * #304 — the four fields an event inherits from its parent series (module doc
+ * above). Display order pinned: name, durationMinutes, location, description.
+ */
+export type EventInheritedField = 'name' | 'durationMinutes' | 'location' | 'description';
+
 export type EventDetail = {
 	id: string;
 	/** Event value, else the parent series' name, else ''. */
@@ -78,6 +84,28 @@ export type EventDetail = {
 	 */
 	seasonOwnerIds: string[];
 	seasonEditorIds: string[];
+	/**
+	 * #304 — the event's `event_series` parent id, `null` when the event is
+	 * standalone (or the parent is not visible) — the SAME "null, never ''"
+	 * rule `seasonId` already follows, so an empty string can never be misread
+	 * as a real id. Computed at the SAME `_parent` read as `seasonId` above
+	 * (line ~203 here), previously discarded — a series picker needs it to
+	 * know which series is currently assigned without a second read.
+	 */
+	seriesId: string | null;
+	/**
+	 * #304 — exactly which of the four inheriting fields THIS event's display
+	 * is ACTUALLY drawing from its series right now: the event's own raw value
+	 * is ABSENT (`event.<prop>?.[0] === undefined` — presence, never the
+	 * merged value's truthiness; a stored `''`/`0` is a real value and blocks
+	 * inheritance even though it displays blank, see the module doc) AND the
+	 * series supplies one (its own raw value is present). A field the series
+	 * does not carry either is not "inherited" — nothing actually comes from
+	 * it. Consequently this is always `[]` for a standalone event (nothing to
+	 * inherit FROM), independent of whether the event's own values are set.
+	 * Display order pinned: name, durationMinutes, location, description.
+	 */
+	inheritedFields: EventInheritedField[];
 };
 
 /**
@@ -200,7 +228,9 @@ export async function loadEventDetail(
 	// null (not '') is the surfaced "no season parent" — `seasonId` is part of
 	// the returned contract now, and '' would read as a real id to a caller.
 	const seasonId = parents.find((p) => p.entity_type === 'season')?.reference ?? null;
-	const seriesId = parents.find((p) => p.entity_type === 'event_series')?.reference ?? '';
+	// #304 — null (not ''), same rule as `seasonId` above: '' would read as a
+	// real id to a caller (now also surfaced on the return contract below).
+	const seriesId = parents.find((p) => p.entity_type === 'event_series')?.reference ?? null;
 
 	const [season, series] = await Promise.all([
 		seasonId ? fetchSeason(cfg, seasonId, fetchImpl) : Promise.resolve(undefined),
@@ -213,6 +243,38 @@ export async function loadEventDetail(
 	const location = event.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? '';
 	const description =
 		event.description?.[0]?.string ?? series?.default_description?.[0]?.string ?? '';
+
+	// #304 — the RAW-PRESENCE test, both sides: the event's own array slot is
+	// ABSENT (never a truthiness check on the merged value above — a stored ''
+	// or 0 is a real value and is excluded here on purpose) AND the series'
+	// own array slot is PRESENT (a field neither side carries is not
+	// "inherited", it is simply unset). Order pinned to the module doc's table.
+	//
+	// #233 SEAM — this line is a read of the event's own `name` and must move
+	// with the others when the app's event name relocates to `event_name`.
+	// #233 makes `name` on the EVENT type formula-owned, and a formula prop
+	// always carries a persisted value: `event.name?.[0] === undefined` would
+	// then be permanently false, 'name' would silently drop out of
+	// `inheritedFields`, and the nameless-after-unassign warning on the event
+	// page (`event_detail_series_unassign_name_empty`) would stop firing — the
+	// exact loss #304 exists to prevent, with every test still green because
+	// the fixtures move to `event_name` at the same time. When #233 lands, this
+	// test reads `event.event_name?.[0]`; the SERIES side stays `series.name`
+	// (the formula is per-prop-def, event type only — event_series `name` is
+	// untouched).
+	const inheritedFields: EventInheritedField[] = [];
+	if (event.name?.[0] === undefined && series?.name?.[0] !== undefined) {
+		inheritedFields.push('name');
+	}
+	if (event.duration_minutes?.[0] === undefined && series?.duration_minutes?.[0] !== undefined) {
+		inheritedFields.push('durationMinutes');
+	}
+	if (event.location?.[0] === undefined && series?.default_location?.[0] !== undefined) {
+		inheritedFields.push('location');
+	}
+	if (event.description?.[0] === undefined && series?.default_description?.[0] !== undefined) {
+		inheritedFields.push('description');
+	}
 
 	const seasonConductors = (season?.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
 	const eventConductors = (event.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
@@ -252,7 +314,9 @@ export async function loadEventDetail(
 		editorIds,
 		seasonId,
 		seasonOwnerIds,
-		seasonEditorIds
+		seasonEditorIds,
+		seriesId,
+		inheritedFields
 	};
 }
 

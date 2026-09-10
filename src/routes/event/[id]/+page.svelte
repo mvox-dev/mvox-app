@@ -26,8 +26,13 @@
 		loadEventDetail,
 		listEventLocations,
 		EventDetailLoadError,
-		type EventDetail
+		type EventDetail,
+		type EventInheritedField
 	} from '$lib/events/eventDetail';
+	// #304 — the series picker's write layer (reassign = atomic-overwrite POST,
+	// unassign = DELETE of the series `_parent` value id — see that module's
+	// header for the SPIKE-verified rights shape).
+	import { reassignEventSeries, unassignEventSeries } from '$lib/events/eventSeriesActions';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -49,7 +54,13 @@
 	// directly (NOT re-exported by this page's other imports from that module)
 	// so the event-delete spec's PARTIAL `vi.mock('$lib/seasons/seasonManage', …)`
 	// (which replaces only `deleteEvent` and keeps the rest real) lands cleanly.
-	import { deleteEvent } from '$lib/seasons/seasonManage';
+	import {
+		deleteEvent,
+		listSeriesOptionsForSeason,
+		getSeriesDefaults,
+		type SeriesOption,
+		type SeriesDefaults
+	} from '$lib/seasons/seasonManage';
 	// The error discriminators live in their OWN module, not in seasonManage —
 	// see deleteErrors.ts's header: importing them from seasonManage would make
 	// them `undefined` under the spec's wholesale-replacement mock shape.
@@ -227,6 +238,38 @@
 		total?: number;
 	} | null>(null);
 
+	// ── #304 — series picker state ─────────────────────────────────────────────
+	// The season-scoped option source (`listEventSeriesForSeason`, reused
+	// verbatim — the SAME read the agenda's event-create picker already runs).
+	// Server-confirmed write (#289, `roster_show_real_names`'s pattern, NOT the
+	// rsvp/attendance queues' optimistic one): `detail.seriesId` is the only
+	// thing the select's DOM value is ever bound to, so nothing on screen moves
+	// until a write actually lands — a REJECTED write reverts the element's
+	// live DOM value explicitly (the browser has already moved it) rather than
+	// waiting on a signal that never changes.
+	let seriesOptions = $state<SeriesOption[]>([]);
+	// Flips true once the options fetch SETTLES (success or failure) — the
+	// select itself waits for it (see the template): rendering it ahead of the
+	// season-scoped options landing would show the none-option alone for one
+	// frame and, worse, let the browser "preselect" a value with no matching
+	// <option> yet, which native <select> resolves to whatever it has (never
+	// the intended current series).
+	let seriesOptionsLoaded = $state(false);
+	// null = idle (no pending pick). '' = an armed UNASSIGN; any other string =
+	// an armed REASSIGN to that series id. Set only when `detail.inheritedFields`
+	// is non-empty — the "no ceremony" case never arms at all (see
+	// `onSeriesSelectChange`).
+	let seriesArmedTarget = $state<{ id: string } | null>(null);
+	// The NEW series' raw field values, for the reassign preview ("what they
+	// will become") — fetched once per arm via `getSeriesDefaults` (the SAME
+	// source the event-create form's inheritance preview already uses). Stays
+	// null for an armed UNASSIGN (nothing to fetch — the preview is just "this
+	// clears") and while a REASSIGN's fetch is still in flight.
+	let seriesPreviewDefaults = $state<SeriesDefaults | null>(null);
+	let seriesPending = $state(false);
+	let seriesError = $state<string | null>(null);
+	let seriesStatus = $state('');
+
 	// ── #103 TE.3 — Works section state ───────────────────────────────────────
 	// The event's parent season id and the season's management rights — BOTH
 	// carried by `loadEventDetail` itself (`seasonId` off the event's `_parent`,
@@ -339,6 +382,34 @@
 		detail !== null && selected !== null && canSeeTally(detail, selected.personId)
 	);
 
+	/**
+	 * #304 — SPECIFICALLY owner-tier (not merely `_editor`), off the SAME
+	 * `ownerIds` the tally/isEditor rule already reads. UNASSIGN (a `_parent`
+	 * value DELETE) is owner-gated on the wire (SPIKE, probe-304-parent-rights-
+	 * gate-live-2026-09-10); an `_editor`-only viewer gets a 403 for a delete
+	 * the picker must never even offer. `ownerIds` already carries the FULL
+	 * aggregate (inherited + direct — the probe's own tester-rights-selfcheck
+	 * shows Entu folding an inherited database-level owner into the same
+	 * list), so this is pure computation over data already loaded, no second
+	 * read (same economy `isEditor` itself follows).
+	 */
+	const isOwnerTier = $derived(
+		detail !== null && selected !== null && detail.ownerIds.includes(selected.personId)
+	);
+
+	/**
+	 * #304 (Gama ruling 5613471404) — true exactly when the "not in a series"
+	 * OPTION must be withheld AND the rights-note shown: a confirmed
+	 * NON-owner, on an event that currently HAS a series (nothing to unassign
+	 * on a standalone event, so withholding/explaining would be noise). One
+	 * condition serves both the option's absence and the note's presence —
+	 * they are the same case by the ruling's own wording ("option absent …
+	 * PLUS a … note").
+	 */
+	const seriesUnassignGated = $derived(
+		detail !== null && !isOwnerTier && detail.seriesId !== null
+	);
+
 	async function loadForSelected(): Promise<void> {
 		const current = selected;
 		const id = eventId;
@@ -349,6 +420,7 @@
 			resetRsvpState();
 			resetComposeState();
 			resetDeleteState();
+			resetSeriesState();
 			return;
 		}
 		status = 'loading';
@@ -408,6 +480,20 @@
 		deleteArmed = false;
 		deletePending = false;
 		deleteError = null;
+	}
+
+	/** #304 — mirrors resetDeleteState: a fresh (or superseded) load must not
+	 *  carry the PREVIOUS event's armed/pending/error/status series-picker
+	 *  state across the switch (the generation-guard test's exact scenario —
+	 *  a write started under the old event must never paint the new one). */
+	function resetSeriesState(): void {
+		seriesOptions = [];
+		seriesOptionsLoaded = false;
+		seriesArmedTarget = null;
+		seriesPreviewDefaults = null;
+		seriesPending = false;
+		seriesError = null;
+		seriesStatus = '';
 	}
 
 	/** #103 TE.3 — mirrors resetRsvpState for the works + attendance surfaces:
@@ -860,6 +946,13 @@
 		seasonManageRights = seasonRights;
 		const eventEditor = manageRightsFrom(loaded.ownerIds, loaded.editorIds, personId) === 'editor';
 
+		// #304 — the series picker's OPTIONS source, same economy as
+		// `loadManagePickers` below: only ever fetched for a rights-holder (the
+		// picker itself is `isEditor`-gated in the template), and only when the
+		// event has a season to scope the query by — a picker with nothing to
+		// offer is not worth a read.
+		if (eventEditor && sid !== null) loadSeriesOptions(cfg, sid, g);
+
 		loadWorksByEventId(cfg, [loaded.id], sid, fetch, {
 			includeInactive: seasonRights === 'editor'
 		})
@@ -905,6 +998,195 @@
 					if (g !== generation) return;
 					attendanceMap = {};
 				});
+		}
+	}
+
+	/** #304 — the season-scoped series options (id + name only —
+	 *  `listSeriesOptionsForSeason`, seasonManage.ts's doc explains why this is
+	 *  NOT `listEventSeriesForSeason`, the agenda event-create picker's source:
+	 *  that function's eventCount costs a second season-wide event read this
+	 *  picker never uses). */
+	function loadSeriesOptions(cfg: ComposeCfg, sid: string, g: number): void {
+		listSeriesOptionsForSeason(cfg, sid, fetch)
+			.then((list) => {
+				if (g !== generation) return;
+				seriesOptions = list;
+				seriesOptionsLoaded = true;
+			})
+			.catch((e) => {
+				console.error('event detail: series options load failed', e);
+				if (g !== generation) return;
+				seriesOptions = [];
+				seriesOptionsLoaded = true;
+			});
+	}
+
+	/** Localized label for one inherited field — shared by the persistent
+	 *  "comes from the series" note and the consequence-preview block. */
+	function seriesFieldLabel(field: EventInheritedField): string {
+		switch (field) {
+			case 'name':
+				return m.event_detail_series_field_name();
+			case 'durationMinutes':
+				return m.event_detail_series_field_duration();
+			case 'location':
+				return m.event_detail_series_field_location();
+			case 'description':
+				return m.event_detail_series_field_description();
+		}
+	}
+
+	/** What `field` would BECOME under `defaults` (the target series' raw
+	 *  values) — the reassign half of the consequence preview. `durationMinutes`
+	 *  stringifies; `null` (the series carries none) renders as ''. */
+	function seriesFieldBecomes(field: EventInheritedField, defaults: SeriesDefaults): string {
+		switch (field) {
+			case 'name':
+				return defaults.name;
+			case 'durationMinutes':
+				return defaults.durationMinutes !== null ? String(defaults.durationMinutes) : '';
+			case 'location':
+				return defaults.defaultLocation;
+			case 'description':
+				return defaults.defaultDescription;
+		}
+	}
+
+	/**
+	 * The select's `onchange` — arms the confirm/cancel pair when (and only
+	 * when) the event actually inherits something (#304's "the safe case pays
+	 * nothing" rule): with nothing inherited, the write commits straight away,
+	 * no ceremony. Reassign fetches the NEW series' raw defaults for the
+	 * preview (`getSeriesDefaults`, the event-create form's own inheritance-
+	 * preview source); unassign needs no fetch — the preview is just "this
+	 * clears".
+	 */
+	async function onSeriesSelectChange(e: Event): Promise<void> {
+		const selectEl = e.currentTarget as HTMLSelectElement;
+		const newId = selectEl.value;
+		if (!detail || !selected) return;
+		const previousId = detail.seriesId ?? '';
+		seriesError = null;
+		seriesStatus = '';
+		if (newId === previousId) {
+			// Picked back to the already-committed value — same as a cancel.
+			seriesArmedTarget = null;
+			seriesPreviewDefaults = null;
+			return;
+		}
+		if (detail.inheritedFields.length === 0) {
+			await commitSeriesChange(newId, selectEl);
+			return;
+		}
+		seriesArmedTarget = { id: newId };
+		seriesPreviewDefaults = null;
+		if (newId === '') return; // unassign — nothing to fetch
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		try {
+			const defaults = await getSeriesDefaults(cfg, newId);
+			if (seriesArmedTarget?.id !== newId) return; // superseded by a later pick
+			seriesPreviewDefaults = defaults;
+		} catch (err) {
+			console.error('event detail: series preview load failed', err);
+			if (seriesArmedTarget?.id !== newId) return;
+			seriesArmedTarget = null;
+			selectEl.value = previousId;
+			seriesError = m.event_detail_series_save_error();
+		}
+	}
+
+	/** Back to idle: the select's DOM value is forced back to the last
+	 *  server-confirmed series (the browser has already moved it to the user's
+	 *  pick — same forced-resync discipline `onRosterNamesChange` follows,
+	 *  #267), the confirm/cancel pair unmounts, nothing was written. */
+	async function cancelSeriesChange(): Promise<void> {
+		if (!detail) return;
+		seriesArmedTarget = null;
+		seriesPreviewDefaults = null;
+		seriesError = null;
+		await tick();
+		const selectEl = document.querySelector<HTMLSelectElement>('[data-testid="event-series-select"]');
+		if (selectEl) selectEl.value = detail.seriesId ?? '';
+		selectEl?.focus();
+	}
+
+	/** The confirm tap — commits whatever `seriesArmedTarget` names. */
+	async function confirmSeriesChange(): Promise<void> {
+		if (!seriesArmedTarget || seriesPending) return;
+		const selectEl = document.querySelector<HTMLSelectElement>('[data-testid="event-series-select"]');
+		await commitSeriesChange(seriesArmedTarget.id, selectEl);
+	}
+
+	/**
+	 * The one write path — reached either straight from `onSeriesSelectChange`
+	 * (nothing inherited, no ceremony) or from `confirmSeriesChange` (the armed
+	 * pair). #289's rule verbatim (`onRosterNamesChange`'s pattern): the local
+	 * value changes ONLY after the write returns. On success the page
+	 * re-reads the event (`refreshEventDetail`) so every merged field — not
+	 * just the series ref — shows the NEW values, never stale inherited text.
+	 * On failure the select's DOM value is forced back to what the server
+	 * still holds and the error names what did not happen; `detail` is left
+	 * completely untouched. `g` is captured BEFORE the write, same idiom as
+	 * every other queue on this page — a write that resolves after a
+	 * collective switch must never paint the new view (page.series-picker.spec's
+	 * generation-guard scenario).
+	 */
+	async function commitSeriesChange(newId: string, selectEl: HTMLSelectElement | null): Promise<void> {
+		if (!detail || !selected) return;
+		const g = generation;
+		const evId = detail.id;
+		const previousId = detail.seriesId ?? '';
+		seriesPending = true;
+		seriesError = null;
+		seriesStatus = '';
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		try {
+			if (newId === '') {
+				await unassignEventSeries(cfg, evId);
+			} else {
+				await reassignEventSeries(cfg, evId, newId);
+			}
+			if (g !== generation) return;
+			seriesArmedTarget = null;
+			seriesPreviewDefaults = null;
+			// The refresh BEFORE the announcement, deliberately: "saved" must mean
+			// the screen already shows what was saved, never a promise that it will
+			// (#289) — announcing first would open exactly the window this feature
+			// exists to close, just one write later (the merged fields flashing
+			// stale for one frame).
+			await refreshEventDetail(evId, g);
+			if (g !== generation) return;
+			seriesPending = false;
+			seriesStatus = m.event_detail_series_saved();
+		} catch (err) {
+			if (g !== generation) return;
+			console.error('event detail: series write failed', evId, err);
+			seriesArmedTarget = null;
+			seriesPreviewDefaults = null;
+			seriesPending = false;
+			seriesError = m.event_detail_series_save_error();
+			if (selectEl) selectEl.value = previousId;
+		}
+	}
+
+	/** Re-reads the event after a landed series write — the ONLY way the page
+	 *  learns the new merged name/duration/location/description (this function
+	 *  never re-derives them locally, so it can never drift from the read-side
+	 *  merge `loadEventDetail` owns). Generation-guarded like every other
+	 *  callback on this page: a refresh that resolves after a collective
+	 *  switch must not repaint the view the viewer has since moved to. A
+	 *  FAILED refresh is a lesser problem than losing the confirmed write —
+	 *  `detail` is simply left as it was; the viewer can reload. */
+	async function refreshEventDetail(evId: string, g: number): Promise<void> {
+		if (!selected) return;
+		try {
+			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const refreshed = await loadEventDetail(cfg, evId);
+			if (g !== generation) return;
+			detail = refreshed;
+		} catch (err) {
+			if (g !== generation) return;
+			console.error('event detail: post-series-write refresh failed', evId, err);
 		}
 	}
 
@@ -2217,6 +2499,141 @@
 			</p>
 		{:else if detail}
 			<div class="flex flex-col gap-1.5">
+				<!-- #304 — the series picker. Rights-holders only (`isEditor`, the SAME
+				     one predicate the pencils/tally/delete all run — a plain member
+				     gets no picker and no note); scoped to events that HAVE a season
+				     (series are season children, so a season-less event has nothing to
+				     scope options by). Placed FIRST in the header — name is the field
+				     series-children most depend on (#132), so the control that decides
+				     it comes before it. -->
+				{#if isEditor && detail.seasonId !== null && seriesOptionsLoaded}
+					<div class="flex flex-col gap-1 border-b border-dashed border-ink-5 pb-2">
+						<label for="event-series-select" class="text-xs text-ink-2">
+							{m.event_detail_series_label()}
+						</label>
+						<!-- Standing rule 1 — native <select>. Value is bound to the
+						     SERVER-CONFIRMED `detail.seriesId` alone (never the armed pick),
+						     so nothing here forces the DOM back until a write actually
+						     settles (#289; onRosterNamesChange's exact discipline, #267). The
+						     none-option ('' — the event-create-series convention) is a REAL
+						     state, not a placeholder prompt (#288 — stays out of the
+						     label-in-name guard), so it is OMITTED rather than disabled when
+						     `seriesUnassignGated` withholds it (Gama ruling 5613471404): an
+						     absent option, never a greyed-out one. -->
+						<select
+							id="event-series-select"
+							data-testid="event-series-select"
+							value={detail.seriesId ?? ''}
+							disabled={seriesPending}
+							onchange={(e) => void onSeriesSelectChange(e)}
+							class="w-fit border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+						>
+							{#if !seriesUnassignGated}
+								<option value="">{m.event_detail_series_none()}</option>
+							{/if}
+							{#each seriesOptions as series (series.id)}
+								<option value={series.id}>{series.name}</option>
+							{/each}
+						</select>
+						{#if seriesUnassignGated}
+							<!-- #301's precedent, applied here: absent PLUS a note — a hole
+							     inside an otherwise-normal dropdown is invisible without one. -->
+							<p data-testid="event-series-rights-note" class="text-xs text-ink-3">
+								{m.event_detail_series_rights_note()}
+							</p>
+						{/if}
+						{#if detail.inheritedFields.length > 0}
+							<!-- "Under the select, name the inheritance" — ONLY the fields
+							     THIS event actually inherits (raw-presence test,
+							     eventDetail.ts), never all four unconditionally. -->
+							<p class="flex flex-wrap items-baseline gap-x-1 text-xs text-ink-3">
+								<span>{m.event_detail_series_inherited_label()}</span>
+								{#if detail.inheritedFields.includes('name')}
+									<span data-testid="event-series-inherited-name"
+										>{m.event_detail_series_field_name()}</span
+									>
+								{/if}
+								{#if detail.inheritedFields.includes('durationMinutes')}
+									<span data-testid="event-series-inherited-duration"
+										>{m.event_detail_series_field_duration()}</span
+									>
+								{/if}
+								{#if detail.inheritedFields.includes('location')}
+									<span data-testid="event-series-inherited-location"
+										>{m.event_detail_series_field_location()}</span
+									>
+								{/if}
+								{#if detail.inheritedFields.includes('description')}
+									<span data-testid="event-series-inherited-description"
+										>{m.event_detail_series_field_description()}</span
+									>
+								{/if}
+							</p>
+						{/if}
+						<!-- The consequence preview — visible BEFORE any write, and only
+						     when something is actually inherited (the safe case pays
+						     nothing, #304's own rule). Reassign shows what each inherited
+						     field WILL BECOME (the new series' raw values); unassign names
+						     which fields CLEAR, with the name-goes-empty case called out on
+						     its own (#132 — series children carry no own name). -->
+						{#if seriesArmedTarget && detail.inheritedFields.length > 0 && (seriesArmedTarget.id === '' || seriesPreviewDefaults)}
+							<div
+								data-testid="event-series-confirm"
+								class="flex flex-col gap-1.5 border border-ink-5 bg-paper p-2 text-xs"
+							>
+								<ul class="flex flex-col gap-0.5">
+									{#each detail.inheritedFields as field (field)}
+										<li>
+											{seriesFieldLabel(field)}{#if seriesArmedTarget.id !== ''}:
+												{seriesFieldBecomes(field, seriesPreviewDefaults!)}{/if}
+										</li>
+									{/each}
+									{#if seriesArmedTarget.id === '' && detail.inheritedFields.includes('name')}
+										<li class="text-red-700">
+											{m.event_detail_series_unassign_name_empty()}
+										</li>
+									{/if}
+								</ul>
+								<div class="flex gap-2">
+									<button
+										type="button"
+										data-testid="event-series-confirm-apply"
+										disabled={seriesPending}
+										aria-busy={seriesPending}
+										class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
+										onclick={() => void confirmSeriesChange()}
+									>
+										{m.event_detail_series_confirm_apply()}
+									</button>
+									<button
+										type="button"
+										data-testid="event-series-confirm-cancel"
+										disabled={seriesPending}
+										class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+										onclick={() => void cancelSeriesChange()}
+									>
+										{m.event_detail_series_confirm_cancel()}
+									</button>
+								</div>
+							</div>
+						{/if}
+						{#if seriesStatus}
+							<p
+								data-testid="event-series-status"
+								role="status"
+								aria-live="polite"
+								class="text-xs text-ink-3"
+							>
+								{seriesStatus}
+							</p>
+						{/if}
+						{#if seriesError}
+							<p data-testid="event-series-error" role="alert" class="text-xs text-red-700">
+								{seriesError}
+							</p>
+						{/if}
+					</div>
+				{/if}
 				<!-- #245 — event_type: the SIXTH #157 whole-field activator. Guarded
 				     like every other optional header field below: an event with no
 				     `event_type` must not render a bare, empty pill — for anyone,

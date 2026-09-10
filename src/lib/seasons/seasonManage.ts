@@ -112,6 +112,38 @@ export async function listEventSeriesForSeason(
 	}));
 }
 
+/** #304 — a season's series, id + name ONLY: the event-detail series picker's
+ *  option source. Deliberately NOT `listEventSeriesForSeason` above: that
+ *  function's eventCount needs a SECOND, season-wide `entity?_type.string=event`
+ *  read the picker has no use for (it never shows a count) — reusing it here
+ *  would cost a request nothing on this page consumes. The one query this
+ *  keeps is byte-identical to that function's first (same season-scoped
+ *  `event_series` list, same `props=name`). */
+export interface SeriesOption {
+	id: string;
+	name: string;
+}
+
+export async function listSeriesOptionsForSeason(
+	cfg: EntuCfg,
+	seasonId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<SeriesOption[]> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name&limit=200`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`listSeriesOptionsForSeason failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: SeriesEntity[] };
+	return (body.entities ?? []).map((series) => ({
+		id: series._id,
+		name: series.name?.[0]?.string ?? ''
+	}));
+}
+
 export async function listEventsForSeason(
 	cfg: EntuCfg,
 	seasonId: string,
