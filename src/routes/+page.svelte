@@ -411,6 +411,16 @@
 	// #288 research), and the refill is async, so `.length === 0` alone cannot
 	// tell "not back yet" apart from "confirmed empty". This distinguishes them.
 	let libraryPickersLoading = $state(false);
+	// #311 — the SECOND signal `pickableWorksVisible`'s sticky effect needs:
+	// `!libraryPickersLoading` alone cannot tell a settle that SUCCEEDED apart
+	// from one that FAILED — `loadManagePickers`' catch clears the loading
+	// flag too, exactly as its `.then()` does. True only for the duration
+	// between a `.then()` writing real data and the NEXT `resetManagement()`
+	// (which flips it back false in the same synchronous pass that blanks
+	// `libraryWorks`/`seasonRepertoire`, mirroring how it handles
+	// `libraryPickersLoading` itself); the catch also sets it false
+	// explicitly, so a failed settle is never mistaken for one that landed.
+	let libraryPickersLoadSucceeded = $state(false);
 	// #288 review F1 — the SECOND async source the visibility decision reads.
 	// `pickableEditionsByEventId` iterates `worksByEventId` — both its per-event
 	// KEYS and each event's already-programmed exclusion set come from there —
@@ -437,6 +447,14 @@
 	// its original `pickableEditions.length > 0` — false while nothing has ever
 	// loaded, exactly the "first render is unaffected" half of the ruling.
 	let pickableEditionsVisibleByEventId = $state<Record<string, boolean>>({});
+	// #311 — "Add work" visibility, the sibling of the above but a single
+	// SCALAR: `pickableWorksList`'s only two inputs, `libraryWorks` and
+	// `seasonRepertoire`, both settle under `loadManagePickers`' one
+	// Promise.all — no second per-event source to gate on, so this needs only
+	// `libraryPickersLoading`'s own settle, not a `worksRowsLoading` twin.
+	// `undefined` = not yet decided; RepertoireElement's own #311 default
+	// (render) applies, matching "first render is unaffected".
+	let pickableWorksVisible = $state<boolean | undefined>(undefined);
 	// Write-queue keys in flight: row ids (and the ADD_* sentinels) the controls
 	// disable on — the #15 double-tap guard.
 	let managePendingKeys = $state<Set<string>>(new Set());
@@ -478,6 +496,31 @@
 	// copies join sources — since either coming back empty misreads as "nothing
 	// here" (no rows, or rows with no labels and an empty add-work select).
 	let panelRepertoireError = $state(false);
+	// #311 — `loadPanelRepertoire` had NO loading signal at all before this
+	// (research-311: zero grep hits), so the panel's Add Work control had
+	// nothing sticky to key hiding off. True before either of its two reads
+	// dispatches, false only once BOTH have settled (success or catch) —
+	// see `loadPanelRepertoire` for how the two independent promises join.
+	let panelRepertoireLoading = $state(false);
+	// #311 — per-read success signals, the panel's version of the main flow's
+	// `libraryPickersLoadSucceeded`: `panelPickableWorksVisible`'s sticky
+	// effect may only recompute once BOTH of `panelPickableWorksList`'s
+	// inputs (`panelWorks`, `panelRepertoire`) come from a settle that
+	// SUCCEEDED — `!panelRepertoireLoading` alone cannot tell that apart from
+	// a settle that FAILED (both clear it), and `loadPanelRepertoire`'s two
+	// reads are independent promises, so each needs its OWN flag rather than
+	// one shared boolean. Also flipped by `refreshPanelRepertoire` (the
+	// #234-sync re-read `panelRepertoire` alone gets after a write on either
+	// surface) — its catch deliberately does NOT flip this false: "keep the
+	// previous rows" there means keep the previous answer here too.
+	let panelRepertoireItemsOk = $state(false);
+	let panelWorksSourcesOk = $state(false);
+	// #311 — the panel's own `pickableWorksVisible` override, the sibling of
+	// the main flow's page-level scalar. `undefined` = not yet decided or a
+	// failed first load; RepertoireElement's own #311 default (render)
+	// applies, which is also what keeps the select visible beside
+	// `panelRepertoireError`'s banner.
+	let panelPickableWorksVisible = $state<boolean | undefined>(undefined);
 
 	// #85 TA.4 — the season summary's expand state (conductor-only) + the
 	// full-roster rates it reveals. Loaded lazily on first expand (most visits
@@ -1163,6 +1206,12 @@
 		// rights anywhere never calls `loadManagePickers`, so nothing else
 		// would ever flip this back).
 		libraryPickersLoading = true;
+		// #311 — same synchronous pass: the sticky `pickableWorksVisible` effect
+		// must not treat this reload's now-blanked `libraryWorks`/
+		// `seasonRepertoire` as a genuine settle before the fetch it is about
+		// to dispatch (or, on the deselect/agenda-failure paths, EVER dispatch)
+		// has had its own say.
+		libraryPickersLoadSucceeded = false;
 		// #288 review F1 — the row source's twin, flipped in the same synchronous
 		// pass for the same reason. Every caller that reaches `resetManagement`
 		// has just blanked `worksByEventId` (the deselect path, the main
@@ -1400,6 +1449,11 @@
 				libraryEditions = editions;
 				seasonRepertoire = repertoire;
 				libraryPickersLoading = false;
+				// #311 — the ONE place this flips true: a load that reached here
+				// completed SUCCESSFULLY. The sticky effect (below, near
+				// `pickableWorksList`) reads this alongside `libraryPickersLoading`
+				// before it will recompute `pickableWorksVisible`.
+				libraryPickersLoadSucceeded = true;
 			})
 			.catch(() => {
 				if (thisRequest !== requestId) return;
@@ -1408,6 +1462,13 @@
 				libraryEditions = [];
 				seasonRepertoire = [];
 				libraryPickersLoading = false;
+				// #311 — explicit, not just inherited from `resetManagement`'s reset:
+				// a failed settle is never mistaken for one that landed, so the
+				// sticky effect leaves `pickableWorksVisible` exactly where the last
+				// SUCCESSFUL load put it — the catch's own "Empty pickers, not a
+				// broken page" choice stands instead of being silently inverted by
+				// a naive `!loading` gate.
+				libraryPickersLoadSucceeded = false;
 			});
 	}
 
@@ -1741,6 +1802,12 @@
 			.then((items) => {
 				if (thisRequest !== requestId || manageableSeasonId !== seasonId) return;
 				panelRepertoire = items;
+				// #311 — this re-read is its own successful settle of the SAME
+				// input `panelPickableWorksVisible`'s sticky effect watches; a
+				// direct-add on the agenda side that leaves nothing left to pick
+				// must re-decide visibility here too, not just on the panel's own
+				// initial `loadPanelRepertoire`.
+				panelRepertoireItemsOk = true;
 			})
 			.catch(() => {
 				/* keep the previous rows; the next open retries */
@@ -1979,6 +2046,20 @@
 
 	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
 
+	// #311 — the STICKY half of `pickableWorksVisible`. Gated on BOTH
+	// `libraryPickersLoading` (skip mid-load, exactly like the sibling effect
+	// above) AND `libraryPickersLoadSucceeded` (skip a settle that FAILED —
+	// the trap a `!libraryPickersLoading`-only gate falls into, since the
+	// catch clears that flag too). Reactive on `pickableWorksList` itself, not
+	// just the load's own settle, so a write that changes `seasonRepertoire`
+	// without a full reload — `refreshWorksAfterWrite`'s re-read after a
+	// direct Add, or #234's panel→agenda sync — re-decides visibility too,
+	// the same way the picker's OPTIONS list already does.
+	$effect(() => {
+		if (libraryPickersLoading || !libraryPickersLoadSucceeded) return;
+		pickableWorksVisible = pickableWorksList.length > 0;
+	});
+
 	// #234 — the panel's own row-building, joined against the panel's OWN
 	// works/editions/copies reads (review F1: `libraryWorks`/`libraryEditions`
 	// are never loaded in the future-only-season case this section exists for —
@@ -1993,6 +2074,18 @@
 	 *  whole reason this section has its own state (see the state block doc). */
 	const panelPickableWorksList = $derived(pickableWorks(panelWorks, panelRepertoire));
 
+	// #311 — the STICKY half of `panelPickableWorksVisible`, the panel's
+	// version of the main flow's effect just below `pickableWorksList`. Gated
+	// on BOTH per-read success flags (never `!panelRepertoireLoading` alone —
+	// that also clears on a failed settle) and reactive on
+	// `panelPickableWorksList`, so `refreshPanelRepertoire`'s post-write
+	// re-read (the #234 agenda→panel sync) re-decides visibility too, not
+	// only `loadPanelRepertoire`'s own initial settle.
+	$effect(() => {
+		if (panelRepertoireLoading || !panelRepertoireItemsOk || !panelWorksSourcesOk) return;
+		panelPickableWorksVisible = panelPickableWorksList.length > 0;
+	});
+
 	/** Absent entirely for a reader with no rights anywhere — AgendaList then
 	 *  renders exactly the read-only agenda it rendered before TR.3. */
 	const worksManage = $derived.by<WorksManage | undefined>(() => {
@@ -2002,6 +2095,7 @@
 			seasonRights: seasonManageRights,
 			eventRightsByEventId: eventManageRights,
 			pickableWorksList,
+			pickableWorksVisible,
 			pickableEditionsByEventId,
 			pickableEditionsVisibleByEventId,
 			editionOptionsByRowId,
@@ -2963,6 +3057,12 @@
 		panelCopies = [];
 		panelPendingKeys = new Set();
 		panelRepertoireError = false;
+		// #311 — reached only where the rows above are, so the panel's next open
+		// starts undecided rather than carrying a stale collective's answer.
+		panelRepertoireLoading = false;
+		panelRepertoireItemsOk = false;
+		panelWorksSourcesOk = false;
+		panelPickableWorksVisible = undefined;
 	}
 
 	/**
@@ -2985,16 +3085,39 @@
 	function loadPanelRepertoire(cfg: ManageCfg, seasonId: string): void {
 		const thisRequest = requestId;
 		panelRepertoireError = false;
+		// #311 — true for the WINDOW both reads below are in flight; the two
+		// booleans track each read's own settle (success or catch) so the flag
+		// only goes false once NEITHER is still pending — mirrors
+		// `loadManagePickers`' single-Promise.all `libraryPickersLoading`, split
+		// across this function's two independent promises instead of one.
+		panelRepertoireLoading = true;
+		// #311 — invalidate any previous answer BEFORE either read dispatches,
+		// same synchronous-pass reasoning as `resetManagement`'s
+		// `libraryPickersLoadSucceeded = false`: neither read has had its say
+		// on THIS settle yet.
+		panelRepertoireItemsOk = false;
+		panelWorksSourcesOk = false;
+		let itemsSettled = false;
+		let sourcesSettled = false;
+		const maybeStopLoading = () => {
+			if (itemsSettled && sourcesSettled) panelRepertoireLoading = false;
+		};
 		listRepertoireItems(cfg, seasonId)
 			.then((items) => {
 				if (thisRequest !== requestId) return;
 				panelRepertoire = items;
+				panelRepertoireItemsOk = true;
 			})
 			.catch((e) => {
 				if (thisRequest !== requestId) return;
 				console.error('agenda: loading the season-manage repertoire failed', e);
 				panelRepertoire = [];
 				panelRepertoireError = true;
+			})
+			.finally(() => {
+				if (thisRequest !== requestId) return;
+				itemsSettled = true;
+				maybeStopLoading();
 			});
 		// One settle for the three join sources: any of them missing degrades the
 		// SAME section the same way (unlabelled rows and/or an add-work select
@@ -3006,6 +3129,7 @@
 				panelWorks = works;
 				panelEditions = editions;
 				panelCopies = copies;
+				panelWorksSourcesOk = true;
 			})
 			.catch((e) => {
 				if (thisRequest !== requestId) return;
@@ -3014,6 +3138,11 @@
 				panelEditions = [];
 				panelCopies = [];
 				panelRepertoireError = true;
+			})
+			.finally(() => {
+				if (thisRequest !== requestId) return;
+				sourcesSettled = true;
+				maybeStopLoading();
 			});
 	}
 
@@ -7360,6 +7489,7 @@
 										context="repertoire"
 										seasonRights={manageableSeasonRights}
 										pickableWorksList={panelPickableWorksList}
+										pickableWorksVisible={panelPickableWorksVisible}
 										pendingKeys={panelPendingKeys}
 										addWorkKey={PANEL_ADD_WORK_KEY}
 										expanded={true}

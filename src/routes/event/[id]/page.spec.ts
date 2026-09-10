@@ -2045,6 +2045,142 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 	});
 });
 
+// ── #311 — the Add Work picker on the event detail page ───────────────────────
+//
+// Gama's option-B ruling (issue #311, comments 5613696176 + 5613945883):
+// RepertoireElement's `pickableWorksVisible` defaults to RENDER; hiding is an
+// explicit opt-in a caller may compute ONLY from a load that COMPLETED
+// SUCCESSFULLY with nothing left to pick. The ruling left this page a choice:
+// opt in, or record plainly why it cannot. Decided FROM THE CODE: it CAN and
+// does opt in — this page's `loadManagePickers` is a single generation-guarded
+// Promise.all setting BOTH of `pickableWorksList`'s inputs (`libraryWorks` +
+// `seasonRepertoire`), with distinct success and catch settle paths — exactly
+// the one-flag shape the main agenda flow gates on, so the same scalar opt-in
+// applies. It lacks a loading flag today (reset/refill/catch and nothing
+// else); GREEN adds one, raised before the Promise.all and cleared in BOTH
+// settle paths.
+//
+// NOTE the default fixtures are ALREADY the confirmed-empty case: every
+// libraryWorksFixture() work (w-1, w-2) is in repertoireItemsFixture() — which
+// is why the existing "management controls render" spec above pins the
+// `work-manage-add-work` WRAPPER, not the select: the gate lands on the inner
+// select + button (the #272 part-4 rule), the wrapper stays, and that spec
+// keeps passing untouched.
+describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing left to pick once loading COMPLETED SUCCESSFULLY"', () => {
+	/** `composeWireStub` with holdable / failable `_type.string=work` GETs —
+	 *  the read feeding BOTH the row join and the pickers' `libraryWorks`. */
+	function worksHoldStub(
+		fixtures: ComposeFixtures = {},
+		{ failWorks = false, armed = false }: { failWorks?: boolean; armed?: boolean } = {}
+	) {
+		const base = composeWireStub(fixtures);
+		const held: Array<(r: Response) => void> = [];
+		let holdArmed = armed;
+		const stub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if ((init?.method ?? 'GET') === 'GET' && url.includes('_type.string=work')) {
+				if (failWorks) return json({ error: 'boom' }, 500);
+				if (holdArmed) return new Promise<Response>((resolve) => held.push(resolve));
+			}
+			return base(input, init);
+		});
+		return {
+			stub,
+			heldCount: () => held.length,
+			async releaseWorkReads() {
+				holdArmed = false;
+				for (const resolve of held.splice(0, held.length)) {
+					resolve(await base('https://api.entu-test.invalid/polyphony/search?_type.string=work'));
+				}
+			}
+		};
+	}
+
+	it('load completes with every library work already in the repertoire → select and button GONE, wrapper and rows stand', async () => {
+		// Default fixtures ARE this case: w-1 and w-2 both sit in the season
+		// repertoire, the load lands cleanly, and nothing is left to pick — the
+		// commission's empty select beside a permanently disabled Add.
+		const { container } = renderComposePage({ season: editorSeason() });
+		await waitFor(() => {
+			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+		});
+		const section = container.querySelector('[data-testid="event-detail-works"]')!;
+		await waitFor(() => {
+			expect(section.querySelector('[data-testid="work-manage-add-work-select"]')).toBeNull();
+		});
+		expect(section.querySelector('[data-testid="work-manage-add-work-button"]')).toBeNull();
+		// The wrapper stays (#272 part-4 rule) and hiding a picker never takes
+		// the rows or the section with it.
+		expect(section.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
+		expect(section.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
+	});
+
+	it('while the picker load is IN FLIGHT the select stays (still loading is not empty), and settles to the real options', async () => {
+		// A THIRD work not yet in the repertoire → once loaded, genuinely
+		// pickable. Every works GET is held from the start, so the window is
+		// provably open when the presence is asserted.
+		const world = worksHoldStub(
+			{
+				season: editorSeason(),
+				works: [
+					...libraryWorksFixture(),
+					{ _id: 'w-3', name: [{ string: 'Ave Maria' }], composer: [{ string: 'Josquin' }] }
+				]
+			},
+			{ armed: true }
+		);
+		const { container } = renderWithFetch(world.stub);
+
+		// The section is up for the rights-holder while the reads hang…
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-works"]')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(world.heldCount()).toBeGreaterThan(0);
+		});
+		// …and the select with it: a transiently-empty `pickableWorksList` mid-
+		// load must not hide the control (the flicker the naive gate ships).
+		expect(
+			container.querySelector('[data-testid="work-manage-add-work-select"]'),
+			'picker load in flight → the select must not be withheld off a still-loading list'
+		).not.toBeNull();
+
+		await world.releaseWorkReads();
+		await waitFor(() => {
+			const select = container.querySelector(
+				'[data-testid="work-manage-add-work-select"]'
+			) as HTMLSelectElement | null;
+			expect(select).not.toBeNull();
+			expect(select!.querySelector('option[value="w-3"]')).not.toBeNull();
+		});
+	});
+
+	it('the picker load FAILS → the select stays — the catch’s visible-but-empty choice stands, a failed load never hides', async () => {
+		const world = worksHoldStub({ season: editorSeason() }, { failWorks: true });
+		const { container } = renderWithFetch(world.stub);
+
+		// Settle the page: the rsvp seed is the same "fully loaded" signal the
+		// no-works-section spec uses; the works reads have all 500'd by then and
+		// this page's `loadManagePickers` catch has blanked its lists.
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
+			).toBe('true');
+		});
+		await new Promise((r) => setTimeout(r, 30));
+		// `!loading && length === 0` is true here — and hiding would silently
+		// invert the catch's deliberate choice: no picker, no error, nothing
+		// anywhere saying the library did not load. The section renders for the
+		// rights-holder and the select stays, empty.
+		const section = container.querySelector('[data-testid="event-detail-works"]');
+		expect(section, 'the editor still gets the works section').not.toBeNull();
+		expect(
+			section!.querySelector('[data-testid="work-manage-add-work-select"]'),
+			'a FAILED load must never hide the control'
+		).not.toBeNull();
+	});
+});
+
 // ── the attendance section (past events only) ─────────────────────────────────
 
 describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () => {
@@ -2523,3 +2659,4 @@ describe('/event/[id] — #220 AM/PM preference on the time line', () => {
 });
 
 // (*MVOX:Tallis* — #220 RED: AM/PM preference reaches the event-detail time line via the shared formatTime)
+// (*MVOX:Tallis* — #311 RED: the event page opts the Add Work picker into honest visibility)

@@ -1105,11 +1105,164 @@ describe('#234 review 2 F2 — an AGENDA-side repertoire write syncs the panel s
 			expect(rowByName(repertoireSection(container), 'Nunc dimittis')).not.toBeNull();
 		});
 		// The work is in the season now: still offering it from the panel invites
-		// a DUPLICATE repertoire_item for the same season.
+		// a DUPLICATE repertoire_item for the same season. #311 sharpens the
+		// original prompt-only assertion: with NOTHING left to pick after a
+		// successfully-settled sync, the panel's select is not an empty chooser —
+		// it is GONE (the commission's own case, and duplication-proof outright).
 		await waitFor(() => {
-			expect(panelAddOptions(container)).toEqual(['']);
+			expect(q(repertoireSection(container), 'work-manage-add-work-select')).toBeNull();
 		});
 	});
 });
 
+// ── #311 — the Add Work picker in the SEASON-MANAGE PANEL ───────────────────────
+//
+// Gama's option-B ruling (issue #311, comments 5613696176 + 5613945883):
+// RepertoireElement's `pickableWorksVisible` defaults to RENDER; a caller may
+// pass `false` only off a load that COMPLETED SUCCESSFULLY with nothing left
+// to pick. The panel is ruled INTO this issue's scope, including the loading
+// flag it lacks today: `loadPanelRepertoire` has no
+// `libraryPickersLoading`-equivalent (research-311 finding: zero grep hits),
+// so before #311 the panel has NO signal to build the override from. GREEN
+// gives it one — a `$state` boolean raised before the fetch and cleared in
+// BOTH settle paths (success AND catch).
+//
+// The panel's catch ALSO raises `panelRepertoireError` (a visible role=alert
+// banner) — a failure philosophy the main flow's silent catch does not share.
+// Hiding on failure here would stack an INVISIBLE picker under a VISIBLE
+// error; the failed→visible rule applies identically.
+describe('#311 — the panel’s Add Work picker keys hiding off "nothing left to pick once its load COMPLETED SUCCESSFULLY"', () => {
+	/** All three library works already in the season → after a clean load there
+	 *  is genuinely nothing left to pick. */
+	const ALL_TAKEN = { 'season-1': [RI_ACTIVE, RI_RETIRED, RI_B] };
+
+	/** Wraps `installWorld` with holdable / failable `_type.string=work` GETs —
+	 *  the read `panelWorks` (one of `panelPickableWorksList`'s two inputs)
+	 *  comes from. Holding it holds `loadPanelRepertoire`'s whole sources
+	 *  Promise.all while the repertoire_item read lands free. */
+	function installPanelPickerWorld({
+		repertoireBySeason,
+		failWorks = false
+	}: {
+		repertoireBySeason: Record<string, EntityRaw[]>;
+		failWorks?: boolean;
+	}) {
+		const base = installWorld({ repertoireBySeason });
+		const held: Array<(r: Response) => void> = [];
+		let holdArmed = false;
+		const wrapped = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+			const url = String(input);
+			const method = init?.method ?? 'GET';
+			if (method === 'GET' && url.includes('_type.string=work')) {
+				if (failWorks) return json({ error: 'boom' }, 500);
+				if (holdArmed) return new Promise<Response>((resolve) => held.push(resolve));
+			}
+			return base(input, init);
+		});
+		vi.stubGlobal('fetch', wrapped);
+		return {
+			/** From now on, hold every `_type.string=work` GET open. */
+			armWorkHold() {
+				holdArmed = true;
+			},
+			heldCount: () => held.length,
+			/** Resolve every held work read with the base world's WORKS. */
+			async releaseWorkReads() {
+				holdArmed = false;
+				for (const resolve of held.splice(0, held.length)) {
+					resolve(await base('https://api.entu-test.invalid/polyphony/search?_type.string=work'));
+				}
+			}
+		};
+	}
+
+	it('load completes with every work already in the season → the select and button are GONE; rows and section stand', async () => {
+		installPanelPickerWorld({ repertoireBySeason: ALL_TAKEN });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
+		setAuthed();
+		const container = await renderAgendaReady('agenda-empty');
+		await openPanel(container);
+
+		// Settled: all three rows are on screen, so both panel reads landed.
+		await waitFor(() => {
+			expect(qa(repertoireSection(container), 'work-row').length).toBe(3);
+		});
+		const section = repertoireSection(container);
+		// The commission's exact complaint: a select you can open, find nothing
+		// in, and never use, beside a permanently disabled Add. Confirmed-empty
+		// after a successful load is the ONE case that hides it.
+		await waitFor(() => {
+			expect(q(section, 'work-manage-add-work-select')).toBeNull();
+		});
+		expect(q(section, 'work-manage-add-work-button')).toBeNull();
+		// Hiding a picker never takes the section with it.
+		expect(qa(section, 'work-row').length).toBe(3);
+	});
+
+	it('while the panel’s works read is IN FLIGHT the select stays (still loading is not empty), and settles to the real options', async () => {
+		const world = installPanelPickerWorld({
+			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] }
+		});
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
+		setAuthed();
+		const container = await renderAgendaReady('agenda-empty');
+		// Armed AFTER the agenda phase (whose own loadManagePickers work GET has
+		// fired by now) and BEFORE the panel opens — so the held read is the
+		// panel’s own.
+		world.armWorkHold();
+		await openPanel(container);
+
+		// The repertoire_item read lands free while the works read is held:
+		// rows on screen, `panelWorks` still blank → `panelPickableWorksList`
+		// is transiently empty. Non-vacuous: the hold is genuinely in flight.
+		await waitFor(() => {
+			expect(qa(repertoireSection(container), 'work-row').length).toBe(2);
+		});
+		await waitFor(() => {
+			expect(world.heldCount()).toBeGreaterThan(0);
+		});
+		expect(
+			q(repertoireSection(container), 'work-manage-add-work-select'),
+			'panel load in flight → the select must not be withheld off a transiently-empty list'
+		).not.toBeNull();
+
+		// Loading completes with work-3 pickable → visible, with the real option.
+		await world.releaseWorkReads();
+		await waitFor(() => {
+			const select = q(
+				repertoireSection(container),
+				'work-manage-add-work-select'
+			) as HTMLSelectElement | null;
+			expect(select).not.toBeNull();
+			expect(select!.querySelector('option[value="work-3"]')).not.toBeNull();
+		});
+	});
+
+	it('the works read FAILS → the error banner shows AND the select stays — a failed load never hides (no invisible picker under a visible error)', async () => {
+		installPanelPickerWorld({
+			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] },
+			failWorks: true
+		});
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
+		setAuthed();
+		const container = await renderAgendaReady('agenda-empty');
+		await openPanel(container);
+
+		// The catch settled: `panelRepertoireError` is up (review F4 behaviour,
+		// unchanged) and `panelWorks` was blanked.
+		const section = repertoireSection(container);
+		await waitFor(() => {
+			expect(q(section, 'season-manage-repertoire-error')).not.toBeNull();
+		});
+		// `!loading && length === 0` is true here — and hiding would be wrong:
+		// this settle was a FAILURE, not a confirmed emptiness. The select
+		// stays, empty, exactly as the visible-but-empty choice intends.
+		expect(
+			q(section, 'work-manage-add-work-select'),
+			'a FAILED panel load must never hide the control'
+		).not.toBeNull();
+	});
+});
+
 // (*MVOX:Tallis*)
+// (*MVOX:Tallis* — #311 RED: the panel’s Add Work picker + its missing loading flag)

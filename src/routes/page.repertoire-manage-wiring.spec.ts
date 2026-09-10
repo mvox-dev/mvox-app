@@ -1035,12 +1035,23 @@ function installReloadWorld(options: WorldOptions = {}) {
 		/** How many row reads are currently held open. */
 		rowHeldCount: () => heldRows.length,
 		/** Resolve the held picker reads — with the base world's entities, or
-		 *  with NO editions when the reload should complete to genuine emptiness. */
-		async releasePickerReads({ editionsEmpty = false } = {}) {
+		 *  with NO editions when the reload should complete to genuine emptiness.
+		 *  #311 twins: `worksEmpty` completes the WORK read to genuine emptiness
+		 *  (the Add Work picker's confirmed-empty case — note the picker's
+		 *  Promise.all also reads repertoire_item, which is never held, so a
+		 *  blank work read alone is what makes `pickableWorksList` resolve
+		 *  empty); `fail` completes both held reads with a 500, which rejects
+		 *  `loadManagePickers`' Promise.all and lands in its catch — the
+		 *  "Empty pickers, not a broken page" path. */
+		async releasePickerReads({ editionsEmpty = false, worksEmpty = false, fail = false } = {}) {
 			armed = false;
 			const toRelease = held.splice(0, held.length);
 			for (const read of toRelease) {
-				if (editionsEmpty && read.kind === 'edition') {
+				if (fail) {
+					read.resolve(json({ error: 'boom' }, 500));
+				} else if (editionsEmpty && read.kind === 'edition') {
+					read.resolve(json({ entities: [] }));
+				} else if (worksEmpty && read.kind === 'work') {
 					read.resolve(json({ entities: [] }));
 				} else {
 					read.resolve(await base(read.url));
@@ -1271,9 +1282,161 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 	});
 });
 
+// ── #311 — the Add Work picker on the MAIN AGENDA FLOW ──────────────────────
+//
+// Gama's option-B ruling (issue #311, comments 5613696176 + 5613945883):
+// RepertoireElement's new `pickableWorksVisible` DEFAULTS TO RENDER; hiding is
+// an explicit opt-in a caller may compute ONLY from a load that COMPLETED
+// SUCCESSFULLY with nothing left to pick. This page is the first of the three
+// production callers to opt in.
+//
+// `pickableWorksList` (pickableWorks(libraryWorks, seasonRepertoire)) has BOTH
+// of its inputs settled by `loadManagePickers`' single Promise.all under the
+// single `libraryPickersLoading` flag — so unlike its per-event sibling
+// `pickableEditionsVisibleByEventId` (a Record gated on TWO flags), this
+// override is one page-held SCALAR, threaded WorksManage → AgendaList's
+// worksElement snippet → RepertoireElement. Research-311 confirmed the row
+// read (`worksByEventId`) plays no part here; do NOT copy the Record shape.
+//
+// The three causes of `pickableWorksList.length === 0`, pinned in order:
+//   1. confirmed empty after a SUCCESSFUL load → hidden (the only hiding case)
+//   2. not loaded yet → visible (no flicker; a reload never vanishes it)
+//   3. load FAILED → visible (the catch's "Empty pickers, not a broken page"
+//      choice stands — a failed load never hides)
+describe('#311 — the Add Work picker keys hiding off "nothing left to pick once loading COMPLETED SUCCESSFULLY"', () => {
+	it('RELOAD resolving works-EMPTY: the select stays through the window, then hides once the load completes with nothing left to pick', async () => {
+		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		// Starting point: work-3 is pickable, the control is on screen with it.
+		await vi.waitFor(() => {
+			const select = container.querySelector('[data-testid="work-manage-add-work-select"]');
+			expect(select).not.toBeNull();
+			expect(select!.querySelector('option[value="work-3"]')).not.toBeNull();
+		});
+
+		await submitSeasonCreateAndEnterReload(container, world);
+		await reExpandWorks(container);
+
+		// Cause 2 mid-window: the reload's picker reads are held open, the
+		// synchronous reset has already blanked `libraryWorks` — still loading
+		// is not empty, the select must not have vanished.
+		expect(
+			container.querySelector('[data-testid="work-manage-add-work-select"]'),
+			'reload in flight → the Add Work control the admin just saw must STAY on screen'
+		).not.toBeNull();
+
+		// Cause 1: the work read completes SUCCESSFULLY to genuine emptiness —
+		// nothing left to pick, and only now does the control go.
+		await world.releasePickerReads({ worksEmpty: true });
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-work-select"]'),
+				'loading COMPLETED with nothing left to pick → the select resolves to hidden'
+			).toBeNull();
+		});
+		expect(container.querySelector('[data-testid="work-manage-add-work-button"]')).toBeNull();
+		// The rows and the page around them stand — this hid a picker, not a section.
+		expect(container.querySelectorAll('[data-testid="work-row"]').length).toBeGreaterThan(0);
+	});
+
+	it('RELOAD resolving NON-empty: the select never vanishes — visible before, THROUGH the window, and after, with the real options', async () => {
+		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-work-select"]')
+			).not.toBeNull();
+		});
+
+		await submitSeasonCreateAndEnterReload(container, world);
+		await reExpandWorks(container);
+
+		// The flicker the naive `length > 0` gate would ship: assert the
+		// sequence directly, mid-window.
+		expect(
+			container.querySelector('[data-testid="work-manage-add-work-select"]'),
+			'a reload with a non-empty library must never make the control vanish and reappear'
+		).not.toBeNull();
+
+		await world.releasePickerReads();
+		await vi.waitFor(() => {
+			const select = container.querySelector(
+				'[data-testid="work-manage-add-work-select"]'
+			) as HTMLSelectElement | null;
+			expect(select).not.toBeNull();
+			expect(select!.querySelector('option[value="work-3"]')).not.toBeNull();
+		});
+	});
+
+	it('RELOAD whose picker load FAILS: the select does NOT hide — "Empty pickers, not a broken page" stands, hiding requires a load that completed SUCCESSFULLY', async () => {
+		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-work-select"]')
+			).not.toBeNull();
+		});
+
+		await submitSeasonCreateAndEnterReload(container, world);
+		await reExpandWorks(container);
+
+		// Cause 3: both held picker reads settle 500 → `loadManagePickers`'
+		// Promise.all rejects → its catch blanks the lists and clears the flag.
+		// `!loading && length === 0` is now true — which is exactly why the
+		// override may NOT be computed from settle alone: this settle was a
+		// FAILURE, and hiding here would silently invert the catch's deliberate
+		// visible-but-empty choice (+page.svelte, loadManagePickers).
+		await world.releasePickerReads({ fail: true });
+		// No observable success signal exists on this path by design — flush the
+		// settle, then pin that nothing vanished.
+		await new Promise((r) => setTimeout(r, 30));
+		expect(
+			container.querySelector('[data-testid="work-manage-add-work-select"]'),
+			'a FAILED load must never hide the control — no picker, no error, nothing anywhere is the bug'
+		).not.toBeNull();
+	});
+
+	it('FIRST render with the picker load held: the select is ALREADY visible (safe default — deliberately asymmetric with the editions first-render guard), and hides only once the load completes empty', async () => {
+		// The editions control's #288 first-render rule is "never shown yet →
+		// nothing to keep visible → hidden until loaded". Option B inverts the
+		// default for the WORKS control: render-first is the safe state, so the
+		// select shows from first paint exactly as it does today — the sticky
+		// scalar starts visible and only a successfully-confirmed emptiness
+		// takes it away. (This is also the pin against copying the sibling's
+		// absent-entry-means-hidden Record semantics.)
+		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
+		world.armPickerHold();
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(world.heldCount()).toBe(2);
+		});
+		expect(
+			container.querySelector('[data-testid="work-manage-add-work-select"]'),
+			'first render, load in flight → the works select renders (default is RENDER, not length > 0)'
+		).not.toBeNull();
+
+		await world.releasePickerReads({ worksEmpty: true });
+		await vi.waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="work-manage-add-work-select"]'),
+				'the initial load completing to genuine emptiness hides it — same rule as the reload'
+			).toBeNull();
+		});
+	});
+});
+
 // (*MVOX:Josquin* — #91 review fix-forward: end-to-end management wiring)
 // (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
 // (*MVOX:Tallis* — #204 review fix-forward: nameless work on the wire)
 // (*MVOX:Tallis* — #272 RED: programme select + add link conditionally shown, page wiring)
 // (*MVOX:Tallis* — #288 RED: the programme control survives its load window)
 // (*MVOX:Josquin* — #288 review F1: the ROW read is the second load window)
+// (*MVOX:Tallis* — #311 RED: the Add Work picker renders only when there is something to add)

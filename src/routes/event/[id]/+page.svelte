@@ -295,6 +295,21 @@
 	let libraryWorks = $state<Work[]>([]);
 	let libraryEditions = $state<Edition[]>([]);
 	let seasonRepertoire = $state<RepertoireItem[]>([]);
+	// #311 — this page opts `pickableWorksVisible` in: its `loadManagePickers`
+	// is a single generation-guarded Promise.all settling BOTH of
+	// `pickableWorksList`'s inputs (`libraryWorks`/`seasonRepertoire`) with
+	// distinct success/catch paths — exactly the one-flag shape the main
+	// agenda flow gates on (research-311). True before the Promise.all
+	// dispatches, false in BOTH its settle paths.
+	let libraryPickersLoading = $state(false);
+	// #311 — the second signal the sticky effect needs: `!libraryPickersLoading`
+	// alone cannot tell a settle that SUCCEEDED apart from one that FAILED (the
+	// catch clears the loading flag too) — see the main agenda flow's own
+	// `libraryPickersLoadSucceeded` for the full reasoning, mirrored here.
+	let libraryPickersLoadSucceeded = $state(false);
+	// #311 — sibling of the main flow's page-level scalar. `undefined` = not
+	// yet decided; RepertoireElement's own default (render) applies.
+	let pickableWorksVisible = $state<boolean | undefined>(undefined);
 	let managePendingKeys = $state<Set<string>>(new Set());
 
 	// ── #262 — schedule_item section state ────────────────────────────────────
@@ -506,6 +521,13 @@
 		libraryWorks = [];
 		libraryEditions = [];
 		seasonRepertoire = [];
+		// #311 — same synchronous pass as the blanking above, mirroring the main
+		// agenda flow's `resetManagement`: the sticky effect must not treat this
+		// now-blanked `libraryWorks`/`seasonRepertoire` as a genuine settle
+		// before `loadManagePickers` (or, for a non-rights-holder, nothing at
+		// all) has had its own say.
+		libraryPickersLoading = true;
+		libraryPickersLoadSucceeded = false;
 		managePendingKeys = new Set();
 		scheduleRows = [];
 		scheduleLoaded = false;
@@ -1202,12 +1224,24 @@
 				libraryWorks = works;
 				libraryEditions = editions;
 				seasonRepertoire = repertoire;
+				libraryPickersLoading = false;
+				// #311 — the ONE place this flips true: this settle completed
+				// SUCCESSFULLY. The sticky effect near `pickableWorksList` reads
+				// this alongside `libraryPickersLoading` before recomputing
+				// `pickableWorksVisible`.
+				libraryPickersLoadSucceeded = true;
 			})
 			.catch(() => {
 				if (g !== generation) return;
 				libraryWorks = [];
 				libraryEditions = [];
 				seasonRepertoire = [];
+				libraryPickersLoading = false;
+				// #311 — explicit: a failed settle is never mistaken for one that
+				// landed, so the sticky effect leaves `pickableWorksVisible`
+				// exactly where the last SUCCESSFUL load put it — visible-but-
+				// empty stands, same as the main agenda flow's catch.
+				libraryPickersLoadSucceeded = false;
 			});
 	}
 
@@ -1744,6 +1778,16 @@
 	});
 
 	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
+
+	// #311 — the STICKY half of `pickableWorksVisible`, mirroring the main
+	// agenda flow's own effect byte-for-byte: skip while loading, skip a
+	// settle that FAILED, otherwise recompute from `pickableWorksList`
+	// reactively (so a write that changes `seasonRepertoire` without a fresh
+	// `loadManagePickers` re-decides visibility too).
+	$effect(() => {
+		if (libraryPickersLoading || !libraryPickersLoadSucceeded) return;
+		pickableWorksVisible = pickableWorksList.length > 0;
+	});
 
 	/** Absent entirely for a viewer with no works AND no rights anywhere on
 	 *  this event — never an empty "Works" placeholder (same rule
@@ -3499,6 +3543,7 @@
 							eventRights={eventManageRights}
 							context={worksContext}
 							{pickableWorksList}
+							{pickableWorksVisible}
 							pickableEditions={pickableEditionsList}
 							{editionOptionsByRowId}
 							pendingKeys={managePendingKeys}

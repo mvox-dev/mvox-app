@@ -93,6 +93,12 @@ export interface WorksManage {
 	eventRightsByEventId: Record<string, ManageRightsState>;
 	/** Library works not yet in the season repertoire (pickableWorks()). */
 	pickableWorksList: Work[];
+	/** #311 — should "Add work" render? A single SCALAR, not per-event like
+	 *  its programme sibling below: both of `pickableWorksList`'s inputs
+	 *  (`libraryWorks`, `seasonRepertoire`) settle under the ONE
+	 *  `libraryPickersLoading` flag, season-wide. Absent = not yet decided;
+	 *  RepertoireElement's own default (render) applies. */
+	pickableWorksVisible?: boolean;
 	/** Per EVENT id: editions not already on that event's programme. */
 	pickableEditionsByEventId: Record<string, PickerOption[]>;
 	/** #288 — per EVENT id: should "Add to programme" render? STICKY across a

@@ -184,6 +184,19 @@
 		 *  does not disable the other's button; that key has to reach THIS
 		 *  control, or the surface simply never shows pending (review F3). */
 		addWorkKey?: string;
+		/** #311 — whether "Add work" (the select built from `pickableWorksList`)
+		 *  should render. Defaults to `true`, NOT `pickableWorksList.length > 0`
+		 *  — the INVERTED default from its sibling `pickableEditionsVisible`
+		 *  below, deliberately: `length === 0` has three causes (confirmed
+		 *  empty, not-loaded-yet, load FAILED) and only the first should ever
+		 *  hide the control, but a component-level default can't tell them
+		 *  apart from a list alone. Hiding is therefore an explicit opt-in —
+		 *  only a caller that can PROVE "load completed successfully, nothing
+		 *  left to pick" passes `false`. An un-migrated (or async, still-
+		 *  loading, or failed) caller keeps today's behaviour: visible. The
+		 *  follow-up brings `pickableEditionsVisible` to this same safe
+		 *  default; it does not pull this prop back to `length > 0` to match. */
+		pickableWorksVisible?: boolean;
 		/** 'programme' context only — editions not yet on tonight's programme. */
 		pickableEditions?: PickerOption[];
 		/** #288 — whether "Add to programme" (the select built from
@@ -232,6 +245,7 @@
 		context = 'repertoire',
 		pickableWorksList = [],
 		addWorkKey = ADD_WORK_KEY,
+		pickableWorksVisible = true,
 		pickableEditions = [],
 		pickableEditionsVisible: pickableEditionsVisibleProp,
 		editionOptionsByRowId = {},
@@ -539,30 +553,40 @@
 
 {#snippet manageAddControls()}
 	{#if canManageRepertoire && context === 'repertoire'}
+		<!-- #311 — the gate is on the inner select+button, not this wrapper
+		     (mirrors #272 part 4's rule for the programme control below): the
+		     wrapper's presence is governed by rights, the controls' by
+		     pickableWorksVisible. Deliberately asymmetric with the
+		     pickableEditionsVisible gate just below — that one already wraps
+		     only its own select because its button has its own `{#if
+		     selectedEditionForAdd}`; this pair has no such split, so the whole
+		     pair sits under one `{#if pickableWorksVisible}` here instead. -->
 		<div data-testid="work-manage-add-work" class="flex flex-wrap items-center gap-2 pt-1">
-			<select
-				data-testid="work-manage-add-work-select"
-				class="w-full sm:w-auto"
-				value={selectedWorkId}
-				disabled={pendingKeys.has(addWorkKey)}
-				aria-label={m.repertoire_add_work_label()}
-				onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
-			>
-				<option value="">{m.repertoire_add_work_label()}</option>
-				{#each pickableWorksList as w (w.id)}
-					<option value={w.id}>{workLabel(w)}</option>
-				{/each}
-			</select>
-			<button
-				type="button"
-				data-testid="work-manage-add-work-button"
-				class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-				disabled={pendingKeys.has(addWorkKey) || !selectedWorkId}
-				aria-label={m.repertoire_add_work_aria_label()}
-				onclick={handleAddWork}
-			>
-				{m.repertoire_add_work_button()}
-			</button>
+			{#if pickableWorksVisible}
+				<select
+					data-testid="work-manage-add-work-select"
+					class="w-full sm:w-auto"
+					value={selectedWorkId}
+					disabled={pendingKeys.has(addWorkKey)}
+					aria-label={m.repertoire_add_work_label()}
+					onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
+				>
+					<option value="">{m.repertoire_add_work_label()}</option>
+					{#each pickableWorksList as w (w.id)}
+						<option value={w.id}>{workLabel(w)}</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					data-testid="work-manage-add-work-button"
+					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
+					disabled={pendingKeys.has(addWorkKey) || !selectedWorkId}
+					aria-label={m.repertoire_add_work_aria_label()}
+					onclick={handleAddWork}
+				>
+					{m.repertoire_add_work_button()}
+				</button>
+			{/if}
 		</div>
 	{/if}
 	<!-- Deliberately NOT the `{:else}` of the branch above: "Add to programme" is
