@@ -2,6 +2,33 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
+### [CHECKPOINT 2026-09-10 ~16:15 EEST — MVOX-19 PAUSE at the seam, Mihkel's request]
+
+**PAUSED, not closed.** Mihkel (15:01): pause after current workflows finish. All workflows finished; tree clean on main @ the seam commit. Resume = his word; on resume the queue below is fully prepped.
+
+**13 MERGED this session:** #305 `d1b9adb` · #301 `a467f8e` · #302 `295cfd9` · #307 `17e7851` · #308 `1bd3b5a` · #304 `253cc5c` · #290 `53bba82` · #303 `2303c18` · #309 `1d8d64c` · #310 `bda9495` · #312 `aa6dd23` · #311 `975a9f0` (+ wake verified #279/#288/#300 landed pre-session). Plus #256 `link` type provisioned LIVE both dbs (polyphony 6aa2398620ebf490c690ab23, crede 6aa239d620ebf490c690ab64 — Pérotin, read-back verified).
+
+**QUEUE ON RESUME (all `prepped` = research landed + args committed, label contract below):**
+1. **#315** roadmap prepped-tier float — args-315.json; tiny; verified by direct probe (ACTIVE_TIER_LABELS render.ts:181).
+2. **#313** season editor drops event list, convert→event page — args-313.json; research-313.json (convert = EDITOR-gated: create+append, no _parent value delete; reuse isEditor NOT isOwnerTier; spec disposition per-file incl. re-point-don't-delete the reload-trigger test).
+3. **#256 UI slice** (link collection surface) — type LIVE; UI args not yet authored (pre-scan in research-290-277-289.json blast-290-256-sweep names the closest pattern + what doesn't exist).
+4. **#277** per-season management entry — research in research-290-277-289.json (panel staleness hazards, TWO guard implementations, rights-derivation not per-season callable); args not authored.
+5. **#289 EPIC** — inventory content in research (14 findings, zero <form> in app); commit inventory doc to repo, then cut sub-issues as NATIVE sub-issue links (Gama: board indents from native links only).
+6. **#233** — NOT queue-gated; A.4 migration BEFORE formula; needs Mihkel's authorization AT THE TIME. #304's commit body carries the 3-site event-name enumeration #233 must include.
+
+**LABEL CONTRACT v2 (Mihkel 15:04-15:05):** in research (dispatch) → **`prepped`** (research landed + args prepared; amendments cheap) → in process (run entry) → cleared after landing line. `prepped` renamed from `researched` 2min after creation. Current prepped: #313, #315, #256, #277, #289.
+
+**PROCESS — per-merge landing notices (Gama 14:13, my miss owned):** one line per merge INCLUDING mid-pack. Fix = persistent Monitor on origin/main (this session: bfvrvwcyf) emitting per-merge events → notice at landing time. **RE-ARM AT EVERY SESSION START / PIPELINE LAUNCH** — dies with the session.
+
+**RECOVERY RECIPES USED (both worked):** (1) YELLOW-halt on non-code-typed finding that's actually a repo edit → fix agent (opus) → Bentham verdict → merge agent with staged-set check; (2) GREEN premature-idle (full-suite run backgrounds, agent reports in-progress) → cache-bust the greenPrompt with a CONTINUATION preamble (work sits in tree; read diff first; foreground suite) → resume same runId. (3) Merge agent refusing unfillable STATED-CHOICES placeholder = CORRECT behaviour → re-dispatch merge with body pre-filled.
+
+**#304 wire law (probe-confirmed live):** _parent value DELETE is owner-gated and _parent-SPECIFIC (editor deletes plain props fine); atomic-overwrite POST editor-reachable. Unassign=owner+note; reassign=editor; convert=editor (no delete involved).
+
+**Session log:** memory/session-mvox19-pickup-log.md (full pickup/ruling/research trail).
+
+(*MVOX:Palestrina*)
+
+---
 ### [CHECKPOINT 2026-09-09 ~23:00 EEST — MVOX-18 close; restart requested by Mihkel "at the next comfortable seam"]
 
 **THE SEAM: when run `wf_36335e5d-51e` (#279+#288+#300) LANDS.** If restart happened before it landed: check `git log origin/main` for test(#279)/fix(#288)/fix(#300) merge commits; any missing task relaunches from `teams/mvox-dev/memory/pipeline-args/args-279-288-300.json` (committed) — resumeFromRunId does NOT survive restart. Landing notices to gama@po-team per contract; remove `in process` labels after.
