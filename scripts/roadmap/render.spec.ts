@@ -326,10 +326,13 @@ describe('renderBoard — ordering inside the groups (#307)', () => {
 	};
 	const issuePos = (html: string, n: number): number => pos(html, `data-issue="${n}"`);
 
-	it('orders the open group by issue number, ascending', () => {
-		// Fixture file order is 305, 289, 301, 298, 262 — must render 262 … 305.
+	it('orders the open group by activity tier, then issue number ascending (#310 amends #307)', () => {
+		// Fixture: #305 carries `in process`, #298 `in research`; 262/289/301
+		// have neither. #310 makes the tier the primary key — so 305, 298,
+		// then the rest by number: 262, 289, 301. (#307's number-ascending
+		// rule survives per tier.)
 		const html = renderBoard(liveShaped, GENERATED_AT);
-		const positions = [262, 289, 298, 301, 305].map((n) => issuePos(html, n));
+		const positions = [305, 298, 262, 289, 301].map((n) => issuePos(html, n));
 		expect([...positions].sort((a, b) => a - b)).toEqual(positions);
 	});
 

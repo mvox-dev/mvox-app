@@ -43,7 +43,9 @@ const PALETTE: Record<string, string> = {
 	ready: '0e8a16',
 	bug: 'd73a4a',
 	blocked: 'b60205',
-	wontfix: 'ffffff'
+	wontfix: 'ffffff',
+	'in process': '95ea29',
+	'in research': 'ecde62'
 };
 
 function raw(number: number, labels: string[], overrides: Partial<RawIssue> = {}): RawIssue {
@@ -205,6 +207,39 @@ describe('fetchBoard → renderBoard — #307 colours and ordering ride the real
 		expect(pos('data-issue="305"')).toBeLessThan(pos('Tehtud'));
 		expect(pos('Tehtud')).toBeLessThan(pos('data-issue="304"'));
 		expect(pos('data-issue="304"')).toBeLessThan(pos('data-issue="210"'));
+	});
+});
+
+describe('fetchBoard → renderBoard — #310 active float rides the real pipeline', () => {
+	// Integration on purpose: the tier is matched against the exact label
+	// strings GitHub sends, so it must survive normalization end-to-end —
+	// a unit spec can go green with the comparator never seeing wire labels.
+	it('floats in process above in research above the rest through the real fetch step, closed group untouched', async () => {
+		// API order deliberately inverted: rest, research, process — and the
+		// closed pair carries a stale `in process` label on the OLDER close.
+		const list = [
+			raw(262, ['bug']),
+			raw(298, ['task', 'in research']),
+			raw(305, ['task', 'in process']),
+			raw(210, ['task', 'in process'], {
+				state: 'closed',
+				state_reason: 'not_planned',
+				closed_at: '2026-07-01T00:00:00Z'
+			}),
+			raw(304, ['task'], { state: 'closed', state_reason: 'completed', closed_at: '2026-09-08T00:00:00Z' })
+		];
+		const html = renderBoard(await board(list), GENERATED_AT);
+		const pos = (n: number): number => {
+			const i = html.indexOf(`data-issue="${n}"`);
+			expect(i, `data-issue="${n}" missing from the page`).toBeGreaterThan(-1);
+			return i;
+		};
+		// Open tier order: 305 (in process), 298 (in research), 262 (rest).
+		expect(pos(305)).toBeLessThan(pos(298));
+		expect(pos(298)).toBeLessThan(pos(262));
+		// Closed: closedAt-desc only — 210's stale `in process` must not float it.
+		expect(pos(304)).toBeLessThan(pos(210));
+		expect(pos(262)).toBeLessThan(pos(304));
 	});
 });
 

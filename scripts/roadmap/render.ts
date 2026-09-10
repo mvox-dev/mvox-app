@@ -168,15 +168,42 @@ function closedAtRank(issue: RoadmapIssue): number {
 	return Number.isNaN(parsed) ? -Infinity : parsed;
 }
 
+// #310: this match is against the exact label strings the mvox team uses on
+// GitHub — 'in process' and 'in research', not an id or a stable enum. Rename
+// either label in the repo's label settings and this silently stops floating
+// anything; nothing here will fail or warn, the board just quietly goes back
+// to plain number order. There is deliberately no test pinning these two
+// strings (see active-float.spec.ts) because a fixture-based test cannot see
+// a GitHub-side rename either — it would stay green through the same failure
+// it exists to catch. Catching the rename itself would mean the build reading
+// the repo's live label set, which was judged not worth the extra API call
+// for an ordering nicety (Gama, #310 comment).
+const ACTIVE_TIER_LABELS = ['in process', 'in research'] as const;
+
 /**
- * Open issues first (current work, by issue number ascending), then closed
- * (most recently finished first, missing closedAt sorts last). One function
- * for both the top-level board and every nested sub-issue walk (renderIssue
- * calls this same function on its own children) — there is no second
- * ordering path to keep in sync.
+ * An open issue's activity tier: 0 when it carries `in process` (which wins
+ * even alongside `in research`), 1 when it carries `in research` alone, 2
+ * otherwise. Lower sorts first. Never consulted for closed issues.
+ */
+function activityTier(issue: RoadmapIssue): number {
+	const names = issue.labels.map((label) => label.name);
+	const rank = ACTIVE_TIER_LABELS.findIndex((label) => names.includes(label));
+	return rank === -1 ? ACTIVE_TIER_LABELS.length : rank;
+}
+
+/**
+ * Open issues first — tiered by activity label (#310: in process, then in
+ * research, then the rest), issue number ascending within each tier — then
+ * closed (most recently finished first, missing closedAt sorts last; labels
+ * play no part here, so a stale activity label left on a closed issue can
+ * never reorder it). One function for both the top-level board and every
+ * nested sub-issue walk (renderIssue calls this same function on its own
+ * children) — there is no second ordering path to keep in sync.
  */
 function boardOrder(issues: RoadmapIssue[]): RoadmapIssue[] {
-	const open = issues.filter((i) => i.state === 'open').sort((a, b) => a.number - b.number);
+	const open = issues
+		.filter((i) => i.state === 'open')
+		.sort((a, b) => activityTier(a) - activityTier(b) || a.number - b.number);
 	const closed = issues.filter((i) => i.state === 'closed').sort((a, b) => closedAtRank(b) - closedAtRank(a));
 	return [...open, ...closed];
 }
