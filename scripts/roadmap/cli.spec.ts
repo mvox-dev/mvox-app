@@ -80,6 +80,26 @@ describe('roadmap build CLI (integration)', () => {
 		expect(readFileSync(cnamePath, 'utf-8').trim()).toBe('docs.mvox.eu');
 	});
 
+	it('#309: cards on the deployed page link to their issue via the fixture htmlUrl', () => {
+		// Wiring check: the htmlUrl must reach the file the Action actually
+		// deploys, not just renderBoard's return value in a unit test.
+		const html = readFileSync(join(outDir, 'roadmap', 'index.html'), 'utf-8');
+		expect(html).toContain('href="https://github.com/mvox-dev/mvox-app/issues/305"');
+		expect(html).toContain('href="https://github.com/mvox-dev/mvox-app/issues/289"');
+	});
+
+	it('#309: the fixture lead (#301) renders on the deployed page', () => {
+		const html = readFileSync(join(outDir, 'roadmap', 'index.html'), 'utf-8');
+		expect(html).toContain('Näitab iga eksemplari laenutuse seisu otse noodi lehel.');
+	});
+
+	it('#309: the deployed header links back to the app at mvox.eu — plain, same tab, labelled mvox', () => {
+		const html = readFileSync(join(outDir, 'roadmap', 'index.html'), 'utf-8');
+		const match = /<a\b[^>]*href="https:\/\/mvox\.eu"[^>]*>\s*mvox\s*<\/a>/.exec(html);
+		expect(match, 'no <a href="https://mvox.eu">mvox</a> on the deployed page').not.toBeNull();
+		expect(match?.[0]).not.toContain('target=');
+	});
+
 	it('#307: the built page carries coloured chips and the Pooleli/Tehtud divider', () => {
 		// Wiring check: the colours/divider must reach the file the Action
 		// actually deploys, not just renderBoard's return value in a unit test.

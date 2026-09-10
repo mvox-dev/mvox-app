@@ -33,6 +33,7 @@ interface RawIssue {
 	labels: { name: string; color: string }[];
 	body: null;
 	closed_at: string | null;
+	html_url: string;
 }
 
 /** Live palette values (gh api repos/mvox-dev/mvox-app/labels, 2026-09-10). */
@@ -54,6 +55,7 @@ function raw(number: number, labels: string[], overrides: Partial<RawIssue> = {}
 		labels: labels.map((name) => ({ name, color: PALETTE[name] ?? 'cccccc' })),
 		body: null,
 		closed_at: null,
+		html_url: `https://github.com/mvox-dev/mvox-app/issues/${number}`,
 		...overrides
 	};
 }
@@ -203,6 +205,36 @@ describe('fetchBoard → renderBoard — #307 colours and ordering ride the real
 		expect(pos('data-issue="305"')).toBeLessThan(pos('Tehtud'));
 		expect(pos('Tehtud')).toBeLessThan(pos('data-issue="304"'));
 		expect(pos('data-issue="304"')).toBeLessThan(pos('data-issue="210"'));
+	});
+});
+
+describe('fetchBoard → renderBoard — #309 card links ride the real pipeline', () => {
+	// Integration on purpose: a unit spec can go green with html_url normalized
+	// but never fetched, or fetched but never rendered. This drives the REST
+	// payload's html_url through the real fetchBoard into renderBoard and reads
+	// it back off the page — top level and nested alike.
+	it('carries html_url from the REST payload onto the rendered card links, nested children included', async () => {
+		const html = renderBoard(
+			await board([raw(289, ['epic']), raw(290, ['task']), raw(305, ['task'])], {
+				289: [raw(290, ['task'])]
+			}),
+			GENERATED_AT
+		);
+		const doc = parse(html);
+		expect(
+			doc.querySelector('[data-issue="305"] a[href="https://github.com/mvox-dev/mvox-app/issues/305"]'),
+			'top-level card carries no link to its issue'
+		).not.toBeNull();
+		expect(
+			doc.querySelector('[data-issue="289"] a[href="https://github.com/mvox-dev/mvox-app/issues/289"]'),
+			'epic card carries no link of its own'
+		).not.toBeNull();
+		expect(
+			doc.querySelector(
+				'[data-issue="289"] [data-issue="290"] a[href="https://github.com/mvox-dev/mvox-app/issues/290"]'
+			),
+			'nested child card carries no link of its own'
+		).not.toBeNull();
 	});
 });
 

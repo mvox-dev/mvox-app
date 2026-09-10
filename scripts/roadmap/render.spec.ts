@@ -51,6 +51,7 @@ function issue(overrides: Partial<RoadmapIssue> & Pick<RoadmapIssue, 'number' | 
 		labels: [],
 		body: null,
 		closedAt: null,
+		htmlUrl: `https://example.test/issues/${overrides.number}`,
 		subIssues: [],
 		...overrides
 	};

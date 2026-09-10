@@ -47,7 +47,8 @@ describe('normalizeIssue', () => {
 				{ name: 'task', color: '1d76db' },
 				{ name: 'ready', color: '0e8a16' }
 			],
-			body: null
+			body: null,
+			html_url: 'https://github.com/mvox-dev/mvox-app/issues/305'
 		});
 		expect(result.labels).toEqual([
 			{ name: 'task', color: '1d76db' },
@@ -62,7 +63,8 @@ describe('normalizeIssue', () => {
 			state: 'open',
 			state_reason: null,
 			labels: ['task', 'ready'],
-			body: null
+			body: null,
+			html_url: 'https://github.com/mvox-dev/mvox-app/issues/305'
 		});
 		expect(result.labels).toEqual([
 			{ name: 'task', color: null },
@@ -77,7 +79,8 @@ describe('normalizeIssue', () => {
 			state: 'open',
 			state_reason: null,
 			labels: [{ name: 'völlig-unbekannt' }],
-			body: null
+			body: null,
+			html_url: 'https://github.com/mvox-dev/mvox-app/issues/306'
 		});
 		expect(result.labels).toEqual([{ name: 'völlig-unbekannt', color: null }]);
 	});
@@ -93,41 +96,134 @@ describe('normalizeIssue', () => {
 			state_reason: 'completed',
 			labels: [],
 			body: null,
-			closed_at: '2026-09-07T16:26:44Z'
+			closed_at: '2026-09-07T16:26:44Z',
+			html_url: 'https://github.com/mvox-dev/mvox-app/issues/282'
 		});
 		expect(result.closedAt).toBe('2026-09-07T16:26:44Z');
 	});
 
 	it('normalizes a missing or null closed_at to closedAt: null', () => {
-		expect(normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null }).closedAt).toBeNull();
 		expect(
-			normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null, closed_at: null }).closedAt
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'open',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).closedAt
+		).toBeNull();
+		expect(
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'open',
+				labels: [],
+				body: null,
+				closed_at: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).closedAt
 		).toBeNull();
 	});
 
 	it('normalizes state to the open|closed union regardless of API casing', () => {
-		expect(normalizeIssue({ number: 1, title: 't', state: 'closed', labels: [], body: null }).state).toBe(
-			'closed'
-		);
-		expect(normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null }).state).toBe('open');
+		expect(
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'closed',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).state
+		).toBe('closed');
+		expect(
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'open',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).state
+		).toBe('open');
 	});
 
 	it('passes through a recognized state_reason', () => {
 		expect(
-			normalizeIssue({ number: 1, title: 't', state: 'closed', state_reason: 'not_planned', labels: [], body: null })
-				.stateReason
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'closed',
+				state_reason: 'not_planned',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).stateReason
 		).toBe('not_planned');
 	});
 
 	it('normalizes an unrecognized or missing state_reason to null', () => {
-		expect(normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null }).stateReason).toBeNull();
 		expect(
-			normalizeIssue({ number: 1, title: 't', state: 'open', state_reason: 'reopened', labels: [], body: null })
-				.stateReason
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'open',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).stateReason
+		).toBeNull();
+		expect(
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'open',
+				state_reason: 'reopened',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).stateReason
 		).toBeNull();
 	});
 
 	it('starts subIssues empty — the fetch step attaches them separately, only for epics', () => {
-		expect(normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null }).subIssues).toEqual([]);
+		expect(
+			normalizeIssue({
+				number: 1,
+				title: 't',
+				state: 'open',
+				labels: [],
+				body: null,
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/1'
+			}).subIssues
+		).toEqual([]);
+	});
+
+	// #309: card links need the issue's own URL from the API — carried, never
+	// built. Full-shape toEqual on purpose: a partial assertion here could go
+	// green while the field silently failed to ride along.
+	it('carries html_url through as htmlUrl, verbatim — full normalized shape pinned (#309)', () => {
+		const rawPayload = {
+			number: 309,
+			title: 'Roadmap cards link out',
+			state: 'open',
+			state_reason: null,
+			labels: [{ name: 'task', color: '1d76db' }],
+			body: null,
+			closed_at: null,
+			html_url: 'https://github.com/mvox-dev/mvox-app/issues/309'
+		};
+		expect(normalizeIssue(rawPayload)).toEqual({
+			number: 309,
+			title: 'Roadmap cards link out',
+			state: 'open',
+			stateReason: null,
+			labels: [{ name: 'task', color: '1d76db' }],
+			body: null,
+			closedAt: null,
+			subIssues: [],
+			htmlUrl: 'https://github.com/mvox-dev/mvox-app/issues/309'
+		});
 	});
 });

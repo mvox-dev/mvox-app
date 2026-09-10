@@ -51,6 +51,7 @@ interface GitHubIssue {
 	body: string | null;
 	pull_request?: unknown;
 	closed_at?: string | null;
+	html_url: string;
 }
 
 /** Extract the `rel="next"` URL from a GitHub `Link` response header, or null when absent. */
@@ -82,6 +83,7 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 		labels,
 		body: raw.body,
 		closedAt: raw.closed_at ?? null,
+		htmlUrl: raw.html_url,
 		subIssues: []
 	};
 }

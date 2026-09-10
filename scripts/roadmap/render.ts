@@ -45,6 +45,8 @@ export interface RoadmapIssue {
 	body: string | null;
 	/** ISO date-time the issue was (most recently) closed; null while open or never recorded. */
 	closedAt: string | null;
+	/** The issue's own GitHub page. Carried verbatim from the API's `html_url` — never assembled. */
+	htmlUrl: string;
 	/** Native GitHub sub-issues, already resolved by the fetch step. Empty = flat. */
 	subIssues?: RoadmapIssue[];
 }
@@ -81,6 +83,17 @@ export function displayTitle(issue: RoadmapIssue): string {
 	const slugline = frontmatter?.slugline;
 	if (typeof slugline === 'string' && slugline.length > 0) return slugline;
 	return issue.title;
+}
+
+/**
+ * The frontmatter `lead` (Estonian, one short line) when present and a
+ * non-empty string; null otherwise — ADDITIONAL to displayTitle, never a
+ * replacement. Same type-guard shape as displayTitle's slugline check.
+ */
+export function displayLead(issue: RoadmapIssue): string | null {
+	const frontmatter = parseFrontmatter(issue.body);
+	const lead = frontmatter?.lead;
+	return typeof lead === 'string' && lead.length > 0 ? lead : null;
 }
 
 /**
@@ -206,8 +219,10 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	if (rendered.has(issue.number)) return '';
 	rendered.add(issue.number);
 	const title = displayTitle(issue);
+	const lead = displayLead(issue);
 	const stateReasonAttr =
 		issue.stateReason != null ? ` data-state-reason="${escapeHtml(issue.stateReason)}"` : '';
+	const leadHtml = lead != null ? `<span class="issue-lead">${escapeHtml(lead)}</span>` : '';
 	const labelsHtml = issue.labels.map(renderLabel).join(' ');
 	const subIssues = issue.subIssues ?? [];
 	const childrenHtml = boardOrder(subIssues)
@@ -218,8 +233,11 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	const subIssuesHtml = childrenHtml ? `<ul class="sub-issues">${childrenHtml}</ul>` : '';
 	return (
 		`<article class="issue" data-issue="${issue.number}" data-state="${issue.state}"${stateReasonAttr}>` +
+		`<a class="issue-link" href="${escapeHtml(issue.htmlUrl)}">` +
 		`<span class="issue-number">#${issue.number}</span>` +
 		`<span class="issue-title">${escapeHtml(title)}</span>` +
+		`</a>` +
+		leadHtml +
 		`<span class="issue-labels">${labelsHtml}</span>` +
 		subIssuesHtml +
 		`</article>`
@@ -299,8 +317,10 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
 	.issue { display: block; border: 1px solid #ccc; border-radius: 0.5rem; padding: 0.75rem; margin: 0.5rem 0; }
 	.issue[data-state="closed"] { opacity: 0.6; }
+	.issue-link { text-decoration: underline; color: inherit; }
 	.issue-number { color: #666; margin-right: 0.5rem; }
 	.issue-title { font-weight: 600; }
+	.issue-lead { display: block; margin-top: 0.25rem; color: #444; }
 	.issue-labels { display: block; margin-top: 0.25rem; }
 	.label { display: inline-block; font-size: 0.75rem; background: #eee; border: 1px solid rgba(0, 0, 0, 0.15); border-radius: 0.75rem; padding: 0.1rem 0.5rem; margin-right: 0.25rem; }
 	.board-group h2 { font-size: 1rem; color: #666; margin: 1.5rem 0 0.5rem; }
@@ -311,6 +331,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 <header>
 	<h1>mvox roadmap</h1>
 	<p class="meta">Generated at <time datetime="${escapeHtml(generatedAt)}">${escapeHtml(formatGeneratedAt(generatedAt))}</time></p>
+	<a href="https://mvox.eu">mvox</a>
 </header>
 <main>
 ${groupsHtml}

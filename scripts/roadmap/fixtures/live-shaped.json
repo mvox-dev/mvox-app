@@ -11,6 +11,7 @@
 		],
 		"body": "## The design\n\nA page on mvox.eu that reads this board live. No generated data file, no build step in the app.",
 		"closedAt": null,
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/305",
 		"subIssues": []
 	},
 	{
@@ -21,6 +22,7 @@
 		"labels": [{ "name": "epic", "color": "6f42c1" }],
 		"body": "## Tasks\n\n- [ ] slice one\n- [ ] slice two",
 		"closedAt": null,
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/289",
 		"subIssues": []
 	},
 	{
@@ -32,8 +34,9 @@
 			{ "name": "task", "color": "1d76db" },
 			{ "name": "ready", "color": "0e8a16" }
 		],
-		"body": null,
+		"body": "---\nlead: Näitab iga eksemplari laenutuse seisu otse noodi lehel.\n---\n\nBody prose the board never renders.",
 		"closedAt": null,
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/301",
 		"subIssues": []
 	},
 	{
@@ -47,6 +50,7 @@
 		],
 		"body": "Part of #289",
 		"closedAt": null,
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/298",
 		"subIssues": []
 	},
 	{
@@ -57,6 +61,7 @@
 		"labels": [{ "name": "bug", "color": "d73a4a" }],
 		"body": "Steps to reproduce: open /login with an expired cookie.",
 		"closedAt": null,
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/262",
 		"subIssues": []
 	},
 	{
@@ -70,6 +75,7 @@
 		],
 		"body": null,
 		"closedAt": null,
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/210",
 		"subIssues": []
 	},
 	{
@@ -80,6 +86,7 @@
 		"labels": [{ "name": "epic", "color": "6f42c1" }],
 		"body": "Superseded by #305.",
 		"closedAt": "2026-08-15T09:30:00Z",
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/291",
 		"subIssues": []
 	},
 	{
@@ -90,6 +97,7 @@
 		"labels": [{ "name": "task", "color": "1d76db" }],
 		"body": "Done.",
 		"closedAt": "2026-09-08T14:11:00Z",
+		"htmlUrl": "https://github.com/mvox-dev/mvox-app/issues/304",
 		"subIssues": []
 	}
 ]
