@@ -304,6 +304,26 @@ roots). **When a module states a pagination discipline in its header, check ever
 against that discipline, not just the one the comment discusses.** A stated discipline reads as
 covering the file.
 
+## [PATTERN-QUALIFICATION-TEST] 2026-09-10, #317 — what makes X a qualification of Y, not a companion
+
+The #317 scheme obliges every base rule to carry a `Qualifications:` line naming **every** rule that
+bounds it, so the completeness question ("is any pair missing?") arrives at every review in this epic.
+The discriminator that settled it: **quote the base whole and ask whether a reader is left confident in
+something false.** Quoting ER-5 whole ("CREATE auto-grants the creator `_owner`") without ER-9 leaves
+the reader believing the creator stays owner — false, a later lower grant silently demotes. Quoting
+ER-11 whole ("changing `_sharing` requires `_owner`") without ER-17 hides the service-key bypass. Both
+correctly demand the line.
+
+ER-7 versus ER-6 is the **non**-finding the test also decides: ER-7 bounds ER-6 to the direct layer, but
+ER-6's own sentence already says "direct", so quoting it whole misleads nobody — companion distinction,
+no `Qualifications:` line owed. Do not raise it in a later round. **The wrong test is "does X narrow Y's
+subject matter" — that catches every adjacent rule and would turn the scheme into noise.**
+
+Also settled this pass, so it is not re-litigated: the §-section **prose** keeps its em-dash clauses
+(§5:132 still holds the systemUser bypass inline). That is the PO's originals-untouched ruling
+(15:27Z, "Originals untouched is right"), not a missed split — the identified blocks are the citable
+layer. Flagging the prose would YELLOW a PO decision.
+
 ## PO standing rules — pointer only
 
 **The binding text is the "PO standing rules" section of `architecture-decisions.md`. Read it there;
