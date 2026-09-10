@@ -26,6 +26,13 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { labelTextColor } from './label-color';
+
+/** One label as GitHub reports it: name plus its colour (hex, no leading '#'), or null when absent. */
+export interface RoadmapLabel {
+	name: string;
+	color: string | null;
+}
 
 /** Normalized issue shape the Action feeds the renderer (GitHub API → this). */
 export interface RoadmapIssue {
@@ -34,8 +41,10 @@ export interface RoadmapIssue {
 	state: 'open' | 'closed';
 	/** GitHub state_reason for closed issues; null for open. */
 	stateReason: 'completed' | 'not_planned' | null;
-	labels: string[];
+	labels: RoadmapLabel[];
 	body: string | null;
+	/** ISO date-time the issue was (most recently) closed; null while open or never recorded. */
+	closedAt: string | null;
 	/** Native GitHub sub-issues, already resolved by the fetch step. Empty = flat. */
 	subIssues?: RoadmapIssue[];
 }
@@ -97,15 +106,50 @@ function escapeHtml(value: string): string {
 	return value.replace(/[&<>]/g, (ch) => HTML_ESCAPES[ch] ?? ch);
 }
 
-/** Open issues first (current work), then closed — stable within each group. */
+/**
+ * A closed issue's sort key: its closedAt as epoch millis, or -Infinity when
+ * absent/unparseable — sorting descending on this key puts "no closedAt"
+ * last, never first, per #307's explicit fallback.
+ */
+function closedAtRank(issue: RoadmapIssue): number {
+	if (!issue.closedAt) return -Infinity;
+	const parsed = Date.parse(issue.closedAt);
+	return Number.isNaN(parsed) ? -Infinity : parsed;
+}
+
+/**
+ * Open issues first (current work, by issue number ascending), then closed
+ * (most recently finished first, missing closedAt sorts last). One function
+ * for both the top-level board and every nested sub-issue walk (renderIssue
+ * calls this same function on its own children) — there is no second
+ * ordering path to keep in sync.
+ */
 function boardOrder(issues: RoadmapIssue[]): RoadmapIssue[] {
-	const open = issues.filter((i) => i.state === 'open');
-	const closed = issues.filter((i) => i.state === 'closed');
+	const open = issues.filter((i) => i.state === 'open').sort((a, b) => a.number - b.number);
+	const closed = issues.filter((i) => i.state === 'closed').sort((a, b) => closedAtRank(b) - closedAtRank(a));
 	return [...open, ...closed];
 }
 
-function renderLabel(label: string): string {
-	return `<span class="label">${escapeHtml(label)}</span>`;
+const NO_COLOR_HEX_RE = /^[0-9a-fA-F]{6}$/;
+
+/**
+ * One label chip. Background is the label's own colour (GitHub sends hex
+ * without the leading '#', prefixed here); text colour is derived from that
+ * colour's relative luminance (label-color.ts), not fixed, so both a very
+ * dark (`blocked` #b60205) and a near-white (`wontfix` #ffffff) chip stay
+ * readable. A label with no colour, or one that isn't valid 6-digit hex,
+ * falls back to the plain `.label` class — today's neutral grey chip. The
+ * hairline border lives on the `.label` class itself so every chip gets it,
+ * including the fallback and the near-white worst case.
+ */
+function renderLabel(label: RoadmapLabel): string {
+	const name = escapeHtml(label.name);
+	if (!label.color || !NO_COLOR_HEX_RE.test(label.color)) {
+		return `<span class="label">${name}</span>`;
+	}
+	const background = `#${label.color}`;
+	const text = labelTextColor(label.color);
+	return `<span class="label" style="background-color: ${background}; color: ${text};">${name}</span>`;
 }
 
 /**
@@ -178,8 +222,33 @@ const REFRESH_SCRIPT = (stamp: string) => `(function () {
 export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string {
 	const stamp = buildStamp(generatedAt);
 	const rendered = new Set<number>();
-	const entriesHtml = boardOrder(issues)
+	// boardOrder is the single ordering function — the same call the nested
+	// sub-issue walk in renderIssue uses on its own children — so splitting
+	// its output by state here to place the divider is not a second sort,
+	// just where the one ordered list happens to change state.
+	const ordered = boardOrder(issues);
+	const openHtml = ordered
+		.filter((issue) => issue.state === 'open')
 		.map((issue) => renderIssue(issue, rendered))
+		.filter((html) => html.length > 0)
+		.join('\n');
+	const closedHtml = ordered
+		.filter((issue) => issue.state === 'closed')
+		.map((issue) => renderIssue(issue, rendered))
+		.filter((html) => html.length > 0)
+		.join('\n');
+	// "Pooleli" / "Tehtud" are hardcoded Estonian literals by design: this
+	// page is a standalone node CLI build step, outside the SvelteKit app and
+	// its Paraglide i18n entirely (see this file's own doc comment) — do not
+	// route these through Paraglide, there is nothing here for it to plug
+	// into. Top-level only: renderIssue's own recursive walk over subIssues
+	// never calls this, so a closed child inside an open epic never spawns a
+	// heading of its own. An empty group (nothing open, or nothing closed)
+	// omits its heading rather than showing a caption over no entries.
+	const groupsHtml = [
+		openHtml.length > 0 ? `<section class="board-group"><h2>Pooleli</h2>\n${openHtml}\n</section>` : '',
+		closedHtml.length > 0 ? `<section class="board-group"><h2>Tehtud</h2>\n${closedHtml}\n</section>` : ''
+	]
 		.filter((html) => html.length > 0)
 		.join('\n');
 	return `<!doctype html>
@@ -195,7 +264,8 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	.issue-number { color: #666; margin-right: 0.5rem; }
 	.issue-title { font-weight: 600; }
 	.issue-labels { display: block; margin-top: 0.25rem; }
-	.label { display: inline-block; font-size: 0.75rem; background: #eee; border-radius: 0.75rem; padding: 0.1rem 0.5rem; margin-right: 0.25rem; }
+	.label { display: inline-block; font-size: 0.75rem; background: #eee; border: 1px solid rgba(0, 0, 0, 0.15); border-radius: 0.75rem; padding: 0.1rem 0.5rem; margin-right: 0.25rem; }
+	.board-group h2 { font-size: 1rem; color: #666; margin: 1.5rem 0 0.5rem; }
 	.sub-issues { list-style: none; margin: 0.5rem 0 0; padding-left: 1.5rem; }
 </style>
 </head>
@@ -205,7 +275,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	<p class="meta">Generated at <time datetime="${escapeHtml(generatedAt)}">${escapeHtml(generatedAt)}</time></p>
 </header>
 <main>
-${entriesHtml}
+${groupsHtml}
 </main>
 <script>
 ${REFRESH_SCRIPT(stamp)}

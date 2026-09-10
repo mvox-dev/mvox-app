@@ -61,4 +61,15 @@ describe('roadmap build CLI (integration)', () => {
 		expect(existsSync(cnamePath), `missing ${cnamePath}`).toBe(true);
 		expect(readFileSync(cnamePath, 'utf-8').trim()).toBe('docs.mvox.eu');
 	});
+
+	it('#307: the built page carries coloured chips and the Pooleli/Tehtud divider', () => {
+		// Wiring check: the colours/divider must reach the file the Action
+		// actually deploys, not just renderBoard's return value in a unit test.
+		const html = readFileSync(join(outDir, 'roadmap', 'index.html'), 'utf-8');
+		expect(html).toMatch(/background(?:-color)?:\s*#0e8a16/i); // the fixture's `ready` chip colour
+		const pooleli = html.indexOf('Pooleli');
+		const tehtud = html.indexOf('Tehtud');
+		expect(pooleli, 'Pooleli heading missing from the deployed page').toBeGreaterThan(-1);
+		expect(tehtud, 'Tehtud heading missing from the deployed page').toBeGreaterThan(pooleli);
+	});
 });

@@ -29,19 +29,32 @@ interface RawIssue {
 	number: number;
 	title: string;
 	state: string;
-	state_reason: null;
-	labels: { name: string }[];
+	state_reason: string | null;
+	labels: { name: string; color: string }[];
 	body: null;
+	closed_at: string | null;
 }
 
-function raw(number: number, labels: string[]): RawIssue {
+/** Live palette values (gh api repos/mvox-dev/mvox-app/labels, 2026-09-10). */
+const PALETTE: Record<string, string> = {
+	epic: '6f42c1',
+	task: '1d76db',
+	ready: '0e8a16',
+	bug: 'd73a4a',
+	blocked: 'b60205',
+	wontfix: 'ffffff'
+};
+
+function raw(number: number, labels: string[], overrides: Partial<RawIssue> = {}): RawIssue {
 	return {
 		number,
 		title: `Issue ${number}`,
 		state: 'open',
 		state_reason: null,
-		labels: labels.map((name) => ({ name })),
-		body: null
+		labels: labels.map((name) => ({ name, color: PALETTE[name] ?? 'cccccc' })),
+		body: null,
+		closed_at: null,
+		...overrides
 	};
 }
 
@@ -144,6 +157,52 @@ describe('fetchBoard — request shape', () => {
 		const subUrl = urls.find((u) => u.includes('/sub_issues')) ?? '';
 		expect(subUrl, 'no sub_issues request was made').not.toBe('');
 		expect(new URL(subUrl).searchParams.get('per_page')).toBe('100');
+	});
+});
+
+describe('fetchBoard → renderBoard — #307 colours and ordering ride the real pipeline', () => {
+	// Integration on purpose: unit specs can pass with the feature unwired.
+	// These drive the REST payload shape through the real fetchBoard into
+	// renderBoard, so label colours / closed_at must survive normalization.
+	it('carries label colours from the REST payload into the rendered chips', async () => {
+		const html = renderBoard(await board([raw(305, ['task']), raw(262, ['blocked'])]), GENERATED_AT);
+		const doc = parse(html);
+		const chip = (issueNumber: number, name: string): string => {
+			const el = Array.from(
+				doc.querySelectorAll(`[data-issue="${issueNumber}"] .label`)
+			).find((c) => c.textContent?.trim() === name);
+			expect(el, `no .label chip "${name}" under #${issueNumber}`).toBeDefined();
+			return el?.getAttribute('style') ?? '';
+		};
+		expect(chip(305, 'task')).toMatch(/background(?:-color)?:\s*#1d76db/i);
+		const blocked = chip(262, 'blocked');
+		expect(blocked).toMatch(/background(?:-color)?:\s*#b60205/i);
+		expect(blocked).toMatch(/(?<![\w-])color:\s*#(?:ffffff|fff)(?![0-9a-fA-F])/i);
+	});
+
+	it('orders open by number and closed by closed_at through the real fetch step, divided by Pooleli/Tehtud', async () => {
+		// API order deliberately wrong on both sides of the line.
+		const list = [
+			raw(305, ['task']),
+			raw(262, ['bug']),
+			raw(210, ['task', 'wontfix'], {
+				state: 'closed',
+				state_reason: 'not_planned',
+				closed_at: '2026-07-01T00:00:00Z'
+			}),
+			raw(304, ['task'], { state: 'closed', state_reason: 'completed', closed_at: '2026-09-08T00:00:00Z' })
+		];
+		const html = renderBoard(await board(list), GENERATED_AT);
+		const pos = (needle: string): number => {
+			const i = html.indexOf(needle);
+			expect(i, `${needle} missing from the page`).toBeGreaterThan(-1);
+			return i;
+		};
+		expect(pos('Pooleli')).toBeLessThan(pos('data-issue="262"'));
+		expect(pos('data-issue="262"')).toBeLessThan(pos('data-issue="305"'));
+		expect(pos('data-issue="305"')).toBeLessThan(pos('Tehtud'));
+		expect(pos('Tehtud')).toBeLessThan(pos('data-issue="304"'));
+		expect(pos('data-issue="304"')).toBeLessThan(pos('data-issue="210"'));
 	});
 });
 

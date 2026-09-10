@@ -4,8 +4,13 @@
 		"title": "[TASK] Roadmap board on mvox.eu, read live from this board's issues",
 		"state": "open",
 		"stateReason": null,
-		"labels": ["task", "ready", "in process"],
+		"labels": [
+			{ "name": "task", "color": "1d76db" },
+			{ "name": "ready", "color": "0e8a16" },
+			{ "name": "in process", "color": "95ea29" }
+		],
 		"body": "## The design\n\nA page on mvox.eu that reads this board live. No generated data file, no build step in the app.",
+		"closedAt": null,
 		"subIssues": []
 	},
 	{
@@ -13,8 +18,9 @@
 		"title": "[EPIC] Library lending 1.0",
 		"state": "open",
 		"stateReason": null,
-		"labels": ["epic"],
+		"labels": [{ "name": "epic", "color": "6f42c1" }],
 		"body": "## Tasks\n\n- [ ] slice one\n- [ ] slice two",
+		"closedAt": null,
 		"subIssues": []
 	},
 	{
@@ -22,8 +28,12 @@
 		"title": "[TASK] Score detail page shows lending state",
 		"state": "open",
 		"stateReason": null,
-		"labels": ["task", "ready"],
+		"labels": [
+			{ "name": "task", "color": "1d76db" },
+			{ "name": "ready", "color": "0e8a16" }
+		],
 		"body": null,
+		"closedAt": null,
 		"subIssues": []
 	},
 	{
@@ -31,8 +41,12 @@
 		"title": "[TASK] Frontmatter research spike",
 		"state": "open",
 		"stateReason": null,
-		"labels": ["task", "in research"],
+		"labels": [
+			{ "name": "task", "color": "1d76db" },
+			{ "name": "in research", "color": "ecde62" }
+		],
 		"body": "Part of #289",
+		"closedAt": null,
 		"subIssues": []
 	},
 	{
@@ -40,26 +54,9 @@
 		"title": "[BUG] Login redirect loops on expired session",
 		"state": "open",
 		"stateReason": null,
-		"labels": ["bug"],
+		"labels": [{ "name": "bug", "color": "d73a4a" }],
 		"body": "Steps to reproduce: open /login with an expired cookie.",
-		"subIssues": []
-	},
-	{
-		"number": 304,
-		"title": "[TASK] Seed polyphony with lending fixtures",
-		"state": "closed",
-		"stateReason": "completed",
-		"labels": ["task"],
-		"body": "Done.",
-		"subIssues": []
-	},
-	{
-		"number": 291,
-		"title": "[EPIC] Roadmap data file published at build time",
-		"state": "closed",
-		"stateReason": "not_planned",
-		"labels": ["epic"],
-		"body": "Superseded by #305.",
+		"closedAt": null,
 		"subIssues": []
 	},
 	{
@@ -67,8 +64,32 @@
 		"title": "[TASK] Legacy import spike",
 		"state": "closed",
 		"stateReason": "not_planned",
-		"labels": ["task", "wontfix"],
+		"labels": [
+			{ "name": "task", "color": "1d76db" },
+			{ "name": "wontfix", "color": "ffffff" }
+		],
 		"body": null,
+		"closedAt": null,
+		"subIssues": []
+	},
+	{
+		"number": 291,
+		"title": "[EPIC] Roadmap data file published at build time",
+		"state": "closed",
+		"stateReason": "not_planned",
+		"labels": [{ "name": "epic", "color": "6f42c1" }],
+		"body": "Superseded by #305.",
+		"closedAt": "2026-08-15T09:30:00Z",
+		"subIssues": []
+	},
+	{
+		"number": 304,
+		"title": "[TASK] Seed polyphony with lending fixtures",
+		"state": "closed",
+		"stateReason": "completed",
+		"labels": [{ "name": "task", "color": "1d76db" }],
+		"body": "Done.",
+		"closedAt": "2026-09-08T14:11:00Z",
 		"subIssues": []
 	}
 ]

@@ -13,6 +13,14 @@
  *   (plus labels outside that set, which must never crash the board).
  * - state_reason has real examples of both `completed` and `not_planned`.
  *
+ * #307 RED adds: labels carry {name, color} (hex without leading '#', the
+ * GitHub wire format) and closedAt (ISO date-time | null); chips render in
+ * the label's own colour with luminance-derived text colour; open group
+ * sorts by number ascending, closed group by closedAt most-recent-first
+ * (null last); an explicit Pooleli/Tehtud divider separates the top-level
+ * groups (hardcoded Estonian — this static page is outside Paraglide by
+ * design). Fixture colours are the LIVE palette (gh api, 2026-09-10).
+ *
  * (*MVOX:Tallis*)
  */
 import { describe, expect, it } from 'vitest';
@@ -22,12 +30,18 @@ import {
 	displayTitle,
 	parseFrontmatter,
 	renderBoard,
-	type RoadmapIssue
+	type RoadmapIssue,
+	type RoadmapLabel
 } from './render';
 
 const GENERATED_AT = '2026-09-10T12:34:56Z';
 
 const liveShaped: RoadmapIssue[] = liveShapedJson as RoadmapIssue[];
+
+/** A {name, color} label; colour is the GitHub hex WITHOUT the leading '#', or null. */
+function label(name: string, color: string | null = null): RoadmapLabel {
+	return { name, color };
+}
 
 function issue(overrides: Partial<RoadmapIssue> & Pick<RoadmapIssue, 'number' | 'title'>): RoadmapIssue {
 	return {
@@ -35,6 +49,7 @@ function issue(overrides: Partial<RoadmapIssue> & Pick<RoadmapIssue, 'number' | 
 		stateReason: null,
 		labels: [],
 		body: null,
+		closedAt: null,
 		subIssues: [],
 		...overrides
 	};
@@ -211,10 +226,262 @@ describe('renderBoard — labels', () => {
 
 	it('does not crash on labels outside the taxonomy', () => {
 		const html = renderBoard(
-			[issue({ number: 210, title: 'Legacy import spike', labels: ['task', 'wontfix', 'völlig-unbekannt'] })],
+			[
+				issue({
+					number: 210,
+					title: 'Legacy import spike',
+					labels: [label('task', '1d76db'), label('wontfix', 'ffffff'), label('völlig-unbekannt')]
+				})
+			],
 			GENERATED_AT
 		);
 		expect(parse(html).querySelector('[data-issue="210"]')).not.toBeNull();
+	});
+});
+
+/**
+ * The `.label` chip element for one label name under one issue's entry.
+ * Contract: every label renders as an element with class "label" whose text
+ * content is the label name.
+ */
+function chip(doc: Document, issueNumber: number, name: string): Element {
+	const found = Array.from(entry(doc, issueNumber).querySelectorAll('.label')).find(
+		(c) => c.textContent?.trim() === name
+	);
+	expect(found, `no .label chip "${name}" under #${issueNumber}`).toBeDefined();
+	return found as Element;
+}
+
+function styleOf(el: Element): string {
+	return el.getAttribute('style') ?? '';
+}
+
+// Text-colour value patterns: labelTextColor returns '#ffffff' / '#000000',
+// but accept the 3-digit shorthand too. `(?<![\w-])` keeps `background-color:`
+// from matching as `color:`.
+const LIGHT_TEXT = /(?<![\w-])color:\s*#(?:ffffff|fff)(?![0-9a-fA-F])/i;
+const DARK_TEXT = /(?<![\w-])color:\s*#(?:000000|000)(?![0-9a-fA-F])/i;
+
+describe('renderBoard — label chips carry their own colours (#307)', () => {
+	it('worst case blocked #b60205: chip background is the label colour, text derived light', () => {
+		const doc = parse(
+			renderBoard([issue({ number: 20, title: 'Blocked one', labels: [label('blocked', 'b60205')] })], GENERATED_AT)
+		);
+		const s = styleOf(chip(doc, 20, 'blocked'));
+		expect(s).toMatch(/background(?:-color)?:\s*#b60205/i);
+		expect(s).toMatch(LIGHT_TEXT);
+	});
+
+	it('worst case wontfix #ffffff: white background, text derived dark', () => {
+		const doc = parse(
+			renderBoard([issue({ number: 21, title: 'Wont fix', labels: [label('wontfix', 'ffffff')] })], GENERATED_AT)
+		);
+		const s = styleOf(chip(doc, 21, 'wontfix'));
+		expect(s).toMatch(/background(?:-color)?:\s*#ffffff/i);
+		expect(s).toMatch(DARK_TEXT);
+	});
+
+	it('chips carry a hairline border, so the #ffffff chip reads as a chip on the white page', () => {
+		const html = renderBoard(
+			[issue({ number: 21, title: 'Wont fix', labels: [label('wontfix', 'ffffff')] })],
+			GENERATED_AT
+		);
+		const classBorder = /\.label\s*\{[^}]*border/.test(html);
+		const inlineBorder = /border/i.test(styleOf(chip(parse(html), 21, 'wontfix')));
+		expect(
+			classBorder || inlineBorder,
+			'no border on chips — a near-white chip is invisible against the page'
+		).toBe(true);
+	});
+
+	it('a label with no colour falls back to the neutral grey chip, not a throw', () => {
+		const html = renderBoard(
+			[issue({ number: 22, title: 'Stray', labels: [label('völlig-unbekannt')] })],
+			GENERATED_AT
+		);
+		const c = chip(parse(html), 22, 'völlig-unbekannt');
+		const s = styleOf(c);
+		const inlineNeutral = /background(?:-color)?:\s*#eee/i.test(s);
+		const classNeutral = !/background/i.test(s) && /\.label\s*\{[^}]*background:\s*#eee/.test(html);
+		expect(
+			inlineNeutral || classNeutral,
+			'colourless label must land on the neutral #eee chip (inline or via the .label class default)'
+		).toBe(true);
+	});
+
+	it('fixture chips render in the live palette colours', () => {
+		const doc = parse(renderBoard(liveShaped, GENERATED_AT));
+		expect(styleOf(chip(doc, 305, 'ready'))).toMatch(/background(?:-color)?:\s*#0e8a16/i);
+		expect(styleOf(chip(doc, 289, 'epic'))).toMatch(/background(?:-color)?:\s*#6f42c1/i);
+	});
+});
+
+describe('renderBoard — ordering inside the groups (#307)', () => {
+	const pos = (html: string, needle: string): number => {
+		const i = html.indexOf(needle);
+		expect(i, `${needle} missing from the page`).toBeGreaterThan(-1);
+		return i;
+	};
+	const issuePos = (html: string, n: number): number => pos(html, `data-issue="${n}"`);
+
+	it('orders the open group by issue number, ascending', () => {
+		// Fixture file order is 305, 289, 301, 298, 262 — must render 262 … 305.
+		const html = renderBoard(liveShaped, GENERATED_AT);
+		const positions = [262, 289, 298, 301, 305].map((n) => issuePos(html, n));
+		expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+	});
+
+	it('orders the closed group by closedAt, most recently finished first', () => {
+		// Fixture file order is 210 (no closedAt), 291 (Aug 15), 304 (Sep 8) —
+		// must render 304, 291, then 210 last (missing date sorts last).
+		const html = renderBoard(liveShaped, GENERATED_AT);
+		expect(issuePos(html, 304)).toBeLessThan(issuePos(html, 291));
+		expect(issuePos(html, 291)).toBeLessThan(issuePos(html, 210));
+	});
+
+	it('a closed issue with no closedAt sorts last — not at the top, not a crash', () => {
+		const board = [
+			issue({ number: 41, title: 'Done, undated', state: 'closed', stateReason: 'completed' }),
+			issue({
+				number: 42,
+				title: 'Done recently',
+				state: 'closed',
+				stateReason: 'completed',
+				closedAt: '2026-09-09T08:00:00Z'
+			}),
+			issue({
+				number: 43,
+				title: 'Done long ago',
+				state: 'closed',
+				stateReason: 'completed',
+				closedAt: '2026-07-01T08:00:00Z'
+			})
+		];
+		const html = renderBoard(board, GENERATED_AT);
+		expect(issuePos(html, 42)).toBeLessThan(issuePos(html, 43));
+		expect(issuePos(html, 43)).toBeLessThan(issuePos(html, 41));
+	});
+});
+
+describe('renderBoard — the line: Pooleli / Tehtud divider (#307)', () => {
+	// Hardcoded Estonian literals by design: this static page is outside
+	// Paraglide (a node CLI, not the SvelteKit app) — not an i18n violation.
+	const pos = (html: string, needle: string): number => {
+		const i = html.indexOf(needle);
+		expect(i, `${needle} missing from the page`).toBeGreaterThan(-1);
+		return i;
+	};
+
+	it('separates the groups: Pooleli heads the open group, Tehtud sits between the groups', () => {
+		const html = renderBoard(liveShaped, GENERATED_AT);
+		const openPositions = liveShaped
+			.filter((i) => i.state === 'open')
+			.map((i) => pos(html, `data-issue="${i.number}"`));
+		const closedPositions = liveShaped
+			.filter((i) => i.state === 'closed')
+			.map((i) => pos(html, `data-issue="${i.number}"`));
+		const pooleli = pos(html, 'Pooleli');
+		const tehtud = pos(html, 'Tehtud');
+		expect(pooleli).toBeLessThan(Math.min(...openPositions));
+		expect(Math.max(...openPositions)).toBeLessThan(tehtud);
+		expect(tehtud).toBeLessThan(Math.min(...closedPositions));
+	});
+
+	it('omits the Tehtud heading when nothing is closed', () => {
+		const html = renderBoard([issue({ number: 1, title: 'Only open work' })], GENERATED_AT);
+		expect(html).toContain('Pooleli');
+		expect(html).not.toContain('Tehtud');
+	});
+
+	it('omits the Pooleli heading when nothing is open', () => {
+		const html = renderBoard(
+			[
+				issue({
+					number: 2,
+					title: 'Everything done',
+					state: 'closed',
+					stateReason: 'completed',
+					closedAt: '2026-09-01T00:00:00Z'
+				})
+			],
+			GENERATED_AT
+		);
+		expect(html).toContain('Tehtud');
+		expect(html).not.toContain('Pooleli');
+	});
+
+	it('is top-level only: a closed sub-issue inside an epic spawns no headings inside the epic', () => {
+		const epic = issue({
+			number: 289,
+			title: '[EPIC] Library lending 1.0',
+			labels: [label('epic', '6f42c1')],
+			subIssues: [
+				issue({ number: 290, title: 'Open child', labels: [label('task', '1d76db')] }),
+				issue({
+					number: 292,
+					title: 'Closed child',
+					state: 'closed',
+					stateReason: 'completed',
+					closedAt: '2026-09-01T00:00:00Z',
+					labels: [label('task', '1d76db')]
+				})
+			]
+		});
+		const html = renderBoard([epic], GENERATED_AT);
+		// The board's top level has only the open epic — a closed CHILD must not
+		// produce a Tehtud heading anywhere, and Pooleli appears exactly once.
+		expect(html).not.toContain('Tehtud');
+		expect(html.split('Pooleli').length - 1).toBe(1);
+	});
+});
+
+describe('renderBoard — sub-issues inherit ordering and chips (#307)', () => {
+	// Children arrive out of order on purpose: open 297 before open 290,
+	// old-closed 292 before newly-closed 294.
+	const epic = issue({
+		number: 289,
+		title: '[EPIC] Library lending 1.0',
+		labels: [label('epic', '6f42c1')],
+		subIssues: [
+			issue({ number: 297, title: 'Child three', labels: [label('task', '1d76db')] }),
+			issue({
+				number: 292,
+				title: 'Child closed long ago',
+				state: 'closed',
+				stateReason: 'completed',
+				closedAt: '2026-08-01T00:00:00Z',
+				labels: [label('task', '1d76db')]
+			}),
+			issue({ number: 290, title: 'Child one', labels: [label('ready', '0e8a16')] }),
+			issue({
+				number: 294,
+				title: 'Child closed recently',
+				state: 'closed',
+				stateReason: 'completed',
+				closedAt: '2026-09-05T00:00:00Z',
+				labels: [label('blocked', 'b60205')]
+			})
+		]
+	});
+
+	it('orders children like the top level: open by number ascending, then closed by closedAt descending', () => {
+		const html = renderBoard([epic], GENERATED_AT);
+		const p = (n: number): number => {
+			const i = html.indexOf(`data-issue="${n}"`);
+			expect(i, `data-issue="${n}" missing`).toBeGreaterThan(-1);
+			return i;
+		};
+		expect(p(290)).toBeLessThan(p(297));
+		expect(p(297)).toBeLessThan(p(294));
+		expect(p(294)).toBeLessThan(p(292));
+	});
+
+	it('renders coloured chips on children through the same path', () => {
+		const doc = parse(renderBoard([epic], GENERATED_AT));
+		expect(styleOf(chip(doc, 290, 'ready'))).toMatch(/background(?:-color)?:\s*#0e8a16/i);
+		const blocked = styleOf(chip(doc, 294, 'blocked'));
+		expect(blocked).toMatch(/background(?:-color)?:\s*#b60205/i);
+		expect(blocked).toMatch(LIGHT_TEXT);
 	});
 });
 
@@ -222,7 +489,7 @@ describe('renderBoard — frontmatter on the page', () => {
 	const decorated = issue({
 		number: 301,
 		title: 'Score detail page shows lending state',
-		labels: ['task', 'ready'],
+		labels: [label('task', '1d76db'), label('ready', '0e8a16')],
 		body: '---\nslugline: Laenutuse seis noodi lehel\ninternal_note: LEAK-MARKER-VALUE\n---\n\nBODY-MARKER-DO-NOT-RENDER paragraph.'
 	});
 
@@ -279,15 +546,16 @@ describe('renderBoard — sub-issues', () => {
 	const epicWithChildren = issue({
 		number: 289,
 		title: '[EPIC] Library lending 1.0',
-		labels: ['epic'],
+		labels: [label('epic', '6f42c1')],
 		subIssues: [
-			issue({ number: 290, title: 'Lending slice one', labels: ['task', 'ready'] }),
+			issue({ number: 290, title: 'Lending slice one', labels: [label('task', '1d76db'), label('ready', '0e8a16')] }),
 			issue({
 				number: 292,
 				title: 'Lending slice two',
-				labels: ['task'],
+				labels: [label('task', '1d76db')],
 				state: 'closed',
-				stateReason: 'completed'
+				stateReason: 'completed',
+				closedAt: '2026-09-01T00:00:00Z'
 			})
 		]
 	});

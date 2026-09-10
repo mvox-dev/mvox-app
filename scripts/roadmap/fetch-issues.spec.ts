@@ -33,19 +33,29 @@ describe('parseNextLink', () => {
 });
 
 describe('normalizeIssue', () => {
-	it('maps GitHub REST label objects to plain label-name strings', () => {
+	// #307: labels carry name AND colour. GitHub reports the colour as a hex
+	// string WITHOUT the leading '#' ("The hexadecimal color code for the
+	// label, without the leading #") — normalize stores it exactly as
+	// reported; '#' is prepended at render time only.
+	it('maps GitHub REST label objects to name+colour pairs, hex kept without a leading #', () => {
 		const result = normalizeIssue({
 			number: 305,
 			title: 'Roadmap board',
 			state: 'open',
 			state_reason: null,
-			labels: [{ name: 'task' }, { name: 'ready' }],
+			labels: [
+				{ name: 'task', color: '1d76db' },
+				{ name: 'ready', color: '0e8a16' }
+			],
 			body: null
 		});
-		expect(result.labels).toEqual(['task', 'ready']);
+		expect(result.labels).toEqual([
+			{ name: 'task', color: '1d76db' },
+			{ name: 'ready', color: '0e8a16' }
+		]);
 	});
 
-	it('accepts bare-string labels too', () => {
+	it('accepts bare-string labels too — no colour available, so color is null', () => {
 		const result = normalizeIssue({
 			number: 305,
 			title: 'Roadmap board',
@@ -54,7 +64,45 @@ describe('normalizeIssue', () => {
 			labels: ['task', 'ready'],
 			body: null
 		});
-		expect(result.labels).toEqual(['task', 'ready']);
+		expect(result.labels).toEqual([
+			{ name: 'task', color: null },
+			{ name: 'ready', color: null }
+		]);
+	});
+
+	it('normalizes a label object arriving without a colour to color: null, never a throw', () => {
+		const result = normalizeIssue({
+			number: 306,
+			title: 'Colourless label',
+			state: 'open',
+			state_reason: null,
+			labels: [{ name: 'völlig-unbekannt' }],
+			body: null
+		});
+		expect(result.labels).toEqual([{ name: 'völlig-unbekannt', color: null }]);
+	});
+
+	// #307: done-by-date ordering needs closed_at carried onto RoadmapIssue.
+	// Live-probed 2026-09-07 on issue #282: a reopened-then-closed issue's
+	// closed_at is the LATEST close — no special case needed beyond null.
+	it('carries closed_at through as closedAt', () => {
+		const result = normalizeIssue({
+			number: 282,
+			title: 'Reopened then closed again',
+			state: 'closed',
+			state_reason: 'completed',
+			labels: [],
+			body: null,
+			closed_at: '2026-09-07T16:26:44Z'
+		});
+		expect(result.closedAt).toBe('2026-09-07T16:26:44Z');
+	});
+
+	it('normalizes a missing or null closed_at to closedAt: null', () => {
+		expect(normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null }).closedAt).toBeNull();
+		expect(
+			normalizeIssue({ number: 1, title: 't', state: 'open', labels: [], body: null, closed_at: null }).closedAt
+		).toBeNull();
 	});
 
 	it('normalizes state to the open|closed union regardless of API casing', () => {

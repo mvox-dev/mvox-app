@@ -29,7 +29,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { RoadmapIssue } from './render';
+import type { RoadmapIssue, RoadmapLabel } from './render';
 
 const API_BASE = 'https://api.github.com';
 const DEFAULT_REPO = 'mvox-dev/mvox-app';
@@ -39,6 +39,7 @@ const MAX_PAGES = 50;
 
 interface GitHubLabel {
 	name?: string;
+	color?: string;
 }
 
 interface GitHubIssue {
@@ -49,6 +50,7 @@ interface GitHubIssue {
 	labels: (string | GitHubLabel)[];
 	body: string | null;
 	pull_request?: unknown;
+	closed_at?: string | null;
 }
 
 /** Extract the `rel="next"` URL from a GitHub `Link` response header, or null when absent. */
@@ -66,7 +68,12 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 	const state = raw.state === 'closed' ? 'closed' : 'open';
 	const stateReason =
 		raw.state_reason === 'completed' || raw.state_reason === 'not_planned' ? raw.state_reason : null;
-	const labels = raw.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((l) => l.length > 0);
+	// GitHub reports label colour as hex WITHOUT the leading '#'; kept exactly
+	// as reported here, '#' is prepended at render time only (label-color.ts /
+	// render.ts's renderLabel).
+	const labels: RoadmapLabel[] = raw.labels
+		.map((l) => (typeof l === 'string' ? { name: l, color: null } : { name: l.name ?? '', color: l.color ?? null }))
+		.filter((l): l is RoadmapLabel => l.name.length > 0);
 	return {
 		number: raw.number,
 		title: raw.title,
@@ -74,6 +81,7 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 		stateReason,
 		labels,
 		body: raw.body,
+		closedAt: raw.closed_at ?? null,
 		subIssues: []
 	};
 }
@@ -146,7 +154,7 @@ export async function fetchBoard(
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();
 	for (const issue of issues) {
-		if (issue.labels.includes('epic')) {
+		if (issue.labels.some((l) => l.name === 'epic')) {
 			const fetched = await fetchSubIssues(repo, token, issue.number, fetchImpl);
 			// Nest the object from the top-level list, not the sub_issues copy of it.
 			// The copy is a distinct object whose own subIssues stay empty forever, so
