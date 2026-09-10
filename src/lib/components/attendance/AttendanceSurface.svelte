@@ -200,7 +200,10 @@
 	class="mt-3 flex flex-col gap-2 rounded-lg border border-ink-4 bg-paper p-3"
 >
 	<div class="flex items-center justify-between">
-		<span class="truncate font-display text-sm text-ink">{item.name}</span>
+		<!-- #290 — no font-display here: this is the app's smallest and only truncated
+		     rendering of user-supplied text in the display face, and the display face
+		     is for identity, not information. -->
+		<span class="truncate text-sm text-ink">{item.name}</span>
 		<button
 			bind:this={closeButtonEl}
 			type="button"
