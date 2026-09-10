@@ -1,0 +1,114 @@
+{
+ "success": true,
+ "failedAgents": [],
+ "results": {
+  "verify-307-module-shapes": {
+   "success": true,
+   "summary": "Repo guard passed (origin=mvox-app.git). HEAD is 295cfd9; last commit touching scripts/roadmap/ or the Action is still d1b9adb — the two commits the task cites (05554ff, b79954c) do not exist anywhere in this repo (local or on GitHub, checked via `gh api commits/<sha>` -> 422 for both) and do not exist on any other branch/worktree on this machine. So 'nesting/cycle rework' and 'per_page' changes described as landed are NOT present; the file content below IS what's actually at HEAD right now, and it matches exactly what PO Gama already verified 'at d1b9adb' in the #307 issue body itself. Flagging this as the one hazard finding; all 7 substantive answers follow from the real current code.",
+   "findings": [
+    {
+     "claim": "Two commits (05554ff nesting/cycle rework, b79954c per_page) landed after d1b9adb and must be re-verified at HEAD.",
+     "verdict": "REFUTED",
+     "evidence": "`git rev-parse HEAD` = 295cfd9 (feat #302). `git log --oneline --all | grep -E '05554ff|b79954c'` returns nothing. `gh api repos/mvox-dev/mvox-app/commits/05554ff` and `.../b79954c` both return HTTP 422 'No commit found for SHA'. No other mvox-app checkout/worktree exists on the filesystem (`git worktree list` shows only /home/ai-teams/workspace-app; a filesystem-wide find for other mvox-app dirs found none). `git log --oneline -1 -- scripts/roadmap/ .github/workflows/roadmap.yml` = d1b9adb, the same commit the #307 issue body cites as its own verification point.",
+     "implication": "The nesting/cycle-rework and per_page logic described below is the SAME code the issue's own 'What is there now, verified at d1b9adb' section already describes — nothing has changed since. If those two commits are real, they exist only in another agent's uncommitted working state or a not-yet-pushed location this sweep could not find; report this back before trusting the premise."
+    },
+    {
+     "claim": "GitHubLabel/GitHubIssue interfaces omit label color and closed_at; normalizeIssue drops both; the fetch URL needs no extra params to get them from GitHub.",
+     "verdict": "CONFIRMED",
+     "evidence": "scripts/roadmap/fetch-issues.ts:40-42 `interface GitHubLabel { name?: string; }` — no `color` field. Lines 44-52 `interface GitHubIssue { number; title; state; state_reason?; labels; body; pull_request?; }` — no `closed_at` field. `normalizeIssue` (lines 65-79) returns `{ number, title, state, stateReason, labels, body, subIssues: [] }` where `labels` (line 69) is mapped to bare name strings only — color is never read even from the raw payload. Fetch URL built at line 98: `${API_BASE}/repos/${repo}/issues?state=all&per_page=${PER_PAGE}` — GitHub's `GET /repos/{owner}/{repo}/issues` REST endpoint returns full label objects (`{name, color, ...}`) and `closed_at` on every issue by default, with no extra query params required to include them — the omission is purely in the TypeScript interfaces/normalizeIssue, not the wire request.",
+     "implication": "Fixtures for #307 need `labels: [{name, color}]` (not bare strings) and a `closed_at` field per issue to exercise the new fetch/normalize behavior; the live API already supplies both today."
+    },
+    {
+     "claim": "RoadmapIssue in render.ts has no color/closed_at fields today.",
+     "verdict": "CONFIRMED",
+     "evidence": "render.ts:31-41 — `export interface RoadmapIssue { number: number; title: string; state: 'open'|'closed'; stateReason: 'completed'|'not_planned'|null; labels: string[]; body: string | null; subIssues?: RoadmapIssue[]; }`. `labels` is `string[]` (plain names), no per-label object; no `closed_at` property anywhere in the type."
+    },
+    {
+     "claim": "boardOrder only splits/concatenates open then closed with no sort; no divider exists; closed-dim is opacity 0.6.",
+     "verdict": "CONFIRMED",
+     "evidence": "render.ts:101-105 `function boardOrder(issues) { const open = issues.filter(i => i.state === 'open'); const closed = issues.filter(i => i.state === 'closed'); return [...open, ...closed]; }` — stable filter, no `.sort()` call anywhere in the file (confirmed by full-file read). renderBoard (render.ts:178-216) builds `entriesHtml` at lines 181-184 by mapping `boardOrder(issues)` straight into one joined string with `.join('\\n')` — no separator/divider element between the open and closed runs. Closed-dim CSS: render.ts:194 `.issue[data-state=\"closed\"] { opacity: 0.6; }`. A divider/heading would insert into entriesHtml assembly right at the open/closed boundary (between the mapped open items and closed items, i.e. inside renderBoard before line 181's single flat map, which would need to become two separate mapped groups joined with divider markup in between)."
+    },
+    {
+     "claim": "Chips render via renderLabel with fixed grey background; a per-chip inline style is the natural attachment point.",
+     "verdict": "CONFIRMED",
+     "evidence": "render.ts:107-109 `function renderLabel(label) { return \\`<span class=\"label\">${escapeHtml(label)}</span>\\`; }` — takes only the label string (name), no color argument today since RoadmapIssue.labels is string[]. CSS at render.ts:198 `.label { display:inline-block; font-size:0.75rem; background:#eee; border-radius:0.75rem; padding:0.1rem 0.5rem; margin-right:0.25rem; }` — one fixed grey background/no text-color override for all labels. Adding per-chip background+luminance-derived text color would attach as a `style=\"...\"` attribute built inside renderLabel (line 108), since renderLabel would need to accept the label's color alongside its name once labels stop being bare strings."
+    },
+    {
+     "claim": "Sub-issues render through the exact same boardOrder + renderIssue + renderLabel code path as top-level issues — the ordering/chip rules apply once, not twice.",
+     "verdict": "CONFIRMED",
+     "evidence": "render.ts:123-145 `renderIssue` recurses on its own children at line 131: `const childrenHtml = boardOrder(subIssues).map((sub) => renderIssue(sub, rendered))...` — same `boardOrder` function, same `renderIssue` function (hence same `renderLabel` calls inside it) used for both the top-level walk (renderBoard line 181-182: `boardOrder(issues).map((issue) => renderIssue(issue, rendered))`) and the nested walk. One code change to boardOrder/renderLabel covers both levels automatically; no duplicated logic to update in two places."
+    },
+    {
+     "claim": "Styling is an inline <style> block in the document head with no CSP blocking inline styles.",
+     "verdict": "CONFIRMED",
+     "evidence": "render.ts:185-201 — the full <head> is `<meta charset>`, `<meta viewport>`, `<title>mvox roadmap</title>`, then a plain inline `<style>...</style>` block (lines 191-200) with hardcoded CSS text, no `<link>` to an external stylesheet. `grep -rn 'Content-Security-Policy|CSP' scripts/roadmap/ .github/workflows/roadmap.yml` returns nothing — no CSP meta tag, no CSP header set anywhere in the render code or the GitHub Pages workflow (.github/workflows/roadmap.yml, which only sets `permissions:`/`concurrency:`, no security headers). An inline `style=\"...\"` attribute per chip is unblocked by anything in this pipeline."
+    },
+    {
+     "claim": "The static page has zero Estonian strings today; Pooleli/Tehtud headings would be new hardcoded literals in render.ts, with no i18n plumbing involved.",
+     "verdict": "CONFIRMED",
+     "evidence": "Every user-facing string in renderBoard (render.ts:178-216) is English: `<title>mvox roadmap</title>` (line 190), `<h1>mvox roadmap</h1>` (line 204), `Generated at` (line 205). No Paraglide import, no locale file, no i18n call anywhere in scripts/roadmap/ (grep across the directory for 'paraglide'/'i18n'/'m.' turns up nothing — this script builds outside the SvelteKit app entirely, per its own doc comment: 'pure function of the JSON... render.ts stays a pure function', node --import tsx CLI, not part of the app's Vite/Paraglide build). Any divider headings (e.g. 'Pooleli' / 'Tehtud') would be added as plain hardcoded template-literal strings directly inside renderBoard's entriesHtml assembly (around lines 178-184), the same way 'mvox roadmap' and 'Generated at' are today — no existing i18n mechanism to route through."
+    }
+   ]
+  },
+  "blast-307-specs-and-facts": {
+   "success": true,
+   "summary": "Blast sweep for #307 (repo guard passed: origin=github.com/mvox-dev/mvox-app.git). Baseline: 4 spec files / 57 tests all pass at HEAD (scripts/roadmap).\n\n(1) SPECS THAT FLIP OR EXTEND\nA. fetch-issues.spec.ts:36-46 'maps GitHub REST label objects to plain label-name strings' asserts result.labels toEqual ['task','ready']. FLIPS: once normalizeIssue preserves color, expected becomes [{name:'task'},{name:'ready'}].\nB. fetch-issues.spec.ts:48-58 'accepts bare-string labels too' same pattern, ['task','ready'] -> [{name:'task'},{name:'ready'}]. FLIPS.\nC. render.spec.ts label-array call sites needing string[] -> object[] conversion: line 214 (['task','wontfix','vollig-unbekannt'] - best home for the no-colour-fallback test), line 225 (['task','ready'] decorated issue), line 282 (['epic']), line 284 (['task','ready']), line 288 (['task']). The issue() helper default labels:[] at line 36 needs no change.\nD. render.spec.ts:201-210 'surfaces the live taxonomy labels on their issues' checks textContent contains label NAME strings - assertions themselves don't need editing (name text still renders) but depend on fixtures/live-shaped.json labels being upgraded to object shape.\nE. render.spec.ts:212-218 'does not crash on labels outside the taxonomy' only checks element exists. EXTEND this to assert the no-colour fallback chip (issue checklist item: 'falls back to today neutral chip rather than throwing') - nothing currently pins that.\nF. render.spec.ts:169-179 'renders open issues before closed ones' checks Math.max(openPos) < Math.min(closedPos) only. SURVIVES unmodified - within-group re-sort doesn't touch the group boundary.\nG. board.spec.ts:33,37,43 (RawIssue.labels:{name:string}[], raw() helper) is type-only; none of board.spec.ts's actual assertions (lines 85-171: number-identity, DOM nesting, and two explicit self-sorted [...ids].sort() comparisons at 126 and 171 that intentionally ignore render order) touch label content or ordering. SURVIVES as-is; raw()/RawIssue only need extending if new tests are added to cover color/order through the real fetchBoard (recommended).\nH. render.ts:107-109 renderLabel(label:string) plus the CSS rule at render.ts:198 (.label{background:#eee...}, one neutral style for every chip) is pinned by NOTHING beyond the bare class existing. Zero spec today asserts chip background, computed text colour, border, or the two named worst cases - these are NEW tests, not flips of existing ones.\nI. GAP: no existing spec anywhere pins in-group ORDER (open-ascending-by-number, or closed by date). The two [...ids].sort() calls in board.spec.ts explicitly normalize away order before comparing. render.spec.ts's only order test (F) checks group separation, never sibling order. So commission items 2 and 3 (done-by-date, open-by-number) have no spec to flip against - pure additions.\n\n(2) FIXTURE SHAPE CHANGES\n- fixtures/live-shaped.json (74 lines, 8 issues: 305,289,301,298,262 open / 304,291,210 closed): every labels array (currently string[], e.g. [\"task\",\"ready\",\"in process\"] on #305) becomes {name,color}[] using the real live palette (section 6). None of the 3 closed issues (304,291,210) carries closed_at today; needs adding with staggered timestamps so the date sort is actually exercised, plus ideally one case exercising the 'no closed_at sorts last' fallback. Fixture array order need not change since the renderer does the sorting, but the open numbers (305,289,301,298,262) are not currently ascending - post-fix render order becomes 262,289,298,301,305.\n- render.spec.ts inline issue() literals - same string->object label conversion, see (1)C; none of those need closed_at since all are state:'open' by default.\n- fetch-issues.spec.ts inline literals lines 42,54 - same conversion, see (1)A/B.\n- board.spec.ts raw() helper (line 37-46) takes labels:string[]; extending it to carry per-label colour is recommended so a board.spec.ts test can exercise colour propagation through the real fetchBoard, not strictly required by any existing assertion.\n\n(3) GITHUB API FACTS - verified against docs.github.com this turn, plus one live probe\n- GET /repos/{owner}/{repo}/issues: labels is required array of object; label.color is required string. Exact doc wording (from the Labels create/update pages, same object shape): 'The hexadecimal color code for the label, without the leading #.' Confirms hex WITHOUT leading #; code must prepend # before use as CSS colour.\n- closed_at: required, string or null, format date-time. Docs state null while open but do not narrate the reopen/close-again transition in prose.\n- Live-probed transition (issue #282 on mvox-dev/mvox-app, verified via gh api this turn): events closed 16:11:12 -> reopened 16:23:35 -> closed 16:26:44; issue.closed_at = 2026-09-07T16:26:44Z, i.e. reflects the MOST RECENT close, not the first and not null despite the intervening reopen. This is a live-probe fact, not a docs quote - the prose docs don't state it.\n- Labels-as-plain-strings: not seen anywhere in the current REST issues docs, schema only shows label objects; fetch-issues.ts's existing string|GitHubLabel union looks defensive against an undocumented/legacy shape, no vendor citation found for it actually occurring today.\n- Default sort of the plain /issues?state=all call (fetchAllIssues passes no sort/direction): docs confirm sort defaults to 'created', direction defaults to 'desc' - confirms the issue's claim that today's order is created-descending.\n\n(4) LUMINANCE/CONTRAST PRECEDENT\n- grep -rn 'luminance|contrast|WCAG' across the repo (excluding node_modules) returns only prose comments citing WCAG success-criteria numbers for a11y (2.1.1, 2.4.3, 2.4.4, 2.5.3, 4.1.2, 4.1.3) plus one STATIC hand-measured contrast note at src/app.css:31-39 ('CONTRAST FLOOR - 4.5:1, base-on-soft', fixed hex pairs measured at design time). Nothing in the repo computes relative luminance or a contrast ratio at runtime - green field for #307.\n- Recommended formula (WCAG 2.x relative luminance): for each sRGB channel c in [0,1], linearize as c<=0.03928 ? c/12.92 : ((c+0.055)/1.055)^2.4; L = 0.2126R + 0.7152G + 0.0722B. Verified by hand for the issue's two named worst cases: #b60205 (blocked) -> L~=0.100 -> dark, wants white text; #ffffff (wontfix) -> L=1.0 -> wants black text plus a border since it's white-on-white page background.\n- Threshold: GitHub's own label-text-colour algorithm is not published on docs.github.com (checked Issues and Labels REST pages; only the hex-format sentence exists, no contrast/threshold prose). [speculative]: recommend black text when L > 0.179 else white - that crossover solves (L+0.05)/(0+0.05)=4.5 (WCAG AA 4.5:1 against pure black text), so it is grounded in the WCAG math, not arbitrary, but the exact constant is not vendor-confirmed - validate it against the full palette in (6) before locking it in.\n\n(5) TWO WORST CASES - confirmed live\ngh api repos/mvox-dev/mvox-app/labels --paginate run this turn returned the full live palette (14 labels): blocked b60205, bug d73a4a, documentation 0075ca, duplicate cfd3d7, enhancement a2eeef, epic 6f42c1, in process 95ea29, in research ecde62, invalid ab96de, needs-po d93f0b, question d876e3, ready 0e8a16, task 1d76db, wontfix ffffff. Both issue-named worst cases confirmed exact: blocked=#b60205 (dark, wants white text) and wontfix=#ffffff (wants black text + border to stay visible on the page's white background). The issue body's other cited values (enhancement #a2eeef, in process #95ea29, in research #ecde62, epic #6f42c1, documentation #0075ca) all match live. Fixtures for #307 should use these 14 real values, not invented ones.\n\n(6) BASELINE\npnpm vitest run scripts/roadmap (PATH-prefixed with ~/.local/share/pnpm) at HEAD: 4 test files, 57 tests, all passed, 2.57s - the pre-#307 baseline to compare any post-change run against.",
+   "findings": [
+    {
+     "claim": "fetch-issues.spec.ts normalizeIssue tests assert labels as plain strings",
+     "verdict": "CONFIRMED",
+     "evidence": "scripts/roadmap/fetch-issues.spec.ts:36-46 and :48-58 both assert result.labels toEqual ['task','ready']",
+     "implication": "Both tests must be rewritten to expect [{name:'task'},{name:'ready'}] once normalizeIssue preserves colour."
+    },
+    {
+     "claim": "render.spec.ts has five call sites building labels as string[] that must become object[]",
+     "verdict": "CONFIRMED",
+     "evidence": "scripts/roadmap/render.spec.ts:214, 225, 282, 284, 288",
+     "implication": "Type-level flip across the file; line 214's 'unknown label' case is the natural home for the no-colour-fallback assertion."
+    },
+    {
+     "claim": "No existing spec pins chip background/text colour or the in-group ordering the issue commissions",
+     "verdict": "NEW-HAZARD",
+     "evidence": "grep of scripts/roadmap/*.spec.ts finds only bare-class/text-content label assertions (render.spec.ts:201-218) and only group-boundary or self-sorted order checks (render.spec.ts:169-179, board.spec.ts:126,171)",
+     "implication": "Items 1 (colour contrast), 2 (done-by-date) and 3 (open-by-number) of #307 need wholly new tests, not just edits to existing ones."
+    },
+    {
+     "claim": "GitHub returns label color as hex without a leading #, and closed_at as string|null date-time",
+     "verdict": "CONFIRMED",
+     "evidence": "docs.github.com REST Labels docs: 'The hexadecimal color code for the label, without the leading #.'; REST Issues response schema: closed_at required, string or null, format: date-time",
+     "implication": "normalizeIssue and fixtures must store raw hex (no #) and prepend # only at render time."
+    },
+    {
+     "claim": "closed_at on a reopened-then-closed issue reflects the most recent close, not null and not the original close",
+     "verdict": "CONFIRMED",
+     "evidence": "Live probe this turn: gh api repos/mvox-dev/mvox-app/issues/282 and .../282/events - events closed 16:11:12 -> reopened 16:23:35 -> closed 16:26:44; issue.closed_at = 2026-09-07T16:26:44Z",
+     "implication": "The 'no closed_at sorts last' fallback only needs to cover issues never closed; a reopen cycle does not produce a null/stale value to worry about."
+    },
+    {
+     "claim": "No luminance/contrast computation exists anywhere in the repo today",
+     "verdict": "CONFIRMED",
+     "evidence": "grep -rn 'luminance|contrast|WCAG' across non-node_modules files: only WCAG success-criterion citations in a11y comments/specs and a static pre-measured ratio comment in src/app.css:31-39; zero runtime contrast math",
+     "implication": "#307's luminance helper is new code with no reuse target in this repo."
+    },
+    {
+     "claim": "GitHub's own label-text-color contrast threshold is undocumented on docs.github.com",
+     "verdict": "INFO",
+     "evidence": "Checked docs.github.com REST Issues and Labels pages via WebFetch this turn; only the hex-format sentence is present, no contrast/threshold prose found",
+     "implication": "[speculative] recommend WCAG relative luminance with L>0.179 as the black/white crossover, verified by hand against the two named worst cases; the exact constant is not vendor-confirmed."
+    },
+    {
+     "claim": "Live label palette has 14 labels; blocked=#b60205 and wontfix=#ffffff are both present and exact",
+     "verdict": "CONFIRMED",
+     "evidence": "gh api repos/mvox-dev/mvox-app/labels --paginate --jq output this turn: full 14-row palette listed in summary section (5)",
+     "implication": "Fixtures for #307 should use these real hex values (all 14) rather than invented colours."
+    },
+    {
+     "claim": "Baseline suite is green before any #307 change",
+     "verdict": "CONFIRMED",
+     "evidence": "pnpm vitest run scripts/roadmap: 4 files, 57 tests passed, 2.57s",
+     "implication": "Compare any post-change run against this 57-test baseline."
+    }
+   ]
+  }
+ }
+}
