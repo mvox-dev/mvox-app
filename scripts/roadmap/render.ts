@@ -169,21 +169,25 @@ function closedAtRank(issue: RoadmapIssue): number {
 }
 
 // #310: this match is against the exact label strings the mvox team uses on
-// GitHub — 'in process' and 'in research', not an id or a stable enum. Rename
-// either label in the repo's label settings and this silently stops floating
-// anything; nothing here will fail or warn, the board just quietly goes back
-// to plain number order. There is deliberately no test pinning these two
-// strings (see active-float.spec.ts) because a fixture-based test cannot see
-// a GitHub-side rename either — it would stay green through the same failure
-// it exists to catch. Catching the rename itself would mean the build reading
-// the repo's live label set, which was judged not worth the extra API call
-// for an ordering nicety (Gama, #310 comment).
-const ACTIVE_TIER_LABELS = ['in process', 'in research'] as const;
+// GitHub — 'in process', 'prepped', and 'in research' (#315) — not an id or a
+// stable enum. Rename any of the three in the repo's label settings and this
+// silently stops floating anything; nothing here will fail or warn, the
+// board just quietly goes back to plain number order. There is deliberately
+// no test pinning these strings (see active-float.spec.ts) because a
+// fixture-based test cannot see a GitHub-side rename either — it would stay
+// green through the same failure it exists to catch. Catching the rename
+// itself would mean the build reading the repo's live label set, which was
+// judged not worth the extra API call for an ordering nicety (Gama, #310
+// comment). The warning has already come true once: `prepped` was renamed
+// from `researched` two minutes after it was created, before it ever reached
+// this code (#315). The next rename will not announce itself either.
+const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'in research'] as const;
 
 /**
  * An open issue's activity tier: 0 when it carries `in process` (which wins
- * even alongside `in research`), 1 when it carries `in research` alone, 2
- * otherwise. Lower sorts first. Never consulted for closed issues.
+ * over the other two even in combination), 1 when it carries `prepped`
+ * without `in process`, 2 when it carries `in research` alone, 3 otherwise.
+ * Lower sorts first. Never consulted for closed issues.
  */
 function activityTier(issue: RoadmapIssue): number {
 	const names = issue.labels.map((label) => label.name);
