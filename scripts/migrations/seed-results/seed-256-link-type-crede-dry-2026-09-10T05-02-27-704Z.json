@@ -1,0 +1,50 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "authorization": "PO-Approved 2026-09-09 mvox-app#256 (Gama \"Signed off as an app extension type\", Mihkel verbatim \"link entity is app extension. we are free from v4E.\")",
+  "entityMetaTypeId": "6a8f471a5eb2498f434e50cc",
+  "propertyMetaTypeId": "6a8f471a5eb2498f434e50e0",
+  "databaseTypeId": "6a8f471a5eb2498f434e50be",
+  "linkTypeId": "6aa239d620ebf490c690ab64",
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "link",
+      "id": "6aa239d620ebf490c690ab64",
+      "outcome": "found"
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.name",
+      "id": "6aa239d720ebf490c690ab6f",
+      "outcome": "found"
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.url",
+      "id": "6aa239d720ebf490c690ab7e",
+      "outcome": "found"
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.description",
+      "id": "6aa239d820ebf490c690ab8c",
+      "outcome": "found"
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "link.display_order",
+      "id": "6aa239d820ebf490c690ab98",
+      "outcome": "found"
+    },
+    {
+      "action": "ensure-add-from",
+      "target": "link.add_from",
+      "id": "6aa239d620ebf490c690ab64",
+      "outcome": "already-wired"
+    }
+  ],
+  "exitCode": 0
+}

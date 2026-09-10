@@ -2,6 +2,26 @@
 
 (*MVOX:Perotin*)
 
+## [DONE] #256 `link` type — LIVE, both dbs, clean, independently re-verified (2026-09-10)
+
+Team-lead authorized ("I authorize this run", 2026-09-10 08:00). Prep (definition +
+2 seed scripts + doc + premise-check probe) landed at the main gap `3b83738` the
+prior session; this session ran the live provisioning.
+
+**Live, both dbs, 6/6 steps, 0 failures each**: polyphony `link` type-def
+`6aa2398620ebf490c690ab23`; mvox_crede `link` type-def `6aa239d620ebf490c690ab64`.
+4 prop-defs each (name/url/description/display_order) + `add_from: database`.
+**Independently re-verified** two ways, not just the script's own self-report:
+(1) a fresh DRY_RUN re-run on each db shows every step `found`/`already-wired`
+against the exact same ids the live run created; (2) a direct read of
+`_sharing`/`_inheritrights` on the type-def + all 4 prop-defs, both dbs — every
+one `domain`/`true`, matching the definition exactly. Zero instances created
+(empty structure only, per commission).
+
+Ledgers: `scripts/migrations/seed-results/seed-256-link-type-{polyphony,crede}-
+{live,dry}-2026-09-10T*.json`. Completion comment posted to mvox-app#256 with
+both type-def ids alongside the human-readable name.
+
 ## [DONE] Create-seeded grant has NO exemption from §7.3 supersession (2026-09-09)
 
 Gama's extension via team-lead, same fixture shape, polyphony. After confirming the create-seeded
