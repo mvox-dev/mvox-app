@@ -23,6 +23,7 @@
 	"rsvp_non_member_hint": "Лише учасники можуть підтвердити RSVP.",
 	"membership_not_active_notice": "Ваше членство в {collective} неактивне. Якщо це здається помилкою, зверніться до хору.",
 	"rsvp_save_failed": "Не вдалося зберегти — торкніться, щоб повторити.",
+	"rsvp_saved": "Збережено.",
 	"attendance_status_present": "Присутній",
 	"attendance_status_absent": "Відсутній",
 	"attendance_status_late": "Запізнюється",

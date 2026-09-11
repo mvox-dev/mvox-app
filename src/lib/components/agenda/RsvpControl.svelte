@@ -16,6 +16,25 @@
 	rejected (its value having been reverted upstream). Distinct from `pending`:
 	an ERROR the user should see, not a transient "saving" state.
 
+	#326 — `saved` surfaces the fourth state the old three (nonMember/pending/
+	saveFailed) had no room for: a write that reconciled successfully. Without
+	it, a reconciled value renders byte-identical to one never attempted —
+	exactly the "dangerous pair" epic #289 names. The cue lives in its OWN
+	persistent node (`rsvp-saved-status`, role="status" aria-live="polite"),
+	mounted from first render regardless of `saved` (a live region must exist
+	BEFORE its first announcement to be picked up by assistive tech — the
+	#267 reference shape, and the same persistent-node pattern #323's
+	links-reorder-status already uses). GREEN's stated choice: this node is
+	VISIBLE, not sr-only. The two precedents differ, so only one of them backs
+	that: #323's links-reorder-status is visible+aria-live, while #324's
+	repertoire-manage-status is sr-only on BOTH its host pages. This surface
+	follows #323 — a plain "Saved." sentence needs no second visual language,
+	so one combined visible+aria-live node beats a sr-only announcement plus a
+	separate visible dot/badge. `saved`
+	never touches `isDisabled`/`aria-busy` — it is a SETTLED state, not an
+	in-flight one, and the control stays fully interactive under it (a
+	reconciled answer can always be changed again).
+
 	No RsvpTallyBadge — tally is out of scope for slice-2 (epic #8).
 -->
 <script lang="ts">
@@ -31,6 +50,11 @@
 		pending?: boolean;
 		// The last write for this event failed — show an inline error line.
 		saveFailed?: boolean;
+		// #326 — the last write for this event RECONCILED successfully. Mutually
+		// exclusive with saveFailed in practice (the caller clears one when it
+		// sets the other), but this component does not enforce that itself — it
+		// only renders what it's given.
+		saved?: boolean;
 		onchange?: (s: RsvpStatus | null) => void;
 	}
 	const {
@@ -38,6 +62,7 @@
 		nonMember = false,
 		pending = false,
 		saveFailed = false,
+		saved = false,
 		onchange
 	}: Props = $props();
 
@@ -147,5 +172,20 @@
 		{:else if saveFailed}
 			<span data-testid="rsvp-save-failed" role="alert">{m.rsvp_save_failed()}</span>
 		{/if}
+	</p>
+	<!--
+		#326 — the SAVED cue, in its own persistent node (never folded into
+		rsvp-msg-line above): a live region must be mounted BEFORE its first
+		text change to be announced, so this renders unconditionally, blank
+		when `saved` is false. VISIBLE (not sr-only, see block comment) — same
+		combined visible+aria-live shape as #323's links-reorder-status.
+	-->
+	<p
+		data-testid="rsvp-saved-status"
+		role="status"
+		aria-live="polite"
+		class="min-h-[16px] text-xs leading-[16px] text-ink-2"
+	>
+		{#if saved}{m.rsvp_saved()}{/if}
 	</p>
 </div>

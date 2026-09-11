@@ -23,6 +23,7 @@
 	"rsvp_non_member_hint": "Only members can RSVP.",
 	"membership_not_active_notice": "Your membership in {collective} is not active. If this seems wrong, get in touch with the choir.",
 	"rsvp_save_failed": "Couldn't save — tap to try again.",
+	"rsvp_saved": "Saved.",
 	"attendance_status_present": "Present",
 	"attendance_status_absent": "Absent",
 	"attendance_status_late": "Late",

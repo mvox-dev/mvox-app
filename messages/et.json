@@ -23,6 +23,7 @@
 	"rsvp_non_member_hint": "Ainult liikmed saavad RSVP kinnitada.",
 	"membership_not_active_notice": "Sinu liikmelisus kooris {collective} ei ole aktiivne. Kui see tundub vale, võta ühendust kooriga.",
 	"rsvp_save_failed": "Salvestamine ebaõnnestus — puuduta uuesti proovimiseks.",
+	"rsvp_saved": "Salvestatud.",
 	"attendance_status_present": "Kohal",
 	"attendance_status_absent": "Puudub",
 	"attendance_status_late": "Hilineb",

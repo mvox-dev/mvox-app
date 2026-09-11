@@ -75,6 +75,10 @@
 		// Events whose last write REJECTED — that row surfaces an inline save-failed
 		// error (the optimistic value having been reverted upstream).
 		failedEventIds?: ReadonlySet<string>;
+		// #326 — events whose last write RECONCILED successfully, same per-event
+		// Set shape as pendingEventIds/failedEventIds: only the row whose id
+		// reconciled shows the saved cue, never more than the key that settled.
+		savedEventIds?: ReadonlySet<string>;
 		// #83 — the 'Recent' section: ALL past events of the current season
 		// (already reverse-chronological — see conductorLogic.ts's recentEvents;
 		// this component renders in the order given, it does not re-sort). Empty/
@@ -163,6 +167,7 @@
 		onrsvpchange,
 		pendingEventIds = new Set<string>(),
 		failedEventIds = new Set<string>(),
+		savedEventIds = new Set<string>(),
 		recentItems = [],
 		conductorEventIds = new Set<string>(),
 		ontakeattendance,
@@ -614,6 +619,7 @@
 								nonMember={membership === 'non-member'}
 								pending={membership === 'loading' || pendingEventIds.has(item.id)}
 								saveFailed={failedEventIds.has(item.id)}
+								saved={savedEventIds.has(item.id)}
 								onchange={(newStatus) => onrsvpchange?.(item, newStatus)}
 							/>
 						</div>

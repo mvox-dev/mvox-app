@@ -217,6 +217,12 @@
 	let myRsvp = $state<RsvpEntry | null>(null);
 	let rsvpPending = $state(false);
 	let rsvpFailed = $state(false);
+	// #326 — the last write for THIS event's rsvp reconciled successfully; feeds
+	// RsvpControl's `saved` prop (its own persistent status-region cue). Same
+	// isCurrentWrite discrimination as myRsvp/rsvpPending/rsvpFailed below — a
+	// write that settles after a navigation/collective switch must never paint
+	// this page's now-different control.
+	let rsvpSaved = $state(false);
 
 	// #102 TE.2 — the rights-gated tally (owner OR editor, see `canSeeTally`
 	// below), per-status counts from the domain
@@ -623,6 +629,7 @@
 		myRsvp = null;
 		rsvpPending = false;
 		rsvpFailed = false;
+		rsvpSaved = false;
 		tally = null;
 		tallyError = false;
 	}
@@ -937,12 +944,19 @@
 			// A fresh write starting clears any stale failure marker — the user is
 			// trying again.
 			if (isPending) rsvpFailed = false;
+			// #326 — and any stale SAVED cue from a previous write: the cue always
+			// describes the latest write, never a settled earlier one.
+			if (isPending) rsvpSaved = false;
 		},
 		reconcile(evId, entry) {
 			const stillCurrent = isCurrentWrite(evId);
 			writeGenerations.delete(evId);
 			if (!stillCurrent) return;
 			myRsvp = entry;
+			// #326 — the write settled: the control earns the saved cue. A
+			// reconciled NULL (a cleared answer) announces too — it renders
+			// identically to never-answered, so the cue is the only distinguisher.
+			rsvpSaved = true;
 			// #102 review fix (F4) — the viewer's own answer is one of the rows the
 			// tally counts, so a successful write just invalidated it (and the
 			// capacity line, which reads `tally.going`). Re-read rather than patch a
@@ -963,6 +977,10 @@
 			if (!stillCurrent) return;
 			myRsvp = before;
 			rsvpFailed = true;
+			// #326 — failure and saved are mutually exclusive (already cleared by
+			// setPending at this attempt's start in practice; kept here too so
+			// revert never depends on that ordering).
+			rsvpSaved = false;
 		}
 	});
 
@@ -4252,6 +4270,7 @@
 						nonMember={membership === 'non-member'}
 						pending={isPast || membership === 'loading' || rsvpPending}
 						saveFailed={rsvpFailed}
+						saved={rsvpSaved}
 						onchange={handleRsvpChange}
 					/>
 					<!-- Gated on the counts actually being loaded, not merely on

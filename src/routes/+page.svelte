@@ -204,6 +204,12 @@
 	// inline handleRsvpChange's whole-map optimistic-set/revert let a second tap
 	// fire against the '__optimistic__' placeholder and get the event stuck).
 	let pendingEventIds = $state<Set<string>>(new Set());
+	// #326 — events whose last write RECONCILED successfully; threaded into
+	// AgendaList so that row's RsvpControl carries the saved cue. Cleared the
+	// moment a NEW write starts for the event (setPending true, below) — the
+	// cue always describes the LATEST write, never a stale one — and on a
+	// failed write (revert), so saved and saveFailed never show together.
+	let savedEventIds = $state<Set<string>>(new Set());
 
 	// #85 TA.4 — my own attendance across every past event, loaded ONCE per
 	// member resolution (not per-event) alongside the memberId lookup. Powers
@@ -900,6 +906,7 @@
 			rsvpByEventId = {};
 			rsvpPartial = false;
 			failedEventIds = new Set();
+			savedEventIds = new Set();
 			recentItems = [];
 			conductorEventIds = new Set();
 			// #214 — no collective, no agenda, no filter to be stale.
@@ -963,6 +970,24 @@
 		memberId = null;
 		membership = 'loading';
 		failedEventIds = new Set();
+		// #326 — a saved cue belongs to the collective whose write earned it, so
+		// this drops every cue ALREADY EARNED at switch time (pin 7), including
+		// one sitting on an event id the next collective happens to reuse.
+		//
+		// What it does NOT reach is a write still IN FLIGHT. This page's queue
+		// callbacks carry no per-write generation guard (event/[id] discriminates
+		// with `isCurrentWrite`, because it collapses the per-event state into
+		// scalars and has to); here `reconcile` adds to `savedEventIds`
+		// unconditionally, so a write started in collective A that settles after
+		// the switch re-adds its eventId afterwards. That is the same pre-existing
+		// gap `rsvpByEventId` already has on this path, not one #326 introduced,
+		// and it is unreachable while Entu event ids are unique across dbs. Fixing
+		// it means a switch-scoped write epoch stamped in `setPending`, checked in
+		// `reconcile`/`revert` — deliberately its own change, not this slice's.
+		// (`requestId` cannot serve as that epoch: it also bumps on
+		// same-collective `keepSeasonManage` refreshes, which would swallow the
+		// cue for a perfectly good write.)
+		savedEventIds = new Set();
 		worksByEventId = {};
 		scheduleByEventId = {};
 		pdfError = false;
@@ -1388,12 +1413,25 @@
 				cleared.delete(eventId);
 				failedEventIds = cleared;
 			}
+			// #326 — and any stale SAVED cue from a previous, now-superseded write:
+			// the cue always describes the latest write, never a settled earlier one.
+			if (isPending && savedEventIds.has(eventId)) {
+				const cleared = new Set(savedEventIds);
+				cleared.delete(eventId);
+				savedEventIds = cleared;
+			}
 		},
 		reconcile(eventId, entry) {
 			const next = { ...rsvpByEventId };
 			if (entry) next[eventId] = entry;
 			else delete next[eventId];
 			rsvpByEventId = next;
+			// #326 — the write settled: this event's row earns the saved cue. A
+			// reconciled NULL (a cleared answer) announces too — it renders
+			// identically to never-answered, so the cue is the only distinguisher.
+			const saved = new Set(savedEventIds);
+			saved.add(eventId);
+			savedEventIds = saved;
 		},
 		revert(eventId, before) {
 			const next = { ...rsvpByEventId };
@@ -1405,6 +1443,14 @@
 			const failed = new Set(failedEventIds);
 			failed.add(eventId);
 			failedEventIds = failed;
+			// #326 — failure and saved are mutually exclusive: a stale saved cue
+			// (already cleared by setPending at this attempt's start in practice)
+			// must not survive a failed write either way.
+			if (savedEventIds.has(eventId)) {
+				const cleared = new Set(savedEventIds);
+				cleared.delete(eventId);
+				savedEventIds = cleared;
+			}
 		}
 	});
 
@@ -8276,6 +8322,7 @@
 								membership={gatedMembership}
 								{pendingEventIds}
 								{failedEventIds}
+								{savedEventIds}
 								recentItems={filteredRecentItems}
 								{conductorEventIds}
 								{myAttendanceByEventId}

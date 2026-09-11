@@ -23,6 +23,7 @@
 	"rsvp_non_member_hint": "Tikai dalībnieki var apstiprināt RSVP.",
 	"membership_not_active_notice": "Tava dalība {collective} nav aktīva. Ja tas šķiet nepareizi, sazinies ar kori.",
 	"rsvp_save_failed": "Neizdevās saglabāt — pieskarieties, lai mēģinātu vēlreiz.",
+	"rsvp_saved": "Saglabāts.",
 	"attendance_status_present": "Klāt",
 	"attendance_status_absent": "Nav",
 	"attendance_status_late": "Kavējas",
