@@ -53,6 +53,7 @@ export const meta = {
   description: 'Full TDD pipeline for a slice epic — SPIKE/SEED/PREFLIGHT/RED/GREEN/INTEGRATION/REVIEW/MERGE/PROBE per task',
   whenToUse: 'When dispatching a slice epic with 2+ sequential tasks through the TDD chain',
   phases: [
+    { title: 'LOAD', detail: 'Read args file (argsFile mode) — args JSON never transits team-lead context', model: 'claude-sonnet-5[1m]' },
     { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5[1m]' },
     { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'claude-opus-4-6[1m]' },
     { title: 'PREFLIGHT', detail: 'Validate data prerequisites before RED', model: 'claude-sonnet-5[1m]' },
@@ -68,7 +69,45 @@ export const meta = {
 }
 
 // args may arrive as a JSON string when invoked via scriptPath — parse if needed
-const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
+let _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
+
+// argsFile mode (baked 2026-09-11, token economy — Mihkel's ruling): launch with
+// args:{argsFile:'<path>'} and a LOAD agent reads the file and returns it via
+// StructuredOutput, so the args JSON never transits team-lead context (previously
+// three copies per launch: pre-launch Read + inline tool call + the completion
+// notification's args echo — ~30k tokens on a seven-slice pack). Team-lead
+// verifies the file pre-launch with a jq summary (task order, issue numbers),
+// never a full Read. Sonnet, not haiku: the loader's one job is verbatim
+// fidelity of long prompt strings.
+const ARGS_SCHEMA = {
+  type: 'object',
+  properties: {
+    repoPath: { type: 'string' },
+    coAuthor: { type: 'string' },
+    tasks: { type: 'array' }
+  },
+  required: ['repoPath', 'coAuthor', 'tasks'],
+  additionalProperties: true
+}
+if (_args.argsFile) {
+  phase('LOAD')
+  const loaded = await agent(
+    'Read the JSON file at ' + _args.argsFile + ' and return its ENTIRE parsed content as your StructuredOutput object. Every field and every string VERBATIM — no summarizing, no paraphrasing, no added fields, no dropped fields. Copy long prompt strings exactly. Do not read any other file or take any other action. Before returning, self-check: the number of entries in your tasks array must equal the number in the file.',
+    { label: 'load-args', phase: 'LOAD', schema: ARGS_SCHEMA, model: 'claude-sonnet-5[1m]' }
+  )
+  if (!loaded || !Array.isArray(loaded.tasks) || loaded.tasks.length === 0) {
+    return { success: false, failedAt: 'LOAD args from ' + _args.argsFile, loadedKeys: loaded ? Object.keys(loaded) : null }
+  }
+  for (let i = 0; i < loaded.tasks.length; i++) {
+    const t = loaded.tasks[i]
+    if (!t.issueNumber || !t.branch || !t.greenPrompt || !t.reviewChecklist || !t.commitBody) {
+      return { success: false, failedAt: 'LOAD args validation — task[' + i + '] missing required field(s)', task: { issueNumber: t.issueNumber, branch: t.branch } }
+    }
+  }
+  log('LOAD: ' + loaded.tasks.length + ' task(s) from ' + _args.argsFile + ' — [' + loaded.tasks.map(function (t) { return '#' + t.issueNumber }).join(', ') + ']')
+  _args = loaded
+}
+
 const REPO = _args.repoPath
 const CO_AUTHOR = _args.coAuthor
 const tasks = _args.tasks
