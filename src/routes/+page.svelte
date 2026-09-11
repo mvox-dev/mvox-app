@@ -3446,6 +3446,13 @@
 	 *  message: a rejected date range must name the actual mistake. */
 	let seasonEditErrors = $state<Partial<Record<SeasonEditableField, 'save' | 'range'>>>({});
 	let seasonEditPending = $state<Partial<Record<SeasonEditableField, boolean>>>({});
+	/** #328 — ONE region shared by all three fields (Gama's one-node-PER-SURFACE
+	 *  ruling: the three fields are one surface, not three), matching the
+	 *  #325/#267 shape of the conductor cue in this SAME panel
+	 *  (`seasonManageConductorStatus`): persistent role="status" region,
+	 *  mounted blank, text set imperatively on a successful settle, cleared at
+	 *  the START of the next attempt — never on a timer. */
+	let seasonEditStatus = $state('');
 
 	/** Every conductor id → display name, off the ALREADY-cached roster
 	 *  (`rosterRows`, warmed by `loadManagePickers` for anyone who can manage
@@ -3547,6 +3554,12 @@
 		seasonEditDraft = '';
 		seasonEditErrors = {};
 		seasonEditPending = {};
+		// #328 — the WRITE cue belongs to the season being left, exactly as
+		// `seasonManageConductorStatus` a few lines up: a save that reconciles
+		// after the switch is already dropped by the generation bump above, but
+		// the NEW panel's region must start blank regardless (never carry a
+		// stale "saved" onto a season it says nothing about).
+		seasonEditStatus = '';
 		// #234 review 2 F1 — the panel's repertoire section belongs to the PANEL's
 		// lifetime, exactly like the series list three lines up, so it is cleared
 		// where it is.
@@ -3966,6 +3979,10 @@
 		// and the agenda's current-season derivation reads those bounds. Refused
 		// BEFORE any write, so the old value simply stands.
 		if (seasonDateRangeInverted(field, value)) {
+			// #328 review R2-F2 — a refusal is an attempt too: the region must not
+			// keep reading "saved" (from an EARLIER write) beside a fresh refusal.
+			// The start-of-attempt clear below is unreachable from this early return.
+			seasonEditStatus = '';
 			seasonEditErrors = { ...seasonEditErrors, [field]: 'range' };
 			return;
 		}
@@ -3980,12 +3997,20 @@
 		// all before this issue.
 		const thisSeasonManage = seasonManageSwitchGeneration;
 		clearSeasonFieldError(field);
+		// #328 — a fresh attempt clears any stale saved cue from a previous
+		// field's settle: the region always describes the LATEST write, never
+		// an earlier one (the family rule, `panelManageStatus`/
+		// `seasonManageConductorStatus`'s own start-of-attempt clear).
+		seasonEditStatus = '';
 		seasonEditPending = { ...seasonEditPending, [field]: true };
 		applySeasonFieldLocally(field, value); // optimistic — the panel is the truth it renders
 		updateSeasonField(cfg, seasonId, field, value)
 			.then(() => {
 				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
 				seasonEditPending = { ...seasonEditPending, [field]: false };
+				// #328 — the settle itself must say so, into the ONE region shared
+				// by all three fields (Gama's one-node-per-SURFACE ruling).
+				seasonEditStatus = m.season_manage_saved();
 			})
 			.catch((e) => {
 				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
@@ -6817,6 +6842,23 @@
 											</p>
 										{/if}
 									</div>
+								</div>
+
+								<!-- #328/#267 shape — persistent sr-only role="status" region,
+								     mounted from first render (a live region announces only
+								     CHANGES to its contents) so a settle is distinguishable from
+								     silence even when nothing failed. ONE region shared by all
+								     three fields above (Gama's one-node-per-SURFACE ruling) —
+								     matches #325's `season-manage-conductor-status` shape, the
+								     cue's own neighbour in this same panel, not #326/#327's
+								     visible variant. -->
+								<div
+									data-testid="season-edit-status"
+									role="status"
+									aria-live="polite"
+									class="sr-only"
+								>
+									{seasonEditStatus}
 								</div>
 
 								<!-- conductors -->

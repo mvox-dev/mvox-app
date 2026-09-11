@@ -412,6 +412,13 @@
 	// string so the copy follows a locale switch — the `eventCreateError` shape
 	// on the agenda page.
 	let scheduleErrors = $state<Record<string, (() => string) | null>>({});
+	// #328 — ONE region shared by every write kind this queue carries (add,
+	// per-row name/datetime edit, remove — Gama's one-node-PER-SURFACE
+	// ruling: the schedule section is one surface, one queue). Matches the
+	// #324/#267 shape (`manageStatus`/`editStatus` on this same page):
+	// persistent role="status" region, mounted blank, text set imperatively
+	// on a successful settle, cleared at the START of the next attempt.
+	let scheduleStatus = $state('');
 	/** Which add-form box the current refusal belongs to — always set WITH the
 	 *  message (#132/T2 review F2: a refusal that names no box is a dead end for
 	 *  anyone who cannot see which one is empty). `null` = form-wide, which is
@@ -697,6 +704,12 @@
 		// still read "saved" from an older event's settle.
 		manageError = false;
 		manageStatus = '';
+		// #328 review F1 — the inline-field cue is the same kind of per-SUBJECT
+		// claim as `manageStatus` above and `scheduleStatus` below, and goes down
+		// with them: without this, a settle on the event being left keeps
+		// captioning the next one's field region, which would read "saved" from
+		// its first render for a write the editor never made there.
+		editStatus = '';
 		scheduleRows = [];
 		scheduleLoaded = false;
 		scheduleAddOpen = false;
@@ -710,6 +723,10 @@
 		scheduleRemoveArmedId = null;
 		scheduleWritePending = {};
 		scheduleErrors = {};
+		// #328 — the write cue goes with the rows it describes, exactly as
+		// `manageStatus` above: a settle for the event being left must never
+		// caption the next one's schedule section.
+		scheduleStatus = '';
 		scheduleAddErrorField = null;
 		attendanceMap = {};
 		attendancePanelOpen = false;
@@ -2012,11 +2029,27 @@
 		scheduleRows = [...scheduleRows, row].sort(compareScheduleItems);
 	}
 
+	// #328 review R2-F1 — the schedule twin of `editWriteGenerations` below: the
+	// load `generation` each in-flight schedule write was STARTED under, keyed
+	// by this queue's own key (add / per-row name / per-row datetime / remove).
+	// Same capture-compare the page's other write guards use.
+	const scheduleWriteGenerations = new Map<string, number>();
+
 	const scheduleQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
 			scheduleWritePending = { ...scheduleWritePending, [key]: pending };
+			// #328 — a fresh attempt (on ANY key this queue carries) clears a stale
+			// saved cue from a previous write's settle: the ONE shared region
+			// always describes the LATEST write (the family rule, `manageStatus`'s
+			// own start-of-attempt clear above).
+			if (pending) {
+				scheduleWriteGenerations.set(key, generation);
+				scheduleStatus = '';
+			}
 		},
 		reconcile(key) {
+			const startedUnder = scheduleWriteGenerations.get(key);
+			scheduleWriteGenerations.delete(key);
 			clearScheduleError(key);
 			if (key === SCHEDULE_ADD_KEY) {
 				// The create's own id/sort position is only known once the server
@@ -2028,8 +2061,19 @@
 				scheduleAddDate = '';
 				scheduleAddTime = '';
 			}
+			// #328 — the settle itself must say so, for every write kind (add, a
+			// row's name/datetime edit, remove), into the ONE region shared by the
+			// surface — never disturbs another row's standing alert.
+			//
+			// #328 review R2-F1 — guarded exactly as the field leg's cue is: a
+			// write that started on the event being left must not announce onto the
+			// one the editor has since moved to. `refreshSchedule` above carries
+			// the same generation check internally, so the whole reconcile now
+			// agrees about which subject it is describing.
+			if (startedUnder === generation) scheduleStatus = m.event_schedule_saved();
 		},
 		revert(key) {
+			scheduleWriteGenerations.delete(key);
 			// #262 review F1 — the optimistic patch has ALREADY been rolled back by
 			// the queue's own `rollback` hook, so without this the row simply snaps
 			// back to its old value and the editor watches her edit un-do itself
@@ -2106,6 +2150,11 @@
 	}
 	function setScheduleAddError(msg: () => string, field: 'name' | 'datetime'): void {
 		scheduleAddErrorField = field;
+		// #328 review R2-F2 — a refusal is an attempt too: the shared region must
+		// not keep reading "saved" (from an EARLIER write) beside a fresh refusal.
+		// The queue's own start-of-attempt clear in `setPending` is unreachable —
+		// nothing is written on a refused path.
+		scheduleStatus = '';
 		setScheduleError(SCHEDULE_ADD_KEY, msg);
 	}
 
@@ -2183,6 +2232,9 @@
 		// #262 review F4 — an emptied name is a REFUSAL, not a no-op: say so and
 		// leave the editor open on the box that has to be fixed.
 		if (value === '') {
+			// #328 review R2-F2 — same rule as the add form's refusals: a refusal
+			// clears the surface's saved cue rather than standing beside it.
+			scheduleStatus = '';
 			setScheduleError(`schedule-edit-name-${id}`, m.event_schedule_name_required);
 			return;
 		}
@@ -2731,6 +2783,13 @@
 	// messages). Cleared alongside `editErrors` whenever the pencil reopens.
 	let editRangeErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
 	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
+	// #328 — ONE region shared by all six inline fields (Gama's one-node-PER-
+	// SURFACE ruling: the inline-field surface is one queue, `editWriteQueue`,
+	// not six), matching the #324/#267 shape (`manageStatus` a few lines up on
+	// this same page): persistent role="status" region, mounted blank, text
+	// set imperatively on a successful settle, cleared at the START of the
+	// next attempt — never on a timer.
+	let editStatus = $state('');
 
 	// #105 TE.5 — focus management (WAI-ARIA edit-in-place). Plain (non-$state)
 	// DOM refs, same posture as any `bind:this` target: these are imperative
@@ -2788,15 +2847,51 @@
 	// `settleFieldFocus`, which restores only when the dismissal that STARTED
 	// this write asked for it (`pendingFocusRestore`, #105 review R2-F1) and no
 	// editor has been opened since.
+	// #328 review R2-F1 — the load `generation` each in-flight FIELD write was
+	// STARTED under, keyed by field (the queue allows at most one live write per
+	// key). Same capture-compare shape `writeGenerations`/
+	// `attendanceWriteGenerations` above use, and the same one #325 threads on
+	// the season leg — so all three legs of the trio answer the late-settle
+	// question identically. Non-reactive, and deliberately NOT cleared by
+	// `resetComposeState`: its entries describe writes still running against the
+	// PREVIOUS load, which is exactly what has to be recognised when they settle.
+	// Threading it here rather than into `createRepertoireWriteQueue` keeps
+	// #324's shared-primitive contract unwidened.
+	const editWriteGenerations = new Map<string, number>();
+
 	const editWriteQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
 			editWritePending = { ...editWritePending, [key as EditableEventField]: pending };
+			// #328 — a fresh attempt (on ANY of the six fields) clears a stale
+			// saved cue from a previous field's settle: the ONE shared region
+			// always describes the LATEST write (the family rule, `manageStatus`'s
+			// own start-of-attempt clear above).
+			if (pending) {
+				editWriteGenerations.set(key, generation);
+				editStatus = '';
+			}
 		},
 		reconcile(key) {
+			const startedUnder = editWriteGenerations.get(key);
+			editWriteGenerations.delete(key);
 			editErrors = { ...editErrors, [key as EditableEventField]: false };
 			settleFieldFocus(key as EditableEventField);
+			// #328 — the settle itself must say so, into the ONE region shared by
+			// all six fields (Gama's one-node-per-SURFACE ruling) — never disturbs
+			// another field's standing error.
+			//
+			// #328 review R2-F1 — but ONLY when the write still describes what is
+			// on screen. `resetComposeState` blanks the region AT the switch; it
+			// cannot stop a write already in flight, so without this guard a save
+			// made on the event being left announces "saved" onto the event the
+			// editor has since moved to — the epic's own defect class, arriving
+			// through the cue. Error/focus handling is left untouched (byte-
+			// preserved): only the ANNOUNCEMENT is a claim about the current
+			// subject.
+			if (startedUnder === generation) editStatus = m.event_edit_saved();
 		},
 		revert(key) {
+			editWriteGenerations.delete(key);
 			editErrors = { ...editErrors, [key as EditableEventField]: true };
 			settleFieldFocus(key as EditableEventField);
 		}
@@ -3089,6 +3184,11 @@
 			}
 			if (raw <= 0) {
 				cancelFieldEdit(field, restoreFocus);
+				// #328 review R2-F2 — a refusal is an attempt too: the shared region
+				// must not keep reading "saved" (from an EARLIER field's write)
+				// beside a fresh refusal. The queue's own start-of-attempt clear in
+				// `setPending` is unreachable — nothing is written on this path.
+				editStatus = '';
 				editRangeErrors = { ...editRangeErrors, duration_minutes: true };
 				return;
 			}
@@ -3941,6 +4041,17 @@
 					</p>
 				{/if}
 
+				<!-- #328/#267 shape — persistent sr-only role="status" region,
+				     mounted from first render (a live region announces only CHANGES
+				     to its contents) so a settle is distinguishable from silence even
+				     when nothing failed. ONE region shared by all six inline fields
+				     above (Gama's one-node-per-SURFACE ruling) — distinct from
+				     #324's repertoire-manage-status and this leg's own
+				     event-schedule-status sibling below. -->
+				<div data-testid="event-edit-status" role="status" aria-live="polite" class="sr-only">
+					{editStatus}
+				</div>
+
 				<!-- #262 — the schedule_item section: engineering's placement call is
 				     HERE, right below the event's own date/time/description block and
 				     above RSVP — "beside the event's own date/time block" (Gama 05:30),
@@ -4268,6 +4379,22 @@
 								</button>
 							{/if}
 						{/if}
+						<!-- #328/#267 shape — persistent sr-only role="status" region,
+						     mounted from first render (a live region announces only
+						     CHANGES to its contents) so a settle is distinguishable from
+						     silence even when nothing failed. ONE region shared by every
+						     write kind this section's queue carries (add, per-row edit,
+						     remove — Gama's one-node-per-SURFACE ruling) — distinct from
+						     the inline-field leg's event-edit-status and #324's
+						     repertoire-manage-status. -->
+						<div
+							data-testid="event-schedule-status"
+							role="status"
+							aria-live="polite"
+							class="sr-only"
+						>
+							{scheduleStatus}
+						</div>
 					</section>
 				{/if}
 
