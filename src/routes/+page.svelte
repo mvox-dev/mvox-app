@@ -3319,6 +3319,21 @@
 	 *  this, said nothing (#132/T3 review F1). Same contract the three text/date
 	 *  fields already keep: a silently snapped-back value reads as a bug. */
 	let seasonManageConductorError = $state(false);
+	/** #325 — true while a conductor add/remove write is in flight. Guards the
+	 *  select AND every chip's remove button, and the handlers themselves check
+	 *  it (a `disabled` attribute alone is a double-tap guard, not a state
+	 *  signal — `fireEvent`/a racing tap reaches the listener regardless). The
+	 *  criterion this closes is DUPLICATE/LOST-REMOVE, not ER-6: the conductor
+	 *  write is a plain multi-value property POST/GET-find-DELETE
+	 *  (addSeasonConductor/removeSeasonConductor, seasonManage.ts), not a
+	 *  direct rights-tier grant, so Entu's replacement rule never reaches it. A
+	 *  duplicate POST would append a second conductor value; a remove racing a
+	 *  re-add can delete the value the re-add just wrote. */
+	let seasonManageConductorPending = $state(false);
+	/** #325/#267 shape — persistent role="status" region, mounted blank, text
+	 *  set imperatively on a successful settle, cleared at the START of the
+	 *  next attempt (never on a timer) — same idiom as `panelManageStatus`. */
+	let seasonManageConductorStatus = $state('');
 	/** True while the panel's roster read is in flight — the conductor chips
 	 *  need it to tell "name not here YET" from "name will NEVER arrive"
 	 *  (#132/T3 review F4). */
@@ -3441,6 +3456,12 @@
 		// was open a moment ago.
 		seasonManageSwitchGeneration += 1;
 		seasonManageConductorError = false;
+		// #325 — the switch clears an in-flight conductor write's VISIBLE
+		// trace too: the new panel starts clean, and the generation bump just
+		// above is what stops the old write's late settle from re-raising
+		// either flag on it (see onSeasonManageConductorSelect/…Remove).
+		seasonManageConductorPending = false;
+		seasonManageConductorStatus = '';
 		seasonManageRosterLoading = false;
 		seasonEditingField = null;
 		seasonEditDraft = '';
@@ -3939,6 +3960,12 @@
 	}
 
 	function onSeasonManageConductorSelect(selection: { id: string | null; label: string }): void {
+		// #325 — the pending flag is the WIRE-level guard, checked here before
+		// anything else: `disabled` on the select is a double-tap guard, not a
+		// state signal, so a racing pick must be refused by the handler itself,
+		// not merely by the attribute. See seasonManageConductorPending's doc
+		// for the duplicate/lost-remove race this closes.
+		if (seasonManageConductorPending) return;
 		if (!selection.id || !selected || manageableSeasonId === null) return;
 		const personId = selection.id;
 		if (seasonManageConductorIds.includes(personId)) return; // no duplicate chips
@@ -3948,18 +3975,31 @@
 		// this add was likewise an unguarded resolve-writer before this issue.
 		const thisSeasonManage = seasonManageSwitchGeneration;
 		seasonManageConductorError = false; // this attempt starts clean
+		seasonManageConductorStatus = ''; // …and so does the saved cue
+		seasonManageConductorPending = true;
 		seasonManageConductorIds = [...seasonManageConductorIds, personId]; // optimistic
-		addSeasonConductor(cfg, seasonId, personId).catch((e) => {
-			if (thisSeasonManage !== seasonManageSwitchGeneration) return;
-			console.error('agenda: add season conductor failed', personId, e);
-			seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId);
-			// …and SAY so: the revert alone is a chip that appears and vanishes
-			// (#132/T3 review F1).
-			seasonManageConductorError = true;
-		});
+		addSeasonConductor(cfg, seasonId, personId)
+			.then(() => {
+				// #325 — a switch mid-flight must neither re-raise pending nor
+				// announce saved onto whatever season is open now.
+				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
+				seasonManageConductorPending = false;
+				seasonManageConductorStatus = m.season_manage_conductor_saved();
+			})
+			.catch((e) => {
+				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
+				console.error('agenda: add season conductor failed', personId, e);
+				seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId);
+				// …and SAY so: the revert alone is a chip that appears and vanishes
+				// (#132/T3 review F1).
+				seasonManageConductorError = true;
+				seasonManageConductorPending = false;
+			});
 	}
 
 	function onSeasonManageConductorRemove(personId: string): void {
+		// #325 — same wire-level refusal as the select above.
+		if (seasonManageConductorPending) return;
 		if (!selected || manageableSeasonId === null) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
@@ -3967,13 +4007,22 @@
 		const thisSeasonManage = seasonManageSwitchGeneration;
 		const before = seasonManageConductorIds;
 		seasonManageConductorError = false;
+		seasonManageConductorStatus = '';
+		seasonManageConductorPending = true;
 		seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId); // optimistic
-		apiRemoveSeasonConductor(cfg, seasonId, personId).catch((e) => {
-			if (thisSeasonManage !== seasonManageSwitchGeneration) return;
-			console.error('agenda: remove season conductor failed', personId, e);
-			seasonManageConductorIds = before;
-			seasonManageConductorError = true;
-		});
+		apiRemoveSeasonConductor(cfg, seasonId, personId)
+			.then(() => {
+				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
+				seasonManageConductorPending = false;
+				seasonManageConductorStatus = m.season_manage_conductor_saved();
+			})
+			.catch((e) => {
+				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
+				console.error('agenda: remove season conductor failed', personId, e);
+				seasonManageConductorIds = before;
+				seasonManageConductorError = true;
+				seasonManageConductorPending = false;
+			});
 	}
 
 	// ── #132/T4 — event CREATION: two entry points, one inline form ───────────
@@ -6725,7 +6774,8 @@
 														aria-label={m.season_conductor_remove({
 															name: seasonConductorLabel(personId)
 														})}
-														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
+														disabled={seasonManageConductorPending}
+														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
 														onclick={() => onSeasonManageConductorRemove(personId)}
 													>
 														&times;
@@ -6742,7 +6792,8 @@
 										<select
 											data-testid="season-manage-conductor-select"
 											aria-label={m.season_conductor_label()}
-											disabled={seasonManageConductorOptions.length === 0}
+											disabled={seasonManageConductorOptions.length === 0 ||
+												seasonManageConductorPending}
 											value=""
 											onchange={(e) => {
 												const target = e.currentTarget as HTMLSelectElement;
@@ -6802,6 +6853,32 @@
 											{m.season_manage_save_error()}
 										</p>
 									{/if}
+									<!-- #325 — the caveat-slot paragraph shape #321 already uses
+									     beside this select (partial-notice/order-note above), so a
+									     write in flight is VISIBLE, not merely a disabled control
+									     (docs/qa/autosave-field-inventory.md: `disabled` alone is a
+									     double-tap guard, not a state signal). -->
+									{#if seasonManageConductorPending}
+										<p
+											data-testid="season-manage-conductor-pending-notice"
+											role="status"
+											class="text-xs text-ink-2"
+										>
+											{m.season_manage_conductor_saving()}
+										</p>
+									{/if}
+									<!-- #325/#267 shape — persistent role="status" region, mounted
+									     blank from first render (a live region announces only
+									     CHANGES to its contents) so a settle is distinguishable from
+									     silence even when nothing failed. -->
+									<div
+										data-testid="season-manage-conductor-status"
+										role="status"
+										aria-live="polite"
+										class="sr-only"
+									>
+										{seasonManageConductorStatus}
+									</div>
 								</div>
 
 								<!-- event series -->

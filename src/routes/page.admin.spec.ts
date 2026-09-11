@@ -67,6 +67,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_roles_last_owner_hint: () => 'The last owner cannot be removed.',
 		admin_roles_no_library: () => 'No library entity is visible in this collective.',
 		admin_roles_action_error: () => 'Role change failed.',
+		// #325 — pending-guard cues (saving notice + saved announcement).
+		admin_roles_saving: () => 'Saving…',
+		admin_roles_saved: () => 'Saved.',
 		admin_roles_read_only: () => 'Only an owner of this collective can change these roles.',
 		admin_roles_remove_self_hint: () => 'Cannot remove your own rights.',
 		// Deliberately NOT the English words: the row badge must render the

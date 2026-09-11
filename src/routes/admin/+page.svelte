@@ -100,6 +100,21 @@
 	 *  `sectionsReadFailed`). */
 	let sectionsError = $state(false);
 	let actionError = $state(false);
+	// #325 — true while an admin/librarian grant/revoke write is in flight.
+	// Guards BOTH selects and every remove button on this page: any of them
+	// could otherwise fire a second direct-grant write for the same reference
+	// while the first is still settling. ER-6 (docs/architecture/
+	// entu-rights-and-visibility-model.md): a reference holds at most one
+	// active direct rights-tier grant per entity, and a second grant write
+	// silently retires the first. ER-9 qualifies it for the creator-owner
+	// case. This flag makes the concurrent write IMPOSSIBLE, not merely
+	// unlikely — the handlers below check it themselves, since `disabled` is
+	// a double-tap guard, not a state signal.
+	let rolesPending = $state(false);
+	// #325/#267 shape — persistent role="status" region, mounted blank, text
+	// set imperatively on a successful settle, cleared at the START of the
+	// next attempt (never on a timer).
+	let rolesStatus = $state('');
 
 	// #165 — the editable collective NAME (the `mvox_collective` marker's own
 	// `name`, not the store's picker label — see collectiveName.ts module doc).
@@ -202,6 +217,12 @@
 		const thisLoad = ++loadSeq;
 		status = 'loading';
 		actionError = false;
+		// #325 — a collective switch (loadSeq bump) is the same "walk away
+		// cleanly" boundary the write handlers already fence their own settle
+		// on (`if (thisLoad !== loadSeq) return`); the visible trace of an
+		// in-flight write must not carry over onto the collective just loaded.
+		rolesPending = false;
+		rolesStatus = '';
 		const token = getToken();
 		if (!token) {
 			// Inconsistency on a protected route — fail loudly, never as "not admin".
@@ -452,58 +473,88 @@
 	// lands mid-write invalidates the snapshot, so neither the refetched rows nor
 	// the error banner can leak into the collective the viewer moved to.
 	async function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
+		// #325 — wire-level refusal: checked before anything else, since
+		// `disabled` on the select is a double-tap guard, not a state signal.
+		if (rolesPending) return;
 		if (!selection.id || !cfg || !dbEntityId) return;
 		const thisLoad = loadSeq;
 		actionError = false;
+		rolesStatus = '';
+		rolesPending = true;
 		try {
 			await addAdmin(cfg, dbEntityId, selection.id);
 			await refreshAdmins(thisLoad);
+			if (thisLoad !== loadSeq) return;
+			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
 			if (thisLoad !== loadSeq) return;
 			console.error('admin roles: add admin failed', e);
 			actionError = true;
+		} finally {
+			if (thisLoad === loadSeq) rolesPending = false;
 		}
 	}
 
 	async function onPickLibrarian(selection: { id: string | null; label: string }): Promise<void> {
+		if (rolesPending) return;
 		if (!selection.id || !cfg || !libraryId) return;
 		const thisLoad = loadSeq;
 		actionError = false;
+		rolesStatus = '';
+		rolesPending = true;
 		try {
 			await addLibrarian(cfg, libraryId, selection.id);
 			await refreshLibrarians(thisLoad);
+			if (thisLoad !== loadSeq) return;
+			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
 			if (thisLoad !== loadSeq) return;
 			console.error('admin roles: add librarian failed', e);
 			actionError = true;
+		} finally {
+			if (thisLoad === loadSeq) rolesPending = false;
 		}
 	}
 
 	async function onRemoveAdmin(personId: string): Promise<void> {
+		if (rolesPending) return;
 		if (!cfg || !dbEntityId) return;
 		const thisLoad = loadSeq;
 		actionError = false;
+		rolesStatus = '';
+		rolesPending = true;
 		try {
 			await removeAdmin(cfg, dbEntityId, personId);
 			await refreshAdmins(thisLoad);
+			if (thisLoad !== loadSeq) return;
+			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
 			if (thisLoad !== loadSeq) return;
 			console.error('admin roles: remove admin failed', e);
 			actionError = true;
+		} finally {
+			if (thisLoad === loadSeq) rolesPending = false;
 		}
 	}
 
 	async function onRemoveLibrarian(personId: string): Promise<void> {
+		if (rolesPending) return;
 		if (!cfg || !libraryId) return;
 		const thisLoad = loadSeq;
 		actionError = false;
+		rolesStatus = '';
+		rolesPending = true;
 		try {
 			await removeLibrarian(cfg, libraryId, personId);
 			await refreshLibrarians(thisLoad);
+			if (thisLoad !== loadSeq) return;
+			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
 			if (thisLoad !== loadSeq) return;
 			console.error('admin roles: remove librarian failed', e);
 			actionError = true;
+		} finally {
+			if (thisLoad === loadSeq) rolesPending = false;
 		}
 	}
 </script>
@@ -612,6 +663,23 @@
 					{m.admin_roles_action_error()}
 				</p>
 			{/if}
+			<!-- #325 — the caveat-slot paragraph shape #321 already uses beside
+			     these selects (partial-notice/order-note below), so a write in
+			     flight is VISIBLE, not merely a disabled control
+			     (docs/qa/autosave-field-inventory.md: `disabled` alone is a
+			     double-tap guard, not a state signal). -->
+			{#if rolesPending}
+				<p data-testid="admin-roles-pending-notice" role="status" class="text-sm text-ink-2">
+					{m.admin_roles_saving()}
+				</p>
+			{/if}
+			<!-- #325/#267 shape — persistent role="status" region, mounted blank
+			     from first render (a live region announces only CHANGES to its
+			     contents) so a settle is distinguishable from silence even when
+			     nothing failed. -->
+			<div data-testid="admin-roles-status" role="status" aria-live="polite" class="sr-only">
+				{rolesStatus}
+			</div>
 
 			<section data-testid="admin-roles-admins" class="flex flex-col gap-3">
 				<h2 class="font-display text-lg">{m.admin_roles_admins_title()}</h2>
@@ -637,7 +705,7 @@
 								<button
 									type="button"
 									data-testid="admin-remove-{person.id}"
-									disabled={!canManageAdmins || isLastOwner(person)}
+									disabled={!canManageAdmins || isLastOwner(person) || rolesPending}
 									class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 									onclick={() => onRemoveAdmin(person.id)}
 								>
@@ -663,7 +731,7 @@
 					<select
 						data-testid="admin-add-admin-select"
 						aria-label={m.admin_roles_add_admin_label()}
-						disabled={adminOptions.length === 0}
+						disabled={adminOptions.length === 0 || rolesPending}
 						value=""
 						onchange={(e) => {
 							const target = e.currentTarget as HTMLSelectElement;
@@ -734,7 +802,7 @@
 									<button
 										type="button"
 										data-testid="librarian-remove-{person.id}"
-										disabled={!canManageLibrarians || isSelf(person)}
+										disabled={!canManageLibrarians || isSelf(person) || rolesPending}
 										title={isSelf(person) ? m.admin_roles_remove_self_hint() : undefined}
 										class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 										onclick={() => onRemoveLibrarian(person.id)}
@@ -758,7 +826,7 @@
 						<select
 							data-testid="admin-add-librarian-select"
 							aria-label={m.admin_roles_add_librarian_label()}
-							disabled={librarianOptions.length === 0}
+							disabled={librarianOptions.length === 0 || rolesPending}
 							value=""
 							onchange={(e) => {
 								const target = e.currentTarget as HTMLSelectElement;
