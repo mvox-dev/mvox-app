@@ -82,6 +82,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 const DB_ENTITY = 'db-1';
 
@@ -156,7 +157,7 @@ function setAuthedWithOneCollective() {
 
 beforeEach(() => {
 	stubGlobalFetch();
-	loadRosterMock.mockImplementation(() => Promise.resolve(fixtureRows()));
+	loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRows())));
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
 	createMock.mockResolvedValue('sec-created');

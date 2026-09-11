@@ -41,7 +41,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
-	listMyRsvps: vi.fn().mockResolvedValue([]),
+	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	rsvpsByEventId: () => ({}),
 	createRsvp: vi.fn(),
 	updateRsvpStatus: vi.fn(),
@@ -50,7 +50,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),

@@ -197,6 +197,16 @@
 		 *  follow-up brings `pickableEditionsVisible` to this same safe
 		 *  default; it does not pull this prop back to `length > 0` to match. */
 		pickableWorksVisible?: boolean;
+		/** #321 (PO ruling 2026-09-11) — the `listWorks` read behind
+		 *  `pickableWorksList` came back TRUNCATED. This select is a CLOSED SET:
+		 *  a work missing from its options cannot be added to the repertoire at
+		 *  all, and the gap reads as "that piece isn't in the library" — the
+		 *  false absence the ruling is about, not a short list. Own flag per feed
+		 *  (this one and `pickableEditionsPartial` below), because a truncated
+		 *  edition read says nothing about the works list and a shared flag would
+		 *  put a false claim in the other picker. Default false: a caller that
+		 *  hands over an already-resolved list has nothing to declare. */
+		pickableWorksPartial?: boolean;
 		/** 'programme' context only — editions not yet on tonight's programme. */
 		pickableEditions?: PickerOption[];
 		/** #288 — whether "Add to programme" (the select built from
@@ -215,6 +225,11 @@
 		 *  remounting on an agenda-skeleton flip, which loses any state kept
 		 *  in here). */
 		pickableEditionsVisible?: boolean;
+		/** #321 — the same fact for the `listAllEditions` read behind
+		 *  `pickableEditions`: an edition it does not offer cannot be put on
+		 *  tonight's programme. See `pickableWorksPartial` for why these are two
+		 *  flags rather than one. */
+		pickableEditionsPartial?: boolean;
 		/** Per-row edition choices for "Pin edition" ('repertoire' context). A row
 		 *  id absent (or mapped to []) hides that row's pin control — nothing to
 		 *  pick from. */
@@ -246,8 +261,10 @@
 		pickableWorksList = [],
 		addWorkKey = ADD_WORK_KEY,
 		pickableWorksVisible = true,
+		pickableWorksPartial = false,
 		pickableEditions = [],
 		pickableEditionsVisible: pickableEditionsVisibleProp,
+		pickableEditionsPartial = false,
 		editionOptionsByRowId = {},
 		pendingKeys = new Set<string>(),
 		expanded: forceExpanded = false,
@@ -575,6 +592,19 @@
 					{#each pickableWorksList as w (w.id)}
 						<option value={w.id}>{workLabel(w)}</option>
 					{/each}
+					<!-- #321 (PO ruling) — a truncated library read hides works that
+					     exist, and a work the list does not offer cannot be added:
+					     "it isn't in the library" is what the gap says. This select can
+					     be opened whenever it renders (it is only `disabled` while a
+					     create is in flight), so the notice goes INSIDE the option list
+					     as a trailing disabled entry — unselectable, last, gone the
+					     moment the read is complete. Same copy as every other
+					     option-list surface. -->
+					{#if pickableWorksPartial}
+						<option data-testid="work-manage-add-work-partial-option" value="" disabled>
+							{m.picker_partial_options_notice()}
+						</option>
+					{/if}
 				</select>
 				<button
 					type="button"
@@ -610,6 +640,14 @@
 					{#each pickableEditions as opt (opt.id)}
 						<option value={opt.id}>{opt.label}</option>
 					{/each}
+					<!-- #321 (PO ruling) — the same shape for the edition feed: an
+					     edition this list does not offer cannot be put on tonight's
+					     programme. -->
+					{#if pickableEditionsPartial}
+						<option data-testid="work-manage-add-programme-partial-option" value="" disabled>
+							{m.picker_partial_options_notice()}
+						</option>
+					{/if}
 				</select>
 			{/if}
 			{#if selectedEditionForAdd}

@@ -51,6 +51,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 function fixtureTree(): SectionNode[] {
 	const sop1: SectionNode = {
@@ -97,7 +98,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);

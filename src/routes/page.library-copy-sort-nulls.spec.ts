@@ -153,6 +153,7 @@ vi.mock('$lib/library/lendingActions', () => ({
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -182,9 +183,9 @@ function setAuthedWithOneCollective() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 /**
@@ -214,21 +215,21 @@ function setAuthedWithOneCollective() {
  *   by since:  lent-none(06-15), lent-beta(07-01), lent-alpha(undated, last) | avail-one, avail-three, avail-none
  */
 function setPartitionFixture() {
-	listWorksMock.mockResolvedValue([
+	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
-	]);
-	listEditionsMock.mockResolvedValue([
+	]));
+	listEditionsMock.mockResolvedValue(toListRead([
 		{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }
-	]);
-	listCopiesMock.mockResolvedValue([
+	]));
+	listCopiesMock.mockResolvedValue(toListRead([
 		{ id: 'lent-alpha', name: 'Copy #8', copyNumber: 8, editionId: 'edition-1' },
 		{ id: 'avail-none', name: '', copyNumber: 0, editionId: 'edition-1' },
 		{ id: 'avail-three', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' },
 		{ id: 'lent-none', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' },
 		{ id: 'avail-one', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
 		{ id: 'lent-beta', name: 'Copy #5', copyNumber: 5, editionId: 'edition-1' }
-	]);
-	listLendingsMock.mockResolvedValue([
+	]));
+	listLendingsMock.mockResolvedValue(toListRead([
 		{
 			id: 'lend-alpha',
 			copyId: 'lent-alpha',
@@ -254,7 +255,7 @@ function setPartitionFixture() {
 			assignedUntil: '',
 			returnedAt: ''
 		}
-	]);
+	]));
 	resolveBorrowerNamesMock.mockResolvedValue(
 		new Map([
 			['member-alpha', 'Alpha Person'],

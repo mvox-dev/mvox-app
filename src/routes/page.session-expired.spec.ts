@@ -112,6 +112,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -143,7 +144,7 @@ function setAuthedWithOneCollective() {
 }
 
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();

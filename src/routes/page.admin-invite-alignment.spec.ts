@@ -28,6 +28,7 @@
 // Mechanism (engineer's call, GREEN): expected to follow the existing
 // `heading` prop pattern — a layout/embedded prop defaulting to today's
 // standalone classes, gated off at the /admin embed only.
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -237,10 +238,10 @@ function loadOk() {
 		persons: [{ id: 'p-cilla', name: 'Cilla Cane', role: 'editor' as const, valueIds: ['pv-ed-cilla'] }],
 		canManage: true
 	});
-	h.loadRosterMock.mockResolvedValue([
+	h.loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
 		{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '' }
-	]);
+	]));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);

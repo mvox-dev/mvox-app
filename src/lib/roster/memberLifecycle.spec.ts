@@ -257,8 +257,10 @@ describe('listInactiveMembers', () => {
 				]
 			})
 		);
-		const rows = await listInactiveMembers(cfg, fetchImpl);
-		expect(rows).toEqual([
+		const read = await listInactiveMembers(cfg, fetchImpl);
+		// #321 — the reader returns `{ items, total, truncated }`; the MAPPING is what
+		// this file pins, the read shape itself lives in rosterData.truncation.spec.ts.
+		expect(read.items).toEqual([
 			{
 				memberId: 'member-9',
 				personId: 'person-9',
@@ -299,8 +301,8 @@ describe('loadInactiveRoster', () => {
 		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-9', _sharing: 'domain', name: 'Gone Girl', email: 'gone@example.com' }
 		]);
-		const rows = await loadInactiveRoster(cfg, fetchImpl);
-		expect(rows).toEqual([
+		const read = await loadInactiveRoster(cfg, fetchImpl);
+		expect(read.items).toEqual([
 			{
 				memberId: 'member-9',
 				personId: 'person-9',
@@ -319,8 +321,8 @@ describe('loadInactiveRoster', () => {
 			})
 		);
 		listMyProfilesMock.mockResolvedValue([]);
-		const rows = await loadInactiveRoster(cfg, fetchImpl);
-		expect(rows).toEqual([]);
+		const read = await loadInactiveRoster(cfg, fetchImpl);
+		expect(read.items).toEqual([]);
 	});
 });
 

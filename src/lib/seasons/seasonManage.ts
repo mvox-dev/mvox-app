@@ -31,11 +31,21 @@ import {
 	SeriesCascadePartialError
 } from './deleteErrors';
 import type { EntuCfg } from './entuSeasons';
+import { deriveListRead, isTruncated, type ListRead } from '$lib/entu/listRead';
 
 export interface SeriesListItem {
 	id: string;
 	name: string;
 	eventCount: number;
+}
+
+/** #321 — `listEventSeriesForSeason`'s shape: no `total`, because TWO
+ *  collections ride the one call (series + season-wide events) and summing
+ *  their counts would be a made-up number. `truncated` is true when EITHER
+ *  read reports `count > raw entities.length`. */
+export interface SeriesListRead {
+	items: SeriesListItem[];
+	truncated: boolean;
 }
 
 export interface StandaloneEvent {
@@ -72,7 +82,7 @@ export async function listEventSeriesForSeason(
 	cfg: EntuCfg,
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<SeriesListItem[]> {
+): Promise<SeriesListRead> {
 	const seriesRes = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name&limit=200`,
@@ -81,12 +91,17 @@ export async function listEventSeriesForSeason(
 		fetchImpl
 	);
 	if (!seriesRes.ok) throw new Error(`listEventSeriesForSeason failed: ${seriesRes.status}`);
-	const seriesBody = (await seriesRes.json()) as { entities?: SeriesEntity[] };
+	const seriesBody = (await seriesRes.json()) as { count?: number; entities?: SeriesEntity[] };
 	const seriesList = seriesBody.entities ?? [];
-	if (seriesList.length === 0) return [];
+	const seriesTruncated = isTruncated(seriesList.length, seriesBody.count);
+	if (seriesList.length === 0) return { items: [], truncated: seriesTruncated };
 
 	// ONE season-wide event read carries every event's `_parent`, grouped
-	// client-side — never a per-series count query (review checklist #2).
+	// client-side — never a per-series count query (review checklist #2). #321:
+	// this is the exact read the module's own admission above
+	// `countSeriesOccurrences` names as under-reporting — its `count` now feeds
+	// `truncated` here, so the admission narrows to what stays true (staleness,
+	// not silent under-reporting — see that function's updated doc comment).
 	const eventsRes = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event&_parent.reference=${seasonId}&props=_parent&limit=500`,
@@ -95,8 +110,9 @@ export async function listEventSeriesForSeason(
 		fetchImpl
 	);
 	if (!eventsRes.ok) throw new Error(`listEventSeriesForSeason event read failed: ${eventsRes.status}`);
-	const eventsBody = (await eventsRes.json()) as { entities?: EventEntity[] };
+	const eventsBody = (await eventsRes.json()) as { count?: number; entities?: EventEntity[] };
 	const events = eventsBody.entities ?? [];
+	const eventsTruncated = isTruncated(events.length, eventsBody.count);
 
 	const counts = new Map<string, number>();
 	for (const event of events) {
@@ -105,11 +121,14 @@ export async function listEventSeriesForSeason(
 		counts.set(seriesRef, (counts.get(seriesRef) ?? 0) + 1);
 	}
 
-	return seriesList.map((series) => ({
-		id: series._id,
-		name: series.name?.[0]?.string ?? '',
-		eventCount: counts.get(series._id) ?? 0
-	}));
+	return {
+		items: seriesList.map((series) => ({
+			id: series._id,
+			name: series.name?.[0]?.string ?? '',
+			eventCount: counts.get(series._id) ?? 0
+		})),
+		truncated: seriesTruncated || eventsTruncated
+	};
 }
 
 /** #304 — a season's series, id + name ONLY: the event-detail series picker's
@@ -129,6 +148,16 @@ export async function listSeriesOptionsForSeason(
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<SeriesOption[]> {
+	// #321 class (1) — ONE season's `event_series` rows, `_parent`-scoped to that
+	// season. A series is a recurring PATTERN ("Tuesday rehearsals", "concert
+	// week"), never an occurrence — the occurrences are `event` children of the
+	// series and are counted separately (`countSeriesOccurrences`). A season
+	// carries a handful of patterns; limit=200 is an explicit, ample bound.
+	//   `listEventSeriesForSeason` above issues the byte-identical query and DOES
+	// report `truncated`. That flag is dominated by its SECOND read — the
+	// season-wide `event` list — and the series half simply rides along in the same
+	// `||` at zero cost. This picker makes no second read, so it has nothing to
+	// ride on and, by the bound above, nothing to report.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name&limit=200`,
@@ -144,11 +173,17 @@ export async function listSeriesOptionsForSeason(
 	}));
 }
 
+/**
+ * #321 — `truncated` compares the server `count` against the RAW season-wide
+ * event read's length, BEFORE the standalone-only filter below: a series
+ * occurrence filtered OUT of `items` is not a row this read is "missing", so
+ * the occurrence filter must never itself read as a truncation.
+ */
 export async function listEventsForSeason(
 	cfg: EntuCfg,
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<StandaloneEvent[]> {
+): Promise<ListRead<StandaloneEvent>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event&_parent.reference=${seasonId}&props=name,start_datetime,_parent&limit=500`,
@@ -157,15 +192,16 @@ export async function listEventsForSeason(
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listEventsForSeason failed: ${res.status}`);
-	const body = (await res.json()) as { entities?: EventEntity[] };
+	const body = (await res.json()) as { count?: number; entities?: EventEntity[] };
 	const events = body.entities ?? [];
-	return events
+	const items = events
 		.filter((event) => seriesRefOf(event) === undefined)
 		.map((event) => ({
 			id: event._id,
 			name: event.name?.[0]?.string ?? '',
 			startDatetime: event.start_datetime?.[0]?.datetime ?? ''
 		}));
+	return deriveListRead(items, events.length, body.count);
 }
 
 /** Which wire value key each editable season field is written under. Seasons
@@ -457,10 +493,20 @@ async function deleteEntity(
  * How many occurrence events the series holds RIGHT NOW — the number the
  * panel's two-step confirm shows before arming an irreversible cascade (#197
  * review 2nd pass F2). Deliberately its own one-row read of the server's
- * `count`, not the panel list's client-side tally: the list derives its counts
- * from ONE season-wide `limit=500` event read, so it under-reports a big season
- * and misses anything created since it last ran, and the confirm must not
- * promise a number the write never checks.
+ * `count`, not the panel list's client-side tally.
+ *
+ * #321 narrows what "not the panel list's tally" means, and its review F1
+ * finishes the narrowing. `listEventSeriesForSeason` parses its own `count` and
+ * REPORTS `truncated` when the season-wide event read behind the tally is
+ * partial, and the panel now SAYS so on screen
+ * (`season-manage-partial-notice`, above the series list) rather than only
+ * logging it. So the truncation half is no longer a reason for this dedicated
+ * read — the reader is told. What remains is the one reason that never depended
+ * on completeness:
+ *   - STALENESS — the panel's list is a snapshot from whenever it last ran, and
+ *     anything created since is invisible to it regardless of truncation.
+ * The confirm must not promise a number the write never checks, against a fetch
+ * that might be minutes old.
  */
 export async function countSeriesOccurrences(
 	cfg: EntuCfg,

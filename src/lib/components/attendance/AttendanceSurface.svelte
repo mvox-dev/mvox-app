@@ -41,6 +41,12 @@
 		pendingMemberIds?: ReadonlySet<string>;
 		// Members whose last write REJECTED — surfaces an inline save-failed line.
 		failedMemberIds?: ReadonlySet<string>;
+		// #321 (PO ruling 2026-09-11) — the member read behind `members` came back
+		// PARTIAL. This panel is a CLOSED SET: a singer with no row here cannot be
+		// marked present at all, and her missing row reads as "she is not a member"
+		// rather than as a list cut short. Both pages that mount this surface pass
+		// their own flag; the `false` default leaves every other caller unchanged.
+		membersPartial?: boolean;
 		ontoggle?: (memberId: string, status: AttendanceStatus | null) => void;
 		onclose?: () => void;
 	}
@@ -53,6 +59,7 @@
 		error = false,
 		pendingMemberIds = new Set<string>(),
 		failedMemberIds = new Set<string>(),
+		membersPartial = false,
 		ontoggle,
 		onclose
 	}: Props = $props();
@@ -234,6 +241,22 @@
 		<p data-testid="attendance-panel-error" class="text-sm text-red-700" role="alert">{m.attendance_load_error()}</p>
 	{:else}
 		<div class="flex flex-col gap-2">
+			<!-- #321 (PO ruling) — the roster behind these rows was cut short, so the
+			     panel says it where the conductor is looking for the missing singer,
+			     not on the page behind it. A list-shaped picker CAN hold a live
+			     region, so this is the shared notice shape (visible paragraph,
+			     role="status", own testid, copy through i18n) rather than the
+			     trailing disabled option the native selects use. Absent from the DOM
+			     once the read is complete. -->
+			{#if membersPartial}
+				<p
+					data-testid="attendance-panel-partial-notice"
+					role="status"
+					class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
+				>
+					{m.picker_partial_members_notice()}
+				</p>
+			{/if}
 			{#each members as member (member.memberId)}
 				<div
 					data-testid="attendance-row-{member.memberId}"

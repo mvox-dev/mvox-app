@@ -45,6 +45,7 @@
 // Assertions match on DATA (names, testids, mock calls), never translated
 // sentences — full-fallback paraglide proxy, same posture as
 // page.event-editing.spec.ts.
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -160,7 +161,7 @@ function loadOk() {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');

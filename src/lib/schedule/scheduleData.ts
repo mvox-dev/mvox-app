@@ -32,6 +32,10 @@ export async function listScheduleItems(
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<ScheduleItem[]> {
+	// #321 class (1) — ONE event's schedule, `_parent`-scoped to that event: a
+	// single evening's timeline (call, warm-up, break, curtain), tens of rows at
+	// the very most. Same scope and same bound as `listProgramItems`, which this
+	// mirrors. limit=500 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=schedule_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,datetime&limit=500`,

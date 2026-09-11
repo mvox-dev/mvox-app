@@ -157,7 +157,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -173,9 +173,9 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue([]),
-	listAllEditions: vi.fn().mockResolvedValue([]),
-	listAllCopies: vi.fn().mockResolvedValue([])
+	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 }));
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
@@ -189,6 +189,7 @@ import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entit
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -282,15 +283,15 @@ function setAuthedWithOneCollective() {
 
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue([]);
+	loadRosterMock.mockResolvedValue(toListRead([]));
 	createEventSeriesMock.mockResolvedValue(NEW_SERIES_ID);
 	createEventMock.mockImplementation(async () => `ev-new-${createEventMock.mock.calls.length}`);
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue([]);
-	listEventSeriesForSeasonMock.mockResolvedValue(seriesFixture());
-	listEventsForSeasonMock.mockResolvedValue(standaloneFixture());
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead(seriesFixture()));
+	listEventsForSeasonMock.mockResolvedValue(toListRead(standaloneFixture()));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);

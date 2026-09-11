@@ -162,6 +162,7 @@ vi.mock('$lib/library/lendingActions', () => ({
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -185,9 +186,9 @@ function setAuthedWithOneCollective() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 type Fixture = {
@@ -208,22 +209,22 @@ type Fixture = {
  */
 function setFixture({ lent, available }: Fixture) {
 	const all = [...lent, ...available];
-	listWorksMock.mockResolvedValue([
+	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
-	]);
-	listEditionsMock.mockResolvedValue([
+	]));
+	listEditionsMock.mockResolvedValue(toListRead([
 		{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }
-	]);
-	listCopiesMock.mockResolvedValue(
+	]));
+	listCopiesMock.mockResolvedValue(toListRead(
 		all.map((id, i) => ({
 			id,
 			name: `Copy #${i + 1}`,
 			copyNumber: i + 1,
 			editionId: 'edition-1'
 		}))
-	);
+	));
 	const borrowers = ['Adam Aber', 'Beata Berg', 'Carl Corno', 'Dora Dux', 'Enn Erg'];
-	listLendingsMock.mockResolvedValue(
+	listLendingsMock.mockResolvedValue(toListRead(
 		lent.map((copyId, i) => ({
 			id: `lend-${copyId}`,
 			copyId,
@@ -232,7 +233,7 @@ function setFixture({ lent, available }: Fixture) {
 			assignedUntil: '',
 			returnedAt: ''
 		}))
-	);
+	));
 	resolveBorrowerNamesMock.mockResolvedValue(
 		new Map(lent.map((_, i) => [`member-${i}`, borrowers[i]]))
 	);

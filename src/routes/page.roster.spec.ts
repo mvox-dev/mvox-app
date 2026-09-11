@@ -68,6 +68,7 @@ import Page from './roster/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -125,10 +126,10 @@ describe('/roster — loading state', () => {
 
 describe('/roster — ready state', () => {
 	it('renders each row (name always shown; a row with no email omits the email node entirely, not just an empty string)', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'member-1', personId: 'person-a', name: 'Ada Lovelace', email: 'ada@example.com' },
 			{ memberId: 'member-2', personId: 'person-b', name: 'Bea Noe', email: '' }
-		]);
+		]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -160,7 +161,7 @@ describe('/roster — ready state', () => {
 
 describe('/roster — empty state', () => {
 	it('shows roster-empty and no roster-list when loadRoster resolves []', async () => {
-		loadRosterMock.mockResolvedValue([]);
+		loadRosterMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -223,7 +224,8 @@ describe('/roster — no-collective state', () => {
 
 describe('/roster — staleness guard (generation discipline)', () => {
 	it('a stale (superseded) load resolving after a collective switch does not clobber the newer result', async () => {
-		let resolveFirst!: (rows: unknown[]) => void;
+		// #321 — the producer resolves a ListRead now, so the held settler takes one.
+		let resolveFirst!: (read: { items: unknown[]; total: number; truncated: boolean }) => void;
 		loadRosterMock.mockImplementationOnce(
 			() =>
 				new Promise((resolve) => {
@@ -237,9 +239,9 @@ describe('/roster — staleness guard (generation discipline)', () => {
 
 		// Switch collective before the first load resolves — this should start a second,
 		// newer load.
-		loadRosterMock.mockResolvedValueOnce([
+		loadRosterMock.mockResolvedValueOnce(toListRead([
 			{ memberId: 'member-2', personId: 'person-b', name: 'Second Collective Member', email: '' }
-		]);
+		]));
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
@@ -253,7 +255,9 @@ describe('/roster — staleness guard (generation discipline)', () => {
 		await waitFor(() => expect(loadRosterMock).toHaveBeenCalledTimes(2));
 
 		// Now resolve the FIRST (stale) call, with a member from the earlier collective.
-		resolveFirst([{ memberId: 'member-1', personId: 'person-a', name: 'Stale Member', email: '' }]);
+		resolveFirst(
+			toListRead([{ memberId: 'member-1', personId: 'person-a', name: 'Stale Member', email: '' }])
+		);
 
 		// TU.2/#110 finding #9 — expand Unassigned to get member-2's row on screen
 		// (every member here is Unassigned; listSectionsMock is pinned to []).

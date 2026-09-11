@@ -62,6 +62,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 // Soprano (order 1) ▸ Soprano 1; Alto (order 2). Members: Ada+Carol in Soprano,
@@ -117,7 +118,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 });
 
@@ -321,7 +322,7 @@ describe('/roster — column header toggles grouped ↔ flat (alphabetical) view
 
 describe('/roster — F1 code-review fix: a member in MULTIPLE sections appears in every one of them', () => {
 	it('a member with sectionIds in two groups shows up in BOTH groups\' member lists (grouped view), and both section names ride along in the flat view', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			...fixtureRows(),
 			{
 				memberId: 'm-multi',
@@ -330,7 +331,7 @@ describe('/roster — F1 code-review fix: a member in MULTIPLE sections appears 
 				email: 'mia@x.com',
 				sectionIds: ['sec-sop', 'sec-alto']
 			}
-		]);
+		]));
 		const container = await renderReady();
 		// TU.2/#110 finding #9 — collapsed by default now; expand both groups to
 		// see their rows.
@@ -392,7 +393,7 @@ describe('/roster — F2 code-review fix: sub-section indentation is a constant 
 				]
 			}
 		];
-		loadRosterMock.mockResolvedValue([]);
+		loadRosterMock.mockResolvedValue(toListRead([]));
 		listSectionsMock.mockResolvedValue(deepTree);
 		const container = await renderReady();
 		// TU.2/#110 finding #9 — a sub-section's own GROUP element only renders
@@ -415,7 +416,7 @@ describe('/roster — F2 code-review fix: sub-section indentation is a constant 
 describe('/roster — F3 code-review fix: a section-tree failure does not black out an otherwise-loaded roster', () => {
 	it('rows load OK, sections load REJECTS → flat list renders (not roster-load-error) with a visible error banner; all rows stay visible; failure is still logged', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockResolvedValue(fixtureRows());
+		loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 		listSectionsMock.mockRejectedValue(new Error('sections boom'));
 		setAuthedWithOneCollective();
 
@@ -455,7 +456,7 @@ describe('/roster — F3 code-review fix: a section-tree failure does not black 
 
 describe('/roster — F4 code-review fix: the empty placeholder is gated on rows AND sections, not rows alone', () => {
 	it('rows=[] but sections exist → the section structure renders with (0) counts, NOT the roster-empty placeholder', async () => {
-		loadRosterMock.mockResolvedValue([]);
+		loadRosterMock.mockResolvedValue(toListRead([]));
 		listSectionsMock.mockResolvedValue(fixtureTree());
 		const container = await renderReady();
 		await expand(container, 'sec-sop'); // TU.2/#110 finding #9 — Soprano 1's header needs its parent open
@@ -471,7 +472,7 @@ describe('/roster — F4 code-review fix: the empty placeholder is gated on rows
 	});
 
 	it('rows=[] AND sections=[] → the roster-empty placeholder still shows (nothing at all to structure)', async () => {
-		loadRosterMock.mockResolvedValue([]);
+		loadRosterMock.mockResolvedValue(toListRead([]));
 		listSectionsMock.mockResolvedValue([]);
 		setAuthedWithOneCollective();
 

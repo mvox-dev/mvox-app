@@ -133,6 +133,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // m1 is the VIEWER's own membership (person-p); m2 joined, m3 invited, m4
 // never invited — all unassigned. m5 is invited AND carries a section, for the
@@ -170,7 +171,7 @@ function setAuthed() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(rows());
+	loadRosterMock.mockResolvedValue(toListRead(rows()));
 	listSectionsMock.mockResolvedValue(tree());
 	listJoinStatesMock.mockImplementation((_cfg: unknown, personIds: string[]) =>
 		Promise.resolve(
@@ -189,8 +190,8 @@ beforeEach(() => {
 	withdrawInviteMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue([]);
-	listInactiveMembersMock.mockResolvedValue([]);
+	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });

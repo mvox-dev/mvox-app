@@ -1,5 +1,6 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // The RSVP write path (#10) — a singer's own status on an event. Harvested from
 // `mvox_v4e_web` `src/lib/rsvp/rsvpData.ts` (tally functions dropped — out of
@@ -40,6 +41,11 @@ export async function findMyMemberId(
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string | null> {
+	// #321 class-1 — scoped by person.reference + status.string=active: the
+	// single-collective-per-db invariant (this module header) means a signed-in
+	// person has AT MOST ONE active member row; limit=1 is an explicit, ample
+	// bound (a second concurrent active row would be damaged data, not a
+	// truncation this read could ever observe).
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=member&person.reference=${encodeURIComponent(personId)}&status.string=active&props=_id&limit=1`,
@@ -56,12 +62,19 @@ export async function findMyMemberId(
  * List the singer's own rsvps (#11). `rsvp` is a child of `person` — scoping by
  * `_parent.reference=personId` is the whole query, native under the singer's own
  * person, no cross-person read (issue AC). Used to seed each agenda row's answer.
+ *
+ * #321 — person-LIFETIME, no season boundary: a weekly-rehearsal member of
+ * ten years reaches the `limit=500` cap on real rows (50/yr x 10yr), so this
+ * is a reachable bound, not a provably-unreachable one. `truncated` (server
+ * `count` > RAW entities.length, same request) tells the agenda page when its
+ * "answer set" is incomplete — see `$lib/entu/listRead` for the shared
+ * contract.
  */
 export async function listMyRsvps(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<MyRsvp[]> {
+): Promise<ListRead<MyRsvp>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=rsvp&_parent.reference=${encodeURIComponent(personId)}&props=event,status&limit=500`,
@@ -71,17 +84,20 @@ export async function listMyRsvps(
 	);
 	if (!res.ok) throw new Error(`listMyRsvps failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{
 			_id: string;
 			event?: Array<{ reference: string }>;
 			status?: Array<{ string: string }>;
 		}>;
 	};
-	return (body.entities ?? []).map((raw) => ({
-		rsvpId: raw._id,
-		eventId: raw.event?.[0]?.reference ?? '',
-		status: (raw.status?.[0]?.string ?? 'going') as RsvpStatus
+	const raw = body.entities ?? [];
+	const items = raw.map((r) => ({
+		rsvpId: r._id,
+		eventId: r.event?.[0]?.reference ?? '',
+		status: (r.status?.[0]?.string ?? 'going') as RsvpStatus
 	}));
+	return deriveListRead(items, raw.length, body.count);
 }
 
 /**

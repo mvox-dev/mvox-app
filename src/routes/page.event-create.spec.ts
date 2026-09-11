@@ -258,7 +258,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -276,9 +276,9 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor in most cases here, so the page's
 // loadManagePickers fires — stub its reads or they hit the network.
 vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue([]),
-	listAllEditions: vi.fn().mockResolvedValue([]),
-	listAllCopies: vi.fn().mockResolvedValue([])
+	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 }));
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
@@ -293,6 +293,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -441,12 +442,14 @@ function upcomingStandaloneFixture() {
 /** Route the two season-scoped reads BY seasonId — the default mocks answer the
  *  same rows whatever season is asked for, which cannot tell the two apart. */
 function routeSeasonListsBySeason(): void {
-	listEventSeriesForSeasonMock.mockImplementation(async (_cfg: unknown, seasonId: string) =>
-		seasonId === SEASON_ID ? seriesFixture() : upcomingSeriesFixture()
-	);
-	listEventsForSeasonMock.mockImplementation(async (_cfg: unknown, seasonId: string) =>
-		seasonId === SEASON_ID ? standaloneFixture() : upcomingStandaloneFixture()
-	);
+	listEventSeriesForSeasonMock.mockImplementation(async (_cfg: unknown, seasonId: string) => ({
+		items: seasonId === SEASON_ID ? seriesFixture() : upcomingSeriesFixture(),
+		truncated: false
+	}));
+	listEventsForSeasonMock.mockImplementation(async (_cfg: unknown, seasonId: string) => {
+		const items = seasonId === SEASON_ID ? standaloneFixture() : upcomingStandaloneFixture();
+		return { items, total: items.length, truncated: false };
+	});
 }
 
 /** Lets anything already queued — a late reply that WOULD have landed — run
@@ -473,16 +476,16 @@ function setAuthedWithOneCollective() {
 
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	// [] = no sections → roster order degrades to the roster's own order.
 	listSectionsMock.mockResolvedValue([]);
 	createEventMock.mockResolvedValue('ev-new-1');
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue([]);
-	listEventSeriesForSeasonMock.mockResolvedValue(seriesFixture());
-	listEventsForSeasonMock.mockResolvedValue(standaloneFixture());
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead(seriesFixture()));
+	listEventsForSeasonMock.mockResolvedValue(toListRead(standaloneFixture()));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);
@@ -872,11 +875,11 @@ describe('agenda — the conductor select (#209) is fed from the cached roster',
 	it('option order is ROSTER order — section (listSections tree order), then position within section, Unassigned last — NOT alphabetical (Gama ruling 3)', async () => {
 		// loadRoster answers NAME order (Ada, Grace, Pete). Grace sings Sopran
 		// (first), Ada Tenor (second), Pete is unassigned → LAST.
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ ...fixtureRows()[0], sectionIds: ['sec-t'] }, // Ada → Tenor
 			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran
 			{ ...fixtureRows()[2], sectionIds: [] } // Pete → Unassigned
-		]);
+		]));
 		listSectionsMock.mockResolvedValue([
 			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
@@ -1606,7 +1609,7 @@ describe('agenda — the event-create form drops async replies that no longer be
 					releaseSlow = resolve;
 				});
 			}
-			return Promise.resolve(upcomingSeriesFixture());
+			return Promise.resolve({ items: upcomingSeriesFixture(), truncated: false });
 		});
 		const container = await renderReady();
 		// Panel-born (#213 removed the page-level [+ Event], so every open is): the
@@ -1625,7 +1628,7 @@ describe('agenda — the event-create form drops async replies that no longer be
 		// The abandoned season's list arrives late. It must land nowhere: offered
 		// under the new season, picking one would ride along as a cross-season
 		// `event_series` parent on the created event.
-		releaseSlow(seriesFixture());
+		releaseSlow({ items: seriesFixture(), truncated: false });
 		await flush();
 		expect(select().querySelector('option[value="series-1"]')).toBeNull();
 		expect(select().querySelector('option[value="series-9"]')).not.toBeNull();
@@ -2481,3 +2484,40 @@ describe('#249 — every event-create control carries a visible label that IS it
 // + event-create-type's #205-F1 redundancy per Gama's scope note), the :766
 // conductor aria-label pin deliberately flipped, placeholders/datalist/groups
 // pinned untouched, fieldset grouping pinned ABSENT per done-when 5)
+
+// ── #321 review F2: the conductor picker states a truncated roster ──────────────
+//
+// The PO's reachability ruling (2026-09-11): a person select fed by the roster is
+// a CLOSED SET, so a member missing from its options cannot be picked at all and
+// the gap reads as "not a member" rather than as a list cut short. The notice sits
+// in the picker's own caveat slot (beside the order note) rather than as a trailing
+// option, because this select goes `disabled` once its options run out — and the
+// "everyone is already added" prompt it then shows is the truncation's most
+// misleading face.
+
+describe('the event-create conductor picker (#321 review F2)', () => {
+	const NOTICE = '[data-testid="event-create-conductor-partial-notice"]';
+
+	it('a truncated roster read renders the shared role="status" notice beside the picker', async () => {
+		loadRosterMock.mockResolvedValue({ items: fixtureRows(), total: 500, truncated: true });
+		const container = await renderReady();
+		await openFormFromPanel(container);
+
+		await waitFor(() => {
+			expect(container.querySelector(NOTICE)).not.toBeNull();
+		});
+		const notice = container.querySelector(NOTICE)!;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toMatch(/sr-only|hidden/);
+	});
+
+	it('a complete roster read leaves it ABSENT from the DOM', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await waitFor(() => {
+			expect(conductorSelect(container).options.length).toBeGreaterThan(1);
+		});
+
+		expect(container.querySelector(NOTICE)).toBeNull();
+	});
+});

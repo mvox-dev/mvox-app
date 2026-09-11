@@ -39,14 +39,20 @@ describe('listActiveMembers — the collective id comes from the DATABASE `_pare
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		expect(members).toEqual([
-			{
-				memberId: 'm-ada',
-				personId: 'p-ada',
-				sectionIds: ['sec-sop'],
-				dbEntityId: DB_ENTITY
-			}
-		]);
+		// #321 — the reader returns a ListRead now; `count: 1` above matches the one
+		// entity on the wire, so this read is COMPLETE.
+		expect(members).toEqual({
+			items: [
+				{
+					memberId: 'm-ada',
+					personId: 'p-ada',
+					sectionIds: ['sec-sop'],
+					dbEntityId: DB_ENTITY
+				}
+			],
+			total: 1,
+			truncated: false
+		});
 	});
 
 	it('a member whose only non-section parent is a LEGACY organization entry resolves NO collective (dbEntityId undefined) — organization is not a collective identity anymore', async () => {
@@ -63,7 +69,7 @@ describe('listActiveMembers — the collective id comes from the DATABASE `_pare
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		expect(members[0].dbEntityId).toBeUndefined();
+		expect(members.items[0].dbEntityId).toBeUndefined();
 	});
 });
 

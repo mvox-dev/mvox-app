@@ -560,7 +560,7 @@ describe('listMyAttendance', () => {
 				]
 			})
 		);
-		const mine: MyAttendance[] = await listMyAttendance(cfg, 'member-me', fetchImpl);
+		const mine: MyAttendance[] = (await listMyAttendance(cfg, 'member-me', fetchImpl)).items;
 		expect(mine).toEqual([
 			{ attendanceId: 'att-1', eventId: 'event-1', status: 'present' },
 			{ attendanceId: 'att-2', eventId: 'event-2', status: 'late' },
@@ -579,7 +579,7 @@ describe('listMyAttendance', () => {
 				]
 			})
 		);
-		const mine = await listMyAttendance(cfg, 'member-me', fetchImpl);
+		const mine = (await listMyAttendance(cfg, 'member-me', fetchImpl)).items;
 		expect(mine).toEqual([{ attendanceId: 'att-ok', eventId: 'event-1', status: 'present' }]);
 		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('att-no-parent'));
 		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('att-no-status'));
@@ -588,7 +588,7 @@ describe('listMyAttendance', () => {
 
 	it('returns [] when the member has no attendance records', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
-		expect(await listMyAttendance(cfg, 'member-me', fetchImpl)).toEqual([]);
+		expect((await listMyAttendance(cfg, 'member-me', fetchImpl)).items).toEqual([]);
 	});
 
 	it('throws on a non-2xx response', async () => {

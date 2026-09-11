@@ -99,6 +99,15 @@ export interface WorksManage {
 	 *  `libraryPickersLoading` flag, season-wide. Absent = not yet decided;
 	 *  RepertoireElement's own default (render) applies. */
 	pickableWorksVisible?: boolean;
+	/** #321 (PO ruling 2026-09-11) — the `listWorks` read behind
+	 *  `pickableWorksList` was truncated, so the "Add work" select is a closed
+	 *  set with a hole in it: a work it does not offer cannot be added, and the
+	 *  gap reads as "that piece isn't in the library". */
+	pickableWorksPartial?: boolean;
+	/** #321 — the same fact for the `listAllEditions` read behind
+	 *  `pickableEditionsByEventId`. Page-level, not per event: the read is
+	 *  collective-wide and the per-event maps only filter it. */
+	pickableEditionsPartial?: boolean;
 	/** Per EVENT id: editions not already on that event's programme. */
 	pickableEditionsByEventId: Record<string, PickerOption[]>;
 	/** #288 — per EVENT id: should "Add to programme" render? STICKY across a

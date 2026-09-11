@@ -43,6 +43,12 @@ export async function listLinks(
 	// query is fired.
 	if (!dbEntityId) return [];
 
+	// #321 class (1) — the collective's OWN curated link list, `_parent`-scoped to
+	// the single database entity resolved above. An admin maintains it by hand and
+	// the surface is one flat list (#256: display_order ascending, no grouping, no
+	// per-member rows); nothing accumulates here over the collective's life.
+	// limit=200 is an explicit, ample bound — a hand-curated menu cannot reach it
+	// — so this cap is a guard, not a silent prefix.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=link&_parent.reference=${encodeURIComponent(dbEntityId)}&props=name,url,description,display_order&limit=200`,

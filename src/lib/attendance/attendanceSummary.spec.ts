@@ -289,6 +289,7 @@ import {
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetConductor } from '$lib/attendance/conductorStore';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {
@@ -338,11 +339,11 @@ function setMemberFixture() {
 		seasonConductors: ['someone-else'], seasonOwners: [], seasonEditors: [], seasons: [] // person-p holds no conductor seat
 	}));
 	findMyMemberIdMock.mockResolvedValue('m-me');
-	listMyAttendanceMock.mockResolvedValue([
+	listMyAttendanceMock.mockResolvedValue(toListRead([
 		{ attendanceId: 'a1', eventId: 'past-1', status: 'present' },
 		{ attendanceId: 'a2', eventId: 'past-2', status: 'absent' },
 		{ attendanceId: 'a3', eventId: 'past-3', status: 'late' }
-	]);
+	]));
 	setAuthedWithOneCollective('person-p');
 }
 
@@ -362,14 +363,14 @@ function setConductorFixture() {
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [], seasons: []
 	}));
 	findMyMemberIdMock.mockResolvedValue('m1');
-	listMyAttendanceMock.mockResolvedValue([
+	listMyAttendanceMock.mockResolvedValue(toListRead([
 		{ attendanceId: 'a1', eventId: 'past-1', status: 'present' },
 		{ attendanceId: 'a2', eventId: 'past-2', status: 'late' }
-	]);
-	loadRosterMock.mockResolvedValue([
+	]));
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-	]);
+	]));
 	const attendanceByEvent: Record<string, EventAttendance[]> = {
 		'past-1': [
 			{ attendanceId: 'x1', memberId: 'm1', status: 'present' },
@@ -385,7 +386,7 @@ function setConductorFixture() {
 }
 
 // Safe defaults so unrelated resolve calls don't hang.
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();
@@ -458,7 +459,7 @@ describe('+page — attendance badges on Recent rows (#85 TA.4)', () => {
 describe('+page — season summary (#85 TA.4)', () => {
 	it('is ALWAYS visible at the top of the Recent section — zero attendance data shows "Attended 0 of N", never hides the block', async () => {
 		setMemberFixture();
-		listMyAttendanceMock.mockResolvedValue([]); // no records at all
+		listMyAttendanceMock.mockResolvedValue(toListRead([])); // no records at all
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -546,13 +547,13 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 		findMyMemberIdMock.mockResolvedValue('m-me');
 		// 5 records: 2 for current-season events, 3 for old-season events.
 		// listMyAttendance returns ALL (no season filter on the server side).
-		listMyAttendanceMock.mockResolvedValue([
+		listMyAttendanceMock.mockResolvedValue(toListRead([
 			{ attendanceId: 'a1', eventId: 'current-1', status: 'present' },
 			{ attendanceId: 'a2', eventId: 'current-2', status: 'late' },
 			{ attendanceId: 'a3', eventId: 'old-1', status: 'present' },
 			{ attendanceId: 'a4', eventId: 'old-2', status: 'present' },
 			{ attendanceId: 'a5', eventId: 'old-3', status: 'late' }
-		]);
+		]));
 		setAuthedWithOneCollective('person-p');
 
 		const { container } = render(Page);
@@ -594,12 +595,12 @@ describe('+page — season rate denominator covers ALL event types (#194/#202 re
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		}));
 		findMyMemberIdMock.mockResolvedValue('m-me');
-		listMyAttendanceMock.mockResolvedValue([
+		listMyAttendanceMock.mockResolvedValue(toListRead([
 			{ attendanceId: 'a1', eventId: 'past-r1', status: 'present' },
 			{ attendanceId: 'a2', eventId: 'past-r2', status: 'late' },
 			{ attendanceId: 'a3', eventId: 'past-c1', status: 'present' },
 			{ attendanceId: 'a4', eventId: 'past-m1', status: 'absent' }
-		]);
+		]));
 		setAuthedWithOneCollective('person-p');
 
 		const { container } = render(Page);
@@ -649,7 +650,7 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 		}));
 		// Confirmed non-member (null member id).
 		findMyMemberIdMock.mockResolvedValue(null);
-		listMyAttendanceMock.mockResolvedValue([]);
+		listMyAttendanceMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective('person-p');
 
 		const { container } = render(Page);
@@ -671,7 +672,7 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 		}));
 		// Member lookup hangs forever — membership stays 'loading'.
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));
-		listMyAttendanceMock.mockResolvedValue([]);
+		listMyAttendanceMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective('person-p');
 
 		const { container } = render(Page);

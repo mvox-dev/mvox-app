@@ -140,6 +140,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── two collectives, two disjoint fixtures ──────────────────────────────────
 
@@ -199,7 +200,7 @@ function setAuthedWithTwoCollectives() {
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
@@ -213,8 +214,8 @@ beforeEach(() => {
 	renameMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue([]);
-	listInactiveMembersMock.mockResolvedValue([]);
+	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
@@ -578,7 +579,7 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 		// `loadForSelected()` — B's guarded success path would read stale and
 		// Bob's row would never leave.)
 		loadRosterMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rowsA() : [])
+			Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : []))
 		);
 		gateB.resolve();
 		await flush();

@@ -144,7 +144,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -159,6 +159,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -286,7 +287,7 @@ async function switchToMonth(container: HTMLElement): Promise<void> {
 }
 
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 beforeEach(() => {
 	setAppLocale('et');

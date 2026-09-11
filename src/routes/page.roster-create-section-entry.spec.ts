@@ -127,6 +127,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── live-shaped fixtures (real polyphony entity ids, 2026-08-12 probe) ──────────
 
@@ -211,7 +212,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(liveShapedTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);

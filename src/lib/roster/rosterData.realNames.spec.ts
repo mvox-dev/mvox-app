@@ -158,7 +158,7 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 			toggle: true,
 			records: [{ _id: 'rec-1', person: 'person-a', name: 'Zoe Zed' }]
 		});
-		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items as RealNameRow[];
 		// Full shape (partial-assertions memory): the record substitutes ONLY the
 		// displayed name — email/sections/ids untouched, profile name preserved.
 		expect(rows).toEqual([
@@ -196,7 +196,7 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 				{ _id: 'rec-d', person: 'person-d', name: '   ' }
 			]
 		});
-		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items as RealNameRow[];
 		// Sorted by the DISPLAYED name (Zoe last although Ada would sort first) —
 		// and every fallback row is shaped IDENTICALLY to the record-backed one:
 		// same fields, no marker field, no placeholder text.
@@ -252,7 +252,7 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 			// name change) — displayed order flips: Berta first, Zoe second.
 			records: [{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' }]
 		});
-		const rows = await loadRosterWithRealNames(cfg, fetchImpl);
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items;
 		expect(rows.map((r) => r.name)).toEqual(['Berta Kask', 'Zoe Zed']);
 	});
 });
@@ -265,7 +265,7 @@ describe('#269 loadRosterWithRealNames — toggle read and the toggle-off negati
 			toggle: false,
 			records: [{ _id: 'rec-1', person: 'person-a', name: 'Zoe Zed' }]
 		});
-		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items as RealNameRow[];
 		expect(rows).toEqual([
 			{
 				memberId: 'member-1',
@@ -290,7 +290,7 @@ describe('#269 loadRosterWithRealNames — toggle read and the toggle-off negati
 			toggle: 'absent',
 			records: [{ _id: 'rec-1', person: 'person-a', name: 'Zoe Zed' }]
 		});
-		const rows = await loadRosterWithRealNames(cfg, fetchImpl);
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items;
 		expect(rows.map((r) => r.name)).toEqual(['Ada Lovelace']);
 		const all = urls(fetchImpl);
 		expect(all.filter((u) => u.includes('admin_member_record'))).toEqual([]);
@@ -321,7 +321,7 @@ describe('#269 loadRosterWithRealNames — the records read: ONE bulk query, nar
 				{ _id: 'rec-c', person: 'person-c', name: 'Mara Moon' }
 			]
 		});
-		const rows = await loadRosterWithRealNames(cfg, fetchImpl);
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items;
 		const recordUrls = urls(fetchImpl).filter((u) => u.includes('admin_member_record'));
 		expect(recordUrls).toHaveLength(1);
 		const u = recordUrls[0];
@@ -376,7 +376,7 @@ describe('#269 loadRosterWithRealNames — the records read: ONE bulk query, nar
 				{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' }
 			]
 		});
-		const rows = await loadRosterWithRealNames(cfg, fetchImpl);
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items;
 		expect(rows.map((r) => r.name)).toEqual(['Zoe Zed']);
 	});
 
@@ -396,7 +396,7 @@ describe('#269 loadRosterWithRealNames — the records read: ONE bulk query, nar
 				{ _id: 'rec-b', person: 'person-b', name: 'Mara Moon' }
 			]
 		});
-		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items as RealNameRow[];
 		expect(rows.map((r) => [r.memberId, r.name])).toEqual([
 			['member-a', 'Ada Lovelace'],
 			['member-c', 'Cora Crane'],
@@ -423,7 +423,7 @@ describe('#269 loadRosterWithRealNames — the records read: ONE bulk query, nar
 				{ _id: 'rec-a3', person: 'person-a', name: 'Third' }
 			]
 		});
-		const rows = await loadRosterWithRealNames(cfg, fetchImpl);
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items;
 		expect(rows.map((r) => [r.memberId, r.name])).toEqual([
 			['member-a', 'Ada Lovelace'],
 			['member-b', 'Bella Boone'],
@@ -448,7 +448,7 @@ describe('#269 loadRosterWithRealNames — the records read: ONE bulk query, nar
 				{ _id: 'rec-b', person: 'person-b', name: 'Mara Moon' }
 			]
 		});
-		const rows = await loadRosterWithRealNames(cfg, fetchImpl);
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items;
 		// member-a never appears — the record does NOT satisfy the gate; member-b
 		// is on and shows her real name.
 		expect(rows.map((r) => [r.memberId, r.name])).toEqual([['member-b', 'Mara Moon']]);
@@ -481,7 +481,7 @@ describe('#269 loadRosterWithRealNames — a failing overlay degrades to profile
 			records: [{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' }],
 			toggleStatus: 500
 		});
-		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items as RealNameRow[];
 		// Full shape, both members still on the roster — the overlay is what is
 		// lost, never a member.
 		expect(rows).toEqual([
@@ -526,7 +526,7 @@ describe('#269 loadRosterWithRealNames — a failing overlay degrades to profile
 			records: [{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' }],
 			recordsStatus: 500
 		});
-		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRosterWithRealNames(cfg, fetchImpl)).items as RealNameRow[];
 		expect(rows).toEqual([
 			{
 				memberId: 'member-a',
@@ -587,7 +587,7 @@ describe('#269 loadRoster (shared producer) — profile names only, no overlay r
 				{ _id: 'rec-b', person: 'person-b', name: 'Aaron Aardvark' }
 			]
 		});
-		const rows = (await loadRoster(cfg, fetchImpl)) as RealNameRow[];
+		const rows = (await loadRoster(cfg, fetchImpl)).items as RealNameRow[];
 		expect(rows).toEqual([
 			{
 				memberId: 'member-a',

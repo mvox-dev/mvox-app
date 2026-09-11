@@ -59,6 +59,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── live wire fixture (verbatim shape + real ids, 2026-08-12 spike probe;
 //    reparented to the single DATABASE entity per #161 — collective = database,
@@ -197,7 +198,7 @@ function setAuthedWithOneCollective() {
 beforeEach(() => {
 	calls.length = 0;
 	resetTypeIdCache(); // the type-id cache is module-scope — never let it leak across cases
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	stubFetch();
 });
 

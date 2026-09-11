@@ -104,6 +104,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 // Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor — same shape as #98/#152's own
@@ -157,7 +158,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);

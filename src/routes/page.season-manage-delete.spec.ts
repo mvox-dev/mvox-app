@@ -176,7 +176,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -194,9 +194,9 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor here, so the page's loadManagePickers fires —
 // stub its reads or they hit the network.
 vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue([]),
-	listAllEditions: vi.fn().mockResolvedValue([]),
-	listAllCopies: vi.fn().mockResolvedValue([])
+	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 }));
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
@@ -220,6 +220,7 @@ import {
 import type { Season } from '$lib/seasons/types';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -318,13 +319,13 @@ function setAuthedWithOneCollective(): void {
 beforeEach(() => {
 	resetRows();
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue([]);
+	loadRosterMock.mockResolvedValue(toListRead([]));
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue([]);
-	listEventSeriesForSeasonMock.mockImplementation(async () => [...seriesRows]);
-	listEventsForSeasonMock.mockImplementation(async () => [...eventRows]);
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	listEventSeriesForSeasonMock.mockImplementation(async () => ({ items: [...seriesRows], truncated: false }));
+	listEventsForSeasonMock.mockImplementation(async () => toListRead([...eventRows]));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);

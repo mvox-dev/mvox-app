@@ -158,6 +158,7 @@ vi.mock('$lib/library/lendingActions', () => ({
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -186,9 +187,9 @@ function setAuthedWithOneCollective() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 /**
@@ -205,19 +206,19 @@ function setAuthedWithOneCollective() {
  *   by since:   c(2026-06-01), b(2026-07-15), then the unassigned {a, d} last
  */
 function setSortFixture() {
-	listWorksMock.mockResolvedValue([
+	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
-	]);
-	listEditionsMock.mockResolvedValue([
+	]));
+	listEditionsMock.mockResolvedValue(toListRead([
 		{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }
-	]);
-	listCopiesMock.mockResolvedValue([
+	]));
+	listCopiesMock.mockResolvedValue(toListRead([
 		{ id: 'copy-a', name: 'Copy #3', copyNumber: 3, editionId: 'edition-1' },
 		{ id: 'copy-d', name: '', copyNumber: 0, editionId: 'edition-1' },
 		{ id: 'copy-b', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
 		{ id: 'copy-c', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
-	]);
-	listLendingsMock.mockResolvedValue([
+	]));
+	listLendingsMock.mockResolvedValue(toListRead([
 		{
 			id: 'lend-b',
 			copyId: 'copy-b',
@@ -234,7 +235,7 @@ function setSortFixture() {
 			assignedUntil: '',
 			returnedAt: ''
 		}
-	]);
+	]));
 	resolveBorrowerNamesMock.mockResolvedValue(
 		new Map([
 			['member-z', 'Zara Zilch'],

@@ -114,7 +114,7 @@ describe('listEventSeriesForSeason — series with event counts, no N+1', () => 
 		const { impl } = recordingFetch(seriesRoute);
 		const result = await listEventSeriesForSeason(cfg, 'season1', impl);
 
-		const byId = [...result].sort((a, b) => a.id.localeCompare(b.id));
+		const byId = [...result.items].sort((a, b) => a.id.localeCompare(b.id));
 		// FULL shape (partial assertions hide bugs — house rule).
 		expect(byId).toEqual([
 			{ id: 's1', name: 'Monday rehearsals', eventCount: 2 },
@@ -154,7 +154,7 @@ describe('listEventSeriesForSeason — series with event counts, no N+1', () => 
 			url.includes('_type.string=event_series') ? json({ entities: [] }) : json({ entities: [] })
 		);
 		const result = await listEventSeriesForSeason(cfg, 'season1', impl);
-		expect(result).toEqual([]);
+		expect(result.items).toEqual([]);
 		expect(mock.mock.calls.length).toBeLessThanOrEqual(2);
 	});
 
@@ -189,7 +189,7 @@ describe('listEventsForSeason — standalone events only (no event_series parent
 		const { impl } = recordingFetch(() => json({ entities: seasonEvents }));
 		const result = await listEventsForSeason(cfg, 'season1', impl);
 
-		expect(result).toEqual([
+		expect(result.items).toEqual([
 			{ id: 'e-solo', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }
 		]);
 	});

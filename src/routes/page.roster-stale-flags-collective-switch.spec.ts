@@ -160,6 +160,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── two collectives, two disjoint fixtures ──────────────────────────────────
 
@@ -231,7 +232,7 @@ function setAuthedWithTwoCollectives() {
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
@@ -246,9 +247,9 @@ beforeEach(() => {
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
 	loadInactiveRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? inactiveA() : inactiveB())
+		Promise.resolve(toListRead(cfg.db === 'polyphony' ? inactiveA() : inactiveB()))
 	);
-	listInactiveMembersMock.mockResolvedValue([]);
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 	vi.mocked(resolveLibrarian).mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
@@ -722,9 +723,11 @@ describe('/roster — #296 reinstatePending across a collective switch', () => {
 		// B's own settle — leaves 'm-inb2' dead forever.)
 		loadInactiveRosterMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(
-				cfg.db === 'polyphony'
-					? inactiveA()
-					: [{ memberId: 'm-inb2', personId: 'p-inb2', name: 'Berta Gone', email: 'berta@x.com', sectionIds: [], dbEntityId: ORG_B }]
+				toListRead(
+					cfg.db === 'polyphony'
+						? inactiveA()
+						: [{ memberId: 'm-inb2', personId: 'p-inb2', name: 'Berta Gone', email: 'berta@x.com', sectionIds: [], dbEntityId: ORG_B }]
+				)
 			)
 		);
 		gateB.resolve();

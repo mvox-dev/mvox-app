@@ -97,6 +97,7 @@ import {
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetConductor } from '$lib/attendance/conductorStore';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -145,17 +146,17 @@ beforeEach(() => {
 		})
 	);
 	findMyMemberIdMock.mockResolvedValue('m1');
-	listMyRsvpsMock.mockResolvedValue([]);
-	listMyAttendanceMock.mockResolvedValue([]);
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	listMyAttendanceMock.mockResolvedValue(toListRead([]));
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	// ACTIVE roster: Alice only. Gone Girl (m9) is deactivated — she exists only
 	// in the inactive read and in the attendance records.
-	loadRosterMock.mockResolvedValue([
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
-	]);
-	loadInactiveRosterMock.mockResolvedValue([
+	]));
+	loadInactiveRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: ['sec-alto'] }
-	]);
+	]));
 	listAttendanceMock.mockImplementation((_cfg: unknown, eventId: string) => {
 		if (eventId === 'past-1') {
 			return Promise.resolve([
@@ -231,4 +232,78 @@ describe('season summary — a deactivated member keeps her rows (done-when 3, i
 	});
 });
 
+// ── #321 review F2, second pass: the rate table says when rows are missing ──────
+//
+// The PO's correction (2026-09-11): the reachability test EXTENDED the
+// display-list criterion to option-lists, it did not replace it, so "nothing is
+// picked in a roll-up" does not exempt this surface — a read that silently drops
+// singers is the defect the issue was filed about. And this table is a
+// particularly bad place for it: it invites comparison between named people, so a
+// dropped singer is absent from a comparison the others are being judged in.
+//
+// EITHER member read raises it (active roster or archived), because the reader
+// needs the same thing to know either way.
+//
+// NO collective-switch pin here, deliberately, and for TWO reasons — the order
+// matters, because the second one is contingent and the first is not:
+//
+//   1. PRIMARY — `seasonRatesPartial` is cleared in BOTH switch teardowns, right
+//      beside the `seasonMemberRates` it describes. The claim therefore cannot
+//      outlive the rows under any render state, which is the property that makes
+//      a leak impossible rather than merely unobservable.
+//   2. SECONDARY — those teardowns also collapse the surface
+//      (`seasonSummaryExpanded = false`), so today the notice unmounts with the
+//      rows and no DOM-level leak is reachable for a spec to catch.
+//
+// Reason 2 alone would be a stale premise the day this summary defaults to
+// expanded (or any surface keeps it mounted across a switch): the notice would
+// then still be on screen after the switch, and only reason 1 keeps it honest.
+// So the absent pin rests on the flag-clear, not on the unmount — and if that
+// default ever changes, the pin becomes writable and worth adding, without this
+// argument having to be re-derived.
+
+describe('season summary — the rate table states a truncated member read (#321 review F2)', () => {
+	const NOTICE = '[data-testid="season-summary-partial-notice"]';
+
+	it('a truncated ACTIVE roster read renders the shared visible role="status" notice above the rows', async () => {
+		loadRosterMock.mockResolvedValue({
+			items: [{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }],
+			total: 500,
+			truncated: true
+		});
+		const { container } = await renderExpandedSummary();
+
+		await waitFor(() => expect(container.querySelector(NOTICE)).not.toBeNull());
+		const notice = container.querySelector(NOTICE)!;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toMatch(/sr-only|hidden/);
+		// Inside the members region, ahead of the rows it is about.
+		const region = container.querySelector('[data-testid="season-summary-members"]')!;
+		expect(region.querySelector(NOTICE)).not.toBeNull();
+		const row = container.querySelector('[data-testid="member-rate-m1"]')!;
+		expect(notice.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+	});
+
+	it('a truncated ARCHIVED read raises the same notice — the history half drops singers too', async () => {
+		loadInactiveRosterMock.mockResolvedValue({
+			items: [{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: [] }],
+			total: 812,
+			truncated: true
+		});
+		const { container } = await renderExpandedSummary();
+
+		await waitFor(() => expect(container.querySelector(NOTICE)).not.toBeNull());
+		// ONE notice for the table, not one per read.
+		expect(container.querySelectorAll(NOTICE).length).toBe(1);
+	});
+
+	it('with both reads complete the notice is ABSENT from the DOM (not hidden — absent)', async () => {
+		const { container } = await renderExpandedSummary();
+		expect(container.querySelector('[data-testid="member-rate-m1"]')).not.toBeNull();
+
+		expect(container.querySelector(NOTICE)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #321 review F2 second pass: the rate table's partial notice)

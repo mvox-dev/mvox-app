@@ -110,7 +110,7 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	// throws inside the .then chain, which the outer .catch swallows by
 	// resetting memberId/membership — silently breaking THIS spec's member
 	// assertions even though it never exercises attendance itself.
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -143,6 +143,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 const EVENT = {
 	id: 'e1',
@@ -195,7 +196,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	it('an INCOMPLETE member (real member id, gate incomplete) is NOT shown as a member: control disabled AND no non-member hint (never mislabeled)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1'); // she IS an active member
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		completionGateStore.set('incomplete'); // ...but her domain name is missing
 		setAuthedWithOneCollective();
 
@@ -214,7 +215,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	it('a COMPLETE member (gate complete) IS shown as a member: control enabled (the release path)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		completionGateStore.set('complete');
 		setAuthedWithOneCollective();
 
@@ -227,7 +228,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	it('a member with the gate still LOADING is disabled with NO hint (no flash of the member affordance)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		completionGateStore.set('loading');
 		setAuthedWithOneCollective();
 
@@ -244,7 +245,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 	it('a GENUINE non-member is unaffected by the gate: disabled + the non-member hint (no over-reach)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue(null); // confirmed non-member
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		completionGateStore.set('complete');
 		setAuthedWithOneCollective();
 

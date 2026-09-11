@@ -79,6 +79,13 @@
 	let canManageAdmins = $state(false);
 	let canManageLibrarians = $state(false);
 	let roster = $state<RosterRow[]>([]);
+	/** #321 (PO ruling 2026-09-11) — the member read behind BOTH person selects
+	 *  was partial. These are closed sets: a person missing from the options
+	 *  cannot be granted a role at all, and the gap reads as "they are not a
+	 *  member" rather than as a list cut short — the case the ruling calls out by
+	 *  name. Assigned from every roster load and cleared where the load starts,
+	 *  so it can never describe a collective the page has left. */
+	let rosterPartial = $state(false);
 	// #209 — the section tree behind ROSTER ORDER; [] (no sections) degrades
 	// `rosterOrder` to the roster's own (name) order.
 	let sections = $state<SectionNode[]>([]);
@@ -252,6 +259,9 @@
 		// saying so), not the whole role surface.
 		sections = [];
 		sectionsError = false;
+		// #321 — the claim about the option list goes down while the list behind it
+		// is being re-read.
+		rosterPartial = false;
 		listSections(c)
 			.then((tree) => {
 				if (thisLoad !== loadSeq) return; // superseded by a newer selection
@@ -267,7 +277,7 @@
 			});
 
 		try {
-			const [libResult, rosterRows, resolvedNameMarker] = await Promise.all([
+			const [libResult, rosterRead, resolvedNameMarker] = await Promise.all([
 				resolveLibrarian(c, target.personId, undefined, resolvedDbEntityId),
 				loadRoster(c),
 				// #165 — a FAILED marker read must land here, in the SAME catch as every
@@ -289,7 +299,8 @@
 			}
 			dbEntityId = resolvedDbEntityId;
 			libraryId = libResult.libraryId;
-			roster = rosterRows;
+			roster = rosterRead.items;
+			rosterPartial = rosterRead.truncated;
 			nameMarker = resolvedNameMarker;
 			await Promise.all([
 				refreshAdmins(thisLoad),
@@ -671,6 +682,19 @@
 							<option value={option.id}>{option.label}</option>
 						{/each}
 					</select>
+					<!-- #321 (PO ruling 2026-09-11) — a truncated roster makes a member
+					     UNGRANTABLE with nothing on screen saying so: the missing option reads
+					     as "not a member". In the picker's own caveat slot (beside the order
+					     note below) rather than as a trailing option inside the list, because
+					     this select goes `disabled` once its options run out — and the prompt
+					     it then shows, "everyone is already added", is the truncation's most
+					     misleading face. A notice inside a dropdown that cannot be opened would
+					     be unreachable exactly when it matters most. -->
+					{#if rosterPartial}
+						<p data-testid="admin-add-admin-partial-notice" role="status" class="text-xs text-ink-2">
+							{m.picker_partial_members_notice()}
+						</p>
+					{/if}
 					<!-- #209 review F2 — the section read failed: the select still works
 					     off the roster's own name order, and says so. -->
 					{#if sectionsError}
@@ -756,6 +780,19 @@
 								<option value={option.id}>{option.label}</option>
 							{/each}
 						</select>
+						<!-- #321 (PO ruling 2026-09-11) — a truncated roster makes a member
+						     UNGRANTABLE with nothing on screen saying so: the missing option reads
+						     as "not a member". In the picker's own caveat slot (beside the order
+						     note below) rather than as a trailing option inside the list, because
+						     this select goes `disabled` once its options run out — and the prompt
+						     it then shows, "everyone is already added", is the truncation's most
+						     misleading face. A notice inside a dropdown that cannot be opened would
+						     be unreachable exactly when it matters most. -->
+						{#if rosterPartial}
+							<p data-testid="admin-add-librarian-partial-notice" role="status" class="text-xs text-ink-2">
+								{m.picker_partial_members_notice()}
+							</p>
+						{/if}
 						<!-- #209 review F2 — the section read failed: the select still works
 						     off the roster's own name order, and says so. -->
 						{#if sectionsError}
@@ -786,6 +823,7 @@
 					presetDbName={selected?.name ?? ''}
 					viewerPersonId={viewerId ?? ''}
 					roster={roster}
+					rosterPartial={rosterPartial}
 					heading="h2"
 					layout="embedded"
 				/>

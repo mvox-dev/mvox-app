@@ -101,6 +101,18 @@ export async function listSections(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<SectionNode[]> {
+	// #321 class (1) — the collective's section tree. The query is deliberately
+	// db-wide (no `_parent` scoping; sections are created `_sharing: 'public'` for
+	// federation discoverability — see roster/+page.svelte's `visibleSections`
+	// note), and since the collective = database ruling (#161) one db holds ONE
+	// collective, so db-wide is collective-wide here. A section is a voice part or
+	// a subgroup of one: a handful per collective, dozens if a large choir
+	// subdivides deeply. The live dev db holds 16 sections across FOUR legacy orgs,
+	// so reaching 500 would take roughly 125 collectives in a single db. An
+	// explicit, ample bound — this cap is a guard, not a silent prefix. (Contrast
+	// the member reads on the same page — rosterData.ts/memberLifecycle.ts — whose
+	// cardinality IS the membership and its archive, and which therefore report
+	// `truncated` and raise the roster's partial notice.)
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=section&props=name,display_order,_parent&limit=500',

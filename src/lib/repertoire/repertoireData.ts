@@ -50,6 +50,12 @@ export async function listRepertoireItems(
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<RepertoireItem[]> {
+	// #321 class (1) — ONE season's repertoire, `_parent`-scoped to that season:
+	// the works the collective is rehearsing this year, a programme a conductor
+	// maintains by hand (tens of rows; the panel renders one flat list). NOT the
+	// library — the collective-lifetime catalogue is `listWorks` (libraryData.ts),
+	// which is class (2) and reports `truncated`. limit=500 is an explicit, ample
+	// bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=repertoire_item&_parent.reference=${encodeURIComponent(seasonId)}&props=name,work,edition,status&limit=500`,
@@ -90,6 +96,9 @@ export async function listProgramItems(
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<ProgramItem[]> {
+	// #321 class (1) — ONE event's programme, `_parent`-scoped to that event: the
+	// pieces sung at a single concert, in `ordinal` order. A concert programme runs
+	// to tens of items; limit=500 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=program_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,edition,ordinal,notes&limit=500`,

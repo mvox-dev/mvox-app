@@ -144,6 +144,7 @@ import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 // ── two collectives, two disjoint fixtures ──────────────────────────────────
 // TWO works per collective on purpose — see the header note on the #74
@@ -219,12 +220,14 @@ function setAuthedWithTwoCollectives() {
 beforeEach(() => {
 	// Every data mock keyed on cfg.db, so both the initial load and every
 	// post-switch reload serve the CURRENT collective's fixture.
-	listWorksMock.mockImplementation((cfg: { db: string }) => Promise.resolve(worksFor(cfg.db)));
-	listLendingsMock.mockResolvedValue([]);
+	listWorksMock.mockImplementation((cfg: { db: string }) => Promise.resolve(toListRead(worksFor(cfg.db))));
+	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockImplementation((cfg: { db: string }) => Promise.resolve(borrowerNamesFor(cfg.db)));
-	listAllEditionsMock.mockImplementation((cfg: { db: string }) => Promise.resolve(editionsFor(cfg.db)));
-	listAllCopiesMock.mockImplementation((cfg: { db: string }) => Promise.resolve(copiesFor(cfg.db)));
-	listActiveMembersMock.mockImplementation((cfg: { db: string }) => Promise.resolve(membersFor(cfg.db)));
+	listAllEditionsMock.mockImplementation((cfg: { db: string }) => Promise.resolve(toListRead(editionsFor(cfg.db))));
+	listAllCopiesMock.mockImplementation((cfg: { db: string }) => Promise.resolve(toListRead(copiesFor(cfg.db))));
+	listActiveMembersMock.mockImplementation((cfg: { db: string }) =>
+		Promise.resolve(toListRead(membersFor(cfg.db)))
+	);
 	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve({ state: 'librarian', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
 	);

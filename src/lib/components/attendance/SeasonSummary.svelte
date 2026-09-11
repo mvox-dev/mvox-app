@@ -26,9 +26,16 @@
 		/** F2 fix: explicit loading/error for the roster rate read. */
 		loading?: boolean;
 		error?: boolean;
+		/** #321 (PO ruling 2026-09-11) — one of the member reads behind
+		 *  `memberRates` was partial, so rows are MISSING from a table that
+		 *  invites comparison between named people: a dropped singer is absent
+		 *  from a comparison the others are being judged in, and nothing else on
+		 *  screen says the set is a prefix. Default false keeps every other caller
+		 *  unchanged. */
+		membersPartial?: boolean;
 		onexpand?: () => void;
 	}
-	const { myRate, canExpand = false, expanded = false, memberRates = [], loading = false, error = false, onexpand }: Props = $props();
+	const { myRate, canExpand = false, expanded = false, memberRates = [], loading = false, error = false, membersPartial = false, onexpand }: Props = $props();
 
 	// A stable per-instance id for the member-rates region — $props.id()
 	// generates a component-scoped ID that is consistent between server and
@@ -71,6 +78,20 @@
 				     error (its sibling in the same feature and structural position). -->
 				<p data-testid="season-rates-error" class="text-sm text-red-700" role="alert">{m.attendance_season_load_error()}</p>
 			{:else}
+				<!-- #321 (PO ruling) — the shared notice shape (visible paragraph,
+				     role="status", own testid, copy through i18n), inside the list it is
+				     about and above the rows so it is read before them. Absent from the
+				     DOM once both member reads are complete; never in the loading or
+				     error branch, neither of which has rows to be partial. -->
+				{#if membersPartial}
+					<p
+						data-testid="season-summary-partial-notice"
+						role="status"
+						class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
+					>
+						{m.season_summary_partial_notice()}
+					</p>
+				{/if}
 				<div role="list" class="flex flex-col gap-1">
 					{#each memberRates as rate (rate.memberId)}
 						{#if rate.inactive}

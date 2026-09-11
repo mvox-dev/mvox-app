@@ -141,7 +141,7 @@ vi.mock('$lib/roster/rosterData', () => ({
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: listAttendanceMock,
 	listAllRsvpsForEvent: listAllRsvpsForEventMock,
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	createAttendance: createAttendanceMock,
 	updateAttendanceStatus: updateAttendanceStatusMock,
 	deleteAttendance: deleteAttendanceMock,
@@ -172,6 +172,7 @@ import {
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetConductor } from '$lib/attendance/conductorStore';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {
@@ -212,9 +213,9 @@ function setOneConductedRecentEventFixture() {
 		seasonOwners: [],
 		seasonEditors: []
 	}));
-	loadRosterMock.mockResolvedValue([
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
-	]);
+	]));
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	setAuthedWithOneCollective('person-p');
@@ -236,7 +237,7 @@ async function renderPageWithRecentRow() {
 
 // Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();

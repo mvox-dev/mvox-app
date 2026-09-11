@@ -1,6 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles } from '$lib/profile/profileData';
+import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // T6.3/#58(TBD) — the library READ data layer. Read-only throughout: no
 // entuFetch(..., { method: 'POST' | 'DELETE' }) anywhere in this module. Field set
@@ -18,7 +19,13 @@ export interface Work {
 	composer: string;
 }
 
-export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Work[]> {
+/**
+ * #321 — collective-wide, no natural ceiling (grows with every work the
+ * collective ever catalogues). `count > raw entities.length` on this SAME
+ * request is the truncation signal — see `$lib/entu/listRead` for the full
+ * contract and the two probe ledgers it rests on.
+ */
+export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Work>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=work&props=name,composer&limit=500',
@@ -28,13 +35,16 @@ export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): 
 	);
 	if (!res.ok) throw new Error(`listWorks failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{ _id: string; name?: Array<{ string: string }>; composer?: Array<{ string: string }> }>;
 	};
-	return (body.entities ?? []).map((raw) => ({
-		id: raw._id,
-		name: raw.name?.[0]?.string ?? '',
-		composer: raw.composer?.[0]?.string ?? ''
+	const raw = body.entities ?? [];
+	const items = raw.map((r) => ({
+		id: r._id,
+		name: r.name?.[0]?.string ?? '',
+		composer: r.composer?.[0]?.string ?? ''
 	}));
+	return deriveListRead(items, raw.length, body.count);
 }
 
 export interface EditionFile {
@@ -80,11 +90,12 @@ function toEdition(raw: EditionRaw, workId?: string): Edition {
 	};
 }
 
+/** #321 — per-work, reachable (a well-catalogued work's editions). */
 export async function listEditions(
 	cfg: EntuCfg,
 	workId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<Edition[]> {
+): Promise<ListRead<Edition>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=edition&_parent.reference=${encodeURIComponent(workId)}&props=name,publisher,external_link,file&limit=500`,
@@ -93,8 +104,9 @@ export async function listEditions(
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listEditions failed: ${res.status}`);
-	const body = (await res.json()) as { entities?: EditionRaw[] };
-	return (body.entities ?? []).map((raw) => toEdition(raw));
+	const body = (await res.json()) as { count?: number; entities?: EditionRaw[] };
+	const raw = body.entities ?? [];
+	return deriveListRead(raw.map((r) => toEdition(r)), raw.length, body.count);
 }
 
 /**
@@ -102,7 +114,8 @@ export async function listEditions(
  * the librarian bulk checkout/return UI where the edition picker must show every
  * edition regardless of which work tree node the user has expanded.
  */
-export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Edition[]> {
+/** #321 — collective-wide flat read, no natural ceiling. */
+export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Edition>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=edition&props=name,publisher,_parent,external_link,file&limit=500',
@@ -112,11 +125,12 @@ export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fe
 	);
 	if (!res.ok) throw new Error(`listAllEditions failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<EditionRaw & { _parent?: Array<{ reference: string; entity_type?: string }> }>;
 	};
-	return (body.entities ?? []).map((raw) =>
-		toEdition(raw, (raw._parent ?? []).find((p) => p.entity_type === 'work')?.reference ?? '')
-	);
+	const raw = body.entities ?? [];
+	const items = raw.map((r) => toEdition(r, (r._parent ?? []).find((p) => p.entity_type === 'work')?.reference ?? ''));
+	return deriveListRead(items, raw.length, body.count);
 }
 
 export interface Copy {
@@ -127,11 +141,12 @@ export interface Copy {
 	editionId: string;
 }
 
+/** #321 — per-edition, reachable (a well-catalogued edition's copies). */
 export async function listCopies(
 	cfg: EntuCfg,
 	editionId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<Copy[]> {
+): Promise<ListRead<Copy>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=copy&_parent.reference=${encodeURIComponent(editionId)}&props=name,copy_number&limit=500`,
@@ -141,14 +156,17 @@ export async function listCopies(
 	);
 	if (!res.ok) throw new Error(`listCopies failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> }>;
 	};
-	return (body.entities ?? []).map((raw) => ({
-		id: raw._id,
-		name: raw.name?.[0]?.string ?? '',
-		copyNumber: raw.copy_number?.[0]?.number ?? 0,
+	const raw = body.entities ?? [];
+	const items = raw.map((r) => ({
+		id: r._id,
+		name: r.name?.[0]?.string ?? '',
+		copyNumber: r.copy_number?.[0]?.number ?? 0,
 		editionId
 	}));
+	return deriveListRead(items, raw.length, body.count);
 }
 
 /**
@@ -157,7 +175,8 @@ export async function listCopies(
  * copy regardless of which edition tree node the user has expanded. Includes
  * `_parent` so each copy carries its edition ID for bulk-return grouping.
  */
-export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Copy[]> {
+/** #321 — collective-wide flat read, no natural ceiling. */
+export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Copy>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=copy&props=name,copy_number,_parent&limit=500',
@@ -167,14 +186,17 @@ export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetc
 	);
 	if (!res.ok) throw new Error(`listAllCopies failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }>; _parent?: Array<{ reference: string; entity_type?: string }> }>;
 	};
-	return (body.entities ?? []).map((raw) => ({
-		id: raw._id,
-		name: raw.name?.[0]?.string ?? '',
-		copyNumber: raw.copy_number?.[0]?.number ?? 0,
-		editionId: (raw._parent ?? []).find((p) => p.entity_type === 'edition')?.reference ?? ''
+	const raw = body.entities ?? [];
+	const items = raw.map((r) => ({
+		id: r._id,
+		name: r.name?.[0]?.string ?? '',
+		copyNumber: r.copy_number?.[0]?.number ?? 0,
+		editionId: (r._parent ?? []).find((p) => p.entity_type === 'edition')?.reference ?? ''
 	}));
+	return deriveListRead(items, raw.length, body.count);
 }
 
 export interface Lending {
@@ -187,7 +209,13 @@ export interface Lending {
 	returnedAt: string;
 }
 
-export async function listLendings(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<Lending[]> {
+/** #321 — the collective-LIFETIME lending log: no natural ceiling (grows with
+ *  every checkout ever made). `truncated` compares the server `count` against
+ *  the RAW wire array length — BEFORE the #258 drop below — so a malformed
+ *  row this function chooses not to show never fabricates a truncation the
+ *  server never reported (see libraryData.truncation.spec.ts's dedicated
+ *  pin). */
+export async function listLendings(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Lending>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=lending&props=copy,member,assigned_at,assigned_until,returned_at&limit=500',
@@ -197,6 +225,7 @@ export async function listLendings(cfg: EntuCfg, fetchImpl: typeof fetch = fetch
 	);
 	if (!res.ok) throw new Error(`listLendings failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{
 			_id: string;
 			copy?: Array<{ reference: string }>;
@@ -219,26 +248,30 @@ export async function listLendings(cfg: EntuCfg, fetchImpl: typeof fetch = fetch
 	// compose an `entity/` (LIST route) request downstream; dropping the row
 	// here means resolveCopyName/resolveBorrowerName/resolveCopyChains never
 	// see an empty id from a real lending row at all.
-	return (body.entities ?? []).flatMap((raw) => {
-		const copyId = raw.copy?.[0]?.reference;
-		const memberId = raw.member?.[0]?.reference;
+	const raw = body.entities ?? [];
+	const items = raw.flatMap((r) => {
+		const copyId = r.copy?.[0]?.reference;
+		const memberId = r.member?.[0]?.reference;
 		if (!copyId || !memberId) {
 			console.warn(
-				`listLendings: dropping malformed lending row ${raw._id} — missing ${!copyId ? 'copy' : 'member'} reference (#258)`
+				`listLendings: dropping malformed lending row ${r._id} — missing ${!copyId ? 'copy' : 'member'} reference (#258)`
 			);
 			return [];
 		}
 		return [
 			{
-				id: raw._id,
+				id: r._id,
 				copyId,
 				memberId,
-				assignedAt: raw.assigned_at?.[0]?.date ?? '',
-				assignedUntil: raw.assigned_until?.[0]?.date ?? '',
-				returnedAt: raw.returned_at?.[0]?.date ?? ''
+				assignedAt: r.assigned_at?.[0]?.date ?? '',
+				assignedUntil: r.assigned_until?.[0]?.date ?? '',
+				returnedAt: r.returned_at?.[0]?.date ?? ''
 			}
 		];
 	});
+	// RAW length (`raw.length`), never `items.length` — a dropped row must never
+	// fabricate a truncation the server never reported (#321).
+	return deriveListRead(items, raw.length, body.count);
 }
 
 export type CopyAvailability =

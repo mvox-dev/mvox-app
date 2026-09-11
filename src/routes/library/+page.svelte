@@ -71,6 +71,23 @@
 	let lendings = $state<Lending[]>([]);
 	let borrowerNames = $state<Map<string, string>>(new Map());
 
+	// #321 — true when any of this page's list reads came back truncated
+	// (server count > raw entities.length on that read's own request). `works`
+	// and `lendings` fire on every load; `editionsPartialWorkIds`/
+	// `copiesPartialEditionIds` accrue per-node as an expand's read comes back
+	// partial. The notice is ONE page-level fact (library-partial-notice) —
+	// which read tripped it does not change what the reader needs to know.
+	let worksPartial = $state(false);
+	let lendingsPartial = $state(false);
+	let editionsPartialWorkIds = $state<Set<string>>(new Set());
+	let copiesPartialEditionIds = $state<Set<string>>(new Set());
+	const libraryPartial = $derived(
+		worksPartial ||
+			lendingsPartial ||
+			editionsPartialWorkIds.size > 0 ||
+			copiesPartialEditionIds.size > 0
+	);
+
 	let expandedWorks = $state<Set<string>>(new Set());
 	let expandedEditions = $state<Set<string>>(new Set());
 	let editionsByWork = $state<Map<string, Edition[]>>(new Map());
@@ -189,6 +206,41 @@
 	let allCopies = $state<Copy[]>([]);
 	let allMembers = $state<ActiveMember[]>([]);
 	let memberNames = $state<Map<string, string>>(new Map());
+
+	/**
+	 * #321 — PO ruling (Gama, 2026-09-11): a closed-set PICKER whose feed was
+	 * truncated must say so, because a missing option does not read as a short
+	 * list — it reads as an ABSENCE ("that copy isn't in the library"), and the
+	 * librarian then acts on that. These three reads are the librarian panel's
+	 * whole reachable world, so their truncation is a different claim from the
+	 * browsing tree's `libraryPartial` and cannot borrow that notice: the ruling
+	 * puts the statement inside the open picker, where the eyes are, not on the
+	 * page behind it.
+	 *
+	 *   `librarianOptionsPartial` — `listAllEditions` OR `listAllCopies`. Both
+	 *     feed the edition step: the editions ARE its options, and a truncated
+	 *     copy read makes an edition's copies invisible, so availability reads
+	 *     "none available" for an edition that has copies — the same false
+	 *     absence one level down.
+	 *   `librarianMembersPartial` — `listActiveMembers`, the borrower set behind
+	 *     BOTH the bulk-checkout member list and every per-copy inline-checkout
+	 *     select. /roster's notice does not cover it: that is another page.
+	 *
+	 * Assigned from each librarian resolve (the effect below and the retry
+	 * handler, the two places that read them) and cleared where that effect
+	 * restarts — a truncation found under collective A must never stand over B's
+	 * panel, the #287/#296/#299 stale-state class.
+	 */
+	let librarianOptionsPartial = $state(false);
+	let librarianMembersPartial = $state(false);
+
+	/** Drop both picker claims — used wherever the panel's feeds are about to be
+	 *  re-read or are gone, so a stale truncation cannot outlive the options it
+	 *  described (a failed load says nothing about completeness either). */
+	function resetLibrarianPickerPartial(): void {
+		librarianOptionsPartial = false;
+		librarianMembersPartial = false;
+	}
 
 	// #198 — librarian-only inline "create work" affordance. Same
 	// open/close/local-insert shape as roster's page-level section create
@@ -316,6 +368,14 @@
 			editionsByWork = new Map();
 			copiesByEdition = new Map();
 			repertoireByWorkId = new Map();
+			// #321 — cleared on EVERY load, same as the maps above: the truncation
+			// fact belongs to the collective that produced it, never carried across
+			// a switch (the #287/#296/#299 stale-state bug class) or stale across a
+			// same-collective refresh.
+			worksPartial = false;
+			lendingsPartial = false;
+			editionsPartialWorkIds = new Set();
+			copiesPartialEditionIds = new Set();
 
 			// #300 — bulk-checkout selection is per-collective state. Options
 			// come from THIS collective's works/editions/copies/members, so a
@@ -342,15 +402,20 @@
 		},
 		onNoCollective: () => {
 			works = [];
+			worksPartial = false;
 		},
 		async load({ cfg, selected: current, isCurrent }) {
-			const [workList, lendingList] = await Promise.all([listWorks(cfg), listLendings(cfg)]);
+			const [worksRead, lendingsRead] = await Promise.all([listWorks(cfg), listLendings(cfg)]);
 			if (!isCurrent()) return;
-			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const activeMemberIds = lendingsRead.items
+				.filter((l) => l.returnedAt === '')
+				.map((l) => l.memberId);
 			const names = await resolveBorrowerNames(cfg, activeMemberIds);
 			if (!isCurrent()) return;
-			works = workList;
-			lendings = lendingList;
+			works = worksRead.items;
+			worksPartial = worksRead.truncated;
+			lendings = lendingsRead.items;
+			lendingsPartial = lendingsRead.truncated;
 			borrowerNames = names;
 			status = 'ready';
 
@@ -400,8 +465,15 @@
 		if (!token) return;
 		editionNodeStatus = new Map(editionNodeStatus).set(workId, 'loading');
 		try {
-			const editions = await listEditions({ db: current.db, token }, workId);
-			editionsByWork = new Map(editionsByWork).set(workId, editions);
+			const result = await listEditions({ db: current.db, token }, workId);
+			editionsByWork = new Map(editionsByWork).set(workId, result.items);
+			// #321 — a per-work notice contribution (accrued in a Set, cleared on
+			// every load — see routeLoad.reset above); a truncated edition read
+			// joins the SAME page-level library-partial-notice as works/lendings.
+			const nextPartial = new Set(editionsPartialWorkIds);
+			if (result.truncated) nextPartial.add(workId);
+			else nextPartial.delete(workId);
+			editionsPartialWorkIds = nextPartial;
 			editionNodeStatus = new Map(editionNodeStatus).set(workId, 'idle');
 		} catch (e) {
 			// #107 (review R2/F3) — a node expand is a READ, so it gets the same
@@ -585,8 +657,13 @@
 		if (!token) return;
 		copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'loading');
 		try {
-			const copies = await listCopies({ db: current.db, token }, editionId);
-			copiesByEdition = new Map(copiesByEdition).set(editionId, copies);
+			const result = await listCopies({ db: current.db, token }, editionId);
+			copiesByEdition = new Map(copiesByEdition).set(editionId, result.items);
+			// #321 — same per-node accrual as loadEditionsFor above.
+			const nextPartial = new Set(copiesPartialEditionIds);
+			if (result.truncated) nextPartial.add(editionId);
+			else nextPartial.delete(editionId);
+			copiesPartialEditionIds = nextPartial;
 			copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'idle');
 		} catch (e) {
 			// #107 (review R2/F3) — same READ-path rule as loadEditionsFor.
@@ -940,9 +1017,15 @@
 		const g = ++librarianGen;
 		if (!current) {
 			resetLibrarian();
+			resetLibrarianPickerPartial();
 			return;
 		}
 		resetLibrarian();
+		// #321 — the claim goes down with the panel it described: this effect IS
+		// the (re)selection seam (see `resetLibrarian` on the line above), so a
+		// truncation found under the collective being left never survives into the
+		// next one's pickers.
+		resetLibrarianPickerPartial();
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
 		resolveLibrarian(cfg, current.personId).then(async (result) => {
@@ -952,16 +1035,24 @@
 			// bulk-checkout/return edition pickers are populated on first render.
 			if (result.state === 'librarian') {
 				try {
-					const [editions, copies, members] = await Promise.all([
+					const [editionsRead, copiesRead, membersRead] = await Promise.all([
 						listAllEditions(cfg),
 						listAllCopies(cfg),
 						listActiveMembers(cfg)
 					]);
 					if (g !== librarianGen) return;
-					allEditions = editions;
-					allCopies = copies;
-					allMembers = members;
-					const memberIdList = members.map((mbr) => mbr.memberId);
+					// #321 — the librarian-only bulk-checkout PICKER data: a distinct
+					// surface from the browsing tree `library-partial-notice` covers, and
+					// (PO ruling 2026-09-11) one that states its own truncation inside
+					// the pickers it feeds rather than borrowing that page-level notice
+					// or /roster's. See the two flags' declaration for why each read
+					// lands where it does.
+					allEditions = editionsRead.items;
+					allCopies = copiesRead.items;
+					allMembers = membersRead.items;
+					librarianOptionsPartial = editionsRead.truncated || copiesRead.truncated;
+					librarianMembersPartial = membersRead.truncated;
+					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
 					resolveBorrowerNames(cfg, memberIdList).then((names) => {
 						if (g === librarianGen) memberNames = names;
 					}).catch((e) => console.error('library: member name resolution failed', e));
@@ -999,10 +1090,13 @@
 				assignedAt: new Date().toISOString().slice(0, 10)
 			});
 			// Refresh lending data after successful checkout
-			const lendingList = await listLendings(cfg);
-			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const lendingsRead = await listLendings(cfg);
+			const activeMemberIds = lendingsRead.items
+				.filter((l) => l.returnedAt === '')
+				.map((l) => l.memberId);
 			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingList;
+			lendings = lendingsRead.items;
+			lendingsPartial = lendingsRead.truncated;
 			borrowerNames = names;
 		} catch (e) {
 			console.error('library: inline checkout failed', copyId, e);
@@ -1030,10 +1124,13 @@
 		try {
 			await returnLending(cfg, lendingId);
 			// Refresh lending data after successful return
-			const lendingList = await listLendings(cfg);
-			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const lendingsRead = await listLendings(cfg);
+			const activeMemberIds = lendingsRead.items
+				.filter((l) => l.returnedAt === '')
+				.map((l) => l.memberId);
 			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingList;
+			lendings = lendingsRead.items;
+			lendingsPartial = lendingsRead.truncated;
 			borrowerNames = names;
 		} catch (e) {
 			console.error('library: return failed', e);
@@ -1081,10 +1178,13 @@
 				bulkCheckoutError = `${result.failed.length} checkout(s) failed`;
 			}
 			// Refresh lending data
-			const lendingList = await listLendings(cfg);
-			const activeMemberIds = lendingList.filter((l) => l.returnedAt === '').map((l) => l.memberId);
+			const lendingsRead = await listLendings(cfg);
+			const activeMemberIds = lendingsRead.items
+				.filter((l) => l.returnedAt === '')
+				.map((l) => l.memberId);
 			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingList;
+			lendings = lendingsRead.items;
+			lendingsPartial = lendingsRead.truncated;
 			borrowerNames = names;
 			bulkCheckoutCheckedMembers = new Set();
 			bulkCheckoutDueDate = '';
@@ -1098,6 +1198,21 @@
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.library_title()}</h1>
+
+		<!-- #321 — persistent, visible: a truncated list is a standing fact, not
+		     a transient toast, so this is never sr-only. Absent from the DOM
+		     (not hidden) once every read is complete — see `libraryPartial`
+		     above and routeLoad.reset, which is what keeps this from leaking a
+		     stale truncation across a collective switch. -->
+		{#if libraryPartial}
+			<p
+				data-testid="library-partial-notice"
+				role="status"
+				class="rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+			>
+				{m.library_partial_notice()}
+			</p>
+		{/if}
 
 		{#if $librarianStore === 'librarian'}
 			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
@@ -1121,6 +1236,20 @@
 							{#each filteredBulkCheckoutEditions as edition (edition.id)}
 								<option value={edition.id}>{edition.name}</option>
 							{/each}
+							<!-- #321 (PO ruling) — the notice belongs INSIDE the open picker, so
+							     in a native select it is a trailing DISABLED option: an option
+							     list cannot host a paragraph or live region, and this is the one
+							     place the librarian scanning the dropdown for a missing edition
+							     will read it. Unselectable and last, so it never competes with a
+							     real option; absent from the list entirely once the read is
+							     complete. The list-shaped pickers below (member checkboxes) carry
+							     the shared visible role="status" notice instead — same copy, same
+							     meaning, the shape each control can actually hold. -->
+							{#if librarianOptionsPartial}
+								<option data-testid="bulk-checkout-edition-partial-option" value="" disabled>
+									{m.picker_partial_options_notice()}
+								</option>
+							{/if}
 						</select>
 					{/if}
 					{#if bulkCheckoutEditionId}
@@ -1128,6 +1257,21 @@
 							{m.library_bulk_checkout_availability({ available: bulkCheckoutEditionAvailability.available, total: bulkCheckoutEditionAvailability.total })}
 						</p>
 						<div data-testid="bulk-checkout-member-list" class="mt-2 flex flex-col gap-1">
+							<!-- #321 (PO ruling) — a truncated borrower set reads as "that singer
+							     is not a member", so the checkbox list says it is a prefix. The
+							     shared notice shape (visible paragraph, role="status", own testid,
+							     copy through i18n), here INSIDE the picker it is about rather than
+							     on the page behind it; absent from the DOM once the read is
+							     complete. -->
+							{#if librarianMembersPartial}
+								<p
+									data-testid="bulk-checkout-members-partial-notice"
+									role="status"
+									class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
+								>
+									{m.picker_partial_members_notice()}
+								</p>
+							{/if}
 							{#each allMembers as member (member.memberId)}
 								{@const existingLending = activeLendingForMemberInEdition(member.memberId, bulkCheckoutEditionCopyIds, lendings)}
 								{#if existingLending}
@@ -1267,19 +1411,27 @@
 						if (!selected) return;
 						const token = getToken();
 						const cfg = { db: selected.db, token: token ?? '' };
+						// #321 — same as the effect above: the claims come down while the
+						// feeds behind them are being re-read.
+						resetLibrarianPickerPartial();
 						resolveLibrarian(cfg, selected.personId).then(async (result) => {
 							libraryEntityIdStore.set(result.libraryId);
 							if (result.state === 'librarian') {
 								try {
-									const [editions, copies, members] = await Promise.all([
+									const [editionsRead, copiesRead, membersRead] = await Promise.all([
 										listAllEditions(cfg),
 										listAllCopies(cfg),
 										listActiveMembers(cfg)
 									]);
-									allEditions = editions;
-									allCopies = copies;
-									allMembers = members;
-									const memberIdList = members.map((mbr) => mbr.memberId);
+									allEditions = editionsRead.items;
+									allCopies = copiesRead.items;
+									allMembers = membersRead.items;
+									// #321 — the retry re-reads the same three feeds, so it re-derives
+									// both picker claims: a retry that comes back complete is what
+									// takes the previous attempt's notices down.
+									librarianOptionsPartial = editionsRead.truncated || copiesRead.truncated;
+									librarianMembersPartial = membersRead.truncated;
+									const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
 									resolveBorrowerNames(cfg, memberIdList).then((names) => {
 										memberNames = names;
 									}).catch((e) => console.error('library: member name resolution failed', e));
@@ -1547,6 +1699,16 @@
 																						<option value={member.memberId}>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</option>
 																					{/if}
 																				{/each}
+																				<!-- #321 (PO ruling) — the same borrower set, the same false
+																				     absence, inside this per-copy picker: a trailing disabled
+																				     option, for the reason the edition select's carries one
+																				     (a select cannot host a live region). One per open
+																				     dropdown, so it costs nothing on the closed rows. -->
+																				{#if librarianMembersPartial}
+																					<option data-testid="inline-checkout-partial-option-{copy.id}" value="" disabled>
+																						{m.picker_partial_members_notice()}
+																					</option>
+																				{/if}
 																			</select>
 																			{#if inlineCheckoutErrors.get(copy.id)}
 																				<span data-testid="inline-checkout-error-{copy.id}" class="text-xs text-red-700" role="alert">{inlineCheckoutErrors.get(copy.id)}</span>

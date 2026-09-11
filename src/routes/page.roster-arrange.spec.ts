@@ -111,6 +111,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 // Soprano (roll-up 3: Ada direct + Eva in Soprano 1 + Selma in Soprano 2)
@@ -163,7 +164,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -537,9 +538,9 @@ describe('/roster — the view modes are a rendering switch over the one existin
 				]
 			}
 		] satisfies SectionNode[]);
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'm-tara', personId: 'p-tara', name: 'Tara Oja', email: 'tara@x.com', sectionIds: ['sec-men1'] }
-		] satisfies RosterRow[]);
+		] satisfies RosterRow[]));
 		const container = await renderReady('admin');
 
 		await selectMode(container, 'arrange');

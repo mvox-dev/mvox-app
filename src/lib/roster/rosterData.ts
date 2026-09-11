@@ -3,6 +3,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles, resolveField, type MyProfile } from '$lib/profile/profileData';
 import { hasVisibleName } from '$lib/profile/completionGate';
 import { readRosterNamesSetting } from '$lib/collective/rosterNames';
+import { deriveListRead, isTruncated, type ListRead } from '$lib/entu/listRead';
 
 // T3.2/#18 — the roster READ data layer. RED (Tallis): every exported function below
 // is a STUB that throws 'not implemented' so `rosterData.spec.ts` compiles and FAILS
@@ -94,11 +95,20 @@ export interface ActiveMember {
  * read here. No fallback — YAGNI. F1: EVERY matching `_parent` entry is kept
  * (a member can be in more than one section), widening the `.find()` pattern
  * used at `libraryData.ts:118` and `entuSeasons.ts:123`.
+ *
+ * #321 class (2) — REACHABLE, so this read reports its own truncation rather than
+ * claiming a bound. Its cardinality IS the collective's active membership: there
+ * is no structural ceiling to appeal to, only how many people sing, and the live
+ * dev db already holds 132 active members against a cap of 500. `count > raw
+ * entities.length` on this SAME request is the signal — see `$lib/entu/listRead`
+ * for the contract and the two probe ledgers it rests on. `/roster` raises
+ * `roster-partial-notice` off it; `loadRoster` (the shared profile-names producer
+ * below) deliberately discards the flag and warns instead — see its doc.
  */
 export async function listActiveMembers(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
-): Promise<ActiveMember[]> {
+): Promise<ListRead<ActiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=member&status.string=active&props=person,_parent&limit=500',
@@ -108,13 +118,15 @@ export async function listActiveMembers(
 	);
 	if (!res.ok) throw new Error(`listActiveMembers failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{
 			_id: string;
 			person?: Array<{ reference: string }>;
 			_parent?: Array<{ reference: string; entity_type?: string }>;
 		}>;
 	};
-	return (body.entities ?? []).map((raw) => {
+	const raws = body.entities ?? [];
+	const items = raws.map((raw) => {
 		const personId = raw.person?.[0]?.reference;
 		// `person` is REQUIRED on the target member shape — fail loud, naming the
 		// object, rather than silently dropping her out of the roster. An absent
@@ -144,6 +156,11 @@ export async function listActiveMembers(
 			dbEntityId
 		};
 	});
+	// RAW length, not `items.length`: this mapper throws rather than dropping, so
+	// the two are equal today — but the contract is "the wire array before any
+	// client-side filtering", so a future drop here can never fabricate a
+	// truncation the server never reported ($lib/entu/listRead).
+	return deriveListRead(items, raws.length, body.count);
 }
 
 // ── read another member's shared profile subset (reused, not new) ────────────────
@@ -269,11 +286,21 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
  * carrying MORE THAN ONE record is absent from the map entirely (see the loop) — the
  * overlay refuses to guess which name is hers. The name itself is returned RAW
  * (untrimmed) — the caller decides what "non-empty" means.
+ *
+ * #321 class (2) — REACHABLE, so this reports `truncated` alongside the map. An
+ * `admin_member_record` is written once per person an admin has ever recorded and
+ * is never archived away, so the collection accumulates over the collective's
+ * whole life on top of tracking membership size; there is no bound to state. The
+ * consequence is specific and worth naming: a truncated read here silently drops
+ * SOME rows from the overlay, so those members revert to their profile name while
+ * their neighbours show a real one — byte-indistinguishable, on screen, from "she
+ * has no record". `loadRosterWithRealNames` carries the flag out so /roster can
+ * say so instead.
  */
 async function listRecordNamesByPerson(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch
-): Promise<Map<string, string>> {
+): Promise<{ byPerson: Map<string, string>; truncated: boolean }> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=admin_member_record&props=person,name&limit=500',
@@ -283,12 +310,14 @@ async function listRecordNamesByPerson(
 	);
 	if (!res.ok) throw new Error(`listRecordNamesByPerson failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{
 			_id: string;
 			person?: Array<{ reference: string }>;
 			name?: Array<{ string: string }>;
 		}>;
 	};
+	const raws = body.entities ?? [];
 	const byPerson = new Map<string, string>();
 	// #269 review — a person carrying MORE THAN ONE record is the exact condition
 	// `loadMemberRecord` classifies as `{state:'damaged'}` (#264 — surface loudly,
@@ -300,7 +329,7 @@ async function listRecordNamesByPerson(
 	// byte-indistinguishable from "no record at all", per the silent-and-complete
 	// fallback rule, and agreeing with what the pencil says about that member.
 	const duplicated = new Set<string>();
-	for (const raw of body.entities ?? []) {
+	for (const raw of raws) {
 		const personId = raw.person?.[0]?.reference;
 		if (!personId) continue; // orphan record — ignored silently, never misjoined
 		if (duplicated.has(personId)) continue; // third+ record — stays dropped
@@ -311,7 +340,10 @@ async function listRecordNamesByPerson(
 		}
 		byPerson.set(personId, raw.name?.[0]?.string ?? '');
 	}
-	return byPerson;
+	// RAW length, never `byPerson.size`: the orphan skip and the duplicate drop
+	// above are rows this function CHOOSES not to map, and neither is a row the
+	// server withheld ($lib/entu/listRead's raw-length rule).
+	return { byPerson, truncated: isTruncated(raws.length, body.count) };
 }
 
 /**
@@ -341,19 +373,62 @@ async function listRecordNamesByPerson(
  *
  * `row.profileName` is set here, on every row, equal to `row.name` — the ONE row
  * shape both producers emit, so a consumer never has to know which one it got.
+ *
+ * #321 — returns a `ListRead`, exactly as `loadRosterWithRealNames` does: the rows
+ * AND whether the member read behind them was partial. It did not, at first — this
+ * function discarded `truncated` with a `console.warn`, on the reasoning that its
+ * three consumers (the agenda's cached `getRoster`, the event page's attendance
+ * panel, the admin roles page's person selects) were pickers and chips rather than
+ * member LISTS, and so had no surface for the fact.
+ *
+ * The PO's ruling of 2026-09-11 rejects that, and the test it gives is
+ * REACHABILITY: every one of those three surfaces is a CLOSED-SET picker over this
+ * producer's rows. A truncated read there does not read as a short list — it reads
+ * as "that person is not a member", which for the admin selects means a member who
+ * cannot be granted a role with nothing on screen saying why. So the flag now
+ * reaches all three, each of which states it inside the picker
+ * (`picker_partial_members_notice`), and the array-returning wrapper that dropped
+ * it is gone rather than kept as a shape nobody should pick.
  */
-export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<RosterRow[]> {
+export async function loadRoster(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<ListRead<RosterRow>> {
+	return await loadRosterRead(cfg, fetchImpl);
+}
+
+/**
+ * #321 — the full-fidelity producer both public orchestrators are built on: the
+ * rows AND whether the member read behind them was partial. Not exported: the two
+ * wrappers differ only in the real-names overlay (see `loadRoster`'s doc), and a
+ * third entry point onto the same read would be one more thing to keep in step.
+ *
+ * `total` is the member read's server count, NOT the row count: the #28
+ * completeness gate below drops nameless members, so `items.length` is already
+ * smaller than the members read on a live collective. That mismatch is what the
+ * roster notice must not confuse itself with — hence `truncated` comes straight
+ * from `listActiveMembers`, which compares the count against its own RAW wire
+ * array, before this function's gate ever runs.
+ */
+async function loadRosterRead(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<ListRead<RosterRow>> {
 	const members = await listActiveMembers(cfg, fetchImpl);
 	const rows = await Promise.all(
-		members.map(async (member) => {
+		members.items.map(async (member) => {
 			const profiles = await listProfilesForPerson(cfg, member.personId, fetchImpl);
 			return toRosterRow(member, profiles);
 		})
 	);
-	return rows
-		.filter((r): r is RosterRow => r !== null)
-		.map((row) => ({ ...row, profileName: row.name }))
-		.sort((a, b) => a.name.localeCompare(b.name));
+	return {
+		items: rows
+			.filter((r): r is RosterRow => r !== null)
+			.map((row) => ({ ...row, profileName: row.name }))
+			.sort((a, b) => a.name.localeCompare(b.name)),
+		total: members.total,
+		truncated: members.truncated
+	};
 }
 
 /**
@@ -388,20 +463,36 @@ export async function loadRoster(cfg: EntuCfg, fetchImpl: typeof fetch = fetch):
  * with no signal to member, admin or console that the setting was being ignored
  * (standing fail-loud-over-fallbacks rule). Both failing branches — the toggle read
  * and the records read — are pinned in rosterData.realNames.spec.ts.
+ *
+ * #321 — returns a `ListRead`: both reads behind these rows are class (2) and
+ * /roster raises `roster-partial-notice` off `truncated`. The flag is the OR of
+ * them, because the two failures look the same to the reader — a list that is
+ * missing people (the member read) and a list where some people are named wrongly
+ * (the records read, which reverts those rows to profile names indistinguishably
+ * from "no record") are both "what you see is not the whole truth". `total` stays
+ * the MEMBER read's server count; the overlay adds no rows, it only renames them.
+ * The overlay's degrade path is the one place `truncated` can be a false NEGATIVE:
+ * a records read that threw tells us nothing about its own completeness, and the
+ * catch below already logs that degrade loudly.
  */
 export async function loadRosterWithRealNames(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
-): Promise<RosterRow[]> {
-	const profileRows = await loadRoster(cfg, fetchImpl);
+): Promise<ListRead<RosterRow>> {
+	const base = await loadRosterRead(cfg, fetchImpl);
 	// Nobody to overlay onto — and no reason to spend the toggle read finding out.
-	if (profileRows.length === 0) return [];
+	// The member read's own `truncated` still travels: "no presentable member, and
+	// the read was partial" is precisely when the notice matters most.
+	if (base.items.length === 0) return base;
 
 	let recordNameByPerson = new Map<string, string>();
+	let recordsTruncated = false;
 	try {
 		const { showRealNames } = await readRosterNamesSetting(cfg, fetchImpl);
 		if (showRealNames) {
-			recordNameByPerson = await listRecordNamesByPerson(cfg, fetchImpl);
+			const records = await listRecordNamesByPerson(cfg, fetchImpl);
+			recordNameByPerson = records.byPerson;
+			recordsTruncated = records.truncated;
 		}
 	} catch (e) {
 		// See doc above — an unresolvable overlay degrades to "toggle off", never
@@ -413,20 +504,26 @@ export async function loadRosterWithRealNames(
 			e
 		);
 		recordNameByPerson = new Map();
+		recordsTruncated = false;
 	}
-	// Toggle off, or nothing to apply: `loadRoster`'s rows are already the answer,
+	const truncated = base.truncated || recordsTruncated;
+	// Toggle off, or nothing to apply: the base rows are already the answer,
 	// already carrying `profileName` and already sorted by the displayed name.
-	if (recordNameByPerson.size === 0) return profileRows;
+	if (recordNameByPerson.size === 0) return { ...base, truncated };
 
-	return profileRows
-		.map((row) => {
-			const recordName = recordNameByPerson.get(row.personId)?.trim();
-			return {
-				...row,
-				name: recordName ? recordName : row.name
-			};
-		})
-		.sort((a, b) => a.name.localeCompare(b.name));
+	return {
+		items: base.items
+			.map((row) => {
+				const recordName = recordNameByPerson.get(row.personId)?.trim();
+				return {
+					...row,
+					name: recordName ? recordName : row.name
+				};
+			})
+			.sort((a, b) => a.name.localeCompare(b.name)),
+		total: base.total,
+		truncated
+	};
 }
 
 // (*MVOX:Tallis* — RED stubs + interface)
@@ -435,3 +532,4 @@ export async function loadRosterWithRealNames(
 // (*MVOX:Palestrina* — F1 code-review fix: multi-section members, TS.1/#95)
 // (*MVOX:Palestrina* — #269 GREEN: the real-names overlay)
 // (*MVOX:Palestrina* — #269 review F1/F2: the overlay is opt-in at /roster only)
+// (*MVOX:Josquin* — #321 review F2: the member + record reads report truncation)

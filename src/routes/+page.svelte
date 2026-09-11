@@ -186,6 +186,11 @@
 	// Only 'non-member' (a genuine resolution) ever shows the hint.
 	let membership = $state<'loading' | 'member' | 'non-member'>('loading');
 	let rsvpByEventId = $state<RsvpByEventId>({});
+	// #321 — true when the singer's OWN listMyRsvps read came back truncated
+	// (server count > raw entities.length on that same request): the answer
+	// set behind rsvpByEventId is then incomplete, and an event this page shows
+	// as "unanswered" may actually have a real answer beyond the cap.
+	let rsvpPartial = $state(false);
 	// Events whose last write REJECTED — threaded into AgendaList so that row shows
 	// an inline save-failed error (otherwise the optimistic value just snapped back
 	// silently). Cleared when a fresh write for the event starts (setPending true).
@@ -203,6 +208,9 @@
 	// both each Recent row's badge (via myAttendanceByEventId below) and my
 	// own season line in the SeasonSummary (deriveAttendanceRate).
 	let myAttendance = $state<MyAttendance[]>([]);
+	// #321 — true when the singer's OWN listMyAttendance read came back
+	// truncated. Same rationale as `rsvpPartial` above, the member-lifetime twin.
+	let attendancePartial = $state(false);
 
 	// #83 — the agenda's 'Recent' section: ALL past events of the CURRENT season.
 	// Loaded as part of loadFullAgenda (one fetch pass for upcoming + recent —
@@ -416,6 +424,22 @@
 	let seasonRepertoire = $state<RepertoireItem[]>([]);
 	let libraryWorks = $state<Work[]>([]);
 	let libraryEditions = $state<Edition[]>([]);
+	/**
+	 * #321 (PO ruling 2026-09-11) — the two library reads behind the repertoire
+	 * PICKERS came back truncated. Both selects are closed sets: a work the
+	 * "Add work" list does not offer cannot be added to the repertoire, and an
+	 * edition the "Add to programme" list does not offer cannot go on tonight's
+	 * programme — the gap reads as "it isn't in the library", not as a short
+	 * list. This site previously carried the "out of the RED-pinned scope"
+	 * narrowing, which the ruling rejects.
+	 *
+	 * One flag per FEED, never one for both: a truncated edition read says
+	 * nothing about the works list, and a shared flag would put a false claim in
+	 * the other picker. Assigned on every settle, cleared where the arrays they
+	 * describe are.
+	 */
+	let libraryWorksPartial = $state(false);
+	let libraryEditionsPartial = $state(false);
 	// #288 — is the `libraryWorks`/`libraryEditions` fetch (loadManagePickers)
 	// currently in flight? `resetManagement()` blanks those two synchronously on
 	// EVERY `loadForSelected` (including same-collective refreshes: season
@@ -497,6 +521,14 @@
 	let panelRepertoire = $state<RepertoireItem[]>([]);
 	let panelWorks = $state<Work[]>([]);
 	let panelEditions = $state<Edition[]>([]);
+	/** #321 (PO ruling 2026-09-11) — the panel's OWN `listWorks` read, behind its
+	 *  own "Add work" select (this section exists because the panel's season can
+	 *  diverge from the agenda's — see the state block doc). Same closed set,
+	 *  same false absence. `panelEditions`/`panelCopies` get no flag: there they
+	 *  feed row LABELS, not options, and a label that cannot be resolved
+	 *  degrades to blank rather than hiding anything pickable (the reason
+	 *  workRows.ts states for staying out). */
+	let panelWorksPartial = $state(false);
 	let panelCopies = $state<Copy[]>([]);
 	let panelPendingKeys = $state<Set<string>>(new Set());
 	// #234 review F4 — a FAILED panel read renders as an empty repertoire
@@ -564,6 +596,22 @@
 	// load surfaces as a distinct state via SeasonSummary.
 	let seasonRatesLoading = $state(false);
 	let seasonRatesError = $state(false);
+	/**
+	 * #321 (PO ruling 2026-09-11, second pass) — either member read behind the
+	 * rate table came back PARTIAL. This was left log-only on the reasoning that
+	 * a per-member percentage roll-up is not an option surface and so falls
+	 * outside the reachability test; the PO's correction is that the test
+	 * EXTENDED the display-list criterion to option-lists rather than replacing
+	 * it, and a read surface that silently drops singers is the original defect
+	 * this issue was filed about.
+	 *
+	 * It is also a particularly bad place to drop rows quietly: the table invites
+	 * comparison between named people, so a missing singer is absent from a
+	 * comparison others are being judged in. ONE flag for both reads (active and
+	 * archived) because the reader needs the same thing to know either way, and
+	 * cleared exactly where `seasonMemberRates` is.
+	 */
+	let seasonRatesPartial = $state(false);
 
 	// #84 TA.3 — the "Take attendance" inline panel. `attendanceItem` is the
 	// recent AgendaItem currently expanded (null = collapsed / nothing open).
@@ -591,7 +639,16 @@
 	// is picked up on the next panel open after the TTL expires (previously the
 	// cache was keyed by db alone and cleared only on collective switch).
 	const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
-	let rosterCache = $state<{ db: string; roster: RosterRow[]; fetchedAt: number } | null>(null);
+	// #321 (PO ruling 2026-09-11) — `truncated` rides IN the cache entry rather
+	// than beside it: a cache HIT is another picker open on the SAME read, and it
+	// must state exactly what the read that filled the cache found. One lifetime,
+	// one owner.
+	let rosterCache = $state<{
+		db: string;
+		roster: RosterRow[];
+		truncated: boolean;
+		fetchedAt: number;
+	} | null>(null);
 	// #132/T3 — the season-manage panel's ONE source of member names (conductor
 	// chips + the conductor picker's option list, #209 a native <select>).
 	// Mirrored off every `getRoster` resolution (cache hit or fresh fetch)
@@ -614,6 +671,19 @@
 	 */
 	let rosterReadsInFlight = $state(0);
 	let rosterReadFailed = $state(false);
+	/**
+	 * #321 (PO ruling 2026-09-11) — the member read behind this page's
+	 * roster-fed pickers came back PARTIAL. A closed-set picker's options are the
+	 * whole reachable world, so a missing one reads as "that person is not a
+	 * member" rather than as a short list; the three conductor pickers and the
+	 * attendance panel therefore say so inside themselves, where the eyes are.
+	 *
+	 * ONE flag for the page because there is one read behind all of them
+	 * (`getRoster`'s cache). Assigned on every resolution — cache hit included,
+	 * off the entry's own `truncated` — and cleared wherever `rosterRows` is, so
+	 * the claim never outlives the rows it describes or crosses a switch.
+	 */
+	let rosterPartial = $state(false);
 	/** The SECTION read behind roster ORDER failed. The picker stays usable —
 	 *  `rosterOrder` degrades to the roster's own name order — but says so
 	 *  rather than presenting a silently different order as the roster's
@@ -639,23 +709,35 @@
 		if (cacheValid) {
 			rosterRows = rosterCache!.roster;
 			rosterReadFailed = false;
+			// #321 — the cached rows carry the cached read's truncation with them.
+			rosterPartial = rosterCache!.truncated;
 			return Promise.resolve(rosterCache!.roster);
 		}
 		rosterReadsInFlight += 1;
 		rosterReadFailed = false;
 		return loadRoster(cfg)
-			.then((roster) => {
+			.then((read) => {
 				// Keyed by the db the fetch was FOR — a collective switch mid-flight
 				// leaves a cache entry the (now different) selected db never matches.
-				rosterCache = { db: cfg.db, roster, fetchedAt: Date.now() };
-				rosterRows = roster;
-				return roster;
+				rosterCache = {
+					db: cfg.db,
+					roster: read.items,
+					truncated: read.truncated,
+					fetchedAt: Date.now()
+				};
+				rosterRows = read.items;
+				rosterPartial = read.truncated;
+				return read.items;
 			})
 			.catch((e: unknown) => {
 				// Re-thrown: every caller keeps its own `.catch` (and the panel its
 				// `.finally`). The flag exists so the PICKER can say "unavailable"
 				// instead of "everyone is already added" (#209 review F1).
 				rosterReadFailed = true;
+				// #321 — a failed read says nothing about completeness: the picker's
+				// "unavailable" caption is the whole story, and a truncation claim from
+				// an earlier attempt must not stand beside it.
+				rosterPartial = false;
 				throw e;
 			})
 			.finally(() => {
@@ -784,6 +866,7 @@
 			memberId = null;
 			membership = 'loading';
 			rsvpByEventId = {};
+			rsvpPartial = false;
 			failedEventIds = new Set();
 			recentItems = [];
 			conductorEventIds = new Set();
@@ -801,6 +884,9 @@
 			closeAttendancePanel();
 			rosterCache = null;
 			rosterRows = [];
+			// #321 — the claim goes with the rows: a truncation found in the
+			// collective being left must never caption the next one's pickers.
+			rosterPartial = false;
 			sectionsCache = null;
 			rosterSections = [];
 			// #209 review F1/F2 — the readiness flags belong to the collective whose
@@ -811,11 +897,15 @@
 			resetSeasonManage();
 			attendanceFailedByEvent = new Map();
 			myAttendance = [];
+			attendancePartial = false;
 			seasonSummaryExpanded = false;
 			seasonMemberRates = [];
 			seasonRatesLoaded = false;
 			seasonRatesLoading = false;
 			seasonRatesError = false;
+			// #321 — the claim goes with the rows it described, so a truncation
+			// found in the collective being left never captions the next one's table.
+			seasonRatesPartial = false;
 			seasons = [];
 			closeSeasonCreateForm();
 			closeEventCreateForm();
@@ -858,6 +948,9 @@
 			// "unknown member" for a refresh that changed no collective.
 			rosterCache = null;
 			rosterRows = [];
+			// #321 — the claim goes with the rows: a truncation found in the
+			// collective being left must never caption the next one's pickers.
+			rosterPartial = false;
 			sectionsCache = null;
 			rosterSections = [];
 			// #209 review F1/F2 — the readiness flags belong to the collective whose
@@ -886,11 +979,27 @@
 		}
 		attendanceFailedByEvent = new Map();
 		myAttendance = [];
+		// #321 review F1 — the two person-lifetime truncation flags share ONE
+		// lifecycle: both describe the collective whose read produced them, so
+		// both die here, unconditionally, before the new reads are issued. Only
+		// `attendancePartial` was reset; `rsvpPartial` was cleared solely in the
+		// no-collective branch above, so a switch from a collective whose
+		// `listMyRsvps` truncated to one whose does not left the notice standing
+		// over B's loading agenda until B's read resolved — a false claim about
+		// B's data (the #287/#296/#299 stale-state class). `rsvpByEventId`
+		// itself is NOT reset here: AgendaList renders a skeleton while
+		// `agendaLoading`, so A's rows are never on screen during the switch,
+		// and the .then/.catch pair below replaces the map either way.
+		rsvpPartial = false;
+		attendancePartial = false;
 		seasonSummaryExpanded = false;
 		seasonMemberRates = [];
 		seasonRatesLoaded = false;
 		seasonRatesLoading = false;
 		seasonRatesError = false;
+		// #321 — the claim goes with the rows it described, so a truncation
+		// found in the collective being left never captions the next one's table.
+		seasonRatesPartial = false;
 		seasons = [];
 		closeSeasonCreateForm();
 		closeEventCreateForm();
@@ -1178,16 +1287,22 @@
 				// per-event). A non-member/failed lookup simply has no records.
 				if (id) {
 					listMyAttendance({ db: current.db, token: getToken() ?? '' }, id)
-						.then((records) => {
+						.then((result) => {
 							if (thisRequest !== requestId) return;
-							myAttendance = records;
+							myAttendance = result.items;
+							// #321 — the member's OWN attendance-lifetime read; a truncated
+							// page means the "my attendance" line and its season-summary
+							// rate are both incomplete. Notice: attendance-partial-notice.
+							attendancePartial = result.truncated;
 						})
 						.catch(() => {
 							if (thisRequest !== requestId) return;
 							myAttendance = [];
+							attendancePartial = false;
 						});
 				} else {
 					myAttendance = [];
+					attendancePartial = false;
 				}
 			})
 			.catch(() => {
@@ -1199,13 +1314,18 @@
 			});
 
 		listMyRsvps({ db: current.db, token: getToken() ?? '' }, personId)
-			.then((rsvps) => {
+			.then((result) => {
 				if (thisRequest !== requestId) return;
-				rsvpByEventId = rsvpsByEventId(rsvps);
+				rsvpByEventId = rsvpsByEventId(result.items);
+				// #321 — the singer's OWN rsvp-lifetime read; a truncated page means an
+				// event this agenda shows as "unanswered" may have a real answer beyond
+				// the cap. Notice: rsvp-partial-notice.
+				rsvpPartial = result.truncated;
 			})
 			.catch(() => {
 				if (thisRequest !== requestId) return;
 				rsvpByEventId = {};
+				rsvpPartial = false;
 			});
 	}
 
@@ -1319,6 +1439,9 @@
 		seasonRepertoire = [];
 		libraryWorks = [];
 		libraryEditions = [];
+		// #321 — the claims go with the lists they describe.
+		libraryWorksPartial = false;
+		libraryEditionsPartial = false;
 		// #288 — flips true in the SAME synchronous pass that blanks the two
 		// arrays above, so the `pickableEditionsVisibleByEventId` effect never
 		// observes them blanked while still reading `libraryPickersLoading` as
@@ -1566,10 +1689,15 @@
 			listAllEditions(cfg),
 			seasonId === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, seasonId)
 		])
-			.then(([works, editions, repertoire]) => {
+			.then(([worksRead, editionsRead, repertoire]) => {
 				if (thisRequest !== requestId) return;
-				libraryWorks = works;
-				libraryEditions = editions;
+				// #321 (PO ruling 2026-09-11) — each picker states its OWN feed's
+				// truncation; "an option is missing from the picker" is exactly the
+				// false absence the ruling names, not a lesser degradation.
+				libraryWorks = worksRead.items;
+				libraryEditions = editionsRead.items;
+				libraryWorksPartial = worksRead.truncated;
+				libraryEditionsPartial = editionsRead.truncated;
 				seasonRepertoire = repertoire;
 				libraryPickersLoading = false;
 				// #311 — the ONE place this flips true: a load that reached here
@@ -1583,6 +1711,10 @@
 				// Empty pickers, not a broken page: the row controls still work.
 				libraryWorks = [];
 				libraryEditions = [];
+				// #321 — a failed read says nothing about completeness, and there are
+				// no options left for a claim to be about.
+				libraryWorksPartial = false;
+				libraryEditionsPartial = false;
 				seasonRepertoire = [];
 				libraryPickersLoading = false;
 				// #311 — explicit, not just inherited from `resetManagement`'s reset:
@@ -2108,6 +2240,14 @@
 
 	// ── derived picker sources ────────────────────────────────────────────────
 
+	// #321 — the pin-edition picker (`work-edition-picker`) is a THIRD closed set
+	// over `libraryEditions`, and it is NOT wired to a notice: its control gates
+	// out entirely on `options.length > 0`, so under a truncated edition read a
+	// work whose editions ALL fall past the cap loses the picker — and with it
+	// (#125 F5b) the row's only edition line, which then reads as "no edition"
+	// for a work that HAS one. There is no control left to hang a trailing option
+	// on, so what the row should SAY instead is a design call: routed to the PO,
+	// not decided here.
 	const editionsByWorkId = $derived.by(() => {
 		const map = new Map<string, Edition[]>();
 		for (const edition of libraryEditions) {
@@ -2245,6 +2385,8 @@
 			eventRightsByEventId: eventManageRights,
 			pickableWorksList,
 			pickableWorksVisible,
+			pickableWorksPartial: libraryWorksPartial,
+			pickableEditionsPartial: libraryEditionsPartial,
 			pickableEditionsByEventId,
 			pickableEditionsVisibleByEventId,
 			editionOptionsByRowId,
@@ -2517,6 +2659,9 @@
 			error: attendanceError,
 			pendingMemberIds: attendancePendingMemberIds,
 			failedMemberIds: attendanceFailedMemberIds,
+			// #321 — `getRoster` is what fills `attendanceRoster`, so the panel
+			// states exactly what that read found.
+			membersPartial: rosterPartial,
 			ontoggle: handleAttendanceToggle,
 			onclose: closeAttendancePanel
 		};
@@ -2581,13 +2726,17 @@
 			loadInactiveRoster(cfg),
 			Promise.all(events.map((event) => listAttendance(cfg, event.id)))
 		])
-			.then(([roster, inactiveRoster, perEventRecords]) => {
+			.then(([rosterRead, inactiveRead, perEventRecords]) => {
 				if (thisRequestSnapshot !== requestId) return;
+				// #321 (PO ruling 2026-09-11, second pass) — the rate table SAYS it.
+				// Either read short-changes the same thing: a singer with no row here
+				// is missing from a comparison the others are being judged in.
+				seasonRatesPartial = rosterRead.truncated || inactiveRead.truncated;
 				seasonMemberRates = deriveAllMemberRates(
 					perEventRecords.flat(),
-					roster,
+					rosterRead.items,
 					events.length,
-					inactiveRoster
+					inactiveRead.items
 				);
 				seasonRatesLoaded = true;
 				seasonRatesLoading = false;
@@ -2597,6 +2746,9 @@
 				seasonRatesLoading = false;
 				seasonRatesError = true;
 				seasonMemberRates = [];
+				// A failed read says nothing about completeness — the error slot is the
+				// whole statement, and there are no rows left for a claim to be about.
+				seasonRatesPartial = false;
 			});
 	}
 
@@ -2905,6 +3057,21 @@
 	 *  (`seasonManageEvents`/`seasonManageEventsError`) along with the panel's
 	 *  event rows — events are managed on their own page now. */
 	let seasonManageSeriesError = $state(false);
+	/** #321 review F1 — the panel's series read is a reachable bound (the
+	 *  season-wide event read behind each row's occurrence tally), and it was
+	 *  only `console.warn`ed: an admin stood in this panel reading an
+	 *  under-reported count with nothing on screen saying so. Panel-level, not
+	 *  per-row — the truncation can be in either half of
+	 *  `listEventSeriesForSeason`'s pair (the series list itself, or the events
+	 *  grouped into the counts), and the notice states the one fact both produce.
+	 *
+	 *  Lifetime follows `seasonManageSeries` exactly, because it is a claim about
+	 *  those rows: ASSIGNED from every settled read (so a complete read clears it
+	 *  with no separate reset), deliberately NOT cleared ahead of a re-read (the
+	 *  rows stay on screen across a reload, so the claim about them must too),
+	 *  and torn down in `resetSeasonManage` — the one backbone every close,
+	 *  season switch and collective switch already routes through. */
+	let seasonManagePartial = $state(false);
 	/** #197 — a failed series/event DELETE surfaces an inline slot (per-attempt,
 	 *  not sticky: cleared at the START of every delete tap, not just on
 	 *  success, so a second try — success or failure — always reflects the
@@ -3136,6 +3303,10 @@
 		seasonManageConductorIds = [];
 		seasonManageSeries = [];
 		seasonManageSeriesError = false;
+		// #321 review F1 — with the rows goes the claim about them: a truncation
+		// detected for the season/collective being left must never be on screen
+		// over the next one's list.
+		seasonManagePartial = false;
 		seasonManageDeleteError = null;
 		seasonManageDeleteArmed = null;
 		seasonManageArmedSeriesCount = null;
@@ -3178,6 +3349,7 @@
 		// settling after this teardown has nothing left to refresh.
 		panelRepertoireSeasonId = null;
 		panelWorks = [];
+		panelWorksPartial = false;
 		panelEditions = [];
 		panelCopies = [];
 		panelPendingKeys = new Set();
@@ -3271,11 +3443,14 @@
 		// with nothing in it), so they share one error surface rather than
 		// half-rendering.
 		Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
-			.then(([works, editions, copies]) => {
+			.then(([worksRead, editionsRead, copiesRead]) => {
 				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				panelWorks = works;
-				panelEditions = editions;
-				panelCopies = copies;
+				// #321 (PO ruling 2026-09-11) — the panel's add-work select states its
+				// own feed's truncation, same as the agenda's pickers above.
+				panelWorks = worksRead.items;
+				panelEditions = editionsRead.items;
+				panelCopies = copiesRead.items;
+				panelWorksPartial = worksRead.truncated;
 				panelWorksSourcesOk = true;
 			})
 			.catch((e) => {
@@ -3284,6 +3459,7 @@
 				panelWorks = [];
 				panelEditions = [];
 				panelCopies = [];
+				panelWorksPartial = false;
 				panelRepertoireError = true;
 			})
 			.finally(() => {
@@ -3350,15 +3526,23 @@
 		// now open — by the switch generation, which a panel-preserving reload
 		// (unlike `manageableSeasonId`) never disturbs.
 		listEventSeriesForSeason(cfg, seasonId)
-			.then((list) => {
+			.then((result) => {
 				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				seasonManageSeries = list;
+				seasonManageSeries = result.items;
+				// #321 review F1 — the panel now SAYS it, in the same notice markup
+				// every other partial surface uses (season-manage-partial-notice, above
+				// the list). Assigned, not conditionally set: a complete read is what
+				// takes a previous open's notice back down.
+				seasonManagePartial = result.truncated;
 			})
 			.catch((e) => {
 				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				console.error('agenda: loading the season\'s event series failed', e);
 				seasonManageSeries = [];
 				seasonManageSeriesError = true;
+				// A failed read says nothing about completeness — the claim goes with
+				// the rows it was about, leaving the error slot as the only statement.
+				seasonManagePartial = false;
 			});
 		// #313 — the panel no longer lists standalone events at all (they are
 		// managed on their own page); the `listEventsForSeason` read this list
@@ -3844,9 +4028,9 @@
 		const thisLoad = eventCreateLoadId;
 		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeasonId !== seasonId;
 		listEventSeriesForSeason(cfg, seasonId)
-			.then((list) => {
+			.then((result) => {
 				if (stale()) return;
-				eventCreateSeriesOptions = list;
+				eventCreateSeriesOptions = result.items;
 			})
 			.catch((e) => {
 				if (stale()) return;
@@ -4179,10 +4363,14 @@
 		const thisSwitch = seasonManageSwitchGeneration;
 		loadPanelRepertoire(cfg, seasonId);
 		listEventSeriesForSeason(cfg, seasonId)
-			.then((list) => {
+			.then((result) => {
 				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				seasonManageSeries = list;
+				seasonManageSeries = result.items;
 				seasonManageSeriesError = false;
+				// #321 review F1 — a refresh re-reads the same bounded pair, so it
+				// re-derives the notice for the rows it just replaced (a create that
+				// pushes the read over its cap raises it; one that does not, clears it).
+				seasonManagePartial = result.truncated;
 			})
 			.catch((e) => {
 				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
@@ -5791,6 +5979,31 @@
 							</button>
 						</div>
 					{:else}
+						<!-- #321 — the singer's own answer/attendance set may be PARTIAL (the
+						     person-lifetime rsvp/attendance reads are reachable bounds, per
+						     research-321 inv). Rendered here, above everything else in this
+						     branch, so it holds regardless of whether the agenda list itself
+						     is empty — completeness of MY answers is not a property of which
+						     events are upcoming. Persistent + visible (never sr-only): a
+						     standing fact sighted users must see too, not a transient toast. -->
+						{#if rsvpPartial}
+							<p
+								data-testid="rsvp-partial-notice"
+								role="status"
+								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+							>
+								{m.rsvp_partial_notice()}
+							</p>
+						{/if}
+						{#if attendancePartial}
+							<p
+								data-testid="attendance-partial-notice"
+								role="status"
+								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+							>
+								{m.attendance_partial_notice()}
+							</p>
+						{/if}
 						<!-- #201 — a fresh collective's agenda is otherwise a blank page: the
 						     working flow (season → event series → events are generated) is
 						     only discoverable via the runbook. Gated on the SAME three
@@ -6431,6 +6644,21 @@
 												<option value={option.id}>{option.label}</option>
 											{/each}
 										</select>
+										<!-- #321 (PO ruling 2026-09-11) — the member read behind these options
+										     was partial, so a person absent from the list reads as "not a member".
+										     Stated in the picker's own caveat slot (the one the order note below
+										     already uses) rather than as a trailing option inside the list, for a
+										     reason specific to THIS control: it goes `disabled` the moment its
+										     options run out, and the exhausted prompt it then shows — "everyone is
+										     already added" — is the truncation's most misleading face. A notice
+										     inside a dropdown that cannot be opened would be unreachable exactly
+										     when it matters most; the library's always-open pickers carry theirs
+										     as a trailing option instead. -->
+										{#if rosterPartial}
+											<p data-testid="season-manage-conductor-partial-notice" role="status" class="text-xs text-ink-2">
+												{m.picker_partial_members_notice()}
+											</p>
+										{/if}
 										<!-- #209 review F2 — the SECTION read behind roster order failed: the
 										     picker still works off the roster's own name order, and says so
 										     rather than passing a different order off as the roster's. -->
@@ -6871,6 +7099,29 @@
 											</fieldset>
 										</div>
 									{/if}
+									<!-- #321 review F1 — the panel's own partial notice, directly
+									     above the rows it is about (the same slot the load-error line
+									     occupies, for the same reason: a statement about THIS list sits
+									     against THIS list). Deliberately the SAME markup the /library,
+									     /roster and rsvp/attendance notices use — visible <p>,
+									     role="status", dashed border, own testid, copy through i18n:
+									     one pattern for one meaning, never a second visual language.
+									     Persistent and never sr-only (a truncated list is a standing
+									     fact, not a transient toast), absent from the DOM once the read
+									     is complete. `resetSeasonManage` is what keeps it from
+									     surviving a season or collective switch. The one deviation is
+									     `text-xs` for `text-sm`: this panel's every line (heading, rows,
+									     counts, the error slot below) is xs, and the page-level notices'
+									     sm would render this one LARGER than the section it sits in. -->
+									{#if seasonManagePartial}
+										<p
+											data-testid="season-manage-partial-notice"
+											role="status"
+											class="mt-1 rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
+										>
+											{m.season_manage_partial_notice()}
+										</p>
+									{/if}
 									{#if seasonManageSeriesError}
 										<p
 											data-testid="season-manage-series-error"
@@ -7035,6 +7286,7 @@
 										seasonRights={manageableSeasonRights}
 										pickableWorksList={panelPickableWorksList}
 										pickableWorksVisible={panelPickableWorksVisible}
+										pickableWorksPartial={panelWorksPartial}
 										pendingKeys={panelPendingKeys}
 										addWorkKey={PANEL_ADD_WORK_KEY}
 										expanded={true}
@@ -7182,6 +7434,21 @@
 											<option value={option.id}>{option.label}</option>
 										{/each}
 									</select>
+									<!-- #321 (PO ruling 2026-09-11) — the member read behind these options
+									     was partial, so a person absent from the list reads as "not a member".
+									     Stated in the picker's own caveat slot (the one the order note below
+									     already uses) rather than as a trailing option inside the list, for a
+									     reason specific to THIS control: it goes `disabled` the moment its
+									     options run out, and the exhausted prompt it then shows — "everyone is
+									     already added" — is the truncation's most misleading face. A notice
+									     inside a dropdown that cannot be opened would be unreachable exactly
+									     when it matters most; the library's always-open pickers carry theirs
+									     as a trailing option instead. -->
+									{#if rosterPartial}
+										<p data-testid="season-create-conductor-partial-notice" role="status" class="text-xs text-ink-2">
+											{m.picker_partial_members_notice()}
+										</p>
+									{/if}
 									<!-- #209 review F2 — the SECTION read behind roster order failed: the
 									     picker still works off the roster's own name order, and says so
 									     rather than passing a different order off as the roster's. -->
@@ -7572,6 +7839,21 @@
 											{/each}
 									</select>
 									</label>
+									<!-- #321 (PO ruling 2026-09-11) — the member read behind these options
+									     was partial, so a person absent from the list reads as "not a member".
+									     Stated in the picker's own caveat slot (the one the order note below
+									     already uses) rather than as a trailing option inside the list, for a
+									     reason specific to THIS control: it goes `disabled` the moment its
+									     options run out, and the exhausted prompt it then shows — "everyone is
+									     already added" — is the truncation's most misleading face. A notice
+									     inside a dropdown that cannot be opened would be unreachable exactly
+									     when it matters most; the library's always-open pickers carry theirs
+									     as a trailing option instead. -->
+									{#if rosterPartial}
+										<p data-testid="event-create-conductor-partial-notice" role="status" class="text-xs text-ink-2">
+											{m.picker_partial_members_notice()}
+										</p>
+									{/if}
 									<!-- #209 review F2 — the SECTION read behind roster order failed: the
 									     picker still works off the roster's own name order, and says so
 									     rather than passing a different order off as the roster's. -->
@@ -7789,6 +8071,7 @@
 										canExpand={$isConductor === 'conductor'}
 										expanded={seasonSummaryExpanded}
 										memberRates={seasonMemberRates}
+										membersPartial={seasonRatesPartial}
 										loading={seasonRatesLoading}
 										error={seasonRatesError}
 										onexpand={handleExpandSeasonSummary}

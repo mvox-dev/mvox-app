@@ -199,7 +199,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -217,9 +217,9 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor in most cases here, so the page's
 // loadManagePickers fires — stub its reads or they hit the network.
 vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue([]),
-	listAllEditions: vi.fn().mockResolvedValue([]),
-	listAllCopies: vi.fn().mockResolvedValue([])
+	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 }));
 // #277 — a named handle: the per-season pins assert WHICH season the panel's
 // repertoire read targets.
@@ -238,6 +238,7 @@ import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -402,17 +403,39 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('polyphony');
 }
 
+/** Two collectives, polyphony selected — what the collective-SWITCH pins need.
+ *  It lived inside the requestId-guard describe until the #321 review F1 notice
+ *  teardown pin (end of this file) became its second caller. */
+function setAuthedWithTwoCollectives(): void {
+	setToken('jwt-abc');
+	authStore.set({
+		status: 'authenticated',
+		personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+		expMs: Date.now() + 100_000
+	});
+	collectiveState.set({
+		status: 'ready',
+		collectives: [
+			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'org-b', name: 'Org B', personId: 'person-p' }
+		],
+		erroredDbs: []
+	});
+	urlCollectiveDbStore.set(null);
+	selectedCollectiveDbStore.set('polyphony');
+}
+
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	// [] = no sections → roster order degrades to the roster's own order.
 	listSectionsMock.mockResolvedValue([]);
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue([]);
-	listEventSeriesForSeasonMock.mockResolvedValue(seriesFixture());
-	listEventsForSeasonMock.mockResolvedValue(standaloneFixture());
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead(seriesFixture()));
+	listEventsForSeasonMock.mockResolvedValue(toListRead(standaloneFixture()));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);
@@ -938,7 +961,7 @@ describe('agenda — season conductors are editable in the panel', () => {
 	});
 
 	it('a conductor who is NOT on the roster (left the collective) reads as an unknown member, never as her entity id', async () => {
-		loadRosterMock.mockResolvedValue(fixtureRows().filter((row) => row.personId !== 'p-grace'));
+		loadRosterMock.mockResolvedValue(toListRead(fixtureRows().filter((row) => row.personId !== 'p-grace')));
 		const container = await renderReady();
 		await openPanel(container);
 
@@ -976,11 +999,11 @@ describe('agenda — season conductors are editable in the panel', () => {
 	it('option order is ROSTER order — section, then position within section — not alphabetical (Gama ruling 3)', async () => {
 		// loadRoster answers NAME order (Ada, Grace, Pete). Pete sings Sopran
 		// (first section), Ada Tenor (second); Grace already conducts (excluded).
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ ...fixtureRows()[0], sectionIds: ['sec-t'] }, // Ada → Tenor
 			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran (excluded anyway)
 			{ ...fixtureRows()[2], sectionIds: ['sec-s'] } // Pete → Sopran
-		]);
+		]));
 		listSectionsMock.mockResolvedValue([
 			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
@@ -1233,31 +1256,12 @@ describe('agenda — the panel lists the season’s series and standalone events
 // ── collective switch: no stale data leaks into the panel ───────────────────────
 
 describe('agenda — the panel’s reads respect the page-wide requestId guard', () => {
-	function setAuthedWithTwoCollectives(): void {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
-			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
-				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-			],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
-	}
-
 	// #132/T3 review F4 — `resetSeasonManage()` clears the arrays on a new
 	// selection, but a read still in flight for the OLD db resolves afterwards.
 	// The panel is closed at that moment, so nothing is on screen; the stale rows
 	// then survive into the NEXT open and render the previous collective's series.
 	it('a series read still in flight when the collective changes never repopulates the panel', async () => {
-		let resolveStale!: (rows: ReturnType<typeof seriesFixture>) => void;
+		let resolveStale!: (result: { items: ReturnType<typeof seriesFixture>; truncated: boolean }) => void;
 		listEventSeriesForSeasonMock.mockImplementation(
 			() =>
 				new Promise((resolve) => {
@@ -1281,7 +1285,7 @@ describe('agenda — the panel’s reads respect the page-wide requestId guard',
 		});
 
 		// …and only NOW does the previous collective's read land.
-		resolveStale(seriesFixture());
+		resolveStale({ items: seriesFixture(), truncated: false });
 		await new Promise((r) => setTimeout(r, 0));
 
 		// The org-b panel must be empty of polyphony's series (org-b's own read is
@@ -1561,7 +1565,7 @@ const repertoireB = [
  *  A's rows from B's. */
 function serveSeriesPerSeason(): void {
 	listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) =>
-		Promise.resolve(seasonId === SEASON_B_ID ? seriesB : seriesA)
+		Promise.resolve({ items: seasonId === SEASON_B_ID ? seriesB : seriesA, truncated: false })
 	);
 }
 
@@ -1699,7 +1703,7 @@ describe('season card #277 — switching the managed season is a context switch'
 
 	it('race (a): a series read for A still in flight when the admin switches to B NEVER repopulates B’s panel', async () => {
 		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
-		let resolveStaleA!: (rows: typeof seriesA) => void;
+		let resolveStaleA!: (result: { items: typeof seriesA; truncated: boolean }) => void;
 		listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) => {
 			if (seasonId === SEASON_ID)
 				return new Promise((resolve) => {
@@ -1716,7 +1720,7 @@ describe('season card #277 — switching the managed season is a context switch'
 
 		await openPanelForSeason(container, 'Season 2027');
 		// …and only NOW does A's read land.
-		resolveStaleA(seriesA);
+		resolveStaleA({ items: seriesA, truncated: false });
 		await flush();
 
 		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2027');
@@ -2269,8 +2273,157 @@ describe('season card #277 — [+ Season] alongside the entries', () => {
 	});
 });
 
+// ── #321 review F1: the panel SAYS when its series list is partial ──────────────
+//
+// The finding: `listEventSeriesForSeason` reported `truncated` and the panel only
+// `console.warn`ed it, so an admin read an under-reported occurrence count with
+// nothing on screen saying so — the issue's own motivating example, left standing.
+//
+// Pinned in the SAME shape as the other three surfaces
+// (page.library-partial-notice.spec.ts / page.agenda-partial-notice.spec.ts /
+// page.roster-partial-notice.spec.ts):
+//   - VISIBLE and persistent: a real <p>, never sr-only, `role="status"`, its own
+//     testid, copy through i18n (the four locales' sentences are pinned in
+//     page.partial-notice-i18n.spec.ts);
+//   - ABSENT FROM THE DOM (not merely hidden) when the read is complete;
+//   - directly above the rows it is about;
+//   - never carried across a SEASON or a COLLECTIVE switch. Both switch pins hold
+//     the new context's read PENDING, so anything on screen after the switch can
+//     only have come from the teardown — had they let the new read settle, the
+//     `seasonManagePartial = result.truncated` assignment would clear the notice
+//     on its own and the pin would pass with no teardown at all.
+
+const PARTIAL_NOTICE = 'season-manage-partial-notice';
+
+/** The panel's series read, reported PARTIAL (the server's count exceeded the
+ *  rows it returned — in either the series read or the season-wide event read
+ *  behind the counts; the panel states the one fact both produce). */
+function truncatedSeriesRead() {
+	return { items: seriesFixture(), truncated: true };
+}
+
+describe('#321 review F1 — the season-manage panel’s partial notice', () => {
+	it('a truncated series read renders a VISIBLE, persistent role="status" notice with the i18n copy, directly above the rows', async () => {
+		listEventSeriesForSeasonMock.mockResolvedValue(truncatedSeriesRead());
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		await waitFor(() => {
+			expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
+		});
+		const notice = q(container, PARTIAL_NOTICE) as HTMLElement;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toContain('sr-only');
+		expect(notice.textContent?.trim()).toBe('season_manage_partial_notice');
+		// Inside the panel, and ahead of the list it describes.
+		expect(panel.contains(notice)).toBe(true);
+		const firstRow = q(container, 'season-manage-series-series-1') as HTMLElement;
+		expect(
+			notice.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+		// A standing fact, not a toast: still there once everything has settled.
+		await flush();
+		expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
+	});
+
+	it('a complete read leaves the notice ABSENT from the DOM (not hidden)', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
+		});
+
+		expect(q(container, PARTIAL_NOTICE)).toBeNull();
+	});
+
+	it('a SEASON switch drops the notice with the rows it described — before the new season’s read has landed', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		// A is truncated; B's read never settles, so a notice visible under B can
+		// only be A's, left standing.
+		listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) =>
+			seasonId === SEASON_B_ID
+				? new Promise(() => {})
+				: Promise.resolve({ items: seriesA, truncated: true })
+		);
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+
+		expect(q(container, PARTIAL_NOTICE)).toBeNull();
+	});
+
+	it('a COLLECTIVE switch does not carry A’s truncation onto B’s panel', async () => {
+		let pendingReads = 0;
+		listEventSeriesForSeasonMock.mockImplementation(() =>
+			pendingReads++ === 0
+				? Promise.resolve(truncatedSeriesRead())
+				: // org-b's read is held pending, same reasoning as the season pin.
+					new Promise(() => {})
+		);
+		setAuthedWithTwoCollectives();
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'agenda-empty')).not.toBeNull();
+		});
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
+		});
+
+		selectedCollectiveDbStore.set('org-b');
+		await waitFor(() => {
+			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
+		});
+		// The switch closed the panel (`resetSeasonManage`); reopening under org-b
+		// is where a leaked claim would show.
+		await openPanel(container);
+
+		expect(q(container, PARTIAL_NOTICE)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #132/T3 RED: [⚙] season management — gear entry point, inline
 // panel, per-field editing, conductor chips, series/standalone listings, close/persist)
 // (*MVOX:Tallis* — #277 RED: per-season entry points — one collapsed entry per
 // manageable season, season switch as a context switch (race pins a–d),
 // per-season rights re-derivation, single-season case byte-identical)
+describe('#321 review F2 — the panel\u2019s conductor picker states a truncated roster', () => {
+	// The PO's reachability ruling (2026-09-11): the conductor select is a CLOSED
+	// SET over the roster, so a member missing from its options cannot be picked
+	// and the gap reads as "not a member". The notice goes in the picker's own
+	// caveat slot, not inside the option list, because this select goes `disabled`
+	// when its options run out — and the "everyone is already added" prompt it then
+	// shows is the truncation's most misleading face.
+	const NOTICE = 'season-manage-conductor-partial-notice';
+
+	it('a truncated roster read renders the shared role="status" notice beside the picker', async () => {
+		loadRosterMock.mockResolvedValue({ items: fixtureRows(), total: 500, truncated: true });
+		const container = await renderReady();
+		await openPanel(container);
+
+		await waitFor(() => {
+			expect(q(container, NOTICE)).not.toBeNull();
+		});
+		const notice = q(container, NOTICE) as HTMLElement;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toMatch(/sr-only|hidden/);
+	});
+
+	it('a complete roster read leaves it ABSENT from the DOM', async () => {
+		const container = await renderReady();
+		const panel = await openPanel(container);
+		await waitFor(() => {
+			expect(conductorSelect(panel).options.length).toBeGreaterThan(1);
+		});
+
+		expect(q(container, NOTICE)).toBeNull();
+	});
+});
+
+// (*MVOX:Josquin* — #321 review F1: the panel's own partial notice — raised from
+// the truncated series read, absent on a complete one, torn down by both switches)

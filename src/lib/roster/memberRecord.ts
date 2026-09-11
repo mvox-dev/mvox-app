@@ -119,6 +119,11 @@ export async function loadMemberRecord(
 	personId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<MemberRecordLookup> {
+	// #321 — scoped by person.reference, not _parent: admin_member_record's
+	// required `database` parent plus the single-collective-per-db invariant
+	// make a _parent filter redundant (same reasoning listActiveMembers
+	// documents for its own unscoped query). A person has at most one
+	// admin_member_record; limit=10 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=admin_member_record&person.reference=${encodeURIComponent(personId)}&props=name,phone,email,birthdate,id_code&limit=10`,

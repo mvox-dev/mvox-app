@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
+		picker_partial_members_notice: () => 'Not every member is listed here',
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 		agenda_today: () => 'Today',
@@ -174,6 +175,7 @@ import {
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetConductor } from '$lib/attendance/conductorStore';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(
 	id: string,
@@ -238,10 +240,10 @@ function setTwoConductedRecentEventsFixture() {
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // seat inherited season-wide — both events are conducted
 	}));
-	loadRosterMock.mockResolvedValue([
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-	]);
+	]));
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	setAuthedWithOneCollective('person-p');
@@ -255,10 +257,10 @@ function setConductedRecentFixture() {
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // person-p inherits the seat (event list empty)
 	}));
-	loadRosterMock.mockResolvedValue([
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-	]);
+	]));
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([
 		{ rsvpId: 'r1', memberId: 'm1', status: 'going' } // m2 deliberately absent — no answer
@@ -268,7 +270,7 @@ function setConductedRecentFixture() {
 
 // Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();
@@ -565,4 +567,62 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 	});
 });
 
+// ── #321 review F2: the panel says when the roster behind its rows was cut ──────
+//
+// The PO's reachability ruling (2026-09-11): this panel is a CLOSED SET. A singer
+// with no row here cannot be marked present at all, and her missing row reads as
+// "she is not a member" rather than as a list cut short — so the panel says it,
+// inside itself, where the conductor looking for her is looking. `loadRoster`
+// reports `truncated` to the page for exactly this (it used to console.warn and
+// drop it); the agenda threads it through `attendancePanel.membersPartial`.
+
+describe('+page — the attendance panel states a truncated roster (#321 review F2)', () => {
+	async function openPanelWithRoster(truncated: boolean) {
+		setConductedRecentFixture();
+		if (truncated) {
+			loadRosterMock.mockResolvedValue({
+				items: [
+					{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
+				],
+				total: 500,
+				truncated: true
+			});
+		}
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="attendance-row-m1"]')).not.toBeNull();
+		});
+		return container;
+	}
+
+	const NOTICE = '[data-testid="attendance-panel-partial-notice"]';
+
+	it('a truncated member read renders the shared VISIBLE role="status" notice inside the panel', async () => {
+		const container = await openPanelWithRoster(true);
+
+		await waitFor(() => {
+			expect(container.querySelector(NOTICE)).not.toBeNull();
+		});
+		const notice = container.querySelector(NOTICE)!;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toMatch(/sr-only|hidden/);
+		// Inside the panel, with the rows it is about — not on the page behind it.
+		expect(
+			container.querySelector(`[data-testid="attendance-panel"] ${NOTICE}`)
+		).not.toBeNull();
+	});
+
+	it('a complete read leaves it ABSENT from the DOM', async () => {
+		const container = await openPanelWithRoster(false);
+		expect(container.querySelector('[data-testid="attendance-row-m2"]')).not.toBeNull();
+
+		expect(container.querySelector(NOTICE)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #321 review F2: the panel's closed-set roster notice)

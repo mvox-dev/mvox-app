@@ -104,7 +104,7 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	// throws inside the .then chain, which the outer .catch swallows by
 	// resetting memberId/membership — silently breaking THIS spec's member
 	// assertions even though it never exercises attendance itself.
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -136,6 +136,7 @@ import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -167,7 +168,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 	it('calls findMyMemberId with {db,token} for the selected collective and the selected person id', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		render(Page);
@@ -181,7 +182,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 	it('calls listMyRsvps with {db,token} for the selected collective and the selected person id', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		render(Page);

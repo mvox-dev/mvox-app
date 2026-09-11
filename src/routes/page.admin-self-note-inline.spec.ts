@@ -29,6 +29,7 @@
 // Assertions match on testids + message KEYS (full-fallback paraglide proxy
 // renders `[key]`), never translated sentences — same posture as
 // page.admin-collective-name.spec.ts.
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -159,7 +160,7 @@ function loadOk() {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [DB_ROOT, SELF_OWNER], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.removeAdminMock.mockResolvedValue(undefined);
 	h.resolveParentMock.mockResolvedValue('parent-1');

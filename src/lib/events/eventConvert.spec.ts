@@ -625,7 +625,7 @@ describe('integration — conversion writes, the REAL agenda/panel producers rea
 		const wire = seededWire();
 
 		// sanity: BEFORE conversion the panel classifies ev-9 as standalone
-		expect(await listEventsForSeason(icfg, 'season-1', wire.fetch)).toEqual([
+		expect((await listEventsForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([
 			{ id: 'ev-9', name: 'Proov', startDatetime: '2027-04-20T18:00:00.000Z' }
 		]);
 
@@ -663,8 +663,8 @@ describe('integration — conversion writes, the REAL agenda/panel producers rea
 		const wire = seededWire();
 		const { seriesId } = await convertEventToSeries(icfg, conversionInput, wire.fetch);
 
-		expect(await listEventsForSeason(icfg, 'season-1', wire.fetch)).toEqual([]);
-		expect(await listEventSeriesForSeason(icfg, 'season-1', wire.fetch)).toEqual([
+		expect((await listEventsForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([]);
+		expect((await listEventSeriesForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([
 			{ id: seriesId, name: 'Proov', eventCount: 1 }
 		]);
 	});

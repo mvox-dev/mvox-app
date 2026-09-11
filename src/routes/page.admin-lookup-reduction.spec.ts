@@ -21,6 +21,7 @@
 //
 // resolveAdmin / resolveLibrarian run REAL here — mocking them would let GREEN
 // "pass" without actually removing their internal lookups from the page path.
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -173,7 +174,7 @@ beforeEach(() => {
 	});
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
 	h.createInviteMock.mockResolvedValue({

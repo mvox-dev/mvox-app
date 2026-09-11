@@ -185,6 +185,7 @@ import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -205,19 +206,19 @@ function setAuthedWithOneCollective() {
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	resolveCopyChainsMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 	listSeasonsMock.mockResolvedValue([]);
 	listRepertoireItemsMock.mockResolvedValue([]);
 }
 
 /** Baseline data: one existing work, no lendings. */
 function mockBaselineLibrary() {
-	listWorksMock.mockResolvedValue([
+	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
-	]);
-	listLendingsMock.mockResolvedValue([]);
+	]));
+	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
 }
 

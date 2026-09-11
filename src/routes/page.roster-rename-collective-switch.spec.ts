@@ -145,6 +145,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── two collectives, two disjoint fixtures (verbatim from the #287 spec) ────
 
@@ -200,7 +201,7 @@ function setAuthedWithTwoCollectives() {
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
@@ -214,8 +215,8 @@ beforeEach(() => {
 	renameMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue([]);
-	listInactiveMembersMock.mockResolvedValue([]);
+	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 });

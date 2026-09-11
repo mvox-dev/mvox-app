@@ -1,6 +1,7 @@
 import { writable, type Writable } from 'svelte/store';
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { isTruncated } from '$lib/entu/listRead';
 
 // #255 done-when 6 — app-level membership resolution, lifted into a store on
 // the `completionGate` precedent (completionGate.ts:3-6: "the ONE app-wide
@@ -35,12 +36,26 @@ export function resetMembership(): void {
 /**
  * Status-UNSCOPED self-lookup: `_type.string=member&person.reference={me}` —
  * NO `status.string` filter. Classify:
- *   - no row                         → 'non-member'
- *   - any row with status 'active'   → 'active'
- *   - row(s), none active            → 'inactive'
+ *   - any row with status 'active'   → 'active' (positive evidence stands,
+ *     whether or not the page is truncated — see #321 note below)
+ *   - the page is TRUNCATED (server `count` > entities.length) and no active
+ *     row is in it → 'loading', never 'inactive'/'non-member' (#321: the
+ *     missing rows could be the active one — a partial page proves nothing
+ *     about what it didn't carry)
+ *   - no row, COMPLETE page          → 'non-member'
+ *   - row(s), COMPLETE page, none active → 'inactive'
  *   - row visible but status unreadable → 'loading' (never a claim off a
  *     half-visible row)
  *   - read throws / non-2xx          → 'loading' (fail-safe, NEVER rejects)
+ *
+ * #321 — this is a (2)-treatment decision, not a (1): the bound (a person's
+ * whole rejoin history) is genuinely reachable churn, not a schema-provable
+ * ceiling, and the table-gap review flagged this site by name. Rather than a
+ * DOM notice (this read backs a banner classification, not a rendered list),
+ * the treatment is the tri-state fail-safe itself, extended one step: a
+ * TRUNCATED page is treated exactly like a half-visible row already is —
+ * evidence too thin to ground a negative claim. `isTruncated` reads the same
+ * server `count` every other #321 detector reads, on this SAME request.
  */
 export async function resolveMembership(
 	cfg: EntuCfg,
@@ -59,13 +74,18 @@ export async function resolveMembership(
 		// function must NEVER reject either (see the module doc's tri-state note).
 		if (!res.ok) return 'loading';
 		const body = (await res.json()) as {
+			count?: number;
 			entities?: Array<{ status?: Array<{ string?: string }> }>;
 		};
 		const entities = body.entities ?? [];
-		if (entities.length === 0) return 'non-member';
 		const statuses = entities.map((e) => e.status?.[0]?.string);
-		// An active membership is never overridden by a stale archived row.
+		// An active membership is never overridden by a stale archived row, nor
+		// by truncation elsewhere in the same page.
 		if (statuses.some((s) => s === 'active')) return 'active';
+		// #321 — a partial page with no active row visible proves nothing about
+		// the rows beyond the cap: 'loading', never 'inactive'/'non-member'.
+		if (isTruncated(entities.length, body.count)) return 'loading';
+		if (entities.length === 0) return 'non-member';
 		// A row this reader can see but whose status came back unreadable (a
 		// sharing-tier gap, not a fact) must never be read as a claim — 'loading',
 		// never 'inactive'.

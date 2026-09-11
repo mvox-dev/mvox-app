@@ -143,7 +143,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 // Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue(null),
-	listMyRsvps: vi.fn().mockResolvedValue([]),
+	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	rsvpsByEventId: () => ({}),
 	createRsvp: vi.fn(),
 	updateRsvpStatus: vi.fn(),
@@ -151,7 +151,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -165,6 +165,7 @@ import type { Season } from '$lib/seasons/types';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -309,6 +310,11 @@ interface WorldOptions {
 	 *  so whatever the section shows across a panel-preserving reload is exactly
 	 *  what the resets left standing, with no refetch to paper over a wipe. */
 	holdRepertoireReads?: () => boolean;
+	/** #321 — the server `count` the panel's own WORK list read answers with.
+	 *  Above the number of works served, that read is TRUNCATED, which the
+	 *  panel's closed-set add-work picker must say out loud. Omitted = no count
+	 *  on the wire = complete, the shape every other fixture here describes. */
+	workCount?: number;
 }
 
 /** The Entu stand-in, db-aware and stateful. Routed by url + method so an
@@ -319,7 +325,8 @@ function installWorld(options: WorldOptions) {
 		pendingRepertoireDbs = [],
 		failRepertoireRead = false,
 		holdCreates = false,
-		holdRepertoireReads = () => false
+		holdRepertoireReads = () => false,
+		workCount
 	} = options;
 	let createSeq = 0;
 
@@ -371,7 +378,10 @@ function installWorld(options: WorldOptions) {
 		if (url.includes('?props=status')) return json({ entity: { status: [{ _id: 'val-status' }] } });
 		if (url.includes('?props=edition')) return json({ entity: { edition: [] } });
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-ri' }] });
-		if (url.includes('_type.string=work')) return json({ entities: WORKS });
+		if (url.includes('_type.string=work'))
+			return json(
+				workCount === undefined ? { entities: WORKS } : { count: workCount, entities: WORKS }
+			);
 		if (url.includes('_type.string=edition')) return json({ entities: EDITIONS });
 		if (url.includes('_type.string=copy')) return json({ entities: [] });
 		if (url.includes('_type.string=program_item')) return json({ entities: [] });
@@ -408,11 +418,11 @@ function setAuthed(dbs: string[] = ['polyphony']) {
 
 beforeEach(() => {
 	resetTypeIdCache();
-	loadRosterMock.mockResolvedValue([]);
+	loadRosterMock.mockResolvedValue(toListRead([]));
 	listSectionsMock.mockResolvedValue([]);
-	listEventsForSeasonMock.mockResolvedValue([]);
+	listEventsForSeasonMock.mockResolvedValue(toListRead([]));
 	deleteEventMock.mockResolvedValue(undefined);
-	listEventSeriesForSeasonMock.mockResolvedValue([]);
+	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead([]));
 	deleteEventSeriesMock.mockResolvedValue(0);
 	countSeriesOccurrencesMock.mockResolvedValue(0);
 	// Never settles: the signing call is what the pin asserts, and letting it
@@ -994,7 +1004,7 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 		});
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
 		let seriesRows = [SERIES_ROW];
-		listEventSeriesForSeasonMock.mockImplementation(async () => seriesRows);
+		listEventSeriesForSeasonMock.mockImplementation(async () => ({ items: seriesRows, truncated: false }));
 		countSeriesOccurrencesMock.mockResolvedValue(3);
 		deleteEventSeriesMock.mockImplementation(async (_cfg: unknown, id: string) => {
 			seriesRows = seriesRows.filter((s) => s.id !== id);
@@ -1283,5 +1293,52 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 	});
 });
 
+// ── #321 review F2 — the PANEL's own add-work picker states its truncated feed ───
+//
+// The panel reads works/editions/copies itself (its season can diverge from the
+// agenda's — see the section's own doc), so its add-work select is a second closed
+// set over a second read. This site carried the same "out of the RED-pinned scope"
+// narrowing the PO's ruling rejected: a work the list does not offer cannot be
+// added, and the gap reads as "that piece isn't in the library".
+
+describe('#234/#321 — the panel add-work picker states a truncated library read', () => {
+	const WORK_OPTION = 'work-manage-add-work-partial-option';
+
+	it('a truncated panel WORK read puts a trailing disabled option inside the select', async () => {
+		installWorld({ repertoireBySeason: { 'season-1': [] }, workCount: 900 });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
+		setAuthed();
+		const container = await renderAgendaReady('agenda-empty');
+		await openPanel(container);
+
+		const section = repertoireSection(container);
+		await waitFor(() => {
+			expect(q(section, WORK_OPTION)).not.toBeNull();
+		});
+		const select = addWorkSelect(section);
+		const options = Array.from(select.options);
+		const last = options[options.length - 1];
+		expect(last.getAttribute('data-testid')).toBe(WORK_OPTION);
+		expect(last.disabled).toBe(true);
+		// The works it DID return stay pickable — a notice is not an error state.
+		expect(options.some((o) => o.textContent?.includes('Spem in alium'))).toBe(true);
+	});
+
+	it('a complete panel read leaves the option ABSENT from the select', async () => {
+		installWorld({ repertoireBySeason: { 'season-1': [] } });
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
+		setAuthed();
+		const container = await renderAgendaReady('agenda-empty');
+		await openPanel(container);
+
+		const section = repertoireSection(container);
+		await waitFor(() => {
+			expect(addWorkSelect(section)).not.toBeNull();
+		});
+		expect(q(section, WORK_OPTION)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #311 RED: the panel’s Add Work picker + its missing loading flag)
+// (*MVOX:Josquin* — #321 review F2: the panel picker states its own feed)

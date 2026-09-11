@@ -40,6 +40,7 @@
 //   surfaces the owner-rights meaning — never the raw platform text.
 // - After a successful person-targeted mint that person is no longer
 //   uninvited: the list is re-derived and the select returns to its default.
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -59,6 +60,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		picker_everyone_added: () => 'Everyone is already added',
 		picker_no_members: () => 'No members to add',
 		picker_order_fallback: () => 'Sorted by name — section order unavailable',
+		picker_partial_members_notice: () => 'Not every member is listed here',
 		admin_roles_remove: (p: { name: string }) => `Remove ${p.name}`,
 		admin_roles_last_owner_hint: () => 'The last owner cannot be removed.',
 		admin_roles_no_library: () => 'No library entity is visible in this collective.',
@@ -279,7 +281,7 @@ function loadOk() {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.listJoinStatesMock.mockResolvedValue({ ...JOIN_STATES });
 	h.resolveParentMock.mockResolvedValue('parent-1');
@@ -819,5 +821,44 @@ describe('#301 /admin invite — the uninvited-list read is owner-gated', () => 
 
 // (*MVOX:Tallis* — #301 RED: owner-only person select routing the existing
 //  button to mintSelfLinkInvite; the createInvite/mint split pinned both ways)
+// ── #321 review F2 — a truncated roster leaves a hole in the person select ──────
+//
+// The PO's reachability ruling (2026-09-11): this select is a CLOSED SET over the
+// roster, so a person it does not offer cannot be picked and the gap reads as an
+// absence. The notice sits OUTSIDE the select/owner-note branch on purpose —
+// truncation can be the very reason the select is not rendered at all (the only
+// uninvited person fell off the read), and a notice inside that branch would
+// vanish exactly then.
+
+describe('/admin invite — the person select states a truncated roster (#321 review F2)', () => {
+	const NOTICE = 'invite-person-partial-notice';
+
+	it('a truncated roster read renders the shared role="status" notice in the invite section', async () => {
+		selectPolyphony();
+		loadOk();
+		h.loadRosterMock.mockReset().mockResolvedValue({ items: ROSTER, total: 500, truncated: true });
+
+		const { section } = await renderInviteReady();
+
+		await waitFor(() => {
+			expect(q(section, NOTICE)).not.toBeNull();
+		});
+		expect(q(section, NOTICE)!.getAttribute('role')).toBe('status');
+		expect(q(section, NOTICE)!.className).not.toMatch(/sr-only|hidden/);
+	});
+
+	it('a complete roster read leaves it ABSENT from the DOM', async () => {
+		selectPolyphony();
+		loadOk();
+
+		const { section } = await renderInviteReady();
+		// The surface really is up (this file's default fixture does not grant the
+		// owner tier the SELECT needs, so the submit button is the honest anchor).
+		expect(q(section, 'invite-admin-submit')).not.toBeNull();
+
+		expect(q(section, NOTICE)).toBeNull();
+	});
+});
+
 // (*MVOX:Palestrina* — #301 review F1/F2: cross-path error clearing + the
 //  owner-gated uninvited-list read)

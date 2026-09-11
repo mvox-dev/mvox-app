@@ -32,6 +32,10 @@ export async function resolveTypeId(
 	const cached = typeIdCache.get(key);
 	if (cached) return cached;
 
+	// #321 class-1 — scoped by name.string, not _parent (a type-definition
+	// entity is global to the db, not a child of anything queryable). Exactly
+	// one type-definition entity exists per name (Entu platform guarantee, not
+	// an app assumption); limit=1 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=entity&name.string=${encodeURIComponent(typeName)}&props=_id&limit=1`,
@@ -77,6 +81,12 @@ export async function listSeasons(
 	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
 	if (!dbEntityId) return [];
 
+	// #321 class (1) — one collective's seasons, `_parent`-scoped to the single
+	// database entity resolved above. A season is a CALENDAR YEAR of the
+	// collective's life (start_date/end_date; `currentSeason` picks the one
+	// containing today), so limit=200 is two centuries of the choir's existence —
+	// an explicit, ample bound reached by construction, not by estimate. This cap
+	// is a guard, not a silent prefix.
 	const res = await entuFetch(
 		cfg.db,
 		// `_owner,_editor` ride along (#91 F1): the repertoire management controls
@@ -129,6 +139,18 @@ export async function listEvents(
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<AgendaItem[]> {
+	// #321 class (1) — ONE season's events, `_parent`-scoped to that season. A
+	// season spans a calendar year (`listSeasons` above), so limit=500 is about 1.4
+	// events every single day of it, summed over every section that rehearses
+	// separately; a weekly-rehearsing choir with a full concert calendar lands
+	// around 60-80. An explicit, ample bound.
+	//   One asymmetry worth naming so the next reader does not read it as a
+	// contradiction: `seasonManage.ts`'s `listEventsForSeason` issues the SAME
+	// season-scoped event query and DOES report `truncated`. Not because its bound
+	// differs — it does not — but because that module already parses this
+	// response's `count` for the neighbouring delete-cascade refuse-guards
+	// (`listChildIds`, `listSeasonEvents`), so reporting it there cost nothing.
+	// Detection is never wrong; class (1) only claims the cap is not reachable.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor&limit=500`,

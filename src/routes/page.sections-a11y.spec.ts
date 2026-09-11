@@ -122,6 +122,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 // Soprano (with one sub-section), Alto, Tenor — plus one UNASSIGNED member so
@@ -171,7 +172,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);

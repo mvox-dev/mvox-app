@@ -116,7 +116,7 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	// throws inside the .then chain, which the outer .catch swallows by
 	// resetting memberId/membership — silently breaking THIS spec's member
 	// assertions even though it never exercises attendance itself.
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -149,6 +149,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 const EVENT = {
 	id: 'e1',
@@ -207,7 +208,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	it('while membership is UNRESOLVED (findMyMemberId still in flight) the control is disabled with NO non-member hint', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {})); // never resolves — stays loading
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -220,7 +221,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	it('a CONFIRMED non-member (findMyMemberId resolves null) shows disabled control + the hint', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue(null);
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -236,7 +237,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	it('a CONFIRMED member (findMyMemberId resolves an id) enables the control and shows no hint', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -251,7 +252,7 @@ describe('+page — membership 3-state gates the non-member hint', () => {
 	it('a lookup FAILURE (findMyMemberId rejects) does NOT assert non-member — disabled, no false hint (fail-safe)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockRejectedValue(new Error('lookup boom'));
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -272,7 +273,7 @@ describe('+page — write-failure feedback (a rejected rsvp save)', () => {
 	it('a rejected write surfaces a per-row save-failed error AND reverts the optimistic value', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue([]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		applyRsvpChangeMock.mockRejectedValue(new Error('save failed'));
 		setAuthedWithOneCollective();
 

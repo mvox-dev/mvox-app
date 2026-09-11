@@ -157,6 +157,7 @@ import LibraryPage from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 afterEach(() => {
 	cleanup();
@@ -796,11 +797,11 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
-		listAllEditionsMock.mockResolvedValue([]);
-		listAllCopiesMock.mockResolvedValue([]);
-		listActiveMembersMock.mockResolvedValue([]);
-		listWorksMock.mockResolvedValue(WORKS);
-		listLendingsMock.mockResolvedValue([]);
+		listAllEditionsMock.mockResolvedValue(toListRead([]));
+		listAllCopiesMock.mockResolvedValue(toListRead([]));
+		listActiveMembersMock.mockResolvedValue(toListRead([]));
+		listWorksMock.mockResolvedValue(toListRead(WORKS));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		listSeasonsMock.mockResolvedValue(SEASONS);
 		listRepertoireItemsMock.mockResolvedValue(REPERTOIRE_ITEMS);
@@ -846,7 +847,7 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 	// toggles are in scope for #93 too.
 	it('the library browse-tree toggles must not dangle their aria-controls IDREFs while collapsed — the regions they reference only render when expanded', async () => {
 		const container = await renderLibraryWithBadges();
-		listEditionsMock.mockResolvedValue([]);
+		listEditionsMock.mockResolvedValue(toListRead([]));
 
 		const toggles = Array.from(
 			container.querySelectorAll('[data-testid^="library-work-toggle-"]')

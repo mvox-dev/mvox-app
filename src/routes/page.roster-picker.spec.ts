@@ -70,6 +70,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures (same shape as page.roster-sections.spec.ts) ───────────────────────
 // Soprano (order 1) ▸ Soprano 1; Alto (order 2). Ada+Carol in Soprano, Eva in
@@ -129,7 +130,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -327,7 +328,7 @@ describe('/roster — tapping a CURRENT section unassigns it; "(Unassigned)" rem
 	});
 
 	it('multi-section member + tap "(Unassigned)" → unassignMemberSection fires ONCE PER current section; the row ends up ONLY in Unassigned', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			...fixtureRows(),
 			{
 				memberId: 'm-multi',
@@ -336,7 +337,7 @@ describe('/roster — tapping a CURRENT section unassigns it; "(Unassigned)" rem
 				email: 'mia@x.com',
 				sectionIds: ['sec-sop', 'sec-alto']
 			}
-		]);
+		]));
 		const container = await renderReady('admin');
 
 		await openPicker(container, 'm-multi');
@@ -373,7 +374,7 @@ describe('/roster — tapping a CURRENT section unassigns it; "(Unassigned)" rem
 describe('/roster — F1 code-review fix: a revert undoes ONLY the membership its own call owned', () => {
 	it('"(Unassigned)" with a PARTIAL failure → only the section whose unassign REJECTED comes back; the one that succeeded stays gone (no whole-snapshot restore)', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			...fixtureRows(),
 			{
 				memberId: 'm-multi',
@@ -382,7 +383,7 @@ describe('/roster — F1 code-review fix: a revert undoes ONLY the membership it
 				email: 'mia@x.com',
 				sectionIds: ['sec-sop', 'sec-alto']
 			}
-		]);
+		]));
 		// Soprano 403s, Alto succeeds — the server ends up holding Soprano only.
 		unassignMock.mockImplementation((_cfg, _memberId, sectionId) =>
 			sectionId === 'sec-sop' ? Promise.reject(new Error('403')) : Promise.resolve()
@@ -512,7 +513,7 @@ describe('/roster — F1(b) code-review fix: "membership already gone server-sid
 
 	it('"(Unassigned)": a section whose unassign says ALREADY-GONE does not come back, while a genuinely failing one does', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			...fixtureRows(),
 			{
 				memberId: 'm-multi',
@@ -521,7 +522,7 @@ describe('/roster — F1(b) code-review fix: "membership already gone server-sid
 				email: 'mia@x.com',
 				sectionIds: ['sec-sop', 'sec-alto']
 			}
-		]);
+		]));
 		// Soprano: already gone server-side (stale row). Alto: a real 403.
 		unassignMock.mockImplementation((_cfg, memberId, sectionId) =>
 			sectionId === 'sec-sop'

@@ -100,6 +100,7 @@ import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -113,9 +114,9 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('polyphony');
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 function setAuthedLibrarian() {
@@ -189,10 +190,10 @@ describe('#75 — i18n: no hardcoded user-facing strings', () => {
 // ---------------------------------------------------------------------------
 describe('#75 — a11y: my-loans section', () => {
 	it('the my-loans toggle has aria-expanded and aria-controls attributes', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
+		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
@@ -235,7 +236,7 @@ describe('#75 — a11y: my-loans section', () => {
 describe('#75 — a11y: error states use role="alert"', () => {
 	it('the library load-error container has role="alert"', async () => {
 		listWorksMock.mockRejectedValue(new Error('boom'));
-		listLendingsMock.mockResolvedValue([]);
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		setAuthedWithOneCollective();
 
@@ -250,8 +251,8 @@ describe('#75 — a11y: error states use role="alert"', () => {
 	});
 
 	it('the librarian-load-error container has role="alert"', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 		resolveLibrarianMock.mockResolvedValue({ state: 'error', libraryId: null });
@@ -266,8 +267,8 @@ describe('#75 — a11y: error states use role="alert"', () => {
 	});
 
 	it('the node-level edition load error has role="alert"', async () => {
-		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		listEditionsMock.mockRejectedValue(new Error('edition load fail'));
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -288,10 +289,10 @@ describe('#75 — a11y: error states use role="alert"', () => {
 	});
 
 	it('the node-level copy load error has role="alert"', async () => {
-		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: 'Ed1', publisher: 'Pub' }]);
+		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: 'Ed1', publisher: 'Pub' }]));
 		listCopiesMock.mockRejectedValue(new Error('copy load fail'));
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		setAuthedWithOneCollective();
@@ -317,22 +318,22 @@ describe('#75 — a11y: error states use role="alert"', () => {
 // ---------------------------------------------------------------------------
 describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 	it('bulk checkout section contains checkboxes with aria-label or associated <label>', async () => {
-		listWorksMock.mockResolvedValue([
+		listWorksMock.mockResolvedValue(toListRead([
 			{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
-		]);
-		listLendingsMock.mockResolvedValue([]);
+		]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedLibrarian();
-		listAllEditionsMock.mockResolvedValue([
+		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter', workId: 'work-1' }
-		]);
-		listAllCopiesMock.mockResolvedValue([
+		]));
+		listAllCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
-		]);
-		listActiveMembersMock.mockResolvedValue([
+		]));
+		listActiveMembersMock.mockResolvedValue(toListRead([
 			{ memberId: 'member-a' }
-		]);
+		]));
 
 		const { container } = render(Page);
 
@@ -374,14 +375,14 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 // ---------------------------------------------------------------------------
 describe('#75 — a11y: keyboard reachability', () => {
 	it('all buttons and form controls in the librarian-tools section are natively focusable (no negative tabIndex)', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedLibrarian();
-		listAllCopiesMock.mockResolvedValue([
+		listAllCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 }
-		]);
-		listActiveMembersMock.mockResolvedValue([{ memberId: 'member-a' }]);
+		]));
+		listActiveMembersMock.mockResolvedValue(toListRead([{ memberId: 'member-a' }]));
 
 		const { container } = render(Page);
 
@@ -401,11 +402,11 @@ describe('#75 — a11y: keyboard reachability', () => {
 	});
 
 	it('all work toggle buttons in the work list are keyboard-reachable', async () => {
-		listWorksMock.mockResolvedValue([
+		listWorksMock.mockResolvedValue(toListRead([
 			{ id: 'work-1', name: 'Spem', composer: 'Tallis' },
 			{ id: 'work-2', name: 'Ave', composer: 'Byrd' }
-		]);
-		listLendingsMock.mockResolvedValue([]);
+		]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
 
@@ -428,10 +429,10 @@ describe('#75 — a11y: keyboard reachability', () => {
 // ---------------------------------------------------------------------------
 describe('#75 — a11y: aria-expanded on expandable sections', () => {
 	it('work toggle starts with aria-expanded="false" and flips to "true" on click', async () => {
-		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		listEditionsMock.mockResolvedValue([]);
+		listEditionsMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -447,11 +448,11 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 	});
 
 	it('edition toggle starts with aria-expanded="false" and flips to "true" on click', async () => {
-		listWorksMock.mockResolvedValue([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem', composer: 'Tallis' }]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		listEditionsMock.mockResolvedValue([{ id: 'edition-1', name: 'Ed1', publisher: 'Pub' }]);
-		listCopiesMock.mockResolvedValue([]);
+		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: 'Ed1', publisher: 'Pub' }]));
+		listCopiesMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -470,10 +471,10 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 	});
 
 	it('my-loans toggle starts with aria-expanded="false" and flips to "true" on click', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
+		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();
@@ -492,10 +493,10 @@ describe('#75 — a11y: aria-expanded on expandable sections', () => {
 	});
 
 	it('my-loans toggle has aria-controls linking to the loans list element', async () => {
-		listWorksMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([
+		listWorksMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
-		]);
+		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		setAuthedWithOneCollective();

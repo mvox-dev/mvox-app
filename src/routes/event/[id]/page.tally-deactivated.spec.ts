@@ -102,6 +102,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -176,11 +177,11 @@ function setAuthedWithPolyphony() {
 
 beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue('m-viewer');
-	listMyRsvpsMock.mockResolvedValue([]);
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue(RSVP_ROWS);
-	loadRosterMock.mockResolvedValue(ACTIVE_ROSTER);
-	listActiveMembersMock.mockResolvedValue(ACTIVE_MEMBERS);
+	loadRosterMock.mockResolvedValue(toListRead(ACTIVE_ROSTER));
+	listActiveMembersMock.mockResolvedValue(toListRead(ACTIVE_MEMBERS));
 });
 
 afterEach(() => {
@@ -271,7 +272,7 @@ describe('(D) stale-closure pin — the gate is captured for the REQUESTED event
 describe('(E adjacent, unchanged) a deactivated viewer keeps her own prior answer, visible but disabled', () => {
 	it('future event: her recorded going answer renders pressed, the control is disabled, the existing non-member hint shows', async () => {
 		findMyMemberIdMock.mockResolvedValue(null); // status-scoped read drops her
-		listMyRsvpsMock.mockResolvedValue([{ rsvpId: 'r-my', eventId: 'ev1', status: 'going' }]);
+		listMyRsvpsMock.mockResolvedValue(toListRead([{ rsvpId: 'r-my', eventId: 'ev1', status: 'going' }]));
 		// Plain-member view: no _editor list — no tally, just her own control.
 		const { container } = renderPage(
 			eventEntity('2026-09-01T16:00:00.000Z', { _editor: undefined })

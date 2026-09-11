@@ -106,6 +106,7 @@ import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 /** Matches an entity path composed with an EMPTY id: '.../entity/' terminal or '.../entity/?query'. */
 const EMPTY_ID_ENTITY_URL = /\/entity\/(\?|$)/;
@@ -158,7 +159,7 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('polyphony');
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
-	listActiveMembersMock.mockResolvedValue([]);
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 /** The page's honest terminal states: ready tree, empty library, or the loud error. */

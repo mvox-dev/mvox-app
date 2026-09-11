@@ -22,6 +22,7 @@ import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
+import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 /**
  * #304 — the four fields an event inherits from its parent series (module doc
@@ -362,10 +363,31 @@ async function fetchSeason(
  * the wire returns — not pinned, matching the spec's SORTED-comparison-only
  * assertions.
  */
+// #321 — collective-LIFETIME, no season/date scope: the same "grows without
+// a natural ceiling" shape the library case names, one layer further from a
+// rendered list (this feeds an autocomplete datalist, never a page a reader
+// scrolls). `truncated` compares the server `count` against the RAW wire
+// array length, BEFORE dedup/blank-dropping below, so shrinking `items`
+// through those never fabricates a truncation the server never reported.
+//
+// TREATMENT: log-only — and the PO ruling of 2026-09-11 settles WHY on ground
+// that stays true for surfaces nobody has built yet. The test for an option
+// list is REACHABILITY: can the user get to the item another way? A CLOSED-SET
+// picker fails it — the options are the whole reachable world, so a missing one
+// reads as an absence ("that person isn't a member", "that copy isn't in the
+// library") and the user acts on that. Those pickers therefore DO carry a
+// notice inside themselves (picker_partial_members_notice /
+// picker_partial_options_notice). This corpus feeds a native <datalist> on a
+// FREE-TEXT input (+page.svelte, event/[id]): the member types whatever they
+// like, so nothing here is unreachable. It is a typing aid, and truncating an
+// aid costs a thinner suggestion list rather than a false absence. Hence
+// detection without a UI completeness claim, logged for whoever reads the
+// console — not because it is "only a picker", but for a reason that will still
+// hold when the caps or the surfaces change.
 export async function listEventLocations(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
-): Promise<string[]> {
+): Promise<ListRead<string>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event&props=location&limit=1000`,
@@ -374,18 +396,21 @@ export async function listEventLocations(
 		fetchImpl
 	);
 	if (!res.ok) throw new Error(`listEventLocations failed: ${res.status}`);
-	const body = (await res.json()) as { entities?: Array<{ location?: Array<{ string: string }> }> };
+	const body = (await res.json()) as {
+		count?: number;
+		entities?: Array<{ location?: Array<{ string: string }> }>;
+	};
 	const entities = body.entities ?? [];
 	const seen = new Set<string>();
-	const out: string[] = [];
+	const items: string[] = [];
 	for (const e of entities) {
 		const loc = e.location?.[0]?.string ?? '';
 		if (loc && !seen.has(loc)) {
 			seen.add(loc);
-			out.push(loc);
+			items.push(loc);
 		}
 	}
-	return out;
+	return deriveListRead(items, entities.length, body.count);
 }
 
 async function fetchSeries(

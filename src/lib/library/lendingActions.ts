@@ -99,7 +99,7 @@ async function defaultResolveCopies(
 	editionId: string,
 	fetchImpl: typeof fetch
 ): Promise<Array<{ id: string }>> {
-	return listCopies(cfg, editionId, fetchImpl);
+	return (await listCopies(cfg, editionId, fetchImpl)).items;
 }
 
 export interface BulkCheckoutPayload {

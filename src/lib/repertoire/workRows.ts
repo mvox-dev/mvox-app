@@ -178,14 +178,25 @@ export async function loadWorksByEventId(
 ): Promise<Record<string, WorkRow[]>> {
 	if (eventIds.length === 0) return {};
 
-	const [works, editions, copies, worksByEvent] = await Promise.all([
+	const [worksRead, editionsRead, copiesRead, worksByEvent] = await Promise.all([
 		listWorks(cfg, fetchImpl),
 		listAllEditions(cfg, fetchImpl),
 		listAllCopies(cfg, fetchImpl),
 		resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl, options)
 	]);
-
-	const sources = collectSources(works, editions, copies);
+	// #321 — no partial-list notice here, and the reason is NOT the pinned-scope
+	// narrowing this comment used to give (the PO's 2026-09-11 ruling rejected
+	// that narrowing everywhere it appeared, and every other site carrying it now
+	// says its truncation out loud). The real reason: these three reads are a
+	// LABEL LOOKUP, not a list anybody reads or picks from. Every row that
+	// belongs on screen is already in `worksByEvent`; a work missing from this
+	// join loses its name/composer/edition TEXT — `buildWorkRows` degrades the
+	// lookup to '' and keeps the row (see its own "missing lookups degrade" doc).
+	// So a truncation here hides no item and offers no option: it costs a blank
+	// label on a row that is still there, which a notice about a partial list
+	// would describe wrongly. A future sweep should leave this one alone for that
+	// reason, not "correct" it into a notice.
+	const sources = collectSources(worksRead.items, editionsRead.items, copiesRead.items);
 	const out: Record<string, WorkRow[]> = {};
 	for (const [eventId, eventWorks] of Object.entries(worksByEvent)) {
 		out[eventId] = buildWorkRows(eventWorks, sources);

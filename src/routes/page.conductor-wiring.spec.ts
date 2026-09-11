@@ -145,6 +145,7 @@ import {
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { get } from 'svelte/store';
 import { isConductor, resetConductor } from '$lib/attendance/conductorStore';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(
 	id: string,
@@ -191,7 +192,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 
 // Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();

@@ -63,7 +63,9 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		// fixture happens to carry a database `_parent`, so she picks one up here
 		// even though this test predates that contract (see
 		// rosterData.database.spec.ts for the dedicated pins).
-		expect(members).toEqual<ActiveMember[]>([
+		// #321 — the reader returns `{ items, total, truncated }`; the MAPPING is what
+		// this file pins, the read shape itself lives in rosterData.truncation.spec.ts.
+		expect(members.items).toEqual<ActiveMember[]>([
 			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], dbEntityId: undefined },
 			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
 		]);
@@ -86,7 +88,7 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
 		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
-		expect(members).toEqual<ActiveMember[]>([
+		expect(members.items).toEqual<ActiveMember[]>([
 			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], dbEntityId: 'org-1' }
 		]);
 	});
@@ -109,7 +111,7 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
 		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
-		expect(members).toEqual<ActiveMember[]>([
+		expect(members.items).toEqual<ActiveMember[]>([
 			{
 				memberId: 'member-1',
 				personId: 'person-a',
@@ -354,7 +356,10 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				'person-b': [] // no domain profile → nameless, excluded
 			}
 		);
-		const rows = await loadRoster(cfg, fetchImpl);
+		// #321 — `loadRoster` reports `{ items, total, truncated }` since the PO's
+		// reachability ruling (its closed-set picker consumers say the truncation
+		// out loud); the row shape below is what `items` carries.
+		const rows = (await loadRoster(cfg, fetchImpl)).items;
 		expect(rows).toEqual<RosterRow[]>([
 			{
 				memberId: 'member-1',
@@ -392,7 +397,10 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				json({ entities: [rawProfile('domain', 'Ada Lovelace', 'ada@example.com')] })
 			);
 		});
-		const rows = await loadRoster(cfg, fetchImpl);
+		// #321 — `loadRoster` reports `{ items, total, truncated }` since the PO's
+		// reachability ruling (its closed-set picker consumers say the truncation
+		// out loud); the row shape below is what `items` carries.
+		const rows = (await loadRoster(cfg, fetchImpl)).items;
 		expect(rows).toEqual<RosterRow[]>([
 			{
 				memberId: 'member-1',
@@ -424,7 +432,7 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 
 	it('empty active-member list → [] and fetchImpl called exactly once (no profile fetch attempted for zero members)', async () => {
 		const fetchImpl = makeFetchMock([], {});
-		const rows = await loadRoster(cfg, fetchImpl);
+		const rows = (await loadRoster(cfg, fetchImpl)).items;
 		expect(rows).toEqual([]);
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
@@ -458,8 +466,8 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				'person-ann': [rawProfile('domain', 'Ann')]
 			}
 		);
-		const rows = await loadRoster(cfg, fetchImpl);
-		expect(rows.map((r) => r.name)).toEqual(['Ann', 'Zelda']);
+		const read = await loadRoster(cfg, fetchImpl);
+		expect(read.items.map((r) => r.name)).toEqual(['Ann', 'Zelda']);
 	});
 
 	// ── #268 privacy fence — the member-visible roster load fetches NOTHING new.

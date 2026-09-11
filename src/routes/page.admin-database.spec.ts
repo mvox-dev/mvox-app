@@ -12,6 +12,7 @@
 //     member created by an invite is parented to the DATABASE entity.
 //   - NO wire traffic resolves the collective besides that seam: `entuFetch` is
 //     stubbed to REJECT, so a leftover member/organization walk fails loudly.
+import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -150,7 +151,7 @@ beforeEach(() => {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
 	h.createInviteMock.mockResolvedValue({

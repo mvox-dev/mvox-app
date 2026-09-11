@@ -94,6 +94,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── live-shaped fixtures (real polyphony entity ids, 2026-08-12 probe) ──────────
 
@@ -177,7 +178,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(efkRows());
+	loadRosterMock.mockResolvedValue(toListRead(efkRows()));
 	listSectionsMock.mockResolvedValue(gateWalkTree());
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -305,7 +306,7 @@ describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER'
 		// derivation therefore answers SIREEN and hangs the destructive control
 		// on the wrong org's sections. The viewer is Pete (personId 'person-p',
 		// EFK) — resolveDatabaseEntityId answers EFK, and so does his own roster row.
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{
 				memberId: 'm-anna',
 				personId: 'p-anna',
@@ -315,7 +316,7 @@ describe("/roster — F3: the org that gates remove is the AUTHENTICATED VIEWER'
 				dbEntityId: ORG_SIREEN
 			},
 			...efkRows()
-		] satisfies RosterRow[]);
+		] satisfies RosterRow[]));
 		listSectionsMock.mockResolvedValue([
 			node(EFK_SOPRANO, 'Soprano', 1, ORG_EFK),
 			node(EFK_BASS, 'Bass', 15, ORG_EFK),

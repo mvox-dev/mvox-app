@@ -57,7 +57,7 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // $lib/entu/request -> $env/dynamic/public, unavailable under happy-dom.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
-	listMyRsvps: vi.fn().mockResolvedValue([]),
+	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	rsvpsByEventId: () => ({}),
 	createRsvp: vi.fn(),
 	updateRsvpStatus: vi.fn(),
@@ -66,7 +66,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),

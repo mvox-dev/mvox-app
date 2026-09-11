@@ -149,6 +149,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures ────────────────────────────────────────────────────────────────
 // Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor — the #98/#152/S2 shape, WITH
@@ -325,7 +326,7 @@ beforeEach(() => {
 	// FROM THE LANDED WRITES (see treeWithLandedMoves above) — a reparent the
 	// mock resolved is visible in the next listSections, one it rejected is not,
 	// exactly like the real server.
-	loadRosterMock.mockImplementation(() => Promise.resolve(fixtureRows()));
+	loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRows())));
 	listSectionsMock.mockImplementation(() => Promise.resolve(treeWithLandedMoves(landedReparents)));
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -605,7 +606,7 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 
 	it('unindent a depth-2 section → the GRANDPARENT SECTION becomes the parent: reparentSection(cfg, "sec-sop1a", "sec-sop"), announced with roster_section_unindented (a named parent, not top level)', async () => {
 		listSectionsMock.mockImplementation(() => Promise.resolve(fixtureTreeDeep()));
-		loadRosterMock.mockImplementation(() => Promise.resolve(fixtureRowsDeep()));
+		loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRowsDeep())));
 		const container = await renderInArrangeMode();
 		expect(row(container, 'sec-sop1a').getAttribute('data-depth')).toBe('2');
 
@@ -1121,7 +1122,7 @@ describe('/roster — an unindent with no resolvable organization fails LOUDLY (
 	it('promote-to-top-level with no known organization id raises the reorder banner and writes NOTHING — never a dead button that silently does nothing', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		listSectionsMock.mockImplementation(() => Promise.resolve(fixtureTreeNoOrg()));
-		loadRosterMock.mockImplementation(() => Promise.resolve(fixtureRowsNoOrg()));
+		loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRowsNoOrg())));
 		const container = await renderInArrangeMode();
 		// The button is live — `canUnindent` only asks whether there IS a parent.
 		expect(unindentBtn(container, 'sec-sop1').disabled).toBe(false);

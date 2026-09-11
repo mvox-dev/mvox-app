@@ -23,6 +23,11 @@ export interface AttendancePanel {
 	error: boolean;
 	pendingMemberIds: ReadonlySet<string>;
 	failedMemberIds: ReadonlySet<string>;
+	/** #321 (PO ruling 2026-09-11) — the member read behind `members` was
+	 *  partial. Travels with the rest of the panel because it is a fact ABOUT
+	 *  those rows: the surface states it inside itself, where a conductor
+	 *  looking for a missing singer is actually looking. */
+	membersPartial: boolean;
 	ontoggle(memberId: string, status: AttendanceStatus | null): void;
 	onclose(): void;
 }

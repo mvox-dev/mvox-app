@@ -133,6 +133,7 @@ import {
 } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import type { RosterRow } from '$lib/roster/rosterData';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -193,13 +194,13 @@ const q = (c: HTMLElement, id: string) => c.querySelector(`[data-testid="${id}"]
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(rosterTwo);
+	loadRosterMock.mockResolvedValue(toListRead(rosterTwo));
 	listSectionsMock.mockResolvedValue([]);
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue([]);
-	listInactiveMembersMock.mockResolvedValue([]);
+	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 	createMemberRecordMock.mockResolvedValue('rec-new');
 	updateMemberRecordMock.mockResolvedValue(undefined);
@@ -299,10 +300,10 @@ describe('(A) card activator — admin-only, whole-block, every display view (#3
 
 	it('section-group call site: a member inside an expanded section group carries the activator', async () => {
 		listSectionsMock.mockResolvedValue([altoSection]);
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			...rosterTwo,
 			{ memberId: 'm3', personId: 'pp-3', name: 'Cara Cantus', email: 'cara@example.com', sectionIds: ['sec-alto'], dbEntityId: 'db-1' }
-		]);
+		]));
 		const utils = render(Page);
 		setAuthedWithOneCollective();
 		adminStore.set('admin');
@@ -412,10 +413,10 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 	});
 
 	it('a row with no email opens with an EMPTY email field — no placeholder-as-value', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			rosterTwo[0],
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: '', sectionIds: [], dbEntityId: 'db-1' }
-		]);
+		]));
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
 		expect(emailInput(container).value).toBe('');
@@ -731,7 +732,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 describe('(E) collective switch — #259 generation discipline', () => {
 	async function renderTwoCollectivesAsAdmin() {
 		loadRosterMock.mockImplementation(async (cfg: { db: string }) =>
-			cfg.db === 'other-choir' ? rowsOther : rosterTwo
+			toListRead(cfg.db === 'other-choir' ? rowsOther : rosterTwo)
 		);
 		const utils = render(Page);
 		setAuthedWithTwoCollectives();
@@ -1432,10 +1433,10 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 	});
 
 	it('an EMPTY email still saves — the field is optional and stays so (optional-field semantics of checkValidity)', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			rosterTwo[0],
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: '', sectionIds: [], dbEntityId: 'db-1' }
-		]);
+		]));
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
 		expect(emailInput(container).value).toBe('');

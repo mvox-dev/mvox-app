@@ -211,6 +211,7 @@ vi.mock('$lib/entity/entityCreate', async () => {
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -236,9 +237,9 @@ function setAuthedWithOneCollective() {
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	resolveCopyChainsMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 	listSeasonsMock.mockResolvedValue([]);
 	listRepertoireItemsMock.mockResolvedValue([]);
 }
@@ -249,24 +250,26 @@ function setAuthedWithOneCollective() {
  * and work-2's zero-editions case is the one that makes a new work usable.
  */
 function mockBaselineLibrary() {
-	listWorksMock.mockResolvedValue([
+	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' },
 		{ id: 'work-2', name: 'Berliner Messe', composer: 'Arvo Pärt' }
-	]);
+	]));
 	listEditionsMock.mockImplementation(async (_cfg: unknown, workId: string) =>
-		workId === 'work-1'
-			? [
-					{
-						id: 'edition-1',
-						name: 'Vocal score',
-						publisher: 'Novello',
-						externalLinks: [],
-						files: []
-					}
-				]
-			: []
+		toListRead(
+			workId === 'work-1'
+				? [
+						{
+							id: 'edition-1',
+							name: 'Vocal score',
+							publisher: 'Novello',
+							externalLinks: [],
+							files: []
+						}
+					]
+				: []
+		)
 	);
-	listLendingsMock.mockResolvedValue([]);
+	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
 }
 
@@ -374,15 +377,17 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
 			workId === 'work-2'
 				? new Promise(() => {})
-				: Promise.resolve([
-						{
-							id: 'edition-1',
-							name: 'Vocal score',
-							publisher: 'Novello',
-							externalLinks: [],
-							files: []
-						}
-					])
+				: Promise.resolve(
+						toListRead([
+							{
+								id: 'edition-1',
+								name: 'Vocal score',
+								publisher: 'Novello',
+								externalLinks: [],
+								files: []
+							}
+						])
+					)
 		);
 
 		const container = await renderReady();
@@ -398,7 +403,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		setAuthedWithOneCollective();
 		mockLibrarian();
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
-			workId === 'work-2' ? Promise.reject(new Error('boom')) : Promise.resolve([])
+			workId === 'work-2' ? Promise.reject(new Error('boom')) : Promise.resolve(toListRead([]))
 		);
 
 		const container = await renderReady();
@@ -1145,20 +1150,22 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
 		resolveCopyChainsMock.mockResolvedValue(new Map());
-		listAllEditionsMock.mockResolvedValue([]);
-		listAllCopiesMock.mockResolvedValue([]);
-		listActiveMembersMock.mockResolvedValue([]);
+		listAllEditionsMock.mockResolvedValue(toListRead([]));
+		listAllCopiesMock.mockResolvedValue(toListRead([]));
+		listActiveMembersMock.mockResolvedValue(toListRead([]));
 		listSeasonsMock.mockResolvedValue([]);
 		listRepertoireItemsMock.mockResolvedValue([]);
-		listWorksMock.mockImplementation(async (cfg: { db: string }) => [
-			{
-				id: 'work-1',
-				name: cfg.db === 'polyphony' ? 'Erste Messe' : 'Zweite Messe',
-				composer: ''
-			}
-		]);
-		listEditionsMock.mockResolvedValue([]);
-		listLendingsMock.mockResolvedValue([]);
+		listWorksMock.mockImplementation(async (cfg: { db: string }) =>
+			toListRead([
+				{
+					id: 'work-1',
+					name: cfg.db === 'polyphony' ? 'Erste Messe' : 'Zweite Messe',
+					composer: ''
+				}
+			])
+		);
+		listEditionsMock.mockResolvedValue(toListRead([]));
+		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 
 		const { container } = render(Page);

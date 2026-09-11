@@ -144,6 +144,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── two collectives, two disjoint fixtures ──────────────────────────────────
 
@@ -202,7 +203,7 @@ function setAuthedWithTwoCollectives() {
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
@@ -216,8 +217,8 @@ beforeEach(() => {
 	renameMock.mockResolvedValue(undefined);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue([]);
-	listInactiveMembersMock.mockResolvedValue([]);
+	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	createInviteMock.mockResolvedValue({ inviteId: 'inv-1', url: 'https://x.invalid/i/1' });
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteId: 'inv-2', url: 'https://x.invalid/i/2' });

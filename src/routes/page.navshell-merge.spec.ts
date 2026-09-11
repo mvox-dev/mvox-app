@@ -170,6 +170,7 @@ import {
 } from '$lib/collectives/store';
 import AdminPage from './admin/+page.svelte';
 import AdminInvitePage from './admin/invite/+page.svelte';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // `children` is a required Snippet prop on NavShell — same stand-in as
 // NavShell.spec.ts.
@@ -221,9 +222,9 @@ function loadOk() {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue([
+	h.loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }
-	]);
+	]));
 	h.listSectionsMock.mockResolvedValue([]);
 	// invite prerequisites ready
 	h.resolveParentMock.mockResolvedValue('parent-1');

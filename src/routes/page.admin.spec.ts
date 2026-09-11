@@ -62,6 +62,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// degraded-order note, so neither can be rendered as "everyone added".
 		picker_no_members: () => 'No members to add',
 		picker_order_fallback: () => 'Sorted by name — section order unavailable',
+		picker_partial_members_notice: () => 'Not every member is listed here',
 		admin_roles_remove: (p: { name: string }) => `Remove ${p.name}`,
 		admin_roles_last_owner_hint: () => 'The last owner cannot be removed.',
 		admin_roles_no_library: () => 'No library entity is visible in this collective.',
@@ -253,6 +254,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { NAV_ENTRIES } from '$lib/nav/entries';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 const CFG = { db: 'polyphony', token: 'jwt-admin' };
 
@@ -314,7 +316,7 @@ function loadOk() {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
 	h.listLibrariansMock.mockResolvedValue(listing([CILLA]));
-	h.loadRosterMock.mockResolvedValue(ROSTER);
+	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	h.listSectionsMock.mockResolvedValue([]);
 	h.addAdminMock.mockResolvedValue(undefined);
 	h.addLibrarianMock.mockResolvedValue(undefined);
@@ -714,12 +716,14 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		// loadRoster answers NAME order (its own contract). Sections put Cilla +
 		// Dora in Sopran (first) and Anna in Tenor (second); Bela is unassigned
 		// → LAST (the roster page's Unassigned group).
-		h.loadRosterMock.mockReset().mockResolvedValue([
-			{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: ['sec-t'] },
-			{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '', sectionIds: [] },
-			{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '', sectionIds: ['sec-s'] },
-			{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '', sectionIds: ['sec-s'] }
-		]);
+		h.loadRosterMock.mockReset().mockResolvedValue(
+			toListRead([
+				{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: ['sec-t'] },
+				{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '', sectionIds: [] },
+				{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '', sectionIds: ['sec-s'] },
+				{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '', sectionIds: ['sec-s'] }
+			])
+		);
 		h.listSectionsMock.mockReset().mockResolvedValue([
 			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
@@ -794,7 +798,7 @@ describe('/admin — a failed section read costs the pickers their order, not th
 	it('an EMPTY roster is not "everyone is already added": the prompt says there is nobody to add', async () => {
 		selectPolyphony();
 		loadOk();
-		h.loadRosterMock.mockReset().mockResolvedValue([]);
+		h.loadRosterMock.mockReset().mockResolvedValue(toListRead([]));
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
 
 		const { container } = await renderReady();
@@ -804,6 +808,60 @@ describe('/admin — a failed section read costs the pickers their order, not th
 		expect(select.disabled).toBe(true);
 		expect(optionValues(select)).toEqual(['']);
 		expect(promptOption(select).textContent?.trim()).toBe('No members to add');
+	});
+});
+
+describe('/admin — #321 review F2: a truncated roster makes a member ungrantable, so the selects say so', () => {
+	// The PO's ruling (2026-09-11) names this case: a person select fed by the
+	// roster is closed by construction, so a truncated read makes that member
+	// UNGRANTABLE with nothing on screen saying why. The notice sits beside each
+	// select rather than inside its option list, because the select goes
+	// `disabled` when the options run out and the "everyone is already added"
+	// prompt it then shows is the truncation's most misleading face.
+	function truncatedRoster() {
+		h.loadRosterMock.mockReset().mockResolvedValue({
+			items: ROSTER,
+			total: 500,
+			truncated: true
+		});
+	}
+
+	it('both person selects carry the shared role="status" notice when the member read was partial', async () => {
+		selectPolyphony();
+		loadOk();
+		truncatedRoster();
+
+		const { container } = await renderReady();
+
+		for (const testid of ['admin-add-admin-partial-notice', 'admin-add-librarian-partial-notice']) {
+			await waitFor(() => {
+				expect(q(container, testid)).not.toBeNull();
+			});
+			expect(q(container, testid)!.getAttribute('role')).toBe('status');
+			expect(q(container, testid)!.className).not.toMatch(/sr-only|hidden/);
+		}
+		// Each notice sits with ITS OWN select, not once for the page.
+		expect(
+			section(container, 'admin-roles-admins').querySelector(
+				'[data-testid="admin-add-admin-partial-notice"]'
+			)
+		).not.toBeNull();
+		expect(
+			section(container, 'admin-roles-librarians').querySelector(
+				'[data-testid="admin-add-librarian-partial-notice"]'
+			)
+		).not.toBeNull();
+	});
+
+	it('a complete roster read leaves both notices ABSENT from the DOM', async () => {
+		selectPolyphony();
+		loadOk();
+
+		const { container } = await renderReady();
+		expect(q(container, 'admin-entry-p-anna')).not.toBeNull();
+
+		expect(q(container, 'admin-add-admin-partial-notice')).toBeNull();
+		expect(q(container, 'admin-add-librarian-partial-notice')).toBeNull();
 	});
 });
 
@@ -1270,7 +1328,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 				libraryId: cfg.db === 'alpha' ? 'lib-alpha' : 'lib-beta'
 			})
 		);
-		h.loadRosterMock.mockResolvedValue(ROSTER);
+		h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 		h.listSectionsMock.mockResolvedValue([]);
 		h.listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
 			Promise.resolve(

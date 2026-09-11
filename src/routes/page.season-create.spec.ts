@@ -156,7 +156,7 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -174,9 +174,9 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor in most cases here, so the page's
 // loadManagePickers fires — stub its reads or they hit the network.
 vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue([]),
-	listAllEditions: vi.fn().mockResolvedValue([]),
-	listAllCopies: vi.fn().mockResolvedValue([])
+	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 }));
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
@@ -188,6 +188,7 @@ import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -291,7 +292,7 @@ function setAuthedWithOneCollective() {
 
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	// [] = no sections → every person is Unassigned and roster order degrades
 	// to the roster's own (name) order.
 	listSectionsMock.mockResolvedValue([]);
@@ -299,7 +300,7 @@ beforeEach(() => {
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 	resolveManageRightsMock.mockResolvedValue('not-editor');
 	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue([]);
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 });
 
 afterEach(() => {
@@ -582,11 +583,11 @@ describe('agenda — the conductor select lists the collective’s persons', () 
 		// loadRoster answers NAME order (its own contract): Ada, Grace, Pete.
 		// Sections put Grace in Sopran (first) and Ada in Tenor (second); Pete
 		// is unassigned → LAST (the roster page's Unassigned group).
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ ...fixtureRows()[0], sectionIds: ['sec-t'] }, // Ada → Tenor
 			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran
 			{ ...fixtureRows()[2], sectionIds: [] } // Pete → Unassigned
-		]);
+		]));
 		listSectionsMock.mockResolvedValue([
 			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
@@ -608,11 +609,11 @@ describe('agenda — the conductor select lists the collective’s persons', () 
 	});
 
 	it('a MULTI-SECTION person (roster page renders her in every group) is offered exactly ONCE, at her first roster position — option values must stay unique', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ ...fixtureRows()[0], sectionIds: ['sec-s', 'sec-t'] }, // Ada → both
 			{ ...fixtureRows()[1], sectionIds: ['sec-s'] }, // Grace → Sopran
 			{ ...fixtureRows()[2], sectionIds: ['sec-t'] } // Pete → Tenor
-		]);
+		]));
 		listSectionsMock.mockResolvedValue([
 			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
@@ -1071,7 +1072,7 @@ describe('agenda — the season-create conductor select tells its empties apart 
 	});
 
 	it('roster resolved EMPTY (this collective has no members): the prompt says there is nobody to add', async () => {
-		loadRosterMock.mockResolvedValue([]);
+		loadRosterMock.mockResolvedValue(toListRead([]));
 
 		const container = await renderReady();
 		await openForm(container);
@@ -1101,4 +1102,41 @@ describe('agenda — the season-create conductor select tells its empties apart 
 
 // (*MVOX:Tallis* — #132/T2 RED: [+ Season] entry point + inline form + conductor picker)
 // (*MVOX:Tallis* — #209 RED: conductor picker is a native <select>, PO standing rule 1)
+// ── #321 review F2: the conductor picker states a truncated roster ──────────────
+//
+// The PO's reachability ruling (2026-09-11): a person select fed by the roster is
+// a CLOSED SET, so a member missing from its options cannot be picked at all and
+// the gap reads as "not a member" rather than as a list cut short. The notice sits
+// in the picker's own caveat slot (beside the order note) rather than as a trailing
+// option, because this select goes `disabled` once its options run out — and the
+// "everyone is already added" prompt it then shows is the truncation's most
+// misleading face.
+
+describe('the season-create conductor picker (#321 review F2)', () => {
+	const NOTICE = '[data-testid="season-create-conductor-partial-notice"]';
+
+	it('a truncated roster read renders the shared role="status" notice beside the picker', async () => {
+		loadRosterMock.mockResolvedValue({ items: fixtureRows(), total: 500, truncated: true });
+		const container = await renderReady();
+		await openForm(container);
+
+		await waitFor(() => {
+			expect(container.querySelector(NOTICE)).not.toBeNull();
+		});
+		const notice = container.querySelector(NOTICE)!;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toMatch(/sr-only|hidden/);
+	});
+
+	it('a complete roster read leaves it ABSENT from the DOM', async () => {
+		const container = await renderReady();
+		await openForm(container);
+		await waitFor(() => {
+			expect(conductorSelect(container).options.length).toBeGreaterThan(1);
+		});
+
+		expect(container.querySelector(NOTICE)).toBeNull();
+	});
+});
+
 // (*MVOX:Palestrina* — #132/T2 review fixes F1–F7)

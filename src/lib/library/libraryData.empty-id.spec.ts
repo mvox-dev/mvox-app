@@ -88,7 +88,7 @@ async function runListLendings(lendingEntities: unknown[]) {
 	let result: Lending[] | null = null;
 	let err: unknown = null;
 	try {
-		result = await listLendings(cfg, fetchImpl);
+		result = (await listLendings(cfg, fetchImpl)).items;
 	} catch (e) {
 		err = e;
 	}
@@ -137,7 +137,7 @@ describe('#258 part 1 — a lending row with a missing reference never yields an
 		};
 		const { result, err } = await runListLendings([rowMissingDates]);
 		expect(err).toBeNull();
-		expect(result).toEqual<Lending[]>([
+		expect(result).toEqual<Lending[] | null>([
 			{
 				id: 'lending-no-dates',
 				copyId: 'copy-9',
@@ -155,7 +155,7 @@ describe('#258 part 1 — malformed rows never compose an entity/ request with a
 		const fetchImpl = routedFetch([goodRow, rowMissingCopy, rowMissingMember]);
 		let lendings: Lending[] = [];
 		try {
-			lendings = await listLendings(cfg, fetchImpl);
+			lendings = (await listLendings(cfg, fetchImpl)).items;
 		} catch {
 			// ASSERT choice: failing loud before any resolution is equally closed.
 		}

@@ -1793,6 +1793,18 @@ type ComposeFixtures = Fixtures & {
 	editions?: unknown[];
 	copies?: unknown[];
 	members?: unknown[];
+	/** #321 — the server `count` the WORK list read answers with. Above the
+	 *  number of `works` served, that read is TRUNCATED, which the closed-set
+	 *  "Add work" picker must say out loud. Omitted = complete. */
+	workCount?: number;
+	/** #321 — the same for the EDITION read behind "Add to programme". */
+	editionCount?: number;
+	/** #321 — the server `count` the member list read answers with. Above the
+	 *  number of `members` served, the read is TRUNCATED (`isTruncated`
+	 *  compares count against the raw wire array), which is what the closed-set
+	 *  attendance panel has to say out loud. Omitted = no count on the wire =
+	 *  complete, the shape every pre-#321 fixture here describes. */
+	memberCount?: number;
 	attendance?: AttendanceRaw[];
 	/** #269 review F1/F2 — serve the "the real-names overlay WOULD fire" wire:
 	 *  a resolvable database entity, `roster_show_real_names: true`, and named
@@ -1869,13 +1881,27 @@ function composeWireStub(fixtures: ComposeFixtures = {}) {
 		}
 		if (url.includes('_type.string=program_item')) return json({ entities: programItems });
 		if (url.includes('_type.string=repertoire_item')) return json({ entities: repertoireItems });
-		if (url.includes('_type.string=work')) return json({ entities: works });
-		if (url.includes('_type.string=edition')) return json({ entities: editions });
+		if (url.includes('_type.string=work'))
+			return json(
+				fixtures.workCount === undefined
+					? { entities: works }
+					: { count: fixtures.workCount, entities: works }
+			);
+		if (url.includes('_type.string=edition'))
+			return json(
+				fixtures.editionCount === undefined
+					? { entities: editions }
+					: { count: fixtures.editionCount, entities: editions }
+			);
 		if (url.includes('_type.string=copy')) return json({ entities: copies });
 		// The ROSTER read (listActiveMembers) carries no person filter; the
 		// person-scoped findMyMemberId query keeps falling through to the base.
 		if (url.includes('_type.string=member') && !url.includes('person.reference'))
-			return json({ entities: members });
+			return json(
+				fixtures.memberCount === undefined
+					? { entities: members }
+					: { count: fixtures.memberCount, entities: members }
+			);
 		if (url.includes('_type.string=attendance')) {
 			if (url.includes('_parent.reference=ev1')) return json({ entities: attendance });
 			if (url.includes('member.reference=member-1')) return json({ entities: myAttendance });
@@ -2178,6 +2204,63 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 			section!.querySelector('[data-testid="work-manage-add-work-select"]'),
 			'a FAILED load must never hide the control'
 		).not.toBeNull();
+	});
+});
+
+// ── #321 review F2 — this page's repertoire pickers state a truncated feed ───────
+//
+// Same closed sets as the agenda's (the component is shared), driven here through
+// this page's OWN `loadManagePickers`: a work the "Add work" list does not offer
+// cannot be added to the season's repertoire, and an edition "Add to programme"
+// does not offer cannot go on tonight's programme. Both feeds carried the "out of
+// the RED-pinned scope" narrowing the PO's ruling rejected.
+
+describe('/event/[id] — the repertoire pickers state a truncated library read (#321 review F2)', () => {
+	const WORK_OPTION = 'work-manage-add-work-partial-option';
+	const PROGRAMME_OPTION = 'work-manage-add-programme-partial-option';
+
+	/** The default library fixture is entirely IN the season's repertoire, so
+	 *  `pickableWorksList` is empty and the select is legitimately withheld
+	 *  (#311). One extra work makes the picker real — the same move the #311
+	 *  specs above make. */
+	function worksWithSomethingPickable(): unknown[] {
+		return [
+			...libraryWorksFixture(),
+			{ _id: 'w-3', name: [{ string: 'Ave Maria' }], composer: [{ string: 'Josquin' }] }
+		];
+	}
+
+	it('a truncated WORK read puts a trailing disabled option inside the Add-work select', async () => {
+		const { container } = renderComposePage({
+			season: editorSeason(),
+			works: worksWithSomethingPickable(),
+			workCount: 900
+		});
+
+		await waitFor(() => {
+			expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).not.toBeNull();
+		});
+		const select = container.querySelector(
+			'[data-testid="work-manage-add-work-select"]'
+		) as HTMLSelectElement;
+		const options = Array.from(select.options);
+		const last = options[options.length - 1];
+		expect(last.getAttribute('data-testid')).toBe(WORK_OPTION);
+		expect(last.disabled).toBe(true);
+		// One flag per FEED — the editions read was complete, so no claim there.
+		expect(container.querySelector(`[data-testid="${PROGRAMME_OPTION}"]`)).toBeNull();
+	});
+
+	it('with the reads complete the option is ABSENT from the select', async () => {
+		const { container } = renderComposePage({
+			season: editorSeason(),
+			works: worksWithSomethingPickable()
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="work-manage-add-work-select"]')).not.toBeNull();
+		});
+
+		expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).toBeNull();
 	});
 });
 
@@ -2658,5 +2741,57 @@ describe('/event/[id] — #220 AM/PM preference on the time line', () => {
 	});
 });
 
+// ── #321 review F2 — the attendance panel is a closed set, so it says when the
+// roster behind it was cut short ───────────────────────────────────────────────
+//
+// The PO's reachability ruling (2026-09-11): a singer with no row in this panel
+// cannot be marked present at all, and her absence reads as "she is not a
+// member". Driven through the REAL `loadRoster` here (this suite's wire stub, not
+// a module mock), so the pin covers the whole path: the member read's `count`,
+// `listActiveMembers`' comparison, `loadRoster`'s report, the page's flag, and
+// AttendanceSurface's notice.
+
+describe('/event/[id] — the attendance panel states a truncated roster (#321 review F2)', () => {
+	const NOTICE = '[data-testid="attendance-panel-partial-notice"]';
+
+	async function openPanel(memberCount?: number) {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			season: conductorSeason(),
+			memberCount
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
+		});
+		return container;
+	}
+
+	it('a member read whose count exceeds its rows raises the shared notice inside the panel', async () => {
+		const container = await openPanel(500);
+
+		await waitFor(() => {
+			expect(container.querySelector(NOTICE)).not.toBeNull();
+		});
+		const notice = container.querySelector(NOTICE)!;
+		expect(notice.getAttribute('role')).toBe('status');
+		expect(notice.className).not.toMatch(/sr-only|hidden/);
+		expect(
+			container.querySelector(`[data-testid="attendance-panel"] ${NOTICE}`)
+		).not.toBeNull();
+	});
+
+	it('a complete read leaves it ABSENT from the DOM', async () => {
+		const container = await openPanel();
+		expect(container.querySelector('[data-testid="attendance-row-member-2"]')).not.toBeNull();
+
+		expect(container.querySelector(NOTICE)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #220 RED: AM/PM preference reaches the event-detail time line via the shared formatTime)
 // (*MVOX:Tallis* — #311 RED: the event page opts the Add Work picker into honest visibility)
+// (*MVOX:Josquin* — #321 review F2: the attendance panel's closed-set roster notice)

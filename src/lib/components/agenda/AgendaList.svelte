@@ -345,8 +345,10 @@
 			eventRights={eventRightsFor(item.id)}
 			pickableWorksList={worksManage?.pickableWorksList ?? NO_OPTIONS}
 			pickableWorksVisible={worksManage?.pickableWorksVisible}
+			pickableWorksPartial={worksManage?.pickableWorksPartial ?? false}
 			pickableEditions={worksManage?.pickableEditionsByEventId[item.id] ?? NO_OPTIONS}
 			pickableEditionsVisible={worksManage?.pickableEditionsVisibleByEventId[item.id]}
+			pickableEditionsPartial={worksManage?.pickableEditionsPartial ?? false}
 			editionOptionsByRowId={worksManage?.editionOptionsByRowId ?? NO_OPTIONS_BY_ID}
 			pendingKeys={worksManage?.pendingKeys ?? NO_KEYS}
 			onaddwork={(workId) => worksManage?.onaddwork(workId)}
@@ -481,6 +483,7 @@
 							error={attendancePanel.error}
 							pendingMemberIds={attendancePanel.pendingMemberIds}
 							failedMemberIds={attendancePanel.failedMemberIds}
+							membersPartial={attendancePanel.membersPartial}
 							ontoggle={attendancePanel.ontoggle}
 							onclose={attendancePanel.onclose}
 						/>

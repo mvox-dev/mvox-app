@@ -139,7 +139,7 @@ vi.mock('$lib/roster/rosterData', () => ({
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: listAttendanceMock,
 	listAllRsvpsForEvent: listAllRsvpsForEventMock,
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	createAttendance: createAttendanceMock,
 	updateAttendanceStatus: updateAttendanceStatusMock,
 	deleteAttendance: deleteAttendanceMock,
@@ -170,6 +170,7 @@ import {
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetConductor } from '$lib/attendance/conductorStore';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {
@@ -220,10 +221,10 @@ function setThreeConductedRecentEventsFixture() {
 		seasonOwners: [],
 		seasonEditors: []
 	}));
-	loadRosterMock.mockResolvedValue([
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-	]);
+	]));
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([
 		{ rsvpId: 'r1', memberId: 'm1', status: 'going' } // m2 deliberately absent — no answer
@@ -257,7 +258,7 @@ async function openPanelOnRow(container: HTMLElement, eventId: string) {
 
 // Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();

@@ -76,6 +76,28 @@
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<RosterRow[]>([]);
 
+	// #321 — true when one of THIS page's member reads came back partial (server
+	// count > the raw entities array on that read's own request — see
+	// $lib/entu/listRead). Two independent facts, one notice:
+	//   `membersPartial`  — `loadRosterWithRealNames`: the active-member list, OR
+	//                       the `admin_member_record` overlay read behind the real
+	//                       names (a truncated overlay silently reverts SOME rows
+	//                       to profile names, indistinguishable on screen from "no
+	//                       record" — see that producer's doc). Re-derived on every
+	//                       load, cleared in `reset` alongside the other per-load
+	//                       facts so it cannot outlive the list it describes.
+	//   `inactivePartial` — `loadInactiveRoster`: the archived-member panel, which
+	//                       only ever grows (deactivate never deletes). Cleared
+	//                       under `isSwitch` alongside `inactiveRows`, the same
+	//                       scoping that panel's own state follows — and (#321
+	//                       review F3) when the panel CLOSES, since the notice it
+	//                       feeds renders at page level over the active roster.
+	// The section tree is deliberately NOT here: `listSections` is class (1), with
+	// its bound stated at the query (sectionData.ts).
+	let membersPartial = $state(false);
+	let inactivePartial = $state(false);
+	const rosterPartial = $derived(membersPartial || inactivePartial);
+
 	// #294 — the three-state join read, keyed by personId (the producer's own
 	// `Record<string, JoinState>` shape — see linkedIdentities.ts). Every
 	// row's controls are a PURE function of this record: there is no separate
@@ -311,6 +333,14 @@
 			removeStatus = '';
 			renameStatus = '';
 			pageCreateStatus = '';
+			// #321 — the partial notice is a claim about the list that is being
+			// replaced. Unconditional (every load, not `isSwitch`-gated) and set again
+			// by `load` below from the read it belongs to: leaving it standing through
+			// a reload would let a truncation from the collective just left, or from a
+			// list that has since shrunk, keep asserting itself over new rows. The
+			// inactive panel's own flag is scoped to a SWITCH instead, below, matching
+			// `inactiveRows`.
+			membersPartial = false;
 			// #255 review r3 F2 — the inactive panel is the one surface this function
 			// does NOT re-derive, so without this a switch left collective A's inactive
 			// members rendered under B's roster, each with a live Reinstate button
@@ -322,6 +352,11 @@
 				showInactive = false;
 				inactiveRows = [];
 				inactiveLoadError = false;
+				// #321 — same scoping as `inactiveRows` directly above: a truncation
+				// detected in A's archived-member list must not keep the notice up over
+				// B's roster, and a same-collective refresh must not clear it out from
+				// under the panel it describes.
+				inactivePartial = false;
 				// #294 — a minted link or a mint/withdraw error names a row from the
 				// OLD collective; the underlying identity property is PER-COLLECTIVE
 				// (a person entity exists per db), so nothing minted or erred under A
@@ -356,6 +391,9 @@
 		onNoCollective: () => {
 			rows = [];
 			sections = [];
+			// #321 — no collective, no list, nothing for the notice to be about.
+			membersPartial = false;
+			inactivePartial = false;
 			// #110 review F3 — collapse state is keyed by section id, so it must never
 			// outlive the tree it describes. Ids from the previous collective would
 			// otherwise keep `expandedIds` non-empty over a tree that has none of them
@@ -410,7 +448,10 @@
 				status = 'load-error';
 				return;
 			}
-			rows = rowResult.value;
+			rows = rowResult.value.items;
+			// #321 — set from the SAME read that produced the rows, so the notice can
+			// never describe a different load's list.
+			membersPartial = rowResult.value.truncated;
 
 			// #294 — the owner-tier read is a DIFFERENT admin-boundary question from
 			// the roster/section reads above (see `ownerTier`'s own doc comment) and
@@ -1229,9 +1270,12 @@
 			const g = routeLoad.generation;
 			if (showInactive) {
 				try {
-					const rows = await loadInactiveRoster(cfg);
+					const read = await loadInactiveRoster(cfg);
 					if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-					inactiveRows = rows;
+					inactiveRows = read.items;
+					// #321 — re-derived from THIS read, so a panel that has just shrunk
+					// back under the cap stops claiming to be partial.
+					inactivePartial = read.truncated;
 				} catch (e) {
 					if (!routeLoad.isCurrent(g)) return;
 					console.error('roster: inactive roster reload after deactivate failed', e);
@@ -1292,7 +1336,16 @@
 	async function toggleInactive(): Promise<void> {
 		const opening = !showInactive;
 		showInactive = opening;
-		if (!opening) return;
+		if (!opening) {
+			// #321 review F3 — the notice is PAGE-level (`rosterPartial`), so a
+			// truncation detected in the archived panel kept standing over the
+			// ACTIVE roster after the panel closed: a claim about a list that is no
+			// longer on screen, read as a claim about the one that is. The cached
+			// `inactiveRows` may stay (reopening reloads and re-derives the flag
+			// below), but the claim goes down with the panel.
+			inactivePartial = false;
+			return;
+		}
 		const cfg = currentCfg;
 		if (!cfg) return;
 		// #259 (filed from #255 r4 review) — this load's await can outlive a
@@ -1308,14 +1361,21 @@
 		const g = routeLoad.generation;
 		try {
 			inactiveLoadError = false;
-			const rows = await loadInactiveRoster(cfg);
+			const read = await loadInactiveRoster(cfg);
 			if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-			inactiveRows = rows;
+			inactiveRows = read.items;
+			// #321 — the archived-member list only grows (deactivate never deletes),
+			// so this is the roster read most likely to hit its cap; the page-level
+			// roster-partial-notice covers it.
+			inactivePartial = read.truncated;
 		} catch (e) {
 			if (!routeLoad.isCurrent(g)) return;
 			console.error('roster: inactive roster load failed', e);
 			inactiveLoadError = true;
 			inactiveRows = [];
+			// A failed read says nothing about completeness — drop the claim with the
+			// rows rather than leaving it standing over an empty panel.
+			inactivePartial = false;
 		}
 	}
 
@@ -1366,9 +1426,12 @@
 			const g = routeLoad.generation;
 			if (showInactive) {
 				try {
-					const rows = await loadInactiveRoster(cfg);
+					const read = await loadInactiveRoster(cfg);
 					if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-					inactiveRows = rows;
+					inactiveRows = read.items;
+					// #321 — re-derived from THIS read, exactly as the deactivate path
+					// above does.
+					inactivePartial = read.truncated;
 				} catch (e) {
 					if (!routeLoad.isCurrent(g)) return;
 					console.error('roster: inactive roster reload after reinstate failed', e);
@@ -4426,6 +4489,24 @@
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.roster_title()}</h1>
+
+		<!-- #321 — persistent, visible: a truncated list is a standing fact, not a
+		     transient toast, so this is never sr-only. Absent from the DOM (not
+		     hidden) once every read is complete. Deliberately the SAME markup the
+		     library and agenda notices use (visible <p>, role="status", dashed
+		     border, own testid, copy through i18n) — one pattern for one meaning, no
+		     second visual language. `rosterPartial` and the two flags behind it are
+		     declared at the top of the script; `reset` is what keeps this from
+		     surviving a collective switch. -->
+		{#if rosterPartial}
+			<p
+				data-testid="roster-partial-notice"
+				role="status"
+				class="rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+			>
+				{m.roster_partial_notice()}
+			</p>
+		{/if}
 
 		<!-- #99 review F3 — the reorder result, for the keyboard/AT path. Present from
 		     first render (a live region announces only CHANGES to its contents, so one

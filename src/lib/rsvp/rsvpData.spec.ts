@@ -336,7 +336,7 @@ describe('listMyRsvps', () => {
 				]
 			})
 		);
-		const rsvps = await listMyRsvps(cfg, 'person-p', fetchImpl);
+		const rsvps = (await listMyRsvps(cfg, 'person-p', fetchImpl)).items;
 		expect(rsvps).toEqual([
 			{ rsvpId: 'rsvp-1', eventId: 'event-x', status: 'going' },
 			{ rsvpId: 'rsvp-2', eventId: 'event-y', status: 'maybe' }
@@ -345,7 +345,7 @@ describe('listMyRsvps', () => {
 
 	it('returns [] when entities array is empty', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
-		const rsvps = await listMyRsvps(cfg, 'person-p', fetchImpl);
+		const rsvps = (await listMyRsvps(cfg, 'person-p', fetchImpl)).items;
 		expect(rsvps).toEqual([]);
 	});
 

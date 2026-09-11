@@ -1,6 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { RsvpStatus } from '$lib/rsvp/rsvpData';
+import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // #84 TA.3 GREEN — the attendance write/read data layer. Mirrors rsvpData.ts
 // EXACTLY, with the structural differences pinned by #77's ruling:
@@ -233,6 +234,16 @@ export async function listAttendance(
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<EventAttendance[]> {
+	// #321 class (1) — ONE event's attendance rows, `_parent`-scoped to that event:
+	// at most one row per member marked for it, so the bound is the collective's
+	// ACTIVE ROSTER, not a log that grows over time (the per-person lifetime twin,
+	// `listMyAttendance` below, is the class-(2) one and reports `truncated`). A
+	// choral collective's active membership runs to the low hundreds — the live dev
+	// db holds 132 members — so limit=500 is an explicit, ample bound.
+	//   The membership half of that claim is not taken on faith: `listActiveMembers`
+	// (rosterData.ts) DOES detect its own truncation and /roster says so, so a
+	// collective that ever grew past this cap would be told on the list whose
+	// cardinality it actually is, not left to infer it from a silent event page.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=attendance&_parent.reference=${encodeURIComponent(eventId)}&props=member,status&limit=500`,
@@ -274,12 +285,18 @@ export async function listAttendance(
  * `listMyRsvps`' role for rsvp, with the participation split flipped: there
  * rsvp is child-of-person (`_parent` scoping); here attendance is
  * child-of-event (`member.reference` scoping).
+ *
+ * #321 — member-LIFETIME, no season boundary: same reachable-bound class as
+ * `listMyRsvps` (grows with tenure, not with choir size). `truncated`
+ * compares the server `count` against the RAW wire array length — BEFORE the
+ * #84-review drop below — so a half-visible row this function drops never
+ * fabricates a truncation the server never reported.
  */
 export async function listMyAttendance(
 	cfg: EntuCfg,
 	memberId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<MyAttendance[]> {
+): Promise<ListRead<MyAttendance>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=attendance&member.reference=${encodeURIComponent(memberId)}&props=_parent,status&limit=500`,
@@ -289,15 +306,17 @@ export async function listMyAttendance(
 	);
 	if (!res.ok) throw new Error(`listMyAttendance failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{
 			_id: string;
 			_parent?: Array<{ reference: string }>;
 			status?: Array<{ string: string }>;
 		}>;
 	};
-	return (body.entities ?? []).flatMap((raw) => {
-		const eventId = raw._parent?.[0]?.reference;
-		const status = raw.status?.[0]?.string as AttendanceStatus | undefined;
+	const raw = body.entities ?? [];
+	const items = raw.flatMap((r) => {
+		const eventId = r._parent?.[0]?.reference;
+		const status = r.status?.[0]?.string as AttendanceStatus | undefined;
 		if (!eventId || !status) {
 			// Fail loudly: a row with no `_parent` or no status means the caller
 			// cannot see the private bucket (prop-def _sharing not widened). Drop the
@@ -305,12 +324,13 @@ export async function listMyAttendance(
 			// would collapse all invisible rows onto key '' and stamp them with a lie
 			// (mirrors listAttendance/listAllRsvpsForEvent's #84-review rule).
 			console.warn(
-				`listMyAttendance: dropping entity ${raw._id} — missing ${!eventId ? '_parent' : ''}${!eventId && !status ? '+' : ''}${!status ? 'status' : ''} (prop-def _sharing not domain?)`
+				`listMyAttendance: dropping entity ${r._id} — missing ${!eventId ? '_parent' : ''}${!eventId && !status ? '+' : ''}${!status ? 'status' : ''} (prop-def _sharing not domain?)`
 			);
 			return [];
 		}
-		return [{ attendanceId: raw._id, eventId, status }];
+		return [{ attendanceId: r._id, eventId, status }];
 	});
+	return deriveListRead(items, raw.length, body.count);
 }
 
 /**
@@ -325,6 +345,12 @@ export async function listAllRsvpsForEvent(
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<RsvpForEvent[]> {
+	// #321 class (1) — ONE event's rsvp answers, scoped through the `event`
+	// reference: at most one answer per member for this event, so the bound is
+	// again the collective's ACTIVE ROSTER (see `listAttendance` above for the same
+	// reasoning and the same 132-member dev-db figure), never a lifetime log — that
+	// twin is `listMyRsvps` (rsvpData.ts), which is class (2) and reports
+	// `truncated`. limit=500 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=rsvp&event.reference=${encodeURIComponent(eventId)}&props=member,status&limit=500`,

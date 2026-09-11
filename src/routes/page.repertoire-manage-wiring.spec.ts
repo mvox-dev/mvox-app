@@ -37,7 +37,7 @@ vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // focused on the repertoire traffic under test.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
-	listMyRsvps: vi.fn().mockResolvedValue([]),
+	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	rsvpsByEventId: () => ({}),
 	createRsvp: vi.fn(),
 	updateRsvpStatus: vi.fn(),
@@ -45,10 +45,16 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 // #288 — resolves (empty): opening the season-create form warms the roster
 // cache through this seam; a bare vi.fn()'s undefined broke `.then` on it.
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn(async () => []) }));
+// #321 — `loadRoster` answers a ListRead now (its closed-set picker consumers
+// state the truncation), so an array here fed `rosterRows = undefined` and the
+// picker's `rosterOrder` threw an unhandled "members is not iterable" while the
+// tests still went green.
+vi.mock('$lib/roster/rosterData', () => ({
+	loadRoster: vi.fn(async () => ({ items: [], total: 0, truncated: false }))
+}));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue([]),
+	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn(),
 	createAttendance: vi.fn(),
 	updateAttendanceStatus: vi.fn(),
@@ -110,6 +116,14 @@ interface WorldOptions {
 	programItems?: Array<Record<string, unknown>>;
 	/** repertoire_items under season-1. */
 	repertoireItems?: Array<Record<string, unknown>>;
+	/** #321 — the server `count` the WORK list read answers with. Above the
+	 *  number of works served, that read is TRUNCATED (`isTruncated` compares
+	 *  the count against the raw wire array), which the closed-set "Add work"
+	 *  picker has to say out loud. Omitted = no count on the wire = complete,
+	 *  the shape every pre-#321 fixture here describes. */
+	workCount?: number;
+	/** #321 — the same for the EDITION list read behind "Add to programme". */
+	editionCount?: number;
 }
 
 const RI_ACTIVE = {
@@ -135,7 +149,9 @@ function installWorld(options: WorldOptions = {}) {
 		seasonEditor = true,
 		eventEditor = false,
 		programItems = [],
-		repertoireItems = [RI_ACTIVE, RI_RETIRED]
+		repertoireItems = [RI_ACTIVE, RI_RETIRED],
+		workCount,
+		editionCount
 	} = options;
 
 	// #91 review F1 — rights arrive WITH THE AGENDA now: listSeasons/listEvents
@@ -173,6 +189,7 @@ function installWorld(options: WorldOptions = {}) {
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-1' }] });
 		if (url.includes('_type.string=work')) {
 			return json({
+				...(workCount === undefined ? {} : { count: workCount }),
 				entities: [
 					{ _id: 'work-1', name: [{ string: 'Spem in alium' }] },
 					{ _id: 'work-2', name: [{ string: 'Old warhorse' }] },
@@ -182,6 +199,7 @@ function installWorld(options: WorldOptions = {}) {
 		}
 		if (url.includes('_type.string=edition')) {
 			return json({
+				...(editionCount === undefined ? {} : { count: editionCount }),
 				entities: [
 					{
 						_id: 'ed-1',
@@ -1437,6 +1455,82 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 // (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
 // (*MVOX:Tallis* — #204 review fix-forward: nameless work on the wire)
 // (*MVOX:Tallis* — #272 RED: programme select + add link conditionally shown, page wiring)
+// ── #321 review F2 — the repertoire pickers say when their library feed was cut ──
+//
+// The PO's reachability ruling (2026-09-11): both selects are CLOSED SETS over a
+// library read, so a work or edition they do not offer cannot be added at all and
+// the gap reads as "it isn't in the library" — a false absence, not a short list.
+// These two feeds carried the "out of the RED-pinned scope" narrowing the ruling
+// rejected.
+//
+// Driven through the REAL reads (this file's wire router, no module mocks), so the
+// pins cover the whole path: the list read's `count`, `isTruncated`, the page's
+// per-feed flag, the WorksManage bundle, AgendaList's forwarding, and the trailing
+// option. Both selects can be opened whenever they render, so the notice lives
+// INSIDE the option list — the shape the ruling asks for where it is reachable.
+
+describe('#321 review F2 — the agenda repertoire pickers state a truncated library read', () => {
+	const WORK_OPTION = 'work-manage-add-work-partial-option';
+	const PROGRAMME_OPTION = 'work-manage-add-programme-partial-option';
+
+	function lastOption(container: HTMLElement, selectTestid: string): HTMLOptionElement {
+		const select = container.querySelector(`[data-testid="${selectTestid}"]`) as HTMLSelectElement;
+		expect(select, `expected [data-testid="${selectTestid}"]`).not.toBeNull();
+		const options = Array.from(select.options);
+		return options[options.length - 1];
+	}
+
+	it('a truncated WORK read puts the notice inside the Add-work select, as a trailing disabled option', async () => {
+		installWorld({ workCount: 900 });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).not.toBeNull();
+		});
+		// Last in the list, unselectable, and carrying the shared option-list copy.
+		const last = lastOption(container, 'work-manage-add-work-select');
+		expect(last.getAttribute('data-testid')).toBe(WORK_OPTION);
+		expect(last.disabled).toBe(true);
+		expect(last.textContent?.trim()).toBe('[picker_partial_options_notice]');
+		// The works the read DID return are still pickable — a notice is not an
+		// error state.
+		expect(
+			Array.from(
+				(container.querySelector('[data-testid="work-manage-add-work-select"]') as HTMLSelectElement)
+					.options
+			).some((o) => o.textContent?.includes('Nunc dimittis'))
+		).toBe(true);
+	});
+
+	it('a truncated EDITION read raises it in the Add-to-programme select — and NOT in the works one', async () => {
+		installWorld({ eventEditor: true, editionCount: 4000 });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+
+		await vi.waitFor(() => {
+			expect(container.querySelector(`[data-testid="${PROGRAMME_OPTION}"]`)).not.toBeNull();
+		});
+		expect(lastOption(container, 'work-manage-add-programme-select').disabled).toBe(true);
+		// One flag per FEED: a truncated edition read says nothing about the works
+		// list, so a claim there would be false.
+		expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).toBeNull();
+	});
+
+	it('with both reads complete neither option is in the DOM', async () => {
+		installWorld({ eventEditor: true });
+		setAuthedWithOneCollective();
+		const { container } = await renderAndExpand();
+		await vi.waitFor(() => {
+			expect(container.querySelector('[data-testid="work-manage-add-work-select"]')).not.toBeNull();
+		});
+
+		expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).toBeNull();
+		expect(container.querySelector(`[data-testid="${PROGRAMME_OPTION}"]`)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #288 RED: the programme control survives its load window)
 // (*MVOX:Josquin* — #288 review F1: the ROW read is the second load window)
 // (*MVOX:Tallis* — #311 RED: the Add Work picker renders only when there is something to add)
+// (*MVOX:Josquin* — #321 review F2: the two repertoire pickers state their feeds)

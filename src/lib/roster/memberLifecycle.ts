@@ -2,6 +2,7 @@ import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listAdmins, listLibrarians } from '$lib/admin/roleManagement';
 import { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterData';
+import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // #255 — the member LIFECYCLE write layer (deactivate / reinstate) plus the
 // inactive-members read that powers the reinstatement surface (done-when 4).
@@ -131,11 +132,22 @@ export interface InactiveMember {
 	dbEntityId?: string;
 }
 
-/** `listActiveMembers`'s query shape with `status.string=archived`. */
+/**
+ * `listActiveMembers`'s query shape with `status.string=archived`.
+ *
+ * #321 class (2) — REACHABLE, and the worst of the roster reads on this axis: a
+ * deactivate only flips `status`, it never deletes, so this collection is the
+ * collective's ENTIRE membership history minus whoever is currently active. It
+ * only grows, for the life of the collective — the same "no natural ceiling"
+ * argument `listLendings` (libraryData.ts) is given for the lending log, and
+ * strictly worse than the active list next to it, which at least shrinks when
+ * people leave. So it reports `truncated` (server `count` > the RAW wire array, on
+ * this same request) and /roster's `roster-partial-notice` covers it.
+ */
 export async function listInactiveMembers(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
-): Promise<InactiveMember[]> {
+): Promise<ListRead<InactiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=member&status.string=archived&props=person,_parent&limit=500',
@@ -145,13 +157,15 @@ export async function listInactiveMembers(
 	);
 	if (!res.ok) throw new Error(`listInactiveMembers failed: ${res.status}`);
 	const body = (await res.json()) as {
+		count?: number;
 		entities?: Array<{
 			_id: string;
 			person?: Array<{ reference: string }>;
 			_parent?: Array<{ reference: string; entity_type?: string }>;
 		}>;
 	};
-	return (body.entities ?? []).map((raw) => {
+	const raws = body.entities ?? [];
+	const items = raws.map((raw) => {
 		const personId = raw.person?.[0]?.reference;
 		if (!personId) {
 			throw new Error(
@@ -164,21 +178,38 @@ export async function listInactiveMembers(
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
 		return { memberId: raw._id, personId, sectionIds, dbEntityId };
 	});
+	// RAW length, not `items.length` — the mapper throws rather than dropping, but
+	// the contract is the wire array before any client-side filtering
+	// ($lib/entu/listRead).
+	return deriveListRead(items, raws.length, body.count);
 }
 
-/** `loadRoster`'s orchestration over `listInactiveMembers` — rows with names. */
+/**
+ * `loadRoster`'s orchestration over `listInactiveMembers` — rows with names.
+ *
+ * #321 — carries the member read's `truncated` through unchanged. `total` is that
+ * read's server count, NOT the row count: the #28 completeness gate in
+ * `toRosterRow` drops nameless members, so the two legitimately differ and only
+ * `truncated` answers "is this list missing people the server has".
+ */
 export async function loadInactiveRoster(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
-): Promise<RosterRow[]> {
+): Promise<ListRead<RosterRow>> {
 	const members = await listInactiveMembers(cfg, fetchImpl);
 	const rows = await Promise.all(
-		members.map(async (member) => {
+		members.items.map(async (member) => {
 			const profiles = await listProfilesForPerson(cfg, member.personId, fetchImpl);
 			return toRosterRow(member, profiles);
 		})
 	);
-	return rows.filter((r): r is RosterRow => r !== null).sort((a, b) => a.name.localeCompare(b.name));
+	return {
+		items: rows
+			.filter((r): r is RosterRow => r !== null)
+			.sort((a, b) => a.name.localeCompare(b.name)),
+		total: members.total,
+		truncated: members.truncated
+	};
 }
 
 /** One manageable grant that blocks deactivation (refusal names the remedy). */

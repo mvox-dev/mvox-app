@@ -51,6 +51,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── live wire fixtures (verbatim shape from the 2026-08-12 polyphony probe,
 //    reparented to the single DATABASE entity per #161) ─────────────────────
@@ -161,7 +162,7 @@ function setAuthedWithOneCollective() {
 }
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(fixtureRows());
+	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 });
 
 afterEach(() => {

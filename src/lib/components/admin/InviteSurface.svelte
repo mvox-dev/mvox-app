@@ -90,7 +90,8 @@
 		heading = 'h1',
 		layout = 'standalone',
 		viewerPersonId = '',
-		roster = []
+		roster = [],
+		rosterPartial = false
 	}: {
 		presetDb?: string;
 		presetDbEntityId?: string;
@@ -99,6 +100,13 @@
 		layout?: 'standalone' | 'embedded';
 		viewerPersonId?: string;
 		roster?: InvitablePerson[];
+		/** #321 (PO ruling 2026-09-11) — the member read behind `roster` was
+		 *  partial, so the person select is a closed set with a hole in it: a
+		 *  person it does not offer cannot be picked, and the gap reads as "not
+		 *  here" rather than as a list cut short. Default false leaves the
+		 *  standalone /admin/invite route (which passes no roster at all)
+		 *  unchanged. */
+		rosterPartial?: boolean;
 	} = $props();
 	const rootClasses = $derived(
 		layout === 'embedded' ? 'flex w-full flex-col gap-4' : 'mx-auto flex w-full max-w-md flex-col gap-4'
@@ -671,6 +679,17 @@
 			{:else if ownerNoteVisible}
 				<p data-testid="invite-owner-note" class="text-xs text-ink-2">
 					{m.roster_member_invite_owner_only()}
+				</p>
+			{/if}
+			<!-- #321 (PO ruling 2026-09-11) — outside the three-way block above on
+			     purpose: truncation can be the very reason `showPersonSelect` is
+			     false (the only uninvited person fell off the read), and a notice
+			     living inside that branch would vanish exactly then. Suppressed
+			     while the list read FAILED, which says nothing about completeness
+			     and already has its own loud note. -->
+			{#if rosterPartial && !personListError}
+				<p data-testid="invite-person-partial-notice" role="status" class="text-xs text-ink-2">
+					{m.picker_partial_members_notice()}
 				</p>
 			{/if}
 			<button

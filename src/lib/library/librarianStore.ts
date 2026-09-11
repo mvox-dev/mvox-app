@@ -83,6 +83,18 @@ export async function resolveMyLibraryId(
 		resolvedDbEntityId = resolved;
 	}
 
+	// #321 class (1) — exactly one `library` is parented under the collective's
+	// database entity. The invariant is a seed/design one, not an Entu
+	// constraint: the librarian-seed strategy creates ONE library per collective
+	// and is idempotent on `_type.string=library&_parent.reference=<collective>`
+	// (entu/research `docs/migration/findings/2026-05-23-librarian-seed-strategy.md`
+	// 3.3; the /library design spec states the same as "Expect 0 or 1 hits (one
+	// library per org)" — db-scoped since #161 made the database entity the
+	// collective). Nothing in `src/` creates a `library`: `entityCreate` only
+	// ever writes work/edition/copy/lending UNDER an already-resolved library id.
+	// So `limit=1` is an explicit, ample bound — a second row would be damaged
+	// data, not a truncation this read could observe — and the `entities?.[0]`
+	// pick below cannot be a silent prefix of a longer list.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=library&_parent.reference=${encodeURIComponent(resolvedDbEntityId)}&props=_id&limit=1`,

@@ -124,6 +124,7 @@ import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 // Two seasons, both started — the CURRENT one is the latest-started (the pure
 // currentSeason rule). Querying repertoire for 'season-old' must fail test 1.
@@ -186,14 +187,14 @@ function setAuthedWithOneCollective() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 function mockHappyPath() {
-	listWorksMock.mockResolvedValue(WORKS);
-	listLendingsMock.mockResolvedValue([]);
+	listWorksMock.mockResolvedValue(toListRead(WORKS));
+	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
 	listSeasonsMock.mockResolvedValue(SEASONS);
 	listRepertoireItemsMock.mockResolvedValue(REPERTOIRE_ITEMS);

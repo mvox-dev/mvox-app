@@ -127,6 +127,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedWithOneCollective() {
 	authStore.set({
@@ -164,7 +165,7 @@ function setAuthedWithTwoCollectives() {
 // Safe default so loadForSelected's findMyMemberId(...).then/listMyRsvps(...).then
 // have something to resolve — no test in this file asserts on RSVP state.
 findMyMemberIdMock.mockResolvedValue(null);
-listMyRsvpsMock.mockResolvedValue([]);
+listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
 	cleanup();

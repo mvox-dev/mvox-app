@@ -86,6 +86,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── two collectives, two disjoint fixtures ──────────────────────────────────
 
@@ -141,7 +142,7 @@ function setAuthedWithTwoCollectives() {
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())

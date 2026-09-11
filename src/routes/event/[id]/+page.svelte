@@ -303,6 +303,20 @@
 	// OR event editor), same economy as the agenda's loadManagePickers.
 	let libraryWorks = $state<Work[]>([]);
 	let libraryEditions = $state<Edition[]>([]);
+	/**
+	 * #321 (PO ruling 2026-09-11) — the two library reads behind this page's
+	 * repertoire PICKERS came back truncated. Both are closed sets: a work the
+	 * "Add work" list does not offer cannot be added to the season's repertoire,
+	 * and an edition "Add to programme" does not offer cannot go on tonight's
+	 * programme. The gap reads as "it isn't in the library" — the false absence
+	 * the ruling is about, not a short list. This site carried the "out of the
+	 * RED-pinned scope" narrowing the ruling rejects.
+	 *
+	 * One flag per FEED: a truncated edition read says nothing about the works
+	 * list, and a shared flag would put a false claim in the other picker.
+	 */
+	let libraryWorksPartial = $state(false);
+	let libraryEditionsPartial = $state(false);
 	let seasonRepertoire = $state<RepertoireItem[]>([]);
 	// #311 — this page opts `pickableWorksVisible` in: its `loadManagePickers`
 	// is a single generation-guarded Promise.all settling BOTH of
@@ -380,6 +394,12 @@
 	let attendancePanelLoading = $state(false);
 	let attendancePanelError = $state(false);
 	let attendanceRoster = $state<RosterRow[]>([]);
+	/** #321 (PO ruling 2026-09-11) — the member read behind the panel's rows was
+	 *  partial. The panel is a CLOSED SET: a singer with no row cannot be marked
+	 *  present, and the absent row reads as "she is not a member". Assigned from
+	 *  every panel load and cleared with `attendanceRoster`, so the claim never
+	 *  outlives the rows it is about. */
+	let attendanceRosterPartial = $state(false);
 	let attendanceRsvpMap = $state<Record<string, { rsvpId: string; status: string }>>({});
 	// #15-shaped guard, per member id (attendanceChangeQueue.ts doc).
 	let attendancePendingMemberIds = $state<Set<string>>(new Set());
@@ -608,6 +628,10 @@
 		workRows = [];
 		libraryWorks = [];
 		libraryEditions = [];
+		// #321 — the claims go with the lists they describe, so a truncation found
+		// in the collective being left never captions the next one's pickers.
+		libraryWorksPartial = false;
+		libraryEditionsPartial = false;
 		seasonRepertoire = [];
 		// #311 — same synchronous pass as the blanking above, mirroring the main
 		// agenda flow's `resetManagement`: the sticky effect must not treat this
@@ -636,6 +660,7 @@
 		attendancePanelLoading = false;
 		attendancePanelError = false;
 		attendanceRoster = [];
+		attendanceRosterPartial = false;
 		attendanceRsvpMap = {};
 		attendancePendingMemberIds = new Set();
 		attendanceFailedMemberIds = new Set();
@@ -661,9 +686,23 @@
 			});
 
 		listMyRsvps(cfg, personId)
-			.then((rsvps) => {
+			.then((result) => {
 				if (g !== generation) return;
-				myRsvp = rsvpsByEventId(rsvps)[evId] ?? null;
+				// #321 — the "out of the RED-pinned scope" reason this comment used to
+				// give is dead (the PO rejected that narrowing wherever it appeared).
+				// What is true instead: this is not a list or an option set — it is a
+				// ONE-ROW lookup, the viewer's own answer for THIS event, and the
+				// control below renders that single value.
+				//
+				// The residual is therefore different in kind from the surfaces that
+				// gained a notice, and worth naming rather than dressing up: if her
+				// answer for this event falls past the person-lifetime cap, the control
+				// reads "not answered" for an event she DID answer — a false claim
+				// about her own state, on a page with no list to caption. It needs a
+				// ruling of its own (what the control should say when the read that
+				// feeds it is partial), not a list notice bolted onto a single value;
+				// flagged to the PO rather than decided here.
+				myRsvp = rsvpsByEventId(result.items)[evId] ?? null;
 			})
 			.catch(() => {
 				if (g !== generation) return;
@@ -698,8 +737,14 @@
 			// for a read whose answer would be thrown away.
 			past ? Promise.resolve<null>(null) : listActiveMembers(cfg)
 		])
-			.then(([rows, activeMembers]) => {
+			.then(([rows, activeMembersRead]) => {
 				if (g !== generation) return;
+				// #321 — the active-member read is here only as a FILTER on the tally
+				// (drop answers from people who have since left), never as a rendered
+				// list, so its `truncated` gets no notice of its own on this page: the
+				// member list whose cardinality it is lives on /roster and says so
+				// there. `listActiveMembers`' own doc states the same boundary.
+				const activeMembers = activeMembersRead?.items;
 				const scoped = activeMembers
 					? rows.filter((r) => activeMembers.some((am) => am.memberId === r.memberId))
 					: rows;
@@ -1645,10 +1690,14 @@
 			listAllEditions(cfg),
 			sid === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, sid)
 		])
-			.then(([works, editions, repertoire]) => {
+			.then(([worksRead, editionsRead, repertoire]) => {
 				if (g !== generation) return;
-				libraryWorks = works;
-				libraryEditions = editions;
+				// #321 (PO ruling 2026-09-11) — each picker states its OWN feed's
+				// truncation, same as the agenda's loadManagePickers.
+				libraryWorks = worksRead.items;
+				libraryEditions = editionsRead.items;
+				libraryWorksPartial = worksRead.truncated;
+				libraryEditionsPartial = editionsRead.truncated;
 				seasonRepertoire = repertoire;
 				libraryPickersLoading = false;
 				// #311 — the ONE place this flips true: this settle completed
@@ -1661,6 +1710,10 @@
 				if (g !== generation) return;
 				libraryWorks = [];
 				libraryEditions = [];
+				// #321 — a failed read says nothing about completeness, and no options
+				// are left for a claim to be about.
+				libraryWorksPartial = false;
+				libraryEditionsPartial = false;
 				seasonRepertoire = [];
 				libraryPickersLoading = false;
 				// #311 — explicit: a failed settle is never mistaken for one that
@@ -2151,6 +2204,14 @@
 	// ── derived picker sources (single event/season, unlike the agenda's
 	//    per-event maps — this page only ever has ONE of each) ────────────
 
+	// #321 — the pin-edition picker (`work-edition-picker`) is a THIRD closed set
+	// over `libraryEditions`, and it is NOT wired to a notice: its control gates
+	// out entirely on `options.length > 0`, so under a truncated edition read a
+	// work whose editions ALL fall past the cap loses the picker — and with it
+	// (#125 F5b) the row's only edition line, which then reads as "no edition"
+	// for a work that HAS one. There is no control left to hang a trailing option
+	// on, so what the row should SAY instead is a design call: routed to the PO,
+	// not decided here.
 	const editionsByWorkId = $derived.by(() => {
 		const map = new Map<string, Edition[]>();
 		for (const edition of libraryEditions) {
@@ -2320,9 +2381,10 @@
 		const evId = detail.id;
 		const g = generation;
 		Promise.all([loadRoster(cfg), listAttendance(cfg, evId), listAllRsvpsForEvent(cfg, evId)])
-			.then(([roster, records, rsvps]) => {
+			.then(([rosterRead, records, rsvps]) => {
 				if (g !== generation || detail?.id !== evId) return;
-				attendanceRoster = roster;
+				attendanceRoster = rosterRead.items;
+				attendanceRosterPartial = rosterRead.truncated;
 				attendanceMap = attendanceByMemberId(records);
 				const rsvpMap: Record<string, { rsvpId: string; status: string }> = {};
 				for (const r of rsvps) rsvpMap[r.memberId] = { rsvpId: r.rsvpId, status: r.status };
@@ -2334,6 +2396,9 @@
 				if (g !== generation || detail?.id !== evId) return;
 				attendancePanelLoading = false;
 				attendancePanelError = true;
+				// A failed load says nothing about completeness — the error is the
+				// whole statement.
+				attendanceRosterPartial = false;
 			});
 	}
 
@@ -2477,8 +2542,15 @@
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		listEventLocations(cfg)
-			.then((locs) => {
-				locationSuggestions = locs;
+			.then((result) => {
+				locationSuggestions = result.items;
+				// #321 — no user-facing claim of completeness for an autocomplete
+				// corpus (see listEventLocations' own doc comment for the treatment);
+				// a dev-visible signal is the honest minimum for a truncation this
+				// surface doesn't otherwise report.
+				if (result.truncated) {
+					console.warn('event detail: location-suggestion corpus is truncated');
+				}
 			})
 			.catch((e) => {
 				console.error('event detail: loading location suggestions failed', e);
@@ -4144,7 +4216,9 @@
 							context={worksContext}
 							{pickableWorksList}
 							{pickableWorksVisible}
+							pickableWorksPartial={libraryWorksPartial}
 							pickableEditions={pickableEditionsList}
+							pickableEditionsPartial={libraryEditionsPartial}
 							{editionOptionsByRowId}
 							pendingKeys={managePendingKeys}
 							onaddwork={handleAddWork}
@@ -4213,6 +4287,7 @@
 								error={attendancePanelError}
 								pendingMemberIds={attendancePendingMemberIds}
 								failedMemberIds={attendanceFailedMemberIds}
+								membersPartial={attendanceRosterPartial}
 								ontoggle={handleAttendanceToggle}
 								onclose={closeAttendancePanel}
 							/>

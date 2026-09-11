@@ -84,6 +84,7 @@ import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedLibrarian() {
 	setToken('jwt-abc');
@@ -104,10 +105,10 @@ function setAuthedLibrarian() {
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	resolveCopyChainsMock.mockResolvedValue(new Map());
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
-	listLendingsMock.mockResolvedValue([]);
-	listAllEditionsMock.mockResolvedValue([]);
-	listAllCopiesMock.mockResolvedValue([]);
-	listActiveMembersMock.mockResolvedValue([]);
+	listLendingsMock.mockResolvedValue(toListRead([]));
+	listAllEditionsMock.mockResolvedValue(toListRead([]));
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
+	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
 afterEach(() => {
@@ -122,10 +123,10 @@ describe('/library — bulk-checkout work picker shows composer (#204)', () => {
 	it('work-select option labels read "Name - Composer"; empty composer → name only, no dangling " - "', async () => {
 		// TWO works on purpose: a single work would auto-select (#74) and the
 		// placeholder shape stops mattering; two keeps the full option list.
-		listWorksMock.mockResolvedValue([
+		listWorksMock.mockResolvedValue(toListRead([
 			{ id: 'work-1', name: 'Silmavalgus', composer: 'P. Uusberg' },
 			{ id: 'work-2', name: 'Anonymous chant', composer: '' }
-		]);
+		]));
 		setAuthedLibrarian();
 
 		const { container } = render(Page);

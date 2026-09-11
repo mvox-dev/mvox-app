@@ -104,6 +104,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { toListRead } from '$lib/testing/listReadFixtures';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -139,13 +140,13 @@ const altoSection = {
 };
 
 beforeEach(() => {
-	loadRosterMock.mockResolvedValue(rosterTwo);
+	loadRosterMock.mockResolvedValue(toListRead(rosterTwo));
 	listSectionsMock.mockResolvedValue([]);
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue([]);
-	listInactiveMembersMock.mockResolvedValue([]);
+	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	// Restored per-test: the fail-closed case below makes it REJECT.
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
@@ -327,10 +328,10 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 	// back EMPTY. Fail-OPEN dressed as "no blockers", on the single check the
 	// refuse-don't-strip design rests on. An unresolvable id is a FAILED check.
 	it('FAIL-CLOSED: a roster with no resolvable database entity id NEVER deactivates', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [] },
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [] }
-		]);
+		]));
 		const { container } = await renderRosterAs('admin');
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
@@ -416,7 +417,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 
 	async function renderWithInactive() {
 		listSectionsMock.mockResolvedValue([altoSection]);
-		loadInactiveRosterMock.mockResolvedValue(inactiveRoster);
+		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
 		const utils = render(Page);
 		setAuthedWithOneCollective();
 		adminStore.set('admin');
@@ -506,7 +507,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 	// aimed at a member id belonging to the collective the admin just left.
 	it('switching collectives clears the panel — one collective\'s inactive members never render under another\'s roster', async () => {
 		listSectionsMock.mockResolvedValue([altoSection]);
-		loadInactiveRosterMock.mockResolvedValue(inactiveRoster);
+		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
 		const { container } = render(Page);
 		setToken('jwt-abc');
 		authStore.set({
@@ -553,14 +554,14 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 	// two lifecycle paths disagreed and the member who had just left the active
 	// list was missing from the open panel she now belongs in.
 	it('a deactivate with the panel OPEN refreshes the panel too — she belongs in it now', async () => {
-		loadInactiveRosterMock.mockResolvedValue([]);
+		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 		// From the write onward she is in the inactive read.
-		loadInactiveRosterMock.mockResolvedValue([
+		loadInactiveRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
-		]);
+		]));
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -578,7 +579,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 	});
 
 	it('a FAILED panel refresh after a deactivate is not reported as a failed deactivate — the write landed', async () => {
-		loadInactiveRosterMock.mockResolvedValue([]);
+		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
@@ -596,7 +597,7 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 
 	it('a NON-admin gets no inactive surface (reinstate is an admin write, done-when 7 symmetry)', async () => {
 		listSectionsMock.mockResolvedValue([altoSection]);
-		loadInactiveRosterMock.mockResolvedValue(inactiveRoster);
+		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
 		adminStore.set('not-admin');
@@ -706,7 +707,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 
 	it('a rejected REINSTATE surfaces a role=alert next to that inactive row — otherwise the tap produces no visible change at all', async () => {
 		listSectionsMock.mockResolvedValue([altoSection]);
-		loadInactiveRosterMock.mockResolvedValue([
+		loadInactiveRosterMock.mockResolvedValue(toListRead([
 			{
 				memberId: 'm9',
 				personId: 'pp-9',
@@ -715,7 +716,7 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 				sectionIds: ['sec-alto'],
 				dbEntityId: 'db-1'
 			}
-		]);
+		]));
 		reinstateMemberMock.mockRejectedValue(new Error('403'));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
@@ -865,7 +866,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 
 		// SUCCESS is the ONE outcome that disarms: from the write onward she is
 		// out of the active reads — refetch, row gone, pair gone with it.
-		loadRosterMock.mockResolvedValue([rosterTwo[0]]);
+		loadRosterMock.mockResolvedValue(toListRead([rosterTwo[0]]));
 		gate.resolve();
 		await waitFor(() =>
 			expect(loadRosterMock.mock.calls.length).toBeGreaterThan(loadsBefore)
@@ -939,7 +940,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 
 		// Release: the write LANDS and the UI says so — refetch, she is gone.
 		// Nothing about the mid-flight cancel tap changed the outcome.
-		loadRosterMock.mockResolvedValue([rosterTwo[0]]);
+		loadRosterMock.mockResolvedValue(toListRead([rosterTwo[0]]));
 		gate.resolve();
 		await waitFor(() =>
 			expect(loadRosterMock.mock.calls.length).toBeGreaterThan(loadsBefore)
@@ -966,10 +967,10 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	// button rendered where null was expected, at the steal assertion below). Restored — test
 	// PASSES. The added `openCard` steps still reach the guarded behaviour.]
 	it('a SECOND row cannot be armed mid-flight — the single arm slot is never stolen from the in-flight row', async () => {
-		loadRosterMock.mockResolvedValue([
+		loadRosterMock.mockResolvedValue(toListRead([
 			...rosterTwo,
 			{ memberId: 'm3', personId: 'pp-3', name: 'Carla Cantus', email: 'carla@example.com', sectionIds: [], dbEntityId: 'db-1' }
-		]);
+		]));
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
@@ -1097,7 +1098,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		// Direct retry — the SAME still-armed confirm, no re-arming dance. The
 		// retry's own start clears the stale failure alert.
 		deactivateMemberMock.mockResolvedValue(undefined);
-		loadRosterMock.mockResolvedValue([rosterTwo[0]]);
+		loadRosterMock.mockResolvedValue(toListRead([rosterTwo[0]]));
 		await fireEvent.click(confirm);
 		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(2));
 		await waitFor(() =>
@@ -1183,8 +1184,11 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		const settlers: Array<(rows: InactiveRow[]) => void> = [];
 		loadInactiveRosterMock.mockImplementation(
 			() =>
-				new Promise<InactiveRow[]>((resolve) => {
-					settlers.push(resolve);
+				new Promise<{ items: InactiveRow[]; total: number; truncated: boolean }>((resolve) => {
+					// #321 — the producer resolves a ListRead now. The tests below still
+					// hand the settler a plain row array (the race they construct is about
+					// settle ORDER, not about truncation), so the wrap happens here.
+					settlers.push((rows: InactiveRow[]) => resolve(toListRead(rows)));
 				})
 		);
 		return settlers;
@@ -1344,7 +1348,7 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 	// deactivate-side mirror, above), this pins the correct capture point:
 	// AFTER each handler's own loadForSelected() call.
 	it('NON-RACE: an ordinary reinstate with the panel open still refreshes it — she leaves the panel', async () => {
-		loadInactiveRosterMock.mockResolvedValue([goneGirl]);
+		loadInactiveRosterMock.mockResolvedValue(toListRead([goneGirl]));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
 		adminStore.set('admin');
@@ -1357,7 +1361,7 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		);
 
 		// From the write onward she is back in the ACTIVE reads only.
-		loadInactiveRosterMock.mockResolvedValue([]);
+		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 		await fireEvent.click(container.querySelector('[data-testid="member-reinstate-m9"]')!);
 		await waitFor(() => expect(reinstateMemberMock).toHaveBeenCalledTimes(1));
 

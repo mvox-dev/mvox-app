@@ -45,7 +45,7 @@ describe('listWorks', () => {
 				]
 			})
 		);
-		const works = await listWorks(cfg, fetchImpl);
+		const works = (await listWorks(cfg, fetchImpl)).items;
 		expect(works).toEqual<Work[]>([
 			{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' },
 			{ id: 'work-2', name: 'Ave verum corpus', composer: '' }
@@ -79,7 +79,7 @@ describe('listEditions', () => {
 				]
 			})
 		);
-		const editions = await listEditions(cfg, 'work-1', fetchImpl);
+		const editions = (await listEditions(cfg, 'work-1', fetchImpl)).items;
 		expect(editions).toEqual<Edition[]>([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', externalLinks: [], files: [] }
 		]);
@@ -131,7 +131,7 @@ describe('listEditions — file/external_link widen (#89)', () => {
 				]
 			})
 		);
-		const editions = await listEditions(cfg, 'work-1', fetchImpl);
+		const editions = (await listEditions(cfg, 'work-1', fetchImpl)).items;
 		expect(editions).toEqual([
 			{
 				id: 'edition-1',
@@ -178,7 +178,7 @@ describe('listAllEditions — file/external_link widen (#89)', () => {
 				]
 			})
 		);
-		const editions = await listAllEditions(cfg, fetchImpl);
+		const editions = (await listAllEditions(cfg, fetchImpl)).items;
 		expect(editions).toEqual([
 			{
 				id: 'edition-1',
@@ -215,7 +215,7 @@ describe('listAllEditions', () => {
 				]
 			})
 		);
-		const editions = await listAllEditions(cfg, fetchImpl);
+		const editions = (await listAllEditions(cfg, fetchImpl)).items;
 		expect(editions).toEqual<Edition[]>([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1', externalLinks: [], files: [] },
 			{ id: 'edition-2', name: 'Peters arrangement', publisher: '', workId: 'work-2', externalLinks: [], files: [] }
@@ -249,7 +249,7 @@ describe('listCopies', () => {
 				]
 			})
 		);
-		const copies = await listCopies(cfg, 'edition-1', fetchImpl);
+		const copies = (await listCopies(cfg, 'edition-1', fetchImpl)).items;
 		expect(copies).toEqual<Copy[]>([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }]);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=copy');
@@ -277,7 +277,7 @@ describe('listLendings', () => {
 				]
 			})
 		);
-		const lendings = await listLendings(cfg, fetchImpl);
+		const lendings = (await listLendings(cfg, fetchImpl)).items;
 		expect(lendings).toEqual<Lending[]>([
 			{
 				id: 'lending-1',
