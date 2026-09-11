@@ -110,7 +110,15 @@
 	import type { Work } from '$lib/library/libraryData';
 	import type { ManageRightsState } from '$lib/repertoire/repertoireActions';
 	import { workLabel } from '$lib/repertoire/workLabel';
+	import {
+		pinnedEditionLabel,
+		rowEditionUnknown as isEditionUnknown
+	} from '$lib/repertoire/editionUnknown';
 	import { rovingNextIndex } from '$lib/a11y/roving';
+
+	/** Stable identity for the `editionsResolvedWorkIds` default — a fresh
+	 *  `new Set()` per render would be a new prop value every time. */
+	const NO_RESOLVED_WORK_IDS: ReadonlySet<string> = new Set<string>();
 
 	const STATUS_OPTIONS: { value: RepertoireStatus; label: () => string }[] = [
 		{ value: 'learning', label: m.repertoire_status_learning },
@@ -231,9 +239,24 @@
 		 *  flags rather than one. */
 		pickableEditionsPartial?: boolean;
 		/** Per-row edition choices for "Pin edition" ('repertoire' context). A row
-		 *  id absent (or mapped to []) hides that row's pin control — nothing to
-		 *  pick from. */
+		 *  id absent (or mapped to []) hides that row's pin control ONLY when
+		 *  `pickableEditionsPartial` is false — a COMPLETE read with no match is a
+		 *  known absence, nothing to pick from. Under a truncated edition read the
+		 *  same empty entry is not an absence: the row renders the unknown state
+		 *  and KEEPS the control (#329), its leading option saying "unknown" and
+		 *  disabled when the row holds a pin the read could not name.
+		 *  The caller merges its scoped per-work reads into this same map, so a
+		 *  resolved work's options arrive here exactly like the join's. */
 		editionOptionsByRowId?: Record<string, PickerOption[]>;
+		/** #329 (review) — work ids whose editions have since been read SCOPED
+		 *  (`listEditions(workId)`, one request, its own reachable cap), settled,
+		 *  and merged into `editionOptionsByRowId`. Those rows are facts again
+		 *  however the collective-wide read fared: an empty option list for a
+		 *  resolved work IS a known absence. Absent/empty = no scoped read has
+		 *  landed, so a zero-match row under truncation stays unknown — which is
+		 *  also what a FAILED scoped read leaves behind, correctly: a read that
+		 *  did not answer proves nothing either way. */
+		editionsResolvedWorkIds?: ReadonlySet<string>;
 		pendingKeys?: ReadonlySet<string>;
 		/** #103 TE.3 — force the expanded region open with NO tap needed. The event
 		 *  detail page IS the expanded view (a member never has to open her own
@@ -266,6 +289,7 @@
 		pickableEditionsVisible: pickableEditionsVisibleProp,
 		pickableEditionsPartial = false,
 		editionOptionsByRowId = {},
+		editionsResolvedWorkIds = NO_RESOLVED_WORK_IDS,
 		pendingKeys = new Set<string>(),
 		expanded: forceExpanded = false,
 		onaddwork,
@@ -303,6 +327,44 @@
 	 *  `mandatory` is a soft hint), so ordinal is no proof of provenance. */
 	function canEditProgrammeRow(row: WorkRow): boolean {
 		return canManageProgramme && context === 'programme' && row.kind === 'program';
+	}
+
+	/** #329 — this row's edition options, whatever source resolved them: the
+	 *  caller merges its scoped per-work reads into the same map. */
+	function optionsFor(row: WorkRow): PickerOption[] {
+		return editionOptionsByRowId[row.id] ?? [];
+	}
+
+	/** #329 — UNKNOWN vs stated fact, and the NAME to print. Both live in
+	 *  `$lib/repertoire/editionUnknown` because the caller decides which works
+	 *  to read scoped off the very same predicate (see `editionsResolvedWorkIds`
+	 *  and the two pages' effects) — a second copy here would drift into rows
+	 *  that say "unknown" with no read behind them. */
+	function rowEditionUnknown(row: WorkRow): boolean {
+		return isEditionUnknown(row, optionsFor(row), pickableEditionsPartial, editionsResolvedWorkIds);
+	}
+	function rowEditionLabel(row: WorkRow): string {
+		return pinnedEditionLabel(row, optionsFor(row));
+	}
+
+	/** The picker's VALUE. `row.editionId` verbatim would be a lie whenever it
+	 *  matches no option: a <select> renders an unmatched value as its first
+	 *  option, so a pin the read could not resolve would display as whatever
+	 *  happens to sit at the top of the list — "nothing pinned" (the
+	 *  placeholder) or, worse, some OTHER edition of the work. Unmatched → '',
+	 *  which selects the row's own leading option, and on an unknown row that
+	 *  option says so and cannot be chosen. */
+	function pickerValue(row: WorkRow): string {
+		return optionsFor(row).some((opt) => opt.id === row.editionId) ? row.editionId : '';
+	}
+
+	/** An unknown row that HOLDS a pin gets no "" (= unpin) choice: with the
+	 *  pinned edition unnameable, unpinning would be an offer to destroy a value
+	 *  we cannot even show. Its leading option says UNKNOWN and is disabled, so
+	 *  the control still opens (#329's ruling — gating it out is itself the
+	 *  false assertion) and still re-pins, but nothing in it erases the pin. */
+	function pickerPinIsUnknown(row: WorkRow): boolean {
+		return row.editionId !== '' && rowEditionUnknown(row);
 	}
 
 	let expandedState = $state(false);
@@ -386,6 +448,33 @@
 	}
 </script>
 
+{#snippet editionPicker(row: WorkRow)}
+	<!-- #125 F5b — ONE unified picker replaces the old pick-select + [Pin]
+	     button pair AND this row's read-only edition line: its VALUE is the
+	     currently pinned edition ('' when none), and a change fires
+	     onpinedition immediately, no confirm step. -->
+	<select
+		data-testid="work-edition-picker"
+		class="w-full sm:w-auto"
+		value={pickerValue(row)}
+		disabled={pendingKeys.has(row.id)}
+		aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
+		onchange={(e) => handlePinEdition(row.id, (e.currentTarget as HTMLSelectElement).value)}
+	>
+		{#if pickerPinIsUnknown(row)}
+			<!-- #329 review — the pin is real, only unnameable: no unpin offer (see
+			     `pickerPinIsUnknown`). Disabled, so the control opens and re-pins
+			     but cannot erase what it cannot show. -->
+			<option value="" disabled>{m.repertoire_edition_unknown()}</option>
+		{:else}
+			<option value="">{m.repertoire_pin_edition_label()}</option>
+		{/if}
+		{#each optionsFor(row) as opt (opt.id)}
+			<option value={opt.id}>{opt.label}</option>
+		{/each}
+	</select>
+{/snippet}
+
 {#snippet workRowContent(row: WorkRow)}
 	<span data-testid="work-name" class="text-sm text-ink">{row.workName}</span>
 	<span data-testid="work-composer" class="text-xs text-ink-2">{row.composer}</span>
@@ -402,26 +491,32 @@
 			{statusLabel(row.status)}
 		</span>
 	{/if}
-	{#if canEditRepertoireRow(row) && (editionOptionsByRowId[row.id] ?? []).length > 0}
-		<!-- #125 F5b — ONE unified picker replaces the old pick-select + [Pin]
-		     button pair AND this row's read-only edition line: its VALUE is the
-		     currently pinned edition ('' when none), and a change fires
-		     onpinedition immediately, no confirm step. -->
-		<select
-			data-testid="work-edition-picker"
-			class="w-full sm:w-auto"
-			value={row.editionId}
-			disabled={pendingKeys.has(row.id)}
-			aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
-			onchange={(e) => handlePinEdition(row.id, (e.currentTarget as HTMLSelectElement).value)}
-		>
-			<option value="">{m.repertoire_pin_edition_label()}</option>
-			{#each editionOptionsByRowId[row.id] ?? [] as opt (opt.id)}
-				<option value={opt.id}>{opt.label}</option>
-			{/each}
-		</select>
-	{:else if row.editionName !== ''}
-		<span data-testid="work-edition" class="text-xs text-ink-2">{row.editionName}</span>
+	{#if canEditRepertoireRow(row) && rowEditionUnknown(row)}
+		<!-- #329 — the edition state under a TRUNCATED read that no scoped
+		     per-work read has settled yet: UNKNOWN, not known-absent, and the
+		     picker stays OPEN rather than disappearing with the "no edition"
+		     line — gating it out is itself the false assertion this fix removes.
+		     Checked BEFORE the matched branch below: a row can have SOME matched
+		     options and still hold a pin that fell past the cap, and that row's
+		     picker must say so rather than render its pin as the placeholder.
+		     The caller reads `listEditions` for this work meanwhile (one request,
+		     scoped), and the row becomes a fact — a named pin or a genuine
+		     known-absence — the moment that lands. -->
+		<span data-testid="work-edition-unknown" class="text-xs text-ink-3 italic">
+			{m.repertoire_edition_unknown()}
+		</span>
+		{@render editionPicker(row)}
+	{:else if canEditRepertoireRow(row) && optionsFor(row).length > 0}
+		{@render editionPicker(row)}
+	{:else if rowEditionLabel(row) !== ''}
+		<span data-testid="work-edition" class="text-xs text-ink-2">{rowEditionLabel(row)}</span>
+	{:else if rowEditionUnknown(row)}
+		<!-- #329 — same unknown state for a non-editor viewer: no picker to open
+		     (management is gated on `canEditRepertoireRow` everywhere else), but
+		     "no edition" is still a claim a truncated read cannot back. -->
+		<span data-testid="work-edition-unknown" class="text-xs text-ink-3 italic">
+			{m.repertoire_edition_unknown()}
+		</span>
 	{:else}
 		<span data-testid="work-no-edition" class="text-xs text-ink-3 italic">{m.repertoire_no_edition()}</span>
 	{/if}

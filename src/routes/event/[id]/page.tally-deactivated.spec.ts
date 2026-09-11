@@ -54,6 +54,7 @@ const {
 	discoverMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
+	findMyRsvpForEventMock,
 	deleteRsvpMock,
 	listAllRsvpsForEventMock,
 	listAttendanceMock,
@@ -64,6 +65,7 @@ const {
 	discoverMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
+	findMyRsvpForEventMock: vi.fn(),
 	deleteRsvpMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn(),
 	listAttendanceMock: vi.fn(),
@@ -76,7 +78,12 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$lib/rsvp/rsvpData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/rsvp/rsvpData')>()),
 	findMyMemberId: findMyMemberIdMock,
+	// #329 — the event page's own-answer read moved to the scoped
+	// `findMyRsvpForEvent`; `listMyRsvps` stays mocked (default `[]`) only
+	// because it is still imported by other modules this spec pulls in
+	// transitively, not because this page calls it any more.
 	listMyRsvps: listMyRsvpsMock,
+	findMyRsvpForEvent: findMyRsvpForEventMock,
 	createRsvp: vi.fn(),
 	updateRsvpStatus: vi.fn(),
 	deleteRsvp: deleteRsvpMock
@@ -178,6 +185,7 @@ function setAuthedWithPolyphony() {
 beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue('m-viewer');
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	findMyRsvpForEventMock.mockResolvedValue(null);
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue(RSVP_ROWS);
 	loadRosterMock.mockResolvedValue(toListRead(ACTIVE_ROSTER));
@@ -272,7 +280,7 @@ describe('(D) stale-closure pin — the gate is captured for the REQUESTED event
 describe('(E adjacent, unchanged) a deactivated viewer keeps her own prior answer, visible but disabled', () => {
 	it('future event: her recorded going answer renders pressed, the control is disabled, the existing non-member hint shows', async () => {
 		findMyMemberIdMock.mockResolvedValue(null); // status-scoped read drops her
-		listMyRsvpsMock.mockResolvedValue(toListRead([{ rsvpId: 'r-my', eventId: 'ev1', status: 'going' }]));
+		findMyRsvpForEventMock.mockResolvedValue({ rsvpId: 'r-my', status: 'going' });
 		// Plain-member view: no _editor list — no tally, just her own control.
 		const { container } = renderPage(
 			eventEntity('2026-09-01T16:00:00.000Z', { _editor: undefined })

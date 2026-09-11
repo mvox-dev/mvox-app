@@ -1417,7 +1417,14 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 				mine = 'maybe';
 				return json({});
 			}
-			if (url.includes('_type.string=rsvp') && url.includes('event.reference=ev1')) {
+			// #329 — cross-person tally shape only: excludes the scoped own-answer
+			// read (findMyRsvpForEvent), which also carries `event.reference=ev1`
+			// but is additionally scoped by `_parent.reference=`.
+			if (
+				url.includes('_type.string=rsvp') &&
+				url.includes('event.reference=ev1') &&
+				!url.includes('_parent.reference=')
+			) {
 				const rows = allRsvpsForEv1();
 				rows[0] = {
 					_id: 'rsvp-77',
@@ -1467,7 +1474,13 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 			expect(posts.length).toBeGreaterThan(0);
 		});
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(urls.some((u) => u.includes('event.reference=ev1'))).toBe(false);
+		// #329 — the viewer's OWN answer is now read via the scoped
+		// `findMyRsvpForEvent` (_parent.reference=p-viewer AND event.reference=ev1),
+		// which legitimately carries `event.reference=ev1` too; only a query WITHOUT
+		// `_parent.reference=` is the cross-person tally shape this test guards.
+		expect(
+			urls.some((u) => u.includes('event.reference=ev1') && !u.includes('_parent.reference='))
+		).toBe(false);
 	});
 });
 
@@ -1581,7 +1594,16 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 		let left = failTimes;
 		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input);
-			if (url.includes('_type.string=rsvp') && url.includes('event.reference=ev1') && left > 0) {
+			// #329 — cross-person tally shape only; the scoped own-answer read
+			// (findMyRsvpForEvent) also carries `event.reference=ev1` but is
+			// additionally scoped by `_parent.reference=` and must not eat this
+			// failure budget meant for the tally read.
+			if (
+				url.includes('_type.string=rsvp') &&
+				url.includes('event.reference=ev1') &&
+				!url.includes('_parent.reference=') &&
+				left > 0
+			) {
 				left -= 1;
 				return json({ message: 'boom' }, 500);
 			}

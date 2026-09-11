@@ -327,6 +327,7 @@
 		}
 	],
 	"repertoire_no_edition": "Izdevums nav norādīts",
+	"repertoire_edition_unknown": "Izdevums nezināms — saraksts var būt nepilnīgs",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Aizņemties",
 	"repertoire_pdf_error": "Neizdevās atvērt PDF — mēģini vēlreiz.",

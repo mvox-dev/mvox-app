@@ -76,12 +76,14 @@
 	} from '$lib/repertoire/repertoireActions';
 	import {
 		listWorks,
+		listEditions,
 		listAllEditions,
 		listAllCopies,
 		type Copy,
 		type Edition,
 		type Work
 	} from '$lib/library/libraryData';
+	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import RepertoireElement, {
 		ADD_PROGRAMME_KEY,
 		ADD_WORK_KEY
@@ -440,6 +442,25 @@
 	 */
 	let libraryWorksPartial = $state(false);
 	let libraryEditionsPartial = $state(false);
+	/**
+	 * #329 (review) — the scoped half of the truncation fix. When
+	 * `libraryEditionsPartial` is true, every repertoire row the collective-wide
+	 * read could not settle (no matched option, or a pin it could not name) gets
+	 * ONE `listEditions(workId)` — scoped to that work, its own reachable cap —
+	 * and the answer lands here, keyed by work id. Merged into
+	 * `editionOptionsByRowId` below, with the key set handed to
+	 * RepertoireElement as `editionsResolvedWorkIds`: a work in here is a stated
+	 * fact again (named pin, or a genuine known-absence when the scoped list is
+	 * empty), a work not in here stays honestly unknown.
+	 *
+	 * `scopedEditionWorkIdsRequested` is deliberately NOT $state: it is the
+	 * dispatch guard (one request per work per collective), not something any
+	 * render reads. A FAILED scoped read stays in it and out of the map — the
+	 * row keeps the unknown wording, which is exactly what a read that did not
+	 * answer leaves us knowing.
+	 */
+	let scopedEditionsByWorkId = $state<Record<string, PickerOption[]>>({});
+	let scopedEditionWorkIdsRequested = new Set<string>();
 	// #288 — is the `libraryWorks`/`libraryEditions` fetch (loadManagePickers)
 	// currently in flight? `resetManagement()` blanks those two synchronously on
 	// EVERY `loadForSelected` (including same-collective refreshes: season
@@ -1442,6 +1463,11 @@
 		// #321 — the claims go with the lists they describe.
 		libraryWorksPartial = false;
 		libraryEditionsPartial = false;
+		// #329 review — the scoped per-work answers belong to the collective they
+		// were read from, and so does the "already asked" guard: dropping only the
+		// map would leave the guard vetoing every re-read after a switch.
+		scopedEditionsByWorkId = {};
+		scopedEditionWorkIdsRequested = new Set<string>();
 		// #288 — flips true in the SAME synchronous pass that blanks the two
 		// arrays above, so the `pickableEditionsVisibleByEventId` effect never
 		// observes them blanked while still reading `libraryPickersLoading` as
@@ -2240,14 +2266,17 @@
 
 	// ── derived picker sources ────────────────────────────────────────────────
 
-	// #321 — the pin-edition picker (`work-edition-picker`) is a THIRD closed set
-	// over `libraryEditions`, and it is NOT wired to a notice: its control gates
-	// out entirely on `options.length > 0`, so under a truncated edition read a
-	// work whose editions ALL fall past the cap loses the picker — and with it
-	// (#125 F5b) the row's only edition line, which then reads as "no edition"
-	// for a work that HAS one. There is no control left to hang a trailing option
-	// on, so what the row should SAY instead is a design call: routed to the PO,
-	// not decided here.
+	// #321/#329 — the pin-edition picker (`work-edition-picker`) is a THIRD
+	// closed set over `libraryEditions`, joined here per work. Under a TRUNCATED
+	// `listAllEditions` read that join proves nothing about a work it has no row
+	// for, so #329 (and its review) splits the row's state three ways:
+	//   • matched, or a pin the join can name → a stated FACT, untouched;
+	//   • not settled by the join → UNKNOWN wording, the picker stays open, and
+	//     this page reads `listEditions(workId)` SCOPED for that one work (the
+	//     effect below);
+	//   • that scoped read settled COMPLETE → a fact again, whichever way it
+	//     came out; truncated against its own cap, it settles nothing.
+	// A complete read issues no scoped reads at all: it already IS the fact.
 	const editionsByWorkId = $derived.by(() => {
 		const map = new Map<string, Edition[]>();
 		for (const edition of libraryEditions) {
@@ -2265,20 +2294,83 @@
 	}
 
 	/** Per repertoire ROW: the editions of that row's work ("pin edition"). A row
-	 *  whose work has no editions gets no entry, which hides the control. */
+	 *  whose work has no editions gets no entry here — RepertoireElement then
+	 *  decides what that means (#329): known-absent hides the control when
+	 *  `libraryEditionsPartial` is false; when true the row is UNKNOWN and the
+	 *  control stays open while the scoped read below settles it.
+	 *  A work with a SCOPED answer uses it verbatim, in preference to the
+	 *  collective-wide join: it is the complete list for that one work. */
 	const editionOptionsByRowId = $derived.by(() => {
 		const out: Record<string, PickerOption[]> = {};
 		for (const rows of Object.values(worksByEventId)) {
 			for (const row of rows) {
 				if (row.kind !== 'repertoire' || row.workId === '' || out[row.id]) continue;
-				const options = (editionsByWorkId.get(row.workId) ?? []).map((edition) => ({
-					id: edition.id,
-					label: editionLabel(edition)
-				}));
+				const options =
+					scopedEditionsByWorkId[row.workId] ??
+					(editionsByWorkId.get(row.workId) ?? []).map((edition) => ({
+						id: edition.id,
+						label: editionLabel(edition)
+					}));
 				if (options.length > 0) out[row.id] = options;
 			}
 		}
 		return out;
+	});
+
+	/** The works the scoped read has answered for — a fact again either way. */
+	const editionsResolvedWorkIds = $derived(new Set(Object.keys(scopedEditionsByWorkId)));
+
+	/** #329 review — the works still in the unknown state: every one of them owes
+	 *  the reader ONE scoped `listEditions` read. Empty under a complete edition
+	 *  read, so this costs nothing in the ordinary case. */
+	const unknownEditionWorkIds = $derived(
+		unresolvedEditionWorkIds(
+			Object.values(worksByEventId).flat(),
+			editionOptionsByRowId,
+			libraryEditionsPartial,
+			editionsResolvedWorkIds
+		)
+	);
+
+	// #329 review — turn "unknown" into a fact. Opening the picker was only half
+	// the ruling; without this read its option list would be empty BY
+	// CONSTRUCTION and the control could resolve nothing. One request per work
+	// (`scopedEditionWorkIdsRequested` is the guard, not a render input), scoped
+	// to that work's own children, so it carries a reachable cap where the
+	// collective-wide read has none. A failure is left alone: the row keeps the
+	// unknown wording rather than acquiring a negative from a read that failed —
+	// and so is a read that comes back TRUNCATED against its own cap: recording
+	// its rows would make the row a stated fact off the same evidence #329
+	// refuses, one layer down.
+	// The dispatch set is bounded by the RENDERED repertoire rows, never the
+	// library: one request per distinct unknown work, deduped by the requested-
+	// set guard above; a later surface that renders more rows joins this
+	// dispatch at that same bound (PO ruling, #329 comment 5635111998).
+	$effect(() => {
+		const workIds = unknownEditionWorkIds;
+		if (workIds.length === 0) return;
+		const cfg = manageCfg();
+		if (!cfg) return;
+		const thisRequest = requestId;
+		for (const workId of workIds) {
+			if (scopedEditionWorkIdsRequested.has(workId)) continue;
+			scopedEditionWorkIdsRequested.add(workId);
+			listEditions(cfg, workId)
+				.then((read) => {
+					if (thisRequest !== requestId) return;
+					if (read.truncated) return; // partial: unknown stands, same as a failure
+					scopedEditionsByWorkId = {
+						...scopedEditionsByWorkId,
+						[workId]: read.items.map((edition) => ({
+							id: edition.id,
+							label: editionLabel(edition)
+						}))
+					};
+				})
+				.catch(() => {
+					// Unknown stands. A read that did not answer is not an absence.
+				});
+		}
 	});
 
 	/** Per EVENT: editions not already on that event's programme, labelled
@@ -2390,6 +2482,7 @@
 			pickableEditionsByEventId,
 			pickableEditionsVisibleByEventId,
 			editionOptionsByRowId,
+			editionsResolvedWorkIds,
 			pendingKeys: managePendingKeys,
 			onaddwork: handleAddWork,
 			onstatuschange: handleStatusChange,

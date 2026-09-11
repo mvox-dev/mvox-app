@@ -59,9 +59,42 @@ export async function findMyMemberId(
 }
 
 /**
+ * The viewer's own rsvp for ONE event — the FACT read (#329, ruled on #321's
+ * residual). `rsvp` is a child of `person`; scoped by BOTH `_parent.reference`
+ * (this person) AND `event.reference` (this event) — a singer has at most one
+ * rsvp per event by construction (the agenda's own map keys on eventId, same
+ * invariant `findMyMemberId` above leans on for its own limit=1), so `limit=1`
+ * is an explicit, ample bound, never a truncation this read could observe.
+ * `null` means CONFIRMED no answer — the scoped read cannot lose a real answer
+ * to a cap, so its empty result IS the fact, not a derived negative.
+ */
+export async function findMyRsvpForEvent(
+	cfg: EntuCfg,
+	personId: string,
+	eventId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<{ rsvpId: string; status: RsvpStatus } | null> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=rsvp&_parent.reference=${encodeURIComponent(personId)}&event.reference=${encodeURIComponent(eventId)}&props=status&limit=1`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`findMyRsvpForEvent failed: ${res.status}`);
+	const body = (await res.json()) as { entities?: Array<{ _id: string; status?: Array<{ string: string }> }> };
+	const row = body.entities?.[0];
+	if (!row) return null;
+	return { rsvpId: row._id, status: (row.status?.[0]?.string ?? 'going') as RsvpStatus };
+}
+
+/**
  * List the singer's own rsvps (#11). `rsvp` is a child of `person` — scoping by
  * `_parent.reference=personId` is the whole query, native under the singer's own
- * person, no cross-person read (issue AC). Used to seed each agenda row's answer.
+ * person, no cross-person read (issue AC). Used to seed each agenda row's answer
+ * (routes/+page.svelte) — its ONLY remaining consumer after #329: the event
+ * page's own-answer state moved to the scoped one-row `findMyRsvpForEvent`
+ * above, which reads that fact directly instead of deriving it from this list.
  *
  * #321 — person-LIFETIME, no season boundary: a weekly-rehearsal member of
  * ten years reaches the `limit=500` cap on real rows (50/yr x 10yr), so this

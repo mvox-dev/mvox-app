@@ -119,8 +119,14 @@ export interface WorksManage {
 	 *  Absent entry = not yet decided (never-yet-shown default, per
 	 *  RepertoireElement's own fallback). */
 	pickableEditionsVisibleByEventId: Record<string, boolean>;
-	/** Per ROW id: the editions of that row's work, for "pin edition". */
+	/** Per ROW id: the editions of that row's work, for "pin edition". Under a
+	 *  truncated edition read this also carries the page's scoped per-work
+	 *  reads, merged in (#329 review). */
 	editionOptionsByRowId: Record<string, PickerOption[]>;
+	/** #329 (review) — work ids whose editions the page has since read SCOPED
+	 *  and merged above. Those rows are stated facts again; a zero-match row for
+	 *  a work NOT in here, under a truncated read, is still unknown. */
+	editionsResolvedWorkIds?: ReadonlySet<string>;
 	/** Write-queue keys currently in flight (row ids + the ADD_* sentinels). */
 	pendingKeys: ReadonlySet<string>;
 	onaddwork(workId: string): void;

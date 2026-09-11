@@ -350,6 +350,7 @@
 			pickableEditionsVisible={worksManage?.pickableEditionsVisibleByEventId[item.id]}
 			pickableEditionsPartial={worksManage?.pickableEditionsPartial ?? false}
 			editionOptionsByRowId={worksManage?.editionOptionsByRowId ?? NO_OPTIONS_BY_ID}
+			editionsResolvedWorkIds={worksManage?.editionsResolvedWorkIds ?? NO_KEYS}
 			pendingKeys={worksManage?.pendingKeys ?? NO_KEYS}
 			onaddwork={(workId) => worksManage?.onaddwork(workId)}
 			onstatuschange={(itemId, status) => worksManage?.onstatuschange(itemId, status)}
