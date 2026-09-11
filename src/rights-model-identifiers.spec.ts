@@ -63,6 +63,22 @@
 //   example the sweep exists to find, Gama 00:18Z).
 // - Not-in-scope fence: §1/§2 prose stays byte-identical; blocks with no #320
 //   mandate stay byte-identical (sha256 pins).
+//
+// ── #322 EXTENSION (RED) — two corrections, identifiers kept ──
+//
+// #322 (body + Gama's release comment, 2026-09-11) corrects two blocks and
+// nothing else. ER-9 is restated DIRECTION-FREE: its "lower/higher" wording
+// presupposed a tier power-ranking the document's evidence never establishes
+// (ER-22 declines it), so the ranking framing goes while the silent-demotion
+// claim stays — Gama's corrected-vs-superseded test: a pre-edit citation of
+// ER-9 for the demotion remains sound, a citation of it for ranked tiers was
+// never supported. Same rule, identifier KEPT, and a one-line dated correction
+// note marks the edit inside the block (the scheme marks supersession only;
+// correction must not be the unmarked cheaper path). ER-12's positional
+// '(§7.3)' becomes ER-7 — a citation swap inside one block. Section 15 states
+// the contract; the section-13 pin map is updated to the corrected ER-9/ER-12
+// bytes and grows ER-18..ER-23 (adopted from Bentham's post-#320 residual,
+// earmarked for #318 — same one-line close, taken here).
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -128,6 +144,37 @@ function blockMatching(label: string, probes: RegExp[]): RuleBlock {
 	).toBe(1);
 	return hits[0];
 }
+
+// ── #322 corrected blocks, authored byte-exact (PO ruling on #316, 2026-09-11 doorbell) ──
+//
+// RED authors the corrected bytes so the section-13 pin map can pin them at
+// RED time — the fence holds THROUGH the sanctioned edit instead of being
+// loosened for it. GREEN's whole job on these two blocks is to make the doc
+// match. Section 15 states the same contract as readable per-clause
+// assertions, so a failure names the ruling it violates, not just a hash.
+//
+// ER-9: the ranking framing goes ("both directions", "non-monotonic",
+// "lower"/"higher"), the claim stays; ER-6 gives the whole replacement
+// mechanism, so the restated rule cites it rather than re-deriving it. The
+// evidence paths stay; the quoted probe sentence goes with the ranking wording
+// it carries. The dated correction note is the block's last line, inside the
+// contiguous `>` run.
+const CORRECTED_ER9 = [
+	'**ER-9** — Since entity CREATE grants the creating caller `_owner` as one direct document (ER-5), a later explicit grant of any other direct tier to that same caller on that same entity replaces it (ER-6) and silently demotes the creator from owner — the replace happens with no error and no notice.',
+	'Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.',
+	'Corrected 2026-09-11: ranking wording removed; the claim is unchanged.'
+].join('\n');
+
+// ER-12: one token swaps — the rule sentence's positional '(§7.3)' becomes
+// '(ER-7)'. Nothing else moves: the evidence line's own '§7.3' mentions are
+// navigation notes and stay.
+const CORRECTED_ER12 = [
+	'**ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property\'s value is written into; `_inheritrights` decides whether a parent\'s rights cascade onto a child (ER-7). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.',
+	'Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.',
+	'Stands on: ER-18, ER-20, ER-1.'
+].join('\n');
+
+const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
 
 // ── 1. format + uniqueness ──────────────────────────────────────────────────
 
@@ -206,7 +253,11 @@ const INVENTORY: [string, RegExp[]][] = [
 	['d. direct and inherited are separate additive layers', [/additive/i, /inherited/i, /single-tier|single tier/i]],
 	['e. _sharing vs _inheritrights are different axes', [/_sharing/, /_inheritrights/, /ax[ei]s/i]],
 	['f. CREATE auto-grants caller _owner as one direct doc, all four tiers', [/auto-grant/i, /_owner/, /four tiers/i]],
-	['g. replacement is bidirectional — grant-lower-after-create silently demotes the creator', [/demot/i, /creator|creating caller/i, /non-monotonic|both directions/i]],
+	// #322: this probe set used to pin the OLD ranking wording (`non-monotonic|
+	// both directions`) — exactly what the correction removes. Repinned on the
+	// claim itself, which survives the restatement (issue body: "extend only if
+	// an assertion pins the old wording").
+	['g. a later grant to the creator silently demotes them from owner', [/demot/i, /creator|creating caller/i, /no error and no notice/i]],
 	['h. _viewer-alone suffices for full private-bucket read', [/_viewer/, /alone/i, /private bucket/i]],
 	['i. tier-admitted vs grant-admitted readers get different answers', [/tier-admitted/i, /grant-admitted/i]],
 	['j. create copies the parent _sharing unless the POST sets it explicitly', [/_sharing/, /parent/i, /cop(y|ies|ied)/i, /omit|explicit/i]],
@@ -349,7 +400,7 @@ describe('cross-references: base rules and their qualifications name each other 
 		{
 			base: 'b (base replace rule)',
 			baseProbes: INVENTORY[1][1],
-			qual: 'g (bidirectional demotion)',
+			qual: 'g (silent demotion of the creator)',
 			qualProbes: INVENTORY[6][1]
 		},
 		{
@@ -361,7 +412,7 @@ describe('cross-references: base rules and their qualifications name each other 
 		{
 			base: 'f (create auto-grant)',
 			baseProbes: INVENTORY[5][1],
-			qual: 'g (bidirectional demotion)',
+			qual: 'g (silent demotion of the creator)',
 			qualProbes: INVENTORY[6][1]
 		},
 		{
@@ -644,7 +695,9 @@ describe('#320: no rule cites the foundation sections positionally once they car
 	// of content that now has identifiers to land on.
 	//
 	// Deliberately NOT scanned: single-section mentions — ER-1's 'Distills §3',
-	// ER-3's 'property-tier `_sharing` (§3)', ER-10's '(§4)', ER-12's '(§7.3)'.
+	// ER-3's 'property-tier `_sharing` (§3)', ER-10's '(§4)', ER-12's
+	// evidence-line '§7.3' mentions (its rule-sentence '(§7.3)' converts to
+	// ER-7 under #322 — see section 15; the evidence mentions stay).
 	// Those are navigation/provenance notes ("the prose this distills lives
 	// there"), which the scheme paragraph keeps as a legitimate use of §N, and
 	// several sit in blocks pinned byte-exact below. Converting them is a
@@ -813,34 +866,50 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 		).not.toBe(FOUNDATION_PROSE_SHA256);
 	});
 
-	// Blocks with NO #320 mandate, pinned byte-exact (sha256 of parsed block
-	// text at the pre-#320 state). Excluded because they DO change: ER-1/ER-3
-	// (one added Stands on: line each), ER-7/ER-12 (the §1–§2 positional token
-	// converts). ER-16 is pinned: research-320 finding 6 confirmed its wording
-	// is generic and needs no edit.
+	// Every block with no LIVE mandate, pinned byte-exact (sha256 of parsed
+	// block text). #320 excluded the blocks it changed (ER-1/ER-3 gained a
+	// Stands on: line, ER-7/ER-12 converted the §1–§2 positional token); ER-16
+	// is pinned: research-320 finding 6 confirmed its wording is generic and
+	// needs no edit.
+	//
+	// #322 maintenance (the sanctioned edit): ER-9's pre-#320 hash and ER-12's
+	// missing entry are replaced by pins of the CORRECTED blocks, computed from
+	// the constants at the top of this file — section 15 asserts the same bytes
+	// with a readable diff. And ER-18..ER-23 join the set: #320 landed, so the
+	// foundation blocks are no longer a live deliverable — pinning them closes
+	// the append-inside-an-ER-block-run path with no new machinery (adopted
+	// from Bentham's post-#320 residual, earmarked for #318; taken here as the
+	// same one-line close, earlier).
 	const UNTOUCHED_SHA256: Record<string, string> = {
 		'ER-2': '01cecca21a2ac74eedd7e04a0c3ff94a14f55c8d2d3ef5951016d769c4edf9dc',
 		'ER-4': 'd8de9757c674fbeb12c169fab48867e05e53967e76d54062e0aced194842af0e',
 		'ER-5': '0bb58d543f78e49bb144ebbbf3574b6fa61db94be1df1396180ccc3b314fbdeb',
 		'ER-6': 'da1263a637b9d80e3826cca351c9576f797152c6c8c22edcfbdc1276a2a777ab',
 		'ER-8': '7b0b4c356bd6df7eb4419e563f17a47c16168ce8a0cd848110a76916a2bb6fdf',
-		'ER-9': '06586b0c16bfbe97aea8e98a936dced39589fcb0d03936bd878f38968cc2532b',
+		'ER-9': sha256(CORRECTED_ER9),
 		'ER-10': '28adf40b8bff7d80874167ac8321a5614f05ae60f97a2b4c60df11d3d7670645',
 		'ER-11': 'b2ee2bb1fdd1e2ef1527f81795d5b44450af6916f1b8b148b5485641846de4af',
+		'ER-12': sha256(CORRECTED_ER12),
 		'ER-13': '348e4b0811f6e66d5024874c32bb202c6a8cc1cff0af4718a65af2363a3e2dd5',
 		'ER-14': '665ec0affb05b5f0aeb3ead0069606c4ee7bc2b2c63af389bc89e9a6fdde4b37',
 		'ER-15': '00b855448d2750eed3be8df26576c9aadd4106f315930fe77c3cd11367fe67eb',
 		'ER-16': '874ee3f28195c10f2da3ff44fe32e8c8e4da8298f8829e79df21a12bda5af12f',
-		'ER-17': 'de114fc7b40b8bf254dbda34ab19bda2162433fc91a86b15e86b54d6e6f1be0e'
+		'ER-17': 'de114fc7b40b8bf254dbda34ab19bda2162433fc91a86b15e86b54d6e6f1be0e',
+		'ER-18': '575f4c3aa26a49c4de82eb29aed0e26faf0b07f27536fc25b26d8c260a38471c',
+		'ER-19': 'c17def0a84e575602e99333d997170604d7d455cf1f607b416f957da285ce634',
+		'ER-20': '107340afe6b83a9525fcea23d0c6bb4ad096f85720a7d2cf92d79fbb21f2b8d8',
+		'ER-21': '3023f8f8249a0aad8a675f16263ed2dbf55a8d75aa5b3c3ca4352e738000dbac',
+		'ER-22': 'bfa254e4a9153d17cd759662389fd0d35c5cb5f0a26d57678d275e58bfefe442',
+		'ER-23': 'f9cfa166ac4752880b1cb58119c28f1d92f77de070a62f9d69d483dfddd2be40'
 	};
 
-	it('blocks with no #320 mandate are byte-identical to the pre-#320 state', () => {
+	it('every pinned block matches its sanctioned bytes (pre-#320 state; #322-corrected state for ER-9/ER-12)', () => {
 		for (const [id, hash] of Object.entries(UNTOUCHED_SHA256)) {
 			const b = blocks.find((x) => x.id === id);
 			expect(b, `${id} disappeared from the doc`).toBeDefined();
 			expect(
-				createHash('sha256').update(b?.text ?? '', 'utf8').digest('hex'),
-				`${id} (doc line ${b?.startLine}) was edited — #320's mandate touches only ER-1/ER-3 (added Stands on: line) and ER-7/ER-12 (§1–§2 token conversion)`
+				sha256(b?.text ?? ''),
+				`${id} (doc line ${b?.startLine}) does not match its pin — sanctioned edits: #320 (ER-1/ER-3 Stands on: lines, ER-7 token conversion) and #322 (ER-9 direction-free restatement + dated correction note, ER-12 '(§7.3)'→'(ER-7)'; those two must match the CORRECTED constants, see section 15 for the readable diff)`
 			).toBe(hash);
 		}
 	});
@@ -961,5 +1030,162 @@ describe('citation hygiene: the forms a rule block may NOT use to cite', () => {
 				).toBe(false);
 			}
 		}
+	});
+});
+
+// ── 15. #322: two corrections, identifiers kept (PO ruling on #316, 2026-09-11) ──
+
+describe('#322: ER-9 restated direction-free — the ranking framing goes, the demotion claim stays', () => {
+	// The ruling verbatim: "restate ER-9 direction-free — ER-6 gives the whole
+	// replacement mechanism; a tier-ranking rule minted to save the old sentence
+	// would extend evidence." Gama's corrected-vs-superseded test (#322 release
+	// comment): a pre-edit citation of ER-9 for "a later grant can silently
+	// demote the creator from owner" remains sound; a citation of it for "grant
+	// tiers are ranked" was never supported — the document never established
+	// that ranking, and ER-22 declines it outright. No sound citation breaks,
+	// so it is the same rule, and the identifier is KEPT.
+
+	const er9 = () => blocks.find((b) => b.id === 'ER-9');
+
+	it('ER-9 still resolves and is NOT marked superseded — this is a correction, not a supersession', () => {
+		const b = er9();
+		expect(b, 'ER-9 disappeared — a correction keeps the identifier; nothing here is retracted').toBeDefined();
+		expect(
+			b?.superseded,
+			'ER-9 reads as superseded — supersession is for a believed-and-cited claim becoming WRONG; here the claim survives verbatim, so the identifier stays active (stop and raise on #322 if this seems to be a supersession after all)'
+		).toBe(false);
+	});
+
+	it('ER-9 contains no ranking or direction language', () => {
+		const b = er9();
+		// 'demote' is deliberately NOT in this list: the silent demotion of the
+		// creator IS the claim, and it survives. What goes is the comparative
+		// tier-ranking framing ('lower'/'higher', 'non-monotonic', 'both
+		// directions', 'the reverse') that presupposes a rank the document's
+		// evidence never establishes.
+		const RANKING = [/\blower\b/i, /\bhigher\b/i, /monotonic/i, /\bdirections?\b/i, /\breverse\b/i];
+		for (const p of RANKING) {
+			expect(
+				b?.text ?? '',
+				`ER-9 still carries ranking/direction wording (${p}) — restate direction-free: ER-6 gives the whole replacement mechanism, and a tier-ranking rule minted to save the old sentence would extend evidence`
+			).not.toMatch(p);
+		}
+	});
+
+	it('ER-9 keeps the silent-demotion claim and its cross-references (ER-5, ER-6)', () => {
+		const t = er9()?.text ?? '';
+		expect(t, 'the silent demotion of the creator is the claim — it must survive the restatement').toMatch(/silently demot/i);
+		expect(t, "the no-error-no-notice consequence is part of the claim and stays").toContain('no error and no notice');
+		expect(t.includes('ER-5'), 'ER-9 no longer cites ER-5 (the create auto-grant it qualifies)').toBe(true);
+		expect(t.includes('ER-6'), 'ER-9 no longer cites ER-6 (the replacement mechanism it rides on)').toBe(true);
+	});
+
+	it('ER-9 keeps its probe evidence paths intact', () => {
+		const t = er9()?.text ?? '';
+		expect(t).toContain('scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts');
+		expect(t).toContain(
+			'scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json'
+		);
+	});
+
+	it('ER-9 carries a one-line dated correction note INSIDE the blockquote run', () => {
+		// The scheme marks supersession and says nothing about correction, which
+		// leaves correction as the unmarked — and therefore cheaper — path
+		// everything would drift toward. In this document of all documents a
+		// rule's text must not change with no trace (Gama, #322): a reader who
+		// remembers the old sentence must see the ranking went deliberately.
+		// Inside the contiguous `>` run is the parser boundary that matters — a
+		// note after a blank line falls out of the block and out of every quote
+		// of it (the section-11 orphan fact).
+		const b = er9();
+		const noteLines = (b?.text ?? '')
+			.split('\n')
+			.filter((l) => /correct/i.test(l) && /\b2026-09-11\b/.test(l));
+		expect(
+			noteLines.length,
+			'ER-9 carries no dated correction note (one line, inside the block, naming 2026-09-11) — without it the ranking wording vanishes with no trace, making correction the unmarked cheaper sibling of supersession'
+		).toBe(1);
+		expect(noteLines[0], 'the note must say WHAT was removed: the ranking wording').toMatch(/ranking/i);
+		expect(
+			noteLines[0],
+			'the note must state the claim is unchanged — that is exactly what distinguishes a correction from a supersession'
+		).toMatch(/claim is unchanged/i);
+	});
+
+	it('ER-9 matches its corrected bytes exactly (same pin as section 13, with a readable diff)', () => {
+		expect(er9()?.text).toBe(CORRECTED_ER9);
+	});
+});
+
+describe("#322: ER-12's positional citation becomes ER-7 — a citation swap inside one block", () => {
+	const er12 = () => blocks.find((b) => b.id === 'ER-12');
+
+	it("ER-12's rule sentence no longer contains the positional token '(§7.3)'", () => {
+		expect(
+			(er12()?.text ?? '').includes('(§7.3)'),
+			"ER-12 still cites the `_inheritrights` cascade positionally as '(§7.3)' — §-numbers are navigation, and the content now has an identifier (ER-7) to land on; a positional citation repoints silently the moment a section is inserted"
+		).toBe(false);
+	});
+
+	it('ER-12 cites ER-7 in place of the section number', () => {
+		expect(
+			(er12()?.text ?? '').includes('cascade onto a child (ER-7)'),
+			"ER-12's rule sentence must cite ER-7 where '(§7.3)' stood — the swap is in place, nothing else in the sentence moves"
+		).toBe(true);
+	});
+
+	it('nothing else in ER-12 moves — sentences, evidence line, and Stands on: line unchanged', () => {
+		const t = er12()?.text ?? '';
+		for (const s of [
+			'govern different axes',
+			'decides which bucket',
+			'Conflating the two axes answers "who can see this?" wrongly in either direction',
+			'it distinguishes what each one decides',
+			'Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis)',
+			// the evidence line's own §7.3 mentions are navigation notes and STAY —
+			// only the rule sentence's citation converts (the half a reader quotes):
+			'(the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10',
+			'Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.',
+			'Stands on: ER-18, ER-20, ER-1.'
+		]) {
+			expect(t.includes(s), `ER-12 changed beyond the citation swap — missing: "${s}"`).toBe(true);
+		}
+	});
+
+	it('ER-12 matches its corrected bytes exactly (same pin as section 13, with a readable diff)', () => {
+		expect(er12()?.text).toBe(CORRECTED_ER12);
+	});
+});
+
+describe('#322: outside the two corrected blocks, the document is byte-identical', () => {
+	// Complements the existing fences: section 13's pins hold the other ER
+	// blocks and the §1/§2 checksum holds the foundation prose — this holds
+	// EVERYTHING else (§3–§7 prose, headers, code fences, trailers), so the
+	// two-block mandate cannot quietly widen. #317's method rules restated as
+	// one hash: distil-never-extend, no renumbering, §-prose untouched.
+	const DOC_MINUS_TARGETS_SHA256 = '5a0f2d4bb019c53fd9c1cbc393922870c4f34fb8305e12b629cb838bca44f2da';
+
+	const docExcludingBlocks = (ids: string[]): string => {
+		const drop = new Set<number>();
+		for (const b of blocks) {
+			if (!ids.includes(b.id)) continue;
+			for (let n = b.startLine; n < b.startLine + b.lineCount; n += 1) drop.add(n);
+		}
+		return doc
+			.split('\n')
+			.filter((_, i) => !drop.has(i + 1))
+			.join('\n');
+	};
+
+	it('the ER-9 and ER-12 blocks both exist (the exclusion below must actually exclude something)', () => {
+		expect(blocks.some((b) => b.id === 'ER-9')).toBe(true);
+		expect(blocks.some((b) => b.id === 'ER-12')).toBe(true);
+	});
+
+	it('the doc minus the ER-9 and ER-12 blockquote runs hashes to its pre-#322 state', () => {
+		expect(
+			sha256(docExcludingBlocks(['ER-9', 'ER-12'])),
+			"#322's mandate is two blocks and nothing else — no renumbering, no §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: git show main:docs/architecture/entu-rights-and-visibility-model.md, drop the ER-9/ER-12 blockquote runs, sha256 the remainder"
+		).toBe(DOC_MINUS_TARGETS_SHA256);
 	});
 });

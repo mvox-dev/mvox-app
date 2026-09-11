@@ -173,7 +173,7 @@ But such a grant is inert. The read gate matches a reader's own person id (`user
 > **ER-2** — `_viewer:<entity-id>` on a non-person entity (e.g. an org) is accepted by the write path but inert at read time: the reference is written into `access` verbatim, but no reader's own person id matches an org id, so the grant confers no transitive "anyone in this org can see this" access.
 > Evidence: `entity.js:138,141-153` (write path accepts any existing-entity reference); `rights.js:84-94` (reference pushed verbatim into `access`). Distills §6.
 
-> **ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property's value is written into; `_inheritrights` decides whether a parent's rights cascade onto a child (§7.3). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.
+> **ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property's value is written into; `_inheritrights` decides whether a parent's rights cascade onto a child (ER-7). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.
 > Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.
 > Stands on: ER-18, ER-20, ER-1.
 
@@ -235,8 +235,9 @@ Live-confirmed 2026-09-09 on polyphony (synthetic), both halves, full raw reques
 > **ER-8** — The replace-on-new-direct-grant behavior in ER-6 is strictly same-entity, same-reference; it does not extend to parent→child propagation. Granting a reference `_owner` on a parent, which propagates down and covers a child via `_inheritrights`, does not delete that child's own pre-existing standalone direct grant for the same reference — propagation never touches a grant document on an entity it merely reaches.
 > Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.
 
-> **ER-9** — Direct-grant replacement (ER-6) runs in both directions and is non-monotonic: a lower tier granted second retires a higher one, not just the reverse. Since entity CREATE grants the creating caller `_owner` as one direct document (ER-5), a later explicit lower-tier grant to that same caller on that same entity silently demotes the creator from owner — the replace happens with no error and no notice.
-> Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json` ("Confirmed non-monotonic: a lower tier granted second retires a higher one too, not just the reverse").
+> **ER-9** — Since entity CREATE grants the creating caller `_owner` as one direct document (ER-5), a later explicit grant of any other direct tier to that same caller on that same entity replaces it (ER-6) and silently demotes the creator from owner — the replace happens with no error and no notice.
+> Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.
+> Corrected 2026-09-11: ranking wording removed; the claim is unchanged.
 
 ### 7.4 The `_parent` gating asymmetry — scoped to one probe, not general
 
