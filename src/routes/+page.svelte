@@ -665,6 +665,14 @@
 	// #15-shaped guard, per member id (see attendanceChangeQueue.ts doc).
 	let attendancePendingMemberIds = $state<Set<string>>(new Set());
 	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
+	// #327 — members whose last write for the CURRENTLY OPEN event RECONCILED
+	// successfully; mirrors #326's savedEventIds shape, scoped to the open
+	// panel (see attendanceQueue's callbacks below, which only touch this when
+	// `eventId === attendanceItem?.id` — the same per-(event,member) granularity
+	// the pending/failed sets already have). Reset on every panel open, which is
+	// what keeps the cue from leaking onto a different event's panel — the read
+	// path (open + load) never touches it, only a write settling does.
+	let attendanceSavedMemberIds = $state<Set<string>>(new Set());
 	// Per-event failed map: stores failed member IDs per event so that a write
 	// failure on a non-current event is not lost — when the conductor reopens that
 	// event later, the failures surface. (#84 review Finding 4)
@@ -2584,6 +2592,10 @@
 		// per-event map (a write that failed while the panel was on another event
 		// is surfaced when the conductor returns to it).
 		attendanceFailedMemberIds = new Set(attendanceFailedByEvent.get(item.id) ?? []);
+		// #327 — a saved cue reports a write, never a read: a fresh open (or
+		// reopen) starts with no cue at all, even for an event id that already
+		// carried one earlier in the session.
+		attendanceSavedMemberIds = new Set();
 
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const thisRequest = ++attendanceRequestId;
@@ -2718,6 +2730,13 @@
 				cleared.delete(memberId);
 				attendanceFailedMemberIds = cleared;
 			}
+			// #327 — and any stale SAVED cue from a previous, now-superseded write:
+			// the cue always describes the latest write, never a settled earlier one.
+			if (isPending && attendanceSavedMemberIds.has(memberId)) {
+				const cleared = new Set(attendanceSavedMemberIds);
+				cleared.delete(memberId);
+				attendanceSavedMemberIds = cleared;
+			}
 		},
 		reconcile(eventId, targetMemberId, entry) {
 			// #85 F1 fix: a successful attendance write invalidates the season
@@ -2748,6 +2767,12 @@
 			if (entry) next[targetMemberId] = entry;
 			else delete next[targetMemberId];
 			attendanceMap = next;
+			// #327 — the write settled: this member's row earns the saved cue. A
+			// reconciled NULL (a cleared record) announces too — it renders
+			// identically to never-marked, so the cue is the only distinguisher.
+			const saved = new Set(attendanceSavedMemberIds);
+			saved.add(targetMemberId);
+			attendanceSavedMemberIds = saved;
 		},
 		revert(eventId, targetMemberId, before) {
 			// #85 F1 fix: a failed write also invalidates the season summary cache
@@ -2791,6 +2816,14 @@
 			const failed = new Set(attendanceFailedMemberIds);
 			failed.add(targetMemberId);
 			attendanceFailedMemberIds = failed;
+			// #327 — failure and saved are mutually exclusive: a stale saved cue
+			// (already cleared by setPending at this attempt's start in practice)
+			// must not survive a failed write either way.
+			if (attendanceSavedMemberIds.has(targetMemberId)) {
+				const cleared = new Set(attendanceSavedMemberIds);
+				cleared.delete(targetMemberId);
+				attendanceSavedMemberIds = cleared;
+			}
 		}
 	});
 
@@ -2820,6 +2853,7 @@
 			error: attendanceError,
 			pendingMemberIds: attendancePendingMemberIds,
 			failedMemberIds: attendanceFailedMemberIds,
+			savedMemberIds: attendanceSavedMemberIds,
 			// #321 — `getRoster` is what fills `attendanceRoster`, so the panel
 			// states exactly what that read found.
 			membersPartial: rosterPartial,

@@ -41,6 +41,11 @@
 		pendingMemberIds?: ReadonlySet<string>;
 		// Members whose last write REJECTED — surfaces an inline save-failed line.
 		failedMemberIds?: ReadonlySet<string>;
+		// #327 — members whose last write RECONCILED successfully, same per-key
+		// Set shape as pendingMemberIds/failedMemberIds (mirrors #326's
+		// savedEventIds on the RSVP sibling): only the row whose member id
+		// reconciled shows the saved cue, never more than the key that settled.
+		savedMemberIds?: ReadonlySet<string>;
 		// #321 (PO ruling 2026-09-11) — the member read behind `members` came back
 		// PARTIAL. This panel is a CLOSED SET: a singer with no row here cannot be
 		// marked present at all, and her missing row reads as "she is not a member"
@@ -59,6 +64,7 @@
 		error = false,
 		pendingMemberIds = new Set<string>(),
 		failedMemberIds = new Set<string>(),
+		savedMemberIds = new Set<string>(),
 		membersPartial = false,
 		ontoggle,
 		onclose
@@ -187,6 +193,17 @@
 		}
 		return { present, absent, late };
 	});
+
+	// #327 issue Done-when bullet 3 (RED's stated choice of the two permitted
+	// behaviours) — the tally above derives from the OPTIMISTIC map, so while
+	// any member's write is in flight its counts include a value the server
+	// hasn't confirmed yet. Rather than thread a second, server-confirmed map
+	// through both host pages (a much wider diff), the tally says so INLINE:
+	// visibly marked exactly while `pendingMemberIds` is non-empty, gone the
+	// moment every write settles (then every counted value IS server-settled).
+	// A failed write is NOT marked — revert restores the pre-tap server truth,
+	// so the tally is accurate again; the per-row alert carries the failure.
+	const tallyUnconfirmed = $derived(pendingMemberIds.size > 0);
 </script>
 
 <!-- #113 review F4 — `aria-busy` belongs on the CONTAINER the focused control
@@ -322,11 +339,37 @@
 							{m.attendance_save_failed()}
 						</p>
 					{/if}
+					<!--
+						#327 — the SAVED cue, per member, in its own persistent node (never
+						folded into the failure line above): a live region must be mounted
+						BEFORE its first text change to be announced, so this renders
+						unconditionally, blank when the member is not in `savedMemberIds`.
+						VISIBLE (not sr-only) — the exact #326 shape (RsvpControl's
+						rsvp-saved-status): one combined visible+aria-live node.
+					-->
+					<p
+						data-testid="attendance-saved-status-{member.memberId}"
+						role="status"
+						aria-live="polite"
+						class="min-h-[16px] text-xs leading-[16px] text-ink-2"
+					>
+						{#if savedMemberIds.has(member.memberId)}{m.attendance_saved()}{/if}
+					</p>
 				</div>
 			{/each}
 		</div>
 		<p data-testid="attendance-tally" class="pt-1 text-[10px] text-ink-2" aria-live="polite">
 			{m.attendance_tally({ present: tally.present, absent: tally.absent, late: tally.late })}
+			<!--
+				#327 issue Done-when bullet 3 — the tally's own optimistic marking,
+				visible whenever any member's write is in flight (see
+				`tallyUnconfirmed` doc above).
+			-->
+			{#if tallyUnconfirmed}
+				<span data-testid="attendance-tally-unconfirmed" class="text-ink-2"
+					>{m.attendance_tally_unconfirmed()}</span
+				>
+			{/if}
 		</p>
 	{/if}
 </div>

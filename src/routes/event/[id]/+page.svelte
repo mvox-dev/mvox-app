@@ -441,6 +441,12 @@
 	// #15-shaped guard, per member id (attendanceChangeQueue.ts doc).
 	let attendancePendingMemberIds = $state<Set<string>>(new Set());
 	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
+	// #327 — members whose last write for THIS event's attendance RECONCILED
+	// successfully; feeds AttendanceSurface's `savedMemberIds` prop. Same
+	// isCurrentAttendanceWrite discrimination as attendanceMap/pending/failed
+	// below — a write that settles after a navigation/collective switch must
+	// never paint this page's now-different panel.
+	let attendanceSavedMemberIds = $state<Set<string>>(new Set());
 
 	/**
 	 * The ONE rights predicate this page owns — `manageRightsFrom`, the app's
@@ -714,6 +720,7 @@
 		attendanceRsvpMap = {};
 		attendancePendingMemberIds = new Set();
 		attendanceFailedMemberIds = new Set();
+		attendanceSavedMemberIds = new Set();
 	}
 
 	/** Membership + the viewer's own rsvp for THIS event. `g` guards against a
@@ -2508,6 +2515,9 @@
 		attendancePanelOpen = true;
 		attendancePanelLoading = true;
 		attendancePanelError = false;
+		// #327 — a saved cue reports a write, never a read: a fresh open (or
+		// reopen) starts with no cue at all.
+		attendanceSavedMemberIds = new Set();
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const evId = detail.id;
 		const g = generation;
@@ -2585,6 +2595,11 @@
 				const failed = new Set(attendanceFailedMemberIds);
 				failed.delete(targetMemberId);
 				attendanceFailedMemberIds = failed;
+				// #327 — and any stale SAVED cue from a previous, now-superseded write:
+				// the cue always describes the latest write, never a settled earlier one.
+				const saved = new Set(attendanceSavedMemberIds);
+				saved.delete(targetMemberId);
+				attendanceSavedMemberIds = saved;
 			}
 		},
 		reconcile(evId, targetMemberId, entry) {
@@ -2595,6 +2610,12 @@
 			if (entry) next[targetMemberId] = entry;
 			else delete next[targetMemberId];
 			attendanceMap = next;
+			// #327 — the write settled: the row earns the saved cue. A reconciled
+			// NULL (a cleared record) announces too — it renders identically to
+			// never-marked, so the cue is the only distinguisher.
+			const saved = new Set(attendanceSavedMemberIds);
+			saved.add(targetMemberId);
+			attendanceSavedMemberIds = saved;
 		},
 		revert(evId, targetMemberId, before) {
 			const stillCurrent = isCurrentAttendanceWrite(evId, targetMemberId);
@@ -2607,6 +2628,14 @@
 			const failed = new Set(attendanceFailedMemberIds);
 			failed.add(targetMemberId);
 			attendanceFailedMemberIds = failed;
+			// #327 — failure and saved are mutually exclusive (already cleared by
+			// setPending at this attempt's start in practice; kept here too so
+			// revert never depends on that ordering).
+			if (attendanceSavedMemberIds.has(targetMemberId)) {
+				const cleared = new Set(attendanceSavedMemberIds);
+				cleared.delete(targetMemberId);
+				attendanceSavedMemberIds = cleared;
+			}
 		}
 	});
 
@@ -4436,6 +4465,7 @@
 								error={attendancePanelError}
 								pendingMemberIds={attendancePendingMemberIds}
 								failedMemberIds={attendanceFailedMemberIds}
+								savedMemberIds={attendanceSavedMemberIds}
 								membersPartial={attendanceRosterPartial}
 								ontoggle={handleAttendanceToggle}
 								onclose={closeAttendancePanel}

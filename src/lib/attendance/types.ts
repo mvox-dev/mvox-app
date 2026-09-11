@@ -23,6 +23,9 @@ export interface AttendancePanel {
 	error: boolean;
 	pendingMemberIds: ReadonlySet<string>;
 	failedMemberIds: ReadonlySet<string>;
+	/** #327 — members whose last write RECONCILED successfully; threaded
+	 *  straight into AttendanceSurface's own prop of the same name. */
+	savedMemberIds: ReadonlySet<string>;
 	/** #321 (PO ruling 2026-09-11) — the member read behind `members` was
 	 *  partial. Travels with the rest of the panel because it is a fact ABOUT
 	 *  those rows: the surface states it inside itself, where a conductor

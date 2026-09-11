@@ -60,8 +60,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_loading: () => 'Loading attendance…',
 		attendance_ready: (p: { count: number }) => `Attendance loaded, ${p.count} members`,
 		attendance_save_failed: () => 'Could not save attendance.',
+		// #327 — the saved cue + tally's optimistic marking; this mock predates
+		// that slice, so both keys are added here rather than left to throw.
+		attendance_saved: () => 'Saved.',
 		attendance_tally: (p: { present: number; absent: number; late: number }) =>
 			`${p.present} present · ${p.absent} absent · ${p.late} late`,
+		attendance_tally_unconfirmed: () => 'Counts include unconfirmed changes.',
 		attendance_close: () => 'Close',
 		// #85 TA.4 — the recent-row attendance badge + season summary render
 		// unconditionally whenever the Recent section renders, so this file's

@@ -489,6 +489,7 @@
 							error={attendancePanel.error}
 							pendingMemberIds={attendancePanel.pendingMemberIds}
 							failedMemberIds={attendancePanel.failedMemberIds}
+							savedMemberIds={attendancePanel.savedMemberIds}
 							membersPartial={attendancePanel.membersPartial}
 							ontoggle={attendancePanel.ontoggle}
 							onclose={attendancePanel.onclose}
