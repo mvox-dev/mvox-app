@@ -24,7 +24,7 @@
 
 **Provenance key:** [P] = read directly by Palestrina this pass · [F] = read directly from source by Finn this pass (auth chain) · [PE] = live-probe verified by Pérotin (2026-09-08 addition, §7) — observed wire behavior against live Entu, not a source `file:line` read; narrower confidence than [P]/[F], flagged as such at point of use.
 
-**Identifier scheme (#317):** every citable rule below carries a stable identifier of the form `ER-<n>` — `n` a positive integer, no leading zeros, opaque and **creation-order only**. The number carries no positional meaning; it is never read as "lives in §n". An identifier is assigned once, is never reused, and is never renumbered. A superseded rule **keeps its identifier forever** and is marked `(superseded by ER-<m>, <date>)` on its definition's first line — superseding never frees the old number for reuse. **Where a rule carries a qualification — an exception, a boundary case, a direction it does not extend to — the qualification is itself a separately identified rule, and base and qualification name each other by ID: the qualification cites its base, and the base carries a `Qualifications: ER-<n>, …` line naming every rule that bounds it, so quoting the base whole shows that it is bounded. Never a clause, a parenthesis, or an "except" folded into the base rule's own sentence:** a qualifier living as a clause dies the moment anyone restates the sentence without it, which is exactly how the per-reference qualifier on the direct-grant-replacement rule was lost on 2026-09-10 (see ER-6 / ER-8 / ER-9 below, where the base rule and both its qualifications are three separate, cross-referenced identifiers). The existing `§1`…`§7.3` section numbers remain **navigation only** — how a human finds a rule by reading — and this scheme never renumbers them; the two numbering systems are independent and are never conflated.
+**Identifier scheme (#317):** every citable rule below carries a stable identifier of the form `ER-<n>` — `n` a positive integer, no leading zeros, opaque and **creation-order only**. The number carries no positional meaning; it is never read as "lives in §n". An identifier is assigned once, is never reused, and is never renumbered. A superseded rule **keeps its identifier forever** and is marked `(superseded by ER-<m>, <date>)` on its definition's first line — superseding never frees the old number for reuse. **Where a rule carries a qualification — an exception, a boundary case, a direction it does not extend to — the qualification is itself a separately identified rule, and base and qualification name each other by ID: the qualification cites its base, and the base carries a `Qualifications: ER-<n>, …` line naming every rule that bounds it, so quoting the base whole shows that it is bounded. Never a clause, a parenthesis, or an "except" folded into the base rule's own sentence:** a qualifier living as a clause dies the moment anyone restates the sentence without it, which is exactly how the per-reference qualifier on the direct-grant-replacement rule was lost on 2026-09-10 (see ER-6 / ER-8 / ER-9 below, where the base rule and both its qualifications are three separate, cross-referenced identifiers). A rule that cannot be stated without relying on another already-identified rule carries a `Stands on: ER-<n>, …` line naming the rules it depends on — the mirror relation to `Qualifications` (dependent → foundation, never the reverse), additive and one-way: a foundation names no dependents in return. The existing `§1`…`§7.3` section numbers remain **navigation only** — how a human finds a rule by reading — and this scheme never renumbers them; the two numbering systems are independent and are never conflated.
 
 ---
 
@@ -36,6 +36,15 @@ Every entity write runs `aggregateEntity` (`utils/aggregate.js`), which material
 - All actual property values always populate `private`. `domain` and `public` are selectively populated copies (§3).
 
 The buckets are **snapshots taken at write time**, not computed at read time. This is the single most important structural fact: a read returns whatever was last written into these objects.
+
+> **ER-18** — Every entity write runs `aggregateEntity`, which materializes three property objects on the stored document — `private`, `domain`, `public` — seeded empty alongside an `access` array by `propertiesToEntity`; all actual property values always populate `private`, with `domain`/`public` as selectively populated copies.
+> Evidence: `aggregate.js:312-320`. Distills §1; adds no new claim.
+
+> **ER-19** — The property buckets are snapshots taken at write time, not computed at read time: a read returns whatever was last written into `private`/`domain`/`public`, however stale.
+> Evidence: `aggregate.js:312-320` (the write that produces the snapshot). Distills §1; adds no new claim.
+
+> **ER-23** — The aggregated rights-tier arrays stored on an entity document — its own direct grants unioned with the grants fetched from its `_inheritrights` parents — are products of the same write-time `aggregateEntity` pass as the property buckets (ER-18): computed and stored at write time, not recomputed at read time.
+> Evidence: `aggregate.js:166-183` (parent grants fetched during the write), `aggregate.js:185-209` (the tier arrays assembled onto the stored document) — `entu-api` source-read 2026-09-11. Distills §1's write-time fact as it extends to rights-tier arrays; adds no new claim.
 
 ---
 
@@ -58,6 +67,12 @@ if (entu.userStr && entity.access?.map(x => x.toString())?.includes(entu.userStr
 First match wins. The route handler turns the `undefined` return into `403 "No accessible properties"` (`routes/[db]/entity/[_id]/index.get.js:97-102`).
 
 **Why `private` is robust:** `getAccessArray` (`utils/rights.js:76-97`) builds `access` by pushing the entity's own `_sharing` string in as a **literal** (`rights.js:80-82`) alongside each granted person reference (`rights.js:84-94`). A `private` entity gets the literal `'private'` in `access` — which matches neither the `'domain'` nor `'public'` branch, and is not a person id, so **only an explicit grant reaches it**. There is no string coincidence that could make `'private'` satisfy a `'domain'`/`'public'` check.
+
+> **ER-20** — `cleanupEntity` selects exactly one bucket by reader tier: an explicit grant reads `private`, else domain-tier access reads `domain`, else public-tier access reads `public`. First match wins; no bucket admitted returns `undefined`, which the route handler turns into `403 "No accessible properties"`.
+> Evidence: `entity.js:569-612,573-586` (bucket selection); `routes/[db]/entity/[_id]/index.get.js:97-102` (403 on no match). Distills §2; adds no new claim.
+
+> **ER-21** — Bucket selection is priority-ordered: an explicit grant outranks domain-tier access, which outranks public-tier access — an explicit-grant caller never falls through to `domain`/`public` even when those buckets would also admit them.
+> Evidence: `entity.js:573-586` (the if/else branch order; quote ER-20 for the branches themselves). Distills §2; adds no new claim.
 
 ---
 
@@ -93,6 +108,7 @@ A property whose definition is `private` (or unset) satisfies neither branch →
 
 > **ER-1** — Bucket exposure is a three-gate AND, narrowest wins: (1) the prop-def's own `_sharing`, (2) the entity type's own `_sharing` as a cap, (3) the entity instance's own `_sharing` as a second retention gate. A property value reaches a **tier-admitted** reader — one admitted by the entity's `domain`/`public` sharing, holding no explicit rights grant — only if all three gates allow it. A reader admitted by an explicit grant is not bounded by these gates at all, and this formula does not hold for them: see ER-4.
 > Evidence: `aggregate.js:86,94,113-121` (gates 1–2); `aggregate.js:269-275` (gate 3); synthesized in `teams/mvox-dev/memory/perotin.md:1263-1272` (2026-08-08: "a visibility scope is only complete when it names all three"); the omitted-gate re-widening this caused is `scripts/migrations/lib/widen-member-refs-2026-08-07.ts`. Distills §3; adds no new claim.
+> Stands on: ER-18, ER-20.
 > Qualifications: ER-4.
 
 ---
@@ -141,6 +157,9 @@ The domain read-gate needs `entu.userStr` truthy (§2). Its value:
 > **ER-17** — A `systemUser` (service-key) caller bypasses the `_owner` requirement of ER-11 on the WRITE path: the rights-property write check is skipped entirely for it. Claimed for the write path only — the DELETE gate (ER-11's DELETE citation) carries no such term.
 > Evidence: `entity.js:115-121` — the `&& !entu.systemUser` term at `entity.js:116`; `entu-api` source-read 2026-09-10.
 
+> **ER-22** — The rights-type properties are a fixed set of seven: `rightTypes = ['_noaccess','_viewer','_expander','_editor','_owner','_sharing','_inheritrights']`. The set is consumed only as a membership test (`rightTypes.includes(property.type)`), so the literal's order carries no rank — it also holds `_sharing`/`_inheritrights`, which are not grant tiers at all.
+> Evidence: `entity.js:21-29` (the literal); `entity.js:113` and `routes/[db]/property/[_id]/index.delete.js:105,140` (the membership tests, its only consumers). Distills §5; adds no new claim.
+
 ---
 
 ## 6. Rights references are NOT type-constrained — but entity-to-entity grants confer nothing  [P]
@@ -154,8 +173,9 @@ But such a grant is inert. The read gate matches a reader's own person id (`user
 > **ER-2** — `_viewer:<entity-id>` on a non-person entity (e.g. an org) is accepted by the write path but inert at read time: the reference is written into `access` verbatim, but no reader's own person id matches an org id, so the grant confers no transitive "anyone in this org can see this" access.
 > Evidence: `entity.js:138,141-153` (write path accepts any existing-entity reference); `rights.js:84-94` (reference pushed verbatim into `access`). Distills §6.
 
-> **ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property's value is written into (§1–§3); `_inheritrights` decides whether a parent's rights cascade onto a child (§7.3). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.
-> Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis, §1–§3); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over §1–§2 and §7.3; adds no new claim.
+> **ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property's value is written into; `_inheritrights` decides whether a parent's rights cascade onto a child (§7.3). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.
+> Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.
+> Stands on: ER-18, ER-20, ER-1.
 
 ---
 
@@ -173,6 +193,7 @@ Probe artifacts: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read
 
 > **ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (§3) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.
 > Evidence: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`.
+> Stands on: ER-18, ER-20.
 
 > **ER-4** — Tier-admitted and grant-admitted readers get different answers to "what can this person see?": for a tier-admitted reader (domain/public, no explicit grant), exposure is the gate conjunction stated in ER-1 (quote ER-1 for the gates; they are not re-enumerated here). For a grant-admitted reader (holds any explicit `_owner`/`_editor`/`_viewer`/`_expander` grant), that formula is wrong — ER-3 established a grant-admitted reader receives the entire private bucket, and prop-def-tier `_sharing` filters nothing.
 > Evidence: `aggregate.js:113-121,269-275` (the gates ER-1 enumerates); ER-3 above (§7.1's operative sentence). Distills §7.1 + §3.
@@ -207,8 +228,9 @@ Live-confirmed 2026-09-09 on polyphony (synthetic), both halves, full raw reques
 > Evidence: `scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts`, `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-crede-editor-disappear-repro-live-2026-09-09T16-56-49-211Z.json`, `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.
 > Qualifications: ER-8, ER-9.
 
-> **ER-7** — Direct and inherited rights are separate, additive layers on an entity's aggregated rights: direct grants follow ER-6; inherited grants cascade in via `_inheritrights` from parents (§1–§2). Only the direct layer is single-tier-per-reference (ER-6); the inherited layer carries no such constraint.
+> **ER-7** — Direct and inherited rights are separate, additive layers on an entity's aggregated rights: direct grants follow ER-6; inherited grants cascade in via `_inheritrights` from parents. Only the direct layer is single-tier-per-reference (ER-6); the inherited layer carries no such constraint.
 > Evidence: `aggregate.js:166-183` (with `_inheritrights` true and at least one parent reference, `getParentRights` fetches the parents' rights), `rights.js:14,40-44` (each fetched grant stamped `inherited: true`), `aggregate.js:185-209` (parent grants unioned with the entity's own into the aggregated tier arrays) — `entu-api` source-read 2026-09-10; direct-layer half per ER-6's probes.
+> Stands on: ER-23.
 
 > **ER-8** — The replace-on-new-direct-grant behavior in ER-6 is strictly same-entity, same-reference; it does not extend to parent→child propagation. Granting a reference `_owner` on a parent, which propagates down and covers a child via `_inheritrights`, does not delete that child's own pre-existing standalone direct grant for the same reference — propagation never touches a grant document on an entity it merely reaches.
 > Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.
