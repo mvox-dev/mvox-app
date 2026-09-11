@@ -655,5 +655,11 @@
 	"links_cancel": "Loobu",
 	"links_remove": "Eemalda",
 	"links_move_up": "Liiguta üles",
-	"links_move_down": "Liiguta alla"
+	"links_move_down": "Liiguta alla",
+	"links_reorder_failed": "Linkide järjekorda ei õnnestunud salvestada — kuvatakse serveris olevat järjekorda.",
+	"links_reorder_failed_stale": "Linkide järjekorda ei õnnestunud salvestada ja praegust järjekorda ei õnnestunud uuesti lugeda. Serveris oleva järjekorra nägemiseks laadi leht uuesti.",
+	"links_reorder_saved": "Linkide järjekord salvestatud.",
+	"links_create_failed": "Linki ei õnnestunud luua. Proovi uuesti.",
+	"links_update_failed": "Linki ei õnnestunud muuta. Proovi uuesti.",
+	"links_remove_failed": "Linki ei õnnestunud eemaldada. Proovi uuesti."
 }

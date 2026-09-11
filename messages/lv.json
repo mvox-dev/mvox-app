@@ -656,5 +656,11 @@
 	"links_cancel": "Atcelt",
 	"links_remove": "Noņemt",
 	"links_move_up": "Pārvietot uz augšu",
-	"links_move_down": "Pārvietot uz leju"
+	"links_move_down": "Pārvietot uz leju",
+	"links_reorder_failed": "Neizdevās saglabāt saišu secību — tiek rādīta serverī saglabātā secība.",
+	"links_reorder_failed_stale": "Neizdevās saglabāt saišu secību, un pašreizējo secību neizdevās nolasīt atkārtoti. Pārlādējiet lapu, lai redzētu serverī saglabāto secību.",
+	"links_reorder_saved": "Saišu secība saglabāta.",
+	"links_create_failed": "Neizdevās izveidot saiti. Mēģiniet vēlreiz.",
+	"links_update_failed": "Neizdevās atjaunināt saiti. Mēģiniet vēlreiz.",
+	"links_remove_failed": "Neizdevās noņemt saiti. Mēģiniet vēlreiz."
 }

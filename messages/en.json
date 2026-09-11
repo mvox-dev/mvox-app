@@ -655,5 +655,11 @@
 	"links_cancel": "Cancel",
 	"links_remove": "Remove",
 	"links_move_up": "Move up",
-	"links_move_down": "Move down"
+	"links_move_down": "Move down",
+	"links_reorder_failed": "The link order couldn't be saved — showing the order the server holds.",
+	"links_reorder_failed_stale": "The link order couldn't be saved, and the current order couldn't be read back. Reload the page to see what the server holds.",
+	"links_reorder_saved": "Link order saved.",
+	"links_create_failed": "Couldn't create the link. Try again.",
+	"links_update_failed": "Couldn't update the link. Try again.",
+	"links_remove_failed": "Couldn't remove the link. Try again."
 }
