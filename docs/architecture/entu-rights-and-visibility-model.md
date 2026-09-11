@@ -135,8 +135,8 @@ The domain read-gate needs `entu.userStr` truthy (§2). Its value:
 
 **Not "one JWT = one collective":** if the same OAuth identity has a real person in two dbs, one JWT carries `accounts` for both and reads `domain` in both. This is not a boundary bypass (each requires a genuine person in that db). Ruled out of scope for mvox 2026-08-05 (person-per-collective stands; cross-install identity is Entu's concern) — recorded here as a mechanism fact, not an open question.
 
-> **ER-10** — The database boundary is a read boundary: "One Entu install per collective → `domain` = in-collective visibility" holds, enforced by code, not by data state (§4). A user authenticated against install X cannot read `domain` entities in install Y unless they genuinely have a `person` entity in Y.
-> Evidence: `middleware/auth.js:21,31-33,46-48`; `routes/auth/index.get.js:132,141-190,254`.
+> **ER-10** — The database boundary is a read boundary: "One Entu install per collective → `domain` = in-collective visibility" holds, enforced by code, not by data state. A user authenticated against install X cannot read `domain` entities in install Y unless they genuinely have a `person` entity in Y.
+> Evidence: `middleware/auth.js:21,31-33,46-48`; `routes/auth/index.get.js:132,141-190,254`. Distills §4.
 
 ---
 
@@ -175,7 +175,7 @@ But such a grant is inert. The read gate matches a reader's own person id (`user
 
 > **ER-12** — `_sharing` and `_inheritrights` govern different axes: `_sharing` decides which bucket (`private`/`domain`/`public`) a property's value is written into; `_inheritrights` decides whether a parent's rights cascade onto a child (ER-7). Conflating the two axes answers "who can see this?" wrongly in either direction. This rule makes no claim about when either axis is evaluated — it distinguishes what each one decides.
 > Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.
-> Stands on: ER-18, ER-20, ER-1.
+> Stands on: ER-7, ER-18, ER-20, ER-1.
 
 ---
 
@@ -191,7 +191,7 @@ Corroborates §2's `cleanupEntity` branch (line 42-43: any grant matching `acces
 
 Probe artifacts: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`, `scripts/migrations/probes/probe-294-gap-a-b-rights-level-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`, `scripts/migrations/seed-results/probe-294-gap-a-b-rights-level-live-2026-09-08T10-28-03-167Z.json`.
 
-> **ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (§3) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.
+> **ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (ER-1) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.
 > Evidence: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`.
 > Stands on: ER-18, ER-20.
 
