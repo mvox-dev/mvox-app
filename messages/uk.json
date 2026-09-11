@@ -346,6 +346,7 @@
 	"repertoire_add_programme_button": "Додати до програми",
 	"repertoire_inactive_count": "+{count} неактивних",
 	"repertoire_manage_error": "Не вдалося зберегти зміну — спробуйте ще раз.",
+	"repertoire_manage_saved": "Зміну збережено.",
 	"repertoire_pdf_link_aria_label": "Відкрити PDF: {work}",
 	"repertoire_borrow_link_aria_label": "Позичити: {work}",
 	"repertoire_external_link_aria_label": "Відкрити {domain}: {work} (відкриється в новому вікні)",

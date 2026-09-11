@@ -344,6 +344,7 @@
 	"repertoire_add_programme_button": "Lisa kavasse",
 	"repertoire_inactive_count": "+{count} mitteaktiivset",
 	"repertoire_manage_error": "Muudatust ei õnnestunud salvestada — proovi uuesti.",
+	"repertoire_manage_saved": "Muudatus salvestatud.",
 	"repertoire_pdf_link_aria_label": "Ava PDF: {work}",
 	"repertoire_borrow_link_aria_label": "Laenuta: {work}",
 	"repertoire_external_link_aria_label": "Ava {domain}: {work} (avaneb uues aknas)",

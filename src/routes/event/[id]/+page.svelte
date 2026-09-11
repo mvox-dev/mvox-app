@@ -355,6 +355,16 @@
 	// yet decided; RepertoireElement's own default (render) applies.
 	let pickableWorksVisible = $state<boolean | undefined>(undefined);
 	let managePendingKeys = $state<Set<string>>(new Set());
+	// #324 — this page's own `repertoireQueue` failure/saved signals (the
+	// agenda's #91 `manageError` idiom, propagated here since this page had
+	// none: `revert()` was console.error + a silent refetch). Scoped to THIS
+	// page, distinct from the agenda page's own same-named state.
+	let manageError = $state(false);
+	// #324/#267 shape — persistent sr-only role="status" region
+	// (profile-roster-names-status idiom): mounted blank, text set
+	// imperatively on a successful settle, cleared at the START of the next
+	// attempt (never on a timer).
+	let manageStatus = $state('');
 
 	// ── #262 — schedule_item section state ────────────────────────────────────
 	// Loaded in `loadComposeSurfaces` alongside `workRows`, under the SAME `g`
@@ -667,6 +677,13 @@
 		libraryPickersLoading = true;
 		libraryPickersLoadSucceeded = false;
 		managePendingKeys = new Set();
+		// #324 review F1 — the write cues go with the rows they describe, exactly
+		// as `resetSeriesState` clears both `seriesError` and `seriesStatus` a
+		// few lines up: a failure raised for the event being left must never
+		// caption the next one's works section, and the sr-only region must not
+		// still read "saved" from an older event's settle.
+		manageError = false;
+		manageStatus = '';
 		scheduleRows = [];
 		scheduleLoaded = false;
 		scheduleAddOpen = false;
@@ -1810,18 +1827,29 @@
 			if (pending) next.add(key);
 			else next.delete(key);
 			managePendingKeys = next;
+			// A fresh attempt clears the previous failure/saved cue — she is
+			// trying again (agenda's own `manageError` rule, #324 propagates it
+			// to `manageStatus` too: never a stale "saved" beside a live retry).
+			if (pending) {
+				manageError = false;
+				manageStatus = '';
+			}
 		},
 		reconcile(key) {
 			// Only a CREATE needs the server (its id is assigned there); every
 			// other write kind already holds the authoritative value locally —
 			// same economy the agenda's own queue callbacks apply.
 			if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorks();
+			// #324 — the settle itself must say so, for every write kind.
+			manageStatus = m.repertoire_manage_saved();
 		},
 		revert(key) {
 			console.error('event detail: repertoire write failed', key);
 			// None of these writes is atomic — refetch shows the TRUTH rather than
 			// a rolled-back-but-possibly-wrong local guess (agenda's own F5 rule).
 			refreshWorks();
+			// #324 — the agenda's own `manageError` idiom, propagated to this page.
+			manageError = true;
 		}
 	});
 
@@ -4314,6 +4342,22 @@
 							onmoveitem={handleMoveItem}
 							onaddprogramitem={handleAddProgramItem}
 						/>
+						<!-- #324 — a management write that failed. Its optimistic change is
+						     already rolled back by the time this renders, so without the
+						     message the value would just snap back and read as a bug
+						     (the agenda page's own #91 `manageError` idiom, propagated). -->
+						{#if manageError}
+							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">
+								{m.repertoire_manage_error()}
+							</p>
+						{/if}
+						<!-- #324/#267 shape — persistent sr-only role="status" region,
+						     mounted from first render (a live region announces only
+						     CHANGES to its contents) so a settle is distinguishable from
+						     silence even when nothing failed. -->
+						<div data-testid="repertoire-manage-status" role="status" aria-live="polite" class="sr-only">
+							{manageStatus}
+						</div>
 					</section>
 				{/if}
 

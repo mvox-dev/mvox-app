@@ -561,6 +561,17 @@
 	// copies join sources — since either coming back empty misreads as "nothing
 	// here" (no rows, or rows with no labels and an empty add-work select).
 	let panelRepertoireError = $state(false);
+	// #324 — `panelQueue`'s own failure/saved signals, distinct from the READ
+	// failure above (`panelRepertoireError`/`season_manage_list_load_error`):
+	// a rejected WRITE must not masquerade as a failed list load. Scoped to
+	// the panel, distinct from the agenda-side `manageError` this same page
+	// already carries for its OWN (untouched) `repertoireQueue`.
+	let panelManageError = $state(false);
+	// #324/#267 shape — persistent sr-only role="status" region
+	// (profile-roster-names-status idiom): mounted blank, text set
+	// imperatively on a successful settle, cleared at the START of the next
+	// attempt (never on a timer).
+	let panelManageStatus = $state('');
 	// #311 — `loadPanelRepertoire` had NO loading signal at all before this
 	// (research-311: zero grep hits), so the panel's Add Work control had
 	// nothing sticky to key hiding off. True before either of its two reads
@@ -2132,6 +2143,12 @@
 			if (pending) next.add(key);
 			else next.delete(key);
 			panelPendingKeys = next;
+			// A fresh attempt clears the previous failure/saved cue — same rule
+			// as the agenda-side queue's own `manageError` above.
+			if (pending) {
+				panelManageError = false;
+				panelManageStatus = '';
+			}
 		},
 		// #234 SYNC — a repertoire_item is a child of the SEASON, so the same row
 		// can be showing on an unprogrammed event's fallback works line too.
@@ -2141,10 +2158,15 @@
 		reconcile() {
 			refreshPanelRepertoire();
 			refreshWorksAfterWrite();
+			// #324 — the settle itself must say so.
+			panelManageStatus = m.repertoire_manage_saved();
 		},
 		revert() {
 			refreshPanelRepertoire();
 			refreshWorksAfterWrite();
+			// #324 — the panel had NO failure signal at all before this; the
+			// agenda-side queue's own `manageError` is the precedent this matches.
+			panelManageError = true;
 		}
 	});
 
@@ -3447,6 +3469,13 @@
 		panelCopies = [];
 		panelPendingKeys = new Set();
 		panelRepertoireError = false;
+		// #324 review F1 — the WRITE cues belong to the panel's subject just as
+		// the READ failure one line up does (the agenda's own `resetManagement`
+		// clears its `manageError` the same way): a rejected write on the season
+		// being left must never stand over the next season's rows, and the
+		// sr-only region must not still read "saved" from the old season.
+		panelManageError = false;
+		panelManageStatus = '';
 		// #311 — reached only where the rows above are, so the panel's next open
 		// starts undecided rather than carrying a stale collective's answer.
 		panelRepertoireLoading = false;
@@ -7388,6 +7417,34 @@
 										onstatuschange={handlePanelStatusChange}
 										onremoveitem={handlePanelRemoveItem}
 									/>
+									<!-- #324 — a panel management write that failed. Its optimistic
+									     change is already rolled back by the time this renders;
+									     without the message the value would just snap back and read
+									     as a bug (the agenda-side queue's own `manageError` idiom,
+									     propagated to this section). DISTINCT node from
+									     `season-manage-repertoire-error` above: a rejected WRITE is
+									     never a failed list load. -->
+									{#if panelManageError}
+										<p
+											data-testid="repertoire-manage-error"
+											role="alert"
+											class="mt-1 text-xs text-red-700"
+										>
+											{m.repertoire_manage_error()}
+										</p>
+									{/if}
+									<!-- #324/#267 shape — persistent sr-only role="status" region,
+									     mounted from first render (a live region announces only
+									     CHANGES to its contents) so a settle is distinguishable from
+									     silence even when nothing failed. -->
+									<div
+										data-testid="repertoire-manage-status"
+										role="status"
+										aria-live="polite"
+										class="sr-only"
+									>
+										{panelManageStatus}
+									</div>
 								</div>
 							</div>
 							{/if}

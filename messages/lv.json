@@ -345,6 +345,7 @@
 	"repertoire_add_programme_button": "Pievienot programmai",
 	"repertoire_inactive_count": "+{count} neaktīvi",
 	"repertoire_manage_error": "Neizdevās saglabāt izmaiņas — mēģini vēlreiz.",
+	"repertoire_manage_saved": "Izmaiņas saglabātas.",
 	"repertoire_pdf_link_aria_label": "Atvērt PDF: {work}",
 	"repertoire_borrow_link_aria_label": "Aizņemties: {work}",
 	"repertoire_external_link_aria_label": "Atvērt {domain}: {work} (atveras jaunā logā)",

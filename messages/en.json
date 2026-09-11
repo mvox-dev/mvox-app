@@ -344,6 +344,7 @@
 	"repertoire_add_programme_button": "Add to programme",
 	"repertoire_inactive_count": "+{count} inactive",
 	"repertoire_manage_error": "Could not save that change — try again.",
+	"repertoire_manage_saved": "Change saved.",
 	"repertoire_pdf_link_aria_label": "Open the PDF for {work}",
 	"repertoire_borrow_link_aria_label": "Borrow {work}",
 	"repertoire_external_link_aria_label": "Open {domain} for {work} (opens in a new window)",
