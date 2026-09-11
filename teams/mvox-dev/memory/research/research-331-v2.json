@@ -1,0 +1,29 @@
+{
+  "_meta": "research-331 v2 (wf_2a11c2fd-a9f, 2/2 clean) — verified against the AMENDED 2026-09-11 16:56 body (banner asserted on the fetched body per the exact-string guard). Read at origin/main 07e9a4da (pre-pack lines — [323-328] pack merging; re-grep by name at args time; #324 collision is CONFIRMED not speculative). v1 research killed, nothing carried. (*MVOX:Palestrina*)",
+  "chain": {
+    "link_a": "editionUnknown.ts:53-54 — rowEditionUnknown opens `if (row.kind !== 'repertoire') return false; if (!partial) return false;`",
+    "link_b": "AgendaList.svelte:351 — `pickableEditionsPartial={worksManage?.pickableEditionsPartial ?? false}`",
+    "link_c": "routes/+page.svelte:2470-2474 — worksManage $derived returns undefined for rights-less reader (docstring says so explicitly)",
+    "link_d": "event/[id]/+page.svelte:4306 passes libraryEditionsPartial directly; assigned ONLY in loadManagePickers :1722 (editor-gated at :1145), default false (:325), reset false (:655)",
+    "conclusion": "CONFIRMED: rights-less reader's partial is false on BOTH pages; the reader unknown branch (RepertoireElement :513-519, whose own comment names the non-editor viewer) can never render for that audience."
+  },
+  "discard_site": {
+    "where": "workRows.ts loadWorksByEventId :172-197 — Promise.all incl. listAllEditions; only editionsRead.items consumed; .truncated never touched",
+    "comment": "The #321-era comment (revised once already) instructs future sweeps to leave the discard alone — 'a truncation here hides no item... costs a blank label'. v2's refutation verified: sound for name/composer (degrade to '' rendered as blank), WRONG for edition — RepertoireElement's terminal {:else} :520-521 renders editionName '' as m.repertoire_no_edition() = a positive absence claim (data-testid work-no-edition). Comment must be corrected in the same change or the fix invites reversal."
+  },
+  "return_shape": {
+    "current": "Promise<Record<string, WorkRow[]>> — bare map, pinned by workRows.spec.ts toEqual ({} case + full-literal case at :329, no truncated field)",
+    "consumers": "FIVE live .then sites: routes/+page.svelte :1612, :1667, :1813 (refreshWorksAfterWrite); event/[id] :1133, :1787 (refreshWorks)",
+    "mock_blast": "~30-40 page-spec files mock loadWorksByEventId resolving bare maps ({} / {ev: [...]})",
+    "design_fork": "HIGHEST-LEVERAGE (blast agent): thread truncated as a new OPTIONAL PER-WorkRow FIELD instead of a top-level {rows, truncated} wrapper — the wrapper breaks all ~30+ mocks; the per-row field breaks none. workRows.spec.ts :329 full-literal still updates under the full-shape-toEqual law either way. Args states the choice."
+  },
+  "wrapper_split": "RepertoireElement's local rowEditionUnknown(row) wrapper feeds BOTH the editor branch (~:494) and the reader branch (~:513) off the single pickableEditionsPartial prop — editor-byte-identical fence + reader fix requires TWO differently-fed call sites, not a prop rename.",
+  "item4_shape": "Under a complete read with a dangling/unnameable pin, every branch misses (editor-unknown false, options empty, label '', reader-unknown false) → falls to terminal {:else} = known-absent claim. Dropping the partial precondition for pin-we-cannot-name only = the splittable secondary.",
+  "tests": {
+    "no_reader_tests_exist": "CORRECTED by Gama on-issue (comment 5635682393): true of the two PAGE suites only. RepertoireElement.edition-unknown-pin.spec.ts:135 IS a reader test ('a non-editor reading the same row gets the unknown wording...') and is GREEN today — the harness hands partial:true, the one input no page ever hands a reader; it certifies the defect's absence. ACCEPTANCE CONSEQUENCE for args-331: #331 must NOT close on component-level reader tests (more will go green with the defect intact); the gate is PAGE-LEVEL tests on both pages, viewer with no manage rights, truncated read. Leave :135 alone — correct test of a correct component; the wiring fix stops it lying without touching it. (Instance of partial-assertions-hide-bugs: wrong-mock-wire.)",
+    "flips": "workRows.spec.ts shape pins move with the chosen shape; any spec asserting work-no-edition for a non-empty-editionId fixture under truncation flips (enumerate at args time post-pack)."
+  },
+  "reset_sites": "worksByEventId resets to {} at THREE routes/+page.svelte sites (~:896, ~:955, ~:1284), each beside a sibling partial-flag reset — the new reader-truncated state must reset at all three or a stale flag survives a collective switch.",
+  "pack_collisions": "#324 edits event/[id] refreshWorks() — the EXACT function #331 must edit (confirmed, not speculative). All pack slices touch messages/*.json. args-331: fresh re-read of refreshWorks + RepertoireElement + locale files post-pack; no pre-pack line anchors.",
+  "fences": "repertoire_edition_unknown wording UNCHANGED (ships in 4 locales); editor-facing behaviour byte-identical to 25d72cd; NO new read on any path; known-absent + resolved-name byte-identical for readers too."
+}

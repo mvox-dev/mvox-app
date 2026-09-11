@@ -79,6 +79,17 @@ let _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
 // verifies the file pre-launch with a jq summary (task order, issue numbers),
 // never a full Read. Sonnet, not haiku: the loader's one job is verbatim
 // fidelity of long prompt strings.
+//
+// RESUME TRAP (learned live 2026-09-11, cost one stale-RED dispatch): the run
+// cache is PREFIX-based — resume replays the longest UNCHANGED prefix of
+// agent() calls, and LOAD is the FIRST call. Cache-busting LOAD to pick up an
+// amended args file therefore invalidates EVERYTHING (all completed slices
+// re-dispatch live against a repo where they already merged); NOT busting it
+// means the loader's cached result silently serves the OLD file. So
+// amend-and-resume is unusable in argsFile mode. Recovery from a mid-pack
+// halt: derive a REMAINDER args file (landed tasks removed; the halted task's
+// prompt amended, skipRed:true if its RED is committed, an explicit
+// checkout-the-existing-branch first action) and launch FRESH.
 const ARGS_SCHEMA = {
   type: 'object',
   properties: {
@@ -92,7 +103,7 @@ const ARGS_SCHEMA = {
 if (_args.argsFile) {
   phase('LOAD')
   const loaded = await agent(
-    'Read the JSON file at ' + _args.argsFile + ' and return its ENTIRE parsed content as your StructuredOutput object. Every field and every string VERBATIM — no summarizing, no paraphrasing, no added fields, no dropped fields. Copy long prompt strings exactly. Do not read any other file or take any other action. Before returning, self-check: the number of entries in your tasks array must equal the number in the file.',
+    'Read the JSON file at ' + _args.argsFile + ' and return its ENTIRE parsed content as your StructuredOutput object. Every field and every string VERBATIM — no summarizing, no paraphrasing, no added fields, no dropped fields. Copy long prompt strings exactly. Do not read any other file or take any other action. Before returning, self-check: the number of entries in your tasks array must equal the number in the file. (Re-read the CURRENT file content — it may have been amended since a prior run.)',
     { label: 'load-args', phase: 'LOAD', schema: ARGS_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
   if (!loaded || !Array.isArray(loaded.tasks) || loaded.tasks.length === 0) {
