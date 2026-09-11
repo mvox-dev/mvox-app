@@ -324,6 +324,54 @@ Also settled this pass, so it is not re-litigated: the §-section **prose** keep
 (15:27Z, "Originals untouched is right"), not a missed split — the identified blocks are the citable
 layer. Flagging the prose would YELLOW a PO decision.
 
+## [GOTCHA-CHECKSUM-FENCE-EXEMPTION-IS-AN-OPEN-PATH] 2026-09-11, #320 r5
+
+A checksum pin over a document region is only as tight as its **normalization**, and every line the
+normalization strips is a path the fence is not on. #320's fence hashes §1→§3 with
+`.filter((l) => !l.startsWith('>'))` so the slice's sanctioned ER blockquotes don't break the pin. That
+closes every *modification* path — I probed seven and all seven moved the hash: both headings, §2 code
+lines and code comments outside the nine pinned sentences, the `Why private is robust` paragraph, the
+literal-`'private'` argument, deleting a pinned sentence, and even blockquote-*izing* a pinned line
+(stripping it changes the kept set). But **adding** a bare non-ER blockquote to §1 sails through green,
+and I demonstrated it carrying a claim that contradicts §1 outright.
+
+**The tell is a comment narrower than its code**: the comment says "minus the ER blockquotes this slice
+is sanctioned to add", while the code exempts *every* blockquote line. Where those two disagree, the code
+is the fence and the comment is the intent — so the gap is exactly the difference. **Check every
+checksum/normalization fence by asking what its strip step makes invisible, then try to ADD something
+there** — modification probes alone certify the half everyone already thinks about. Fix shape: exempt
+only lines belonging to a block whose first line matches the ER-definition pattern, so a non-ER
+blockquote inside the fenced region fails loudly.
+
+Generalises as a section-I instance (a guard is a property of a PATH): a normalization *is* a path
+enumeration, written as code rather than prose. Sibling of the finding that prompted it — the round-4
+nine-sentence presence list had the same shape, pinning nine paths and leaving the rest of the region
+open.
+
+**Method note for this doc family (#318/#319 will add more fences):** re-derive any claimed pin yourself
+from `git show main:<path>` through the same normalization, reimplemented from the comment's prose rather
+than copy-pasted. On #320 that also proved the pin certifies MAIN rather than branch self-agreement —
+main's slice drops **zero** blockquote lines, and both sides normalize to the same 33 lines / 2025 bytes,
+which is what rules out the strip discarding real prose.
+
+**Closed at `cd56721`** — exemption narrowed to runs whose first line matches `DEFINITION_FIRST_LINE`.
+Re-derived independently: pin unchanged (`113c0327…`, 2025 prose bytes on both main and tip, so nothing
+was repinned) and the smuggled-note case now moves the hash to `c8b7e07e…`.
+
+**[STAND-DOWN, premise named] one level deeper, NOT pressed.** Per the #305 lesson I asked for the case
+below the one the fix names: a line appended **inside an existing ER block's contiguous `>` run** (no
+blank line between) is still exempt — measured, the hash stays exactly at the pin. A non-ER blockquote
+separated by a blank line IS caught, so the run boundary reads markdown correctly. I did not press it, on
+three premises: (a) the text lands inside a rule block, so it surfaces whenever anyone quotes that rule,
+which is the identifier scheme's whole purpose — unlike the closed hole, which hid prose in §1/§2
+attributed to nothing; (b) it stays bound by the 12-line/1200-char caps, the evidence-line rule and the
+exactly-one content probes; (c) ER-18..ER-23 are #320's own reviewed deliverable, and `UNTOUCHED_SHA256`
+deliberately pins only the 13 pre-#320 blocks.
+
+**Re-open when** any of those three goes false — in particular, **once #320 merges those blocks stop being
+the live deliverable, so the cheap close is adding ER-18..ER-23 to `UNTOUCHED_SHA256` in the next slice
+that touches this spec (#318).** No new machinery needed; the mechanism is already there.
+
 ## PO standing rules — pointer only
 
 **The binding text is the "PO standing rules" section of `architecture-decisions.md`. Read it there;

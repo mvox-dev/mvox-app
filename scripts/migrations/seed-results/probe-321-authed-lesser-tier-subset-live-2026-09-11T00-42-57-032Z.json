@@ -1,0 +1,141 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#321 — authenticated-lesser-tier half: for a caller whose rights admit a SUBSET of a real collection (direct _viewer on 2 of 3 children), does count report the caller-visible subset or the raw total? Completes the [unverified] half left open by probe-321-list-count-semantics-2026-09-11.ts (anonymous tier was already confirmed clean).",
+  "ledger": [
+    {
+      "step": "create-container",
+      "outcome": "created",
+      "id": "6aa34e8e31ced11fa92bb79a"
+    },
+    {
+      "step": "create-children",
+      "outcome": "created",
+      "ids": [
+        "6aa34e8e31ced11fa92bb7a2",
+        "6aa34e8e31ced11fa92bb7aa",
+        "6aa34e8e31ced11fa92bb7b2"
+      ]
+    },
+    {
+      "step": "create-tester",
+      "outcome": "created",
+      "id": "6aa34e8f31ced11fa92bb7ba"
+    },
+    {
+      "step": "mint-tester-key",
+      "outcome": "minted",
+      "testerId": "6aa34e8f31ced11fa92bb7ba",
+      "note": "raw key never logged"
+    },
+    {
+      "step": "grant-viewer-subset",
+      "outcome": "granted",
+      "grantedTo": [
+        "6aa34e8e31ced11fa92bb7a2",
+        "6aa34e8e31ced11fa92bb7aa"
+      ],
+      "notGranted": "6aa34e8e31ced11fa92bb7b2"
+    },
+    {
+      "step": "tester-auth-exchange",
+      "outcome": "ok",
+      "status": 200
+    },
+    {
+      "step": "read-as-db-root",
+      "outcome": "200",
+      "query": "_type.string=person&_parent.reference=6aa34e8e31ced11fa92bb79a&props=name&limit=50",
+      "count": 3,
+      "entityIds": [
+        "6aa34e8e31ced11fa92bb7a2",
+        "6aa34e8e31ced11fa92bb7aa",
+        "6aa34e8e31ced11fa92bb7b2"
+      ],
+      "entitiesLength": 3
+    },
+    {
+      "step": "read-as-tester",
+      "outcome": "200",
+      "query": "_type.string=person&_parent.reference=6aa34e8e31ced11fa92bb79a&props=name&limit=50",
+      "count": 2,
+      "entityIds": [
+        "6aa34e8e31ced11fa92bb7a2",
+        "6aa34e8e31ced11fa92bb7aa"
+      ],
+      "entitiesLength": 2
+    },
+    {
+      "step": "verdict",
+      "outcome": "CONFIRMED-NO-LEAK-count-matches-caller-visible-subset",
+      "control": {
+        "count": 3,
+        "entitiesLength": 3
+      },
+      "tester": {
+        "count": 2,
+        "entitiesLength": 2
+      }
+    },
+    {
+      "step": "delete-6aa34e8e31ced11fa92bb79a",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "step": "delete-6aa34e8e31ced11fa92bb7a2",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "step": "delete-6aa34e8e31ced11fa92bb7aa",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "step": "delete-6aa34e8e31ced11fa92bb7b2",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "step": "delete-6aa34e8f31ced11fa92bb7ba",
+      "outcome": "deleted",
+      "status": 200
+    },
+    {
+      "step": "verify-gone-6aa34e8e31ced11fa92bb79a",
+      "outcome": "404",
+      "expected": 404,
+      "gone": true
+    },
+    {
+      "step": "verify-gone-6aa34e8e31ced11fa92bb7a2",
+      "outcome": "404",
+      "expected": 404,
+      "gone": true
+    },
+    {
+      "step": "verify-gone-6aa34e8e31ced11fa92bb7aa",
+      "outcome": "404",
+      "expected": 404,
+      "gone": true
+    },
+    {
+      "step": "verify-gone-6aa34e8e31ced11fa92bb7b2",
+      "outcome": "404",
+      "expected": 404,
+      "gone": true
+    },
+    {
+      "step": "verify-gone-6aa34e8f31ced11fa92bb7ba",
+      "outcome": "404",
+      "expected": 404,
+      "gone": true
+    },
+    {
+      "step": "teardown-summary",
+      "outcome": "zero-residue"
+    }
+  ]
+}

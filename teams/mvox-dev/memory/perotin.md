@@ -2,6 +2,67 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] #321 — authed-lesser-tier half CLOSED, count respects a caller's grant-admitted SUBSET too (2026-09-11)
+
+Team-lead-authorized live run ("I authorize this run"), polyphony, completing the one half the
+read-only pass above left [unverified]. Rig: 1 container + 3 children (`_probe_321_*`, all
+`_sharing:private`, person-typed for zero schema footprint) + 1 throwaway tester person (parented
+separately at the db entity, NOT under the container, so it never inflates the collection's own
+count) + fresh `entu_api_key` on the tester + DIRECT `_viewer` grant on children 1+2 ONLY — child 3
+gets no grant at all.
+
+**Query `_type.string=person&_parent.reference=<containerId>&props=name&limit=50` as both callers**:
+db-root (control) — count=3, entities=[all 3]. Tester (direct _viewer on exactly 2 of 3) —
+**count=2, entities=[child1, child2]** — count matches the CALLER-VISIBLE subset, not the raw total.
+No leak: child 3's existence is invisible to the tester in both `count` and `entities`.
+
+**#321 both questions now fully closed**: for ANY tier tested — full-rights (db-root), zero-rights
+(anonymous), and partial-rights (direct grant on a subset) — `count` always equals what that specific
+caller can actually see. A "showing N of count" partial-list notice is safe to build on this
+mechanism for any rights tier; it never discloses rows the viewer holds no rights to.
+
+Full teardown: 5/5 entities deleted, independently re-verified via fresh GETs (404 on all 5) — zero
+residue, no grant-property cleanup needed (entity DELETE removes its properties atomically).
+
+Held uncommitted (tree on team-lead's pipeline branch): `scripts/migrations/probes/
+probe-321-authed-lesser-tier-subset-2026-09-11.ts`, `scripts/migrations/seed-results/
+probe-321-authed-lesser-tier-subset-live-2026-09-11T00-42-57-032Z.json`.
+
+## [PROBE-RESULT] #321 — Entu list `count` holds true total under truncation AND respects caller rights (anon tier), read-only, zero writes (2026-09-11)
+
+Team-lead dispatch, polyphony, pre-authorized read-only (research-321.json's blast finding
++ [unverified]/[speculative] flags). Docs first: `entu-www` query-reference/quickstart/best-practices
+are SILENT on `count` both ways (no field mentioned at all, no response-envelope example shown) —
+genuinely undocumented, not contradicted, so probing is the correct instrument (consult-and-believe
+carve-out 1).
+
+**Q1 CONFIRMED, 4 sites, real data (no fixtures needed)**: `count` holds the TRUE total and stays
+stable across limit (1/2/1000), `props=` on/off, `_parent.reference`-scoped vs `_type`-filtered vs
+db-wide-no-filter, and a status filter. Sites: type-def entities (27, `_type.string=entity`),
+profile-under-person (3, exact `_parent.reference` shape from profileData.ts:170-173), member-active
+exactly-at-cap edge case (count=2, limit=2 vs limit=3 both show entities=2 — confirms `entities.length
+=== limit` alone is NOT enough to detect truncation, reading `count` is what disambiguates, matching
+research's own flagged risk), db-wide no-filter (318). `entities.length` is the only thing limit
+touches; `count` never moved.
+
+**Q2 (anonymous tier) CONFIRMED NO LEAK**: 5 sites, anonymous (no Authorization header) `count` always
+equals what anonymous can actually see (77/8/0/1/0), never the authenticated total (318/27/4/3/2).
+**Q2 (authenticated-lesser-tier, e.g. domain-tier non-owner): [unverified], explicitly, not inferred**
+— only one real identity is available in this environment (`ENTU_API_KEY` = db-root, confirmed by
+creds.ts's own doc comment); `ENTU_ADMIN_KEY` is a KNOWN DEAD END (probe-44, 2026-08-08: anonymous
+floor JWT, `accounts:[]`). Standing up a second-tier caller (throwaway person + api key + grant, the
+probe-294 pattern) would itself be a write — out of scope for this zero-write task, so left open
+rather than assumed from the anonymous result.
+
+One query-construction bug caught and fixed before reporting: first run used `limit=1` on the db-wide
+Q2 site (inconsistent with the other four sites' large limits), which truncated the ANON side too and
+tripped a false "leak" flag in my own automated verdict — not a real finding, a self-authored bug.
+Fixed to `limit=1000`, re-ran, clean. Stale mislabeled ledger deleted before commit-holding.
+
+Script + ledger held uncommitted (tree is on a pipeline branch, team-lead's call when to land):
+`scripts/migrations/probes/probe-321-list-count-semantics-2026-09-11.ts`, `scripts/migrations/
+seed-results/probe-321-list-count-semantics-live-2026-09-11T00-39-06-327Z.json`.
+
 ## [DONE] #256 `link` type — LIVE, both dbs, clean, independently re-verified (2026-09-10)
 
 Team-lead authorized ("I authorize this run", 2026-09-10 08:00). Prep (definition +

@@ -1,0 +1,211 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#321 — does Entu list-response count reliably hold the true total under truncation (Q1), and does it respect the caller's rights-admitted subset rather than leaking the raw total (Q2)? Read-only, zero writes, polyphony synthetic only.",
+  "docsChecked": [
+    "~/projects/entu-www/src/api/query-reference/index.md — Pagination section (limit/skip) documents no count/total field",
+    "~/projects/entu-www/src/api/quickstart/index.md — no list-response JSON example shown at all",
+    "~/projects/entu-www/src/api/best-practices/index.md — pagination guidance, no count field mentioned"
+  ],
+  "docsVerdict": "SILENT on the count field both ways (presence and rights-scoping) — genuinely undocumented, not contradicted. Probing is the correct instrument per the consult-and-believe ruling's carve-out 1.",
+  "q1Verdict": "CONFIRMED",
+  "q2AnonymousTierVerdict": "CONFIRMED-NO-LEAK",
+  "q2AuthenticatedLesserTierVerdict": "[unverified] — not testable without a write in this environment",
+  "ledger": [
+    {
+      "step": "q1-site-1-type-defs",
+      "outcome": "count-stable-across-limit-and-props",
+      "baseline": {
+        "query": "_type.string=entity&props=name&limit=1000",
+        "status": 200,
+        "count": 27,
+        "entitiesLength": 27,
+        "hasCountKey": true
+      },
+      "limit2": {
+        "query": "_type.string=entity&props=name&limit=2",
+        "status": 200,
+        "count": 27,
+        "entitiesLength": 2,
+        "hasCountKey": true
+      },
+      "limit1": {
+        "query": "_type.string=entity&props=name&limit=1",
+        "status": 200,
+        "count": 27,
+        "entitiesLength": 1,
+        "hasCountKey": true
+      },
+      "noProps": {
+        "query": "_type.string=entity&limit=1",
+        "status": 200,
+        "count": 27,
+        "entitiesLength": 1,
+        "hasCountKey": true
+      }
+    },
+    {
+      "step": "q1-site-2-parent-scoped-profile",
+      "outcome": "count-true-total-entities-truncated",
+      "baseline": {
+        "query": "_type.string=profile&_parent.reference=69bcfd8e9c031ab8e6ce8079&props=name,email,_sharing&limit=10",
+        "status": 200,
+        "count": 3,
+        "entitiesLength": 3,
+        "hasCountKey": true
+      },
+      "limit1": {
+        "query": "_type.string=profile&_parent.reference=69bcfd8e9c031ab8e6ce8079&props=name,email,_sharing&limit=1",
+        "status": 200,
+        "count": 3,
+        "entitiesLength": 1,
+        "hasCountKey": true
+      }
+    },
+    {
+      "step": "q1-site-3-exactly-at-cap-edge-case",
+      "outcome": "exactly-at-cap-confirmed-not-truncated-via-count",
+      "atCap": {
+        "query": "_type.string=member&status.string=active&props=person&limit=2",
+        "status": 200,
+        "count": 2,
+        "entitiesLength": 2,
+        "hasCountKey": true
+      },
+      "aboveCap": {
+        "query": "_type.string=member&status.string=active&props=person&limit=3",
+        "status": 200,
+        "count": 2,
+        "entitiesLength": 2,
+        "hasCountKey": true
+      },
+      "belowCap": {
+        "query": "_type.string=member&status.string=active&props=person&limit=1",
+        "status": 200,
+        "count": 2,
+        "entitiesLength": 1,
+        "hasCountKey": true
+      }
+    },
+    {
+      "step": "q1-site-4-db-wide-no-filter",
+      "outcome": "count-stable-independent-of-type-filter",
+      "limit1": {
+        "query": "limit=1",
+        "status": 200,
+        "count": 318,
+        "entitiesLength": 1,
+        "hasCountKey": true
+      },
+      "limit50": {
+        "query": "limit=50",
+        "status": 200,
+        "count": 318,
+        "entitiesLength": 50,
+        "hasCountKey": true
+      }
+    },
+    {
+      "step": "q2-anon-vs-authed",
+      "outcome": "anon-count-respects-anon-visibility-no-leak",
+      "sites": [
+        {
+          "label": "db-wide no-filter",
+          "authed": {
+            "query": "props=_id&limit=1000",
+            "status": 200,
+            "count": 318,
+            "entitiesLength": 318,
+            "hasCountKey": true
+          },
+          "anon": {
+            "query": "props=_id&limit=1000",
+            "status": 200,
+            "count": 77,
+            "entitiesLength": 77,
+            "hasCountKey": true
+          },
+          "anonCountMatchesAnonVisible": true,
+          "anonLeaksAuthedTotal": false
+        },
+        {
+          "label": "type-def entities",
+          "authed": {
+            "query": "_type.string=entity&props=name&limit=1000",
+            "status": 200,
+            "count": 27,
+            "entitiesLength": 27,
+            "hasCountKey": true
+          },
+          "anon": {
+            "query": "_type.string=entity&props=name&limit=1000",
+            "status": 200,
+            "count": 8,
+            "entitiesLength": 8,
+            "hasCountKey": true
+          },
+          "anonCountMatchesAnonVisible": true,
+          "anonLeaksAuthedTotal": false
+        },
+        {
+          "label": "person db-wide",
+          "authed": {
+            "query": "_type.string=person&props=name&limit=1000",
+            "status": 200,
+            "count": 4,
+            "entitiesLength": 4,
+            "hasCountKey": true
+          },
+          "anon": {
+            "query": "_type.string=person&props=name&limit=1000",
+            "status": 200,
+            "count": 0,
+            "entitiesLength": 0,
+            "hasCountKey": true
+          },
+          "anonCountMatchesAnonVisible": true,
+          "anonLeaksAuthedTotal": false
+        },
+        {
+          "label": "profile under person 69bcfd8e9c031ab8e6ce8079",
+          "authed": {
+            "query": "_type.string=profile&_parent.reference=69bcfd8e9c031ab8e6ce8079&props=name&limit=10",
+            "status": 200,
+            "count": 3,
+            "entitiesLength": 3,
+            "hasCountKey": true
+          },
+          "anon": {
+            "query": "_type.string=profile&_parent.reference=69bcfd8e9c031ab8e6ce8079&props=name&limit=10",
+            "status": 200,
+            "count": 1,
+            "entitiesLength": 1,
+            "hasCountKey": true
+          },
+          "anonCountMatchesAnonVisible": true,
+          "anonLeaksAuthedTotal": false
+        },
+        {
+          "label": "member active",
+          "authed": {
+            "query": "_type.string=member&status.string=active&props=person&limit=1000",
+            "status": 200,
+            "count": 2,
+            "entitiesLength": 2,
+            "hasCountKey": true
+          },
+          "anon": {
+            "query": "_type.string=member&status.string=active&props=person&limit=1000",
+            "status": 200,
+            "count": 0,
+            "entitiesLength": 0,
+            "hasCountKey": true
+          },
+          "anonCountMatchesAnonVisible": true,
+          "anonLeaksAuthedTotal": false
+        }
+      ]
+    }
+  ]
+}
