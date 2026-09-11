@@ -2242,6 +2242,143 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 	});
 });
 
+// ── #277 review F2 — the form belongs to the SEASON it was opened in ───────────
+//
+// #277 gave every manageable season its own collapsed entry, and clicking
+// another season's entry switches the panel. The series form lives INSIDE that
+// panel but is gated on the page-level `seriesCreateOpen` alone, and
+// `seriesCreateSeasonId` is captured at OPEN and read at SUBMIT — the exact
+// shape #132/T6 review F3 fixed for the COLLECTIVE switch (`loadForSelected`
+// calls `closeSeriesCreateForm()` right after `resetSeasonManage()`), one scope
+// down. Second half: a switch performs the teardown `closeSeasonManagePanel`
+// REFUSES while a run is unfinished, so it must refuse too — and the entries
+// must SAY so rather than no-op.
+describe('#277 review F2 — a season switch takes the series form with the panel', () => {
+	const SEASON_B_ID = 'season-2';
+
+	/** Two not-lapsed seasons, the viewer editor on both — two entries. */
+	function twoSeasonResult() {
+		return fullAgendaResult({
+			seasons: [
+				currentSeason(true),
+				{
+					id: SEASON_B_ID,
+					name: 'Season 2027',
+					startDate: isoDate(61),
+					endDate: isoDate(240),
+					conductors: [],
+					owners: [],
+					editors: ['person-p']
+				}
+			]
+		});
+	}
+
+	function expandButtons(container: HTMLElement): HTMLButtonElement[] {
+		return Array.from(
+			container.querySelectorAll('[data-testid="season-card-expand"]')
+		) as HTMLButtonElement[];
+	}
+
+	function expandFor(container: HTMLElement, seasonName: string): HTMLButtonElement | null {
+		return expandButtons(container).find((b) => b.textContent?.includes(seasonName)) ?? null;
+	}
+
+	it('form open under A, click B’s entry: no form survives under B — and the one re-opened there prefills B’s dates and submits under B', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		const container = await renderReady();
+		await openSeriesForm(container);
+		expect((q(container, 'series-create-from') as HTMLInputElement).value).toBe(SEASON_START);
+
+		await fireEvent.click(expandFor(container, 'Season 2027') as HTMLButtonElement);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2027');
+		});
+		expect(q(container, 'series-create-form')).toBeNull();
+
+		// The entry point is back (it renders only while no form is open), and the
+		// form it opens is B's: B's date prefills, B's season on the wire.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-add-series')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'season-manage-add-series') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'series-create-form')).not.toBeNull();
+		});
+		expect((q(container, 'series-create-from') as HTMLInputElement).value).toBe(isoDate(61));
+
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await settleSeriesRun(container);
+
+		expect(lastSeriesInput().extraParentIds).toEqual([SEASON_B_ID]);
+		for (const call of createEventMock.mock.calls) {
+			expect((call[1] as CreateEventInput).extraParentIds).toEqual([SEASON_B_ID]);
+		}
+	});
+
+	it('a STOPPED run refuses the switch: B’s entry is DISABLED, the panel stays A’s with its resume notice, and the run’s record survives to be finished', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		// The stop recipe: occurrence #2 of 3 fails → resumable, owing two.
+		createEventMock.mockImplementation(async () => {
+			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
+			return `ev-new-${createEventMock.mock.calls.length}`;
+		});
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+
+		// The switch target says it is refused, and clicking it changes nothing.
+		const bEntry = expandFor(container, 'Season 2027') as HTMLButtonElement;
+		expect(bEntry.disabled).toBe(true);
+		await fireEvent.click(bEntry);
+		await flush();
+
+		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2026');
+		expect(q(container, 'series-create-resume')).not.toBeNull();
+		// The record is still A's to finish: the resumed submit creates NO second
+		// series and re-POSTs nothing that landed.
+		createEventMock.mockImplementation(
+			async () => `ev-resumed-${createEventMock.mock.calls.length}`
+		);
+		await submit(container);
+		await settleSeriesRun(container);
+
+		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
+		expect(lastSeriesInput().extraParentIds).toEqual([SEASON_ID]);
+		expect(createEventMock).toHaveBeenCalledTimes(4);
+		expect(
+			createEventMock.mock.calls.slice(2).map((c) => (c[1] as CreateEventInput).startDatetime)
+		).toEqual(['2026-09-14T16:00:00.000Z', '2026-09-21T16:00:00.000Z']);
+	});
+
+	it('the season ALREADY in play is never disabled by its own run: it has no entry of its own while open — the collapse control carries the refusal (#135)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		createEventMock.mockImplementation(async () => {
+			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
+			return `ev-new-${createEventMock.mock.calls.length}`;
+		});
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+
+		expect(expandFor(container, 'Season 2026')).toBeNull();
+		expect((q(container, 'season-card-collapse') as HTMLButtonElement).disabled).toBe(true);
+	});
+});
+
 // ── #215 — the toggleable date grid replaces the skip-dates input ──────────────
 //
 // Mihkel 2026-09-02: "responsive preview where dates are toggled directly."

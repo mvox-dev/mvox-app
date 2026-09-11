@@ -372,6 +372,17 @@
 	// season has LAPSED with a later one waiting (review F1).
 	let manageableSeasonId = $state<string | null>(null);
 	let manageableSeasonRights = $state<ManageRightsState>('not-editor');
+	/**
+	 * #277 — per-season rights, keyed by season id, for EVERY candidate season
+	 * in the per-season entry-point set (`manageableSeasonEntries` below) — not
+	 * just the one `manageableSeasonId` happens to be pointing at. Populated at
+	 * load time by the SAME `manageRightsFrom` call the single-season
+	 * derivation above already makes, one call per candidate; promoted
+	 * uniformly by the database-entity-rights fallback (see the
+	 * `loadFullAgenda().then()` callback) since db-entity rights are
+	 * season-independent (ER-7).
+	 */
+	let manageableSeasonRightsById = $state<Record<string, ManageRightsState>>({});
 	// #132/T2 review F3 — the season-CREATION gate's own rights signal, DELIBERATELY
 	// separate from `seasonManageRights`. That one answers "may I manage the CURRENT
 	// season's repertoire", so it is fail-closed 'not-editor' whenever no season is
@@ -522,6 +533,21 @@
 	// applies, which is also what keeps the select visible beside
 	// `panelRepertoireError`'s banner.
 	let panelPickableWorksVisible = $state<boolean | undefined>(undefined);
+	/**
+	 * #277 review 2 F1 — the season `panelRepertoire`'s rows were read for, set
+	 * where they are read (`loadPanelRepertoire`) and cleared with them
+	 * (`resetSeasonManage`). What `refreshPanelRepertoire` re-reads, INSTEAD of
+	 * re-deriving the season from `manageableSeasonId` at settle time: that id is
+	 * blank for the whole length of every `{ keepSeasonManage: true }` reload
+	 * (`resetManagement()` blanks it), so a panel-side repertoire write settling
+	 * inside one bailed on the blank and skipped its reconcile entirely, leaving
+	 * the section on pre-write rows — the same live-compare defect #277 review F1
+	 * took out of `loadPanelRepertoire`. Surviving a close/reopen is deliberate:
+	 * `closeSeasonManagePanel` keeps `panelRepertoire`, so it keeps this too, and
+	 * only the panel-lifetime teardown drops both. Plain state, nothing renders
+	 * off it.
+	 */
+	let panelRepertoireSeasonId: string | null = null;
 
 	// #85 TA.4 — the season summary's expand state (conductor-only) + the
 	// full-roster rates it reveals. Loaded lazily on first expand (most visits
@@ -739,6 +765,17 @@
 	 */
 	function loadForSelected(opts: { keepSeasonManage?: boolean } = {}) {
 		const keepSeasonManage = opts.keepSeasonManage === true;
+		// #277 review F1 — the season the OPEN panel is holding, captured HERE
+		// because `resetManagement()` below blanks `manageableSeasonId` for the
+		// whole round trip. A panel-preserving reload deliberately skips
+		// `resetSeasonManage` and leaves the panel on screen with ITS season's
+		// fields, rows and armed state — so the success handler must give that
+		// season back, not the automatic pick (`manageableSeasonId = mSeasonId`
+		// silently repointed the OPEN panel, and the next field edit then wrote
+		// to a season the operator was not looking at). `null` on every other
+		// path: a genuine switch, or a reload with no panel open, has nothing to
+		// hold and takes the automatic pick as before.
+		const heldSeasonId = keepSeasonManage && seasonManageOpen ? manageableSeasonId : null;
 		const current = selected;
 		if (!current) {
 			agendaItems = [];
@@ -907,14 +944,67 @@
 						seasonId === null
 							? 'not-editor'
 							: manageRightsFrom(seasonOwners, seasonEditors, personId);
-					// #167 — the ADMIN's rights, mirroring the derivation above but keyed
-					// on the MANAGEABLE season (current-if-running, else the soonest future
-					// one) rather than the viewer's current season. This is what lets
-					// event/series creation controls survive creating a season that has
-					// not started yet.
-					manageableSeasonId = mSeasonId;
-					manageableSeasonRights =
-						mSeasonId === null ? 'not-editor' : manageRightsFrom(mOwners, mEditors, personId);
+					// #277 — the per-season entry-point candidate set: every NOT-LAPSED
+					// season in `fullSeasons`, union the automatic pick (`mSeasonId`)
+					// itself so the existing lapsed-only-collective fallback (#167)
+					// keeps its one entry even though it fails the not-lapsed test
+					// below. `conductorLogic.ts` is untouched — this is a page-local,
+					// per-season generalisation of the SAME lapsed comparison
+					// `manageableSeason` already makes for its single pick.
+					const nowDateOnly = new Date().toISOString().slice(0, 10);
+					const candidateSeasons = fullSeasons.filter(
+						(s) => s.id === mSeasonId || s.endDate === '' || s.endDate >= nowDateOnly
+					);
+					// Rights are `manageRightsFrom` again, this time against EACH
+					// candidate's OWN owners/editors — never carried over from another
+					// season (criterion 4: rights are re-derived per season).
+					const nextManageableRightsById: Record<string, ManageRightsState> = {};
+					for (const s of candidateSeasons) {
+						nextManageableRightsById[s.id] = manageRightsFrom(s.owners, s.editors, personId);
+					}
+					manageableSeasonRightsById = nextManageableRightsById;
+					// #167 — the ADMIN's season: the automatic pick (current-if-running,
+					// else the soonest future one), NOT the viewer's current season. This
+					// is what lets event/series creation controls survive creating a
+					// season that has not started yet.
+					//
+					// #277 review F1 — with ONE exception, which is the whole point of
+					// `keepSeasonManage`: a reload that keeps the panel open keeps the
+					// season that panel is managing (`heldSeasonId`), and re-derives its
+					// rights from THIS reload's own per-season answers — never
+					// overwriting the id, which repointed the open panel at the automatic
+					// pick while its fields, rows and label still described the season
+					// the operator opened. The held season is kept only while the reload
+					// still admits it as a candidate; if it is gone (deleted elsewhere,
+					// or lapsed out of the set) the panel has no subject left, so the
+					// automatic pick takes over behind a FULL teardown — no field, row or
+					// armed delete of the vanished season may survive under another
+					// season's heading.
+					const keptSeasonId =
+						heldSeasonId !== null && candidateSeasons.some((s) => s.id === heldSeasonId)
+							? heldSeasonId
+							: null;
+					// The teardown is `resetSeasonManage` — see its `panelRepertoire`
+					// block, which names this branch as its ONE `keepSeasonManage`
+					// caller.
+					if (keptSeasonId !== null) {
+						manageableSeasonId = keptSeasonId;
+						manageableSeasonRights = nextManageableRightsById[keptSeasonId] ?? 'not-editor';
+					} else {
+						if (heldSeasonId !== null) {
+							resetSeasonManage();
+							// The series form belongs to the season it was opened in (the
+							// `openSeasonManagePanelFor` twin, #132/T6 review F3): the panel
+							// that hosts it just went, so unmount it rather than leave a
+							// form whose `seriesCreateSeasonId` names a season this page no
+							// longer manages. UNMOUNT only — `restoreSeriesCreateRun` below
+							// still decides what happens to any resume record.
+							closeSeriesCreateForm();
+						}
+						manageableSeasonId = mSeasonId;
+						manageableSeasonRights =
+							mSeasonId === null ? 'not-editor' : manageRightsFrom(mOwners, mEditors, personId);
+					}
 					// #138 review F2 — the first moment THIS db's own season data is on
 					// hand, which is what `restoreSeriesCreateRun` needs to re-open the
 					// panel + form for a run that stopped here before the viewer left.
@@ -955,14 +1045,23 @@
 					//
 					// Fail-closed throughout: only an explicit 'editor' opens anything;
 					// 'not-editor', 'error' and a rejection all leave the gates shut.
-					const manageableRightsInvisible =
-						mSeasonId !== null && mOwners.length === 0 && mEditors.length === 0;
 					const currentRightsInvisible =
 						seasonId !== null && seasonOwners.length === 0 && seasonEditors.length === 0;
 					// Step 3 of `deriveSeasonCreateRights`' ladder: no current season
 					// AND no season at all to borrow rights from — the brand-new
 					// collective, where the FIRST season must be creatable in-app.
 					const noSeasonToBorrowFrom = seasonId === null && fullSeasons.length === 0;
+					// #277 — every CANDIDATE season whose own owners/editors came back
+					// empty. The automatic pick's own invisible-rights case (#167's
+					// `manageableRightsInvisible`) is exactly ONE instance of this:
+					// `manageableSeason` returns an element OF `fullSeasons`, so
+					// `mOwners`/`mEditors` ARE that season's own arrays and `mSeasonId`
+					// is always itself a candidate. Generalised to the whole per-season
+					// entry set so the probe's promotion below can reach every one of
+					// them, not only the season the automatic pick happened to land on.
+					const invisibleCandidateSeasons = candidateSeasons.filter(
+						(s) => s.owners.length === 0 && s.editors.length === 0
+					);
 					// `currentRightsInvisible` is a trigger in its OWN right (#167 review
 					// round 2, F2), not merely a consequence to act on inside the branch.
 					// The manageable and the current season are DIFFERENT entities
@@ -972,13 +1071,46 @@
 					// the probe on the manageable season alone then produced exactly the
 					// contradiction this block exists to prevent: [+ Event] and the gear
 					// rendered against a dead repertoire surface for the current season.
-					if (manageableRightsInvisible || currentRightsInvisible || noSeasonToBorrowFrom) {
+					if (
+						invisibleCandidateSeasons.length > 0 ||
+						currentRightsInvisible ||
+						noSeasonToBorrowFrom
+					) {
 						loadDatabaseEntityRights(worksCfg, personId).then((state) => {
 							if (thisRequest !== requestId) return;
 							if (state !== 'editor') return;
+							// #277 — this promotion is COLLECTIVE-LEVEL, not season-specific:
+							// the database entity's own `_owner`/`_editor` is a rights layer
+							// separate from (and additive to) any one season's own
+							// direct/inherited grant (ER-7,
+							// docs/architecture/entu-rights-and-visibility-model.md) — so
+							// ONE 'editor' answer here promotes EVERY candidate season whose
+							// own rights came back invisible, not just the
+							// automatically-picked one.
+							if (invisibleCandidateSeasons.length > 0) {
+								manageableSeasonRightsById = {
+									...manageableSeasonRightsById,
+									...Object.fromEntries(
+										invisibleCandidateSeasons.map(
+											(s) => [s.id, 'editor'] as [string, ManageRightsState]
+										)
+									)
+								};
+							}
 							// Rights on the database entity are rights over the whole
 							// collective — every gate whose own read came back blank.
-							if (manageableRightsInvisible) manageableSeasonRights = 'editor';
+							// #277 review F1 — read off the map this promotion just wrote,
+							// keyed to the season actually IN PLAY: a panel-preserving reload
+							// keeps the OPERATOR's season, which need not be `mSeasonId`, so
+							// promoting `mSeasonId`'s answer onto it would light (or leave
+							// dark) the wrong season's controls. Fail-closed as before: only
+							// an 'editor' answer in the map opens anything.
+							if (
+								manageableSeasonId !== null &&
+								manageableSeasonRightsById[manageableSeasonId] === 'editor'
+							) {
+								manageableSeasonRights = 'editor';
+							}
 							seasonCreateRights = 'editor';
 							if (currentRightsInvisible && seasonManageRights !== 'editor') {
 								seasonManageRights = 'editor';
@@ -1181,6 +1313,7 @@
 		seasonManageRights = 'not-editor';
 		manageableSeasonId = null;
 		manageableSeasonRights = 'not-editor';
+		manageableSeasonRightsById = {};
 		seasonCreateRights = 'not-editor';
 		eventManageRights = {};
 		seasonRepertoire = [];
@@ -1785,12 +1918,20 @@
 	 *  a create's server-assigned id needs, and what a failed write reverts to. */
 	function refreshPanelRepertoire(): void {
 		const cfg = manageCfg();
-		if (!cfg || manageableSeasonId === null) return;
-		const seasonId = manageableSeasonId;
+		// The season the rows on screen were READ for, not `manageableSeasonId` —
+		// see `panelRepertoireSeasonId` for why the live id cannot answer this.
+		const seasonId = panelRepertoireSeasonId;
+		if (!cfg || seasonId === null) return;
 		const thisRequest = requestId;
+		// #277 review 2 F1 — the season-switch ticket in place of the live
+		// `manageableSeasonId !== seasonId` compare this shipped with, for the
+		// reason argued at `loadPanelRepertoire`'s own reads: a blank id is a reload
+		// in progress, never a switch, so the compare dropped every re-read that
+		// resolved inside one; the generation says which it actually was.
+		const thisSwitch = seasonManageSwitchGeneration;
 		listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (thisRequest !== requestId || manageableSeasonId !== seasonId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				panelRepertoire = items;
 				// #311 — this re-read is its own successful settle of the SAME
 				// input `panelPickableWorksVisible`'s sticky effect watches; a
@@ -1860,11 +2001,26 @@
 		});
 	}
 
+	/**
+	 * #277 review 2 F1 — the rollback of a panel repertoire write is a
+	 * resolve-writer like `confirmSeasonFieldEdit`'s catch, and needs the same
+	 * capture-compare: `createRepertoireWriteQueue` runs `hooks.rollback` on
+	 * rejection with no guard of its own, and both rollbacks below restore values
+	 * captured from the season that was open at CLICK time. A reject arriving
+	 * after the admin switched seasons painted those rows under the new season's
+	 * heading — live remove/status controls writing against the OTHER season's
+	 * repertoire_item ids — until the following re-read happened to wash them out.
+	 * `apply` needs no guard: it runs synchronously inside `request`, before any
+	 * switch can intervene. Nor does `handlePanelAddWork`, which has no hooks at
+	 * all — its only settle effect is the queue's `reconcile`/`revert`, and those
+	 * re-read whatever season `panelRepertoireSeasonId` names.
+	 */
 	function handlePanelStatusChange(itemId: string, status: RepertoireStatus) {
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const before = panelRepertoire.find((item) => item.id === itemId)?.status;
 		if (before === undefined) return;
+		const thisSwitch = seasonManageSwitchGeneration;
 		panelQueue.request(itemId, () => updateRepertoireStatus(cfg, itemId, status), {
 			apply: () => {
 				panelRepertoire = panelRepertoire.map((item) =>
@@ -1872,6 +2028,7 @@
 				);
 			},
 			rollback: () => {
+				if (thisSwitch !== seasonManageSwitchGeneration) return;
 				panelRepertoire = panelRepertoire.map((item) =>
 					item.id === itemId ? { ...item, status: before } : item
 				);
@@ -1883,11 +2040,13 @@
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const before = panelRepertoire;
+		const thisSwitch = seasonManageSwitchGeneration;
 		panelQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
 			apply: () => {
 				panelRepertoire = panelRepertoire.filter((item) => item.id !== itemId);
 			},
 			rollback: () => {
+				if (thisSwitch !== seasonManageSwitchGeneration) return;
 				panelRepertoire = before;
 			}
 		});
@@ -2712,11 +2871,23 @@
 	// reopen persistence contract).
 	// #261 (Mihkel ruling 2026-09-06) — renamed from `showSeasonManageGear`: the
 	// gear is REMOVED ("gear not needed"); this same derivation now gates the
-	// whole season CARD (collapsed expand button + opened title row). Unchanged
-	// shape, new name for what it gates.
-	const showSeasonCard = $derived(
-		manageableSeasonId !== null && manageableSeasonRights === 'editor'
+	// whole season CARD (collapsed expand buttons + opened title row).
+	//
+	// #277 — the per-season entry-point SET: every candidate season (see the
+	// `manageableSeasonRightsById` population in the load callback) this
+	// viewer holds editor rights on, in `seasons`' own order (current-first).
+	// A season absent from `manageableSeasonRightsById` (never a candidate, or
+	// a lapsed one nobody's automatic pick lands on) is filtered out for free
+	// — `undefined !== 'editor'`. `manageableSeasonId`/`manageableSeasonRights`
+	// still name WHICH one is open or is the switch's target; this is the
+	// broader set the card's collapsed entries iterate over.
+	const manageableSeasonEntries = $derived(
+		seasons.filter((s) => manageableSeasonRightsById[s.id] === 'editor')
 	);
+	// With exactly one entry this is byte-identical to the pre-#277 gate
+	// (`manageableSeasonId !== null && manageableSeasonRights === 'editor'`) —
+	// the one entry IS that season, admitted by the same rights check.
+	const showSeasonCard = $derived(manageableSeasonEntries.length > 0);
 
 	let seasonManageOpen = $state(false);
 	let seasonManageName = $state('');
@@ -2828,6 +2999,20 @@
 	 *  stale counter over whatever is on screen now. Plain state, not `$state`
 	 *  — nothing renders off it directly. */
 	let seasonManageDeleteGeneration = 0;
+	/**
+	 * #277 — a SECOND, sibling generation counter, in the same capture-compare
+	 * shape as `requestId`/`worksLoadId`/`scheduleLoadId` (top of file) but
+	 * deliberately its OWN ticket, not a reuse of theirs: those bump on a
+	 * COLLECTIVE switch, and this bumps on a SEASON switch — an independent
+	 * race a collective-scoped ticket cannot order. Bumped by
+	 * `resetSeasonManage` (the switch's one reset backbone — see
+	 * `openSeasonManagePanelFor`), so every genuine switch bumps it exactly
+	 * once. The panel's unguarded resolve-writers (`confirmSeasonFieldEdit`,
+	 * the conductor add/remove handlers) capture it alongside `manageableSeasonId`
+	 * and re-check it before touching state on resolve/reject: a write issued
+	 * for the season just left must not land on the season now open.
+	 */
+	let seasonManageSwitchGeneration = 0;
 
 	/** Build the `onProgress` sink threaded into `deleteEventSeries`/
 	 *  `deleteSeason` for ONE delete attempt, bound to the generation captured
@@ -2856,14 +3041,19 @@
 	 *  need it to tell "name not here YET" from "name will NEVER arrive"
 	 *  (#132/T3 review F4). */
 	let seasonManageRosterLoading = $state(false);
-	/** The dialog itself, and the collapsed card's own expand control — focus
-	 *  moves INTO the panel on open (#132/T3 review F1) and back to the
-	 *  expand button on close (#261 — the gear was the old anchor; the
-	 *  expand button UNMOUNTS while the panel is open and REMOUNTS the moment
-	 *  it closes, so `closeSeasonManagePanel` waits a `tick()` before reading
-	 *  this binding). */
+	/** The dialog itself — focus moves INTO the panel on open (#132/T3 review
+	 *  F1) and back to the closed season's own expand button on close (#261 —
+	 *  the gear was the old anchor). */
 	let seasonManagePanelEl = $state<HTMLDivElement | null>(null);
-	let seasonManageExpandEl = $state<HTMLButtonElement | null>(null);
+	/** #277 — the CARD container, replacing the single `seasonManageExpandEl`
+	 *  binding: with one collapsed entry PER manageable season, "the expand
+	 *  button to refocus on close" is no longer a single fixed element — it is
+	 *  whichever entry matches `manageableSeasonId` at that moment, found by
+	 *  its `data-season-manage-id` attribute (see `closeSeasonManagePanel`).
+	 *  The expand button for the season being closed UNMOUNTS while its panel
+	 *  is open and REMOUNTS the moment it closes, so that lookup waits a
+	 *  `tick()` first, same as before. */
+	let seasonCardEl = $state<HTMLDivElement | null>(null);
 
 	// Per-field inline edit — the event/[id] pattern (beginFieldEdit /
 	// confirmFieldEdit / Escape-cancels), scoped to the three editable season
@@ -2957,6 +3147,13 @@
 		// this reset just walked away from (a collective switch mid-cascade) is
 		// silently dropped instead of resurrecting the counter it just cleared.
 		seasonManageDeleteGeneration += 1;
+		// #277 — likewise a fresh SEASON-switch generation: this reset IS the
+		// switch's backbone (see `openSeasonManagePanelFor`), so every genuine
+		// switch (and every collective-switch/agenda-failure teardown that
+		// already called this) bumps it exactly once, dropping any
+		// field-edit/conductor-add resolve still in flight for whatever season
+		// was open a moment ago.
+		seasonManageSwitchGeneration += 1;
 		seasonManageConductorError = false;
 		seasonManageRosterLoading = false;
 		seasonEditingField = null;
@@ -2965,10 +3162,21 @@
 		seasonEditPending = {};
 		// #234 review 2 F1 — the panel's repertoire section belongs to the PANEL's
 		// lifetime, exactly like the series list three lines up, so it is cleared
-		// where it is. Reached on a genuine collective switch and on the
-		// agenda-failure path — never on a `{ keepSeasonManage: true }` reload,
-		// which deliberately keeps the panel and everything it is showing.
+		// where it is.
+		//
+		// #277 review 2 F2 — the callers that reach it, corrected: a genuine
+		// collective switch, the agenda-failure path, and (new in #277) a SEASON
+		// switch, `openSeasonManagePanelFor`'s one reset backbone. Plus exactly one
+		// `{ keepSeasonManage: true }` reload — the `heldSeasonId`/`keptSeasonId`
+		// block in `loadForSelected`, where the held season is no longer among the
+		// reload's candidates: the panel has no subject left, so it takes a full
+		// teardown rather than keeping the vanished season's rows under the
+		// automatic pick's heading. Every OTHER panel-preserving reload skips this
+		// function entirely and keeps the section it is showing.
 		panelRepertoire = [];
+		// #277 review 2 F1 — with the rows, the season they were read for: a write
+		// settling after this teardown has nothing left to refresh.
+		panelRepertoireSeasonId = null;
 		panelWorks = [];
 		panelEditions = [];
 		panelCopies = [];
@@ -3001,6 +3209,14 @@
 	 */
 	function loadPanelRepertoire(cfg: ManageCfg, seasonId: string): void {
 		const thisRequest = requestId;
+		// #277 review F1 — the SEASON-switch ticket, captured alongside
+		// `thisRequest`. See the comment above the first read for why the live
+		// `manageableSeasonId` compare this replaces could not do the job.
+		const thisSwitch = seasonManageSwitchGeneration;
+		// #277 review 2 F1 — the section's subject, recorded where it is read so a
+		// later `refreshPanelRepertoire` (whose caller is a write settle, possibly
+		// mid-reload) knows which season the rows on screen belong to.
+		panelRepertoireSeasonId = seasonId;
 		panelRepertoireError = false;
 		// #311 — true for the WINDOW both reads below are in flight; the two
 		// booleans track each read's own settle (success or catch) so the flag
@@ -3019,20 +3235,34 @@
 		const maybeStopLoading = () => {
 			if (itemsSettled && sourcesSettled) panelRepertoireLoading = false;
 		};
+		// #277 — a season SWITCH is not a collective switch, so
+		// `thisRequest`/`requestId` alone does not catch a still-in-flight read
+		// from the season just left. The ticket for it is
+		// `seasonManageSwitchGeneration`, bumped by the switch's own
+		// `resetSeasonManage`.
+		//
+		// #277 review F1 — NOT a live `manageableSeasonId !== seasonId` compare
+		// (what this shipped as): `resetManagement()` blanks `manageableSeasonId`
+		// for the whole length of every `{ keepSeasonManage: true }` reload, so a
+		// panel refresh issued right after one — `refreshAfterSeasonManageDelete`,
+		// the series-create paths — was dropped outright whenever its own read
+		// resolved before the agenda load did, leaving the section on its stale
+		// rows with `panelRepertoireLoading` stuck true. A blank id is a reload in
+		// progress, never a switch; the generation says which it was.
 		listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				panelRepertoire = items;
 				panelRepertoireItemsOk = true;
 			})
 			.catch((e) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				console.error('agenda: loading the season-manage repertoire failed', e);
 				panelRepertoire = [];
 				panelRepertoireError = true;
 			})
 			.finally(() => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				itemsSettled = true;
 				maybeStopLoading();
 			});
@@ -3042,14 +3272,14 @@
 		// half-rendering.
 		Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
 			.then(([works, editions, copies]) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				panelWorks = works;
 				panelEditions = editions;
 				panelCopies = copies;
 				panelWorksSourcesOk = true;
 			})
 			.catch((e) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				console.error('agenda: loading the season-manage repertoire sources failed', e);
 				panelWorks = [];
 				panelEditions = [];
@@ -3057,7 +3287,7 @@
 				panelRepertoireError = true;
 			})
 			.finally(() => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				sourcesSettled = true;
 				maybeStopLoading();
 			});
@@ -3091,6 +3321,9 @@
 		// screen — and the stale rows then survive into the NEXT open and render
 		// the previous collective's series until the new fetches land.
 		const thisRequest = requestId;
+		// #277 — the SEASON-switch ticket for the series read below (see
+		// `loadPanelRepertoire`, which captures it for the same reason).
+		const thisSwitch = seasonManageSwitchGeneration;
 		seasonManageSeriesError = false;
 		// #132/T2 review F1's cache-first `getRoster` — same lazy-on-open posture
 		// as the season-CREATE form (never a roster read on the plain agenda
@@ -3111,13 +3344,18 @@
 		getSections(cfg).catch((e) => {
 			console.error('agenda: loading the section tree for season management failed', e);
 		});
+		// #277 — same rationale as `loadPanelRepertoire` below: a season switch
+		// does not touch `requestId`, so a series read still in flight for the
+		// season just left must be told apart from one still describing the season
+		// now open — by the switch generation, which a panel-preserving reload
+		// (unlike `manageableSeasonId`) never disturbs.
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((list) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				seasonManageSeries = list;
 			})
 			.catch((e) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				console.error('agenda: loading the season\'s event series failed', e);
 				seasonManageSeries = [];
 				seasonManageSeriesError = true;
@@ -3126,6 +3364,55 @@
 		// managed on their own page); the `listEventsForSeason` read this list
 		// fired went with the rows it fed.
 		loadPanelRepertoire(cfg, seasonId);
+	}
+
+	/**
+	 * #277 — every per-season collapsed entry's click handler: open the panel
+	 * for `seasonId`, switching to it first if it is not already the season in
+	 * play. A switch is a FULL teardown of the previous season's panel state
+	 * (`resetSeasonManage` — the exact same backbone a genuine close/collective
+	 * switch already uses, reused rather than duplicated) followed by a fresh
+	 * `openSeasonManagePanel` for the new one: nothing of the season being left
+	 * survives (criterion 3), and rights are re-pointed from the already-computed
+	 * per-season map, never carried over (criterion 4).
+	 *
+	 * Reopening the season ALREADY open/in-play (`seasonId === manageableSeasonId`
+	 * — the single-manageable-season case, always) skips the reset branch
+	 * entirely and degrades to plain `openSeasonManagePanel()`, preserving the
+	 * existing close/reopen-without-refetch persistence contract untouched
+	 * (criterion 5: byte-identical when only one season is manageable).
+	 *
+	 * #277 review F2 — a switch is exactly the panel teardown
+	 * `closeSeasonManagePanel` REFUSES while a series run is unfinished, so it
+	 * carries the same refusal, and it takes the series form down with the panel
+	 * the way a collective switch does. Both halves are argued at their line.
+	 */
+	function openSeasonManagePanelFor(seasonId: string): void {
+		if (seasonId !== manageableSeasonId) {
+			// #277 review F2 — the same `seriesRunUnfinished` refusal
+			// `closeSeasonManagePanel` (#135) and `seasonCardCollapseDisabled` carry:
+			// a switch unmounts the form together with the panel that hosts it, and
+			// the resume record is keyed to the season it was opened for — so a
+			// switch mid-run would take away the only explanation on screen for why
+			// every create entry point is dead, and then let the next agenda load
+			// REAP that record (`restoreSeriesCreateRun` compares it against
+			// `manageableSeasonId`), abandoning the occurrences the stopped run
+			// still owes. The other seasons' entries render DISABLED under this
+			// same condition, so this is never an enabled control that no-ops.
+			if (seriesRunUnfinished) return;
+			resetSeasonManage();
+			// #277 review F2 — the series form belongs to the SEASON it was opened
+			// in exactly as it belongs to the db it was opened in (#132/T6 review
+			// F3, `loadForSelected`'s collective-switch twin): `resetSeasonManage`
+			// deliberately does not touch its state, and `seriesCreateSeasonId` is
+			// captured at open and read at submit — so a form left mounted under the
+			// new season's heading would have created the series, and every
+			// occurrence, under the season just left.
+			closeSeriesCreateForm();
+			manageableSeasonId = seasonId;
+			manageableSeasonRights = manageableSeasonRightsById[seasonId] ?? 'not-editor';
+		}
+		openSeasonManagePanel();
 	}
 
 	function closeSeasonManagePanel(): void {
@@ -3167,7 +3454,18 @@
 		// this tick (`seasonManageOpen` just went false, but Svelte has not
 		// re-rendered), so the focus call waits for the DOM to catch up —
 		// same `tick()` shape as `refocusSeasonManagePanel` below.
-		tick().then(() => seasonManageExpandEl?.focus());
+		// #277 — looked up by `data-season-manage-id` rather than a single
+		// bound element: the season just closed is the one THIS close call
+		// belongs to (`manageableSeasonId`), never whichever OTHER manageable
+		// season's entry happens to also be on screen.
+		const closedSeasonId = manageableSeasonId;
+		tick().then(() => {
+			seasonCardEl
+				?.querySelector<HTMLButtonElement>(
+					`[data-testid="season-card-expand"][data-season-manage-id="${closedSeasonId}"]`
+				)
+				?.focus();
+		});
 	}
 
 	/** Focus moves INTO the dialog the moment it opens (#132/T3 review F1). Without
@@ -3267,14 +3565,23 @@
 
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
+		// #277 — captured alongside `seasonId`: a SWITCH away from THIS season
+		// bumps `seasonManageSwitchGeneration` (via `resetSeasonManage`), so a
+		// save that resolves or rejects AFTER the admin has moved on to another
+		// season's panel touches nothing there. This function was previously an
+		// unguarded resolve-writer — its `.then()`/`.catch()` had no re-check at
+		// all before this issue.
+		const thisSeasonManage = seasonManageSwitchGeneration;
 		clearSeasonFieldError(field);
 		seasonEditPending = { ...seasonEditPending, [field]: true };
 		applySeasonFieldLocally(field, value); // optimistic — the panel is the truth it renders
 		updateSeasonField(cfg, seasonId, field, value)
 			.then(() => {
+				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
 				seasonEditPending = { ...seasonEditPending, [field]: false };
 			})
 			.catch((e) => {
+				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
 				console.error('agenda: season field save failed', field, e);
 				seasonEditPending = { ...seasonEditPending, [field]: false };
 				applySeasonFieldLocally(field, before);
@@ -3331,9 +3638,13 @@
 		if (seasonManageConductorIds.includes(personId)) return; // no duplicate chips
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
+		// #277 — same capture-compare guard as `confirmSeasonFieldEdit` above;
+		// this add was likewise an unguarded resolve-writer before this issue.
+		const thisSeasonManage = seasonManageSwitchGeneration;
 		seasonManageConductorError = false; // this attempt starts clean
 		seasonManageConductorIds = [...seasonManageConductorIds, personId]; // optimistic
 		addSeasonConductor(cfg, seasonId, personId).catch((e) => {
+			if (thisSeasonManage !== seasonManageSwitchGeneration) return;
 			console.error('agenda: add season conductor failed', personId, e);
 			seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId);
 			// …and SAY so: the revert alone is a chip that appears and vanishes
@@ -3346,10 +3657,13 @@
 		if (!selected || manageableSeasonId === null) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
+		// #277 — same capture-compare guard; this remove was likewise unguarded.
+		const thisSeasonManage = seasonManageSwitchGeneration;
 		const before = seasonManageConductorIds;
 		seasonManageConductorError = false;
 		seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId); // optimistic
 		apiRemoveSeasonConductor(cfg, seasonId, personId).catch((e) => {
+			if (thisSeasonManage !== seasonManageSwitchGeneration) return;
 			console.error('agenda: remove season conductor failed', personId, e);
 			seasonManageConductorIds = before;
 			seasonManageConductorError = true;
@@ -3859,15 +4173,19 @@
 	 *  the section's own season. */
 	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
 		const thisRequest = requestId;
+		// #277 review F1 — the season-switch ticket, same capture-compare as the
+		// panel's own reads: a switch between this refresh and its settle must not
+		// let the season just left repaint the rows of the season now open.
+		const thisSwitch = seasonManageSwitchGeneration;
 		loadPanelRepertoire(cfg, seasonId);
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((list) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				seasonManageSeries = list;
 				seasonManageSeriesError = false;
 			})
 			.catch((e) => {
-				if (thisRequest !== requestId) return;
+				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
 				console.error('agenda: refreshing the season\'s event series after an event create failed', e);
 				seasonManageSeriesError = true;
 			});
@@ -4060,6 +4378,14 @@
 			onProgress: makeSeasonManageDeleteProgress(generation)
 		})
 			.then((deletedOccurrences) => {
+				// #277 review F3 — the guard its season-delete twin
+				// (`onSeasonManageSeasonDelete`) already carries, for the same reason:
+				// `resetSeasonManage` bumps the generation on every switch, so a
+				// cascade whose season (or collective) the operator has since left
+				// must not announce itself, splice the season now open, or fire that
+				// season's agenda reload. The captured generation reached only the
+				// progress sink before this.
+				if (generation !== seasonManageDeleteGeneration) return;
 				seasonManageDeleteArmed = null;
 				seasonManageArmedSeriesCount = null;
 				seasonManageSeries = seasonManageSeries.filter((row) => row.id !== series.id);
@@ -4075,6 +4401,9 @@
 			})
 			.catch((e) => {
 				console.error('agenda: deleting event series failed', series.id, e);
+				// Symmetric guard (#277 review F3): a stale failure must not paint an
+				// error slot belonging to the season the operator moved to.
+				if (generation !== seasonManageDeleteGeneration) return;
 				seasonManageDeleteError = seasonManageDeleteFailure('series', e);
 			})
 			.finally(() => {
@@ -5558,57 +5887,96 @@
 						     `keepSeasonManage: true` caller exists to prevent (`$state`
 						     survives a remount; DOM focus, scroll and caret do not). -->
 						{#if showSeasonCard || seasonManageOpen}
-							<div data-testid="agenda-admin-card" class="mb-3 rounded-md border border-ink-4 p-1.5">
-								{#if !seasonManageOpen}
-									<!-- #261 ruling, collapsed face: the season NAME and NOTHING
-									     else — no trashcan, no gear, no plus, no describing words.
-									     The WHOLE card is the click target (the #205 whole-field
-									     precedent: a real full-width native button, not a glyph at
-									     the edge). Focus lands here on close (below).
+							<div
+								data-testid="agenda-admin-card"
+								bind:this={seasonCardEl}
+								class="mb-3 rounded-md border border-ink-4 p-1.5"
+							>
+								<!-- #277 — ONE collapsed entry per season in `manageableSeasonEntries`,
+								     in the page's own `seasons` order (current-first), EXCLUDING
+								     whichever one is currently open (that season renders its EXPANDED
+								     face below instead). With exactly one manageable season this loop
+								     has exactly one iteration and — while closed — renders that one
+								     entry; the markup inside is otherwise UNCHANGED from the pre-#277
+								     single-card shape (criterion 5: byte-identical single-season DOM).
+								     Clicking a DIFFERENT season's entry than the one open IS the
+								     switch (`openSeasonManagePanelFor`); clicking THIS season's own
+								     entry after a plain collapse is a no-op reopen (fields survive,
+								     no refetch — same contract as before #277). -->
+								{#each manageableSeasonEntries as ms (ms.id)}
+									{#if !seasonManageOpen || ms.id !== manageableSeasonId}
+										<!-- #261 ruling, collapsed face: the season NAME and NOTHING
+										     else — no trashcan, no gear, no plus, no describing words.
+										     The WHOLE card is the click target (the #205 whole-field
+										     precedent: a real full-width native button, not a glyph at
+										     the edge). Focus lands here on close (below).
 
-									     #261 review F3 — the name keeps its HEADING. On main it was
-									     an <h2> (#238: "title the card by its season name"); folding
-									     it into the button must not cost the agenda's only admin
-									     heading, or a screen-reader user navigating by H/rotor can no
-									     longer find this card in either state. The WAI-APG Accordion
-									     header is a heading WRAPPING the button, so the button stays
-									     the whole-card target and the outline is restored for free.
+										     #261 review F3 — the name keeps its HEADING. On main it was
+										     an <h2> (#238: "title the card by its season name"); folding
+										     it into the button must not cost the agenda's only admin
+										     heading, or a screen-reader user navigating by H/rotor can no
+										     longer find this card in either state. The WAI-APG Accordion
+										     header is a heading WRAPPING the button, so the button stays
+										     the whole-card target and the outline is restored for free.
 
-									     #261 review F1 — NO `aria-label` on this button. An
-									     aria-label SUPERSEDES the element's own contents, so the
-									     accessible name became "Open season card" with the visible
-									     "2026/2027" nowhere inside it: WCAG 2.1 AA 2.5.3 (Label in
-									     Name) fails and voice control cannot say "click 2026/2027".
-									     Same fix as #205 review F1 three sections down: the verb
-									     rides INSIDE as an sr-only span, the visible name follows,
-									     and AT hears "<action> <name>". `season-manage-label` stays
-									     on the NAME span alone so the dialog's `aria-labelledby`
-									     still resolves to the bare season name.
+										     #261 review F1 — NO `aria-label` on this button. An
+										     aria-label SUPERSEDES the element's own contents, so the
+										     accessible name became "Open season card" with the visible
+										     "2026/2027" nowhere inside it: WCAG 2.1 AA 2.5.3 (Label in
+										     Name) fails and voice control cannot say "click 2026/2027".
+										     Same fix as #205 review F1 three sections down: the verb
+										     rides INSIDE as an sr-only span, the visible name follows,
+										     and AT hears "<action> <name>". `season-manage-label` stays
+										     on the NAME span alone so the dialog's `aria-labelledby`
+										     still resolves to the bare season name.
 
-									     #261 review F2 — the card now SAYS it is a target: `group` +
-									     a hover tint (`hover:bg-ink-5`, the SectionPicker/roster
-									     hoverable-target token) + an aria-hidden disclosure triangle
-									     that darkens on hover, the ✎ treatment of the #205 fields.
-									     The ruling bars describing WORDS on the collapsed face, not
-									     state indicators — and with the gear gone this card is the
-									     ONLY way into season management (#261 finding 2). -->
-									<h2>
-										<button
-											type="button"
-											data-testid="season-card-expand"
-											bind:this={seasonManageExpandEl}
-											aria-expanded="false"
-											class="group flex w-full min-h-11 items-center gap-2 rounded-sm px-1.5 text-left font-display text-lg text-ink hover:bg-ink-5"
-											onclick={openSeasonManagePanel}
-										>
-											<span class="sr-only">{m.season_manage_expand_label()}</span>
-											<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
-												>▸</span
+										     #261 review F2 — the card now SAYS it is a target: `group` +
+										     a hover tint (`hover:bg-ink-5`, the SectionPicker/roster
+										     hoverable-target token) + an aria-hidden disclosure triangle
+										     that darkens on hover, the ✎ treatment of the #205 fields.
+										     The ruling bars describing WORDS on the collapsed face, not
+										     state indicators — and with the gear gone this card is the
+										     ONLY way into season management (#261 finding 2). -->
+										<!-- #277 review F2 — an entry that would SWITCH the panel is
+										     disabled while a series run is unfinished, the same
+										     condition `seasonCardCollapseDisabled` disables the collapse
+										     control under and `openSeasonManagePanelFor` refuses on: the
+										     switch performs the very teardown that refusal exists for,
+										     and an enabled control that no-ops lies about it. Never the
+										     season already in play (its own entry is a plain reopen),
+										     so the single-manageable-season card is untouched — one
+										     entry, always `ms.id === manageableSeasonId`, never
+										     disabled.
+										     #277 review F4 — the in-play season's entry is labelled
+										     from the PANEL's live value (`seasonManageDeleteName`,
+										     which prefers `seasonManageName` once the fields are
+										     loaded), not from the `seasons` list: collapsing keeps the
+										     panel's fields (the reopen-without-refetch contract) while
+										     `applySeasonFieldLocally` never touches `seasons`, so a
+										     rename followed by a collapse showed the OLD name here
+										     while the panel's own delete confirm quoted the new one.
+										     Every OTHER entry has no panel state of its own and reads
+										     the list, as before. -->
+										<h2>
+											<button
+												type="button"
+												data-testid="season-card-expand"
+												data-season-manage-id={ms.id}
+												aria-expanded="false"
+												disabled={seriesRunUnfinished && ms.id !== manageableSeasonId}
+												class="group flex w-full min-h-11 items-center gap-2 rounded-sm px-1.5 text-left font-display text-lg text-ink hover:bg-ink-5 disabled:opacity-50 disabled:hover:bg-transparent"
+												onclick={() => openSeasonManagePanelFor(ms.id)}
 											>
-											<span>{seasonManageDeleteName}</span>
-										</button>
-									</h2>
-								{:else}
+												<span class="sr-only">{m.season_manage_expand_label()}</span>
+												<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
+													>▸</span
+												>
+												<span>{ms.id === manageableSeasonId ? seasonManageDeleteName : ms.name}</span>
+											</button>
+										</h2>
+									{/if}
+								{/each}
+								{#if seasonManageOpen}
 									<!-- #261 ruling, opened face: the title row. A plain flex
 									     div — role="toolbar" and the #156 roving tabindex retire
 									     with the gear (stated choice: 1–2 plain buttons is a

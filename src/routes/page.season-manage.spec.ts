@@ -106,7 +106,15 @@ const {
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
-	removeSeasonConductorMock
+	removeSeasonConductorMock,
+	listRepertoireItemsMock,
+	deleteRepertoireItemMock,
+	updateRepertoireStatusMock,
+	getSeriesDefaultsMock,
+	deleteEventSeriesMock,
+	countSeriesOccurrencesMock,
+	countSeasonScopeMock,
+	deleteSeasonMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -121,7 +129,15 @@ const {
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
-	removeSeasonConductorMock: vi.fn()
+	removeSeasonConductorMock: vi.fn(),
+	listRepertoireItemsMock: vi.fn(),
+	deleteRepertoireItemMock: vi.fn(),
+	updateRepertoireStatusMock: vi.fn(),
+	getSeriesDefaultsMock: vi.fn(),
+	deleteEventSeriesMock: vi.fn(),
+	countSeriesOccurrencesMock: vi.fn(),
+	countSeasonScopeMock: vi.fn(),
+	deleteSeasonMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -131,7 +147,15 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: updateSeasonFieldMock,
 	addSeasonConductor: addSeasonConductorMock,
-	removeSeasonConductor: removeSeasonConductorMock
+	removeSeasonConductor: removeSeasonConductorMock,
+	// #277 — the delete-arm race pin drives the title-row trashcan, whose arming
+	// fires the live scope read; the rest complete the module so the page never
+	// imports `undefined` under this wholesale mock.
+	getSeriesDefaults: getSeriesDefaultsMock,
+	deleteEventSeries: deleteEventSeriesMock,
+	countSeriesOccurrences: countSeriesOccurrencesMock,
+	countSeasonScope: countSeasonScopeMock,
+	deleteSeason: deleteSeasonMock
 }));
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: vi.fn(),
@@ -144,7 +168,12 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 });
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
+	resolveManageRights: resolveManageRightsMock,
+	// #277 review 2 F1 — the panel's repertoire WRITE seam, needed by the
+	// rollback-after-switch pin. `createRepertoireWriteQueue` stays REAL (the
+	// spread above): the guard under test lives in the hooks the page hands it.
+	deleteRepertoireItem: deleteRepertoireItemMock,
+	updateRepertoireStatus: updateRepertoireStatusMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 // #209 — only the NETWORK read is stubbed; groupBySection (the pure roster-order
@@ -192,8 +221,10 @@ vi.mock('$lib/library/libraryData', () => ({
 	listAllEditions: vi.fn().mockResolvedValue([]),
 	listAllCopies: vi.fn().mockResolvedValue([])
 }));
+// #277 — a named handle: the per-season pins assert WHICH season the panel's
+// repertoire read targets.
 vi.mock('$lib/repertoire/repertoireData', () => ({
-	listRepertoireItems: vi.fn().mockResolvedValue([])
+	listRepertoireItems: listRepertoireItemsMock
 }));
 
 import Page from './+page.svelte';
@@ -385,6 +416,14 @@ beforeEach(() => {
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
 	removeSeasonConductorMock.mockResolvedValue(undefined);
+	listRepertoireItemsMock.mockResolvedValue([]);
+	deleteRepertoireItemMock.mockResolvedValue(undefined);
+	updateRepertoireStatusMock.mockResolvedValue(undefined);
+	getSeriesDefaultsMock.mockResolvedValue({});
+	deleteEventSeriesMock.mockResolvedValue(undefined);
+	countSeriesOccurrencesMock.mockResolvedValue(0);
+	countSeasonScopeMock.mockResolvedValue({ series: 0, events: 0, repertoireItems: 0 });
+	deleteSeasonMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -403,6 +442,14 @@ afterEach(() => {
 	updateSeasonFieldMock.mockReset();
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
+	listRepertoireItemsMock.mockReset();
+	deleteRepertoireItemMock.mockReset();
+	updateRepertoireStatusMock.mockReset();
+	getSeriesDefaultsMock.mockReset();
+	deleteEventSeriesMock.mockReset();
+	countSeriesOccurrencesMock.mockReset();
+	countSeasonScopeMock.mockReset();
+	deleteSeasonMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -1418,5 +1465,812 @@ describe('agenda — the season-manage conductor select tells its empties apart 
 	});
 });
 
+// ════════════════════════════════════════════════════════════════════════════════
+// #277 — a per-season entry point, NOT a picker (Gama's `ready` ruling,
+// 2026-09-09: dropdown/select explicitly rejected; "make creation set the
+// manageable season" explicitly rejected as a hidden mode).
+//
+// Contract under test:
+//   1. an admin can open the management panel for ANY not-lapsed season they
+//      hold editor rights on, not just `manageableSeason`'s automatic pick;
+//   2. the panel states WHICH season it manages, visibly, whenever more than
+//      one is manageable — the visible identity is the season's OWN NAME via
+//      the existing `season-manage-label` element, so NO new i18n key is
+//      needed for it;
+//   3. switching the managed season is a context switch: repertoire, series
+//      rows, fields and every in-flight write belong to the OPEN season;
+//   4. rights are re-derived per season — never carried across a switch;
+//   5. with exactly one manageable season the DOM is EXACTLY today's (#261
+//      face) — no new control in the common case, no new testids: each entry
+//      reuses data-testid="season-card-expand", distinguished by its visible
+//      season name (querySelectorAll where the multi case needs them all).
+//
+// Rendering shape pinned here: the single collapsed card block becomes an
+// iteration over the manageable set — one collapsed entry per season, in the
+// page's `seasons` order, each opening the panel FOR THAT season. Clicking
+// another season's collapsed entry while a panel is open IS the switch.
+//
+// The manageable SET: every not-lapsed season (current + upcoming) whose own
+// ride-along owners/editors resolve the viewer to editor (`manageRightsFrom`
+// per season), plus `manageableSeason`'s automatic pick unchanged (its lapsed
+// fallback keeps its entry — conductorLogic.manageable.spec.ts does not flip).
+// The DB-entity-rights fallback is COLLECTIVE-level: when it promotes, it
+// promotes uniformly for all candidate seasons.
+// ════════════════════════════════════════════════════════════════════════════════
+
+/** Every per-season entry currently on the page, in DOM order. */
+function expandButtons(container: HTMLElement): HTMLElement[] {
+	return Array.from(
+		container.querySelectorAll('[data-testid="season-card-expand"]')
+	) as HTMLElement[];
+}
+
+/** The collapsed entry whose visible text names `seasonName`, or null. */
+function expandFor(container: HTMLElement, seasonName: string): HTMLElement | null {
+	return expandButtons(container).find((b) => b.textContent?.includes(seasonName)) ?? null;
+}
+
+/** Open (or switch to) the panel FOR the named season via its own entry, then
+ *  wait until the panel's visible label names that season. */
+async function openPanelForSeason(container: HTMLElement, seasonName: string): Promise<HTMLElement> {
+	await waitFor(() => {
+		expect(expandFor(container, seasonName), `an entry for ${seasonName}`).not.toBeNull();
+	});
+	await fireEvent.click(expandFor(container, seasonName) as HTMLElement);
+	await waitFor(() => {
+		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe(seasonName);
+	});
+	return q(container, 'season-manage-panel') as HTMLElement;
+}
+
+/** Any <select> offering a season as an option — the picker shape Gama's
+ *  ruling rejects. (The event-create form's season <select> only exists while
+ *  that form is open; none of these tests open it.) */
+function seasonPickerSelects(container: HTMLElement): HTMLSelectElement[] {
+	return (Array.from(container.querySelectorAll('select')) as HTMLSelectElement[]).filter(
+		(sel) =>
+			Array.from(sel.querySelectorAll('option')).some((o) => /Season 20\d\d/.test(o.textContent ?? ''))
+	);
+}
+
+/** Two not-lapsed seasons; per-season rights as given. Only `seasons` is
+ *  passed, so the builder derives the current/manageable fields exactly as the
+ *  real producer would — production-shaped, never hand-pinned. */
+function twoSeasonResult(opts: { aEditor?: boolean; bEditor?: boolean } = {}) {
+	const { aEditor = true, bEditor = true } = opts;
+	return fullAgendaResult({
+		seasons: [currentSeason(aEditor), { ...upcomingSeason(), editors: bEditor ? ['person-p'] : [] }]
+	});
+}
+
+const flush = () => new Promise((r) => setTimeout(r, 0));
+
+const SEASON_B_ID = 'season-2';
+const seriesA = [{ id: 'series-a1', name: 'Monday rehearsals', eventCount: 12 }];
+const seriesB = [{ id: 'series-b1', name: 'Thursday sectionals', eventCount: 4 }];
+/** One repertoire row per season — what lets the write-race pin tell A's row
+ *  from B's inside the panel's repertoire section. */
+const repertoireA = [
+	{ id: 'rep-a1', workId: 'work-a1', editionId: '', status: 'active', name: 'Kyrie' }
+];
+const repertoireB = [
+	{ id: 'rep-b1', workId: 'work-b1', editionId: '', status: 'active', name: 'Sanctus' }
+];
+
+/** Answer each season its OWN series list — what lets the switch pins tell
+ *  A's rows from B's. */
+function serveSeriesPerSeason(): void {
+	listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) =>
+		Promise.resolve(seasonId === SEASON_B_ID ? seriesB : seriesA)
+	);
+}
+
+describe('season card #277 — one entry per manageable season, not a picker', () => {
+	it('TWO manageable seasons: TWO collapsed entries in season order, each a BUTTON naming its own season (sr-only verb + visible name), and NO season <select> anywhere; merely rendering opens no panel and reads nothing', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(expandButtons(container)).toHaveLength(2);
+		});
+		const [first, second] = expandButtons(container);
+		expect(first.tagName).toBe('BUTTON');
+		expect(second.tagName).toBe('BUTTON');
+		// Season order — the page's `seasons` order, current first.
+		expect(first.textContent).toContain('Season 2026');
+		expect(second.textContent).toContain('Season 2027');
+		// Each entry resolves BY its function AND by ITS season (the #261
+		// accname discipline, now per entry — no aria-label superseding the name).
+		expect(first.hasAttribute('aria-label')).toBe(false);
+		expect(second.hasAttribute('aria-label')).toBe(false);
+		expect(
+			within(container).getByRole('button', { name: /season_manage_expand_label.*Season 2026/ })
+		).toBe(first);
+		expect(
+			within(container).getByRole('button', { name: /season_manage_expand_label.*Season 2027/ })
+		).toBe(second);
+		// Not a picker: no dropdown duplicates the list beside it.
+		expect(seasonPickerSelects(container)).toEqual([]);
+
+		expect(q(container, 'season-manage-panel')).toBeNull();
+		expect(listEventSeriesForSeasonMock).not.toHaveBeenCalled();
+		// NOT asserting `listRepertoireItemsMock` uncalled here (deviation,
+		// stated): `twoSeasonResult()`'s default `aEditor: true` makes person-p
+		// editor on the CURRENT season, which is `seasonManageRights` territory
+		// (#91/#167) — a completely different, pre-existing surface (the
+		// agenda's own inline "Add work" pickers) that eagerly prefetches
+		// `listRepertoireItems(cfg, currentSeasonId)` on EVERY render where the
+		// viewer edits their current season, #277 or not. None of the ~50
+		// pre-#277 tests in this file assert this mock stays uncalled under an
+		// editor-true current season, for exactly that reason. The panel's OWN
+		// read is what the two assertions above already cover.
+		expect(listRepertoireItemsMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+	});
+
+	it('ONE manageable season: EXACTLY one entry — today’s #261 face, no new control, no picker (criterion 5)', async () => {
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
+		});
+		expect(expandButtons(container)).toHaveLength(1);
+		const only = expandButtons(container)[0];
+		expect(only.getAttribute('aria-expanded')).toBe('false');
+		expect(only.textContent).toContain('Season 2026');
+		expect(only.hasAttribute('aria-label')).toBe(false);
+		expect(seasonPickerSelects(container)).toEqual([]);
+	});
+
+	it('opening the UPCOMING season’s entry loads THAT season: series + repertoire reads use ITS id, the fields are ITS fields, and the visible label names it (criteria 1+2)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2027');
+
+		await waitFor(() => {
+			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_B_ID);
+		});
+		await waitFor(() => {
+			expect(listRepertoireItemsMock).toHaveBeenCalledWith(CFG, SEASON_B_ID);
+		});
+		// The fields are B's, seeded fresh — never A's under B's heading.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-name')?.textContent).toContain('Season 2027');
+		});
+		expect(q(container, 'season-manage-start_date')?.textContent?.trim()).toBe(isoDate(61));
+		expect(q(container, 'season-manage-end_date')?.textContent?.trim()).toBe(isoDate(240));
+		// B's series, not A's.
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-b1')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-series-series-a1')).toBeNull();
+		// A conductor chip from A would be a leak — B has none.
+		expect(q(container, 'season-manage-conductor-p-grace')).toBeNull();
+	});
+
+	it('with the panel OPEN for one season the OTHER season’s entry stays reachable — the panel names its season while more than one is manageable (criterion 2)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+
+		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2026');
+		// B's entry is still there — it IS the way to switch.
+		expect(expandButtons(container)).toHaveLength(1);
+		expect(expandFor(container, 'Season 2027')).not.toBeNull();
+	});
+});
+
+describe('season card #277 — switching the managed season is a context switch', () => {
+	it('A open → click B’s entry: the panel now holds B’s fields and B’s series; NOTHING of A survives — fields, rows, chips (criterion 3)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-a1')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-conductor-p-grace')).not.toBeNull();
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+
+		await waitFor(() => {
+			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_B_ID);
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-manage-name')?.textContent).toContain('Season 2027');
+		});
+		expect(q(container, 'season-manage-name')?.textContent).not.toContain('Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-b1')).not.toBeNull();
+		});
+		expect(q(container, 'season-manage-series-series-a1')).toBeNull();
+		expect(q(container, 'season-manage-conductor-p-grace')).toBeNull();
+		// The repertoire read re-ran for B, not recycled from A.
+		await waitFor(() => {
+			expect(listRepertoireItemsMock).toHaveBeenCalledWith(CFG, SEASON_B_ID);
+		});
+	});
+
+	it('race (a): a series read for A still in flight when the admin switches to B NEVER repopulates B’s panel', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		let resolveStaleA!: (rows: typeof seriesA) => void;
+		listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) => {
+			if (seasonId === SEASON_ID)
+				return new Promise((resolve) => {
+					resolveStaleA = resolve as typeof resolveStaleA;
+				});
+			return new Promise(() => {}); // B's own read stays pending: anything visible is stale
+		});
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_ID);
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+		// …and only NOW does A's read land.
+		resolveStaleA(seriesA);
+		await flush();
+
+		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2027');
+		expect(q(container, 'season-manage-series-series-a1')).toBeNull();
+		expect(q(container, 'season-manage-series-error')).toBeNull();
+	});
+
+	it('race (b): a field edit on A REJECTING after the switch neither clobbers B’s field nor leaks into B’s error slot — and the field is still editable (criterion 3)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		let rejectStaleWrite!: (e: Error) => void;
+		updateSeasonFieldMock.mockImplementation(
+			() =>
+				new Promise((_resolve, reject) => {
+					rejectStaleWrite = reject as typeof rejectStaleWrite;
+				})
+		);
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await editField(container, 'name', 'Renamed A');
+		await waitFor(() => {
+			expect(updateSeasonFieldMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'name', 'Renamed A');
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+		rejectStaleWrite(new Error('boom, late'));
+		await flush();
+
+		// B's field untouched: not A's old value (the stale revert), not the draft.
+		expect(q(container, 'season-manage-name')?.textContent).toContain('Season 2027');
+		expect(q(container, 'season-manage-name')?.textContent).not.toContain('Season 2026');
+		expect(q(container, 'season-manage-name')?.textContent).not.toContain('Renamed A');
+		// No error leak into B's slots.
+		expect(q(container, 'season-edit-error-name')).toBeNull();
+		// And no leaked pending flag: B's name is still editable.
+		await fireEvent.click(q(container, 'season-edit-btn-name') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-edit-input-name')).not.toBeNull();
+		});
+	});
+
+	it('race (c): an in-flight conductor add on A rejecting after the switch leaves B’s chips and error slot untouched (criterion 3)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		let rejectStaleAdd!: (e: Error) => void;
+		addSeasonConductorMock.mockImplementation(
+			() =>
+				new Promise((_resolve, reject) => {
+					rejectStaleAdd = reject as typeof rejectStaleAdd;
+				})
+		);
+		const container = await renderReady();
+
+		const panelA = await openPanelForSeason(container, 'Season 2026');
+		await pickConductor(panelA, 'p-ada');
+		await waitFor(() => {
+			expect(addSeasonConductorMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'p-ada');
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+		rejectStaleAdd(new Error('boom, late'));
+		await flush();
+
+		// B has NO conductors: neither the optimistic Ada nor A's restored
+		// before-array (Grace) may appear under B's heading.
+		expect(q(container, 'season-manage-conductor-p-ada')).toBeNull();
+		expect(q(container, 'season-manage-conductor-p-grace')).toBeNull();
+		expect(q(container, 'season-manage-conductor-error')).toBeNull();
+	});
+
+	it('race (d): a season delete ARMED on A is DISARMED by the switch — B’s title row shows the idle trashcan, never a live confirm (resetSeasonManage keeps covering it)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-season')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'season-manage-delete-season') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-season-confirm')).not.toBeNull();
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+
+		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
+		expect(q(container, 'season-manage-delete-season-cancel')).toBeNull();
+		await waitFor(() => {
+			expect(q(container, 'season-manage-delete-season')).not.toBeNull();
+		});
+		expect(deleteSeasonMock).not.toHaveBeenCalled();
+	});
+
+	it('race (e): a panel repertoire REMOVE on A rejecting after the switch never paints A’s row under B’s heading (criterion 3)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		// Each season its own row. B's SECOND read — the one the rejected write's
+		// `revert()` fires — never settles, so the rollback is the only thing that
+		// could put a row on screen: without the guard the assertion below is not
+		// racing a re-read that would have washed A's row out a tick later.
+		let bReads = 0;
+		listRepertoireItemsMock.mockImplementation((_cfg: unknown, seasonId: string) => {
+			if (seasonId !== SEASON_B_ID) return Promise.resolve(repertoireA);
+			bReads += 1;
+			return bReads === 1 ? Promise.resolve(repertoireB) : new Promise(() => {});
+		});
+		let rejectStaleDelete!: (e: Error) => void;
+		deleteRepertoireItemMock.mockImplementation(
+			() =>
+				new Promise((_resolve, reject) => {
+					rejectStaleDelete = reject as typeof rejectStaleDelete;
+				})
+		);
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-repertoire')?.textContent).toContain('Kyrie');
+		});
+		const removeA = q(q(container, 'season-manage-repertoire') as HTMLElement, 'work-manage-remove');
+		expect(removeA, 'the panel row’s remove control').not.toBeNull();
+		await fireEvent.click(removeA as HTMLElement);
+		await waitFor(() => {
+			expect(deleteRepertoireItemMock).toHaveBeenCalledWith(CFG, 'rep-a1');
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-repertoire')?.textContent).toContain('Sanctus');
+		});
+
+		// …and only NOW does A's DELETE reject.
+		rejectStaleDelete(new Error('boom, late'));
+		await flush();
+
+		const section = q(container, 'season-manage-repertoire') as HTMLElement;
+		// B's row stands, A's restored array is not painted under it — and no
+		// remove/status control writing against A's repertoire_item id survives.
+		expect(section.textContent).toContain('Sanctus');
+		expect(section.textContent).not.toContain('Kyrie');
+		expect(section.querySelectorAll('[data-testid="work-manage-remove"]')).toHaveLength(1);
+	});
+});
+
+describe('season card #277 — rights are re-derived per season', () => {
+	it('editor on the CURRENT season only: exactly one entry, the current season’s — the upcoming season the viewer cannot edit gets NONE (criterion 4, fail-closed)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult({ aEditor: true, bEditor: false }));
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(expandFor(container, 'Season 2026')).not.toBeNull();
+		});
+		expect(expandButtons(container)).toHaveLength(1);
+		expect(expandFor(container, 'Season 2027')).toBeNull();
+	});
+
+	it('switching cannot CARRY A’s editor onto B: with rights on A only, opening A leaves NO switch target for B', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult({ aEditor: true, bEditor: false }));
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+
+		expect(expandFor(container, 'Season 2027')).toBeNull();
+		expect(expandButtons(container)).toHaveLength(0);
+	});
+
+	it('editor on the UPCOMING season only: ITS entry renders even though the automatic pick (the current season) is unmanageable — and it opens ITS panel (criterion 1)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult({ aEditor: false, bEditor: true }));
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(expandFor(container, 'Season 2027')).not.toBeNull();
+		});
+		expect(expandFor(container, 'Season 2026')).toBeNull();
+		expect(expandButtons(container)).toHaveLength(1);
+
+		await openPanelForSeason(container, 'Season 2027');
+		await waitFor(() => {
+			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_B_ID);
+		});
+		expect(listEventSeriesForSeasonMock).not.toHaveBeenCalledWith(CFG, SEASON_ID);
+	});
+
+	it('rights on ZERO not-lapsed seasons: no entries, no card, no panel — absent, not disabled (and the DB probe’s not-editor answer is no grant)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult({ aEditor: false, bEditor: false }));
+		const container = await renderReady();
+
+		// The auto-pick carries no visible rights → the database entity is asked;
+		// its 'not-editor' (suite default) leaves everything shut.
+		await waitFor(() => {
+			expect(resolveManageRightsMock).toHaveBeenCalledWith(CFG, ORG_EFK, 'person-p');
+		});
+		expect(expandButtons(container)).toHaveLength(0);
+		expect(q(container, 'agenda-admin-card')).toBeNull();
+		expect(q(container, 'season-manage-panel')).toBeNull();
+	});
+
+	it('the DB-entity fallback promotes UNIFORMLY: no per-season rights visible anywhere + database-entity editor → EVERY not-lapsed season gets an entry (collective-level grant)', async () => {
+		resolveManageRightsMock.mockResolvedValue('editor');
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult({ aEditor: false, bEditor: false }));
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(expandButtons(container)).toHaveLength(2);
+		});
+		expect(expandFor(container, 'Season 2026')).not.toBeNull();
+		expect(expandFor(container, 'Season 2027')).not.toBeNull();
+	});
+
+	it('a LAPSED season alongside a current one gets NO entry even for its editor — the set is not-lapsed seasons only (the automatic pick’s lapsed FALLBACK case stays covered by the existing single-season specs)', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			fullAgendaResult({
+				seasons: [
+					{
+						id: 'season-0',
+						name: 'Season 2025',
+						startDate: isoDate(-300),
+						endDate: isoDate(-100),
+						conductors: [],
+						owners: [],
+						editors: ['person-p']
+					},
+					currentSeason(true)
+				]
+			})
+		);
+		const container = await renderReady();
+
+		await waitFor(() => {
+			expect(expandFor(container, 'Season 2026')).not.toBeNull();
+		});
+		expect(expandButtons(container)).toHaveLength(1);
+		expect(expandFor(container, 'Season 2025')).toBeNull();
+	});
+});
+
+// ════════════════════════════════════════════════════════════════════════════════
+// #277 REVIEW pins (Bentham, RED verdict) — the three findings that only bite
+// once the OPEN panel's season and the automatic pick can differ.
+// ════════════════════════════════════════════════════════════════════════════════
+
+/** The two-step series delete inside the panel, from the row's trashcan. */
+async function armAndConfirmSeriesDelete(container: HTMLElement, id: string): Promise<void> {
+	await fireEvent.click(q(container, `season-manage-series-delete-${id}`) as HTMLElement);
+	await waitFor(() => {
+		expect(q(container, `season-manage-series-delete-confirm-${id}`)).not.toBeNull();
+	});
+	await fireEvent.click(q(container, `season-manage-series-delete-confirm-${id}`) as HTMLElement);
+}
+
+/** Each collapsed entry's visible season NAME (its last span — the sr-only verb
+ *  and the disclosure triangle precede it), in DOM order. */
+function entryNames(container: HTMLElement): string[] {
+	return expandButtons(container).map(
+		(b) => b.querySelector('span:last-of-type')?.textContent?.trim() ?? ''
+	);
+}
+
+describe('season card #277 review F1 — a panel-preserving reload keeps the panel on ITS season', () => {
+	it('a series delete inside B’s panel reloads the agenda with the panel kept: the panel stays B’s, the next field edit writes B, and B is NOT listed as a collapsed entry while it is open', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2027');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-b1')).not.toBeNull();
+		});
+
+		// The panel's own delete → `refreshAfterSeasonManageDelete` →
+		// `loadForSelected({ keepSeasonManage: true })`, which leaves the panel open.
+		await armAndConfirmSeriesDelete(container, 'series-b1');
+		await waitFor(() => {
+			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
+		});
+		await flush();
+
+		// Still B's panel — label, fields, and the id every write carries.
+		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2027');
+		expect(q(container, 'season-manage-name')?.textContent).toContain('Season 2027');
+		await editField(container, 'name', 'Renamed B');
+		await waitFor(() => {
+			expect(updateSeasonFieldMock).toHaveBeenCalledWith(CFG, SEASON_B_ID, 'name', 'Renamed B');
+		});
+		expect(updateSeasonFieldMock).not.toHaveBeenCalledWith(CFG, SEASON_ID, 'name', 'Renamed B');
+		// One face per season: A collapsed, B expanded — never B listed under
+		// itself while its own panel is open.
+		expect(entryNames(container)).toEqual(['Season 2026']);
+	});
+
+	it('the panel’s repertoire section reconciles after that reload even when its own re-read settles BEFORE the agenda load', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		let panelItems = [
+			{ id: 'rep-b1', workId: 'work-b1', editionId: '', status: 'active', name: 'Kyrie' }
+		];
+		listRepertoireItemsMock.mockImplementation((_cfg: unknown, seasonId: string) =>
+			Promise.resolve(seasonId === SEASON_B_ID ? panelItems : [])
+		);
+		const container = await renderReady();
+		await openPanelForSeason(container, 'Season 2027');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-repertoire')?.textContent).toContain('Kyrie');
+		});
+
+		// The post-delete agenda reload NEVER settles, so the panel's own re-read
+		// is the only thing that lands — exactly the ordering under which the live
+		// `manageableSeasonId` compare dropped it (blanked for the whole reload).
+		panelItems = [
+			{ id: 'rep-b2', workId: 'work-b2', editionId: '', status: 'active', name: 'Sanctus' }
+		];
+		loadFullAgendaMock.mockImplementation(() => new Promise(() => {}));
+		await armAndConfirmSeriesDelete(container, 'series-b1');
+		await waitFor(() => {
+			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
+		});
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-repertoire')?.textContent).toContain('Sanctus');
+		});
+		expect(q(container, 'season-manage-repertoire')?.textContent).not.toContain('Kyrie');
+	});
+
+	it('review 2 F1 — a panel repertoire WRITE settling during that reload reconciles its own section too: the blanked `manageableSeasonId` is a reload, not a switch', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		// Read 1 = the panel's open, read 2 = the post-delete list refresh (same
+		// rows), read 3 = what the status write's own reconcile fetches. Only the
+		// third carries a different name, so 'Gloria' on screen can ONLY have come
+		// from `refreshPanelRepertoire` — which used to bail on the blank
+		// `manageableSeasonId` a `{ keepSeasonManage: true }` reload holds for its
+		// whole duration, leaving the section on pre-write rows.
+		let bReads = 0;
+		listRepertoireItemsMock.mockImplementation((_cfg: unknown, seasonId: string) => {
+			if (seasonId !== SEASON_B_ID) return Promise.resolve([]);
+			bReads += 1;
+			return Promise.resolve(
+				bReads >= 3
+					? [{ id: 'rep-b1', workId: 'work-b1', editionId: '', status: 'retired', name: 'Gloria' }]
+					: repertoireB
+			);
+		});
+		let resolveStatusWrite!: () => void;
+		updateRepertoireStatusMock.mockImplementation(
+			() =>
+				new Promise<void>((resolve) => {
+					resolveStatusWrite = resolve as typeof resolveStatusWrite;
+				})
+		);
+		const container = await renderReady();
+		await openPanelForSeason(container, 'Season 2027');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-repertoire')?.textContent).toContain('Sanctus');
+		});
+
+		// The write goes out BEFORE the reload — mid-reload the panel's controls are
+		// read-only anyway (`resetManagement` blanks the rights too), so the only
+		// way a write can settle inside that window is to have started outside it.
+		await fireEvent.click(
+			q(q(container, 'season-manage-repertoire') as HTMLElement, 'work-status-retired') as HTMLElement
+		);
+		await waitFor(() => {
+			expect(updateRepertoireStatusMock).toHaveBeenCalledWith(CFG, 'rep-b1', 'retired');
+		});
+
+		// The reload this panel's own series delete fires NEVER settles, so
+		// `manageableSeasonId` stays blank for the rest of the test.
+		loadFullAgendaMock.mockImplementation(() => new Promise(() => {}));
+		await armAndConfirmSeriesDelete(container, 'series-b1');
+		await waitFor(() => {
+			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
+		});
+		await waitFor(() => {
+			expect(bReads).toBe(2);
+		});
+
+		// …and only NOW does the status write land, inside the reload's window.
+		resolveStatusWrite();
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-repertoire')?.textContent).toContain('Gloria');
+		});
+		// The reconcile's own read went to the PANEL's season (a third B read),
+		// never to the automatic pick the blanked id would have fallen back to.
+		expect(bReads).toBe(3);
+	});
+});
+
+describe('season card #277 review F3 — a series cascade that resolves after a switch', () => {
+	it('the delete of A’s series landing AFTER the switch announces nothing, splices no row of B’s, and fires no reload', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		let resolveCascade!: (count: number) => void;
+		deleteEventSeriesMock.mockImplementation(
+			() =>
+				new Promise<number>((resolve) => {
+					resolveCascade = resolve as typeof resolveCascade;
+				})
+		);
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-a1')).not.toBeNull();
+		});
+		await armAndConfirmSeriesDelete(container, 'series-a1');
+		await waitFor(() => {
+			expect(deleteEventSeriesMock).toHaveBeenCalled();
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+		const agendaLoadsBeforeLanding = loadFullAgendaMock.mock.calls.length;
+		resolveCascade(3);
+		await flush();
+
+		expect(q(container, 'season-manage-delete-status')?.textContent?.trim()).toBe('');
+		expect(q(container, 'season-manage-delete-error')).toBeNull();
+		// B's rows are B's — the stale splice cannot reach them.
+		expect(q(container, 'season-manage-series-series-b1')).not.toBeNull();
+		expect(loadFullAgendaMock).toHaveBeenCalledTimes(agendaLoadsBeforeLanding);
+	});
+
+	it('a REJECTED cascade for A after the switch paints no error slot in B’s panel', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		let rejectCascade!: (e: Error) => void;
+		deleteEventSeriesMock.mockImplementation(
+			() =>
+				new Promise<number>((_resolve, reject) => {
+					rejectCascade = reject as typeof rejectCascade;
+				})
+		);
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-a1')).not.toBeNull();
+		});
+		await armAndConfirmSeriesDelete(container, 'series-a1');
+		await waitFor(() => {
+			expect(deleteEventSeriesMock).toHaveBeenCalled();
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+		rejectCascade(new Error('boom, late'));
+		await flush();
+
+		expect(q(container, 'season-manage-delete-error')).toBeNull();
+		expect(q(container, 'season-manage-series-series-b1')).not.toBeNull();
+	});
+});
+
+describe('season card #277 review F4 — the in-play entry carries the panel’s live name', () => {
+	it('ONE manageable season: a rename in the panel then a collapse shows the NEW name on the entry (the collapse keeps the panel’s fields)', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+		await editField(container, 'name', 'Renamed 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-name')?.textContent).toContain('Renamed 2026');
+		});
+
+		await collapseSeasonCard(container);
+
+		await waitFor(() => {
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
+		});
+		expect(expandButtons(container)).toHaveLength(1);
+		expect(expandButtons(container)[0].textContent).toContain('Renamed 2026');
+		expect(expandButtons(container)[0].textContent).not.toContain('Season 2026');
+	});
+
+	it('the OTHER seasons’ entries keep reading the season list: renaming the open season touches only its own entry', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		serveSeriesPerSeason();
+		const container = await renderReady();
+
+		await openPanelForSeason(container, 'Season 2026');
+		await editField(container, 'name', 'Renamed 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-name')?.textContent).toContain('Renamed 2026');
+		});
+		// B is collapsed and untouched while A is open…
+		expect(entryNames(container)).toEqual(['Season 2027']);
+
+		await collapseSeasonCard(container);
+
+		// …and A's own entry comes back with the edited name beside B's unchanged one.
+		await waitFor(() => {
+			expect(expandButtons(container)).toHaveLength(2);
+		});
+		expect(entryNames(container)).toEqual(['Renamed 2026', 'Season 2027']);
+	});
+});
+
+describe('season card #277 — [+ Season] alongside the entries', () => {
+	it('[+ Hooaeg] stays present above TWO manageable entries, and a created season JOINS the entries after the existing post-create reload', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(expandButtons(container)).toHaveLength(2);
+		});
+		await waitFor(() => {
+			expect(q(container, 'season-create')).not.toBeNull();
+		});
+
+		await fireEvent.click(q(container, 'season-create') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'season-create-form')).not.toBeNull();
+		});
+		await fireEvent.input(q(container, 'season-create-name') as HTMLInputElement, {
+			target: { value: 'Season 2028' }
+		});
+		await fireEvent.input(q(container, 'season-create-start') as HTMLInputElement, {
+			target: { value: isoDate(241) }
+		});
+		await fireEvent.input(q(container, 'season-create-end') as HTMLInputElement, {
+			target: { value: isoDate(400) }
+		});
+		// The post-create reload answers THREE manageable seasons.
+		loadFullAgendaMock.mockResolvedValue(
+			fullAgendaResult({
+				seasons: [
+					currentSeason(true),
+					upcomingSeason(),
+					{
+						id: 'season-3',
+						name: 'Season 2028',
+						startDate: isoDate(241),
+						endDate: isoDate(400),
+						conductors: [],
+						owners: [],
+						editors: ['person-p']
+					}
+				]
+			})
+		);
+		await fireEvent.click(q(container, 'season-create-submit') as HTMLElement);
+
+		await waitFor(() => {
+			expect(loadFullAgendaMock).toHaveBeenCalledTimes(2);
+		});
+		await waitFor(() => {
+			expect(expandButtons(container)).toHaveLength(3);
+		});
+		expect(expandFor(container, 'Season 2028')).not.toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #132/T3 RED: [⚙] season management — gear entry point, inline
 // panel, per-field editing, conductor chips, series/standalone listings, close/persist)
+// (*MVOX:Tallis* — #277 RED: per-season entry points — one collapsed entry per
+// manageable season, season switch as a context switch (race pins a–d),
+// per-season rights re-derivation, single-season case byte-identical)
