@@ -372,6 +372,63 @@ deliberately pins only the 13 pre-#320 blocks.
 the live deliverable, so the cheap close is adding ER-18..ER-23 to `UNTOUCHED_SHA256` in the next slice
 that touches this spec (#318).** No new machinery needed; the mechanism is already there.
 
+## [PATTERN-PAIR-THE-FLAG-WITH-THE-ROWS] 2026-09-11, #321 r4 — the audit that finds the missed consumers
+
+When a producer starts reporting a completeness flag beside its rows (`{ items, total, truncated }`), the
+review question is not "does each notice work" but **"does every consumer of `items` either consume the
+flag or state at the site why it does not?"** Run it mechanically — one grep pairs them:
+
+```
+grep -rn 'Read\.items\|Read\.truncated\|read\.items\|read\.truncated' src/routes src/lib \
+  --include='*.svelte' --include='*.ts' | grep -v spec | sort
+```
+
+Adjacent line numbers with `.items` and no `.truncated` partner ARE the finding. On #321 that surfaced
+four unpaired sites after three fix commits had already closed six others by hand — three of them closed-set
+`<select>` feeds the PO's ruling covered (`+page.svelte:1671`, `event/[id]:1669`, `+page.svelte:3406` →
+`work-manage-add-work-select` / `work-manage-add-programme-select`). Reading the fix commits alone would
+not have found them; the fixes were all correct, and the gap was entirely in what they did not reach —
+the section-I shape again, at the consumer level.
+
+**Companion lesson on scope comments.** All four unpaired sites carried the SAME sentence — "out of the
+RED-pinned scope: only /library and the agenda's own rsvp/attendance lines get one" — which the PO had
+already overruled ("naming something a follow-up does not narrow a criterion that already covers it").
+**A stale scope comment replicated across sites is a search key, not one defect**: grep the sentence, not
+the symptom. And note the asymmetry worth preserving — one of the four (`workRows.ts:193`) was correctly
+out on the merits (a label-lookup miss degrades a name to `''`, it hides no pickable item), so its
+DISPOSITION was right while its stated REASON was the overruled one. Enumerate that case explicitly or a
+fixer "corrects" a true disposition into a false one.
+
+**Ruling shape to watch for:** a PO ruling that adds a test can EXTEND an existing criterion rather than
+replace it. #321's reachability test extended the display-list criterion to option-lists; the chain read
+it as replacing, which exempted a roll-up table ("nothing is picked here"). The PO corrected it in the
+same words. When a ruling introduces a test, ask whether the prior criterion survives alongside it.
+
+### The grep's own blind spot — follow the ARRAY, not the read (found 2026-09-11, #321 r5)
+
+That pairing grep is **read-level**: it finds a `.items` assignment with no `.truncated` partner. It cannot
+see the case where the flag IS captured at the read and a **second consumer of the same array** renders no
+notice. On #321 the closure commit made the read-level audit come back clean, and one closed-set picker was
+still uncovered: `libraryEditions` feeds the "Add to programme" select (wired) **and** `editionsByWorkId` →
+`editionOptionsByRowId` → `work-edition-picker`, the per-row pin-edition select
+(`RepertoireElement.svelte:409`), which got nothing.
+
+**So the audit has two passes and I only had the first.** After pairing every read, take each flagged array
+and follow its *derived* consumers one hop at a time (`grep -n '<arrayName>' <page>`, then each `$derived`
+built from it). A notice wired at one consumer proves nothing about its siblings.
+
+**Why that instance did not become a second RED, and the line I drew** — worth keeping, because the
+consistency question is the hard part. The three feeds I RED'd were **mechanical**: flag present at the
+read, notice shape already built, only threading missing, and every site carried a comment citing a reason
+the PO had overruled. Nothing needed deciding. The pin-edition case is **not** mechanical: its control is
+gated on `options.length > 0`, so under truncation the select does not render at all and the row falls
+through to `work-no-edition` ("no edition") — a positive false statement, with no control left to hang a
+trailing option on. Fixing it means deciding what the row should SAY, a design call inside an issue whose
+fence reads "no paging UI, no filter/search, no cap changes". **Mechanical gap → RED; residual needing a
+ruling → name it at the site, route it to the PO, don't block the merge.** The same branch had already
+handled its `listMyRsvps` single-value residual that way with PO endorsement, so the line follows an
+accepted precedent rather than my mood.
+
 ## PO standing rules — pointer only
 
 **The binding text is the "PO standing rules" section of `architecture-decisions.md`. Read it there;

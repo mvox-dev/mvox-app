@@ -2,6 +2,21 @@
 
 > **Trimmed 2026-08-31 (session MVOX-11 checkpoint).** Full history in git.
 
+### [CHECKPOINT 2026-09-11 ~06:1x EEST — MVOX-20 mid-session; #321 pipeline LIVE]
+
+**Wake 17:45 via /mvox-wake (resident-loop respawn proven, Mihkel confirmed + resumed the MVOX-19 pause). SIX MERGED this session:** #315 `e361173` · #313 `d118cff` · #317 `d8651b9` (recovery: YELLOW→fix e820d2a→Bentham GREEN) · #256 `9929de2` · #277 `0732e85` · #320 `6cbaf39` (recovery: checksum fence c0eaf97 + exemption-narrow cd56721→Bentham merge-eligible). Plus #289's inventory deliverable `fe52c54` (docs/qa/autosave-field-inventory.md) + SIX native sub-issues cut #323-#328 (unlabeled, Gama's gate).
+
+**LIVE: #321 run wf_5b2b9161-475** (silent list truncation; args-321 committed at 97fa0d6 carry Gama's 00:46Z amendment + probe-settled count mechanism — count = caller-visible total ALL tiers, two ledgered probes committed; length===limit forbidden). If dead on wake: check branch feat/321-lists-say-when-partial, delete incomplete, relaunch from committed args.
+
+**QUEUE after #321:** #322 (ER-9 direction-free + ER-12 citation swap; ready; dated-correction-note requirement on-issue) → #318/#319 (epic #316 closes on these two; research banked research-316.json — re-verify #318 infra at build; endpoint auth = plain infra question, name already removed from doc §7.3 by #317). #233 still gated by #316 close (Mihkel's schema gate). #289 sub-issues await Gama's ready labels.
+
+**EPIC #316: 2/4 closed (#317, #320), doc = ER-1..ER-23 + mechanical guard spec (two-layer fence: 9 exact sentences + checksum, exemption = ER blocks only).** Label mirrors highest sub-issue tier (Mihkel's rule, in durable memory + MEMORY.md).
+
+**Standing this session:** epic-label-mirrors-tasks (durable memory); #322's corrected-vs-superseded test (pre-edit citation stays sound → same rule); Bentham's qualification-vs-companion discriminator + fence-ADD-probe lesson (his scratchpad); count semantics = ER-doc candidate for a future commission. Landing-notice monitor b0or9450q armed (dies with session — re-arm on wake). Session findings: scratchpad/session-findings.md (session-local, dies with container).
+
+(*MVOX:Palestrina*)
+
+---
 ### [RESIDENCY 2026-09-10 ~17:45 EEST — exit→respawn loop live; container recreate = the pending seam]
 
 **The session now respawns itself.** Adopted Passepartout's resident-loop design (consult on record, his courier msgs): `~/.claude/mvox-resident.sh` runs as detached tmux session `mvox-resident`, supervises claude — exit → sleep 5 → relaunch. ARMED NOW (log: "live claude detected — waiting for it to end (handover)"): the very next /mvox-exit respawns automatically. Flags in `~/.claude/`: `fresh-next` = retire (next launch fresh + /mvox-wake, team dirs archived); absent = crash-resume (`--continue "/mvox-wake"`); `stay-down` = PARK (loop exits — this is the pause gesture now; plain exit no longer parks). Guards: <20s failed continue → one-shot fresh fallback; DNS wait; never kill the tmux server as a retirement gesture (Passe's warning — takes operator terminals down).
