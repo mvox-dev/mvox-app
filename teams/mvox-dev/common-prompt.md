@@ -26,7 +26,7 @@ When prompts or memory cite `$REPO/...` or `$ENTU_RESEARCH/...`, resolve relativ
 ## Key References
 
 - `CLAUDE.md` — project overview, architecture, commands, conventions
-- Schema authority: the commissioning GitHub issue per type (see "Schema Evolution" below); schema-of-record home pending. `entu/research` `docs/schema/v4E/` is HISTORICAL REFERENCE only (retired as canonical 2026-09-06)
+- Schema authority: the commissioning GitHub issue per type adjudicates; shape-of-record = `scripts/migrations/lib/mvox-schema-extensions.ts` + `docs/architecture/mvox-schema-extensions.md` (settled #263 — see "Schema Evolution" item 5). `entu/research` `docs/schema/v4E/` is HISTORICAL REFERENCE only (retired as canonical 2026-09-06)
 - GitHub Issues — check open issues for task context
 
 ## Communication Rule
@@ -193,7 +193,7 @@ git push origin --delete <feature-branch>
 1. **PO sign-off before build is unchanged**: new entity types, property shapes, rights or sharing semantics still require an explicit PO ruling, recorded on the commissioning GitHub issue. That issue thread is the type's design record.
 2. The mvox PR carries `PO-Approved: <date> <issue/comment ref or "verbal in session, logged by team-lead">`. The `Schema-Change: entu/research@…` trailer is **retired** — do not point new work at the upstream repo.
 3. Bentham REDs any mvox PR whose diff references a new/changed entity type, property, formula, or rights default without a `PO-Approved:` trailer.
-4. Type creation on live databases lands via seed/setup scripts, Pérotin's domain, with the usual authorization gate. Precision (Pérotin premise-check 2026-09-06): the `mvox_collective` "precedent" covers only *skipping schema.ts/PR/trailers* — its definition actually lives inline in entu-research's `setup-entity-types.ts` (foreign team, foreign repo). Do NOT add new types there; new definitions live workspace-app-side (home per the pending schema-of-record decision).
+4. Type creation on live databases lands via seed/setup scripts, Pérotin's domain, with the usual authorization gate. Precision (Pérotin premise-check 2026-09-06): the `mvox_collective` "precedent" covers only *skipping schema.ts/PR/trailers* — its definition actually lives inline in entu-research's `setup-entity-types.ts` (foreign team, foreign repo). Do NOT add new types there; new definitions live workspace-app-side (home per item 5 below).
 5. The durable **schema-of-record home** is settled (PO ruling 2026-09-06, mvox-app#263): `scripts/migrations/lib/mvox-schema-extensions.ts` (definitions, one `MvoxEntityDef` per type) + `docs/architecture/mvox-schema-extensions.md` (narrative) + `scripts/migrations/lib/ensure-schema-type.ts` (idempotent provision primitive). The commissioning issue is the **adjudication record** (fixed once settled); the `ts`/`.md` pair is the **shape-of-record** (current truth, synced with what's provisioned); `MvoxEntityDef.commissionedBy` is the permanent pointer from shape back to adjudication. **Guard:** on any conflict between shape-of-record and a provisioned db, the discrepancy is a defect to surface — never silently edit either side to match the other. Provisioning audience is per-commission: each commissioning issue answers explicitly whether the type lands on mvox_crede too (schema additions follow their commission's audience — no default-yes). Run ledgers for type-provisioning live in `seed-results/`, same as instance seeds.
 
 ## Research Support

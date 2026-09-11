@@ -368,9 +368,33 @@ attributed to nothing; (b) it stays bound by the 12-line/1200-char caps, the evi
 exactly-one content probes; (c) ER-18..ER-23 are #320's own reviewed deliverable, and `UNTOUCHED_SHA256`
 deliberately pins only the 13 pre-#320 blocks.
 
-**Re-open when** any of those three goes false — in particular, **once #320 merges those blocks stop being
-the live deliverable, so the cheap close is adding ER-18..ER-23 to `UNTOUCHED_SHA256` in the next slice
-that touches this spec (#318).** No new machinery needed; the mechanism is already there.
+**CLOSED 2026-09-11 by #322 (`db03a38`), not #318.** The slice took it a slot earlier than I earmarked —
+stated choice (e) in its commit body, credited at the spec comment. Verified at the FILE, not from the
+commit body: `src/rights-model-identifiers.spec.ts:898-903` carries ER-18..ER-23 in `UNTOUCHED_SHA256`,
+and ER-9/ER-12 are computed off `CORRECTED_ER9`/`CORRECTED_ER12` rather than re-pinned by hand.
+**#318 must not re-take this.**
+
+### The residual that close leaves — three blocks carry no hash pin (found 2026-09-11, verifying the above)
+
+The pin set is **20 of 23 blocks**. Missing: **ER-1, ER-3, ER-7** — exactly the three #320 edited
+(`Stands on:` lines on ER-1/ER-3, ER-7's token conversion), which is *why* they could not be pinned to
+pre-#320 bytes at the time. Their only block-level guards are sentence-**presence** tests (`:917`, `:929`,
+`:940`), and a presence list is open to addition by construction — the same shape as the round-4
+nine-sentence list that started this arc. Measured cap slack, so an append is expressible rather than
+theoretically open: ER-1 8 lines / 276 chars, ER-3 9L/688C, ER-7 9L/495C, against `MAX_LINES = 12` /
+`MAX_CHARS = 1200` (`:370-371`). The §1–§3 fence does not cover them either — its exemption is per-ER-run
+by design (`cd56721`), so a line inside an ER block's own `>` run is invisible to it wherever it sits.
+
+**[unverified]** that an appended sentence there actually runs green — I did not doctor the doc and run
+the suite, because a seven-slice pack was live in the shared tree and the single-tree protocol gives me no
+business dirtying it. The above is a static read; the run is what would settle it.
+
+**The close is cheap and the machinery exists**: all three are stable on main post-#322, so they pin
+exactly like the other twenty — plain hashes, or the `CORRECTED_*`-constant form if a slice edits them in
+the same breath. Right home is the next spec-touching slice (**#318** on current sequencing).
+**Same-mistake warning for whoever takes it**: this residual exists *because* #320's own edits made three
+blocks unpinnable at pin time — so a slice that edits an ER block and pins it in the same commit closes
+its hole, while one that edits and defers opens a new one. **Pin in the editing slice.**
 
 ## [PATTERN-PAIR-THE-FLAG-WITH-THE-ROWS] 2026-09-11, #321 r4 — the audit that finds the missed consumers
 
@@ -428,6 +452,31 @@ fence reads "no paging UI, no filter/search, no cap changes". **Mechanical gap �
 ruling → name it at the site, route it to the PO, don't block the merge.** The same branch had already
 handled its `listMyRsvps` single-value residual that way with PO endorsement, so the line follows an
 accepted precedent rather than my mood.
+
+## [PATTERN-PAIR-THE-FLAG-WITH-THE-ROWS, third disposition] 2026-09-11, #329 — when DISCARDING the rows is right
+
+#321 gave two dispositions for a truncated read: wire the notice, or state at the site why not. #329's
+scoped-read bail is a **third** — discard the partial page entirely — and it is right under one specific
+condition: **when the rows feed a CLAIM, not merely a display.** The test that separates them:
+
+- **Library page** (`routes/library/+page.svelte:468-475`) keeps `result.items` AND adds the workId to
+  `editionsPartialWorkIds`. Correct there, because those rows are only a list — nothing derives a negative.
+- **Repertoire row** (`+page.svelte:2354-2362`, `event/[id]:2308-2316`) must discard, because entering
+  `scopedEditionsByWorkId` is exactly what puts the work into `editionsResolvedWorkIds`, drops it from
+  `unresolvedEditionWorkIds`, and converts the row to a stated fact. Keeping the rows *is* the derived
+  negative, one layer down.
+
+**The price, and why it is not a defect**: the picker then holds its placeholder and nothing else, so at
+>500 editions for ONE work (`limit=500`, `libraryData.ts:101`) pinning becomes unperformable. Honest — the
+row says unknown and asserts nothing false — but a dead affordance. Showing partial options *without*
+resolving needs the option source decoupled from the resolved set (two maps), a refactor rather than the
+one-liner the fence allowed. **So: discard when the rows drive a claim, and price the lost affordance out
+loud instead of quietly keeping rows to preserve it.**
+
+Method note: the bail proved load-bearing by replay at file granularity — pre-fix blobs of the two
+`+page.svelte` over the branch, restore chained with `;` — exactly 4 failures, all on assertions
+(`expected null not to be null`), 24 unrelated green. A timeout or a module error there would have proved
+nothing.
 
 ## PO standing rules — pointer only
 

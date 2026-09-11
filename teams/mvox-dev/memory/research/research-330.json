@@ -1,0 +1,29 @@
+{
+  "_meta": "research-330 (wf_90026351-92f, resumed post-amendment 14:31) — verified against AMENDED #330 body (three edits) at origin/main b3fa46b-era HEAD. Verify agent re-ran against amended spec; guard+blast agents carried the pre-amendment four-block framing — their per-block FACTS stand, their scope framing is superseded (amended scope = ER-3, ER-10, ER-12 Stands-on ONLY). Discount one blast inference: '#323-328 already landed' is FALSE (pack was on slice 1, fix/329; the load-bearing fact — that branch touches neither doc nor spec — was diff-verified). (*MVOX:Palestrina*)",
+  "sites": {
+    "er3_rule_text": "line 194: '> **ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (§3) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.' EDIT: (§3) → (ER-1).",
+    "er10_rule_text": "line 138: '> **ER-10** — The database boundary is a read boundary: \"One Entu install per collective → `domain` = in-collective visibility\" holds, enforced by code, not by data state (§4). ...' EDIT: drop (§4).",
+    "er10_evidence": "line 139: '> Evidence: `middleware/auth.js:21,31-33,46-48`; `routes/auth/index.get.js:132,141-190,254`.' EDIT: append 'Distills §4.'",
+    "er12_stands_on": "line 178: '> Stands on: ER-18, ER-20, ER-1.' EDIT: add ER-7 (order ours; issue example puts it first).",
+    "fence_verified": "ER-12 Evidence (line 177) both §7.3 mentions present, byte-identical to CORRECTED_ER12 pin — STAYS. ER-4 Evidence (line 199) 'ER-3 above (§7.1's operative sentence)' — STAYS. 9 'Distills §n' lines at 41,44,47,72,75,110,161,174,199 — all STAY.",
+    "acceptance_prestate": "Assertions 1,2 false (edits establish); 3 half-true (Stands-on lacks ER-7; Evidence already pin-identical); 4,5 true already.",
+    "counting_note": "ER-10's edit CREATES a 10th 'Distills §n' line — post-edit count reads 10, not 9; acceptance #4 requires only the original 9 remain. Bake into review checklist so 10 is not misread as drift.",
+    "completeness": "Sanity scan of every ER rule-text line: only ER-3 and ER-10 carry bare-§ citations — the amended three-edit list is complete; every other § inside ER blocks sits in Evidence/Distills/navigation positions (fenced)."
+  },
+  "guardSpec": {
+    "er3": "NO hash pin (one of the ER-1/ER-3/ER-7 gap trio, Bentham 2026-09-11, confirmed at HEAD: sentence-presence tests spec.ts:917-927/:929-938/:940-944). ER-3's substring test does NOT include the '(§3)' token → stays green through the edit unaided. BUT the edit breaks DOC_MINUS_TARGETS_SHA256 (spec.ts:1166-1189) — ER-3 not in its excluded {ER-9, ER-12} set. #330 adds ER-3's first pin from post-edit bytes (closes ER-3's slice of the gap as a side effect; ER-1/ER-7 remain unpinned, out of scope).",
+    "er10": "Statically hash-pinned (UNTOUCHED_SHA256 '28adf40...', spec.ts:890, whole 2-line block); no sentence test. Edit breaks the static pin AND DOC_MINUS_TARGETS_SHA256. Re-pin from post-edit bytes.",
+    "er12": "Dynamic pin sha256(CORRECTED_ER12) (spec.ts:892; constant :171-175) + direct .toBe(CORRECTED_ER12) (:1155-1157). Updating the constant fixes both, BUT a third assertion — 'nothing else in ER-12 moves' (:1137-1153) — string-matches the OLD 'Stands on: ER-18, ER-20, ER-1.' verbatim at :1149 and must be edited itself. DOC_MINUS_TARGETS_SHA256 does NOT break from ER-12 (already excluded by #322's design).",
+    "doc_minus_targets": "DOC_MINUS_TARGETS_SHA256 catch-all excludes only {ER-9, ER-12} — must be re-derived (or its exclusion set widened) to absorb the ER-3/ER-10 edits; state the choice.",
+    "er4": "No spec change needed — its static pin ('d8de9757...', :885) matches the live doc; #330 doesn't touch it.",
+    "mirror_guard_safe": "One-way 'Stands on:' mirror guard (:1009-1033): ER-7's block does not name ER-12, so adding ER-7 to ER-12's Stands-on does NOT trip it — verified, not assumed.",
+    "mechanism": "Two layers per spec's own comments: section 13 (:764-768) = 9 verbatim OPERATIVE_SENTENCES + FOUNDATION_PROSE_SHA256; section 15 (:1160-1165) = per-clause assertions naming the ruling + DOC_MINUS_TARGETS_SHA256 catch-all.",
+    "controls": "Spec asserts NO hard-coded 52 or 9 counts (grep clean). Doc has 23 ER blocks, 9 Distills lines. The old body's '52' figure has no source in spec or amended body — dead."
+  },
+  "blast": {
+    "consumers": "src/rights-model-identifiers.spec.ts is the SOLE programmatic consumer of the doc. No scripts/, no .github/ workflow parses it. Other grep hits are team-memory/research JSON prose only.",
+    "doc_internal": "Only ER-4 cites ER-3, by id/paraphrase — does not quote the '(§3)' token; no other block cites ER-10 or ER-12. No cross-reference orphaned.",
+    "axes": "multi-collective N/A (reference doc); locales N/A (internal English, no messages/*.json); rights-tiers = subject matter but edit is citation-form only, no runtime surface; invite-vs-auto N/A.",
+    "pack_overlap": "fix/329-derived-negatives (live at research time) diff-verified: no touch to the doc or the spec. Later pack slices' args target UI surfaces only. NOTE: blast agent's claim '#323-328 already landed' was a false inference — discarded."
+  }
+}

@@ -7,6 +7,8 @@ description: End this session cleanly from inside — checkpoint first, arm the 
 
 **Mechanism (proven 2026-09-10):** `tmux send-keys` into this session's own pane arrives exactly like typed user input. Sending `/exit` + Enter ends the session. **Respawn is automatic** when the resident loop is armed (below); without it, the `up` launcher's wake override (`~/.claude/up-wake` → `/mvox-wake`) reorients the next manually-launched session.
 
+**Pane discovery (corrected 2026-09-11 — the MVOX-20 break stalled on this):** under the resident loop, claude is a CHILD of `mvox-resident.sh`, so the pane's `pane_current_command` is `bash`, not `claude` — matching on the command name finds nothing ("no claude pane found"). Find the pane by PROCESS ANCESTRY instead: the Bash tool shell runs under the claude process, whose ancestor chain reaches the pane's root process. Walk `ps -o ppid=` up from `$$` and pick the pane whose `#{pane_pid}` appears in that chain — under the resident loop that is normally `mvox-resident:0.0`. `self-exit.sh` (durable copy in this dir) implements this. Do not trust `$TMUX` to locate anything: it survives respawns stale (at the MVOX-20 break it pointed at a long-dead client). And record the fix BEFORE sending: the successful send kills the session mid-turn, so whatever you learned in that turn never reaches the transcript — the MVOX-20 solution was lost exactly this way.
+
 ## The resident loop (adopted from Passepartout, consult 2026-09-10)
 
 `~/.claude/mvox-resident.sh`, run as the sole command of a detached tmux session, supervises claude: launch in foreground → claude exits → sleep 5 → relaunch. The loop IS the supervisor. Flag protocol, all in `~/.claude/`:
@@ -35,10 +37,10 @@ Guards: a `--continue` that dies non-zero under 20s falls back once to fresh; `s
    ```
    The script's handover phase waits for THIS claude to end before launching the next — no second-claude race. Idempotent: if the resident session exists, skip.
 3. **Say goodbye to Mihkel in your final message BEFORE sending** — the send is the last thing you do; nothing after it runs.
-4. Send the exit. Preferred: `bash ~/.claude/skills/mvox-exit/self-exit.sh`. If the classifier blocks the script, run the two allowed commands directly (they carry explicit permission rules in `~/.claude/settings.json`):
+4. Send the exit. Preferred: `bash ~/.claude/skills/mvox-exit/self-exit.sh`. If the classifier blocks the script, run the two allowed commands directly (they carry explicit permission rules in `~/.claude/settings.json`) — note the pane match is by `pane_pid` in your own ancestor chain (walk `ps -o ppid=` up from `$$`), NOT by `pane_current_command`, which reads `bash` under the resident loop:
    ```
-   tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_current_command}'
-   tmux send-keys -t <the claude pane> "/exit" Enter
+   tmux list-panes -a -F '#{session_name}:#{window_index}.#{pane_index} #{pane_pid}'
+   tmux send-keys -t <the pane whose pane_pid is your ancestor — normally mvox-resident:0.0> "/exit" Enter
    ```
 
 **Never wire "kill/restart the tmux server or session" as the retirement gesture** — Passepartout's hard-won warning: it takes attached operator terminals down with it. Exit claude; let the loop respawn.
