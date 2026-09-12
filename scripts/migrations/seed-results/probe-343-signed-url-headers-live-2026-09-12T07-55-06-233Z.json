@@ -1,0 +1,57 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#343 — read-only characterization of signed-URL response headers (ETag/Last-Modified) on a real uploaded file property, to settle whether a server-side validator exists independent of the file-property _id for the offline byte-store staleness design.",
+  "targetEditionId": "6a9f440dca67df980f417d78",
+  "targetPropertyId": "6a9f4c32ca67df980f417d84",
+  "verdict": "ETag PRESENT, STABLE, RAW-MD5-SHAPED — usable as a genuine content-identity validator independent of the file-property _id; a byte-store COULD key/validate on ETag as a belt-and-suspenders check even if _id changes.",
+  "ledger": [
+    {
+      "step": "resolve-target",
+      "editionId": "6a9f440dca67df980f417d78",
+      "propertyId": "6a9f4c32ca67df980f417d84",
+      "filename": "probe-275-wire-smoke-2026-09-07T23-43-46-224Z.txt",
+      "filesize": 53
+    },
+    {
+      "step": "header-comparison",
+      "mint1": {
+        "status": 200,
+        "headers": {
+          "accept-ranges": "bytes",
+          "content-disposition": "inline;filename=\"probe-275-wire-smoke-2026-09-07T23-43-46-224Z.txt\"",
+          "content-length": "53",
+          "content-type": "text/plain",
+          "date": "Sat, 12 Sep 2026 07:55:06 GMT",
+          "etag": "\"61203b8ca4aa05ed61c46e1ad7ccc5aa\"",
+          "last-modified": "Mon, 07 Sep 2026 23:43:46 GMT",
+          "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+          "vary": "Origin, Access-Control-Request-Headers, Access-Control-Request-Method",
+          "x-amz-request-id": "tx00000a7b992fbf1de2a13-006aa5055a-1aff9f1f6-fra1b",
+          "x-rgw-object-type": "Normal"
+        }
+      },
+      "mint2": {
+        "status": 200,
+        "headers": {
+          "accept-ranges": "bytes",
+          "content-disposition": "inline;filename=\"probe-275-wire-smoke-2026-09-07T23-43-46-224Z.txt\"",
+          "content-length": "53",
+          "content-type": "text/plain",
+          "date": "Sat, 12 Sep 2026 07:55:06 GMT",
+          "etag": "\"61203b8ca4aa05ed61c46e1ad7ccc5aa\"",
+          "last-modified": "Mon, 07 Sep 2026 23:43:46 GMT",
+          "strict-transport-security": "max-age=15552000; includeSubDomains; preload",
+          "vary": "Origin, Access-Control-Request-Headers, Access-Control-Request-Method",
+          "x-amz-request-id": "tx00000cdf0a4932bca2f38-006aa5055a-1aff9f219-fra1b",
+          "x-rgw-object-type": "Normal"
+        }
+      },
+      "etagPresent": true,
+      "etagStableAcrossMints": true,
+      "etagIsRawMd5": true,
+      "lastModifiedPresent": true
+    }
+  ]
+}

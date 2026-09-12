@@ -1,0 +1,23 @@
+{
+  "dryRun": true,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#343 — does replacing a file-type property change its _id (structural staleness) or can the same _id come to serve different bytes (staleness NOT structural, needs a validator)? Fully disposable _probe_343_* fixture, torn down regardless of outcome.",
+  "docsChecked": [
+    "~/projects/entu-www/src/api/files/index.md — \"Each file property gets its own unique storage location identified by its _id\"; \"Deleting a File Property\" — soft-delete, underlying object storage file NOT removed",
+    "~/projects/entu-www/src/api/properties/index.md — \"Overwriting a Property Value\" — generic _id-in-payload replace semantics, silent on whether it applies to file-typed properties"
+  ],
+  "ledger": [
+    {
+      "step": "ensure-work",
+      "outcome": "dry-run-would-create",
+      "entityName": "_probe_343 Test Work",
+      "parentId": "6a885aa1ac0a9c7d5f122da5"
+    },
+    {
+      "step": "dry-run-plan",
+      "wouldTargetEdition": null,
+      "wouldTargetWork": null
+    }
+  ]
+}

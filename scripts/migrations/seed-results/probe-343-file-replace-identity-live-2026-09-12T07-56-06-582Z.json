@@ -1,0 +1,87 @@
+{
+    "dryRun": false,
+    "db": "polyphony",
+    "sensitive": false,
+    "purpose": "mvox-app#343 — does replacing a file-type property change its _id (structural staleness) or can the same _id come to serve different bytes (staleness NOT structural, needs a validator)? Fully disposable _probe_343_* fixture, torn down regardless of outcome.",
+    "docsChecked": [
+        "~/projects/entu-www/src/api/files/index.md — \"Each file property gets its own unique storage location identified by its _id\"; \"Deleting a File Property\" — soft-delete, underlying object storage file NOT removed",
+        "~/projects/entu-www/src/api/properties/index.md — \"Overwriting a Property Value\" — generic _id-in-payload replace semantics, silent on whether it applies to file-typed properties"
+    ],
+    "ledger": [
+        {
+            "step": "ensure-work",
+            "outcome": "created",
+            "id": "6aa5059431ced11fa92bb8a6",
+            "entityName": "_probe_343 Test Work",
+            "parentId": "6a885aa1ac0a9c7d5f122da5"
+        },
+        {
+            "step": "ensure-edition",
+            "outcome": "created",
+            "id": "6aa5059431ced11fa92bb8ae",
+            "entityName": "_probe_343 Test Edition",
+            "parentId": "6aa5059431ced11fa92bb8a6"
+        },
+        {
+            "step": "a-baseline-upload",
+            "outcome": "ok",
+            "propertyId": "6aa5059431ced11fa92bb8b6",
+            "filesize": 47,
+            "readBack": []
+        },
+        {
+            "step": "b-documented-replace-delete-then-post",
+            "outcome": "new-id-confirmed",
+            "deleteOk": true,
+            "deleteStatus": 200,
+            "postDeleteDirectGetStatus": 404,
+            "oldId": "6aa5059431ced11fa92bb8b6",
+            "newId": "6aa5059531ced11fa92bb8b7",
+            "idChanged": true,
+            "readBack": []
+        },
+        {
+            "step": "c-ambiguous-branch-post-with-existing-id",
+            "outcome": "SUPPLIED-_ID-IGNORED — Entu appended a NEW property despite the existing _id in the payload (file properties exempt from generic overwrite-by-_id semantics)",
+            "requestStatus": 200,
+            "rawResponse": {
+                "_id": "6aa5059431ced11fa92bb8ae",
+                "properties": [
+                    {
+                        "_id": "6aa5059531ced11fa92bb8b8",
+                        "type": "file",
+                        "filename": "probe343-v3.txt",
+                        "filesize": 96,
+                        "filetype": "text/plain",
+                        "upload": {
+                            "url": "https://entu-files.fra1.digitaloceanspaces.com/polyphony/6aa5059431ced11fa92bb8ae/6aa5059531ced11fa92bb8b8?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=DO801K7KGBJ4M3DXWW4X%2F20260912%2Ffra1%2Fs3%2Faws4_request&X-Amz-Date=20260912T075605Z&X-Amz-Expires=60&X-Amz-Signature=41d17296fb246ce3764c198b7f55efa810f06c01e6f4954f233e99b19e4f3303&X-Amz-SignedHeaders=content-disposition%3Bhost&x-amz-acl=private&x-amz-checksum-crc32=AAAAAA%3D%3D&x-amz-sdk-checksum-algorithm=CRC32&x-id=PutObject",
+                            "method": "PUT",
+                            "headers": {
+                                "ACL": "private",
+                                "Content-Disposition": "inline;filename=\"probe343-v3.txt\"",
+                                "Content-Length": 96,
+                                "Content-Type": "text/plain"
+                            }
+                        }
+                    }
+                ]
+            },
+            "putV3Ok": null,
+            "putV3Status": null,
+            "sameIdServesNewBytes": null,
+            "finalReadBack": []
+        },
+        {
+            "step": "teardown",
+            "outcome": "clean",
+            "deletedProperties": [],
+            "editionDeleteOk": true,
+            "editionReverifyStatus": 404,
+            "workDeleteOk": true,
+            "workReverifyStatus": 404
+        }
+    ],
+    "caveats": [
+        "readBack/finalReadBack fields in the ledger below are ALL BOGUS ([]) — the readEditionFile helper assumed a single-entity GET returns a flat `{properties:[...]}` array (the POST create/append response shape, per the #275 finding), but a GET actually wraps the payload as `{entity:{...}}` with properties KEYED by name (`entity.file`). Confirmed via a read-only scratch check post-run (GET entity/{libraryId}?props=name -> `{entity:{name:[...]}}`). Fixed in the script for future use. NONE of the reported verdicts depend on this helper: the baseline/replace/ambiguous-branch findings all come from (1) the upload POST response bodies, which use the genuinely-flat `properties` array shape and were parsed correctly (validated by successful PUTs against the returned upload.url in steps a and b), and (2) direct property/{id} GETs (the 404 after DELETE). Teardown is independently confirmed clean via fresh GETs on the edition AND work entities (404/404) — entity DELETE removes its properties atomically (established precedent, #321-era probes), so the two live file properties this run created (v2's real upload + v3's metadata-only ignored-_id entry) are gone even though the buggy pre-teardown read never found them to delete individually."
+    ]
+}

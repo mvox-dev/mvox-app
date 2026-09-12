@@ -2,6 +2,55 @@
 
 (*MVOX:Perotin*)
 
+## [PROBE-RESULT] #343 — file-property identity is STRUCTURAL on both replace paths; ETag exists as a belt-and-suspenders validator (2026-09-12)
+
+Team-lead dispatch (offline byte-store staleness mechanism design), polyphony, two probes.
+
+**Probe 2 (read-only, no gate needed)**: signed download URL for a real uploaded file
+(#275's persisted SMOKE fixture) carries a STABLE, raw-32-hex-MD5-shaped `ETag` across two
+independent mints, plus `Last-Modified`. **Gotcha**: presigned URLs are method-scoped — `HEAD`
+403s (signature covers the HTTP method), must use `GET`. Ledger: `seed-results/probe-343-
+signed-url-headers-live-2026-09-12T07-55-06-233Z.json`.
+
+**Probe 1 (LIVE, authorized, `_probe_343_*` throwaway edition, full teardown, 5/5 independently
+re-verified 404)**: (a) documented replace route (DELETE old property + POST new) → confirmed
+NEW `_id` every time, structural. Bonus finding: a direct `GET /property/{id}` on an
+already-soft-deleted property 404s (not just excluded from the entity view — invisible to a
+direct-by-id read too). (b) THE decisive ambiguous branch — POST `[{_id: <existing file
+property's id>, type:'file', filename/filesize/filetype: <new>}]` (the generic "Overwriting a
+Property Value" shape) — **Entu IGNORES the supplied `_id` and APPENDS a new property with a
+NEW `_id` instead of overwriting in place.** File properties are exempt from the generic
+overwrite-by-`_id` convention documented for string/number props. **Combined verdict: no route
+(documented or ambiguous) lets the SAME file-property `_id` come to serve different bytes — a
+byte-store keyed on file-property `_id` gets staleness structurally, for free.** ETag (probe 2)
+remains available as an optional extra validator, not load-bearing.
+
+**Self-caught bug, disclosed to team-lead, doesn't touch the verdicts**: `readEditionFile`
+helper assumed single-entity GET returns the flat `{properties:[...]}` array — that shape is
+actually specific to the POST create/append response (the #275 finding). A GET wraps as
+`{entity:{file:[...]}}`, KEYED by property name. Confirmed via a scratch read-only check
+(`GET entity/{id}?props=name` → `{entity:{name:[...]}}`). Fixed in the script; patched a
+`caveats` note into the already-written ledger (`readBack`/`finalReadBack` fields are bogus
+empties) rather than re-running live for no new information — the actual verdicts came from
+POST response bodies (parsed via the OTHER, correct flat-array logic, validated by successful
+PUTs) and direct `property/{id}` GETs, neither of which used the buggy helper.
+
+Scripts (uncommitted, held for team-lead's seam): `scripts/migrations/probes/
+probe-343-file-replace-identity-2026-09-12.ts`, `probe-343-signed-url-headers-2026-09-12.ts`.
+
+**Extension (same day) — CORS check, read-only**: fetch()-GET against a fresh signed URL with an
+`Origin` header. Bucket is **allowlisted to `https://mvox.eu` specifically** — that origin gets
+`Access-Control-Allow-Origin: https://mvox.eu` back; an unexpected `https://example.com` gets NO
+CORS header at all (a real browser would block it). Good news for #343: the fetch-through-store
+read leg works from mvox.eu today, no Argo-side CORS change needed. **But**
+`Access-Control-Expose-Headers` is ABSENT even for the admitted origin — ETag is NOT exposed to a
+browser fetch() response's JS (`response.headers.get('etag')` would return null). If the
+read-through design wants client-side ETag comparison, that needs an Argo-side
+`Access-Control-Expose-Headers: ETag` addition first; the file-property `_id` structural-identity
+path (probe 1) doesn't need this at all. Ledger: `seed-results/probe-343-signed-url-headers-
+live-2026-09-12T08-03-54-345Z.json` (superseded an earlier run whose CORS-shape classifier didn't
+have a branch for "allowlisted-specific" — fixed before re-running, prior ledger deleted).
+
 ## [PROBE-RESULT] #321 — authed-lesser-tier half CLOSED, count respects a caller's grant-admitted SUBSET too (2026-09-11)
 
 Team-lead-authorized live run ("I authorize this run"), polyphony, completing the one half the
