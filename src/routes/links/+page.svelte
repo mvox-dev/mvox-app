@@ -319,8 +319,9 @@
 	}
 </script>
 
-<div data-testid="links-page" class="flex flex-col gap-4">
-	<h1 class="text-lg font-semibold">{m.links_title()}</h1>
+<main class="min-h-screen bg-paper px-6 py-10 text-ink">
+	<div data-testid="links-page" class="mx-auto flex w-full max-w-md flex-col gap-4">
+	<h1 class="font-display text-2xl">{m.links_title()}</h1>
 
 	{#if admin === 'admin'}
 		<!-- #323 — reorder save-state, reference pattern #267
@@ -548,6 +549,7 @@
 			{/each}
 		</ul>
 	{/if}
-</div>
+	</div>
+</main>
 
 <!-- (*MVOX:Palestrina* — #256 GREEN) -->
