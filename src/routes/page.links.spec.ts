@@ -455,4 +455,69 @@ describe('#256 — reorder: native move up / move down per row, persisted via re
 	});
 });
 
-// (*MVOX:Tallis* — #256 RED)
+// ── #335 — visible styling ──────────────────────────────────────────────────
+// Every form control on this page shipped with NO class at all (reported live
+// by Mihkel from a phone: bare labels, invisible inputs, buttons as plain
+// text — preflight strips the browser border/background and app.css's base
+// rule only sets font-size). src/unclassed-controls.spec.ts owns PRESENCE
+// (some class on every control, codebase-wide); these pins own VISIBILITY on
+// this page: each control's class must contain 'border' — a substring, not an
+// exact string, so GREEN picks the exact idiom within the roster reference
+// (`rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50`).
+// links-add-submit already carries layout-only `self-start` (which passes the
+// presence guard) — it is asserted here like the other seven, NOT
+// special-cased: its fix adds real styling alongside the existing self-start.
+
+describe('#335 — Links page controls are VISIBLE: every input and button carries a border class', () => {
+	function expectBorder(container: HTMLElement, testid: string) {
+		const el = q(container, testid);
+		expect(el, testid).not.toBeNull();
+		expect(el!.getAttribute('class') ?? '', `${testid} class`).toContain('border');
+	}
+
+	it("the add form's three inputs and its submit button carry a border class", async () => {
+		const { container } = await renderReady('admin');
+		for (const testid of ['links-add-name', 'links-add-url', 'links-add-description']) {
+			expectBorder(container, testid);
+		}
+		expectBorder(container, 'links-add-submit');
+	});
+
+	it('every per-row button — move-up, move-down, edit, remove — carries a border class', async () => {
+		const { container } = await renderReady('admin');
+		for (const testid of ['links-move-up', 'links-move-down', 'links-edit', 'links-remove']) {
+			for (const el of qa(container, testid)) {
+				expect(el.getAttribute('class') ?? '', `${testid} class`).toContain('border');
+			}
+			expect(qa(container, testid).length, testid).toBeGreaterThan(0);
+		}
+	});
+
+	it("the in-situ edit form's three inputs and its save/cancel buttons carry a border class", async () => {
+		const { container } = await renderReady('admin');
+		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-edit"]')!);
+		for (const testid of [
+			'links-edit-name',
+			'links-edit-url',
+			'links-edit-description',
+			'links-edit-save',
+			'links-edit-cancel'
+		]) {
+			expectBorder(container, testid);
+		}
+	});
+
+	it('the load-error retry button carries a border class', async () => {
+		listLinksMock.mockRejectedValue(new Error('boom'));
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		adminStore.set('admin');
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'links-retry-load')).not.toBeNull();
+		});
+		expectBorder(container, 'links-retry-load');
+		consoleError.mockRestore();
+	});
+});
+
+// (*MVOX:Tallis* — #256 RED; #335 visible-styling pins)

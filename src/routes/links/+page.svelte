@@ -384,17 +384,36 @@
 		>
 			<label class="flex flex-col gap-1 text-sm">
 				{m.links_add_name_label()}
-				<input data-testid="links-add-name" type="text" bind:value={addName} />
+				<input
+					data-testid="links-add-name"
+					type="text"
+					bind:value={addName}
+					class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+				/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				{m.links_add_url_label()}
-				<input data-testid="links-add-url" type="text" bind:value={addUrl} />
+				<input
+					data-testid="links-add-url"
+					type="text"
+					bind:value={addUrl}
+					class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+				/>
 			</label>
 			<label class="flex flex-col gap-1 text-sm">
 				{m.links_add_description_label()}
-				<input data-testid="links-add-description" type="text" bind:value={addDescription} />
+				<input
+					data-testid="links-add-description"
+					type="text"
+					bind:value={addDescription}
+					class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+				/>
 			</label>
-			<button type="submit" data-testid="links-add-submit" class="self-start">
+			<button
+				type="submit"
+				data-testid="links-add-submit"
+				class="self-start rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
+			>
 				{m.links_add_submit()}
 			</button>
 		</form>
@@ -409,7 +428,12 @@
 	{:else if status === 'load-error'}
 		<div data-testid="links-load-error" role="alert" class="flex flex-col gap-2">
 			<p class="text-sm text-red-700">{m.links_load_error()}</p>
-			<button type="button" data-testid="links-retry-load" onclick={() => loadForSelected()}>
+			<button
+				type="button"
+				data-testid="links-retry-load"
+				onclick={() => loadForSelected()}
+				class="self-start rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+			>
 				{m.links_retry()}
 			</button>
 		</div>
@@ -422,11 +446,21 @@
 					{#if editingId === row.id}
 						<label class="flex flex-col gap-1 text-sm">
 							{m.links_add_name_label()}
-							<input data-testid="links-edit-name" type="text" bind:value={editName} />
+							<input
+								data-testid="links-edit-name"
+								type="text"
+								bind:value={editName}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
 						</label>
 						<label class="flex flex-col gap-1 text-sm">
 							{m.links_add_url_label()}
-							<input data-testid="links-edit-url" type="text" bind:value={editUrl} />
+							<input
+								data-testid="links-edit-url"
+								type="text"
+								bind:value={editUrl}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
+							/>
 						</label>
 						<label class="flex flex-col gap-1 text-sm">
 							{m.links_add_description_label()}
@@ -434,13 +468,24 @@
 								data-testid="links-edit-description"
 								type="text"
 								bind:value={editDescription}
+								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
 							/>
 						</label>
 						<div class="flex gap-2">
-							<button type="button" data-testid="links-edit-save" onclick={() => saveEdit(row.id)}>
+							<button
+								type="button"
+								data-testid="links-edit-save"
+								onclick={() => saveEdit(row.id)}
+								class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
+							>
 								{m.links_save()}
 							</button>
-							<button type="button" data-testid="links-edit-cancel" onclick={cancelEdit}>
+							<button
+								type="button"
+								data-testid="links-edit-cancel"
+								onclick={cancelEdit}
+								class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+							>
 								{m.links_cancel()}
 							</button>
 						</div>
@@ -466,6 +511,7 @@
 									disabled={i === 0 || reorderPending}
 									aria-label={m.links_move_up()}
 									onclick={() => moveUp(i)}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 								>
 									↑
 								</button>
@@ -475,16 +521,23 @@
 									disabled={i === rows.length - 1 || reorderPending}
 									aria-label={m.links_move_down()}
 									onclick={() => moveDown(i)}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 								>
 									↓
 								</button>
-								<button type="button" data-testid="links-edit" onclick={() => startEdit(row)}>
+								<button
+									type="button"
+									data-testid="links-edit"
+									onclick={() => startEdit(row)}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+								>
 									{m.links_edit()}
 								</button>
 								<button
 									type="button"
 									data-testid="links-remove"
 									onclick={() => handleRemove(row.id)}
+									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 								>
 									{m.links_remove()}
 								</button>
