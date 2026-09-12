@@ -255,8 +255,14 @@ describe('loadWorksByEventId', () => {
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	it('assembles a renderable WorkRow end-to-end from the live wire shapes', async () => {
-		const fetchImpl = vi.fn().mockImplementation((url: string | URL | Request) => {
+	// #331 — the edition read's `truncated` is COMPUTED here (listAllEditions
+	// derives it from the wire `count`) and must ride each row rather than be
+	// discarded: this read is what feeds a reader's `row.editionName`, and its
+	// '' is rendered as "No pinned edition" — a positive claim of absence a
+	// truncated read cannot back. `editionCount` above the returned entities
+	// marks the edition read partial; absent = complete.
+	function wireFetch(options: { editionCount?: number } = {}) {
+		return vi.fn().mockImplementation((url: string | URL | Request) => {
 			const s = String(url);
 			if (s.includes('_type.string=work')) {
 				return Promise.resolve(
@@ -274,6 +280,7 @@ describe('loadWorksByEventId', () => {
 			if (s.includes('_type.string=edition')) {
 				return Promise.resolve(
 					json({
+						...(options.editionCount === undefined ? {} : { count: options.editionCount }),
 						entities: [
 							{
 								_id: 'ed-1',
@@ -324,8 +331,10 @@ describe('loadWorksByEventId', () => {
 			}
 			return Promise.resolve(json({ error: `unrouted: ${s}` }, 404));
 		});
+	}
 
-		const byEvent = await loadWorksByEventId(cfg, ['e1'], 'season-1', fetchImpl);
+	it('assembles a renderable WorkRow end-to-end from the live wire shapes', async () => {
+		const byEvent = await loadWorksByEventId(cfg, ['e1'], 'season-1', wireFetch());
 		expect(byEvent).toEqual<Record<string, WorkRow[]>>({
 			e1: [
 				{
@@ -341,7 +350,39 @@ describe('loadWorksByEventId', () => {
 					fileId: 'file-score',
 					externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
 					canBorrow: true,
-					notes: ''
+					notes: '',
+					// #331 — a COMPLETE edition read says so on the row: the absence
+					// of the flag and "the read was complete" must be the same claim.
+					truncated: false
+				}
+			]
+		});
+	});
+
+	// #331 RED — `editionsRead.truncated` was computed one line above the join
+	// and thrown away; the row it should have ridden is the ONLY thing a
+	// rights-less reader's RepertoireElement ever receives, so the discard is
+	// what made the reader's unknown branch unreachable. Full literal, not
+	// objectContaining: the field must LAND, next to the '' it reinterprets.
+	it('threads the edition read\'s truncation onto every row it labels — a truncated read must not silently blank `editionName`', async () => {
+		const byEvent = await loadWorksByEventId(cfg, ['e1'], 'season-1', wireFetch({ editionCount: 4000 }));
+		expect(byEvent).toEqual<Record<string, WorkRow[]>>({
+			e1: [
+				{
+					id: 'ri-1',
+					kind: 'repertoire',
+					workId: 'work-1',
+					editionId: 'ed-1',
+					workName: 'Spem in alium',
+					composer: 'Thomas Tallis',
+					status: 'active',
+					editionName: '40-part original',
+					ordinal: null,
+					fileId: 'file-score',
+					externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
+					canBorrow: true,
+					notes: '',
+					truncated: true
 				}
 			]
 		});

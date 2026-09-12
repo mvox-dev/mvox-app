@@ -179,7 +179,11 @@ describe('RepertoireElement — expanded view', () => {
 	});
 
 	it('marks a work with no pinned edition via work-no-edition instead of an empty edition line', async () => {
-		const { container } = await renderExpanded([row({ editionName: '' })]);
+		// #331 — `editionId: ''` too: the default row PINS ed-1, and a pinned-but
+		// -unnameable row is the unknown state (a dangling reference is still a
+		// pin, #331 item 4), not this known absence. This test is about
+		// nothing-pinned, so the fixture must actually pin nothing.
+		const { container } = await renderExpanded([row({ editionId: '', editionName: '' })]);
 		expect(container.querySelector('[data-testid="work-no-edition"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="work-edition"]')).toBeNull();
 	});

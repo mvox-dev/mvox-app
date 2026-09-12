@@ -72,6 +72,14 @@ export type WorkRow = {
 	/** program_item.notes — soloists, dedications. '' = absent (always '' for a
 	 *  season-repertoire row: repertoire_item has no notes prop). */
 	notes: string;
+	/** #331 — the collective-wide edition read behind `editionName` came back
+	 *  TRUNCATED, so `editionName: ''` means "could not name it", never "no
+	 *  pinned edition". Rides the ROW (set by loadWorksByEventId from
+	 *  `editionsRead.truncated`) because a reader with no manage rights has no
+	 *  manage props to learn the fact from — `pickableEditionsPartial` reaches
+	 *  her as false on both pages. Optional: a hand-built row without it (the
+	 *  #234 panel join, existing spec fixtures) reads as a complete read. */
+	truncated?: boolean;
 };
 
 /**

@@ -112,7 +112,8 @@
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import {
 		pinnedEditionLabel,
-		rowEditionUnknown as isEditionUnknown
+		rowEditionUnknown as isEditionUnknown,
+		readerEditionUnknown as isReaderEditionUnknown
 	} from '$lib/repertoire/editionUnknown';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 
@@ -343,6 +344,23 @@
 	function rowEditionUnknown(row: WorkRow): boolean {
 		return isEditionUnknown(row, optionsFor(row), pickableEditionsPartial, editionsResolvedWorkIds);
 	}
+	/** #331 — the READER's unknown/fact split. Two things differ from the editor
+	 *  feed above, and both are in `editionUnknown.ts` (no second predicate):
+	 *  the flag is the row's OWN `truncated` (set by `loadWorksByEventId`)
+	 *  rather than `pickableEditionsPartial` — a reader with no manage rights
+	 *  never triggers the manage picker read that flag reports on, so it reaches
+	 *  her as `false` on both pages however truncated the label lookup behind
+	 *  `row.editionName` was; and an unnameable PIN is unknown for her even
+	 *  under a complete read (#331 item 4), which is safe here precisely because
+	 *  she has no picker whose unpin choice it could take away. */
+	function readerEditionUnknown(row: WorkRow): boolean {
+		return isReaderEditionUnknown(
+			row,
+			optionsFor(row),
+			row.truncated ?? false,
+			editionsResolvedWorkIds
+		);
+	}
 	function rowEditionLabel(row: WorkRow): string {
 		return pinnedEditionLabel(row, optionsFor(row));
 	}
@@ -362,7 +380,13 @@
 	 *  pinned edition unnameable, unpinning would be an offer to destroy a value
 	 *  we cannot even show. Its leading option says UNKNOWN and is disabled, so
 	 *  the control still opens (#329's ruling — gating it out is itself the
-	 *  false assertion) and still re-pins, but nothing in it erases the pin. */
+	 *  false assertion) and still re-pins, but nothing in it erases the pin.
+	 *
+	 *  #331 — reads `rowEditionUnknown` (the EDITOR feed), never
+	 *  `readerEditionUnknown`: under the looser reader rule this removal would
+	 *  become PERMANENT on a complete read, where no scoped read is owed that
+	 *  could ever name the pin — an editor could not clear a reference she
+	 *  cannot read. See `editionUnknown.ts`'s header. */
 	function pickerPinIsUnknown(row: WorkRow): boolean {
 		return row.editionId !== '' && rowEditionUnknown(row);
 	}
@@ -510,10 +534,19 @@
 		{@render editionPicker(row)}
 	{:else if rowEditionLabel(row) !== ''}
 		<span data-testid="work-edition" class="text-xs text-ink-2">{rowEditionLabel(row)}</span>
-	{:else if rowEditionUnknown(row)}
+	{:else if !canEditRepertoireRow(row) && readerEditionUnknown(row)}
 		<!-- #329 — same unknown state for a non-editor viewer: no picker to open
 		     (management is gated on `canEditRepertoireRow` everywhere else), but
-		     "no edition" is still a claim a truncated read cannot back. -->
+		     "no edition" is still a claim a truncated read cannot back.
+		     #331 — fed from `readerEditionUnknown` (the row's OWN `truncated`),
+		     not `rowEditionUnknown`/`pickableEditionsPartial`: that flag is always
+		     false for a reader (she never triggers the manage picker read it
+		     reports on), which is exactly why this branch could never fire before.
+		     The reader feed is also the LOOSER of the two (item 4: an unnameable
+		     pin is unknown for her under a complete read as well), so the
+		     `!canEditRepertoireRow(row)` guard is load-bearing, not belt-and
+		     -braces: without it an editor could reach this branch on a row her
+		     own feed correctly calls a fact. -->
 		<span data-testid="work-edition-unknown" class="text-xs text-ink-3 italic">
 			{m.repertoire_edition_unknown()}
 		</span>

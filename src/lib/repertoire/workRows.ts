@@ -192,14 +192,24 @@ export async function loadWorksByEventId(
 	// belongs on screen is already in `worksByEvent`; a work missing from this
 	// join loses its name/composer/edition TEXT — `buildWorkRows` degrades the
 	// lookup to '' and keeps the row (see its own "missing lookups degrade" doc).
-	// So a truncation here hides no item and offers no option: it costs a blank
-	// label on a row that is still there, which a notice about a partial list
-	// would describe wrongly. A future sweep should leave this one alone for that
-	// reason, not "correct" it into a notice.
+	// For name/composer that blank asserts nothing, so a truncation there really
+	// does cost nothing worth a notice. It is NOT true for edition (#331): a
+	// blank `editionName` is rendered by RepertoireElement's terminal `{:else}`
+	// as "No pinned edition" — a positive claim the label lookup cannot back
+	// when it was truncated. So `editionsRead.truncated` rides every row below
+	// (`WorkRow.truncated`) rather than being thrown away; it is what lets a
+	// reader's row say "unknown" instead of asserting an absence it never read.
+	// The one other caller that builds rows straight off `buildWorkRows` — the
+	// #234 season-manage panel in routes/+page.svelte — still discards its own
+	// `editionsRead.truncated`, and says there why it is held out (editor-only
+	// surface, waiting on #331's split-out item 4). Not a precedent to copy.
 	const sources = collectSources(worksRead.items, editionsRead.items, copiesRead.items);
 	const out: Record<string, WorkRow[]> = {};
 	for (const [eventId, eventWorks] of Object.entries(worksByEvent)) {
-		out[eventId] = buildWorkRows(eventWorks, sources);
+		out[eventId] = buildWorkRows(eventWorks, sources).map((row) => ({
+			...row,
+			truncated: editionsRead.truncated
+		}));
 	}
 	return out;
 }

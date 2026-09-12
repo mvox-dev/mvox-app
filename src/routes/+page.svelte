@@ -551,10 +551,23 @@
 	/** #321 (PO ruling 2026-09-11) — the panel's OWN `listWorks` read, behind its
 	 *  own "Add work" select (this section exists because the panel's season can
 	 *  diverge from the agenda's — see the state block doc). Same closed set,
-	 *  same false absence. `panelEditions`/`panelCopies` get no flag: there they
-	 *  feed row LABELS, not options, and a label that cannot be resolved
-	 *  degrades to blank rather than hiding anything pickable (the reason
-	 *  workRows.ts states for staying out). */
+	 *  same false absence. `panelCopies` gets no flag: it feeds row LABELS, not
+	 *  options, and a label that cannot be resolved degrades to a blank, which
+	 *  asserts nothing.
+	 *
+	 *  `panelEditions` gets none either, but NOT for that reason — #331
+	 *  corrected it in workRows.ts and it is corrected here too: edition is the
+	 *  one label whose blank is not blank. RepertoireElement renders an
+	 *  unresolved `editionName` on an optionless row as "No pinned edition", a
+	 *  positive claim of absence a truncated read cannot back, so this panel
+	 *  does still state it. What holds the fix out is the SURFACE, not the
+	 *  reasoning: the panel is editor-only (`manageableSeasonRights` gates the
+	 *  whole section), and #331's unknown wording reaches an editor through
+	 *  `rowEditionUnknown`, which also drives `pickerPinIsUnknown` — flipping it
+	 *  under a complete read would leave an editor unable to clear a pin she
+	 *  cannot read. That affordance is #331's split-out item 4, parked for a PO
+	 *  ruling; see `editionUnknown.ts`'s header. Thread `editionsRead.truncated`
+	 *  onto `panelWorkRows` when it lands. */
 	let panelWorksPartial = $state(false);
 	let panelCopies = $state<Copy[]>([]);
 	let panelPendingKeys = $state<Set<string>>(new Set());

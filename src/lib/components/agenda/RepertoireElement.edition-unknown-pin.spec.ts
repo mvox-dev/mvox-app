@@ -18,7 +18,7 @@
 //     nothing in it can erase a value we cannot show;
 //   • once the caller's scoped read lands (`editionsResolvedWorkIds`), the row
 //     is a stated fact again — a named pin, or a genuine known-absence.
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RepertoireElement from './RepertoireElement.svelte';
 import type { PickerOption, WorkRow } from '$lib/repertoire/types';
@@ -50,13 +50,17 @@ function row(overrides: Partial<WorkRow> = {}): WorkRow {
 	};
 }
 
-/** Season editor on the repertoire surface, edition read TRUNCATED. */
+/** Season editor on the repertoire surface, edition read TRUNCATED by default. */
 function renderRow(
 	r: WorkRow,
 	opts: {
 		options?: PickerOption[];
 		resolved?: string[];
 		manageRights?: 'editor' | 'not-editor';
+		/** #331 — the MANAGE read's `truncated`, i.e. what an EDITOR's feed is
+		 *  keyed on. Every #329 case here is a truncated read; the complete-read
+		 *  suite at the bottom is the one that sets this false. */
+		partial?: boolean;
 		onpinedition?: (itemId: string, editionId: string) => void;
 	} = {}
 ) {
@@ -66,7 +70,7 @@ function renderRow(
 			expanded: true,
 			manageRights: opts.manageRights ?? 'editor',
 			context: 'repertoire',
-			pickableEditionsPartial: true,
+			pickableEditionsPartial: opts.partial ?? true,
 			editionOptionsByRowId: opts.options === undefined ? {} : { [r.id]: opts.options },
 			editionsResolvedWorkIds: new Set(opts.resolved ?? []),
 			onpinedition: opts.onpinedition,
@@ -201,4 +205,68 @@ describe('#329 review — once the scoped read lands, the row is a stated fact a
 	});
 });
 
+// #331 (review finding 1) — the EDITOR under a COMPLETE read. This is the path
+// the #329 suites above never touch (they all pin `pickableEditionsPartial:
+// true`), and it is where item 4's relaxation was held out of the shared
+// predicate: an editor's unknown state also removes the picker's '' (= unpin)
+// entry, and under a complete read `unresolvedEditionWorkIds` issues no scoped
+// read that could ever name the pin — the removal would be permanent, leaving
+// her unable to clear a reference she cannot read. So her behaviour stays
+// byte-identical to 25d72cd, as #331's own "Done when" requires, and the
+// affordance question rides the split-out item 4 to a PO ruling.
+describe('#331 — the EDITOR under a COMPLETE read keeps every affordance she had', () => {
+	it('a pin nothing can name leaves the plain picker, with the unpin choice ENABLED', () => {
+		const { container } = renderRow(row({ editionId: 'ed-9' }), {
+			partial: false,
+			options: [{ id: 'ed-1', label: '40-part original' }]
+		});
+
+		expect(container.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
+		const select = picker(container)!;
+		expect(select, 'work-edition-picker on the complete-read row').not.toBeNull();
+		// The unpin entry is the point: it must not be the disabled unknown option.
+		expect(optionShape(select)).toEqual([
+			{ value: '', label: '[repertoire_pin_edition_label]', disabled: false },
+			{ value: 'ed-1', label: '40-part original', disabled: false }
+		]);
+		// Still not displayed AS ed-1 — `pickerValue` keeps that honest on its own,
+		// with no help from the unknown state.
+		expect(select.value).toBe('');
+	});
+
+	it('an unpin on that row actually reaches the handler', async () => {
+		const onpinedition = vi.fn();
+		const { container } = renderRow(row({ editionId: 'ed-9' }), {
+			partial: false,
+			options: [{ id: 'ed-1', label: '40-part original' }],
+			onpinedition
+		});
+
+		await fireEvent.change(picker(container)!, { target: { value: '' } });
+		expect(onpinedition).toHaveBeenCalledWith('ri-1', '');
+	});
+
+	it('nothing pinned under a complete read is a known absence — no picker, no unknown wording', () => {
+		const { container } = renderRow(row({ editionId: '' }), { partial: false });
+
+		expect(container.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
+		expect(container.querySelector('[data-testid="work-no-edition"]')).not.toBeNull();
+		expect(picker(container)).toBeNull();
+	});
+
+	it('a READER on the same complete read still gets the unknown wording (item 4 is hers)', () => {
+		const { container } = renderRow(row({ editionId: 'ed-9' }), {
+			partial: false,
+			manageRights: 'not-editor',
+			options: [{ id: 'ed-1', label: '40-part original' }]
+		});
+
+		expect(container.querySelector('[data-testid="work-edition-unknown"]')).not.toBeNull();
+		expect(container.querySelector('[data-testid="work-no-edition"]')).toBeNull();
+		expect(container.textContent).not.toContain('[repertoire_no_edition]');
+		expect(picker(container)).toBeNull();
+	});
+});
+
 // (*MVOX:Josquin* — #329 review)
+// (*MVOX:Josquin* — #331 review, finding 1)

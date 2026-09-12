@@ -18,6 +18,37 @@
 // that read comes back COMPLETE. The pages check its `truncated` and leave the
 // work unresolved when it is set, so a partial one-work read cannot settle a
 // row either.
+//
+// #331 item 4 narrows that rule for one shape, on ONE of the two feeds below:
+// a PIN we cannot name is unknown even under a COMPLETE read — a dangling or
+// unreadable edition reference is still a pin, and "no pinned edition" stays
+// false regardless of `partial`. `partial` remains genuinely required for the
+// other shape (zero matched options, nothing pinned).
+//
+// That narrowing ships on the READER feed only — `readerEditionUnknown`. It is
+// a WORDING change there and nothing else: a reader has no picker. On the
+// editor feed (`rowEditionUnknown`) the same relaxation would also flip
+// `pickerPinIsUnknown`, which replaces the picker's '' (= unpin) entry with a
+// disabled one. #329's reason for that disable was that a scoped read would
+// shortly name the pin — but `unresolvedEditionWorkIds` issues no scoped read
+// under a COMPLETE read, so an editor would be left permanently unable to
+// clear a pin she cannot read. #331's "editor-facing behaviour byte-identical
+// to 25d72cd" bullet and its item 4 collide there; the editor half is split
+// out (item 4 is marked "splittable if it widens the slice") and needs a PO
+// ruling on the unpin affordance before it can land.
+//
+// KNOWN GAP, both feeds (#337, raised in #331's review): `editionUnknown` opens
+// with `if (row.kind !== 'repertoire') return false`, so PROGRAM rows are
+// excluded outright. That came from #329, where the surface under discussion was
+// the season-repertoire pin control a program row has no equivalent of. It is
+// NOT a considered ruling about the WORDING: a program_item's `edition` is a
+// required reference, and its `editionName` degrades to '' through the same
+// truncated collective-wide label lookup — so a program row whose edition the
+// read could not name falls to RepertoireElement's terminal `{:else}` and
+// prints "No pinned edition" about an item that is pinned by construction. On
+// /event/[id] that is the primary row shape. #337 carries the reader-feed fix
+// (wording only there too — a program row has no pin control); until it lands,
+// read the `kind` gate as a gap, not as a decision.
 
 import type { PickerOption, WorkRow } from './types';
 
@@ -34,18 +65,42 @@ export function pinnedEditionLabel(row: WorkRow, options: readonly PickerOption[
 }
 
 /**
- * Is this row's edition state UNKNOWN (as opposed to a stated fact)?
+ * The ONE implementation both feeds below run. `unnameablePinNeedsNoTruncation`
+ * is the single axis they differ on (#331 item 4) — everything else is shared
+ * so the two can never drift.
+ */
+function editionUnknown(
+	row: WorkRow,
+	options: readonly PickerOption[],
+	partial: boolean,
+	resolvedWorkIds: ReadonlySet<string>,
+	unnameablePinNeedsNoTruncation: boolean
+): boolean {
+	if (row.kind !== 'repertoire') return false;
+	if (resolvedWorkIds.has(row.workId)) return false;
+	if (pinnedEditionLabel(row, options) !== '') return false;
+	// The PIN-we-cannot-name shape: `editionId` is set and nothing resolves its
+	// label. The OTHER shape — zero matched options, nothing pinned — needs
+	// `partial` on both feeds: "this work has no edition" would be a claim a
+	// truncated read cannot back, but under a COMPLETE read it is a known
+	// absence (`editionId === ''` is read off the repertoire_item itself, not
+	// off the truncated join, so a complete join adds nothing to the claim).
+	if (row.editionId !== '') return unnameablePinNeedsNoTruncation || partial;
+	return partial && options.length === 0;
+}
+
+/**
+ * Is this row's edition state UNKNOWN (as opposed to a stated fact), on the
+ * EDITOR feed — `partial` is the manage picker read's `pickableEditionsPartial`.
  *
- * Two shapes qualify, and only while the edition read behind the options was
- * truncated AND no scoped read has settled for the row's work:
- *   • a PIN we cannot name — `editionId` is set and nothing resolves its label;
- *   • a work with ZERO matched options and nothing pinned — "this work has no
- *     edition" would be a claim the truncated read cannot back.
+ * Both unknown shapes need `partial` here, and deliberately so: this predicate
+ * also gates `pickerPinIsUnknown`, which takes the unpin choice out of the
+ * picker. Relaxing the pin shape (#331 item 4) would make that removal
+ * permanent for an editor whose pin is simply unreadable, with no scoped read
+ * left to settle it — see the module header. Byte-identical to `25d72cd`.
  *
- * A row whose pin we CAN name is a fact (truncation poisons negatives, never
- * positives). A row with nothing pinned but a non-empty option list is a fact
- * too: `editionId === ''` is read off the repertoire_item itself, not off the
- * truncated join.
+ * A row whose pin we CAN name is a fact either way (truncation poisons
+ * negatives, never positives).
  */
 export function rowEditionUnknown(
 	row: WorkRow,
@@ -53,11 +108,26 @@ export function rowEditionUnknown(
 	partial: boolean,
 	resolvedWorkIds: ReadonlySet<string>
 ): boolean {
-	if (row.kind !== 'repertoire') return false;
-	if (!partial) return false;
-	if (resolvedWorkIds.has(row.workId)) return false;
-	if (pinnedEditionLabel(row, options) !== '') return false;
-	return row.editionId !== '' || options.length === 0;
+	return editionUnknown(row, options, partial, resolvedWorkIds, false);
+}
+
+/**
+ * The same question on the READER feed — `truncated` is the row's OWN
+ * `WorkRow.truncated` (#331), because `pickableEditionsPartial` reports on a
+ * manage read a rights-less reader never triggers.
+ *
+ * Here the PIN-we-cannot-name shape is unknown UNCONDITIONALLY (#331 item 4):
+ * a dangling or unreadable edition reference is still a pin, so "No pinned
+ * edition" is false whether or not the read that failed to name it truncated.
+ * A reader carries no picker, so this changes wording and nothing else.
+ */
+export function readerEditionUnknown(
+	row: WorkRow,
+	options: readonly PickerOption[],
+	truncated: boolean,
+	resolvedWorkIds: ReadonlySet<string>
+): boolean {
+	return editionUnknown(row, options, truncated, resolvedWorkIds, true);
 }
 
 /**
@@ -87,3 +157,4 @@ export function unresolvedEditionWorkIds(
 }
 
 // (*MVOX:Josquin* — #329 review)
+// (*MVOX:Josquin* — #331 review, finding 1)
