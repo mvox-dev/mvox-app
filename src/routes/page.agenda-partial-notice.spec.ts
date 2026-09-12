@@ -278,7 +278,13 @@ describe('#321 — the agenda states when the singer’s own answer/attendance s
 		selectedCollectiveDbStore.set(DB_B);
 		// B's agenda is on screen and B's rsvp read is in flight (still pending).
 		await waitFor(() => {
-			expect(q(container, 'selected-collective')?.textContent).toContain('Other Choir');
+			// #338 — with two collectives `selected-collective` is the header <select>,
+			// whose textContent is EVERY option's label concatenated; reading it would
+			// pass at initial render, before the switch, and stay green on the wrong
+			// selection. The selection itself is the fact this gate needs.
+			const select = q(container, 'selected-collective') as HTMLSelectElement | null;
+			expect(select?.value).toBe(DB_B);
+			expect(select?.selectedOptions[0]?.text.trim()).toBe('Other Choir');
 			expect(listMyRsvpsMock).toHaveBeenCalledWith(expect.objectContaining({ db: DB_B }), 'person-q');
 		});
 		expect(q(container, 'rsvp-partial-notice')).toBeNull();

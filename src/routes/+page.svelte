@@ -12,7 +12,13 @@
 		tallinnLocalToUtcIso,
 		isoDateFormatter
 	} from '$lib/preferences/timeFormat';
-	import { collectiveState, selectedCollectiveStore, pickerModeStore } from '$lib/collectives/store';
+	import {
+		collectiveState,
+		selectedCollectiveStore,
+		pickerModeStore,
+		selectCollective,
+		hydrateCollectives
+	} from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { getToken } from '$lib/auth/storage';
@@ -162,6 +168,32 @@
 	const collectives = $derived($collectiveState);
 	const selected = $derived($selectedCollectiveStore);
 	const pickerMode = $derived($pickerModeStore);
+
+	// #338 — discovery is in flight from the error panel's retry. `hydrateCollectives`
+	// publishes no 'loading' state of its own on a retry (it only ever sets the
+	// TERMINAL state), so without this the button is the only place the attempt can
+	// show, and a slow retry reads as a dead control.
+	let collectivesRetrying = $state(false);
+
+	async function retryCollectives(): Promise<void> {
+		if (collectivesRetrying) return;
+		// Snapshot before the call: a failed retry has to restore the error panel it
+		// was fired from, and `collectiveState` may be anything by then.
+		const knownErroredDbs = $collectiveState.status === 'error' ? $collectiveState.erroredDbs : [];
+		collectivesRetrying = true;
+		try {
+			await hydrateCollectives();
+		} catch (err) {
+			// #338 review F4 — `hydrateCollectives` RETHROWS a non-auth discovery
+			// failure (auth expiry it settles as 'anonymous' itself). Unhandled, that
+			// was an unhandled rejection and a click with no visible consequence at
+			// all. Re-stating the error keeps the panel truthful and retryable.
+			console.error('collective discovery retry failed', err);
+			collectiveState.set({ status: 'error', erroredDbs: knownErroredDbs });
+		} finally {
+			collectivesRetrying = false;
+		}
+	}
 
 	let agendaItems = $state<AgendaItem[]>([]);
 	let agendaLoading = $state(true);
@@ -1008,6 +1040,9 @@
 		// (`requestId` cannot serve as that epoch: it also bumps on
 		// same-collective `keepSeasonManage` refreshes, which would swallow the
 		// cue for a perfectly good write.)
+		// #338 — the header picker now drives this switch on every use (the
+		// former separate page made it an edge case), so this gap is reported,
+		// not silently inherited, as a third condition alongside the two above.
 		savedEventIds = new Set();
 		worksByEventId = {};
 		scheduleByEventId = {};
@@ -6244,13 +6279,27 @@
 						<option value={loc}></option>
 					{/each}
 				</datalist>
-				<header class="flex items-center justify-between pb-2">
-					<p class="font-display text-xl text-ink" data-testid="selected-collective">{selected.name}</p>
-					<nav class="flex items-center gap-3 text-xs text-ink-3">
-						{#if pickerMode === 'picker'}
-							<a class="underline" href="/collectives">{m.agenda_switch_collective()}</a>
-						{/if}
-					</nav>
+				<header class="flex items-center pb-2">
+					{#if pickerMode === 'picker'}
+						<select
+							class="rounded-md border border-ink bg-paper px-2 py-1 font-display text-xl text-ink"
+							data-testid="selected-collective"
+							aria-label={m.agenda_switch_collective()}
+							value={selected.db}
+							onchange={(e) => {
+								// #334 — this crosses the offline cache's (database,
+								// person-id) partition boundary; whichever of #334/#338
+								// lands second inherits the other's constraint here.
+								void selectCollective((e.currentTarget as HTMLSelectElement).value);
+							}}
+						>
+							{#each collectives.status === 'ready' ? collectives.collectives : [] as c (c.db)}
+								<option value={c.db}>{c.name}</option>
+							{/each}
+						</select>
+					{:else}
+						<p class="font-display text-xl text-ink" data-testid="selected-collective">{selected.name}</p>
+					{/if}
 				</header>
 				<div class="rounded-lg bg-paper p-4">
 					{#if sessionExpired}
@@ -8477,9 +8526,23 @@
 		<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper text-ink">
 			<p class="text-sm text-ink" data-testid="auth-status">{m.agenda_signed_in()}</p>
 			{#if collectives.status === 'none'}
-				<a class="text-sm underline" href="/collectives">{m.agenda_collectives_none()}</a>
+				<p class="text-sm text-ink">{m.agenda_collectives_none()}</p>
 			{:else if collectives.status === 'error'}
-				<a class="text-sm underline" href="/collectives">{m.agenda_collectives_error_retry()}</a>
+				<p class="text-sm text-ink">
+					{m.agenda_collectives_error_dbs({ dbs: collectives.erroredDbs.join(', ') })}
+				</p>
+				<button
+					type="button"
+					class="rounded-md border border-ink px-4 py-2 text-sm text-ink hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-60"
+					data-testid="collectives-retry"
+					disabled={collectivesRetrying}
+					aria-busy={collectivesRetrying}
+					onclick={() => {
+						void retryCollectives();
+					}}
+				>
+					{m.agenda_collectives_error_retry()}
+				</button>
 			{:else}
 				<p class="text-sm text-ink">{m.agenda_collectives_loading()}</p>
 			{/if}

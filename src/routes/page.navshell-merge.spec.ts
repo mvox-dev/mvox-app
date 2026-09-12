@@ -46,8 +46,8 @@ const msgs = vi.hoisted(() => {
 		nav_library: () => 'Library',
 		nav_invite: () => 'Invite',
 		nav_admin: () => 'Admin',
-		nav_collectives: () => 'Collectives',
-		// #256 — the Lingikogu entry joins the nav (7th entry).
+		// #256 — the Lingikogu entry joins the nav; #338 dropped collectives, so
+		// it is the 6th and last (the counts pinned below).
 		nav_links: () => 'Links'
 	};
 	const anyMessage = new Proxy({} as Record<string, (...args: unknown[]) => string>, {
@@ -270,8 +270,8 @@ afterEach(() => {
 // ── the entry list itself ───────────────────────────────────────────────────────
 
 describe('#140 — NAV_ENTRIES after the merge', () => {
-	it('carries exactly 7 entries — the separate invite entry is gone; links joined (#256)', () => {
-		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(7);
+	it('carries exactly 6 entries — the separate invite entry is gone; links joined (#256); collectives left with its page (#338)', () => {
+		expect(NAV_ENTRIES.map((e) => e.key)).toHaveLength(6);
 		expect(NAV_ENTRIES.find((e) => e.key === 'invite')).toBeUndefined();
 		expect(NAV_ENTRIES.find((e) => e.route === '/admin/invite')).toBeUndefined();
 	});
@@ -290,9 +290,9 @@ describe('#140 — NAV_ENTRIES after the merge', () => {
 // ── NavShell rendering the REAL entries (integration) ───────────────────────────
 
 describe('#140 — NavShell × real NAV_ENTRIES', () => {
-	it('renders exactly 7 top-level nav entries for a full-context admin (#256 added links)', () => {
+	it('renders exactly 6 top-level nav entries for a full-context admin (#256 added links; #338 removed collectives)', () => {
 		const { container } = renderShell({ isAdmin: true, hasMultipleCollectives: true });
-		expect(navAnchors(container)).toHaveLength(7);
+		expect(navAnchors(container)).toHaveLength(6);
 	});
 
 	it('renders an Admin entry for admins — and NO separate Invite entry', () => {
@@ -418,8 +418,8 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 // on: switching it moved the write's `db` to collective B while `dbEntityId` stayed
 // the parent's org of collective A, minting a member parented under an entity
 // id that does not exist in B (silently orphaned — the TU.1/#109 failure
-// class). Multi-collective is first class (NAV_ENTRIES carries a
-// hasMultipleCollectives-gated 'collectives' entry), so it gets a spec.
+// class). Multi-collective is first class (the agenda header carries the
+// #338 collective picker), so it gets a spec.
 
 function selectRamkoorOfTwo() {
 	setToken('jwt-admin');

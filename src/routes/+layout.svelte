@@ -23,7 +23,6 @@
 		urlCollectiveDbStore,
 		selectedCollectiveStore,
 		selectedCollectiveIdentityStore,
-		pickerModeStore,
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
 	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
@@ -218,7 +217,6 @@
 	completionLocked={$completionGateStore === 'incomplete'}
 	anonymous={$authStore.status !== 'authenticated'}
 	isAdmin={$adminStore === 'admin'}
-	hasMultipleCollectives={$pickerModeStore === 'picker'}
 >
 	{#if $membershipStore === 'inactive' && $selectedCollectiveStore}
 		<!-- #255 done-when 6 — the ONE app-level notice. NO redirect (nothing she

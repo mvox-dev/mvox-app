@@ -10,6 +10,10 @@
 		completionLocked = false,
 		anonymous = false,
 		isAdmin = false,
+		// #338 — no real NAV_ENTRIES entry reads this any more (the collectives
+		// entry died with its page; the picker lives in the agenda header). It
+		// stays as NavContext's second visibility axis, exercised by NavShell.spec,
+		// so a future entry can gate on it without re-threading the shell.
 		hasMultipleCollectives = false,
 		children,
 	}: {
