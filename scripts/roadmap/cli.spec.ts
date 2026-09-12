@@ -13,12 +13,28 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Window } from 'happy-dom';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
-const fixturePath = fileURLToPath(new URL('./fixtures/live-shaped.json', import.meta.url));
+// join over dirname, not `new URL(…)`: importing happy-dom below replaces the
+// global URL class with one whose instances fileURLToPath rejects ("The URL
+// must be of scheme file"). Same idiom, same reason, as staleness-warning.spec.ts.
+const specDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(specDir, '..', '..');
+const fixturePath = join(specDir, 'fixtures', 'live-shaped.json');
+
+/**
+ * Parse the built page. This spec stays in the `node` environment (the rest of
+ * it is pure filesystem/child-process work), so the DOM is instantiated from a
+ * local happy-dom Window rather than via `// @vitest-environment happy-dom`.
+ */
+function parse(html: string) {
+	const window = new Window();
+	const parser = new window.DOMParser();
+	return parser.parseFromString(html, 'text/html');
+}
 
 describe('roadmap build CLI (integration)', () => {
 	let outDir: string;
@@ -98,6 +114,22 @@ describe('roadmap build CLI (integration)', () => {
 		const match = /<a\b[^>]*href="https:\/\/mvox\.eu"[^>]*>\s*mvox\s*<\/a>/.exec(html);
 		expect(match, 'no <a href="https://mvox.eu">mvox</a> on the deployed page').not.toBeNull();
 		expect(match?.[0]).not.toContain('target=');
+	});
+
+	it('#340: the staleness warning is ABSENT from the deployed page — the fixture suppresses the check', () => {
+		// Computed from fixtures/live-shaped.json: open issues are #305 (task,
+		// ready, in process), #289 (epic), #301 (task, ready), #298 (task,
+		// in research), #262 (bug). #298 carries `in research`, which switches
+		// the whole predicate off — so even #301 (ready without in process /
+		// prepped / blocked, a violator on a quiet board) must NOT be warned
+		// about. If the fixture's labels ever change, recompute this expectation.
+		//
+		// Absence is asserted on the DOM and on the visible sentence, NOT by
+		// forbidding the string 'staleness-warning' page-wide: the stylesheet
+		// names that class unconditionally, exactly as it does `.issue-lead`.
+		const html = readFileSync(join(outDir, 'roadmap', 'index.html'), 'utf-8');
+		expect(parse(html).querySelector('.staleness-warning')).toBeNull();
+		expect(html).not.toContain('Valmis tööd seisavad ja keegi ei uuri');
 	});
 
 	it('#307: the built page carries coloured chips and the Pooleli/Tehtud divider', () => {

@@ -190,9 +190,113 @@ const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'in research'] as const;
  * Lower sorts first. Never consulted for closed issues.
  */
 function activityTier(issue: RoadmapIssue): number {
-	const names = issue.labels.map((label) => label.name);
+	// #340's never-fail fixture smuggles `labels: null` past the type at the
+	// renderBoard boundary — `?? []` keeps this a plain lookup, not a crash.
+	const names = (issue.labels ?? []).map((label) => label?.name);
 	const rank = ACTIVE_TIER_LABELS.findIndex((label) => names.includes(label));
 	return rank === -1 ? ACTIVE_TIER_LABELS.length : rank;
+}
+
+/**
+ * All OPEN issues in the tree, top-level and nested (subIssues), as one flat
+ * list, each issue exactly once. fetchBoard reparents open sub-issues under
+ * their epic, so an idle groomed task nested under a container (#338's own
+ * shape) would otherwise be invisible to a check that only looked at the top
+ * level.
+ *
+ * `seen` is the same identity guard renderIssue's `rendered` set is, for the
+ * same two reasons: fetchBoard shares ONE object per issue number across
+ * parents, so a child reported under two epics would otherwise be listed
+ * twice (and named twice in the warning line); and a parent cycle
+ * (289 → 290 → 289, the shape fetch-issues.ts explicitly defends against)
+ * would otherwise recurse until the stack died — at which point
+ * stalenessViolators' catch would swallow the RangeError and the check would
+ * go silent on exactly the malformed board where a violator matters.
+ *
+ * Also defensive against a missing/malformed `subIssues` or `state` — #340's
+ * never-fail contract needs this to degrade, not throw.
+ */
+function flattenOpenIssues(
+	issues: RoadmapIssue[],
+	seen: Set<number> = new Set<number>()
+): RoadmapIssue[] {
+	const result: RoadmapIssue[] = [];
+	for (const issue of issues ?? []) {
+		// Identity is the issue number; an entry arriving without one (malformed
+		// input smuggled past the type) is not deduplicated because it cannot be
+		// identified — it still gets walked rather than dropped.
+		const number: number | undefined = issue?.number;
+		if (typeof number === 'number') {
+			if (seen.has(number)) continue;
+			seen.add(number);
+		}
+		if (issue?.state === 'open') result.push(issue);
+		const subIssues = issue?.subIssues ?? [];
+		if (subIssues.length > 0) result.push(...flattenOpenIssues(subIssues, seen));
+	}
+	return result;
+}
+
+/** #340: either label switches the whole staleness check off — see stalenessViolators. */
+const STALENESS_SUPPRESSOR_LABELS = ['in research', 'blocks research'] as const;
+/** #340: any of these on a ready task satisfies the check — it is not a violator. */
+const STALENESS_SATISFIER_LABELS = ['in process', 'prepped', 'blocked'] as const;
+
+/** Same label-name matching idiom as activityTier, one label at a time. */
+function hasLabel(issue: RoadmapIssue, name: string): boolean {
+	return (issue?.labels ?? []).some((label) => label?.name === name);
+}
+
+/**
+ * #340 — the staleness predicate: issue numbers of open, `task`+`ready`
+ * issues that carry none of `in process` / `prepped` / `blocked`, evaluated
+ * only when no open issue anywhere carries `in research` or `blocks
+ * research` (either suppresses the whole check — Mihkel's ruling that a
+ * build merely running is not itself an excuse; only an explicit `blocks
+ * research` is). Scoped to `task` so an open epic's own `ready` (its
+ * children are the dispatchable work, #316's shape) never fires.
+ *
+ * Wrapped in a local try/catch mirroring parseFrontmatter's precedent: a bug
+ * here must default to no warning, never crash into main()'s exitCode=1 path
+ * — that would freeze the deployed page, the exact inversion #340 exists to
+ * prevent. The page always deploys.
+ */
+function stalenessViolators(issues: RoadmapIssue[]): number[] {
+	try {
+		const open = flattenOpenIssues(issues);
+		const suppressed = open.some((issue) =>
+			STALENESS_SUPPRESSOR_LABELS.some((label) => hasLabel(issue, label))
+		);
+		if (suppressed) return [];
+		return open
+			.filter((issue) => hasLabel(issue, 'task') && hasLabel(issue, 'ready'))
+			.filter((issue) => !STALENESS_SATISFIER_LABELS.some((label) => hasLabel(issue, label)))
+			.map((issue) => issue.number);
+	} catch {
+		// A crash here must never reach main()'s exitCode=1 path — default to
+		// no warning, same posture as parseFrontmatter's local catch.
+		return [];
+	}
+}
+
+/**
+ * The warning line itself: the Estonian sentence plus one `#N` link per
+ * violator, in the page's own link idiom (an `.issue-link` anchor to the
+ * issue's real `htmlUrl`, carried verbatim like renderIssue's own link).
+ * Empty string when there are no violators — renderBoard then omits the
+ * element entirely rather than rendering an empty shell.
+ */
+function renderStalenessWarning(issues: RoadmapIssue[], violators: number[]): string {
+	if (violators.length === 0) return '';
+	const open = flattenOpenIssues(issues);
+	const links = violators
+		.map((number) => {
+			const found = open.find((issue) => issue.number === number);
+			const href = found ? escapeHtml(found.htmlUrl) : '#';
+			return `<a class="issue-link" href="${href}">#${number}</a>`;
+		})
+		.join(', ');
+	return `<p class="staleness-warning">Valmis tööd seisavad ja keegi ei uuri: ${links}</p>`;
 }
 
 /**
@@ -225,8 +329,8 @@ const NO_COLOR_HEX_RE = /^[0-9a-fA-F]{6}$/;
  * including the fallback and the near-white worst case.
  */
 function renderLabel(label: RoadmapLabel): string {
-	const name = escapeHtml(label.name);
-	if (!label.color || !NO_COLOR_HEX_RE.test(label.color)) {
+	const name = escapeHtml(label?.name ?? '');
+	if (!label?.color || !NO_COLOR_HEX_RE.test(label.color)) {
 		return `<span class="label">${name}</span>`;
 	}
 	const background = `#${label.color}`;
@@ -254,7 +358,10 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	const stateReasonAttr =
 		issue.stateReason != null ? ` data-state-reason="${escapeHtml(issue.stateReason)}"` : '';
 	const leadHtml = lead != null ? `<span class="issue-lead">${escapeHtml(lead)}</span>` : '';
-	const labelsHtml = issue.labels.map(renderLabel).join(' ');
+	// #340's never-fail fixture smuggles `labels: null` and a name-less label
+	// object past the type — `?? []` and renderLabel's own guard keep this a
+	// plain render, not a crash.
+	const labelsHtml = (issue.labels ?? []).map(renderLabel).join(' ');
 	const subIssues = issue.subIssues ?? [];
 	const childrenHtml = boardOrder(subIssues)
 		.map((sub) => renderIssue(sub, rendered))
@@ -324,6 +431,8 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 		.map((issue) => renderIssue(issue, rendered))
 		.filter((html) => html.length > 0)
 		.join('\n');
+	const violators = stalenessViolators(issues);
+	const warningHtml = renderStalenessWarning(issues, violators);
 	// "Pooleli" / "Tehtud" are hardcoded Estonian literals by design: this
 	// page is a standalone node CLI build step, outside the SvelteKit app and
 	// its Paraglide i18n entirely (see this file's own doc comment) — do not
@@ -356,6 +465,8 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	.label { display: inline-block; font-size: 0.75rem; background: #eee; border: 1px solid rgba(0, 0, 0, 0.15); border-radius: 0.75rem; padding: 0.1rem 0.5rem; margin-right: 0.25rem; }
 	.board-group h2 { font-size: 1rem; color: #666; margin: 1.5rem 0 0.5rem; }
 	.sub-issues { list-style: none; margin: 0.5rem 0 0; padding-left: 1.5rem; }
+	.staleness-warning { background: #fff3cd; border: 1px solid #f0ad4e; border-radius: 0.5rem; padding: 0.75rem 1rem; margin: 1rem 0; color: #7a5900; font-size: 0.95rem; }
+	.staleness-warning .issue-link { color: inherit; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -364,6 +475,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	<p class="meta">Generated at <time datetime="${escapeHtml(generatedAt)}">${escapeHtml(formatGeneratedAt(generatedAt))}</time></p>
 	<a href="https://mvox.eu">mvox</a>
 </header>
+${warningHtml}
 <main>
 ${groupsHtml}
 </main>
