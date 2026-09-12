@@ -135,20 +135,25 @@ Josquin merges after Bentham GREEN + team-lead approval. This is a delegation fr
 
 ### Merge Procedure
 
-**Always merge locally, never via `gh pr merge`.** This ensures the `prepare-commit-msg` hook runs and adds the co-author trailer.
+**Always merge locally, never via `gh pr merge`.** NOTE (verified 2026-09-12, Josquin): this repo has **no git hooks** (`.git/hooks` empty, no `core.hooksPath`) — nothing appends the co-author trailer for you. **Author it into the commit message by hand, every merge.**
 
 ```bash
 git checkout main
 git pull
 git merge --squash <feature-branch>
-git commit -m "feat(#XXX): description"
+git commit -m "feat(#XXX): description
+
+...body...
+
+Co-authored-by: Mihkel Putrinš <mihkel.putrinsh@gmail.com>"
 git push
 ```
 
-Then close the PR and delete the branch:
+Then close the PR (if one exists) and delete the branch. After a squash merge the branch's commits are not ancestors of main, so `git branch -d` refuses — verify emptiness first, then force-delete:
 ```bash
 gh pr close <number>
-git push origin --delete <feature-branch>
+git diff main <feature-branch> --quiet && git branch -D <feature-branch>
+git push origin --delete <feature-branch>   # skip if the branch was local-only
 ```
 
 ### Issue Closure
