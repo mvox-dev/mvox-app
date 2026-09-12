@@ -83,6 +83,11 @@ describe('package.json: at most a generator scripts entry', () => {
 		'@tailwindcss/vite',
 		'@testing-library/svelte',
 		'@types/node',
+		// #343 repin — fake-indexeddb PO-approved on the issue (comment
+		// IC_kwDOTubdKM8AAAABUHJaew): a test-environment shim for a browser
+		// API node lacks, the exact happy-dom precedent. `dependencies`
+		// staying ABSENT is the line this fence actually guards (above).
+		'fake-indexeddb',
 		'happy-dom',
 		'svelte',
 		'svelte-check',

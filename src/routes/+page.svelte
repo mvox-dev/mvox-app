@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { get } from 'svelte/store';
 	import { authStore } from '$lib/auth/session';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	// #220 — the AM/PM preference reaches every displayed clock time through
@@ -15,9 +16,11 @@
 	import {
 		collectiveState,
 		selectedCollectiveStore,
+		selectedCollectiveIdentityStore,
 		pickerModeStore,
 		selectCollective,
-		hydrateCollectives
+		hydrateCollectives,
+		sameCollectiveIdentity
 	} from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
@@ -56,7 +59,8 @@
 	// seam (one GET per visible event id, upcoming AND recent — no per-row
 	// refetch storm, no family left out per Gama's ruling 5558026158).
 	import { listScheduleItemsByEventId, type ScheduleItem } from '$lib/schedule/scheduleData';
-	import { signFileUrl } from '$lib/repertoire/fileUrls';
+	import { openFileBytes } from '$lib/files/openFileBytes';
+	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import type {
 		ManageRightsState,
@@ -1532,6 +1536,28 @@
 	// resolved at agenda load and parked in an href; RepertoireElement hands up
 	// the file property id instead and this signs it now.
 	//
+	// #343 — the delivery leg reads through the byte store: `openFileBytes`
+	// signs (on a miss), fetches the bytes itself and serves them back as a
+	// `blob:` URL. That is what the tab receives on the cache-hit and stored
+	// paths; on the two DEGRADED paths — the byte fetch or the body read
+	// rejected, or the declared size is over the store cap — the tab receives
+	// the signed S3 url itself (the pre-#343 delivery, kept rather than let
+	// the cache gate an open). `reason` says which path ran; openFileBytes'
+	// DELIVERY REPORTING block is the full account, not restated here.
+	//
+	// The identity is captured HERE, at click time, off
+	// `selectedCollectiveIdentityStore` — never re-read from "current" state
+	// inside openFileBytes, so a late-settling fetch (the singer switched
+	// collectives while it was in flight) still resolves and stores under the
+	// identity it was issued under. What DOES get re-checked at settle time is
+	// whether that identity is still the one on screen: if not, the tab action
+	// is suppressed — nothing to navigate for a screen showing someone else's
+	// data, and nothing to alarm about either. Suppressing means undoing BOTH
+	// halves of what the click set up: the blank tab is closed (the same thing
+	// the failure path does — an about:blank that never resolves is worse than
+	// no tab) and the minted object URL is released, or a full copy of the
+	// score stays pinned in page memory behind a URL nothing can ever reach.
+	//
 	// The blank tab is opened SYNCHRONOUSLY, inside the click's user-gesture
 	// window — a window.open() issued after the signing await is swallowed by
 	// popup blockers. If the blocker took it anyway (tab === null) we navigate
@@ -1539,16 +1565,28 @@
 	function handlePdfClick(fileId: string) {
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const identity = get(selectedCollectiveIdentityStore);
+		if (!identity) return;
 		pdfError = false;
 		const tab = window.open('', '_blank');
 		if (tab) tab.opener = null;
-		signFileUrl(cfg, fileId)
-			.then((url) => {
+		openFileBytes(cfg, identity, fileId, getAppByteStore())
+			.then(({ url, release, reason }) => {
+				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
+					release();
+					tab?.close();
+					return;
+				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
+				// #343 fix-round, ruling condition 1 — the delivery path is not
+				// rendered here (no UI in this slice), but it must not be dropped:
+				// #334's availability child is the reader that needs it.
+				void reason;
 			})
 			.catch(() => {
 				tab?.close();
+				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
 				pdfError = true;
 			});
 	}

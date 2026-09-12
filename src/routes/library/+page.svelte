@@ -3,9 +3,14 @@
 	// derived from lending. Read-only throughout. Same state-machine shape as
 	// roster/+page.svelte (loading/no-collective/load-error/ready + generation guard).
 	// T6.4/#73 — my-loans section + librarian checkout/return UI.
+	import { get } from 'svelte/store';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
-	import { selectedCollectiveStore } from '$lib/collectives/store';
+	import {
+		selectedCollectiveStore,
+		selectedCollectiveIdentityStore,
+		sameCollectiveIdentity
+	} from '$lib/collectives/store';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import {
 		listWorks,
@@ -37,7 +42,8 @@
 	import { createWork, createEdition } from '$lib/entity/entityCreate';
 	// #275 — the app's first upload path: attach files to an edition.
 	import { uploadEditionFiles, formatFileSize } from '$lib/library/editionFiles';
-	import { signFileUrl } from '$lib/repertoire/fileUrls';
+	import { openFileBytes } from '$lib/files/openFileBytes';
+	import { getAppByteStore } from '$lib/files/appByteStore';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
 	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
@@ -845,9 +851,24 @@
 	// never cached — the read model carries no url field by design). The
 	// blank tab opens SYNCHRONOUSLY inside the click's user-gesture window,
 	// same popup-blocker-safe shape as the agenda's handlePdfClick.
+	//
+	// #343 — same read-through flip as the agenda: `openFileBytes` serves the
+	// tab a `blob:` URL of the actual bytes on the cache-hit and stored paths,
+	// and the signed url itself on the two DEGRADED paths (byte fetch or body
+	// read rejected, or declared size over the store cap) — `reason` names
+	// which ran, see openFileBytes' DELIVERY REPORTING block.
+	//
+	// Identity is captured HERE off `selectedCollectiveIdentityStore` at click
+	// time; a late-settling open whose identity has since changed is suppressed
+	// (nothing to navigate for a screen showing someone else's data now) —
+	// and suppressing closes the blank tab and releases the minted object URL,
+	// same as the agenda: an about:blank that never resolves, and a pinned
+	// copy of the score nothing can reach, are both worse than nothing.
 	function handleOpenEditionFile(fileId: string): void {
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const identity = get(selectedCollectiveIdentityStore);
+		if (!identity) return;
 		// A retry clears the previous verdict up front, so a later success
 		// leaves nothing stale behind (agenda handlePdfClick precedent).
 		const cleared = new Set(editionFileOpenErrors);
@@ -855,14 +876,23 @@
 		editionFileOpenErrors = cleared;
 		const tab = window.open('', '_blank');
 		if (tab) tab.opener = null;
-		signFileUrl(cfg, fileId)
-			.then((url) => {
+		openFileBytes(cfg, identity, fileId, getAppByteStore())
+			.then(({ url, release, reason }) => {
+				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
+					release();
+					tab?.close();
+					return;
+				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
+				// #343 fix-round, ruling condition 1 — not rendered here (no UI in
+				// this slice), but not dropped: #334's availability child reads it.
+				void reason;
 			})
 			.catch((e) => {
-				console.error('library: sign edition file url failed', fileId, e);
+				console.error('library: open edition file failed', fileId, e);
 				tab?.close();
+				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
 				// The blank tab closing again is invisible feedback — say it on
 				// the page, or the click looks like nothing happened.
 				editionFileOpenErrors = new Set(editionFileOpenErrors).add(fileId);

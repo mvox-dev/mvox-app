@@ -113,7 +113,18 @@ export const selectedCollectiveStore: Readable<Collective | null> = derived(
  */
 export type CollectiveIdentity = { db: string; personId: string };
 
-function sameIdentity(a: CollectiveIdentity | null, b: CollectiveIdentity | null): boolean {
+/**
+ * THE one definition of "same identity", exported because the rule has
+ * consumers outside this module: the click handlers that capture an identity
+ * at issue time and re-check it when an async open settles (#343 — agenda,
+ * library and event-detail pages). It lives here, next to the type and the
+ * store it guards, so a future change to what counts as the same identity has
+ * exactly one place to change. `null` is only ever equal to itself.
+ */
+export function sameCollectiveIdentity(
+	a: CollectiveIdentity | null,
+	b: CollectiveIdentity | null
+): boolean {
 	if (a === null || b === null) return a === b;
 	return a.db === b.db && a.personId === b.personId;
 }
@@ -126,7 +137,7 @@ export const selectedCollectiveIdentityStore: Readable<CollectiveIdentity | null
 		let started = false;
 		return selectedCollectiveStore.subscribe((c) => {
 			const next = c ? { db: c.db, personId: c.personId } : null;
-			if (started && sameIdentity(last, next)) return;
+			if (started && sameCollectiveIdentity(last, next)) return;
 			started = true;
 			last = next;
 			set(next);

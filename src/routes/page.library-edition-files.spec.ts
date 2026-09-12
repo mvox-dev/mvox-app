@@ -47,7 +47,7 @@
 // the AGENDA's work-link-pdf path — pinned green by the existing
 // page.season-repertoire.spec.ts suite, which this slice must not touch.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -230,6 +230,14 @@ vi.mock('$lib/library/editionFiles', () => ({
 		bytes === 1937 ? '1.9 KB' : bytes === 245678 ? '239.9 KB' : bytes === 2048 ? '2.0 KB' : `${bytes} B`
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+// #343 — the byte-store persistence seam: an in-memory fake stands in for
+// IndexedDB (fresh per test, see beforeEach). The open path now READS
+// THROUGH it: sign → fetch bytes → store under (db, personId, fileId) →
+// serve a blob: URL. On THAT path the signed URL never reaches the tab; on the
+// degraded ones (byte fetch or body read rejected, declared size over the
+// store cap) openFileBytes hands the signed URL over on purpose rather than
+// let the cache gate an open — see its DELIVERY REPORTING block.
+vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
@@ -240,6 +248,9 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+
+let fakeByteStore: FakeByteStore;
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -304,6 +315,22 @@ function mockBaselineLibrary() {
 function mockLibrarian() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
+
+/** #343 — a byte-serving global fetch for the signed-URL GET leg. */
+function stubByteFetch() {
+	const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
+		new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]).slice(), {
+			status: 200,
+			headers: { 'content-type': 'application/pdf' }
+		})
+	);
+	vi.stubGlobal('fetch', fetchMock);
+	return fetchMock;
+}
+
+beforeEach(() => {
+	fakeByteStore = createFakeByteStore();
+});
 
 afterEach(() => {
 	cleanup();
@@ -600,6 +627,8 @@ describe('#275 — opening a file signs its URL at click time (60s TTL — never
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		vi.stubGlobal('open', vi.fn(() => ({ opener: {}, location: { href: '' }, close: vi.fn() })));
+		// #343 — success now includes the byte GET, so the retry needs a live wire.
+		stubByteFetch();
 		signFileUrlMock.mockRejectedValueOnce(new Error('sign failed'));
 
 		const container = await renderWithEditionOpen('edition-1');
@@ -624,6 +653,116 @@ describe('#275 — opening a file signs its URL at click time (60s TTL — never
 				container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
 			).toBeNull()
 		);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #343 — the open path READS THROUGH the byte store (blob: URL, never the
+// signed URL; failure AFTER signing gets the same existing error surface)
+// ---------------------------------------------------------------------------
+
+describe('#343 — library Open serves bytes through the store', () => {
+	it('the tab receives a blob: URL — never the raw signed url — and the bytes land under the clicking identity', async () => {
+		mockBaselineLibrary();
+		setAuthedWithOneCollective();
+		const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		const openMock = vi.fn(() => tab);
+		vi.stubGlobal('open', openMock);
+		const fetchMock = stubByteFetch();
+		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
+
+		const container = await renderWithEditionOpen('edition-1');
+		const open = await waitFor(() => {
+			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+
+		await fireEvent.click(open);
+
+		// Popup pattern preserved: blank tab opened SYNC in the gesture, severed.
+		expect(openMock).toHaveBeenCalledWith('', '_blank');
+		expect(tab.opener).toBeNull();
+		await waitFor(() => {
+			expect(tab.location.href).toMatch(/^blob:/);
+		});
+		expect(tab.location.href).not.toContain('s3.example');
+		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-1');
+		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-1']);
+		expect(
+			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
+		).toBeNull();
+	});
+
+	// #343 fix-round — Gama's 1(b) ruling: a byte GET dying after successful
+	// signing now falls back to the signed URL already in hand instead of
+	// closing the tab with an error (the exact pre-#343 delivery path).
+	it('a fetch that fails AFTER successful signing falls back to the RAW signed url — no per-file error, tab not closed', async () => {
+		mockBaselineLibrary();
+		setAuthedWithOneCollective();
+		const close = vi.fn();
+		const tab = { opener: {} as unknown, location: { href: '' }, close };
+		vi.stubGlobal('open', vi.fn(() => tab));
+		const fetchMock = vi.fn(async () => {
+			throw new TypeError('Failed to fetch');
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
+
+		const container = await renderWithEditionOpen('edition-1');
+		const open = await waitFor(() => {
+			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+
+		await fireEvent.click(open);
+
+		await waitFor(() => {
+			expect(tab.location.href).toBe('https://s3.example/signed-1');
+		});
+		expect(fetchMock).toHaveBeenCalled();
+		expect(close).not.toHaveBeenCalled();
+		expect(
+			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
+		).toBeNull();
+		// Nothing half-fetched was stored — a fallback delivers, it never caches.
+		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual([]);
+	});
+
+	it('OFFLINE: a file already in the store opens with every network path dead — no signing, no fetch, no error', async () => {
+		mockBaselineLibrary();
+		setAuthedWithOneCollective();
+		const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
+		vi.stubGlobal('open', vi.fn(() => tab));
+		const fetchMock = vi.fn(async () => {
+			throw new TypeError('Failed to fetch');
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		fakeByteStore.seed({ db: 'polyphony', personId: 'person-p' }, 'file-1', {
+			bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
+			filetype: 'application/pdf',
+			sha256: 'sha-cached'
+		});
+
+		const container = await renderWithEditionOpen('edition-1');
+		const open = await waitFor(() => {
+			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+
+		await fireEvent.click(open);
+
+		await waitFor(() => {
+			expect(tab.location.href).toMatch(/^blob:/);
+		});
+		expect(signFileUrlMock).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(
+			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
+		).toBeNull();
 	});
 });
 

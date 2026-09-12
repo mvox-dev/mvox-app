@@ -140,6 +140,11 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	listSections: listSectionsMock
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+// #343 — the panel's onpdfclick now reads through the byte store
+// (openFileBytes -> $lib/files/appByteStore); an in-memory fake stands in for
+// IndexedDB (unavailable under happy-dom) so this pre-existing signing-wiring
+// pin keeps exercising the real click -> signFileUrl path unchanged.
+vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => createFakeByteStore() }));
 // Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue(null),
@@ -160,6 +165,7 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 }));
 
 import Page from './+page.svelte';
+import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import { authStore } from '$lib/auth/session';
@@ -1342,3 +1348,5 @@ describe('#234/#321 — the panel add-work picker states a truncated library rea
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #311 RED: the panel’s Add Work picker + its missing loading flag)
 // (*MVOX:Josquin* — #321 review F2: the panel picker states its own feed)
+// (*MVOX:Josquin* — #343: appByteStore mocked so the panel's onpdfclick pin
+// keeps exercising the real signFileUrl wiring under the read-through flip)
