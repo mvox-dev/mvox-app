@@ -1,0 +1,14 @@
+{
+	// #318 — config only. NEVER execute `wrangler` from this repo's tooling or
+	// CI; activation (the first `wrangler deploy`) is a production deployment
+	// and is explicitly PO-gated — see README.md.
+	//
+	// No `vars` block: this Worker holds no secrets and needs none — it reads
+	// nothing but its own gitignored, build-time-generated rules bundle.
+	"name": "entu-rights-mcp",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-09-12"
+	// Routing (path route on the mvox.eu zone vs a subdomain such as
+	// rights.mvox.eu) is left to PO at activation time — see README.md. No
+	// `routes` / `route` entry here until that choice is made.
+}

@@ -12,7 +12,10 @@ export default mergeConfig(
 			// Colocated app specs, plus standalone ops/migration scripts (T4.10/#30 —
 			// `scripts/migrations/**`). Scripts import the real `$lib` data layer and run
 			// under Vite here (the tsx `$env` shim is only for standalone node execution).
-			include: ['src/**/*.spec.ts', 'scripts/**/*.spec.ts'],
+			// #318 adds workers/** — the entu-rights-mcp Worker's specs are pure node
+			// (no wrangler, no workers pool); the pre-existing globs did not reach
+			// the new top-level dir.
+			include: ['src/**/*.spec.ts', 'scripts/**/*.spec.ts', 'workers/**/*.spec.ts'],
 			environment: 'node',
 			globals: false,
 			// #163 — STRUCTURAL test isolation: `pnpm test` must never be ABLE to
