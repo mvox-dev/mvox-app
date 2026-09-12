@@ -35,6 +35,26 @@ function row(overrides: Partial<WorkRow> = {}): WorkRow {
 
 const ED1: PickerOption = { id: 'ed-1', label: '40-part original' };
 
+/** #337 — the triggering shape, byte-for-byte what workRows.spec.ts's 'falls
+ *  back to the item name and blanks the join when the edition is unreadable'
+ *  fence pins as `buildWorkRows`' program-branch output when the
+ *  collective-wide edition read did not carry the item's edition: the REQUIRED
+ *  `editionId` survives off the program_item itself, everything joined through
+ *  the edition (workId, editionName) degrades to ''. */
+function programRow(overrides: Partial<WorkRow> = {}): WorkRow {
+	return row({
+		id: 'pi-9',
+		kind: 'program',
+		workId: '',
+		editionId: 'ed-gone',
+		workName: 'Ghost piece',
+		composer: '',
+		status: null,
+		ordinal: 1,
+		...overrides
+	});
+}
+
 describe('pinnedEditionLabel', () => {
 	it("prefers the row's own resolved name", () => {
 		expect(pinnedEditionLabel(row({ editionId: 'ed-1', editionName: 'Bärenreiter' }), [ED1])).toBe(
@@ -97,6 +117,16 @@ describe('rowEditionUnknown (the EDITOR feed)', () => {
 	it('a program row is never in this state — it carries no pin control at all', () => {
 		expect(rowEditionUnknown(row({ kind: 'program' }), [], true, NONE)).toBe(false);
 	});
+
+	// #337 fence — the reader-feed change is WORDING ONLY. This feed also gates
+	// `pickerPinIsUnknown` and `unresolvedEditionWorkIds`; a program row must
+	// never reach either, pin or no pin, truncated or not.
+	it('stays SHUT for a program row holding an unnameable pin — #337 touches the reader feed only', () => {
+		for (const truncated of [false, true]) {
+			expect(rowEditionUnknown(programRow(), [], truncated, NONE)).toBe(false);
+			expect(rowEditionUnknown(programRow(), [ED1], truncated, NONE)).toBe(false);
+		}
+	});
 });
 
 // #331 — the reader's feed. Its third argument is the ROW's own `truncated`
@@ -127,15 +157,34 @@ describe('readerEditionUnknown (the READER feed)', () => {
 		}
 	});
 
-	// CHARACTERISATION, not a ruling (#337). The `kind !== 'repertoire'` gate is
-	// #329's and lives on main; this pins TODAY's behaviour so #331 cannot be read
-	// as having settled it. It is a known gap — a program_item's `edition` is a
-	// required reference, so "No pinned edition" is false for it too — and #337
-	// carries the reader-feed fix, which will replace this expectation.
-	it('a program row is never unknown TODAY, dangling pin or not — #337 gap, pinned as-is', () => {
-		expect(readerEditionUnknown(row({ kind: 'program', editionId: 'ed-9' }), [], false, NONE)).toBe(
-			false
-		);
+	// #337 — replaces the characterisation this suite carried ('a program row is
+	// never unknown TODAY, dangling pin or not'). A program_item's `edition` is a
+	// REQUIRED reference, so a program row with `editionId` set whose label
+	// nothing resolves holds a real pin the read could not name — "No pinned
+	// edition" is a claim that row cannot express. Unknown under BOTH truncation
+	// states: this is the same unnameable-pin branch item 4 opened for the
+	// reader, and that branch never needed truncation.
+	it("a program row's unnameable pin is UNKNOWN for a reader, truncated or not (#337)", () => {
+		for (const truncated of [false, true]) {
+			expect(readerEditionUnknown(programRow(), [], truncated, NONE)).toBe(true);
+			// ...including when the row somehow has matched options: the pin still
+			// matches none of them, same rule as the repertoire pin shape.
+			expect(readerEditionUnknown(programRow(), [ED1], truncated, NONE)).toBe(true);
+		}
+	});
+
+	// #337 fence — a program row with NO editionId IS producible (`edition` is
+	// schema-required, but `mandatory: true` is a soft UI hint in Entu, and
+	// listProgramItems fabricates '' for an absent/unread reference instead of
+	// dropping the item the way listRepertoireItems drops a work-less one), and
+	// it must still NOT take the zero-options unknown shape on either feed: that
+	// shape asks "is anything pinned?", a question a program row cannot pose.
+	// A chosen rule, not an impossibility claim.
+	it('a program row with no editionId never takes the zero-options shape, on either feed', () => {
+		for (const truncated of [false, true]) {
+			expect(readerEditionUnknown(programRow({ editionId: '' }), [], truncated, NONE)).toBe(false);
+			expect(rowEditionUnknown(programRow({ editionId: '' }), [], truncated, NONE)).toBe(false);
+		}
 	});
 
 	it('a work the scoped read has answered for is a fact — dangling pin included', () => {
@@ -199,6 +248,17 @@ describe('unresolvedEditionWorkIds', () => {
 	it('skips a row with no resolvable work — there is no scoped read to make for it', () => {
 		expect(unresolvedEditionWorkIds([row({ workId: '' })], {}, true, NONE)).toEqual([]);
 	});
+
+	// #337 fence — "No new read on any path": a program row's unknown wording
+	// never puts a work id on the scoped-read plan. Doubly shut: this plan reads
+	// the EDITOR feed (which stays closed to program rows), and the producible
+	// unknown program row has `workId: ''` anyway (the work is joined THROUGH
+	// the edition the read could not carry).
+	it('a program row never adds to the read plan, however unknown its pin', () => {
+		expect(unresolvedEditionWorkIds([programRow()], {}, true, NONE)).toEqual([]);
+	});
 });
 
 // (*MVOX:Josquin* — #329 review)
+// (*MVOX:Tallis* — #337 RED: the program-row characterisation replaced with
+// the reader rule; editor-feed and zero-options fences pinned)

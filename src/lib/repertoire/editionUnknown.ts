@@ -37,18 +37,27 @@
 // out (item 4 is marked "splittable if it widens the slice") and needs a PO
 // ruling on the unpin affordance before it can land.
 //
-// KNOWN GAP, both feeds (#337, raised in #331's review): `editionUnknown` opens
-// with `if (row.kind !== 'repertoire') return false`, so PROGRAM rows are
-// excluded outright. That came from #329, where the surface under discussion was
-// the season-repertoire pin control a program row has no equivalent of. It is
-// NOT a considered ruling about the WORDING: a program_item's `edition` is a
-// required reference, and its `editionName` degrades to '' through the same
-// truncated collective-wide label lookup — so a program row whose edition the
-// read could not name falls to RepertoireElement's terminal `{:else}` and
-// prints "No pinned edition" about an item that is pinned by construction. On
-// /event/[id] that is the primary row shape. #337 carries the reader-feed fix
-// (wording only there too — a program row has no pin control); until it lands,
-// read the `kind` gate as a gap, not as a decision.
+// #337 (raised in #331's review): a PROGRAM row's `edition` is a required
+// reference, and its `editionName` degrades to '' through the same truncated
+// collective-wide label lookup a repertoire row's pin does — so on the READER
+// feed a program row with an unnameable pin is admitted into the same
+// unnameable-pin branch item 4 opened, unconditionally (it never needed
+// truncation there either). The EDITOR feed is unchanged: a program row
+// carries no pin control at all — `canEditRepertoireRow` hardcodes
+// `kind === 'repertoire'` — so `rowEditionUnknown` keeps short-circuiting
+// false for it exactly as before.
+//
+// A program row with no `editionId` is PRODUCIBLE and still takes neither
+// unknown shape, by choice. The reference is schema-required, but Entu's
+// `mandatory: true` is a soft UI hint (see types.ts on `ordinal` defaulting to
+// 0), and `listProgramItems` (repertoireData.ts) fabricates `editionId: ''`
+// for an absent or unread `edition` rather than dropping the item the way
+// `listRepertoireItems` drops a work-less one — so broken data does reach here
+// as a program row with `editionId === ''`. It keeps the terminal "no pinned
+// edition" wording: the zero-options shape asks "is anything pinned?", a
+// question only a repertoire row can pose, and the unknown branch has no
+// answer for it. Widening that is open, not settled — #337 covers the
+// unnameable pin only.
 
 import type { PickerOption, WorkRow } from './types';
 
@@ -76,7 +85,13 @@ function editionUnknown(
 	resolvedWorkIds: ReadonlySet<string>,
 	unnameablePinNeedsNoTruncation: boolean
 ): boolean {
-	if (row.kind !== 'repertoire') return false;
+	// Program rows are shut out UNLESS this is the reader feed's unnameable-pin
+	// branch (#337): `editionId !== ''` with `unnameablePinNeedsNoTruncation`
+	// true. That is the only door in, and it requires `editionId !== ''`, so a
+	// program row can never fall through to the zero-options shape below (that
+	// branch is reached only when `editionId === ''`).
+	if (row.kind !== 'repertoire' && !(unnameablePinNeedsNoTruncation && row.editionId !== ''))
+		return false;
 	if (resolvedWorkIds.has(row.workId)) return false;
 	if (pinnedEditionLabel(row, options) !== '') return false;
 	// The PIN-we-cannot-name shape: `editionId` is set and nothing resolves its
