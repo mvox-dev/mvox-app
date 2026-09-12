@@ -73,36 +73,37 @@ sits locally: `~/projects/polyphony/apps/vault/production-backup.sql` (D1 dump, 
 confirm freshness before any real migration run). 22 `members` rows, single org `org_crede_001`.
 `profileData.ts` `createProfile()` does NOT take name/email — separate property POST needed per profile.
 
-## [PATTERN] Invite redemption writes NOTHING admin-readable — two distinct code paths, only one runs per session (2026-09-08, #294)
+## [PATTERN] Invite redemption writes NOTHING admin-readable (2026-09-08, #294)
 
-Source-cited, `~/projects/entu-api`. Two entity-write paths in `routes/auth/index.get.js`, mutually
-exclusive per exchange (`inviteAttempted` flag gates which runs):
+`routes/auth/index.get.js`, two mutually-exclusive paths gated by `inviteAttempted`. Redemption
+(`replaceInviteWithCredentials`, L279-287) touches only the private `entu_user` property — no
+`name`/`email`/rights props. The auto-provision path (`createUserForAccount`, L289-333, only runs when
+`!inviteAttempted`) DOES write those but is categorically the other path. Net: no existing mechanism
+surfaces invited-vs-redeemed state to an admin; would need a new domain/public prop written at redemption
+time, or an aggregate formula (never a raw-field formula — formulas bypass rights).
 
-- **Invite-redemption path** — `replaceInviteWithCredentials` (L279-287), called at L216/L223 when
-  `query.invite` present. `setEntity` call's properties array is `[{type:'entu_user', _id:<placeholder
-  id>, uid, email, provider}]` — ONLY the `entu_user` property (private-tier, unchanged from creation)
-  is touched. No `name`/`email` top-level props, no rights props (`_editor`/`_owner`/etc — none in the
-  array `checkEntityAccess`/`validatePropertyTypes` would gate on). `setEntity` given a non-null
-  `entityId` skips ALL creation-only logic (`applyDefaultParents`/`inheritParentProperties`/
-  `applyPropertyDefaults` — `entity.js` L44-48 gate on `!entityId`) — update path has zero implicit
-  rights escalation, confirmed by reading `setEntity` itself.
-- **No-invite auto-provision path** — `createUserForAccount` (L289-333), only reachable when
-  `!inviteAttempted` (L236) — i.e. NEVER runs if `query.invite` was present, success or fail. This path
-  DOES write `email` (L318) and conditionally `name` (L321-323) as top-level string props, AND grants
-  `_editor` natively in a second `setEntity` call (L330) — but this is categorically the OTHER path,
-  irrelevant to mvox's invite flow.
+## [PATTERN] mvox.eu is a zero-server-runtime static SPA — confirmed twice independently (2026-09-10 research-316.json r318, re-confirmed 2026-09-12 for #318 args)
 
-**Conclusion for #294**: invite redemption changes nothing an admin can already read — `name`/`email`
-stay empty (matches `createInvite` sending neither), rights stay exactly as `createInvite` set them
-(self-`_editor` only). The three-state discriminator (never-invited / invited-placeholder / redeemed)
-lives ONLY inside `entu_user`'s contents, which is private-tier in every state — no existing mechanism
-surfaces it to an admin. A real fix needs a NEW mechanism: e.g. a domain/public-readable boolean/state
-prop written at redemption time (would need mvox's own redemption-adjacent code, since entu-api's own
-redemption touches nothing else), or a formula computing an aggregate join-state (formulas bypass rights
-— usable for aggregates/booleans, NOT for projecting `entu_user`'s raw contents — see the formula
-mechanics finding cited in common-prompt.md "v4E/Entu" pitfalls; genuinely a candidate worth naming to
-Mihkel, but unverified whether mvox has any redemption-time hook to write it from, since entu-api's
-redemption is a black box mvox doesn't get to run code inside).
+`@sveltejs/adapter-static`, `fallback: 'index.html'`, no `wrangler.json`/`.toml` ever committed, no
+`+server.ts`, no `hooks.server.ts`, no `dependencies` key in package.json. DNS: mvox.eu apex →
+`multivox.pages.dev` (CF Pages, git-connected). `architecture-decisions.md:355` + `common-prompt.md:48`
+still describe the superseded `adapter-cloudflare`/BFF shape (dead since 2026-05-23 "Path C" decision) —
+stale doc, not stale reality; flag if anyone cites those lines as current. Any new server component (e.g.
+#318's MCP server) is new infra from zero — no existing HTTP-handling code to attach to.
+
+## [GOTCHA] No commit-SHA stamping exists anywhere in the build
+
+SvelteKit's generated `_app/version.json` holds a build timestamp, not a git SHA. `[unverified]` whether CF
+Pages exposes `CF_PAGES_COMMIT_SHA` as a build-time env var — plausible from general CF Pages knowledge, not
+confirmed against CF docs or the dashboard. Check before any GREEN phase needing "as of commit X" in a
+response (e.g. #318's MCP server).
+
+## [GOTCHA] Haiku subagents fabricate line numbers reading large single-line JSON blobs
+
+A dispatched haiku subagent cited `research-316.json:line 1485` — the file is ~222-272 lines total
+(effectively one giant top-level object). The claim itself checked out against the file's actual content,
+but the citation was invented. Don't trust haiku line-number citations into JSON without spot-checking;
+prose/code files are more reliable.
 
 ## [DEFERRED] /library filter voicing/language field name mismatch (still open, low priority)
 

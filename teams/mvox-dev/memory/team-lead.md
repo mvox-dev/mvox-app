@@ -2,7 +2,22 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-21 WIND-DOWN 2026-09-12 ~01:10 EEST, planned at the #328 seam (Mihkel 23:52)]
+### [LIVE — MVOX-22 session af2d1ae7, wake 2026-09-12 01:08]
+
+**Wake done 01:20: finn/bentham/perotin up; landing monitor bt9nl0xj5 armed (dies with session); mail drained (31 historical, nothing new).** Stale branch fix/328-* deleted (Bentham-verified landed).
+
+**RUN 1 wf_386fca67-e3e (pack [330,318,331] from args-pack-330-318-331.json, 38cffec): #330 LANDED 26e36e8** (closed, cleared, noticed) → HALTED at #318 REVIEW YELLOW (config finding tripped non-code-blocker halt; branch feat/318-entu-rights-mcp at ed6bde1 = RED 94c4d5a + GREEN, preserved). Findings on-issue (comment 5642106513): transport fails real client handshake (notifications/initialized→-32601 instead of 202; SSE-GET served health JSON; DELETE/OPTIONS fall through, no CORS), wrong @ts-expect-error (TS2578 with bundle present), workers/ outside typecheck gate. **Gama ACCEPTED the #318 design with one objection (staleness story) + three asks — ALL already in the GREEN** (README manual-refresh in plain words, push-trigger feasibility = Mihkel's token call, sourceCommitDate on stamp). Gama pre-ruled: won't activate a server whose staleness story is "someone remembers" — if no repo-side trigger, redeploy step must be written into the doc-amendment procedure BEFORE the activation ask.
+
+**RUN 2 wf_9981136a-6f1 ([318-fix, 331]): three findings CLOSED + verified live at 11aa91f** (transport 202/405/405/204 + nine-path CORS sweep w/ MCP-Protocol-Version pinned; check:workers proven off-repo; vitest include widened to workers/** at RED — answered Gama's urgent sibling-gate doorbell 5642126501 with comment 5642133781). **YELLOWed on ONE new finding: fix commit 11aa91f carried 'Closes #318' trailer → would auto-close at squash, dissolving the activation gate.** #331 never reached.
+
+**RUN 3 LIVE: wf_731c0e74-4a9, [318-amend, 331]** from args-remainder2-318-331.json (318r2 = message-only amend, content diff must stay empty, MERGE authors body from commitBody never default concatenation; 331 verbatim third carry). Finding on-issue 5642757949. UNCOMMITTED on tree: args-318r*.json, args-remainder*-318-331.json, team-lead.md, finn.md — commit at next main gap.
+
+**#318 SPECIAL AT ITS MERGE:** commitBody has NO Closes trailer — issue stays OPEN; activation at mvox.eu (first wrangler deploy + routing choice path-vs-subdomain) is a PO gate. At #318's landing: notice to Gama + request activation authorization. Design record = #318 comment 5641268713 (separate Worker workers/entu-rights-mcp/, gitignored stamped bundle carrying sourceCommit, verbatim-by-test, no auth per mitselek). Finn's infra report: mvox.eu = static CF Pages (multivox), adapter-static, no wrangler/no server code anywhere; architecture-decisions.md:355 + common-prompt.md:48 still say adapter-cloudflare/BFF — STALE, superseded by Path C 2026-05-23; doc-fix candidate at a gap.\n\n**Per-landing routine:** Gama one-liner + board-label.sh <N> land (330: close issue; 331: close; 318: leave open, land label anyway at activation not merge — decide at the event). If pack halts mid-way: remainder args file + FRESH launch (prefix-cache law), never amend-and-resume.\n\n**HELD/GATED:** #319 (Mihkel-pending spec amendment). #316 closes on #318+#319 → lifts #233's gate. #332 shaped, not ready. Epic #289 closure = Gama's call.
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-21 WIND-DOWN 2026-09-12 ~01:10 EEST, planned at the #328 seam (Mihkel 23:52)]
 
 **MVOX-21 TALLY (12h session): 7 merged** — #329 25d72cd (YELLOW-cap recovery: fix c0700bd + Bentham GREEN + Gama sanction 5635111998) · #323 ca0da98 · #324 c9a3954 (honest-stall recovery) · #325 5dafcaf · #326 a42a15c · #327 a9e420d · #328 ba16454. **Epic #289: ALL SIX sub-issues closed, mirror cleared — closure reported to Gama, their call.** Also: #330 prepped (amended 3-edit spec; args-330.json committed) · #331 researched v2 (research-331-v2.json; v1 killed on Gama's catch) · #331/#332 follow-ons filed by PO.
 
