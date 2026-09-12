@@ -113,7 +113,7 @@
 	import {
 		pinnedEditionLabel,
 		rowEditionUnknown as isEditionUnknown,
-		readerEditionUnknown as isReaderEditionUnknown
+		readerEditionUnknownReason as getReaderEditionUnknownReason
 	} from '$lib/repertoire/editionUnknown';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 
@@ -353,8 +353,13 @@
 	 *  `row.editionName` was; and an unnameable PIN is unknown for her even
 	 *  under a complete read (#331 item 4), which is safe here precisely because
 	 *  she has no picker whose unpin choice it could take away. */
-	function readerEditionUnknown(row: WorkRow): boolean {
-		return isReaderEditionUnknown(
+	/** #342 — WHY, not just whether: 'truncated' names an incomplete read (may
+	 *  still resolve), 'dangling' a pin under a COMPLETE read that resolves to
+	 *  nothing (nothing left to wait for). Same wiring as the boolean it
+	 *  replaces at this call site — computed once so the render branch below
+	 *  never evaluates the predicate twice. */
+	function readerEditionUnknownReason(row: WorkRow): 'truncated' | 'dangling' | null {
+		return getReaderEditionUnknownReason(
 			row,
 			optionsFor(row),
 			row.truncated ?? false,
@@ -515,6 +520,12 @@
 			{statusLabel(row.status)}
 		</span>
 	{/if}
+	<!-- #342 — computed once, before the chain below, so the reader branch can
+	     both GATE on it and SELECT its wording without calling the predicate
+	     twice. null (editor row, or a reader row that is a stated fact) short-
+	     circuits the reader branch exactly as `!canEditRepertoireRow(row) &&
+	     readerEditionUnknown(row)` used to. -->
+	{@const readerReason = canEditRepertoireRow(row) ? null : readerEditionUnknownReason(row)}
 	{#if canEditRepertoireRow(row) && rowEditionUnknown(row)}
 		<!-- #329 — the edition state under a TRUNCATED read that no scoped
 		     per-work read has settled yet: UNKNOWN, not known-absent, and the
@@ -534,21 +545,27 @@
 		{@render editionPicker(row)}
 	{:else if rowEditionLabel(row) !== ''}
 		<span data-testid="work-edition" class="text-xs text-ink-2">{rowEditionLabel(row)}</span>
-	{:else if !canEditRepertoireRow(row) && readerEditionUnknown(row)}
+	{:else if readerReason !== null}
 		<!-- #329 — same unknown state for a non-editor viewer: no picker to open
 		     (management is gated on `canEditRepertoireRow` everywhere else), but
 		     "no edition" is still a claim a truncated read cannot back.
-		     #331 — fed from `readerEditionUnknown` (the row's OWN `truncated`),
-		     not `rowEditionUnknown`/`pickableEditionsPartial`: that flag is always
-		     false for a reader (she never triggers the manage picker read it
-		     reports on), which is exactly why this branch could never fire before.
-		     The reader feed is also the LOOSER of the two (item 4: an unnameable
-		     pin is unknown for her under a complete read as well), so the
-		     `!canEditRepertoireRow(row)` guard is load-bearing, not belt-and
-		     -braces: without it an editor could reach this branch on a row her
-		     own feed correctly calls a fact. -->
+		     #331 — fed from `readerEditionUnknownReason` (the row's OWN
+		     `truncated`), not `rowEditionUnknown`/`pickableEditionsPartial`: that
+		     flag is always false for a reader (she never triggers the manage
+		     picker read it reports on), which is exactly why this branch could
+		     never fire before. The reader feed is also the LOOSER of the two
+		     (item 4: an unnameable pin is unknown for her under a complete read
+		     as well), so `readerReason` being null-for-editors above is
+		     load-bearing, not belt-and-braces: without it an editor could reach
+		     this branch on a row her own feed correctly calls a fact.
+		     #342 — WHICH sentence depends on `readerReason`: 'truncated' keeps
+		     the old key (incompleteness is a true claim there), 'dangling' (a
+		     pin under a COMPLETE read, #331 item 4's shape) gets the new one —
+		     nothing is incomplete, and nothing the reader waits for resolves it. -->
 		<span data-testid="work-edition-unknown" class="text-xs text-ink-3 italic">
-			{m.repertoire_edition_unknown()}
+			{readerReason === 'dangling'
+				? m.repertoire_edition_unknown_pinned()
+				: m.repertoire_edition_unknown()}
 		</span>
 	{:else}
 		<span data-testid="work-no-edition" class="text-xs text-ink-3 italic">{m.repertoire_no_edition()}</span>

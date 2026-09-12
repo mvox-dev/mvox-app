@@ -331,6 +331,7 @@
 	],
 	"repertoire_no_edition": "No pinned edition",
 	"repertoire_edition_unknown": "Edition unknown — the list may be incomplete",
+	"repertoire_edition_unknown_pinned": "Edition unavailable — the pinned edition can no longer be shown",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Borrow",
 	"repertoire_pdf_error": "Could not open the PDF — try again.",

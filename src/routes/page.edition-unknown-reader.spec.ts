@@ -311,13 +311,16 @@ describe('#331 agenda — the reader\'s COMPLETE read keeps every stated fact', 
 		// row already has. The pin's id resolves to nothing: not the row's own
 		// label lookup, and (the read being complete) not anything a re-read
 		// could find. "No pinned edition" is false either way.
+		// #342 \u2014 this IS the dangling state: the list is whole, so the wording is
+		// the NEW key, never the truncated state's incompleteness claim.
 		const { container } = await renderExpandedAsReader({
 			'pv-ev': [workRow({ truncated: undefined })]
 		});
 		const li = workRowOf(container, 'Old warhorse');
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
 		expect(unknown, 'work-edition-unknown on the reader\u2019s row').not.toBeNull();
-		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
+		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(li.textContent).not.toContain('[repertoire_no_edition]');
 	});

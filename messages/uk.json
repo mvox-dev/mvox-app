@@ -333,6 +333,7 @@
 	],
 	"repertoire_no_edition": "Видання не вказано",
 	"repertoire_edition_unknown": "Видання невідоме — список може бути неповним",
+	"repertoire_edition_unknown_pinned": "Видання недоступне — закріплене видання більше не можна показати",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Позичити",
 	"repertoire_pdf_error": "Не вдалося відкрити PDF — спробуйте ще раз.",

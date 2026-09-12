@@ -516,4 +516,36 @@ describe('#329 i18n — repertoire_edition_unknown exists; repertoire_no_edition
 	});
 });
 
+// #342 i18n — the unknown wording splits. `repertoire_edition_unknown` keeps
+// its current sentence and serves the TRUNCATED state only (its incompleteness
+// claim is true there); `repertoire_edition_unknown_pinned` serves the
+// DANGLING pin under a COMPLETE read, where nothing is incomplete and nothing
+// the user waits for will resolve it. Three states, three sentences — none may
+// share wording in any locale.
+describe('#342 i18n — repertoire_edition_unknown_pinned exists; the three edition-state messages are distinct', () => {
+	it.each(LOCALES)('%s.json carries repertoire_edition_unknown_pinned, non-empty', (locale) => {
+		const messages = localeMessages(locale);
+		expect('repertoire_edition_unknown_pinned' in messages, `${locale}.json missing key`).toBe(
+			true
+		);
+		expect(isMessageEmpty(messages['repertoire_edition_unknown_pinned'])).toBe(false);
+	});
+
+	it.each(LOCALES)(
+		'%s: no_edition, edition_unknown and edition_unknown_pinned are pairwise DIFFERENT sentences',
+		(locale) => {
+			const messages = localeMessages(locale);
+			const noEdition = messagePatterns(messages['repertoire_no_edition']).join(' ');
+			const unknown = messagePatterns(messages['repertoire_edition_unknown']).join(' ');
+			const pinned = messagePatterns(messages['repertoire_edition_unknown_pinned']).join(' ');
+			expect(pinned).not.toBe('');
+			expect(pinned).not.toBe(unknown);
+			expect(pinned).not.toBe(noEdition);
+			expect(unknown).not.toBe(noEdition);
+		}
+	);
+});
+
 // (*MVOX:Tallis* — #329 RED)
+// (*MVOX:Tallis* — #342 RED: the dangling-pin key added to the locale guards;
+// no_edition byte-pin untouched)

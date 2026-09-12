@@ -331,6 +331,7 @@
 	],
 	"repertoire_no_edition": "Trükiväljaanne valimata",
 	"repertoire_edition_unknown": "Trükiväljaanne teadmata — nimekiri võib olla poolik",
+	"repertoire_edition_unknown_pinned": "Trükiväljaanne pole saadaval — kinnistatud trükiväljaannet ei saa enam kuvada",
 	"repertoire_pdf_link": "PDF",
 	"repertoire_borrow_link": "Laenuta",
 	"repertoire_pdf_error": "PDF-i avamine ebaõnnestus — proovi uuesti.",

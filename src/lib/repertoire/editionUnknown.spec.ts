@@ -8,9 +8,11 @@ import type { PickerOption, WorkRow } from './types';
 import {
 	pinnedEditionLabel,
 	readerEditionUnknown,
+	readerEditionUnknownReason,
 	rowEditionUnknown,
 	unresolvedEditionWorkIds
 } from './editionUnknown';
+import * as editionUnknownModule from './editionUnknown';
 
 const NONE: ReadonlySet<string> = new Set<string>();
 
@@ -211,6 +213,118 @@ describe('readerEditionUnknown (the READER feed)', () => {
 	});
 });
 
+// #342 — WHY a reader's row is unknown, at the same seam. The wording split
+// (truncated names incompleteness; a dangling pin does not) needs the render
+// site to tell the two states apart, and #342's amendment put that
+// discriminator in scope: `readerEditionUnknownReason` returns 'truncated' |
+// 'dangling' | null with `readerEditionUnknown`'s EXACT wiring, so the boolean
+// and the reason can never diverge. It reports a distinction #329/#331/#337
+// already make — never a new one: every case below is a row those rulings
+// already call unknown (or a fact), only now the unknown says which kind.
+describe('readerEditionUnknownReason (#342 — the READER feed, with a reason)', () => {
+	it("a pin nothing can name under a TRUNCATED read is 'truncated' — incompleteness is a true claim there", () => {
+		expect(readerEditionUnknownReason(row({ editionId: 'ed-9' }), [], true, NONE)).toBe(
+			'truncated'
+		);
+		expect(readerEditionUnknownReason(row({ editionId: 'ed-9' }), [ED1], true, NONE)).toBe(
+			'truncated'
+		);
+	});
+
+	it("a pin nothing can name under a COMPLETE read is 'dangling' — nothing is incomplete, and nothing resolves it (#331 item 4's shape)", () => {
+		expect(readerEditionUnknownReason(row({ editionId: 'ed-9' }), [], false, NONE)).toBe(
+			'dangling'
+		);
+		// ...including when the work has OTHER matched options: the pin still
+		// matches none of them.
+		expect(readerEditionUnknownReason(row({ editionId: 'ed-9' }), [ED1], false, NONE)).toBe(
+			'dangling'
+		);
+	});
+
+	it("the zero-options shape is 'truncated' or null, NEVER 'dangling' — it requires truncation to fire at all", () => {
+		// Truncated, nothing pinned, zero options: the unknown that IS about an
+		// incomplete list.
+		expect(readerEditionUnknownReason(row(), [], true, NONE)).toBe('truncated');
+		// Complete, nothing pinned: a known absence — null, not a reason.
+		expect(readerEditionUnknownReason(row(), [], false, NONE)).toBe(null);
+		expect(readerEditionUnknownReason(row(), [ED1], false, NONE)).toBe(null);
+		// The sweep: no editionId === '' case may ever come back 'dangling' — a
+		// dangling REFERENCE needs a reference.
+		for (const options of [[], [ED1]] as const) {
+			for (const truncated of [false, true]) {
+				for (const resolved of [NONE, new Set(['work-1'])]) {
+					expect(
+						readerEditionUnknownReason(row(), [...options], truncated, resolved)
+					).not.toBe('dangling');
+					expect(
+						readerEditionUnknownReason(programRow({ editionId: '' }), [...options], truncated, resolved)
+					).not.toBe('dangling');
+				}
+			}
+		}
+	});
+
+	it("a PROGRAM row's unnameable pin takes the same two reasons through the #337 gate", () => {
+		expect(readerEditionUnknownReason(programRow(), [], true, NONE)).toBe('truncated');
+		expect(readerEditionUnknownReason(programRow(), [ED1], true, NONE)).toBe('truncated');
+		expect(readerEditionUnknownReason(programRow(), [], false, NONE)).toBe('dangling');
+		expect(readerEditionUnknownReason(programRow(), [ED1], false, NONE)).toBe('dangling');
+	});
+
+	it('a stated fact has NO reason — nameable pins and answered works are null either way', () => {
+		for (const truncated of [false, true]) {
+			expect(readerEditionUnknownReason(row({ editionId: 'ed-1' }), [ED1], truncated, NONE)).toBe(
+				null
+			);
+			expect(
+				readerEditionUnknownReason(
+					row({ editionId: 'ed-9', editionName: 'Peters' }),
+					[],
+					truncated,
+					NONE
+				)
+			).toBe(null);
+			expect(
+				readerEditionUnknownReason(row({ editionId: 'ed-9' }), [], truncated, new Set(['work-1']))
+			).toBe(null);
+		}
+	});
+
+	it('the EDITOR feed has NO reason surface — its step-4 collapse to bare `partial` cannot produce dangling', () => {
+		// The export set is the assertion: exactly ONE reason function exists in
+		// this module, and it is the reader's. No `rowEditionUnknownReason`, no
+		// editor variant under any name.
+		const reasonExports = Object.keys(editionUnknownModule).filter((name) =>
+			/reason/i.test(name)
+		);
+		expect(reasonExports).toEqual(['readerEditionUnknownReason']);
+	});
+
+	it('the boolean wrapper is byte-identical to `reason !== null` — the shim can never diverge', () => {
+		const rows: WorkRow[] = [
+			row(),
+			row({ editionId: 'ed-9' }),
+			row({ editionId: 'ed-1' }),
+			row({ editionId: 'ed-9', editionName: 'Peters' }),
+			row({ kind: 'program' }),
+			programRow(),
+			programRow({ editionId: '' })
+		];
+		for (const r of rows) {
+			for (const options of [[], [ED1]] as const) {
+				for (const truncated of [false, true]) {
+					for (const resolved of [NONE, new Set(['work-1'])]) {
+						expect(readerEditionUnknown(r, [...options], truncated, resolved)).toBe(
+							readerEditionUnknownReason(r, [...options], truncated, resolved) !== null
+						);
+					}
+				}
+			}
+		}
+	});
+});
+
 describe('unresolvedEditionWorkIds', () => {
 	it('is empty under a complete read — the ordinary case owes no extra request', () => {
 		expect(unresolvedEditionWorkIds([row()], {}, false, NONE)).toEqual([]);
@@ -262,3 +376,5 @@ describe('unresolvedEditionWorkIds', () => {
 // (*MVOX:Josquin* — #329 review)
 // (*MVOX:Tallis* — #337 RED: the program-row characterisation replaced with
 // the reader rule; editor-feed and zero-options fences pinned)
+// (*MVOX:Tallis* — #342 RED: readerEditionUnknownReason — truncated vs
+// dangling, boolean shim pinned byte-identical)

@@ -322,12 +322,16 @@ describe("/event/[id] #331 — the reader's COMPLETE read keeps every stated fac
 		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
 	});
 
-	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#331 item 4)', async () => {
+	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#331 item 4; #342 wording)', async () => {
+		// #342 — the read finished and ed-9 is simply gone: nothing is incomplete,
+		// so the wording is the NEW key, never the truncated state's
+		// incompleteness claim.
 		const { container } = await renderAsReader({});
 		const li = workRowOf(container, 'Spem in alium');
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
 		expect(unknown, 'work-edition-unknown on the reader’s row').not.toBeNull();
-		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
+		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(li.textContent).not.toContain('[repertoire_no_edition]');
 	});

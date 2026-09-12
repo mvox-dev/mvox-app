@@ -268,5 +268,87 @@ describe('#331 — the EDITOR under a COMPLETE read keeps every affordance she h
 	});
 });
 
+// #342 — the READER branch selects its wording by REASON, not by a bare
+// boolean. The two states #329/#331/#337 already distinguish get different
+// sentences: a TRUNCATED unknown keeps `repertoire_edition_unknown` (its
+// incompleteness claim is true there), a DANGLING pin under a COMPLETE read
+// gets `repertoire_edition_unknown_pinned` (nothing is incomplete, and nothing
+// the reader waits for will resolve it). The reader wiring feeds the row's OWN
+// `truncated` — these rows carry the flag explicitly.
+describe('#342 — the reader wording splits: truncated names incompleteness, a dangling pin does not', () => {
+	it('a TRUNCATED unknown keeps the incompleteness wording — the old key, not the new one', () => {
+		const { container } = renderRow(row({ editionId: 'ed-9', truncated: true }), {
+			manageRights: 'not-editor'
+		});
+
+		const unknown = container.querySelector('[data-testid="work-edition-unknown"]');
+		expect(unknown, 'work-edition-unknown on the truncated reader row').not.toBeNull();
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown_pinned]');
+		expect(container.textContent).not.toContain('[repertoire_no_edition]');
+	});
+
+	it('a DANGLING pin under a COMPLETE read gets the NEW wording — no incompleteness claim', () => {
+		// truncated: false, a real pin, no scoped resolution — #331 item 4's
+		// shape, now with its own sentence.
+		const { container } = renderRow(row({ editionId: 'ed-9', truncated: false }), {
+			manageRights: 'not-editor'
+		});
+
+		const unknown = container.querySelector('[data-testid="work-edition-unknown"]');
+		expect(unknown, 'work-edition-unknown on the dangling reader row').not.toBeNull();
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
+		// NOT the truncated wording: `[repertoire_edition_unknown]` (closing
+		// bracket included) must be gone — its incompleteness claim is false here.
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown]');
+		expect(container.textContent).not.toContain('[repertoire_no_edition]');
+		// Still a reader: the wording is the whole change, no picker appears.
+		expect(picker(container)).toBeNull();
+	});
+
+	it('the dangling wording also serves a dangling pin alongside OTHER matched options', () => {
+		const { container } = renderRow(row({ editionId: 'ed-2', truncated: false }), {
+			manageRights: 'not-editor',
+			options: [{ id: 'ed-1', label: '40-part original' }]
+		});
+
+		expect(
+			container.querySelector('[data-testid="work-edition-unknown"]')!.textContent
+		).toContain('[repertoire_edition_unknown_pinned]');
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown]');
+	});
+});
+
+// #342 fence — the EDITOR render sites are byte-identical: her feed's step-4
+// collapse to bare `partial` cannot produce the dangling shape, so her unknown
+// wording and her picker's disabled unknown option keep the OLD key, and the
+// new key never appears on any editor surface.
+describe('#342 fence — the editor never sees the new wording', () => {
+	it("the editor's truncated unknown row keeps the old key everywhere, picker option included", () => {
+		const { container } = renderRow(row({ editionId: 'ed-9', truncated: true }));
+
+		expect(
+			container.querySelector('[data-testid="work-edition-unknown"]')!.textContent
+		).toContain('[repertoire_edition_unknown]');
+		expect(optionShape(picker(container)!)).toEqual([
+			{ value: '', label: '[repertoire_edition_unknown]', disabled: true }
+		]);
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown_pinned]');
+	});
+
+	it("the editor's complete-read row with an unnameable pin stays a plain picker — no unknown wording of either kind", () => {
+		const { container } = renderRow(row({ editionId: 'ed-9', truncated: false }), {
+			partial: false,
+			options: [{ id: 'ed-1', label: '40-part original' }]
+		});
+
+		expect(container.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown]');
+		expect(container.textContent).not.toContain('[repertoire_edition_unknown_pinned]');
+	});
+});
+
 // (*MVOX:Josquin* — #329 review)
 // (*MVOX:Josquin* — #331 review, finding 1)
+// (*MVOX:Tallis* — #342 RED: the reader branch selects by reason; editor
+// surfaces fenced on the old key)

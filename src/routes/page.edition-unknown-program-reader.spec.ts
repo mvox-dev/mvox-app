@@ -129,10 +129,12 @@ const PROGRAM_ITEMS = [
 	}
 ];
 
-/** TRUNCATED at the wire: `count` far above the one row returned — the real
- *  `deriveListRead` inside `listAllEditions` is what has to turn this into
- *  `truncated`, `loadWorksByEventId` is what has to put it on the row. */
-function wireStub() {
+/** TRUNCATED at the wire when `editionCount` is set far above the one row
+ *  returned — the real `deriveListRead` inside `listAllEditions` is what has
+ *  to turn this into `truncated`, `loadWorksByEventId` is what has to put it
+ *  on the row. Absent (#342's dangling-complete case), the read is COMPLETE
+ *  and ed-9 is simply not in it. */
+function wireStub(opts: { editionCount?: number } = {}) {
 	const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
@@ -140,7 +142,7 @@ function wireStub() {
 		if (url.includes('_type.string=program_item')) return json({ entities: PROGRAM_ITEMS });
 		if (url.includes('_type.string=edition')) {
 			return json({
-				count: 4000,
+				...(opts.editionCount === undefined ? {} : { count: opts.editionCount }),
 				entities: [
 					{
 						_id: 'ed-1',
@@ -188,7 +190,7 @@ afterEach(() => {
 
 describe('#337 agenda — a reader’s program row through the shared element', () => {
 	it('a program row whose pin the truncated wire read could not name says UNKNOWN, never "no pinned edition"', async () => {
-		wireStub();
+		wireStub({ editionCount: 4000 });
 		setAuthedReader();
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -212,4 +214,38 @@ describe('#337 agenda — a reader’s program row through the shared element', 
 	});
 });
 
+// #342 — the coverage gap research named: this suite (agenda, program rows,
+// real works path) had NO dangling-complete case. The read below is COMPLETE
+// (no `count` on the wire) and ed-9 is simply not in it — the same unknown
+// row, but nothing about the list is incomplete, so the wording is the NEW
+// key, never the truncated state's incompleteness claim.
+describe('#342 agenda — a reader’s program row, dangling pin under a COMPLETE read', () => {
+	it('a program row pinned to an edition the complete read does not hold gets the dangling wording', async () => {
+		wireStub();
+		setAuthedReader();
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="works-line"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="works-line"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="work-row"]')).not.toBeNull();
+		});
+
+		const li = workRowOf(container, 'Ghost piece');
+		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
+		expect(unknown, 'work-edition-unknown on the reader’s program row').not.toBeNull();
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
+		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
+		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
+		expect(li.textContent).not.toContain('[repertoire_no_edition]');
+
+		// Still a reader: no management surface rides along with the wording.
+		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
+		expect(li.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #337 RED)
+// (*MVOX:Tallis* — #342 RED: dangling-complete program case added — the gap
+// the research named)

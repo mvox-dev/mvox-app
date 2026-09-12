@@ -58,6 +58,15 @@
 // question only a repertoire row can pose, and the unknown branch has no
 // answer for it. Widening that is open, not settled — #337 covers the
 // unnameable pin only.
+//
+// #342 — the reader's unknown wording SPLITS by why: a truncated read is
+// incomplete (may resolve itself), a dangling pin under a complete read is
+// not (nothing left to wait for). `readerEditionUnknownReason` reports which,
+// with `readerEditionUnknown`'s exact parameter wiring, so the boolean and the
+// reason can never diverge. The editor feed exposes no reason function: its
+// step-4 collapse to bare `partial` (the pin branch above, when
+// `unnameablePinNeedsNoTruncation` is false) means it structurally can never
+// produce the 'dangling' shape — every editor unknown IS a truncated one.
 
 import type { PickerOption, WorkRow } from './types';
 
@@ -77,6 +86,17 @@ export function pinnedEditionLabel(row: WorkRow, options: readonly PickerOption[
  * The ONE implementation both feeds below run. `unnameablePinNeedsNoTruncation`
  * is the single axis they differ on (#331 item 4) — everything else is shared
  * so the two can never drift.
+ *
+ * #342 widens the return from a bare boolean to WHY: 'truncated' | 'dangling'
+ * | null. The pin branch (`editionId !== ''`) is the only one that can ever
+ * yield 'dangling', and only when `unnameablePinNeedsNoTruncation` is true
+ * (the reader feed) — there it fires on a COMPLETE read (`partial` false) as
+ * 'dangling' and on a truncated one as 'truncated'. On the editor feed
+ * (`unnameablePinNeedsNoTruncation` false) that same branch collapses to bare
+ * `partial`, so it can only ever say 'truncated' or null — the editor
+ * structurally never produces 'dangling'. The zero-options branch needs
+ * `partial` to fire at all on EITHER feed, so it can only ever say 'truncated'
+ * or null too.
  */
 function editionUnknown(
 	row: WorkRow,
@@ -84,24 +104,27 @@ function editionUnknown(
 	partial: boolean,
 	resolvedWorkIds: ReadonlySet<string>,
 	unnameablePinNeedsNoTruncation: boolean
-): boolean {
+): 'truncated' | 'dangling' | null {
 	// Program rows are shut out UNLESS this is the reader feed's unnameable-pin
 	// branch (#337): `editionId !== ''` with `unnameablePinNeedsNoTruncation`
 	// true. That is the only door in, and it requires `editionId !== ''`, so a
 	// program row can never fall through to the zero-options shape below (that
 	// branch is reached only when `editionId === ''`).
 	if (row.kind !== 'repertoire' && !(unnameablePinNeedsNoTruncation && row.editionId !== ''))
-		return false;
-	if (resolvedWorkIds.has(row.workId)) return false;
-	if (pinnedEditionLabel(row, options) !== '') return false;
+		return null;
+	if (resolvedWorkIds.has(row.workId)) return null;
+	if (pinnedEditionLabel(row, options) !== '') return null;
 	// The PIN-we-cannot-name shape: `editionId` is set and nothing resolves its
 	// label. The OTHER shape — zero matched options, nothing pinned — needs
 	// `partial` on both feeds: "this work has no edition" would be a claim a
 	// truncated read cannot back, but under a COMPLETE read it is a known
 	// absence (`editionId === ''` is read off the repertoire_item itself, not
 	// off the truncated join, so a complete join adds nothing to the claim).
-	if (row.editionId !== '') return unnameablePinNeedsNoTruncation || partial;
-	return partial && options.length === 0;
+	if (row.editionId !== '') {
+		if (unnameablePinNeedsNoTruncation) return partial ? 'truncated' : 'dangling';
+		return partial ? 'truncated' : null;
+	}
+	return partial && options.length === 0 ? 'truncated' : null;
 }
 
 /**
@@ -123,7 +146,7 @@ export function rowEditionUnknown(
 	partial: boolean,
 	resolvedWorkIds: ReadonlySet<string>
 ): boolean {
-	return editionUnknown(row, options, partial, resolvedWorkIds, false);
+	return editionUnknown(row, options, partial, resolvedWorkIds, false) !== null;
 }
 
 /**
@@ -142,6 +165,31 @@ export function readerEditionUnknown(
 	truncated: boolean,
 	resolvedWorkIds: ReadonlySet<string>
 ): boolean {
+	return editionUnknown(row, options, truncated, resolvedWorkIds, true) !== null;
+}
+
+/**
+ * #342 — WHY the reader's row is unknown, with `readerEditionUnknown`'s exact
+ * wiring, so the boolean and the reason can never diverge:
+ *
+ *   'truncated' — the read that failed to name this row's edition state was
+ *                 itself truncated: incompleteness is a true claim, and the
+ *                 state may resolve by itself.
+ *   'dangling'  — a pin under a COMPLETE read that still resolves to nothing
+ *                 (deleted or unreadable). Nothing is incomplete, and nothing
+ *                 the user waits for will fix it.
+ *   null        — not unknown at all (a stated fact).
+ *
+ * READER feed only. The editor feed has no reason surface on purpose: its
+ * step-4 collapse to bare `partial` means it cannot produce the dangling
+ * shape — every editor unknown is a truncated unknown.
+ */
+export function readerEditionUnknownReason(
+	row: WorkRow,
+	options: readonly PickerOption[],
+	truncated: boolean,
+	resolvedWorkIds: ReadonlySet<string>
+): 'truncated' | 'dangling' | null {
 	return editionUnknown(row, options, truncated, resolvedWorkIds, true);
 }
 

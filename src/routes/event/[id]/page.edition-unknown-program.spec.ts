@@ -270,15 +270,18 @@ describe("/event/[id] #337 — a reader's PROGRAM rows under a TRUNCATED edition
 });
 
 describe("/event/[id] #337 — the reader's COMPLETE read", () => {
-	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence', async () => {
+	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#342 wording)', async () => {
 		// No `count` — the read is complete; ed-9 is simply not in it (deleted or
 		// unreadable). Mirrors the sibling suite's ri-3/ed-9 repertoire case
 		// (#331 item 4): the unnameable-pin shape never needed truncation.
+		// #342 — and because nothing here is incomplete, the wording is the NEW
+		// key, never the truncated state's incompleteness claim.
 		const { container } = await renderAsReader({});
 		const li = workRowOf(container, 'Ghost piece');
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
 		expect(unknown, 'work-edition-unknown on the reader’s program row').not.toBeNull();
-		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
+		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(container.textContent).not.toContain('[repertoire_no_edition]');
 	});
