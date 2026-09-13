@@ -241,6 +241,12 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
+	// #346 — restore the clipboard the G-block copy drives installed.
+	if (originalClipboardDesc) {
+		Object.defineProperty(navigator, 'clipboard', originalClipboardDesc);
+	} else {
+		Reflect.deleteProperty(navigator, 'clipboard');
+	}
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -251,6 +257,26 @@ afterEach(() => {
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
+}
+
+/** #346 — the invite value is becoming a readonly <input> (a <p> cannot
+ *  `.select()`); read the value wherever it lives so the token/composition
+ *  claims hold across the element change. */
+function linkValue(el: HTMLElement): string {
+	return el instanceof HTMLInputElement ? el.value : (el.textContent ?? '');
+}
+
+// ── #346 clipboard control — page.admin-invite-copy.spec.ts's idiom verbatim:
+//    per-property defineProperty on the navigator INSTANCE, restored from the
+//    captured original descriptor (never vi.stubGlobal on navigator). ────────
+const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+
+function setClipboard(value: unknown): void {
+	Object.defineProperty(navigator, 'clipboard', {
+		value,
+		configurable: true,
+		writable: true
+	});
 }
 
 /** Every invite-control element on the page, whatever row it sits on. */
@@ -460,7 +486,14 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		expect(link.textContent).toContain('tok-fresh-1');
+		const value = linkValue(link);
+		expect(value).toContain('tok-fresh-1');
+		// #346 — the deliverable is a LINK, not a bare token: the same
+		// buildInviteUrl(window.location.origin, token) composition the admin
+		// surface does. A recipient can open scheme+host+/invite/<token>; a
+		// bare JWT pasted into a browser is a search query.
+		expect(value).toContain('/invite/');
+		expect(value.startsWith(window.location.origin)).toBe(true);
 	});
 
 	it('after the mint the state is RE-READ and the row follows the contents: kutsu gone, saada uuesti + tühista kutse on', async () => {
@@ -511,7 +544,12 @@ describe('(E) saada uuesti — atomic replace via the sweep-then-mint producer',
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		expect(link.textContent).toContain('tok-fresh-1');
+		const value = linkValue(link);
+		expect(value).toContain('tok-fresh-1');
+		// #346 — `kutsu` and `saada uuesti` share handleMintInvite AND this
+		// render: the resend path must yield the SAME composed absolute URL.
+		expect(value).toContain('/invite/');
+		expect(value.startsWith(window.location.origin)).toBe(true);
 	});
 });
 
@@ -568,9 +606,25 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(q(container, 'roster-invite-link-m4')).not.toBeNull());
 
+		// #346 — COPY under A too, so the switch has copied-state to clear: the
+		// per-row copy state belongs in the SAME reset({isSwitch}) block (and
+		// onNoCollective) as `inviteLinkByMemberId` itself.
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		setClipboard({ writeText });
+		await fireEvent.click(q(container, 'roster-invite-link-m4')!);
+		await waitFor(() =>
+			expect(q(container, 'roster-invite-copy-status-m4')?.textContent?.trim()).toBe(
+				'[admin_invite_copied]'
+			)
+		);
+
 		await switchToOtherChoir(container);
 		expect(
 			container.querySelectorAll('[data-testid^="roster-invite-link-"]')
+		).toHaveLength(0);
+		// #346 — the status nodes mount WITH the link panel: none may survive it.
+		expect(
+			container.querySelectorAll('[data-testid^="roster-invite-copy-status-"]')
 		).toHaveLength(0);
 		await waitFor(() =>
 			expect(
@@ -580,6 +634,42 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 				})
 			).toBe(true)
 		);
+
+		// #346 — mint under B: the fresh panel's status region starts EMPTY —
+		// nothing copied under A announces over B's row.
+		await openCard(container, 'm-bob');
+		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
+		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
+		await waitFor(() => expect(q(container, 'roster-invite-link-m-bob')).not.toBeNull());
+		const freshStatus = q(container, 'roster-invite-copy-status-m-bob');
+		expect(freshStatus).not.toBeNull();
+		expect(freshStatus!.textContent?.trim()).toBe('');
+	});
+
+	it("#346 — a copy FAILURE's alert from collective A does not survive the switch either (copyFailed state joins the same resets)", async () => {
+		const { container } = await renderRoster();
+		await openCard(container, 'm4'); // #302 drive-path edit
+		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
+		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
+		await waitFor(() => expect(q(container, 'roster-invite-link-m4')).not.toBeNull());
+
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		setClipboard(undefined); // absent API → the visible per-row failure
+		await fireEvent.click(q(container, 'roster-invite-link-m4')!);
+		await waitFor(() => expect(q(container, 'roster-invite-copy-error-m4')).not.toBeNull());
+		consoleSpy.mockRestore();
+
+		await switchToOtherChoir(container);
+		expect(
+			container.querySelectorAll('[data-testid^="roster-invite-copy-error-"]')
+		).toHaveLength(0);
+
+		// Mint under B: the fresh panel starts CLEAN — no failure carried over.
+		await openCard(container, 'm-bob');
+		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
+		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
+		await waitFor(() => expect(q(container, 'roster-invite-link-m-bob')).not.toBeNull());
+		expect(q(container, 'roster-invite-copy-error-m-bob')).toBeNull();
 	});
 });
 
@@ -754,3 +844,6 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 // (*MVOX:Byrd* — #294 review fixes: blocks (H) and (I) pin the two stale-load
 //  seams — a superseded join-state fan-out (resolve OR reject) writing last,
 //  and a generation bump stranding `inviteActionPending`)
+// (*MVOX:Tallis* — #346 RED: D/E now pin the COMPOSED absolute URL on both
+//  producers, and (G) pins that the per-row copy state joins the same
+//  collective-switch resets as the link map itself)

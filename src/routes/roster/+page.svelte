@@ -25,6 +25,16 @@
 	// and every row here already has a person.
 	import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
 	import { mintSelfLinkInvite, withdrawInvite } from '$lib/invite/inviteData';
+	// #346 — the token this row mints is a bearer secret; the row must hand an
+	// ADMIN a real URL (scheme + host + /invite/<token>), never a bare JWT (a
+	// bare JWT pasted into a browser is a search query). `buildInviteUrl` is
+	// the SAME composer InviteSurface.svelte uses (#345/f501a78) — one
+	// implementation, not a second one growing here. `createInviteLinkCopier`
+	// is that same landed copy semantics, extracted (#346) so this row's
+	// click-to-copy is byte-identical to the admin surface's, not a second
+	// copy path with a second set of failure semantics.
+	import { buildInviteUrl } from '$lib/invite/invite-links';
+	import { createInviteLinkCopier, type InviteLinkCopier } from '$lib/invite/copy-invite-link';
 	import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
 	import {
 		deactivateMember,
@@ -122,6 +132,17 @@
 	let inviteLinkByMemberId = $state<Record<string, string>>({});
 	let inviteErrorByMemberId = $state<Record<string, boolean>>({});
 	let withdrawErrorByMemberId = $state<Record<string, boolean>>({});
+	// #346 — one `InviteLinkCopier` per row (lazily created on the row's FIRST
+	// click), plus its rendered outcome: `copiedByMemberId`/`copyFailedByMemberId`
+	// are this component's own reactive mirror of the copier's flags (the
+	// module itself carries no runes — see copy-invite-link.ts), refreshed
+	// synchronously at copy() entry and again on settle, same two-step read
+	// InviteSurface.svelte uses. Reused across a row's later mints — the
+	// copier's `getText` reads `inviteLinkByMemberId[memberId]` live, so a
+	// fresh token never needs a fresh instance.
+	let inviteCopierByMemberId = $state<Record<string, InviteLinkCopier>>({});
+	let copiedByMemberId = $state<Record<string, boolean>>({});
+	let copyFailedByMemberId = $state<Record<string, boolean>>({});
 	// A single shared in-flight guard, mirroring `deactivatePending`'s
 	// whole-block shape rather than a per-row map: #294 has no requirement for
 	// concurrent invite actions across rows, and one flag is the smaller
@@ -368,6 +389,11 @@
 				inviteLinkByMemberId = {};
 				inviteErrorByMemberId = {};
 				withdrawErrorByMemberId = {};
+				// #346 — a row's copier/copy-outcome names a link from the OLD
+				// collective same as `inviteLinkByMemberId` above; scoped identically.
+				inviteCopierByMemberId = {};
+				copiedByMemberId = {};
+				copyFailedByMemberId = {};
 				// #299 (PO ruling, Gama) — `pageCreateParentId` is not cosmetic form
 				// state: it is a cross-collective reference. The parent `<select>`'s
 				// options rebuild from the new collective's `ownOrgFlatSections`, so
@@ -408,6 +434,10 @@
 			inviteLinkByMemberId = {};
 			inviteErrorByMemberId = {};
 			withdrawErrorByMemberId = {};
+			// #346 — no collective, no copy state to claim either.
+			inviteCopierByMemberId = {};
+			copiedByMemberId = {};
+			copyFailedByMemberId = {};
 		},
 		onNoToken: () => {
 			// F3 code-review fix: drop `currentCfg` too — a write cfg must never
@@ -1493,7 +1523,18 @@
 			if (!routeLoad.isCurrent(g)) return;
 			const { [row.memberId]: _dropped, ...restErrors } = inviteErrorByMemberId;
 			inviteErrorByMemberId = restErrors;
-			inviteLinkByMemberId = { ...inviteLinkByMemberId, [row.memberId]: inviteToken };
+			// #346 — the composed URL (scheme + host + /invite/<token>), the SAME
+			// helper InviteSurface.svelte uses; never the bare token.
+			inviteLinkByMemberId = {
+				...inviteLinkByMemberId,
+				[row.memberId]: buildInviteUrl(window.location.origin, inviteToken)
+			};
+			// A fresh link starts with a clean copy outcome — a stale "copied"/
+			// failure from a link that no longer exists must not linger over it
+			// (the same discipline InviteSurface's submit() applies to its own
+			// `copied`/`copyFailed`).
+			copiedByMemberId = { ...copiedByMemberId, [row.memberId]: false };
+			copyFailedByMemberId = { ...copyFailedByMemberId, [row.memberId]: false };
 			await refreshJoinState(cfg, row.personId, g);
 		} catch (e) {
 			if (!routeLoad.isCurrent(g)) return;
@@ -1546,6 +1587,30 @@
 		} finally {
 			if (routeLoad.isCurrent(g)) inviteActionPending = false;
 		}
+	}
+
+	/** #346 — click-to-copy on the row's own invite-link input, following
+	 *  InviteSurface.svelte's #345 idiom exactly: select the full value first
+	 *  (the manual fallback, harmless on success, the ONLY recovery path on
+	 *  failure), then run this row's `InviteLinkCopier` — lazily created on
+	 *  first use, reused after. Both `copiedByMemberId`/`copyFailedByMemberId`
+	 *  are read TWICE — synchronously right after `copy()` is invoked (its
+	 *  entry-reset, visible even while THIS attempt is still pending) and
+	 *  again once it settles — because the copier itself carries no runes;
+	 *  this component owns the only reactive mirror of its flags. */
+	async function copyInviteLink(memberId: string, input: HTMLInputElement): Promise<void> {
+		input.select();
+		let copier = inviteCopierByMemberId[memberId];
+		if (!copier) {
+			copier = createInviteLinkCopier(() => inviteLinkByMemberId[memberId] ?? '');
+			inviteCopierByMemberId = { ...inviteCopierByMemberId, [memberId]: copier };
+		}
+		const pending = copier.copy();
+		copiedByMemberId = { ...copiedByMemberId, [memberId]: copier.copied };
+		copyFailedByMemberId = { ...copyFailedByMemberId, [memberId]: copier.copyFailed };
+		await pending;
+		copiedByMemberId = { ...copiedByMemberId, [memberId]: copier.copied };
+		copyFailedByMemberId = { ...copyFailedByMemberId, [memberId]: copier.copyFailed };
 	}
 
 	// ── #268 — admin member records: the in-row editor (real name, phone,
@@ -4197,13 +4262,43 @@
 						     render — the fresh token IS the deliverable of both. Reuses the
 						     standalone invite page's own copy (`admin_invite_link_label`,
 						     `admin_invite_bearer_warning`) rather than duplicating it: the
-						     bearer-secret risk is identical, this is the same mechanism. -->
+						     bearer-secret risk is identical, this is the same mechanism.
+						     #346 — the value is now the COMPOSED absolute URL, in a readonly
+						     <input> (a <p> cannot `.select()`), following InviteSurface's
+						     landed click-to-copy idiom exactly. `break-all` is dropped — an
+						     input scrolls its own overflow, the row stays legible. -->
+						<label class="flex flex-col gap-1 text-xs">
+							{m.admin_invite_link_label()}
+							<input
+								type="text"
+								readonly
+								data-testid="roster-invite-link-{row.memberId}"
+								value={inviteLinkByMemberId[row.memberId]}
+								class="w-full rounded-md border border-ink-5 p-2 font-mono text-base text-ink-2"
+								onclick={(e) => copyInviteLink(row.memberId, e.currentTarget)}
+							/>
+						</label>
+						<!-- #346 — the confirmation's OWN persistent node, one per row, the
+						     same shape InviteSurface's `invite-copy-status` uses (#345):
+						     mounted with the link panel regardless of `copied`, visible,
+						     reserved min-height, no timer. -->
 						<p
-							data-testid="roster-invite-link-{row.memberId}"
-							class="rounded-md border border-ink-5 p-2 text-xs break-all text-ink-2"
+							data-testid="roster-invite-copy-status-{row.memberId}"
+							role="status"
+							aria-live="polite"
+							class="min-h-[16px] text-xs leading-[16px] text-ink-2"
 						>
-							{m.admin_invite_link_label()}: {inviteLinkByMemberId[row.memberId]}
+							{#if copiedByMemberId[row.memberId]}{m.admin_invite_copied()}{/if}
 						</p>
+						{#if copyFailedByMemberId[row.memberId]}
+							<p
+								data-testid="roster-invite-copy-error-{row.memberId}"
+								role="alert"
+								class="text-xs text-red-700"
+							>
+								{m.admin_invite_copy_error()}
+							</p>
+						{/if}
 						<p class="text-xs text-ink-3">{m.admin_invite_bearer_warning()}</p>
 					{/if}
 					{#if inviteErrorByMemberId[row.memberId]}

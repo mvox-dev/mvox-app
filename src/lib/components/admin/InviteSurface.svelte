@@ -21,6 +21,13 @@
 	} from '$lib/invite/inviteData';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
+	// #346 — the copy semantics extracted VERBATIM out of this file's own
+	// `copyLink()` (f501a78), so the roster row's second copy surface rides
+	// the SAME implementation instead of growing a second one with second
+	// failure semantics. See copy-invite-link.ts's header for the pinned
+	// contract; page.admin-invite-copy.spec.ts (unmodified) is the behavioral
+	// fence this extract must not move.
+	import { createInviteLinkCopier } from '$lib/invite/copy-invite-link';
 	// #301 — the owner-only person-targeted invite path: `resolveOwnerTier`
 	// gates the select (mint onto an existing person is owner-gated, #294's
 	// live 403), `listJoinStates` derives who counts as uninvited (contents of
@@ -156,6 +163,12 @@
 	let inviteExpiryDate = $state('');
 	let copied = $state(false);
 	let copyFailed = $state(false);
+	// #346 — the ONE copier instance for this surface's link, extracted out of
+	// this component's own former `copyLink()` body. Its `getText` closes over
+	// `inviteLink` and re-reads it live, so the SAME instance stays correct
+	// across a later `createAnother` → fresh mint (never a creation-time
+	// snapshot) — see copy-invite-link.spec.ts.
+	const copier = createInviteLinkCopier(() => inviteLink);
 
 	let createError = $state<{ personId?: string } | null>(null);
 
@@ -474,19 +487,17 @@
 		}
 	}
 
+	// #346 — extracted onto the shared module; SAME entry-reset-visible-before-
+	// settle two-step read `copyInviteLink` in roster/+page.svelte uses, since
+	// the copier itself carries no runes (copy-invite-link.ts has none) — this
+	// component owns the only reactive mirror of `copier.copied`/`copyFailed`.
 	async function copyLink(): Promise<void> {
-		copied = false;
-		copyFailed = false;
-		try {
-			// No silent no-op: an unavailable clipboard (non-secure context) fails
-			// visibly; the readonly input stays manually copyable.
-			if (!navigator.clipboard?.writeText) throw new Error('clipboard unavailable in this context');
-			await navigator.clipboard.writeText(inviteLink);
-			copied = true;
-		} catch (e) {
-			console.error('admin/invite: copy failed', e);
-			copyFailed = true;
-		}
+		const pending = copier.copy();
+		copied = copier.copied;
+		copyFailed = copier.copyFailed;
+		await pending;
+		copied = copier.copied;
+		copyFailed = copier.copyFailed;
 	}
 
 	function createAnother(): void {
