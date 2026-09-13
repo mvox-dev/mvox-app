@@ -551,6 +551,15 @@
 					readonly
 					value={inviteLink}
 					class="rounded-md border border-ink px-3 py-2 font-mono"
+					onclick={(e) => {
+						// #345 — the manual fallback (the roster-rename `.select()` precedent):
+						// select the text UNCONDITIONALLY, then run the same copyLink() the
+						// button uses. Harmless on success (the clipboard write already put
+						// the text there); on failure it is the ONLY visible recovery path.
+						// No second copy implementation, no second failure surface.
+						e.currentTarget.select();
+						void copyLink();
+					}}
 				/>
 			</label>
 			<button
@@ -559,8 +568,22 @@
 				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
 				onclick={copyLink}
 			>
-				{copied ? m.admin_invite_copied() : m.admin_invite_copy()}
+				{m.admin_invite_copy()}
 			</button>
+			<!-- #345 — the confirmation's OWN persistent node (RsvpControl's
+			     `rsvp-saved-status` shape): mounted from the FIRST render of this
+			     done panel regardless of `copied`, VISIBLE (not sr-only), reserved
+			     min-height so the announcement never shifts layout. `copyLink()`
+			     already clears `copied` at the start of every attempt (and
+			     `createAnother` clears it too) — no new reset code here. -->
+			<p
+				data-testid="invite-copy-status"
+				role="status"
+				aria-live="polite"
+				class="min-h-[16px] text-xs leading-[16px] text-ink-2"
+			>
+				{#if copied}{m.admin_invite_copied()}{/if}
+			</p>
 			{#if copyFailed}
 				<p class="text-sm text-red-700" role="alert">{m.admin_invite_copy_error()}</p>
 			{/if}
