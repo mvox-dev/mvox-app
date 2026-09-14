@@ -443,12 +443,21 @@ describe('renderBoard — the line: Pooleli / Tehtud divider (#307)', () => {
 describe('renderBoard — sub-issues inherit ordering and chips (#307)', () => {
 	// Children arrive out of order on purpose: open 297 before open 290,
 	// old-closed 292 before newly-closed 294.
+	// #354 adjustment: closed #294's `blocked` chip no longer renders (a closed
+	// issue displays no motion labels — closed-motion-labels.spec.ts), so the
+	// coloured-chip-through-the-recursive-path assertion moved to OPEN child
+	// #297, which now carries `blocked` alongside `task`. #294 keeps the label
+	// in the fixture: ordering must stay closedAt-desc, chips or no chips.
 	const epic = issue({
 		number: 289,
 		title: '[EPIC] Library lending 1.0',
 		labels: [label('epic', '6f42c1')],
 		subIssues: [
-			issue({ number: 297, title: 'Child three', labels: [label('task', '1d76db')] }),
+			issue({
+				number: 297,
+				title: 'Child three',
+				labels: [label('task', '1d76db'), label('blocked', 'b60205')]
+			}),
 			issue({
 				number: 292,
 				title: 'Child closed long ago',
@@ -484,7 +493,9 @@ describe('renderBoard — sub-issues inherit ordering and chips (#307)', () => {
 	it('renders coloured chips on children through the same path', () => {
 		const doc = parse(renderBoard([epic], GENERATED_AT));
 		expect(styleOf(chip(doc, 290, 'ready'))).toMatch(/background(?:-color)?:\s*#0e8a16/i);
-		const blocked = styleOf(chip(doc, 294, 'blocked'));
+		// #354: the worst-case dark chip is read off OPEN child #297 — closed
+		// #294 no longer displays its `blocked` motion chip.
+		const blocked = styleOf(chip(doc, 297, 'blocked'));
 		expect(blocked).toMatch(/background(?:-color)?:\s*#b60205/i);
 		expect(blocked).toMatch(LIGHT_TEXT);
 	});

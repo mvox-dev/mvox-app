@@ -184,6 +184,21 @@ function closedAtRank(issue: RoadmapIssue): number {
 const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'in research'] as const;
 
 /**
+ * #354 — the five labels that describe where work sits in the queue, not what
+ * it was. A closed issue is not in the queue, so renderIssue filters these off
+ * closed issues' chip rows (kind labels — task/epic/bug/enhancement — stay).
+ * Same exact-string, case-sensitive idiom as ACTIVE_TIER_LABELS / hasLabel:
+ * these are the live GitHub label names, not a stable enum, and no comparison
+ * in this file folds case.
+ */
+export const MOTION_LABELS = ['ready', 'in process', 'prepped', 'in research', 'blocked'] as const;
+
+/** Pure predicate over MOTION_LABELS — the one instrument closed-motion-labels.spec.ts pins. */
+export function isMotionLabel(name: string): boolean {
+	return (MOTION_LABELS as readonly string[]).includes(name);
+}
+
+/**
  * An open issue's activity tier: 0 when it carries `in process` (which wins
  * over the other two even in combination), 1 when it carries `prepped`
  * without `in process`, 2 when it carries `in research` alone, 3 otherwise.
@@ -361,7 +376,16 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	// #340's never-fail fixture smuggles `labels: null` and a name-less label
 	// object past the type — `?? []` and renderLabel's own guard keep this a
 	// plain render, not a crash.
-	const labelsHtml = (issue.labels ?? []).map(renderLabel).join(' ');
+	// #354: a closed issue is not in the queue, so its motion labels (ready /
+	// in process / prepped / in research / blocked) are filtered off before
+	// rendering; kind labels (task/epic/bug/enhancement) always render. Open
+	// issues are unchanged. stalenessViolators reads flattenOpenIssues, which
+	// never touches labelsHtml, so this filter cannot move that fence.
+	const visibleLabels =
+		issue.state === 'open'
+			? (issue.labels ?? [])
+			: (issue.labels ?? []).filter((label) => !isMotionLabel(label?.name ?? ''));
+	const labelsHtml = visibleLabels.map(renderLabel).join(' ');
 	const subIssues = issue.subIssues ?? [];
 	const childrenHtml = boardOrder(subIssues)
 		.map((sub) => renderIssue(sub, rendered))
