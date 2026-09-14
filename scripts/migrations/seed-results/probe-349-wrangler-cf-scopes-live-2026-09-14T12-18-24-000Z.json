@@ -1,0 +1,87 @@
+{
+  "purpose": "mvox-app#349 — does the remote's existing Cloudflare credential cover #348's DNS work (attach a Pages custom domain + repoint a zone CNAME)? STRICTLY READ-ONLY: every call listed below is a GET. No create/update/delete was attempted at any point, and no interactive OAuth login was invoked.",
+  "hardFences": [
+    "READ-ONLY only — no POST/PUT/PATCH/DELETE issued against any Cloudflare endpoint",
+    "no interactive wrangler login attempted at any point",
+    "ambiguous reads reported as ambiguous, not resolved by attempting a write"
+  ],
+  "credentialCheck": {
+    "processEnv": "CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID NOT present in `env` by default",
+    "credentialsFile": "~/.config/mvox/credentials.env — CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID both present (values never printed/logged)",
+    "sourced": "set -a; . ~/.config/mvox/credentials.env; set +a  (house pattern, project_wrangler_deploy_auth precedent)"
+  },
+  "calls": [
+    {
+      "step": "wrangler whoami",
+      "method": "wrangler CLI (internally GET-only for this command)",
+      "result": "FAILED — \"Failed to automatically retrieve account IDs for the logged in user\" / errorMessage: \"user account fetch permission denied\". Wrangler's log (headers/bodies self-sanitized by wrangler, not by us) showed one 403 and one 200 among its internal calls; isolated below via direct curl to determine which call failed and why."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/user/tokens/verify",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "token is valid and active (Cloudflare message code 10000)"
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/accounts",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "success:true but result:[] — zero accounts listed for this token, despite the account demonstrably existing (see zone read below). This is the call wrangler whoami's account auto-discovery depends on; its empty result is why whoami fails."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}",
+      "method": "GET",
+      "httpStatus": 403,
+      "result": "\"Unauthorized to access requested resource\" (code 9109). CLOUDFLARE_ACCOUNT_ID from credentials.env was independently confirmed to MATCH the account id reported on the mvox.eu zone read below (1431b76f0b65e3d23833966744ff2bdf) — so this is a genuine permission gap on the CORRECT account, not a stale/wrong stored id. Account IDs are not secrets (used routinely in dashboard URLs); comparing/printing the id itself is safe."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/zones?name=mvox.eu",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "zone found, id 8c9bc3d0f03502efe6429878cdfb8160, account 1431b76f0b65e3d23833966744ff2bdf (\"Mihkel.putrinsh@gmail.com's Account\"). Cloudflare's OWN `permissions` array on this zone object for the calling token: [\"#zone_settings:read\",\"#zone_settings:edit\",\"#zone:read\",\"#dns_records:edit\",\"#dns_records:read\",\"#zone:edit\",\"#cache_purge:edit\"]. This is Cloudflare's authoritative, per-token echo of granted zone-level scope — the most decisive signal in this probe."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/zones/{zoneId}/dns_records?per_page=100",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "9 DNS records returned cleanly (A/CNAME/MX/TXT, incl. mvox.eu -> multivox.pages.dev CNAME) — dns_records:read confirmed working in practice, not just declared."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/accounts/{id}/pages/projects",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "6 Pages projects listed (multivox, entuphony, polyphony-registry, polyphony-vault, esl-review, evr-mail-mock) — Pages read confirmed at the account level, EVEN THOUGH plain /accounts and /accounts/{id} both denied. Cloudflare's Pages permission group is evidently independent of the generic Account Settings/membership read permission."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/accounts/{id}/pages/projects/multivox",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "full project object read cleanly (source/build/deployment config, domains: [multivox.pages.dev, mvox.eu])"
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/accounts/{id}/pages/projects/multivox/domains",
+      "method": "GET",
+      "httpStatus": 200,
+      "result": "1 custom domain currently attached: mvox.eu (status active, zone_tag matches the mvox.eu zone id). No branch-specific custom domain exists yet — situational context for #348, not itself part of the scope question."
+    },
+    {
+      "step": "wrangler pages project list",
+      "method": "wrangler CLI (read-only list command)",
+      "result": "succeeded cleanly, same 6 projects as the direct curl read — corroborates Pages read via the actual tool #348 would use, not just raw curl."
+    },
+    {
+      "step": "GET https://api.cloudflare.com/client/v4/user/tokens (attempt to read the token's OWN policy, to settle Pages Edit-vs-Read-only directly)",
+      "method": "GET",
+      "httpStatus": 403,
+      "result": "\"Unauthorized to access requested resource\" (code 9109). Expected/normal boundary — reading a token's own policy needs a separate 'API Tokens: Read' permission, which security-conscious deploy tokens routinely omit. This 403 is NOT evidence against Pages:Edit; it answers a different question (can this token read Cloudflare's token-management API at all — no)."
+    }
+  ],
+  "grantsFoundVsNeeded": {
+    "Zone -> DNS -> Read (mvox.eu)": "CONFIRMED FOUND — dns_records:read in the zone's own permissions array + live DNS-record read succeeded",
+    "Zone -> DNS -> Edit (mvox.eu)": "CONFIRMED FOUND — dns_records:edit in the zone's own permissions array (Cloudflare-reported, most decisive signal available; not inferred from a successful write, since none was attempted)",
+    "Account -> Cloudflare Pages -> Read": "CONFIRMED FOUND — project list/direct-read/domains-read all 200, corroborated via both curl and wrangler pages project list",
+    "Account -> Cloudflare Pages -> Edit": "CANNOT TELL — Cloudflare's Pages API does not echo a per-resource permissions array the way the Zones API does, so no read-only Pages call can confirm or rule out Edit. The one avenue that WOULD answer directly (reading the token's own configured policy via GET /user/tokens) is itself blocked (403, a distinct and separate permission gap, not itself informative about Pages:Edit). Per the hard fence, no POST/PATCH was attempted to disambiguate."
+  },
+  "verdict": "MIXED, precisely: Zone->DNS->Edit and Zone->DNS->Read on mvox.eu are CONFIRMED SUFFICIENT (Cloudflare's own permissions array is decisive). Account->Cloudflare Pages->Read is CONFIRMED SUFFICIENT. Account->Cloudflare Pages->Edit is CANNOT TELL — no read-only Cloudflare endpoint can confirm or rule it out; the only test that would settle it is an actual write (POST/PATCH a Pages custom domain), which is out of scope for this probe by the hard fence. Three of four needed grants are confirmed present; the fourth (Pages Edit specifically) is the one genuine unknown, with the exact blocking mechanism named above.",
+  "nothingMutated": "Every call in this probe was an HTTP GET (plus two read-only wrangler CLI list/whoami invocations, neither of which mutates). No create, update, or delete was issued against any Cloudflare resource at any point. No interactive wrangler login/OAuth flow was invoked."
+}
