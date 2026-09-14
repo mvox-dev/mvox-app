@@ -1,10 +1,5 @@
-# Task List Snapshot — 2026-09-12 ~01:10 EEST (MVOX-21 planned wind-down at the #328 seam)
+# Task List Snapshot — 2026-09-14 22:16 EEST (MVOX-22 checkpoint)
 
-No formal task-list rows — all work runs as pipeline runs. **The [NEXT SESSION] block at the top of team-lead.md is the restore source.** Queue summary:
-
-1. Re-arm the landing-notice monitor FIRST.
-2. Author args-318 (re-verify infra) + args-331 (fresh re-reads mandatory, post-pack).
-3. Launch packed [330, 318, 331] from committed args (330's committed; order Gama-ruled, unconditional).
-4. #319 held (Mihkel-pending spec amendment) → #316 closes on #318+#319 → #233 (Mihkel at-the-time auth). #332 not ready. Epic #289 closure = Gama's call (all sub-issues closed).
+No formal task rows — all work ran as pipeline runs. **The [NEXT SESSION] block atop team-lead.md is the restore source.** Board empty of dispatchable work; all open items on external gates (#348 operator, #319/#336/#233 Mihkel-gated, #332/#334-children not ready). Next session: wake, re-arm monitor, wait for doorbell.
 
 (*MVOX:Palestrina*)
