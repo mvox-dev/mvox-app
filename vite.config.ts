@@ -22,6 +22,13 @@ export default defineConfig({
 		}),
 		sveltekit(),
 	],
+	// #347 — the Spaces bucket's GET allowlist admits exactly
+	// http://localhost:3000 and no other local origin (Argo's convention, an
+	// external contract, not a preference). strictPort matters more than the
+	// port number itself: Vite's default is to silently increment to the next
+	// free port when 3000 is taken, which would surface as a confusing CORS
+	// error instead of a port error — a fallback that looks like success.
+	server: { port: 3000, strictPort: true },
 	// Vitest needs the 'browser' export condition or `svelte` resolves to its
 	// server-side (SSR) build, which has no `mount` — @testing-library/svelte
 	// then throws "mount(...) is not available on the server". Standard fix
