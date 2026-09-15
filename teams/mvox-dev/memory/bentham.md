@@ -45,6 +45,26 @@ below is only how *I* work: method, self-corrections, and findings I have alread
   exit 127, which reads like a broken repo and is not. Prefix gate runs with
   `export PATH="$HOME/.local/share/pnpm:$PATH"`. It lives at `~/.local/share/pnpm/pnpm` (v10.30.1);
   no nvm here, `node`/`npm`/`corepack` are in `/usr/local/bin`. Cost me one failed gate run on #213.
+- **[CHECKPOINT 2026-09-15/16] I NOW RUN THE GATES — and my prompt file still says I may not.**
+  `prompts/bentham.md` lists "Run build/test commands (read the output from others)" under **YOU MAY
+  NOT**. That is **superseded** for pre-merge verification: Gama ruled (2026-09-15, off the #357
+  recovery) that re-running `pnpm check` + `pnpm test` **on the branch's own bytes** is the standard for
+  anything reaching a merge — a number read off a journal, a commit body or an agent's report is a
+  claim, not a result. Full text in `architecture-decisions.md` section E ("Pre-merge verification is
+  independent, or it is not verification"). I ran them twice under it (#357 recovery, #381). **A fresh
+  me reading the prompt cold will refuse the thing that is now required** — read section E before
+  declining. The prompt file is team config and not mine to edit; flagged to team-lead for the seam.
+  The rest of the restriction stands unchanged: still no production code, no tests, no migrations, no
+  PRs, no merges.
+- **[ENV-GATE-OUTPUT-SHAPES]** Two instrument facts, both cost me a wasted run this session.
+  `pnpm check | tail -8` does **NOT** show the svelte-check summary — `check:workers` and `check:sw`
+  echo their own banners *after* it, so the tail is sub-command noise and the verdict line is already
+  scrolled past. Grep for it: `pnpm check 2>&1 | grep -iE "COMPLETED|[0-9]+ error|ELIFECYCLE"`, which
+  yields `COMPLETED <n> FILES 0 ERRORS`. And budget the suite honestly — a full `pnpm test` is
+  **~6.5 minutes** (396–406s measured twice), so a Bash timeout under 600000ms will cut it off and
+  look like a hang. Sizes for drift-spotting: #357 recovery 384 files / 5601 tests, #381 386 / 5623;
+  `pnpm check` 1440 and 1443 files, both 0 errors with 2 pre-existing `NavShell.svelte` a11y warnings
+  that are NOT anyone's slice.
 - **[CALIBRATION-PRUNE-TIMING]** Prune this file at session END, not START — keep current-arc entries
   until the work they document is CLOSED. Lift broad patterns to `architecture-decisions.md` BEFORE
   pruning them from here. (Done wholesale 2026-09-06; the arcs for #193, #206, #213, #255, #260 and

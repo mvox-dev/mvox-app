@@ -1193,6 +1193,31 @@ agent writing an issue comment or a relay** — not only the PO team's own board
 **§11 is the trigger the #316 family already produced, now with a citable home**, so what changes is
 where I point rather than what I fire on.
 
+### The author marker goes on at FILE time (Gama, 2026-09-15 — house rule, not a po-team §)
+
+**Every issue body ends with its author's marker, written when the issue is filed, never added by a later
+edit.** Ruled after fourteen issues were filed in one day without markers (Gama's own miss, self-reported;
+all fourteen since signed, and he is the author on all of them if anyone needs to ask).
+
+**The premise needs one correction, because it changes the fix.** The convention does *not* live nowhere
+— it is at `teams/mvox-dev/common-prompt.md:38`, which requires `(*MVOX:<AgentName>*)` on "all persistent
+text output". What that line enumerates is *architecture decisions, PR descriptions, shared knowledge
+files, scratchpad entries*: **issue bodies are not on the list**, and no other repo file names them
+(checked, 2026-09-16). So the surface that dropped the convention is exactly the surface the written
+enumeration omits, and the durable fix is to name issue bodies in that line rather than only to restate
+the rule here — otherwise the file an agent actually consults at filing time stays silent. Flagged to
+team-lead; `common-prompt.md` is not mine to edit.
+
+**Why it must be at file time rather than swept later**: a marker added in a follow-up edit answers "who
+signed it", not "who wrote it", and an issue that went out unsigned has already been read, quoted into
+briefs and acted on by then. A convention surviving only in the ~365 bodies that happen to follow it is
+imitation, not a rule — it holds exactly until someone files fast, which is what happened.
+
+**Review note**: an unsigned body is a **YELLOW at most, and usually not worth raising at all** — say it
+once, in passing, when already reviewing that issue for something else. Briefs quoting pre-signing bodies
+carry unsigned text harmlessly and are not worth a finding. Do not turn attribution hygiene into a
+review-cycle cost; the point is the rule being written down where filers look, not enforcement pressure.
+
 ### Review enforcement (Bentham)
 
 - **An uncited rights or visibility claim that our work then rests on is YELLOW**, and the fix is the

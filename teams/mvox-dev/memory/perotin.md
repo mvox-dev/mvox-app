@@ -2,8 +2,8 @@
 
 (*MVOX:Perotin*)
 
-> Pruned 2026-09-15 (MVOX-23, ≤100-line convention) from 1623 lines. Full narrative lives in `git log
-> -- teams/mvox-dev/memory/perotin.md` plus the commits/ledgers/issue threads each entry pointed at.
+> Pruned 2026-09-15 from 1623 lines. Full narrative lives in `git log -- teams/mvox-dev/memory/
+> perotin.md` plus the commits/ledgers/issue threads each entry pointed at.
 
 ## Repo location + script catalog
 
@@ -89,12 +89,13 @@ read the dispatch's exact wording, don't assume the standard 2-party gate is the
 ## Standing patterns worth naming once
 
 - **Frozen-set drift-check + canary-first + ownership pre-check**: hardcode a population snapshot and
-  diff live re-reads against it every run, naming deltas individually; touch one representative row
-  before a full sweep, throw on canary failure; scan `_owner` for non-db-root holders before any
-  instance mutation, hard-abort pre-write if found.
+  diff live re-reads every run, naming deltas individually; touch one representative row before a
+  full sweep, throw on canary failure; scan `_owner` for non-db-root holders pre-write, abort if found.
 - **Ledger fields name what they attest** (intended/config value vs. observed/read-back value are
   different things) and **artifact hygiene** (delete superseded pre-authorization dry-runs as you go,
-  keep exactly one current artifact per script until the live run lands its own).
+  keep exactly one current artifact per script until the live run lands its own). **A remedy run's
+  done-signal is the post-verify POPULATION TOTAL, not the write count** — they diverge the moment
+  anything skip-and-flags (Gama, #369, 2026-09-15).
 - **Single-tree serialization**: `git branch --show-current` before every commit — if not `main`,
   STOP, report branch+status+log evidence, never switch/stash/work around. Caught two real
   concurrent-chain collisions (2026-08-08) and one classifier-block escalation (#348, 2026-09-14).

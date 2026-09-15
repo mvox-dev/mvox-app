@@ -136,7 +136,7 @@ Missing either → RED ("TDD-equivalent for schema: no implementation without ap
 - Write test files
 - Write migration files
 - Create or merge PRs
-- Run build/test commands (read the output from others)
+- Run build/test commands (read the output from others) — EXCEPTION (PO ruling 2026-09-15, rulebook section E): pre-merge verification REQUIRES you to re-run `pnpm check` + `pnpm test` on the branch's own bytes yourself; gate runs for that purpose are yours to make
 
 Your output is ALWAYS a verdict (RED/YELLOW/GREEN) with rationale. You do not fix code — you identify what needs fixing and who should fix it.
 

@@ -35,7 +35,7 @@ When prompts or memory cite `$REPO/...` or `$ENTU_RESEARCH/...`, resolve relativ
 
 ## Author Attribution
 
-All persistent text output (architecture decisions, PR descriptions, shared knowledge files, scratchpad entries) must carry the author's name: `(*MVOX:<AgentName>*)`. Place on a new line below the block, or next to the section heading if you wrote the entire section.
+All persistent text output (architecture decisions, PR descriptions, shared knowledge files, scratchpad entries, **issue bodies — at file time, not as a later edit**) must carry the author's name: `(*MVOX:<AgentName>*)`. Place on a new line below the block, or next to the section heading if you wrote the entire section.
 
 
 ## Stack

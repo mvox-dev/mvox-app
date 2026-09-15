@@ -4,9 +4,20 @@ Personal notes. Only Josquin writes here.
 
 ---
 
-## [CHECKPOINT] 2026-09-15 MVOX-23 — 3 merges (#351, #353, #369) + ER-27 in review; the rights-doc pin machinery
+## [CHECKPOINT] 2026-09-15 MVOX-23 — 6 merges (#351, #353, ER-26, ER-27, #357, #381); the rights-doc pin machinery + ruling-is-not-mechanism
 
-Merges: #351 `bb19dfe` · #353 `b4961ad` · #369/ER-26 `6aad0a7`. ER-27 built on `docs/er27-child-creation-editor` @ `ed4aecf`, with Bentham. Stale branches swept (main-only between chains).
+Merges, in order: #351 `bb19dfe` · #353 `b4961ad` · #369/ER-26 `6aad0a7` · #372/ER-27 `725ad26` · #357 `d1891fb` · #381 `ef42821`. Four stale branches swept (#350, #352, #353, #357-marker) — each only after proving subsumption, never on "looks landed".
+
+**[STATE at shutdown]** Tree is NOT on main — it sits on `fix/382-merge-prompt-git-facts` @ `b451cbc`, PARKED for next session's decision (team-lead's call, not mine to merge). Uncommitted riders on the tree: `common-prompt.md`, `architecture-decisions.md`, `task-list-snapshot.md`, `team-lead.md`, `scratchpad/` untracked — all team-lead's, all awaiting his seam. This entry is being written onto the parked branch because that is what is checked out; it is an uncommitted change to a tracked file and survives the next checkout.
+
+### [PATTERN load-bearing] A PO ruling is authority for what WE do, never for how the platform behaves
+ER-27's brief said child creation is "governed by `_editor`, don't chase `_expander`", with Mihkel's ruling as THE authority. Bentham RED'd it and was right: `entu-www` documents the mechanism and documents it differently — at least `_expander` is the minimum, `_editor`/`_owner` each INCLUDE it (`src/overview/entities/index.md:27`, `:43`; `src/api/properties/index.md:141`). "Editor is fine" was true, but true for a reason the block did not give. Fix = split the two: documented mechanism from the docs (first-class under consult-and-believe 2026-09-06), ruling kept as mvox's grant POSTURE, said in the block's own words. §11 makes an ER the citable authority on its question, so the wrong shape would have installed a vendor-contradicting claim in the doc that exists to prevent exactly that. **Carry into every mint brief.**
+
+### [GOTCHA load-bearing] Editing `docs/architecture/entu-rights-and-visibility-model.md` trips FIVE pins, not one
+Any ER addition moves: (1) the doc-remainder sha in `src/rights-model-identifiers.spec.ts` (`DOC_MINUS_TARGETS_SHA256`), (2+3) BOTH whole-file shas in `workers/entu-rights-mcp/fences.spec.ts` (the doc AND the guard spec — the guard-spec pin goes stale the moment you edit the guard spec, so it is always the *second half* of any spec edit, never an afterthought), (4) `parser.spec.ts` ALL_IDS + count, (5) `generator.spec.ts` literal count. Compute hashes by temporary `console.log` inside the spec, run, capture, remove — the assertion message truncates at ~40 chars so you cannot read the actual off a failure. Also watch `MAX_CHARS = 1200` per block: my first ER-27 rewrite came in at 1239 and the guard caught it (final 1158).
+
+### [GOTCHA] The `_parent` fence keys on a STRING, not a claim — it will block documented rules
+`/_parent/.test(b.text)` over the whole block forces #304 + a 2026-09-10 probe date + probe-304 evidence + "not established as general Entu behaviour" + polyphony + event onto ANY block containing the token — every one false of a documented rule. It cost me the ability to state the documented parent-reference requirement in ER-27's own words; I cited the doc by path and avoided the token. Bentham upheld the complaint; filed as a commission (#376/#377 area). Related: those same docs answer ER-14's open scoping (its Restrictions table puts `_parent` deletion behind `_owner`), so ER-14's "not established as general" framing is now wrong — needs its own mandate plus a repin since ER-14 is pinned.
 
 ### [GOTCHA load-bearing] Editing `docs/architecture/entu-rights-and-visibility-model.md` trips FIVE pins, not one
 Any ER addition moves: (1) the doc-remainder sha in `src/rights-model-identifiers.spec.ts` (`DOC_MINUS_TARGETS_SHA256`), (2+3) BOTH whole-file shas in `workers/entu-rights-mcp/fences.spec.ts` (the doc AND the guard spec — the guard-spec pin goes stale the moment you edit the guard spec, so it is always the *second half* of any spec edit, never an afterthought), (4) `parser.spec.ts` ALL_IDS + count, (5) `generator.spec.ts` literal count. Compute hashes by temporary `console.log` inside the spec, run, capture, remove — the assertion message truncates at ~40 chars so you cannot read the actual off a failure.
@@ -26,8 +37,23 @@ Bentham handed me ER-26's block hash. I did not paste-and-trust: added it, ran t
 ### [GOTCHA] Relays garble — check the primary
 Team-lead's relay of Bentham's ER-27 instruction inverted it ("no exclusion entry" vs his "exclude AND pin"). His reasoning in his own message settles it. Flagged rather than silently following either.
 
+### [PATTERN] Merge order is COMMIT → GATE → PUSH, and it is now house-blessed
+I gate the MERGED bytes locally and push only on green: a bad merge is then a local reset, not a published bad main. Cost: a correct merge sits committed-and-unpushed for ~7 min (test alone ~400s), which tripped team-lead's supervision monitor on #381. Resolution (his, 2026-09-15): keep gate-first, monitor re-armed so LOCAL-AHEAD alerts only after ~12 min sustained; ORIGIN-ADVANCE stays immediate. Do NOT flip to push-first to quiet a monitor.
+
+### [PATTERN] Record the git-facts block BEFORE touching anything, halt on contradiction (#382 shape)
+Merge briefs now carry claimed state; run and record `git branch --show-current`, `rev-list --left-right --count main...<branch>`, both log directions, `status --short`, local branches — then HALT to team-lead if any line contradicts. Used on #357 and #381; both matched. I add the branch-diff file list too, because it is what proves a checkout is rider-safe.
+
+### [PATTERN] Prove subsumption before force-deleting a branch
+#357's stale marker branch: I checked its RED specs were BYTE-IDENTICAL on main (`git diff babe77c:<f> main:<f>` clean ×3) and that the WIP's 4 files were a strict subset of the squash's 7 with MORE content in each — not merely that the filenames existed. Note the trap: `git diff main <stale-branch>` read 20 files / −1265 lines, which is NOT unique content, just main's newer work being reverted by an old branch. The subsumption checks are the ones that carry the argument.
+
+### [GOTCHA] Branch-base reads go stale under the shared tree
+I told two people the ER-27 branch lagged main by the seam commit. Wrong: `ed4aecf`'s parent IS the seam `4149234`. I had recorded the base from a `git status` snapshot taken before team-lead's seam commit landed on the shared tree while it sat on MY branch. Verify ancestry with `merge-base --is-ancestor` / `rev-list --left-right`, never from a remembered tip.
+
 ### Repo facts that changed since my older entries
-**No formatter.** `package.json` has no `lint`/`format` script and no biome/prettier dep — all my Biome/Prettier sprawl notes below are STALE. `pnpm check` now chains `check:workers` + `check:sw` (#353's service-worker tsconfig). Gate numbers this session: check 0 errors / 1433 files, test 5550 in 380 files.
+**No formatter.** `package.json` has no `lint`/`format` script and no biome/prettier dep — all my Biome/Prettier sprawl notes below are STALE. `pnpm check` now chains `check:workers` + `check:sw` (#353's service-worker tsconfig). Gate numbers grew through the session: 5383/368 (#351) → 5506/375 (#353) → 5550/380 (ER-26/27) → 5601/384 (#357) → 5625/386 (#381); check 0 errors throughout.
+
+### [STATE] Open at shutdown
+#381's ref-discipline fence landed under the PRE-fix template — the run that produced it could not have been stopped by it, so the classifier's first real test is the next pipeline launch from a freshly copied, md5-verified template (team-lead's task, not mine). `fix/382` parked at `b451cbc`. Commissions filed off my slices: #376/#377 (pin cascade + the `_parent` fence's exclusion ruling), #378 (docs sweep, report-only). #364 still holds ER-24/25; landing it must empty the `RESERVED` table in the numbering sweep.
 
 (*MVOX:Josquin*)
 
