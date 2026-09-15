@@ -87,6 +87,24 @@ export interface ByteStoreAdapter {
 	touch(db: string, personId: string, fileId: string, openedAt: number): Promise<void>;
 	delete(db: string, personId: string, fileId: string): Promise<void>;
 	list(): Promise<ByteStoreRow[]>;
+	/**
+	 * KEYS ONLY — every (db, personId, fileId) currently held, reading NOT ONE
+	 * byte payload (#351 review). `list()` deserialises every stored
+	 * ArrayBuffer it returns, so against a full store it pulls the whole cap
+	 * (BYTE_STORE_CAP_BYTES — 200MB) into the JS heap; on a phone, that is not
+	 * a price a page load may pay to learn a set of ids. Anything whose answer
+	 * IS a set of keys — presence, partition clearing — takes this. Only the
+	 * cap arithmetic still needs `list()` (it sums `record.size`), and that
+	 * runs on a put, never on a render.
+	 */
+	listKeys(): Promise<ByteStoreKey[]>;
+}
+
+/** The key triple alone — what `listKeys` answers. */
+export interface ByteStoreKey {
+	db: string;
+	personId: string;
+	fileId: string;
 }
 
 /** The store interface the app consumes. */
@@ -100,6 +118,23 @@ export interface ByteStore {
 	evict(identity: CollectiveIdentity, fileId: string): Promise<void>;
 	clearPartition(db: string, personId: string): Promise<void>;
 	usage(): Promise<number>;
+	/**
+	 * #351 — the PRESENCE query: which fileIds does this (db, personId)
+	 * partition hold RIGHT NOW, so a list can badge every row with ONE call
+	 * instead of one `get()` per row.
+	 *
+	 * THIS IS NOT AN OPEN: unlike `get()`, it never counts as an open — no
+	 * `adapter.touch`, no recency movement, and NO BYTES READ AT ALL (it goes
+	 * through `adapter.listKeys`, never `adapter.list` — #351 review finding
+	 * 2: this runs on every library and event-detail load, and `list()` would
+	 * deserialise the entire cached-PDF store to answer it). `get()` is what
+	 * bounds the LRU cap; a per-row presence check built on it would stamp
+	 * every listed file as freshly opened on every render and collapse
+	 * eviction order to render order. There is no live invalidation either —
+	 * the store has no events — so a row the cap evicts simply stops
+	 * appearing on the NEXT call to this method.
+	 */
+	heldFileIds(db: string, personId: string): Promise<string[]>;
 }
 
 export const BYTE_STORE_CAP_BYTES = 200 * 1024 * 1024;
@@ -176,10 +211,12 @@ export function createByteStore(
 		},
 
 		async clearPartition(db, personId) {
-			const rows = await adapter.list();
-			for (const row of rows) {
-				if (row.db === db && row.personId === personId) {
-					await adapter.delete(row.db, row.personId, row.fileId);
+			// Keys, not rows: deleting a partition never needs to read the bytes
+			// it is deleting (#351 review).
+			const keys = await adapter.listKeys();
+			for (const key of keys) {
+				if (key.db === db && key.personId === personId) {
+					await adapter.delete(key.db, key.personId, key.fileId);
 				}
 			}
 		},
@@ -187,6 +224,15 @@ export function createByteStore(
 		async usage() {
 			const rows = await adapter.list();
 			return rows.reduce((sum, row) => sum + row.record.size, 0);
+		},
+
+		async heldFileIds(db, personId) {
+			// KEYS ONLY. This runs on every library/event-detail load, and the
+			// answer is a list of id strings — going through `adapter.list()`
+			// would deserialise every cached PDF in the store to produce it
+			// (#351 review finding 2). See the `listKeys` doc above.
+			const keys = await adapter.listKeys();
+			return keys.filter((key) => key.db === db && key.personId === personId).map((key) => key.fileId);
 		}
 	};
 }

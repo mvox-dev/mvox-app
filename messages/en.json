@@ -632,6 +632,8 @@
 	"library_edition_file_error": "Could not attach files.",
 	"library_edition_file_not_created": "{filename} was not attached — the server returned nothing for it.",
 	"library_edition_file_open_error": "Could not open the file.",
+	"file_presence_on_device": "On this device",
+	"file_presence_needs_network": "Needs network",
 	"login_heading": "Sign in to mvox",
 	"login_error_csrf_mismatch": "Your sign-in link expired or was invalid. Please try again.",
 	"login_error_missing_session_token": "Sign-in did not complete. Please try again.",

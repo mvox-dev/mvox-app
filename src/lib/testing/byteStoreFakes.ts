@@ -71,6 +71,16 @@ export function createFakeAdapter(): FakeAdapter {
 		async list() {
 			return Array.from(map.values());
 		},
+		async listKeys() {
+			// Keys reconstructed from the map's OWN keys, never from the stored
+			// rows — the real adapter answers this from `getAllKeys()` and
+			// touches no payload, and a double that reads the rows anyway could
+			// not tell a caller that reads bytes from one that does not.
+			return Array.from(map.keys()).map((k) => {
+				const [db, personId, fileId] = triple(k);
+				return { db, personId, fileId };
+			});
+		},
 		rows() {
 			return Array.from(map.values());
 		}
@@ -140,6 +150,11 @@ export function createFakeByteStore(): FakeByteStore {
 			let total = 0;
 			for (const r of map.values()) total += r.size;
 			return total;
+		},
+		async heldFileIds(db, personId) {
+			// Delegates to heldFor — one implementation, not a divergent double
+			// (#351: the real interface and this fake gained the same member).
+			return this.heldFor(db, personId);
 		}
 	};
 }

@@ -317,6 +317,49 @@
 	let seasonId = $state<string | null>(null);
 	let seasonManageRights = $state<ManageRightsState>('not-editor');
 	let workRows = $state<WorkRow[]>([]);
+	// #351 — the on-device/needs-network file badge. `null` means the store
+	// has not answered yet: an absent badge, not a wrong one (byteStore.ts
+	// heldFileIds doc). ONE heldFileIds(db, personId) call per works list,
+	// never a per-row get() — page.presence-badges.spec.ts's trap test.
+	let heldFileIds = $state<Set<string> | null>(null);
+
+	// #351 review — THE ONLY path by which `heldFileIds` is ever populated:
+	// the load-time query and the post-open refresh both come through here.
+	//
+	// WHY A RE-QUERY AND NOT A LOCAL PATCH. A put is a STORE-WIDE mutation,
+	// not a single-key fact: storing a newly-fetched part runs the cap's
+	// `evictUntilFits` (byteStore.ts), which deletes the globally
+	// least-recently-opened rows — including rows on this very screen. Adding
+	// the newcomer to the Set and stopping there leaves every evicted row
+	// badged "on this device" for the rest of the page's life, which is the
+	// wrong-badge direction #351 exists to prevent. One more keys-only query
+	// (no bytes read, no recency moved) reflects the addition AND the
+	// evictions.
+	//
+	// `presenceSeq`: the last query ISSUED wins. The store only moves
+	// forward, so an earlier query resolving late describes an older store
+	// and must not overwrite a newer answer.
+	let presenceSeq = 0;
+	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
+		const seq = ++presenceSeq;
+		// Supplementary, same as the works read's own failure handling: even a
+		// synchronous store-construction failure must not take the rest of
+		// this surface down with it.
+		try {
+			getAppByteStore()
+				.heldFileIds(db, personId)
+				.then((ids) => {
+					if (seq !== presenceSeq || !isCurrent()) return;
+					heldFileIds = new Set(ids);
+				})
+				.catch((e) => {
+					console.error('event detail: file presence read failed', e);
+				});
+		} catch (e) {
+			console.error('event detail: file presence read failed', e);
+		}
+	}
+
 	// #343 — the agenda's own error surface, reused verbatim: zero new locale
 	// keys for this page's first PDF-open error (see `handlePdfClick`).
 	let pdfError = $state(false);
@@ -686,6 +729,9 @@
 		seasonId = null;
 		seasonManageRights = 'not-editor';
 		workRows = [];
+		// #351 — cleared on every load: a not-yet-answered presence renders no
+		// badge at all, never the previous event's or a stale answer.
+		heldFileIds = null;
 		libraryWorks = [];
 		libraryEditions = [];
 		// #321 — the claims go with the lists they describe, so a truncation found
@@ -1209,6 +1255,10 @@
 				if (g !== generation) return;
 				workRows = [];
 			});
+
+		// #351 — ONE presence query for the whole works list, never a per-row
+		// get() (byteStore.ts heldFileIds doc — get() counts as an open).
+		refreshPresence(cfg.db, personId, () => g === generation);
 
 		if (seasonRights === 'editor' || eventEditor) loadManagePickers(cfg, sid, g);
 
@@ -1859,9 +1909,25 @@
 				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
-				// #343 fix-round, ruling condition 1 — not rendered here (no UI in
-				// this slice), but not dropped: #334's availability child reads it.
-				void reason;
+				// #351 — a delivery that ATTEMPTED a store write mutates the WHOLE
+				// store, not just this key: the put runs the cap's evictUntilFits
+				// first and may have deleted other rows on this same screen to
+				// make room (see refreshPresence). Re-ask.
+				//
+				// BOTH write-attempting reasons, not just the successful one:
+				// byteStore.put evicts BEFORE it writes (IndexedDB offers no way
+				// to reserve space ahead of a write), so a put that REJECTS has
+				// already discarded those rows — and openFileBytes reports that
+				// open 'network-uncached'. Gating on 'network-stored' alone would
+				// leave the discarded rows badged on-device for the rest of the
+				// page's life. 'cache' moves recency but deletes nothing, and
+				// 'fallback-navigation' never reaches the store at all, so
+				// neither of those needs a re-query.
+				if (reason === 'network-stored' || reason === 'network-uncached') {
+					refreshPresence(identity.db, identity.personId, () =>
+						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
+					);
+				}
 			})
 			.catch((e) => {
 				console.error('event detail: pdf open failed', e);
@@ -4536,6 +4602,7 @@
 							rows={workRows}
 							expanded={true}
 							onpdfclick={handlePdfClick}
+							{heldFileIds}
 							manageRights={seasonManageRights}
 							seasonRights={seasonManageRights}
 							eventRights={eventManageRights}

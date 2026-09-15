@@ -632,6 +632,8 @@
 	"library_edition_file_error": "Failide lisamine ebaõnnestus.",
 	"library_edition_file_not_created": "Faili {filename} ei lisatud — server ei tagastanud selle kohta midagi.",
 	"library_edition_file_open_error": "Faili avamine ebaõnnestus.",
+	"file_presence_on_device": "Selles seadmes",
+	"file_presence_needs_network": "Vajab võrguühendust",
 	"login_heading": "Logi mvoxi sisse",
 	"login_error_csrf_mismatch": "Sisselogimislink aegus või oli vigane. Palun proovi uuesti.",
 	"login_error_missing_session_token": "Sisselogimine ei lõppenud. Palun proovi uuesti.",

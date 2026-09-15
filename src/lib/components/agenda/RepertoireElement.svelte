@@ -173,6 +173,12 @@
 		rows: WorkRow[];
 		/** Sign + open this edition file NOW (see the header note on the 60s url). */
 		onpdfclick?: (fileId: string) => void;
+		/** #351 — fileIds the byte store holds for the CURRENT identity's
+		 *  partition, from ONE heldFileIds(db, personId) call the caller makes
+		 *  per render (never per row — see byteStore.ts heldFileIds doc). `null`
+		 *  means the store has not answered yet: no badge renders for ANY row,
+		 *  rather than a default-then-correct flicker. */
+		heldFileIds?: ReadonlySet<string> | null;
 		/** Rights for the surface `context` names. */
 		manageRights?: ManageRightsState;
 		/** `_editor` on the SEASON — governs repertoire_item writes. Defaults to
@@ -278,6 +284,7 @@
 	const {
 		rows,
 		onpdfclick,
+		heldFileIds = null,
 		manageRights = 'not-editor',
 		seasonRights,
 		eventRights,
@@ -573,8 +580,18 @@
 	{#if row.notes !== ''}
 		<span data-testid="work-notes" class="text-xs text-ink-2 italic">{row.notes}</span>
 	{/if}
-	<span class="flex flex-wrap gap-2">
+	<span class="flex flex-wrap items-center gap-2">
 		{#if row.fileId !== ''}
+			<!-- #351 — presence indicator: NOT a control (no role/tabindex,
+			     unwrapped by any button/link). Absent entirely while heldFileIds
+			     has not answered (null) — an absent badge is not a claim. -->
+			{#if heldFileIds !== null}
+				<span data-testid="file-presence-{row.fileId}" class="text-xs text-ink-2">
+					{heldFileIds.has(row.fileId)
+						? m.file_presence_on_device()
+						: m.file_presence_needs_network()}
+				</span>
+			{/if}
 			<button
 				type="button"
 				data-testid="work-link-pdf"

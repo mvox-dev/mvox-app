@@ -634,6 +634,8 @@
 	"library_edition_file_error": "Не вдалося додати файли.",
 	"library_edition_file_not_created": "Файл {filename} не додано — сервер нічого не повернув для нього.",
 	"library_edition_file_open_error": "Не вдалося відкрити файл.",
+	"file_presence_on_device": "На цьому пристрої",
+	"file_presence_needs_network": "Потрібна мережа",
 	"login_heading": "Увійти в mvox",
 	"login_error_csrf_mismatch": "Термін дії посилання для входу минув або воно було недійсним. Спробуйте ще раз.",
 	"login_error_missing_session_token": "Вхід не завершився. Спробуйте ще раз.",

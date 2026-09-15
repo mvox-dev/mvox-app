@@ -1,9 +1,9 @@
 // #343 — IndexedDB persistence for the offline byte store.
 //
-// Deliberately thin: get/put/touch/delete/list on rows keyed (db, personId,
-// fileId). ALL policy (cap, eviction, null-identity, partition semantics)
-// lives in the byteStore core and is specced there — nothing here duplicates
-// it.
+// Deliberately thin: get/put/touch/delete/list/listKeys on rows keyed (db,
+// personId, fileId). ALL policy (cap, eviction, null-identity, partition
+// semantics) lives in the byteStore core and is specced there — nothing here
+// duplicates it.
 //
 // TWO OBJECT STORES, ONE KEY (#343 review). IndexedDB has no partial update:
 // writing a record writes the whole value, bytes included. The payload
@@ -18,7 +18,7 @@
 // `openedAt` reads as 0 — oldest possible, so eviction claims it first rather
 // than letting an unstamped row sit uncollectable.
 
-import type { ByteStoreAdapter, ByteStoreRow, StoredFileRecord } from './byteStore';
+import type { ByteStoreAdapter, ByteStoreKey, ByteStoreRow, StoredFileRecord } from './byteStore';
 
 const DB_NAME = 'mvox-byte-store';
 // v2 = the payload/recency split. The bump is a CACHE FLUSH, not a migration:
@@ -160,6 +160,22 @@ export function createIdbAdapter(factory?: IDBFactory): ByteStoreAdapter {
 					}
 				})
 			);
+		},
+
+		async listKeys() {
+			const database = await getDb();
+			// `getAllKeys` on the PAYLOAD store — the keys ARE the triple
+			// (compositeKey above), so nothing needs to be read to recover
+			// them, and no ArrayBuffer is structured-clone-deserialised. The
+			// RECENCY store is not consulted: it carries no key the payload
+			// store lacks (put/delete write and remove both halves together),
+			// and a recency row with no payload is not a held file.
+			const tx = database.transaction(PAYLOAD_STORE, 'readonly');
+			const keys = await reqToPromise(tx.objectStore(PAYLOAD_STORE).getAllKeys());
+			return keys.map((key): ByteStoreKey => {
+				const [db, personId, fileId] = JSON.parse(String(key)) as [string, string, string];
+				return { db, personId, fileId };
+			});
 		}
 	};
 }

@@ -119,7 +119,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_edition_file_error: () => 'Could not attach files.',
 		library_edition_file_not_created: (p: { filename: string }) =>
 			`${p.filename} was not attached — the server returned nothing for it.`,
-		library_edition_file_open_error: () => 'Could not open the file.'
+		library_edition_file_open_error: () => 'Could not open the file.',
+		// #351 — presence badge, rendered on every file row once the store answers.
+		file_presence_on_device: () => 'On this device',
+		file_presence_needs_network: () => 'Needs network'
 	}
 }));
 

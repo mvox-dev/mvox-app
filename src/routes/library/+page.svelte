@@ -77,6 +77,50 @@
 	let lendings = $state<Lending[]>([]);
 	let borrowerNames = $state<Map<string, string>>(new Map());
 
+	// #351 — the on-device/needs-network file badge. `null` means the store
+	// has not answered yet: an absent badge, not a wrong one (see byteStore.ts
+	// heldFileIds doc). ONE heldFileIds(db, personId) call per load, never a
+	// per-row get() — see the RED comment at the top of
+	// page.library-presence-badges.spec.ts.
+	let heldFileIds = $state<Set<string> | null>(null);
+
+	// #351 review — THE ONLY path by which `heldFileIds` is ever populated:
+	// the load-time query and the post-open refresh both come through here.
+	//
+	// WHY A RE-QUERY AND NOT A LOCAL PATCH. A put is a STORE-WIDE mutation,
+	// not a single-key fact: storing a newly-fetched part runs the cap's
+	// `evictUntilFits` (byteStore.ts), which deletes the globally
+	// least-recently-opened rows — including rows on this very screen. Adding
+	// the newcomer to the Set and stopping there leaves every evicted row
+	// badged "on this device" for the rest of the page's life, which is the
+	// wrong-badge direction #351 exists to prevent. One more keys-only query
+	// (no bytes read, no recency moved) reflects the addition AND the
+	// evictions.
+	//
+	// `presenceSeq`: the last query ISSUED wins. The store only moves
+	// forward, so an earlier query resolving late describes an older store
+	// and must not overwrite a newer answer.
+	let presenceSeq = 0;
+	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
+		const seq = ++presenceSeq;
+		// Badges are supplementary (the repertoire-badge precedent): even a
+		// synchronous store-construction failure must not take down the
+		// (already-successful) library browse tree with it.
+		try {
+			getAppByteStore()
+				.heldFileIds(db, personId)
+				.then((ids) => {
+					if (seq !== presenceSeq || !isCurrent()) return;
+					heldFileIds = new Set(ids);
+				})
+				.catch((e) => {
+					console.error('library: file presence read failed', e);
+				});
+		} catch (e) {
+			console.error('library: file presence read failed', e);
+		}
+	}
+
 	// #321 — true when any of this page's list reads came back truncated
 	// (server count > raw entities.length on that read's own request). `works`
 	// and `lendings` fire on every load; `editionsPartialWorkIds`/
@@ -374,6 +418,9 @@
 			editionsByWork = new Map();
 			copiesByEdition = new Map();
 			repertoireByWorkId = new Map();
+			// #351 — cleared on every load: a not-yet-answered presence renders
+			// no badge at all, never the PREVIOUS collective's or a stale answer.
+			heldFileIds = null;
 			// #321 — cleared on EVERY load, same as the maps above: the truncation
 			// fact belongs to the collective that produced it, never carried across
 			// a switch (the #287/#296/#299 stale-state bug class) or stale across a
@@ -429,6 +476,12 @@
 			findMyMemberId(cfg, current.personId).then((id) => {
 				if (isCurrent()) myMemberId = id;
 			});
+
+			// #351 — ONE presence query for the whole file list, never a
+			// per-row get() (byteStore.ts heldFileIds doc — get() counts as an
+			// open). Fire-and-forget like the sibling reads above: the badges
+			// paint from the answer alone once it lands.
+			refreshPresence(cfg.db, current.personId, isCurrent);
 
 			// #92 TR.4 — season-scoped repertoire read, once: resolve the CURRENT
 			// season (same pure picker the agenda uses) then TR.2's
@@ -885,9 +938,25 @@
 				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
-				// #343 fix-round, ruling condition 1 — not rendered here (no UI in
-				// this slice), but not dropped: #334's availability child reads it.
-				void reason;
+				// #351 — a delivery that ATTEMPTED a store write mutates the WHOLE
+				// store, not just this key: the put runs the cap's evictUntilFits
+				// first and may have deleted other rows on this same screen to
+				// make room (see refreshPresence). Re-ask.
+				//
+				// BOTH write-attempting reasons, not just the successful one:
+				// byteStore.put evicts BEFORE it writes (IndexedDB offers no way
+				// to reserve space ahead of a write), so a put that REJECTS has
+				// already discarded those rows — and openFileBytes reports that
+				// open 'network-uncached'. Gating on 'network-stored' alone would
+				// leave the discarded rows badged on-device for the rest of the
+				// page's life. 'cache' moves recency but deletes nothing, and
+				// 'fallback-navigation' never reaches the store at all, so
+				// neither of those needs a re-query.
+				if (reason === 'network-stored' || reason === 'network-uncached') {
+					refreshPresence(identity.db, identity.personId, () =>
+						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
+					);
+				}
 			})
 			.catch((e) => {
 				console.error('library: open edition file failed', fileId, e);
@@ -1811,14 +1880,30 @@
 																	<span class="break-words text-ink">
 																		{file.filename} · {formatFileSize(file.filesize)}
 																	</span>
-																	<button
-																		type="button"
-																		data-testid="library-edition-file-open-{file.id}"
-																		class="shrink-0 text-xs underline"
-																		onclick={() => handleOpenEditionFile(file.id)}
-																	>
-																		{m.library_edition_file_open()}
-																	</button>
+																	<span class="flex shrink-0 items-center gap-2">
+																		<!-- #351 — presence indicator: NOT a control (no
+																		     role/tabindex, unwrapped by any button/link).
+																		     Absent entirely while heldFileIds has not
+																		     answered — see the load() comment above. -->
+																		{#if heldFileIds !== null}
+																			<span
+																				data-testid="file-presence-{file.id}"
+																				class="text-ink-2"
+																			>
+																				{heldFileIds.has(file.id)
+																					? m.file_presence_on_device()
+																					: m.file_presence_needs_network()}
+																			</span>
+																		{/if}
+																		<button
+																			type="button"
+																			data-testid="library-edition-file-open-{file.id}"
+																			class="shrink-0 text-xs underline"
+																			onclick={() => handleOpenEditionFile(file.id)}
+																		>
+																			{m.library_edition_file_open()}
+																		</button>
+																	</span>
 																</div>
 																<!-- Open is a READ affordance every member has, so its
 																     failure message lives HERE, beside the files list,

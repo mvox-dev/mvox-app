@@ -633,6 +633,8 @@
 	"library_edition_file_error": "Neizdevās pievienot failus.",
 	"library_edition_file_not_created": "Fails {filename} netika pievienots — serveris par to neko neatgrieza.",
 	"library_edition_file_open_error": "Neizdevās atvērt failu.",
+	"file_presence_on_device": "Šajā ierīcē",
+	"file_presence_needs_network": "Nepieciešams tīkls",
 	"login_heading": "Pieslēgties mvox",
 	"login_error_csrf_mismatch": "Jūsu pierakstīšanās saite ir novecojusi vai nederīga. Lūdzu, mēģiniet vēlreiz.",
 	"login_error_missing_session_token": "Pierakstīšanās netika pabeigta. Lūdzu, mēģiniet vēlreiz.",

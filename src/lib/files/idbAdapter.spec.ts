@@ -168,6 +168,35 @@ describe('idbAdapter — against a real IndexedDB implementation', () => {
 		]);
 		expect(JSON.stringify({ ...rows[0].record, bytes: undefined })).not.toMatch(/https?:/i);
 	});
+
+	// #351 review finding 2 — the keys-only seam the presence query rides.
+	it('listKeys answers every held (db, personId, fileId) triple — and nothing else, including keys delete() removed', async () => {
+		const adapter = createIdbAdapter(new IDBFactory());
+		await adapter.put('polyphony', 'person-a', 'file-1', record(5));
+		await adapter.put('polyphony', 'person-b', 'file-2', record(6));
+		await adapter.put('crede', 'person-a', 'file-3', record(7));
+
+		const keys = await adapter.listKeys();
+		expect([...keys].sort((a, b) => a.fileId.localeCompare(b.fileId))).toEqual([
+			{ db: 'polyphony', personId: 'person-a', fileId: 'file-1' },
+			{ db: 'polyphony', personId: 'person-b', fileId: 'file-2' },
+			{ db: 'crede', personId: 'person-a', fileId: 'file-3' }
+		]);
+
+		await adapter.delete('polyphony', 'person-b', 'file-2');
+		expect((await adapter.listKeys()).map((k) => k.fileId).sort()).toEqual(['file-1', 'file-3']);
+	});
+
+	it('listKeys reads NO payload — the returned objects carry the triple alone, no bytes, no record', async () => {
+		const adapter = createIdbAdapter(new IDBFactory());
+		await adapter.put('polyphony', 'person-a', 'file-1', record(5, 4096));
+
+		const keys = await adapter.listKeys();
+		// Full-shape pin: any `record`/`bytes` member here means the payload
+		// store was read, which is exactly the 200MB-into-heap cost this
+		// method exists to avoid.
+		expect(Object.keys(keys[0]).sort()).toEqual(['db', 'fileId', 'personId']);
+	});
 });
 
 // (*MVOX:Tallis*)
