@@ -1,0 +1,41 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#348 boxes 3+4 — does dev.mvox.eu get CORS-admitted on the bucket, quiescing the #343 fallback-navigation path?",
+  "ledger": [
+    {
+      "step": "resolve-target",
+      "editionId": "6a9f440dca67df980f417d78",
+      "propertyId": "6a9f4c32ca67df980f417d84",
+      "filename": "probe-275-wire-smoke-2026-09-07T23-43-46-224Z.txt",
+      "filesize": 53
+    },
+    {
+      "step": "cors-check-dev-origin",
+      "results": [
+        {
+          "origin": "https://dev.mvox.eu",
+          "status": 200,
+          "allowOrigin": "https://dev.mvox.eu",
+          "ok": true
+        },
+        {
+          "origin": "https://mvox.eu",
+          "status": 200,
+          "allowOrigin": "https://mvox.eu",
+          "ok": true
+        },
+        {
+          "origin": "https://example.com",
+          "status": 200,
+          "ok": true
+        }
+      ],
+      "devAdmitted": true,
+      "exampleAdmitted": false,
+      "box3Confirmed": true,
+      "box4Confirmed": true
+    }
+  ]
+}

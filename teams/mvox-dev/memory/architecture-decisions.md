@@ -899,10 +899,10 @@ Zero `.svelte` / `.ts` files touched. Zero tests rewritten (specs assert key inv
 
 Everything below spent months in the reviewer's personal scratchpad, where exactly one agent read it. Each rule changed at least one real verdict, and most describe a defect that shipped past green tests. Lifted at team-lead's direction (MVOX-16) so **implementers can consult the same contract the review enforces** rather than discovering it at REVIEW phase.
 
-Read this way: sections **A** and **E** bind Tallis (RED author) and the GREEN pair; **B**, **C** and **G** bind Josquin and Pérotin; **F** binds Byrd; **D** tells any agent how to read a verdict they receive. Where a rule already had a home elsewhere in this file, the subsection cross-links rather than restates — the older section stays canonical.
+Read this way: sections **A** and **E** bind Tallis (RED author) and the GREEN pair; **B**, **C** and **G** bind Josquin and Pérotin; **F** binds Byrd; **J** binds Victoria and team-lead at issue-writing time; **D** tells any agent how to read a verdict they receive. Where a rule already had a home elsewhere in this file, the subsection cross-links rather than restates — the older section stays canonical.
 
 **Start with section I** if you are writing or reviewing a guard of any kind — it is the lens the other
-sections turn out to be instances of, and it sits last only so the A–H letters already cited across
+sections turn out to be instances of, and it sits after H only so the A–H letters already cited across
 scratchpads and prompts keep resolving.
 
 Provenance: every file:line reference below was re-verified on 2026-09-06 against the tree at `f1944e8`. `main` moved twice during the lift (`5c8b052`, `06cd4d7`), but `git diff --stat f1944e8..HEAD -- src/` was empty at each move — those commits touched migrations, ledgers and team docs only, so the references stand. Re-run that command before trusting a line number here; **line numbers rot, and the symbol names and the reasoning are the durable part.** Per the standing lesson at the rule-6 correction box above, verify a "shipped as #N" claim against code, not issue state.
@@ -1139,6 +1139,63 @@ much as the reviewer checking one — the same reason the rulebook was lifted ou
 MVOX-16.
 
 (*MVOX:Bentham*, steward — PO-team formulation; instances verified or provenance-marked as above)
+
+## J. Issue-writing standard — po-team §9 / §10 / §11, binding mvox's own filings
+
+Three sections of the po-team issue standard, adopted mvox-side. §9 and §10 were ruled 2026-09-14, §11
+on 2026-09-15 (Gama, relayed by Henry). They bind **Victoria and team-lead at filing time, and every
+agent writing an issue comment or a relay** — not only the PO team's own board.
+
+- **§9 — word economy.** An issue body states the deliverable and its done-when in the fewest checkable
+  words; a comment makes one point, outcome first. **Verbatim authorizations, fences, limits and
+  SUPERSEDED markers stay in full, always** — economy never licenses paraphrasing one of those.
+- **§10 — `ready` requires acceptance criteria in the body.** Re-`ready`-ing an old issue *is*
+  dispatching it, so its body gets re-read first: it was written against state that has since moved.
+  Pairs with the dispatch gate in `feedback_ready_label_gate`.
+- **§11 — a rights claim carries its ER identifier or an explicit `[unverified]`.** Any statement of
+  Entu rights or visibility mechanics, in an issue body, a comment or a relay. No exception for brevity
+  or confidence. The identifiers live in `docs/architecture/entu-rights-and-visibility-model.md`
+  (ER-1…ER-23 as of today); **ER-16** governs how to cite them in notes, and this entry follows it —
+  identifiers, never restatements.
+
+**§11 is the trigger the #316 family already produced, now with a citable home**, so what changes is
+where I point rather than what I fire on.
+
+### Review enforcement (Bentham)
+
+- **An uncited rights or visibility claim that our work then rests on is YELLOW**, and the fix is the
+  identifier, not a rewrite. It goes **RED** when the claim is load-bearing for a schema or rights
+  change under review *and* disagrees with the rule it should have cited — that is #316's founding
+  failure (two wrong claims went out on 2026-09-10 while the correct answers sat in the document), not
+  a hygiene lapse.
+- **Do not fire §11 on application-code comments.** ER-16's subject is working notes and scratchpads,
+  and #319 parks the code-comment question **deliberately**: #325's restatement of ER-6 at
+  `src/routes/admin/+page.svelte:105-112` is outside its scope as written, because a guard's comment
+  must be self-sufficient for the engineer reading it. The residual risk is stated there and real — a
+  restatement in code is protected by no pin, so it can silently drift from the rule it cites — but
+  flagging one today enforces a rule that was explicitly not extended there.
+- **The issue template is not the enforcement, and must never be read as evidence.** #319's remaining
+  half adds a "Rights rules relied on" field, and ships the limit *beside* the field for this reason:
+  GitHub templates bind web-UI creation only, `gh issue create --body-file` bypasses them entirely, and
+  that is how every issue on this board is created — so the template catches neither agent. A filled
+  field is not proof the rule was followed; an empty one is not proof it was broken. **Section I
+  exactly**: the guard sits on the browser path while the outcome stays reachable by the two paths it
+  is not on. The claim-time rule (§11) is what covers agent-authored text.
+- **#316 is the gate on schema-level work and is still OPEN** (`epic`, `ready`, `blocked`, verified this
+  turn). Mihkel's commissioning condition is that no new schema-level work proceeds until it closes;
+  #233 sits behind it. **#319 does not close it**: #319 is the epic's last child, but its trailer reads
+  `Closes #319` only — Gama closes #316 himself and unblocks #233 in his own pass (his correction,
+  2026-09-15 00:11). So the gate lifts on **his** close, not on #319's merge, and merging #319 is not
+  the signal to stand this trigger down. Until it lifts, a slice introducing a new entity type,
+  property, formula or rights default is RED on the gate **in addition to** the `PO-Approved:` trailer
+  check in section C.
+
+**Source**: relayed by team-lead 2026-09-15. Verified rather than recorded from the relay: §11's wording
+and its 2026-09-15 adoption at the body of **mvox-app#319** (which also states that mvox-side adoption
+is a relay, not repo work); the ER set and ER-16's subject line at the rights doc; #316's state and gate
+language at its own body. The §9/§10 wording matches the durable memory note written 2026-09-14.
+
+(*MVOX:Bentham*, steward)
 
 ---
 
