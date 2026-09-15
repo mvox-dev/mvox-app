@@ -18,18 +18,28 @@ const sha256 = (path: string): string =>
 	createHash('sha256').update(readFileSync(resolve(ROOT, path))).digest('hex');
 
 describe('the doc and its guard spec are byte-identical to HEAD — this slice reads them, never edits them', () => {
+	// #369 repin (PO-approved 2026-09-15, Gama; recorded on #369) — BOTH pins move
+	// once, together, and this is the commissioned doc-edit slice the original
+	// repin instruction points at. The edit: ER-26 and its §7.5 home (a reference
+	// carries the referenced person's name and email in its own `.string`, whatever
+	// `props` asked for), plus the guard spec's own maintenance for it — the
+	// numbering sweep learns the third id-state (RESERVED: ER-24/ER-25 held by
+	// #364) and the doc-remainder pin re-derives. Precedent for moving a byte pin
+	// this way rather than loosening it: #322 and #330, both recorded inside the
+	// guard spec's own pin comments. These pins prove no drift SINCE this edit,
+	// never that the edit was right.
 	it('docs/architecture/entu-rights-and-visibility-model.md is unchanged', () => {
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
 			'#318 builds a VIEW over the doc; a doc edit belongs to its own commissioned slice. Repin only behind a PO-ruled doc edit (sha256 of the file at the sanctioned state).'
-		).toBe('df3ffdb3492f20b61d0e06cd118c1600188f78fb9191a5fa760cfda1cce69b97');
+		).toBe('73de6287276827a189b028ae12dca51a6d57510449b9d4d7b8fa15e90743bcd5');
 	});
 
 	it('src/rights-model-identifiers.spec.ts (the guard spec) is unchanged', () => {
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('f6b6c047a564467895e2d3f4bdd6dedc4b896cf3c51ff7b886c870972248f55a');
+		).toBe('0cbada09993177bf617b492964fbcd850cbba14fbced35e60205ed4e165f44b2');
 	});
 });
 

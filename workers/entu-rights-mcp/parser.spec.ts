@@ -21,12 +21,16 @@ const DOC_PATH = resolve(
 );
 const doc = readFileSync(DOC_PATH, 'utf-8');
 
-const ALL_IDS = Array.from({ length: 23 }, (_, i) => `ER-${i + 1}`);
+// ER-1..ER-23, then ER-26 (#369). The gap is not an omission: ER-24/ER-25 are
+// reserved by name on #364 and have not landed, and the ids are opaque and
+// creation-order, so the set is enumerated rather than generated from a count.
+// The guard spec's numbering sweep holds the same reservation.
+const ALL_IDS = [...Array.from({ length: 23 }, (_, i) => `ER-${i + 1}`), 'ER-26'];
 
-describe('parseRightsDoc on the real doc: all 23 rules, ids exact', () => {
-	it('extracts exactly the 23 identified rules, ids ER-1..ER-23 (as a set — document order and identifier order are allowed to disagree)', () => {
+describe('parseRightsDoc on the real doc: all 24 rules, ids exact', () => {
+	it('extracts exactly the 24 identified rules, ids ER-1..ER-23 plus ER-26 (as a set — document order and identifier order are allowed to disagree)', () => {
 		const { rules } = parseRightsDoc(doc);
-		expect(rules.length, 'rule count').toBe(23);
+		expect(rules.length, 'rule count').toBe(ALL_IDS.length);
 		expect([...rules.map((r) => r.id)].sort(), 'id set').toEqual([...ALL_IDS].sort());
 	});
 

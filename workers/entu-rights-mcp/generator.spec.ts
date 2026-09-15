@@ -25,12 +25,14 @@ const FAKE_SHA = 'deadbeefcafe0123456789abcdef0123456789ab';
 const FAKE_DATE = '2026-09-12T00:00:00Z';
 
 describe('buildBundle: the in-memory stamped view', () => {
-	it('carries all 23 parsed rules plus the injected stamp — nothing else', () => {
+	// 24 since #369 added ER-26 (ER-24/ER-25 are reserved on #364 and unlanded, so
+	// the count and the highest id do not match — they are not meant to).
+	it('carries all 24 parsed rules plus the injected stamp — nothing else', () => {
 		const bundle = buildBundle(doc, FAKE_SHA, FAKE_DATE);
 		expect(Object.keys(bundle).sort()).toEqual(['rules', 'sourceCommit', 'sourceCommitDate']);
 		expect(bundle.sourceCommit).toBe(FAKE_SHA);
 		expect(bundle.sourceCommitDate).toBe(FAKE_DATE);
-		expect(bundle.rules.length).toBe(23);
+		expect(bundle.rules.length).toBe(24);
 	});
 
 	it('bundle rules ARE the parser output — the full parsed shape, verbatim text included (toEqual, not a subset)', () => {

@@ -611,6 +611,24 @@ describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)'
 		// named, and it is the one #317 already prescribes: a rule is retired by
 		// SUPERSEDING it — the block stays, marked `(superseded by ER-<m>,
 		// <date>)`, holding its number forever. Never by renumbering.
+		//
+		// #369: a number can also be absent because it is RESERVED — ruled and
+		// named on its commissioning issue, but not yet written into the doc. That
+		// is a third state the sweep did not model, and it is not the hazard the
+		// sweep exists to catch: the hazard is a number that resolves to nothing
+		// because someone renumbered or reused it. The comment above already
+		// concedes the scheme's own silence here — #317 says ids are opaque,
+		// creation-order, never reused and never renumbered, which "says nothing
+		// about gaps". So a reserved number is listed by hand with the issue that
+		// holds it, and every OTHER hole still fails exactly as before.
+		//
+		// The other half of the arrangement lives on #364: its body carries the
+		// obligation that landing it removes {24, 25} from this table, and the
+		// staleness check below is that obligation enforced from this side — the
+		// two halves point at each other, so neither can rot alone. Ruled by Gama
+		// 2026-09-15 on the #369 commission: a stable number is worth more than a
+		// dense sequence, so if #364 never lands, 24/25 stay empty at no cost.
+		const RESERVED: Record<number, string> = { 24: '#364', 25: '#364' };
 		const ns = blocks.map((b) => Number(b.id.slice(3))).sort((a, b) => a - b);
 		expect(new Set(ns).size, 'duplicate id numbers').toBe(ns.length);
 		// Sweeping from 1 rather than from ns[0] also covers a missing ER-1, so no
@@ -618,11 +636,21 @@ describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)'
 		// with the remedy spelled out instead of a bare "lowest id is not ER-1".
 		const missing: number[] = [];
 		for (let n = 1; n < ns[ns.length - 1]; n += 1) {
-			if (!ns.includes(n)) missing.push(n);
+			if (!ns.includes(n) && !(n in RESERVED)) missing.push(n);
 		}
 		expect(
 			missing.map((n) => `ER-${n}`),
-			`these ids resolve to no block. #317 retires a rule by SUPERSEDING it: keep the block, mark its first line \`(superseded by ER-<m>, <date>)\`, and it keeps its number forever — restore a superseded stub for each id listed. Do NOT renumber the surviving rules to close the hole, and do not reuse a freed number: either one silently repoints every citation already written, with no error and no broken link.`
+			`these ids resolve to no block. #317 retires a rule by SUPERSEDING it: keep the block, mark its first line \`(superseded by ER-<m>, <date>)\`, and it keeps its number forever — restore a superseded stub for each id listed. Do NOT renumber the surviving rules to close the hole, and do not reuse a freed number: either one silently repoints every citation already written, with no error and no broken link. If a listed id is instead RESERVED on an issue and awaiting its slice, add it to RESERVED above with that issue — never close the hole by minting its number for other content.`
+		).toEqual([]);
+
+		// The reservation list is not allowed to go stale: once a reserved rule
+		// lands, its entry must go, or the sweep would stop guarding that number.
+		expect(
+			Object.keys(RESERVED)
+				.map(Number)
+				.filter((n) => ns.includes(n))
+				.map((n) => `ER-${n}`),
+			'a RESERVED id now resolves to a real block. If it is the RESERVED rule itself landing, drop the entry so the sweep guards that number like any other. If it is DIFFERENT content wearing a reserved number, that is a squatter and the entry is not the thing to change: the number belongs to the issue named beside it, and closing the hole by minting it for other content silently repoints every citation already written against the reservation.'
 		).toEqual([]);
 	});
 
@@ -944,6 +972,18 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 	// Evidence line's `(§7.1's operative sentence)` navigation note, so that
 	// existing pin IS the acceptance check for "ER-4 unchanged" (no duplicate
 	// assertion below, by design).
+	//
+	// #369 maintenance (Bentham's review finding, folded in before merge): ER-26
+	// is pinned in the slice that MINTS it, rather than left for a later one. The
+	// remainder pin above excludes it, and under #322/#330 that exclusion bought a
+	// preserved pre-edit anchor — but this slice re-derives the remainder, so the
+	// exclusion buys nothing here and would cost ER-26 every byte-level guard it
+	// otherwise inherits: a silent later edit of its text would trip only the
+	// format checks. Pinning here is preferred over dropping it from the exclusion
+	// set, which would couple the remainder pin to ER-26's content and force a
+	// remainder repin on every future sanctioned edit of it. This is the
+	// post-#320 residual (ER-1/ER-7 still unpinned because #320 edited and
+	// deferred) not repeated.
 	const UNTOUCHED_SHA256: Record<string, string> = {
 		'ER-2': '01cecca21a2ac74eedd7e04a0c3ff94a14f55c8d2d3ef5951016d769c4edf9dc',
 		'ER-3': sha256(EDITED_ER3),
@@ -965,7 +1005,8 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 		'ER-20': '107340afe6b83a9525fcea23d0c6bb4ad096f85720a7d2cf92d79fbb21f2b8d8',
 		'ER-21': '3023f8f8249a0aad8a675f16263ed2dbf55a8d75aa5b3c3ca4352e738000dbac',
 		'ER-22': 'bfa254e4a9153d17cd759662389fd0d35c5cb5f0a26d57678d275e58bfefe442',
-		'ER-23': 'f9cfa166ac4752880b1cb58119c28f1d92f77de070a62f9d69d483dfddd2be40'
+		'ER-23': 'f9cfa166ac4752880b1cb58119c28f1d92f77de070a62f9d69d483dfddd2be40',
+		'ER-26': '5c642639a96063848b01820bb88e3638715739736a65ac4e74914670f1b0f1d5'
 	};
 
 	it('every pinned block matches its sanctioned bytes (pre-#320 state; #322-corrected state for ER-9/ER-12)', () => {
@@ -1378,7 +1419,20 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	// edit itself — the per-block pins (EDITED_ER3/EDITED_ER10/CORRECTED_ER12,
 	// section 13) are what carry #330's RED. Derivation: doc at origin/main
 	// 38cffec (== b3fa46b doc bytes), drop the four blockquote runs, sha256.
-	const DOC_MINUS_TARGETS_SHA256 = '8b7cc41e859beabae9ce787ce8322648ecc551ab6435c5410402adcf8e1a5a6b';
+	//
+	// #369 maintenance (PO-approved 2026-09-15, Gama) — the exclusion set widens
+	// again, to {ER-3, ER-9, ER-10, ER-12, ER-26}, for ER-26 (a reference's own
+	// `.string` carries the referenced person's name and email, whatever `props`
+	// asked for). The #330 CHOICE above cannot be repeated here, and the reason is
+	// worth stating: #322 and #330 EDITED existing blocks, so excluding them
+	// preserved a pre-edit anchor. #369 ADDS — a new §7.5 heading, its paragraph,
+	// and the blank line that separates the new blockquote run — and added lines
+	// outside the excluded blocks land in the remainder by construction. No
+	// exclusion set can hold the old anchor, so the pin is RE-DERIVED from
+	// post-#369 bytes, and it carries #330's caveat in full: it proves no drift
+	// SINCE this edit, not that this edit was right. Derivation: doc at this
+	// commit, drop the five blockquote runs, sha256.
+	const DOC_MINUS_TARGETS_SHA256 = '91a57440428956e2b5413603c903524ecfcdd6bf804a82589cb4d8983aa8f4d9';
 
 	const docExcludingBlocks = (ids: string[]): string => {
 		const drop = new Set<number>();
@@ -1392,16 +1446,16 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 			.join('\n');
 	};
 
-	it('the ER-3, ER-9, ER-10 and ER-12 blocks all exist (the exclusion below must actually exclude something)', () => {
-		for (const id of ['ER-3', 'ER-9', 'ER-10', 'ER-12']) {
+	it('the ER-3, ER-9, ER-10, ER-12 and ER-26 blocks all exist (the exclusion below must actually exclude something)', () => {
+		for (const id of ['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26']) {
 			expect(blocks.some((b) => b.id === id), `${id} disappeared from the doc`).toBe(true);
 		}
 	});
 
-	it('the doc minus the ER-3/ER-9/ER-10/ER-12 blockquote runs hashes to its pre-#322 state', () => {
+	it('the doc minus the ER-3/ER-9/ER-10/ER-12/ER-26 blockquote runs hashes to its post-#369 state', () => {
 		expect(
-			sha256(docExcludingBlocks(['ER-3', 'ER-9', 'ER-10', 'ER-12'])),
-			"#322's mandate was ER-9/ER-12 and #330's is ER-3/ER-10/ER-12, nothing else — no renumbering, no §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: git show main:docs/architecture/entu-rights-and-visibility-model.md, drop the four blockquote runs, sha256 the remainder"
+			sha256(docExcludingBlocks(['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26'])),
+			"#322's mandate was ER-9/ER-12, #330's is ER-3/ER-10/ER-12 and #369's is ER-26 plus its §7.5 home, nothing else — no renumbering, no other §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: take the doc at the sanctioned state, drop the five blockquote runs, sha256 the remainder"
 		).toBe(DOC_MINUS_TARGETS_SHA256);
 	});
 });

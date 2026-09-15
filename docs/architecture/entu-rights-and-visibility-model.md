@@ -246,6 +246,13 @@ Live-confirmed 2026-09-09 on polyphony (synthetic), both halves, full raw reques
 > **ER-14** — On `event`'s `_parent` reference to its series parent (`polyphony` db, synthetic, probed 2026-09-10 under #304): a value DELETE was OWNER-gated (403 "User not in _owner property" for an editor-only caller, 200 for an owner caller) while a POST was EDITOR-gated (200 once editor-on-event plus expander-on-referenced were present) — the two write verbs on the same rights-type property answered differently. A control DELETE on a plain (non-`_parent`) property under the same editor-only caller returned 200, so the owner-gate is specific to `_parent`, not to DELETE generally. **Not established as general Entu behaviour** — one probe, one property, one entity type; no source `file:line` confirms the mechanism.
 > Evidence: `scripts/migrations/probes/probe-304-parent-rights-gate-2026-09-10.ts`; results `scripts/migrations/seed-results/probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json`.
 
+### 7.5 A reference carries the referenced person's name and email in its own `.string`
+
+The trap is that it arrives unasked. A projection narrowed to rights properties — `props=_owner,_editor`, the shape a grant audit reaches for precisely because it wants ids and nothing else — still ships each reference's `.string`, and Entu has already baked the referenced person's `name` and `email` into that field; `/history` does the same through a server-side `$lookup` on reference-type changes, so a change log pulled for rights forensics carries the same payload. Narrowing `props` is not a redaction step and was never meant to be one: a print, a log line, or a ledger file written straight from the response carries the PII whatever the query asked for.
+
+> **ER-26** — Every reference a read returns carries the referenced person's `name` and `email` baked into the reference's own `.string` field, whatever the request's `props` asked for: a `props=_owner,_editor` projection still ships them, and `/history`'s server-side `$lookup` does the same for reference-type changes. An "ids only" read is therefore only ids-only if `.string` is stripped at the point of extraction — before any print, log, or ledger write.
+> Evidence: `history.get.js:190-219` (the `$lookup` that joins the referenced entity's display fields onto each returned change) — `entu-api` source-read 2026-09-15, live-confirmed the same day; probe `scripts/migrations/probes/probe-369-crede-self-editor-diagnosis-2026-09-15.ts` (Pérotin, #369).
+
 ---
 
 ## What this changes for the single-collective design
@@ -270,3 +277,5 @@ Between 2026-07-17 and 2026-07-19 the same rights/sharing questions produced thr
 (*MVOX:Palestrina*) — auth-chain verification (§4) by Finn, same pass.
 
 (*MVOX:Perotin*) — §7 live-probe corroboration added 2026-09-08, per #294; §7.3 added 2026-09-09, ruled intended by Mihkel same day.
+
+(*MVOX:Josquin*) — §7.5 / ER-26 added 2026-09-15, per #369; the finding is Pérotin's, from the probe its Evidence line names.
