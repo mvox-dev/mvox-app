@@ -134,6 +134,28 @@ const FINAL_DISCIPLINE = '\n\nFINAL-RESULT DISCIPLINE: never end your turn with 
 // incident into a clean stop-and-report): destructive git is never self-service recovery.
 const GIT_SAFETY = '\n\nGIT SAFETY (absolute): NEVER run `git reset --hard`, `git checkout -- <path>`, `git clean`, `git stash` (in any form), force-push, or any other command that discards working-tree state — the tree is SHARED and may hold other agents\' and team-memory edits that are not yours to destroy. Dirty files you did not create are normal: leave them alone; they do not block branch checkout or `merge --squash`, and you stage explicitly by path so they cannot ride into your commit. If you find the repo in a state you did not expect (wrong branch, your branch missing, conflicting edits), STOP: commit nothing, run no recovery, and report the exact observed state in your StructuredOutput (success=false). A prior agent ran `reset --hard` on shared main to recover from its own confusion and destroyed teammates\' work.'
 
+// MAIN HALT (baked 2026-09-15, issue #381 — a fix agent found its work already committed on
+// main and narrated it instead of stopping): landing on main is a HALT, not a fact to report.
+// Appended literally (not as a shared constant) at each of RED/GREEN/GREEN-FIX/FIX's own
+// prompt string below — src/pipeline-ref-discipline.spec.ts pins the raw template TEXT per
+// phase region, so a `+ CONST` reference would read as the identifier, not the fence prose.
+// MERGE and SEED are exempt: MERGE's commit on main IS its job; SEED runs before RED creates
+// the story branch, so "ONLY on the story branch" would be a false instruction there.
+// RESIDUAL (review round, 2026-09-15): the run that lands a template change executes under the
+// PRE-change template; fences take effect at the next launch from a freshly copied scratchpad
+// template (md5-verify the copy against .claude/workflows/tdd-slice-pipeline.js after merge).
+// EARLIEST CHECK WINS / BOTH DIRECTIONS PINNED (Gama acceptance additions, review round
+// 2026-09-15): PRIMARY CHECK (branch identity, pre-commit) precedes the SECONDARY net
+// (after-the-fact anomalies) in the prose below — deliberately, since the primary gate is
+// answerable before a commit exists and cannot be narrated around.
+// src/pipeline-ref-discipline-fence.ts is the single source of truth both sides pin against: its
+// exported HALT_REASON_* constants are the exact phrases re-used verbatim below (imported by
+// pipeline-ref-discipline.spec.ts rather than duplicated), and its `classifyRefState` is a real,
+// executable mirror of this prose's decision order — its own spec file drives it with
+// BOTH a healthy-run fixture (silent) and the #357-shape fixture (fires), so the fence's
+// correctness isn't argued from prose a test cannot execute (see
+// src/pipeline-ref-discipline-fence.spec.ts).
+
 // All template agents are schema-forced; agentS appends the guards uniformly.
 // NOTE (baked 2026-09-06): a `_shared` key in the LAUNCH args object is NOT read by agents —
 // they read only their own prompts and any args JSON file those prompts name. Put per-run rules
@@ -290,7 +312,7 @@ for (let i = 0; i < tasks.length; i++) {
     log('RED: ' + taskLabel)
 
     const red = await agentS(
-      task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED). Stage EXPLICITLY by path — NEVER git add -A (the shared tree may hold dirty team memory files that must not ride into the branch). Then: git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"',
+      task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED). Stage EXPLICITLY by path — NEVER git add -A (the shared tree may hold dirty team memory files that must not ride into the branch). Then: git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.',
       { label: 'red-' + task.issueNumber, phase: 'RED', schema: RESULT_SCHEMA, model: 'claude-fable-5' }
     )
 
@@ -306,7 +328,7 @@ for (let i = 0; i < tasks.length; i++) {
   log('GREEN: ' + taskLabel)
 
   const green = await agentS(
-    task.greenPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\nBRANCH: ' + task.branch + ' (already checked out)\n\nVerification:\n1. cd ' + REPO + ' && pnpm test -- --run — ALL pass\n2. cd ' + REPO + ' && pnpm check — 0 type errors\n\nGit: stage EXPLICITLY by path (NEVER git add -A — dirty team memory files may sit in the tree), then git commit -m "' + task.commitPrefix + ': ' + task.title + '"',
+    task.greenPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\nBRANCH: ' + task.branch + ' (already checked out)\n\nVerification:\n1. cd ' + REPO + ' && pnpm test -- --run — ALL pass\n2. cd ' + REPO + ' && pnpm check — 0 type errors\n\nGit: stage EXPLICITLY by path (NEVER git add -A — dirty team memory files may sit in the tree), then git commit -m "' + task.commitPrefix + ': ' + task.title + '"' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.',
     { label: 'green-' + task.issueNumber, phase: 'GREEN', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
   )
 
@@ -339,7 +361,7 @@ for (let i = 0; i < tasks.length; i++) {
         phase('GREEN-FIX')
         log('INTEGRATION found wiring gaps for ' + taskLabel + ', fixing (attempt ' + integrationAttempts + ')')
         await agentS(
-          'Fix wiring gaps on branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ').\n\nWORKING DIRECTORY: ' + REPO + '\n\nThe INTEGRATION check found these unreachable features:\n' + failSummary + '\n\nFor each gap: add the missing import/render in the appropriate page or route file. Do NOT rewrite the feature — just wire it in.\n\nVerify: pnpm test -- --run && pnpm check. Commit the fix.',
+          'Fix wiring gaps on branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ').\n\nWORKING DIRECTORY: ' + REPO + '\n\nThe INTEGRATION check found these unreachable features:\n' + failSummary + '\n\nFor each gap: add the missing import/render in the appropriate page or route file. Do NOT rewrite the feature — just wire it in.\n\nVerify: pnpm test -- --run && pnpm check. Commit the fix.' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.',
           { label: 'green-fix-' + task.issueNumber + '-' + integrationAttempts, phase: 'GREEN-FIX', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
         )
       } else {
@@ -385,7 +407,7 @@ for (let i = 0; i < tasks.length; i++) {
         phase('FIX')
         log('Review ' + verdict.verdict + ' for ' + taskLabel + ', fixing (attempt ' + reviewAttempts + ')')
         await agentS(
-          'Fix review findings for #' + task.issueNumber + ' (' + task.title + ') in ' + REPO + ' on branch ' + task.branch + '.\n\nVerdict: ' + verdict.verdict + '\n\n## Findings\n' + formatFindings(verdict.findings) + '\n\nFor each finding, understand the ROOT CAUSE before writing a fix. The "Recommended fix" (if provided) describes the fix shape — use it as a starting point but verify it against the actual code.\n\nFix, verify (pnpm test -- --run && pnpm check), commit.',
+          'Fix review findings for #' + task.issueNumber + ' (' + task.title + ') in ' + REPO + ' on branch ' + task.branch + '.\n\nVerdict: ' + verdict.verdict + '\n\n## Findings\n' + formatFindings(verdict.findings) + '\n\nFor each finding, understand the ROOT CAUSE before writing a fix. The "Recommended fix" (if provided) describes the fix shape — use it as a starting point but verify it against the actual code.\n\nFix, verify (pnpm test -- --run && pnpm check), commit.' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.',
           { label: 'fix-' + task.issueNumber + '-' + reviewAttempts, phase: 'FIX', schema: RESULT_SCHEMA, model: 'claude-opus-5[1m]' }
         )
       }
