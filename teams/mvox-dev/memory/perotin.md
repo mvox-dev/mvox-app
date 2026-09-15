@@ -2,9 +2,8 @@
 
 (*MVOX:Perotin*)
 
-> Pruned 2026-09-15 (MVOX-23, ≤100-line convention) from 1623 lines. Full narrative lives in
-> `git log -- teams/mvox-dev/memory/perotin.md` plus the commits/ledgers/issue threads each entry
-> pointed at. Kept below: durable facts, current state, open items, standing patterns.
+> Pruned 2026-09-15 (MVOX-23, ≤100-line convention) from 1623 lines. Full narrative lives in `git log
+> -- teams/mvox-dev/memory/perotin.md` plus the commits/ledgers/issue threads each entry pointed at.
 
 ## Repo location + script catalog
 
@@ -54,6 +53,10 @@ work = `git log --oneline -- scripts/migrations/` (one committed result artifact
   NFC match; `q=X` = case-insensitive substring. `mandatory:true` on a prop-def is a UI hint only.
 - **API key vs JWT**: `entu_api_key` permanent (SHA-256); JWT 48h, IP-bound (`aud`, cross-IP = silent
   401); a key on a person with no OAuth account returns an anonymous-floor JWT — no real seat.
+- **Reference values leak a name for free**: any reference-type property value — a raw `_owner`/
+  `_editor` entry, `/history`'s `old`/`new` — carries a denormalized human-readable `.string` of the
+  target, even when `name` was never in the requested `props` (confirmed #369; `/history` does the
+  same server-side via `$lookup`). "Don't request name" ≠ ids-only — strip `.string` at extraction.
 
 ## Authorization gate — canonical (cross-ref `[[feedback_authorization_gate]]`)
 
@@ -71,30 +74,27 @@ read the dispatch's exact wording, don't assume the standard 2-party gate is the
 - **mvox_crede = confirmed REAL PII** (Mihkel, 2026-09-06, #265 comment 5561632474) — real choir
   pilot, real names/emails. Any crede-targeting script/ledger is real-PII by default; use
   `sensitive: true` in `writeLedger` (routes to gitignored `seed-results/crede-instance/`).
-- Estonian choir names (EFK/Sireen/RAM/TAM/EKBL/EMKL) — real, publicly-associated, acceptable. Seed
-  persons elsewhere — synthesized Estonian-style names, `@example.ee`, no real PII.
+- Estonian choir names (EFK/Sireen/RAM/TAM/EKBL/EMKL) — real, publicly-associated. Seed persons
+  elsewhere — synthesized Estonian-style names, `@example.ee`, no real PII.
 
 ## Currently deferred / not scheduled
 
 - **Real member-seat empirical verification** — every live run I execute is db-root-omniscient;
-  "write landed" ≠ "a real non-owner member sees it." No way to synthesize a second seat myself
+  "write landed" ≠ "a real non-owner member sees it." No second seat to synthesize myself
   (`ENTU_ADMIN_KEY` confirmed anonymous-floor) — needs an actual second OAuth login.
-- **#68 db-root `_owner` backfill — STRUCTURALLY BLOCKED** (2026-08-09): `_owner` is a rightType
-  property needing `_owner` already held on the target — db-root holds none of the 72 flagged
-  entities, chicken-and-egg via plain API. Needs an Entu admin override or manual admin-UI action.
-  `lib/v4e-translator.ts` never sets `_sharing` on new prop-defs either (Josquin's territory, flagged).
+- **#68 db-root `_owner` backfill — STRUCTURALLY BLOCKED** (2026-08-09): needs `_owner` already held
+  on the target — db-root holds none of the 72 flagged entities, chicken-and-egg via plain API. Needs
+  an Entu admin override or manual admin-UI action.
 
 ## Standing patterns worth naming once
 
-- **`BASELINE_*_IDS` frozen-set drift-check**: hardcode a population snapshot, diff live re-reads
-  against it every run, name deltas individually rather than folding into a bare count. **Canary-
-  first + read-back verify**: touch one representative row before a full sweep; throw on canary
-  failure. **Ownership pre-check**: scan `_owner` for non-db-root holders before any instance
-  mutation; hard-abort pre-write if found.
-- **Ledger fields name what they attest** — an intended/config value vs. an observed/read-back value
-  are different things; name the field so a reader can tell which without reading the source.
-  **Artifact hygiene**: delete superseded pre-authorization dry-runs as you go, keep exactly one
-  current artifact per script until the live run lands its own.
+- **Frozen-set drift-check + canary-first + ownership pre-check**: hardcode a population snapshot and
+  diff live re-reads against it every run, naming deltas individually; touch one representative row
+  before a full sweep, throw on canary failure; scan `_owner` for non-db-root holders before any
+  instance mutation, hard-abort pre-write if found.
+- **Ledger fields name what they attest** (intended/config value vs. observed/read-back value are
+  different things) and **artifact hygiene** (delete superseded pre-authorization dry-runs as you go,
+  keep exactly one current artifact per script until the live run lands its own).
 - **Single-tree serialization**: `git branch --show-current` before every commit — if not `main`,
   STOP, report branch+status+log evidence, never switch/stash/work around. Caught two real
   concurrent-chain collisions (2026-08-08) and one classifier-block escalation (#348, 2026-09-14).

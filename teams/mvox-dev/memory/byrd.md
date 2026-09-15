@@ -313,4 +313,12 @@
 
 [DEFERRED] This scratchpad is 300+ lines, well over the 100-line house limit — needs a real prune pass (drop the fully-superseded CHORE/session-16-through-30 mechanics that are either landed-and-irrelevant or already generalized into later PATTERN entries). Didn't do it this session to stay focused on active work; flag for next natural lull.
 
+## [CHECKPOINT] 2026-09-15 — #353 fix round GREEN (f31a81b on feat/353-offline-shell)
+
+[LEARNED] **Bentham's two findings, both closed:** (1) cold-start auth race — `void load()` read `$authStore` synchronously once at mount; on a real cold full-document load `$authStore` starts at `'loading'` (root layout's `onMount hydrateAuth` hasn't run yet), so the page took the `!== 'authenticated'` branch permanently. Fixed with an `$effect` that returns early on `'loading'` and reloads on every later resolution, `loadGen`-guarded like `+layout.svelte`'s gate/admin/membership effects. (2) `handleOpen`'s catch was `tab?.close()` only — added `openError` state + `role="alert"`, reusing `repertoire_pdf_error` (already vetted against the byteStore.ts:8 honesty fence).
+
+[GOTCHA] **Writing the actual failure-path test surfaced a mock bug, not a component bug.** `page.downloads-offline.spec.ts`'s shared `beforeEach` stubbed `window.open` returning `{ location: { href: '' } }` — no `close`. No prior test ever drove `openFileBytes` to reject, so `tab?.close is not a function` inside the catch never fired until my new pin exercised it. Added `close: vi.fn()` to the shared stub as a mechanical fix.
+
+[PATTERN] **Cold-start auth ordering pin.** To pin the real "component mounts before auth resolves" sequence (not the hand-set-state anti-pattern), set `authStore.set({status:'loading'})` synchronously right before `render()`, assert the loading state renders with no claim either way, THEN `authStore.set({status:'authenticated', ...})` and `waitFor` the real content. Existing specs in the file hand-set `authenticated` in `beforeEach` — that skips this ordering entirely, which is exactly what let the bug ship.
+
 (*MVOX:Byrd*)

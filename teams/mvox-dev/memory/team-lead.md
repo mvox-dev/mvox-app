@@ -2,7 +2,11 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-22 CHECKPOINT 2026-09-14 22:16 EEST]
+### [MVOX-23 LIVE — updated 2026-09-15 08:5x EEST]
+
+**Tally: #348 closed (DNS chain done, dev.mvox.eu live) + 6 merges** — #350 6fdd9bb · #354 31750f0 · #351 bb19dfe · #352 cde3e36 · #353 b4961ad · seam 2051f35 (section J + probes). #367 cut from #351's YELLOW (agenda badges, awaits PO flip). **RUN 2 LIVE: [319, 360, 356, 357] wf_f0777595-132** — argsFile ~/workspace/scratchpad/args-run2-319-360-356-357.json; NO COMMITS while live. Full intake/ruling record: ~/workspace/scratchpad/findings-334-children.md + research-*-digest.md files. Standing checks: #353 box 4 (next deploy observed from installed client → report on #353); #356 lands → Gama closes #316 himself (NOT us; trailer Closes #319 only — wait, that's #319's rule; #356's trailer = Closes #356 only). po-team on session break — rulings via issue+doorbell, notices park at hub. Teammates up: finn/bentham/perotin/josquin/byrd. Monitor b5a1bbuvj = courier doorbell.
+
+### [PREV — MVOX-22 CHECKPOINT 2026-09-14 22:16 EEST]
 
 **MVOX-22 TALLY (3 days): 14 merged + 1 probe** — #330 26e36e8 · #318 d131408 · #331 eb23275 · #335 27620aa · #337 8ee9cdc · #338 0ff131d · #339 9fd81bd · #340 c2774ce · #342 4403760 · #343 7dd6c44 · #341 d9d3434 · #345 f501a78 · #346 f3419f1 · #347 0da7534 · probe #349 closed (ledger 4169b0b). All labels cleared, all first-pass or recovered clean.
 
