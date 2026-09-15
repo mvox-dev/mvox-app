@@ -932,6 +932,26 @@ Two techniques that look like alternatives actually **compose**, and the pair is
 
 Order matters. Replay alone on a timing race measures scheduling luck, so a pre-fix failure proves nothing. Once step 1 fixes the ordering, step 2 measures *the fix's absence* and nothing else — which is why #260 could report an identical verbatim failure across three runs. **Always demand the failure be for the right reason**: #260's tripped on the state assertion itself, not on a timeout. A timeout failure is indistinguishable from a broken test and must never be accepted as race proof.
 
+### Proving an alarm SILENT — the independent-toggle baseline (PO ruling, Gama 2026-09-15, off #381)
+
+**Standing shape for any fence, guard, alarm or halt rule.** Showing the trigger stays quiet on a healthy fixture proves almost nothing on its own, because **silence for the wrong reason is indistinguishable from silence for the right one** — the fixture may be missing a field the classifier needs, or one flag may be masking another, and the run looks identically green.
+
+**What closes it**: take the *same* healthy baseline and toggle **each** anomaly independently, asserting every one of them flips it to fire. That demonstrates the silence is caused by the **absence of the anomalies** rather than by something the fixture never supplied. #381's `pipeline-ref-discipline-fence.spec.ts` is the worked example — one `healthyRun()` builder, four single-flag overrides off it, plus a stacked fixture pinning which check wins. Note the builder sets the non-anomalous flags to `false` **explicitly rather than leaving them unset**, which is what makes each toggle a one-variable change.
+
+This is the positive-control half of `feedback_negative_from_the_instrument` ("a clean negative is a claim about the instrument until proven otherwise") applied to alarms rather than to greps, and it is the same discipline as section H's non-empty-input control on an empty grep. **A trigger nobody has watched fire — or watched *not*-fire for a demonstrated reason — is untested**, and an overridden fence is worse than no fence, because it trains the override until the one true firing reads like all the others.
+
+### Verifying a single-source-of-truth or pin claim — test the MECHANISM, never the claim (same ruling)
+
+When a diff claims two artefacts "cannot drift apart" — shared constants, an imported pin, a generated view, a checksum — **do not review the claim; establish the mechanism by asking what each edit direction does.** The three-way question:
+
+- edit **side A** alone → the pin must fail;
+- edit **side B** alone → the pin must fail;
+- edit **both consistently** → it must pass, because that is a deliberate change and not drift.
+
+Gama's formulation, worth carrying verbatim: **"a pin that cannot distinguish a deliberate change from a drift is not a pin."**
+
+Two traps this catches. A pin can be **one-directional** — it notices an edit to the copy but not to the source, or vice versa — and reads as symmetric in the prose. And a "single source" can cover **less of the artefact than the claim implies**: #381's template *hand-copies* its fence phrases rather than interpolating them (correctly — a `+ CONST` reference would make the raw-text pin match an identifier instead of prose), so what actually closes the loop is that the spec **imports** the constants and asserts their presence. Had the spec re-declared those literals instead, every word of the claim would still have been true and nothing would have been pinned. **Name which characters are on the shared path**, and treat any prose outside them as unpinned until something else pins it.
+
 ## B. Entu wire and rights mechanics — the read and rights half
 
 The **write** primitives already have homes above: "Entu mutation-op wire shapes" (UPDATE / REMOVE / DELETE_ENTITY / POST boolean, and the entity-versus-property endpoint split), "Entu formula-to-plain conversion mechanic", "File-property mutations must round-trip full file payload", and "Entities created directly under an organization MUST set `_inheritrights: true`". Those stay canonical. This subsection adds the read-path and rights mechanics that were never written down outside the reviewer's notes.
