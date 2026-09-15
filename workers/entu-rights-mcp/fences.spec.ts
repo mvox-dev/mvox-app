@@ -28,18 +28,22 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 	// this way rather than loosening it: #322 and #330, both recorded inside the
 	// guard spec's own pin comments. These pins prove no drift SINCE this edit,
 	// never that the edit was right.
+	//
+	// #372 repin (PO-approved 2026-09-15, Gama; ruling recorded on #372) — both
+	// move together again for ER-27 and its §7.6 home (creating a child under a
+	// parent is governed by `_editor` on that parent). Same caveat.
 	it('docs/architecture/entu-rights-and-visibility-model.md is unchanged', () => {
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
 			'#318 builds a VIEW over the doc; a doc edit belongs to its own commissioned slice. Repin only behind a PO-ruled doc edit (sha256 of the file at the sanctioned state).'
-		).toBe('73de6287276827a189b028ae12dca51a6d57510449b9d4d7b8fa15e90743bcd5');
+		).toBe('7160b596c9077942032283d9f1a66268fffbef5a4051601074a3c47433ed4b41');
 	});
 
 	it('src/rights-model-identifiers.spec.ts (the guard spec) is unchanged', () => {
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('0cbada09993177bf617b492964fbcd850cbba14fbced35e60205ed4e165f44b2');
+		).toBe('002bb006ca99c8a9811c0fae6d6fe634217f4d1ded7f94afd20f62f8edcdff8a');
 	});
 });
 

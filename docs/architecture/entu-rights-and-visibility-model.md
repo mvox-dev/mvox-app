@@ -253,6 +253,13 @@ The trap is that it arrives unasked. A projection narrowed to rights properties 
 > **ER-26** — Every reference a read returns carries the referenced person's `name` and `email` baked into the reference's own `.string` field, whatever the request's `props` asked for: a `props=_owner,_editor` projection still ships them, and `/history`'s server-side `$lookup` does the same for reference-type changes. An "ids only" read is therefore only ids-only if `.string` is stripped at the point of extraction — before any print, log, or ledger write.
 > Evidence: `history.get.js:190-219` (the `$lookup` that joins the referenced entity's display fields onto each returned change) — `entu-api` source-read 2026-09-15, live-confirmed the same day; probe `scripts/migrations/probes/probe-369-crede-self-editor-diagnosis-2026-09-15.ts` (Pérotin, #369).
 
+### 7.6 Which tier governs creating a child under a parent
+
+The platform documents this one, so the documentation is where the mechanism comes from (consult-and-believe, 2026-09-06), and Mihkel's ruling keeps its real role: the reason for our practice, not evidence about the platform. Stated as one sentence the two fuse, and the house posture starts reading as a claim about Entu. The field evidence that prompted the question is consistent with the rule but is not a test of it: nobody attempted a create and was refused. What was counted is a population that had been unable to answer, and the same population after the remedy.
+
+> **ER-27** — Creating a child entity under a parent requires at least `_expander` on that parent; `_editor` and `_owner` each include `_expander`, so either one suffices and no separate `_expander` grant is needed. mvox's practice, ruled by Mihkel on mvox-app#372 ("editor is fine"), is to grant `_editor` and not to provision bare `_expander` — a posture on top of the platform rule, never a restatement of it.
+> Evidence: `entu-www`, consulted 2026-09-15 — `src/overview/entities/index.md:27` (the minimum, and the inclusion) and `:43` (the rights table, where creating children sits on `_expander` and `_owner`); the API reference repeats it for the parent-reference property at `src/api/properties/index.md:141`. Field corroboration on crede: 19 of 24 persons held no self-`_editor`, none of the 85 `rsvp` children had a non-admin creator, 24 of 24 hold it after the remedy — `scripts/migrations/probes/probe-369-crede-self-editor-diagnosis-2026-09-15.ts`, `scripts/migrations/probes/remedy-369-crede-self-editor-grant-2026-09-15.ts` (Pérotin, #369); ledgers under `scripts/migrations/seed-results/crede-instance/`, gitignored under the crede real-PII rule.
+
 ---
 
 ## What this changes for the single-collective design
@@ -278,4 +285,4 @@ Between 2026-07-17 and 2026-07-19 the same rights/sharing questions produced thr
 
 (*MVOX:Perotin*) — §7 live-probe corroboration added 2026-09-08, per #294; §7.3 added 2026-09-09, ruled intended by Mihkel same day.
 
-(*MVOX:Josquin*) — §7.5 / ER-26 added 2026-09-15, per #369; the finding is Pérotin's, from the probe its Evidence line names.
+(*MVOX:Josquin*) — §7.5 / ER-26 added 2026-09-15, per #369; the finding is Pérotin's, from the probe its Evidence line names. §7.6 / ER-27 added the same day, per the ruling on #372; its supporting counts are Pérotin's too, from the same pair of runs.

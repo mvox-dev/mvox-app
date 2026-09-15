@@ -1006,7 +1006,8 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 		'ER-21': '3023f8f8249a0aad8a675f16263ed2dbf55a8d75aa5b3c3ca4352e738000dbac',
 		'ER-22': 'bfa254e4a9153d17cd759662389fd0d35c5cb5f0a26d57678d275e58bfefe442',
 		'ER-23': 'f9cfa166ac4752880b1cb58119c28f1d92f77de070a62f9d69d483dfddd2be40',
-		'ER-26': '5c642639a96063848b01820bb88e3638715739736a65ac4e74914670f1b0f1d5'
+		'ER-26': '5c642639a96063848b01820bb88e3638715739736a65ac4e74914670f1b0f1d5',
+		'ER-27': 'd098b5e306890e28ccd087397d33fc1a172189a9feb05fc7b8213e0c5297e145'
 	};
 
 	it('every pinned block matches its sanctioned bytes (pre-#320 state; #322-corrected state for ER-9/ER-12)', () => {
@@ -1432,7 +1433,11 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	// post-#369 bytes, and it carries #330's caveat in full: it proves no drift
 	// SINCE this edit, not that this edit was right. Derivation: doc at this
 	// commit, drop the five blockquote runs, sha256.
-	const DOC_MINUS_TARGETS_SHA256 = '91a57440428956e2b5413603c903524ecfcdd6bf804a82589cb4d8983aa8f4d9';
+	//
+	// #372 maintenance: same shape again for ER-27 and its §7.6 home — an
+	// addition, so the remainder re-derives rather than preserving an anchor, and
+	// the same caveat rides along. ER-27 is pinned below in this same slice.
+	const DOC_MINUS_TARGETS_SHA256 = '54fccff44d348d687b7b1ecc726a933a1bfa57ef47e643ad9efdaaf9b6599b90';
 
 	const docExcludingBlocks = (ids: string[]): string => {
 		const drop = new Set<number>();
@@ -1446,16 +1451,16 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 			.join('\n');
 	};
 
-	it('the ER-3, ER-9, ER-10, ER-12 and ER-26 blocks all exist (the exclusion below must actually exclude something)', () => {
-		for (const id of ['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26']) {
+	it('the ER-3, ER-9, ER-10, ER-12, ER-26 and ER-27 blocks all exist (the exclusion below must actually exclude something)', () => {
+		for (const id of ['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26', 'ER-27']) {
 			expect(blocks.some((b) => b.id === id), `${id} disappeared from the doc`).toBe(true);
 		}
 	});
 
-	it('the doc minus the ER-3/ER-9/ER-10/ER-12/ER-26 blockquote runs hashes to its post-#369 state', () => {
+	it('the doc minus the ER-3/ER-9/ER-10/ER-12/ER-26/ER-27 blockquote runs hashes to its post-#372 state', () => {
 		expect(
-			sha256(docExcludingBlocks(['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26'])),
-			"#322's mandate was ER-9/ER-12, #330's is ER-3/ER-10/ER-12 and #369's is ER-26 plus its §7.5 home, nothing else — no renumbering, no other §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: take the doc at the sanctioned state, drop the five blockquote runs, sha256 the remainder"
+			sha256(docExcludingBlocks(['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26', 'ER-27'])),
+			"#322's mandate was ER-9/ER-12, #330's is ER-3/ER-10/ER-12, #369's is ER-26 plus its §7.5 home and #372's is ER-27 plus its §7.6 home, nothing else — no renumbering, no other §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: take the doc at the sanctioned state, drop the six blockquote runs, sha256 the remainder"
 		).toBe(DOC_MINUS_TARGETS_SHA256);
 	});
 });
