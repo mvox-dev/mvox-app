@@ -99,3 +99,42 @@ body::-webkit-scrollbar,
 		font-size: 1rem;
 	}
 }
+
+/* #357 — capture-redaction overlay. DEFAULT-INERT BY CONSTRUCTION: every rule
+ * below requires the html[data-redacting] root toggle, set by a human in
+ * devtools before a screenshot (src/lib/redact/redact.ts). Without the
+ * toggle, the marker attribute has zero rendering effect — no rule guarding
+ * the marker may ever drop the html[data-redacting] prefix, or every
+ * existing PII-value spec would break.
+ *
+ * The wrapper gets position: relative so its ::after overlay anchors to it;
+ * the overlay itself is an opaque repeating-linear-gradient hatch over the
+ * house ink tokens, so a redacted field reads as DELIBERATELY REMOVED in the
+ * captured image, never as merely empty (#357: a reader must be able to tell
+ * a redaction from a blank field). Pure CSS, no DOM mutation — the value
+ * underneath stays untouched (RedactedField.spec.ts).
+ *
+ * z-index is set explicitly rather than left to paint order: a positioned
+ * ::after already paints above its in-flow <input> sibling, but that is a
+ * subtlety a later edit could break, and the whole point is that the hatch
+ * covers the value. jsdom cannot prove it — the landing comment's capture
+ * checklist confirms it in a real browser. pointer-events is deliberately
+ * left at its default: the toggle is a human screenshot-time state, and an
+ * overlay that swallows clicks on a redacted field is the wanted behaviour.
+ */
+html[data-redacting] [data-redact] {
+	position: relative;
+}
+html[data-redacting] [data-redact]::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	background-image: repeating-linear-gradient(
+		45deg,
+		var(--color-ink),
+		var(--color-ink) 4px,
+		var(--color-ink-2) 4px,
+		var(--color-ink-2) 8px
+	);
+}

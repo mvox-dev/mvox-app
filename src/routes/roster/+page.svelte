@@ -78,6 +78,7 @@
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import RedactedField from '$lib/components/RedactedField.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	const selected = $derived($selectedCollectiveStore);
@@ -4096,60 +4097,45 @@
 					<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
 					     this <li>, not a dialog/drawer/overlay. -->
 					<div class="mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2">
-						<label class="flex flex-col gap-1 text-xs">
-							{m.roster_record_name_label()}
-							<input
-								type="text"
-								required
-								data-testid="roster-record-name"
-								bind:value={recordForm.name}
-								disabled={recordSavingMemberId !== null}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<label class="flex flex-col gap-1 text-xs">
-							{m.roster_record_phone_label()}
-							<input
-								type="tel"
-								data-testid="roster-record-phone"
-								bind:value={recordForm.phone}
-								disabled={recordSavingMemberId !== null}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<label class="flex flex-col gap-1 text-xs">
-							{m.roster_record_email_label()}
-							<input
-								type="email"
-								data-testid="roster-record-email"
-								bind:this={emailInputEl}
-								bind:value={recordForm.email}
-								disabled={recordSavingMemberId !== null}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<label class="flex flex-col gap-1 text-xs">
-							{m.roster_record_birthdate_label()}
-							<!-- #207 — the platform's OWN date picker, never a custom
-							     calendar. -->
-							<input
-								type="date"
-								data-testid="roster-record-birthdate"
-								bind:value={recordForm.birthdate}
-								disabled={recordSavingMemberId !== null}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<label class="flex flex-col gap-1 text-xs">
-							{m.roster_record_id_code_label()}
-							<input
-								type="text"
-								data-testid="roster-record-id-code"
-								bind:value={recordForm.id_code}
-								disabled={recordSavingMemberId !== null}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
+						<RedactedField
+							label={m.roster_record_name_label()}
+							type="text"
+							testid="roster-record-name"
+							required
+							bind:value={recordForm.name}
+							disabled={recordSavingMemberId !== null}
+						/>
+						<RedactedField
+							label={m.roster_record_phone_label()}
+							type="tel"
+							testid="roster-record-phone"
+							bind:value={recordForm.phone}
+							disabled={recordSavingMemberId !== null}
+						/>
+						<RedactedField
+							label={m.roster_record_email_label()}
+							type="email"
+							testid="roster-record-email"
+							bind:el={emailInputEl}
+							bind:value={recordForm.email}
+							disabled={recordSavingMemberId !== null}
+						/>
+						<!-- #207 — the platform's OWN date picker, never a custom
+						     calendar. -->
+						<RedactedField
+							label={m.roster_record_birthdate_label()}
+							type="date"
+							testid="roster-record-birthdate"
+							bind:value={recordForm.birthdate}
+							disabled={recordSavingMemberId !== null}
+						/>
+						<RedactedField
+							label={m.roster_record_id_code_label()}
+							type="text"
+							testid="roster-record-id-code"
+							bind:value={recordForm.id_code}
+							disabled={recordSavingMemberId !== null}
+						/>
 						<div class="flex items-center gap-2">
 							<button
 								type="button"
