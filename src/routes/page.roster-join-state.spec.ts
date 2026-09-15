@@ -259,12 +259,8 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-/** #346 — the invite value is becoming a readonly <input> (a <p> cannot
- *  `.select()`); read the value wherever it lives so the token/composition
- *  claims hold across the element change. */
-function linkValue(el: HTMLElement): string {
-	return el instanceof HTMLInputElement ? el.value : (el.textContent ?? '');
-}
+// #360 — the linkValue helper is GONE with the rendered value itself: the
+// composed URL is now observable only as the clipboard payload.
 
 // ── #346 clipboard control — page.admin-invite-copy.spec.ts's idiom verbatim:
 //    per-property defineProperty on the navigator INSTANCE, restored from the
@@ -481,19 +477,25 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-4');
 		// A createInvite here would manufacture a SECOND person+member for Dora.
 		expect(createInviteMock).not.toHaveBeenCalled();
-		const link = await waitFor(() => {
-			const el = q(container, 'roster-invite-link-m4');
+		// #360 — the fresh link surfaces as a COPY BUTTON only, never rendered.
+		const copyButton = await waitFor(() => {
+			const el = q(container, 'roster-invite-copy-m4');
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		const value = linkValue(link);
-		expect(value).toContain('tok-fresh-1');
-		// #346 — the deliverable is a LINK, not a bare token: the same
-		// buildInviteUrl(window.location.origin, token) composition the admin
-		// surface does. A recipient can open scheme+host+/invite/<token>; a
-		// bare JWT pasted into a browser is a search query.
-		expect(value).toContain('/invite/');
-		expect(value.startsWith(window.location.origin)).toBe(true);
+		// #346's composition claim, kept OBSERVABLE at the clipboard: the payload
+		// is the composed absolute URL (scheme+host+/invite/<token>), never a
+		// bare JWT — a bare JWT pasted into a browser is a search query.
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		setClipboard({ writeText });
+		await fireEvent.click(copyButton);
+		await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+		const payload = writeText.mock.calls[0][0] as string;
+		expect(payload).toContain('tok-fresh-1');
+		expect(payload).toContain('/invite/');
+		expect(payload.startsWith(window.location.origin)).toBe(true);
+		// #360 — and the token never reaches the DOM.
+		expect(container.textContent).not.toContain('tok-fresh-1');
 	});
 
 	it('after the mint the state is RE-READ and the row follows the contents: kutsu gone, saada uuesti + tühista kutse on', async () => {
@@ -525,7 +527,8 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 			return el!;
 		});
 		expect(alertEl.getAttribute('role')).toBe('alert');
-		expect(q(container, 'roster-invite-link-m4')).toBeNull();
+		// #360 — the panel's affordance is the copy button now.
+		expect(q(container, 'roster-invite-copy-m4')).toBeNull();
 		expect(q(container, 'roster-member-invite-m4')).not.toBeNull();
 	});
 });
@@ -539,17 +542,24 @@ describe('(E) saada uuesti — atomic replace via the sweep-then-mint producer',
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-3');
 		expect(createInviteMock).not.toHaveBeenCalled();
-		const link = await waitFor(() => {
-			const el = q(container, 'roster-invite-link-m3');
+		// #360 — copy-only on the resend path too: same button, same payload.
+		const copyButton = await waitFor(() => {
+			const el = q(container, 'roster-invite-copy-m3');
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		const value = linkValue(link);
-		expect(value).toContain('tok-fresh-1');
 		// #346 — `kutsu` and `saada uuesti` share handleMintInvite AND this
-		// render: the resend path must yield the SAME composed absolute URL.
-		expect(value).toContain('/invite/');
-		expect(value.startsWith(window.location.origin)).toBe(true);
+		// panel: the resend path must yield the SAME composed absolute URL,
+		// observable at the clipboard (never in the DOM).
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		setClipboard({ writeText });
+		await fireEvent.click(copyButton);
+		await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+		const payload = writeText.mock.calls[0][0] as string;
+		expect(payload).toContain('tok-fresh-1');
+		expect(payload).toContain('/invite/');
+		expect(payload.startsWith(window.location.origin)).toBe(true);
+		expect(container.textContent).not.toContain('tok-fresh-1');
 	});
 });
 
@@ -604,14 +614,15 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(q(container, 'roster-invite-link-m4')).not.toBeNull());
+		await waitFor(() => expect(q(container, 'roster-invite-copy-m4')).not.toBeNull());
 
-		// #346 — COPY under A too, so the switch has copied-state to clear: the
-		// per-row copy state belongs in the SAME reset({isSwitch}) block (and
-		// onNoCollective) as `inviteLinkByMemberId` itself.
+		// #346 — COPY under A too (via the #360 copy button), so the switch has
+		// copied-state to clear: the per-row copy state belongs in the SAME
+		// reset({isSwitch}) block (and onNoCollective) as `inviteLinkByMemberId`
+		// itself.
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		setClipboard({ writeText });
-		await fireEvent.click(q(container, 'roster-invite-link-m4')!);
+		await fireEvent.click(q(container, 'roster-invite-copy-m4')!);
 		await waitFor(() =>
 			expect(q(container, 'roster-invite-copy-status-m4')?.textContent?.trim()).toBe(
 				'[admin_invite_copied]'
@@ -619,9 +630,8 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		);
 
 		await switchToOtherChoir(container);
-		expect(
-			container.querySelectorAll('[data-testid^="roster-invite-link-"]')
-		).toHaveLength(0);
+		// #360 — the panel's affordance is the copy button; none survives the switch.
+		expect(q(container, 'roster-invite-copy-m4')).toBeNull();
 		// #346 — the status nodes mount WITH the link panel: none may survive it.
 		expect(
 			container.querySelectorAll('[data-testid^="roster-invite-copy-status-"]')
@@ -640,7 +650,7 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await openCard(container, 'm-bob');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
-		await waitFor(() => expect(q(container, 'roster-invite-link-m-bob')).not.toBeNull());
+		await waitFor(() => expect(q(container, 'roster-invite-copy-m-bob')).not.toBeNull());
 		const freshStatus = q(container, 'roster-invite-copy-status-m-bob');
 		expect(freshStatus).not.toBeNull();
 		expect(freshStatus!.textContent?.trim()).toBe('');
@@ -651,11 +661,11 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
-		await waitFor(() => expect(q(container, 'roster-invite-link-m4')).not.toBeNull());
+		await waitFor(() => expect(q(container, 'roster-invite-copy-m4')).not.toBeNull());
 
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		setClipboard(undefined); // absent API → the visible per-row failure
-		await fireEvent.click(q(container, 'roster-invite-link-m4')!);
+		await fireEvent.click(q(container, 'roster-invite-copy-m4')!);
 		await waitFor(() => expect(q(container, 'roster-invite-copy-error-m4')).not.toBeNull());
 		consoleSpy.mockRestore();
 
@@ -668,7 +678,7 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		await openCard(container, 'm-bob');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
-		await waitFor(() => expect(q(container, 'roster-invite-link-m-bob')).not.toBeNull());
+		await waitFor(() => expect(q(container, 'roster-invite-copy-m-bob')).not.toBeNull());
 		expect(q(container, 'roster-invite-copy-error-m-bob')).toBeNull();
 	});
 });

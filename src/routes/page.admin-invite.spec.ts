@@ -329,10 +329,10 @@ describe('/admin/invite — done (show-once link)', () => {
 		expect(inputArg).not.toHaveProperty('email');
 		expect(inputArg).not.toHaveProperty('memberName');
 
-		// The full invite URL, shown once.
-		const link = container.querySelector('[data-testid="invite-link"]') as HTMLInputElement;
-		expect(link).not.toBeNull();
-		expect(link.value).toBe(`${window.location.origin}/invite/${MINTED_TOKEN}`);
+		// #360 — the invite URL is NEVER rendered: no invite-link input exists.
+		// Copy-to-clipboard is the only egress (page.admin-invite-copy.spec.ts
+		// pins the button-driven copy and its payload).
+		expect(container.querySelector('[data-testid="invite-link"]')).toBeNull();
 
 		// Bearer warning is always visible. #36 — it can no longer name the
 		// invitee (no email is collected at all), so it stays generic.
@@ -340,16 +340,16 @@ describe('/admin/invite — done (show-once link)', () => {
 		expect(warning).not.toBeNull();
 		expect(warning!.textContent).toContain('Bearer secret');
 
-		// Bearer-secret hygiene: the token surfaces EXACTLY ONCE in the rendered
-		// output — a second interpolation (warning text, href, data- attribute)
-		// would widen the secret's DOM surface. Svelte sets the input value as a
-		// property, so innerHTML alone may count zero: include input values.
+		// #360 bearer-secret hygiene, tightened from "exactly once" to ZERO: the
+		// token surfaces NOWHERE in the rendered output — not in markup, not as
+		// an input value (Svelte sets values as properties, so innerHTML alone
+		// may count zero: include input values).
 		const surface =
 			container.innerHTML +
 			Array.from(container.querySelectorAll('input'))
 				.map((i) => i.value)
 				.join('\n');
-		expect(surface.split(MINTED_TOKEN).length - 1).toBe(1);
+		expect(surface.split(MINTED_TOKEN).length - 1).toBe(0);
 
 		// Bearer-secret hygiene: the token lives ONLY in component state.
 		for (let i = 0; i < localStorage.length; i++) {

@@ -371,7 +371,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		expect(inviteSection.querySelector('h2')).not.toBeNull();
 	});
 
-	it('the embedded invite surface is LIVE: submitting mints an invite via createInvite and shows the /invite/<token> link', async () => {
+	it('the embedded invite surface is LIVE: submitting mints an invite via createInvite and surfaces the copy-only result panel', async () => {
 		const { container } = await renderMergedReady();
 		const inviteSection = q<HTMLElement>(container, 'admin-invite-section')!;
 		const submit = q<HTMLButtonElement>(inviteSection, 'invite-admin-submit')!;
@@ -387,13 +387,16 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 				expect.objectContaining({ dbEntityId: expect.any(String) })
 			);
 		});
-		// The minted link surfaces — the external URL shape /invite/<token> is
-		// untouched by the merge.
+		// #360 — the mint result surfaces COPY-ONLY: the invite-copy button
+		// renders, the link input does not exist, and the token never reaches
+		// the DOM. (The external URL shape /invite/<token> stays pinned by the
+		// buildInviteUrl backward-compat test below and by the copy-suite
+		// clipboard payloads.)
 		await waitFor(() => {
-			const link = q<HTMLInputElement>(container, 'invite-link');
-			expect(link).not.toBeNull();
-			expect(link!.value).toContain('/invite/tok-123');
+			expect(q(container, 'invite-copy')).not.toBeNull();
 		});
+		expect(q(container, 'invite-link')).toBeNull();
+		expect(container.textContent).not.toContain('tok-123');
 	});
 
 	it('non-admin (no-access): NO invite functionality renders on /admin either', async () => {

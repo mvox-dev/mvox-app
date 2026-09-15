@@ -555,24 +555,11 @@
 		</div>
 	{:else if status === 'done'}
 		<div data-testid="invite-admin-result" class="flex flex-col gap-3">
-			<label class="flex flex-col gap-1 text-sm">
-				{m.admin_invite_link_label()}
-				<input
-					data-testid="invite-link"
-					readonly
-					value={inviteLink}
-					class="rounded-md border border-ink px-3 py-2 font-mono"
-					onclick={(e) => {
-						// #345 — the manual fallback (the roster-rename `.select()` precedent):
-						// select the text UNCONDITIONALLY, then run the same copyLink() the
-						// button uses. Harmless on success (the clipboard write already put
-						// the text there); on failure it is the ONLY visible recovery path.
-						// No second copy implementation, no second failure surface.
-						e.currentTarget.select();
-						void copyLink();
-					}}
-				/>
-			</label>
+			<!-- #360 (Mihkel: "lets not show them on screen at no time — copy to
+			     clipboard is enough") — the readonly input holding the composed URL
+			     is GONE; the label stays (it still names what the button below
+			     copies) and the button is the ONE remaining affordance. -->
+			<p class="text-sm">{m.admin_invite_link_label()}</p>
 			<button
 				type="button"
 				data-testid="invite-copy"

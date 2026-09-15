@@ -1589,17 +1589,15 @@
 		}
 	}
 
-	/** #346 — click-to-copy on the row's own invite-link input, following
-	 *  InviteSurface.svelte's #345 idiom exactly: select the full value first
-	 *  (the manual fallback, harmless on success, the ONLY recovery path on
-	 *  failure), then run this row's `InviteLinkCopier` — lazily created on
-	 *  first use, reused after. Both `copiedByMemberId`/`copyFailedByMemberId`
-	 *  are read TWICE — synchronously right after `copy()` is invoked (its
+	/** #360 — click-to-copy via the row's own copy BUTTON (the readonly input
+	 *  it used to run through is gone — nothing on screen to `.select()`
+	 *  anymore). Runs this row's `InviteLinkCopier` — lazily created on first
+	 *  use, reused after. Both `copiedByMemberId`/`copyFailedByMemberId` are
+	 *  read TWICE — synchronously right after `copy()` is invoked (its
 	 *  entry-reset, visible even while THIS attempt is still pending) and
 	 *  again once it settles — because the copier itself carries no runes;
 	 *  this component owns the only reactive mirror of its flags. */
-	async function copyInviteLink(memberId: string, input: HTMLInputElement): Promise<void> {
-		input.select();
+	async function copyInviteLink(memberId: string): Promise<void> {
 		let copier = inviteCopierByMemberId[memberId];
 		if (!copier) {
 			copier = createInviteLinkCopier(() => inviteLinkByMemberId[memberId] ?? '');
@@ -4263,21 +4261,20 @@
 						     standalone invite page's own copy (`admin_invite_link_label`,
 						     `admin_invite_bearer_warning`) rather than duplicating it: the
 						     bearer-secret risk is identical, this is the same mechanism.
-						     #346 — the value is now the COMPOSED absolute URL, in a readonly
-						     <input> (a <p> cannot `.select()`), following InviteSurface's
-						     landed click-to-copy idiom exactly. `break-all` is dropped — an
-						     input scrolls its own overflow, the row stays legible. -->
-						<label class="flex flex-col gap-1 text-xs">
-							{m.admin_invite_link_label()}
-							<input
-								type="text"
-								readonly
-								data-testid="roster-invite-link-{row.memberId}"
-								value={inviteLinkByMemberId[row.memberId]}
-								class="w-full rounded-md border border-ink-5 p-2 font-mono text-base text-ink-2"
-								onclick={(e) => copyInviteLink(row.memberId, e.currentTarget)}
-							/>
-						</label>
+						     #360 (Mihkel: "lets not show them on screen at no time — copy to
+						     clipboard is enough") — the readonly input holding the composed
+						     URL is GONE. A copy button, InviteSurface's affordance, is the
+						     row's only remaining trigger; the label stays (it still names
+						     what the button copies). -->
+						<p class="text-xs">{m.admin_invite_link_label()}</p>
+						<button
+							type="button"
+							data-testid="roster-invite-copy-{row.memberId}"
+							class="self-start rounded-md border border-ink-5 px-3 py-1 text-xs text-ink-2 hover:text-ink"
+							onclick={() => copyInviteLink(row.memberId)}
+						>
+							{m.admin_invite_copy()}
+						</button>
 						<!-- #346 — the confirmation's OWN persistent node, one per row, the
 						     same shape InviteSurface's `invite-copy-status` uses (#345):
 						     mounted with the link panel regardless of `copied`, visible,

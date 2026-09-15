@@ -161,12 +161,15 @@ afterEach(() => {
 	urlCollectiveDbStore.set(null);
 });
 
-describe('#346 InviteSurface rides the shared copy module after the extract', () => {
-	it('an INPUT-click copy runs through createInviteLinkCopier, and its getText yields the surface\'s own inviteLink', async () => {
+describe('#346/#360 InviteSurface rides the shared copy module', () => {
+	// #360 — the readonly input (and its click trigger) is GONE: the button is
+	// the only affordance, so the seam pin re-targets to it. The former
+	// input-click variant of this test is DELETED deliberately, not drifted.
+	it('a BUTTON-click copy runs through createInviteLinkCopier, and its getText yields the surface\'s own inviteLink', async () => {
 		const { container } = await renderDone();
 		const writeText = installWriteText();
 
-		await fireEvent.click(q(container, 'invite-link') as HTMLElement);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 		await waitFor(() => {
 			expect(writeText).toHaveBeenCalledTimes(1);
 		});
@@ -176,20 +179,8 @@ describe('#346 InviteSurface rides the shared copy module after the extract', ()
 		const getText = h.createCopierSpy.mock.calls[0][0] as () => string;
 		expect(getText()).toBe(EXPECTED_URL());
 	});
-
-	it('a BUTTON-click copy runs through the SAME module — one implementation behind both triggers', async () => {
-		const { container } = await renderDone();
-		const writeText = installWriteText();
-
-		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
-		await waitFor(() => {
-			expect(writeText).toHaveBeenCalledTimes(1);
-		});
-		expect(writeText).toHaveBeenCalledWith(EXPECTED_URL());
-		expect(h.createCopierSpy).toHaveBeenCalled();
-	});
 });
 
 // (*MVOX:Tallis* — #346 RED: the extract's wiring pin — InviteSurface's copy
-//  must run through $lib/invite/copy-invite-link; behavior itself stays
-//  fenced by the unmodified page.admin-invite-copy.spec.ts)
+//  must run through $lib/invite/copy-invite-link; #360 re-targets the pin to
+//  the button, the sole remaining trigger)

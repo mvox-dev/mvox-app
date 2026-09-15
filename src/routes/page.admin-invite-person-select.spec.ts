@@ -453,10 +453,9 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 		// DUPLICATE person + member for someone who already exists.
 		expect(h.createInviteMock).not.toHaveBeenCalled();
 
-		// The done surface is the SAME on both paths: show-once link, copy
-		// control, always-visible bearer warning.
-		const link = q<HTMLInputElement>(container, 'invite-link')!;
-		expect(link.value).toBe(`${window.location.origin}/invite/${MINTED_TOKEN}`);
+		// The done surface is the SAME on both paths: copy-only (#360 — no
+		// rendered link input), copy control, always-visible bearer warning.
+		expect(q(container, 'invite-link')).toBeNull();
 		expect(q(container, 'invite-copy')).not.toBeNull();
 		expect(q(container, 'invite-bearer-warning')?.textContent).toContain('Bearer secret');
 	});

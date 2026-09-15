@@ -76,7 +76,7 @@
 	"admin_invite_bearer_warning": "Igaüks, kes selle lingi avab, võib selle liikmesuse endale võtta — link ise on saladus. Saada see ainult kutsutavale isikule ja ainult usaldusväärse kanali kaudu.",
 	"admin_invite_show_once": "Seda linki näidatakse ainult üks kord ja seda ei salvestata kuhugi. Link aegub {date}.",
 	"admin_invite_error": "Kutse loomine ebaõnnestus. Palun proovi uuesti.",
-	"admin_invite_copy_error": "Lingi kopeerimine ebaõnnestus.",
+	"admin_invite_copy_error": "Kutselingi kopeerimine ebaõnnestus. Saada kutse selle asemel uuesti.",
 	"admin_invite_partial_failure": "Isikuolem ({personId}) on juba loodud ja kannab kehtivat kutsetokenit. Ära saada ühtegi linki — paranda või eemalda see isikuolem Entus ja proovi siis uuesti.",
 	"admin_invite_create_another": "Loo uus kutse (praegune link kaob)",
 	"admin_invite_person_label": "Keda kutsud?",

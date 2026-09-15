@@ -1,41 +1,40 @@
 // @vitest-environment happy-dom
 //
-// #345 RED — clicking the invite link copies it, and the confirmation moves
-// off the button into a persistent status region. Contract (issue #345, Gama):
+// #360 RED — the invite link is never shown on screen: copy only. Contract
+// (issue #360, Mihkel verbatim: "lets not show them on screen at no time —
+// copy to clipboard is enough"; Gama's ruling: NO reveal-on-failure):
 //
-// - Clicking the readonly invite-link INPUT calls the SAME `copyLink()` the
-//   button uses — one copy path, one set of failure semantics, never a second
-//   implementation (pinned by clipboard call count + payload).
-// - The confirmation leaves the button's label. It renders in a NEW persistent
-//   `role="status"` region (`invite-copy-status`) — the #267/#323/#325/#326
-//   idiom: mounted from the FIRST render of the done panel with empty text (a
-//   live region must exist BEFORE its first announcement), text set on settle,
-//   cleared at the start of the next attempt and by "create another", NO
-//   timer, and the node is NEVER unmounted between states (same-node identity,
-//   the #325 three-part shape). Reserved min-height so the announcement never
-//   shifts layout (RsvpControl's `rsvp-saved-status` reserved-height pattern).
-// - The BUTTON's label becomes STATIC (`admin_invite_copy`) — it never swaps
-//   to `admin_invite_copied` again. The button stays a real, focusable button
-//   (the keyboard path; the input click is mouse-only convenience on top of a
-//   complete control) and its click still drives the same flow.
-// - Clipboard ABSENT (non-secure context / writeText missing): the existing
-//   `copyFailed` alert renders (role="alert", conditional mount KEPT), AND the
-//   input's text is left SELECTED after the click — the manual fallback
-//   (roster rename's `.select()` precedent). The status region stays empty on
-//   failure — a failure is the alert's job, not the status region's.
-// - The input keeps its classes / readonly / value, and clicking it navigates
-//   nowhere (it is an <input>, not an anchor — nothing to navigate to).
+// - The readonly invite-link INPUT is GONE. The `invite-copy` button is the
+//   ONLY affordance. The label and the bearer warning stay.
+// - NO element renders the composed invite URL or the raw token — as text,
+//   as a value, or in any attribute — in ANY state: after mount, after a
+//   copy SUCCESS, after a copy FAILURE. (The no-reveal ruling as a test: a
+//   reveal-on-failure would put the secret on screen at the exact moment the
+//   user is most likely to photograph it for help.)
+// - The persistent `role="status"` region (`invite-copy-status`) keeps the
+//   #345 three-part shape: mounted from the first render of the done panel,
+//   empty at rest, set on settle, cleared at the START of the next attempt,
+//   never unmounted, reserved min-height, NO timer.
+// - Clipboard ABSENT (Gama's sharpening, verbatim law: the replacement tests
+//   "must assert OBSERVABLE behaviour — failure state visible, failure names
+//   the re-send recourse — not merely that some text renders"): the failure
+//   alert is VISIBLE (role="alert") and renders the `admin_invite_copy_error`
+//   key — whose wording (pinned per-locale in page.admin-invite-copy-i18n
+//   .spec.ts) names re-sending the invite as the recourse. There is NO
+//   selection fallback any more: nothing on screen to select is the point.
+// - DELETED with #360 (deliberate, not drift): the input-shape assertions
+//   (tagName/readonly/classes/value), the input-click copy path, and the
+//   selectionStart/selectionEnd manual-fallback assertions — all described an
+//   element this commission removes. Their replacement coverage is the
+//   observable failure behaviour above plus the no-reveal sweep
+//   (no-rendered-invite-link.sweep.spec.ts).
 //
-// CLIPBOARD MOCK (none existed in the tree before this suite — stated choice):
-// `Object.defineProperty(navigator, 'clipboard', ...)` on the happy-dom
-// navigator INSTANCE, restored per-test from the captured original descriptor.
-// NOT `vi.stubGlobal('navigator', ...)`: that replaces the WHOLE navigator
-// object, stripping every other navigator API the rendered tree may touch —
-// property-define is scoped to the one property and exactly reversible.
+// CLIPBOARD MOCK — unchanged idiom: per-property `Object.defineProperty` on
+// the happy-dom navigator INSTANCE, restored from the captured original
+// descriptor; never vi.stubGlobal('navigator').
 //
 // Renders the REAL route page (./admin/invite/+page.svelte), not the surface
-// component in isolation — plain-admin tier, same as page.admin-invite.spec.ts
-// (the person-select owner gate is orthogonal to copying and stays out).
+// component in isolation — plain-admin tier, same as page.admin-invite.spec.ts.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,7 +48,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_db_label: () => 'Collective',
 		admin_invite_submit: () => 'Create invite',
 		admin_invite_creating: () => 'Creating…',
-		admin_invite_link_label: () => 'Invite link',
+		admin_invite_link_label: () => '[admin_invite_link_label]',
 		// Key-echo mocks for the copy contract — assertions below pin WHICH key
 		// renders WHERE (static button label vs. status region vs. alert).
 		admin_invite_copy: () => '[admin_invite_copy]',
@@ -126,7 +125,7 @@ function q<T extends HTMLElement = HTMLElement>(container: HTMLElement, testid: 
 	return container.querySelector<T>(`[data-testid="${testid}"]`);
 }
 
-/** Render the real route page and drive it to the done panel (show-once link). */
+/** Render the real route page and drive it to the done panel (copy-only). */
 async function renderDone(): Promise<{ container: HTMLElement }> {
 	selectPolyphony();
 	h.resolveParentMock.mockResolvedValue('parent-1');
@@ -149,6 +148,22 @@ async function renderDone(): Promise<{ container: HTMLElement }> {
 }
 
 const EXPECTED_URL = () => `${window.location.origin}/invite/${MINTED_TOKEN}`;
+
+/** #360 — the no-reveal ruling as an assertion: neither the composed URL nor
+ *  the raw token reaches the DOM — not as text, not as a control's value
+ *  (Svelte sets values as properties, so innerHTML alone can miss them), not
+ *  in any attribute (innerHTML covers those). */
+function expectNoInviteMaterial(container: HTMLElement): void {
+	expect(container.textContent).not.toContain(MINTED_TOKEN);
+	expect(container.textContent).not.toContain('/invite/');
+	expect(container.innerHTML).not.toContain(MINTED_TOKEN);
+	for (const el of Array.from(
+		container.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input, textarea')
+	)) {
+		expect(el.value).not.toContain(MINTED_TOKEN);
+		expect(el.value).not.toContain('/invite/');
+	}
+}
 
 // ── clipboard control (see block comment above for the mechanism choice) ──────
 const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
@@ -195,31 +210,75 @@ afterEach(() => {
 	urlCollectiveDbStore.set(null);
 });
 
-// ── one copy path ─────────────────────────────────────────────────────────────
+// ── #360 — never rendered, in any state ───────────────────────────────────────
 
-describe('#345 clicking the invite link copies it — same copyLink path', () => {
-	it('clicking the readonly invite-link input hands the ABSOLUTE invite URL to the clipboard exactly once', async () => {
+describe('#360 the invite URL/token never reaches the DOM — any state', () => {
+	it('after mount (done panel): NO invite-link input, no URL/token anywhere; label + bearer warning stay', async () => {
+		const { container } = await renderDone();
+
+		// The old readonly input is GONE — the button is the only affordance.
+		expect(q(container, 'invite-link')).toBeNull();
+		expectNoInviteMaterial(container);
+
+		// Kept per the issue: the label and the bearer warning.
+		expect(container.textContent).toContain('[admin_invite_link_label]');
+		const warning = q(container, 'invite-bearer-warning');
+		expect(warning).not.toBeNull();
+		expect(warning!.textContent).toContain('Bearer secret');
+	});
+
+	it('after a copy SUCCESS: still nothing rendered — the clipboard is the only egress', async () => {
 		const { container } = await renderDone();
 		const writeText = installWriteText();
 
-		const input = q<HTMLInputElement>(container, 'invite-link') as HTMLInputElement;
-		expect(input.value).toBe(EXPECTED_URL()); // absolute URL, never a bare token
-		await fireEvent.click(input);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
+		await waitFor(() => {
+			expect(writeText).toHaveBeenCalledTimes(1);
+		});
+		await flush();
+
+		expect(q(container, 'invite-link')).toBeNull();
+		expectNoInviteMaterial(container);
+	});
+
+	it('after a copy FAILURE: no reveal-on-failure — the secret stays off screen at the exact moment it must', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { container } = await renderDone();
+		setClipboard(undefined);
+
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
+		await waitFor(() => {
+			expect(container.querySelector('[role="alert"]')).not.toBeNull();
+		});
+
+		expect(q(container, 'invite-link')).toBeNull();
+		expectNoInviteMaterial(container);
+		consoleSpy.mockRestore();
+	});
+});
+
+// ── one copy path, one affordance ─────────────────────────────────────────────
+
+describe('#360 the invite-copy button is the ONLY trigger — one implementation', () => {
+	it('button click hands the ABSOLUTE invite URL to the clipboard exactly once', async () => {
+		const { container } = await renderDone();
+		const writeText = installWriteText();
+
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 
 		await waitFor(() => {
 			expect(writeText).toHaveBeenCalledTimes(1);
 		});
-		// The payload is the SAME absolute URL the input shows — the existing
-		// copyLink() reads `inviteLink`; a second implementation reading anything
-		// else (input.value at click time, a re-built URL) has no seam here.
+		// The composed URL exists ONLY as the clipboard payload now — never a
+		// bare token, never rendered.
 		expect(writeText).toHaveBeenCalledWith(EXPECTED_URL());
 	});
 
-	it('input click and button click drive ONE implementation: two triggers → two identical clipboard payloads, nothing else', async () => {
+	it('two clicks → two identical clipboard payloads, nothing else', async () => {
 		const { container } = await renderDone();
 		const writeText = installWriteText();
 
-		await fireEvent.click(q(container, 'invite-link') as HTMLElement);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 
 		await waitFor(() => {
@@ -230,49 +289,27 @@ describe('#345 clicking the invite link copies it — same copyLink path', () =>
 	});
 });
 
-// ── the persistent status region (the #325 three-part shape) ──────────────────
+// ── the persistent status region (the #325 three-part shape, kept) ────────────
 
-describe('#345 invite-copy-status — persistent role="status" region', () => {
+describe('#360 invite-copy-status — persistent role="status" region survives the input removal', () => {
 	it('is mounted from the FIRST render of the done panel: empty text, role="status", aria-live="polite", reserved min-height', async () => {
 		const { container } = await renderDone();
 
-		// Part 1 of the three-part shape: present at rest, BEFORE any copy — a
-		// live region must exist before its first announcement to be picked up.
 		const status = q(container, 'invite-copy-status');
 		expect(status, 'expected the persistent invite-copy-status region').not.toBeNull();
 		expect(status!.getAttribute('role')).toBe('status');
 		expect(status!.getAttribute('aria-live')).toBe('polite');
 		expect(status!.textContent?.trim()).toBe('');
-		// Reserved height (RsvpControl's rsvp-saved-status pattern) so the
-		// announcement appearing/clearing never shifts the layout.
 		expect(status!.className).toMatch(/min-h-/);
 	});
 
-	it('INPUT-click success → the region announces [admin_invite_copied] on the SAME node that rendered empty', async () => {
+	it('BUTTON-click success → the region announces [admin_invite_copied] on the SAME node that rendered empty', async () => {
 		const { container } = await renderDone();
 		installWriteText();
 
 		const statusAtRest = q(container, 'invite-copy-status');
 		expect(statusAtRest).not.toBeNull();
 
-		await fireEvent.click(q(container, 'invite-link') as HTMLElement);
-
-		// Part 2: text set on settle …
-		await waitFor(() => {
-			expect(q(container, 'invite-copy-status')?.textContent?.trim()).toBe(
-				'[admin_invite_copied]'
-			);
-		});
-		// … part 3: on the SAME node — never unmount/remount (a remounted live
-		// region is a fresh node the screen reader never registered).
-		expect(q(container, 'invite-copy-status')).toBe(statusAtRest);
-	});
-
-	it('BUTTON-click success → the region announces too (whichever trigger was used)', async () => {
-		const { container } = await renderDone();
-		installWriteText();
-
-		const statusAtRest = q(container, 'invite-copy-status');
 		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 
 		await waitFor(() => {
@@ -280,15 +317,17 @@ describe('#345 invite-copy-status — persistent role="status" region', () => {
 				'[admin_invite_copied]'
 			);
 		});
+		// On the SAME node — never unmount/remount (a remounted live region is a
+		// fresh node the screen reader never registered).
 		expect(q(container, 'invite-copy-status')).toBe(statusAtRest);
 	});
 
-	it('clears at the START of the next copy attempt (in-flight second copy → empty text, same node still mounted, no timer involved)', async () => {
+	it('clears at the START of the next copy attempt (in-flight second copy → empty text, same node, no timer involved)', async () => {
 		const { container } = await renderDone();
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		setClipboard({ writeText });
 
-		await fireEvent.click(q(container, 'invite-link') as HTMLElement);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'invite-copy-status')?.textContent?.trim()).toBe(
 				'[admin_invite_copied]'
@@ -297,9 +336,9 @@ describe('#345 invite-copy-status — persistent role="status" region', () => {
 		const statusAfterFirst = q(container, 'invite-copy-status');
 
 		// Second attempt NEVER settles — the clear must come from the attempt's
-		// START (copyLink's existing entry-point resets), not from success.
+		// START (the copier's entry-point resets), not from success.
 		writeText.mockReturnValue(new Promise(() => {}));
-		await fireEvent.click(q(container, 'invite-link') as HTMLElement);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 
 		await waitFor(() => {
 			expect(q(container, 'invite-copy-status')?.textContent?.trim()).toBe('');
@@ -324,8 +363,6 @@ describe('#345 invite-copy-status — persistent role="status" region', () => {
 		expect(createAnother, 'expected the create-another button').not.toBeUndefined();
 		await fireEvent.click(createAnother as HTMLButtonElement);
 
-		// Back on the form → mint again → the fresh done panel's region is EMPTY
-		// (createAnother + the mint-site resets both clear the copied state).
 		await waitFor(() => {
 			const submit = q<HTMLButtonElement>(container, 'invite-admin-submit');
 			expect(submit && !submit.disabled).toBe(true);
@@ -340,10 +377,10 @@ describe('#345 invite-copy-status — persistent role="status" region', () => {
 	});
 });
 
-// ── the button: static label, still the keyboard path ─────────────────────────
+// ── the button: static label, the keyboard path, a real classed control ───────
 
-describe('#345 the copy button label is STATIC — the confirmation no longer lives on it', () => {
-	it('after a successful copy the button still reads [admin_invite_copy] — it never swaps to [admin_invite_copied]', async () => {
+describe('#360 the copy button stays a real, static-labelled control', () => {
+	it('after a successful copy the button still reads [admin_invite_copy] — the confirmation lives in the status region', async () => {
 		const { container } = await renderDone();
 		const writeText = installWriteText();
 
@@ -354,16 +391,13 @@ describe('#345 the copy button label is STATIC — the confirmation no longer li
 		await waitFor(() => {
 			expect(writeText).toHaveBeenCalledTimes(1);
 		});
-		await flush(); // let the settled copy state reach the DOM before asserting
+		await flush();
 
-		// The core of #345: the user may have acted on the INPUT — a label swap
-		// on an element they did not touch is not an announcement. The cue moved
-		// to the status region; the label holds still.
 		expect(button.textContent?.trim()).toBe('[admin_invite_copy]');
 		expect(button.textContent).not.toContain('[admin_invite_copied]');
 	});
 
-	it('the button remains a real, focusable button and its click still copies (the keyboard path is intact)', async () => {
+	it('the button is a native, focusable, CLASSED button (the #335 guard) and its click copies', async () => {
 		const { container } = await renderDone();
 		const writeText = installWriteText();
 
@@ -371,7 +405,8 @@ describe('#345 the copy button label is STATIC — the confirmation no longer li
 		expect(button.tagName).toBe('BUTTON');
 		expect(button.getAttribute('type')).toBe('button');
 		expect(button.disabled).toBe(false);
-		// Focusable — a keyboard user reaches it without touching the input.
+		expect(button.className.trim()).not.toBe('');
+		expect(button.className).toContain('border');
 		expect(button.tabIndex).toBeGreaterThanOrEqual(0);
 		button.focus();
 		expect(document.activeElement).toBe(button);
@@ -384,90 +419,57 @@ describe('#345 the copy button label is STATIC — the confirmation no longer li
 	});
 });
 
-// ── clipboard absent: fail visibly + leave the text selected ──────────────────
+// ── clipboard absent: OBSERVABLE failure, naming the re-send recourse ─────────
 
-describe('#345 clipboard ABSENT — the alert stays, the click selects the text', () => {
-	it('navigator.clipboard undefined: input click → [admin_invite_copy_error] alert + the full link text SELECTED; status region stays empty', async () => {
+describe('#360 clipboard ABSENT — the failure is visible and names the recourse (Gama sharpening)', () => {
+	it('navigator.clipboard undefined: button click → a VISIBLE role="alert" rendering the admin_invite_copy_error key; status region stays empty; nothing revealed', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { container } = await renderDone();
 		setClipboard(undefined);
 
-		const input = q<HTMLInputElement>(container, 'invite-link') as HTMLInputElement;
-		expect(input.value.length).toBeGreaterThan(0);
-		await fireEvent.click(input);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 
-		// The existing failure surface, KEPT as a conditional-mount alert (an
-		// alert announces on insertion — right for a failure).
+		// Observable failure state: the alert is visible and carries the key
+		// whose wording (pinned in page.admin-invite-copy-i18n.spec.ts) names
+		// re-sending the invite as the recourse — the ONLY recovery path now
+		// that there is deliberately nothing on screen to select.
 		await waitFor(() => {
 			const alert = container.querySelector('[role="alert"]');
 			expect(alert, 'expected the copy-failed alert').not.toBeNull();
 			expect(alert!.textContent).toContain('[admin_invite_copy_error]');
 		});
 
-		// The manual fallback (roster rename's .select() precedent): the click
-		// leaves the whole link selected, so Ctrl/Cmd-C is one keystroke away
-		// exactly where the automatic path fails by design.
-		expect(input.selectionStart).toBe(0);
-		expect(input.selectionEnd).toBe(input.value.length);
-
 		// A failure is the alert's story — the status region says nothing.
 		const status = q(container, 'invite-copy-status');
 		expect(status).not.toBeNull();
 		expect(status!.textContent?.trim()).toBe('');
 
+		// And no reveal: the failure state renders NO invite material.
+		expectNoInviteMaterial(container);
+
 		consoleSpy.mockRestore();
 	});
 
-	it('clipboard present but writeText missing: same visible failure + selection on input click', async () => {
+	it('clipboard present but writeText missing: same visible failure, same silence everywhere else', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { container } = await renderDone();
 		setClipboard({}); // the API object exists; writeText does not
 
-		const input = q<HTMLInputElement>(container, 'invite-link') as HTMLInputElement;
-		await fireEvent.click(input);
+		await fireEvent.click(q(container, 'invite-copy') as HTMLElement);
 
 		await waitFor(() => {
 			const alert = container.querySelector('[role="alert"]');
 			expect(alert).not.toBeNull();
 			expect(alert!.textContent).toContain('[admin_invite_copy_error]');
 		});
-		expect(input.selectionStart).toBe(0);
-		expect(input.selectionEnd).toBe(input.value.length);
 		expect(q(container, 'invite-copy-status')?.textContent?.trim()).toBe('');
+		expectNoInviteMaterial(container);
+		expect(goto).not.toHaveBeenCalled();
 
 		consoleSpy.mockRestore();
 	});
 });
 
-// ── input hygiene: still the same readonly input, nowhere to navigate ─────────
-
-describe('#345 the input stays what it was — plus hygiene', () => {
-	it('after a copy-click the input keeps its classes, readonly and value; no navigation happened', async () => {
-		const { container } = await renderDone();
-		const writeText = installWriteText();
-
-		const input = q<HTMLInputElement>(container, 'invite-link') as HTMLInputElement;
-		const valueBefore = input.value;
-
-		await fireEvent.click(input);
-		await waitFor(() => {
-			expect(writeText).toHaveBeenCalledTimes(1);
-		});
-		await flush();
-
-		// Unclassed-controls guard: the input keeps today's styling tokens (a
-		// token-presence pin, not byte-equality — GREEN may ADD e.g. a cursor
-		// affordance, but stripping the control bare is a regression).
-		for (const token of ['rounded-md', 'border', 'border-ink', 'px-3', 'py-2', 'font-mono']) {
-			expect(input.className).toContain(token);
-		}
-		expect(input.readOnly).toBe(true);
-		expect(input.value).toBe(valueBefore);
-
-		// Nothing to navigate to: it is an input, not an anchor — the click must
-		// not have grown a link wrapper or fired a route change.
-		expect(input.closest('a')).toBeNull();
-		expect(input.hasAttribute('href')).toBe(false);
-		expect(goto).not.toHaveBeenCalled();
-	});
-});
+// (*MVOX:Tallis* — #360 RED: copy-only admin surface — the input dies, the
+//  button is the sole affordance, absence asserted in every state, failure
+//  observable via the reworded admin_invite_copy_error key)
