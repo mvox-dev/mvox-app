@@ -213,12 +213,15 @@ function setAuthedWithOneCollective(personId = 'person-p') {
  * delivers them: past-1 is the MOST RECENT (top) row.
  */
 function setThreeConductedRecentEventsFixture() {
+	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
+	// seat: person-p gains `_editor` on all three events so the panel-placement
+	// flows this file pins stay reachable. The seat stays too.
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
-			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
-			agendaItem('past-2', '2026-06-03T16:00:00.000Z', []),
-			agendaItem('past-3', '2026-05-27T16:00:00.000Z', [])
+			{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] },
+			{ ...agendaItem('past-2', '2026-06-03T16:00:00.000Z', []), editors: ['person-p'] },
+			{ ...agendaItem('past-3', '2026-05-27T16:00:00.000Z', []), editors: ['person-p'] }
 		],
 		seasonId: 's1',
 		seasonConductors: ['person-p'], // seat inherited season-wide — all three rows conducted

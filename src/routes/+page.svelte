@@ -73,6 +73,7 @@
 	} from '$lib/repertoire/types';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import {
+		canMarkAttendance,
 		createProgramItem,
 		createRepertoireItem,
 		createRepertoireWriteQueue,
@@ -261,10 +262,17 @@
 	// #83 — the agenda's 'Recent' section: ALL past events of the CURRENT season.
 	// Loaded as part of loadFullAgenda (one fetch pass for upcoming + recent —
 	// F1+F2 fix: no duplicate listSeasons/listEvents calls, no N+1 conductor
-	// reads). `conductorEventIds` is computed PURELY from the already-loaded data
-	// (season.conductors + event.conductors on each AgendaItem).
+	// reads).
 	let recentItems = $state<AgendaItem[]>([]);
-	let conductorEventIds = $state<Set<string>>(new Set());
+	// #356 — THE marking gate for the agenda's recent rows: event ids the viewer
+	// passes `canMarkAttendance` on (owner-OR-editor on the EVENT). That is the
+	// same function /event/[id] calls, on the same owners/editors, so the two
+	// surfaces cannot answer differently for one event. Computed PURELY from the
+	// `_owner`/`_editor` refs the agenda read already carried (#91 review F1) —
+	// no new IO. The conductor SEAT no longer admits a row here — see
+	// conductorStore.ts's `isConductor`/`canExpand`, which stay a display/expand
+	// signal only (#365, epic #362).
+	let attendanceEventIds = $state<Set<string>>(new Set());
 
 	// #214 — event type filter chips above the agenda. Gama's ruling
 	// (2026-09-02, all three comments): the chip set is derived from the
@@ -967,7 +975,7 @@
 			failedEventIds = new Set();
 			savedEventIds = new Set();
 			recentItems = [];
-			conductorEventIds = new Set();
+			attendanceEventIds = new Set();
 			// #214 — no collective, no agenda, no filter to be stale.
 			agendaTypeFilter = 'all';
 			worksByEventId = {};
@@ -1352,14 +1360,25 @@
 						});
 					}
 					// Conductor event IDs: pure computation on already-loaded data (no IO).
+					// #365/epic #362 — `isConductor` (below) still reads this; the seat
+					// stays the display/expand signal it always was, it just no longer
+					// gates the marking affordance (#356).
 					const ids = computeConductorEventIds(personId, seasonConductors, recent);
-					conductorEventIds = ids;
 					// F3 fix — wire isConductor from the broader signal: a season conductor
 					// IS a conductor even before any past events exist this season (the
 					// per-event Set gates rows; this store is the coarser "is a conductor
 					// at all" signal for TA.3).
 					isConductor.set(
 						ids.size > 0 || seasonConductors.includes(personId) ? 'conductor' : 'not-conductor'
+					);
+					// #356 — the marking gate, called on the item itself so this surface
+					// and /event/[id] run LITERALLY the same function: owner-OR-editor
+					// on the EVENT, nothing else. `item.owners`/`item.editors` are the
+					// visible `_owner`/`_editor` refs the agenda read already carried
+					// (#91) — the same inputs `eventManageRights` is derived from — so
+					// this stays pure computation with no new IO.
+					attendanceEventIds = new Set(
+						recent.filter((item) => canMarkAttendance(item, personId)).map((item) => item.id)
 					);
 				}
 			)
@@ -1378,7 +1397,7 @@
 					agendaError = true;
 				}
 				recentItems = [];
-				conductorEventIds = new Set();
+				attendanceEventIds = new Set();
 				worksByEventId = {};
 				scheduleByEventId = {};
 				resetManagement();
@@ -2689,10 +2708,11 @@
 	// later open/close/re-open, same shape as `requestId` above.
 	function openAttendancePanel(item: AgendaItem) {
 		if (!selected) return;
-		// Finding 4 hardening: re-check conductor gate locally — the AgendaList
-		// render condition is the primary gate, but keeping the invariant here
-		// avoids relying solely on a remote Entu rights rejection.
-		if (!conductorEventIds.has(item.id)) return;
+		// Finding 4 hardening: re-check the rights gate locally (#356:
+		// canMarkAttendance ids) — the AgendaList render condition is the
+		// primary gate, but keeping the invariant here avoids relying solely on
+		// a remote Entu rights rejection.
+		if (!attendanceEventIds.has(item.id)) return;
 		attendanceItem = item;
 		attendanceLoading = true;
 		attendanceError = false;
@@ -8529,7 +8549,7 @@
 								{failedEventIds}
 								{savedEventIds}
 								recentItems={filteredRecentItems}
-								{conductorEventIds}
+								conductorEventIds={attendanceEventIds}
 								{myAttendanceByEventId}
 								{worksByEventId}
 								{worksManage}

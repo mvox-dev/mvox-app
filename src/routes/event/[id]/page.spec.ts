@@ -1688,9 +1688,11 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 //         event-detail-attendance-tally-{present,absent,late} — from the
 //         child-of-event listAttendance read (attendanceData). Domain-visible
 //         data, so a plain member may see it — NOT gated on rights;
-//       - take-attendance-btn — CONDUCTORS only (the viewer is in
-//         detail.conductorIds — the SAME resolveConductors verdict the agenda
-//         gates its button on, #83), opening the SAME AttendanceSurface
+//       - take-attendance-btn — RIGHTS-HOLDERS only (#356 superseded the #83
+//         conductor-seat rule: canMarkAttendance — manageRightsFrom(
+//         detail.ownerIds, detail.editorIds, personId) === 'editor', the same
+//         owner-or-editor rule as everything else; the seat alone no longer
+//         gates marking on either surface), opening the SAME AttendanceSurface
 //         component (attendance-panel / attendance-row-{memberId} /
 //         attendance-toggle-{memberId}-{status}) fed by the real loadRoster +
 //         listAttendance + listAllRsvpsForEvent reads.
@@ -2321,8 +2323,11 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 
 	it("offers 'Take attendance' to a CONDUCTOR and opens the real AttendanceSurface over the real roster", async () => {
+		// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not
+		// the seat: the viewer gains `_editor` on the event so this open-flow
+		// pin stays reachable. The seat stays (conductor display data).
 		const { container } = renderComposePage({
-			event: pastEventEntity(),
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason()
 		});
 		await waitFor(() => {
@@ -2373,8 +2378,10 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	// fence spec without that database stub would pass on a leaking tree
 	// (`resolveDatabaseEntityId` → null → the overlay degrades to off by itself).
 	it("the attendance panel keeps PROFILE names even with the toggle ON and named records on the wire, and never asks for a record (#269 scope fence)", async () => {
+		// #356 — event `_editor` added so the panel this fence opens stays
+		// reachable under the rights gate (see the open-flow test above).
 		const { container, fetchStub } = renderComposePage({
-			event: pastEventEntity(),
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason(),
 			realNames: true
 		});
@@ -2431,8 +2438,11 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 
 	it("a CONDUCTOR still gets the section on a past event with nothing recorded — 'Take attendance' needs somewhere to live", async () => {
+		// #356 — the section-admit branch is now the rights rule too: the viewer
+		// gains `_editor` on the event (a SEAT-ONLY conductor no longer gets the
+		// section — page.attendance-rights-gate.spec.ts pins that negative).
 		const { container } = renderComposePage({
-			event: pastEventEntity(),
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason(),
 			attendance: []
 		});
@@ -2502,8 +2512,12 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 	});
 
 	it('integration: ONE page composes header + rsvp + works (expanded, managed) + attendance (badge, tally, surface) from the existing components', async () => {
+		// #356 — the attendance surface's gate reads the EVENT's own rights
+		// (canMarkAttendance over detail.ownerIds/editorIds), so the viewer
+		// gains `_editor` on the event; the season `_editor` keeps gating the
+		// works-management controls as before.
 		const { container } = renderComposePage({
-			event: pastEventEntity(),
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: seasonEntity({
 				conductor: [{ reference: 'p-viewer' }],
 				_editor: [{ reference: 'p-viewer' }]
@@ -2777,8 +2791,10 @@ describe('/event/[id] — the attendance panel states a truncated roster (#321 r
 	const NOTICE = '[data-testid="attendance-panel-partial-notice"]';
 
 	async function openPanel(memberCount?: number) {
+		// #356 — event `_editor` added so the panel stays reachable under the
+		// rights gate (see the attendance describe above).
 		const { container } = renderComposePage({
-			event: pastEventEntity(),
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason(),
 			memberCount
 		});

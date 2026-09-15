@@ -335,6 +335,20 @@ export async function resolveManageRights(
 }
 
 /**
+ * #356 — THE one gate for marking attendance, on both surfaces (event view +
+ * agenda recent rows): owner-OR-editor on the EVENT (ownership subsumes
+ * editing), via `manageRightsFrom`. The conductor SEAT deliberately does NOT
+ * count — a seat-only conductor holds no write rights on the event; the seat
+ * stays a display/expand signal only (#365 under epic #362 owns its future).
+ */
+export function canMarkAttendance(
+	event: { owners: readonly string[]; editors: readonly string[] },
+	personId: string
+): boolean {
+	return manageRightsFrom(event.owners, event.editors, personId) === 'editor';
+}
+
+/**
  * "Add work" picker: library works NOT already present in the current
  * season's repertoire (by workId), preserving library order. Pure — no
  * fetch. Excludes a work regardless of its repertoire_item's status: a

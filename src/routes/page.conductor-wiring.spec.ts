@@ -246,7 +246,11 @@ describe('+page — recent items reach AgendaList (#83 conductor wiring)', () =>
 describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', () => {
 	it('a conductor sees the Recent section with their conducted events identified', async () => {
 		// person-p is in the season conductors, and the event inherits (empty conductors)
-		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
+		// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
+		// seat: person-p gains `_editor` on the event so the button expectation
+		// below keeps its behavioral intent (the recent-items wiring this test is
+		// about). The seat stays for the wiring's own sake.
+		const recentEvent = { ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] };
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming: [],
 			recent: [recentEvent],

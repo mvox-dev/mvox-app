@@ -84,12 +84,16 @@
 		// this component renders in the order given, it does not re-sort). Empty/
 		// omitted → no Recent section at all (no heading, no empty-state row).
 		recentItems?: AgendaItem[];
-		// #83 — events where the signed-in person holds the conductor seat
-		// (per-event, because an event-level override can differ row by row — same
-		// per-event-Set shape as pendingEventIds/failedEventIds). A recent row
-		// whose id is in the set shows the 'Take attendance' button; upcoming rows
-		// never show it regardless of membership — attendance is taken after the
-		// fact only.
+		// #83 — events the signed-in person may take attendance on (per-event,
+		// because rights can differ row by row — same per-event-Set shape as
+		// pendingEventIds/failedEventIds). A recent row whose id is in the set
+		// shows the 'Take attendance' button; upcoming rows never show it
+		// regardless of membership — attendance is taken after the fact only.
+		//
+		// #356 — the caller (+page.svelte) now fills this with canMarkAttendance
+		// ids (owner-OR-editor on the event), NOT the conductor seat; the prop
+		// name/shape is unchanged (kept for the existing unit-level callers of
+		// this component), only what the real page feeds it changed.
 		conductorEventIds?: ReadonlySet<string>;
 		ontakeattendance?: (item: AgendaItem) => void;
 		// #87 fix — the currently-open attendance panel (undefined = none open

@@ -103,6 +103,7 @@
 	import { loadWorksByEventId } from '$lib/repertoire/workRows';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import {
+		canMarkAttendance,
 		createProgramItem,
 		createRepertoireItem,
 		createRepertoireWriteQueue,
@@ -2638,11 +2639,18 @@
 		return { present, absent, late };
 	});
 
-	/** The viewer holds the conductor seat for THIS event — resolveConductors'
-	 *  verdict (#77), already resolved into `detail.conductorIds` by
-	 *  loadEventDetail. Same gate the agenda's 'Take attendance' button uses. */
-	const isConductorForEvent = $derived(
-		detail !== null && selected !== null && detail.conductorIds.includes(selected.personId)
+	/** #356 — THE marking gate: owner-OR-editor on the EVENT (canMarkAttendance,
+	 *  ownership subsumes editing). The conductor seat (`detail.conductorIds`,
+	 *  resolveConductors' verdict, #77) is display data only now — it no longer
+	 *  admits anyone here. Same gate the agenda's 'Take attendance' button
+	 *  uses (AgendaList.svelte). */
+	const canMarkAttendanceForEvent = $derived(
+		detail !== null &&
+			selected !== null &&
+			canMarkAttendance(
+				{ owners: detail.ownerIds, editors: detail.editorIds },
+				selected.personId
+			)
 	);
 
 	/** Hidden entirely on a future event (nothing to show yet — the task spec's
@@ -2661,7 +2669,7 @@
 	 *  to read (the tally is gated on `hasAttendanceRecords` too); she gets the
 	 *  heading and the Take-attendance button, nothing zeroed. */
 	const showAttendanceSection = $derived(
-		isPast && detail !== null && (hasAttendanceRecords || isConductorForEvent)
+		isPast && detail !== null && (hasAttendanceRecords || canMarkAttendanceForEvent)
 	);
 
 	/** A minimal `AgendaItem` view of `detail` — AttendanceSurface's `item` prop
@@ -2684,7 +2692,7 @@
 	);
 
 	function openAttendancePanel(): void {
-		if (!selected || !detail || !isConductorForEvent) return;
+		if (!selected || !detail || !canMarkAttendanceForEvent) return;
 		attendancePanelOpen = true;
 		attendancePanelLoading = true;
 		attendancePanelError = false;
@@ -4709,7 +4717,7 @@
 								>
 							</p>
 						{/if}
-						{#if isConductorForEvent && !attendancePanelOpen}
+						{#if canMarkAttendanceForEvent && !attendancePanelOpen}
 							<TakeAttendanceButton eventName={detail.name} onclick={openAttendancePanel} />
 						{/if}
 						{#if attendancePanelOpen && agendaItemForPanel}

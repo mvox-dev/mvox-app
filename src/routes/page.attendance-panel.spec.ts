@@ -235,11 +235,14 @@ function deferred<T>() {
 
 /** TWO conducted recent events sharing the same roster — for cross-event bleed regressions. */
 function setTwoConductedRecentEventsFixture() {
+	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
+	// seat: person-p gains `_editor` on both events so the panel flows this file
+	// pins stay reachable. The seat stays too (it is not what admits her).
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
-			agendaItem('past-1', '2026-06-10T16:00:00.000Z', []),
-			agendaItem('past-2', '2026-06-03T16:00:00.000Z', [])
+			{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] },
+			{ ...agendaItem('past-2', '2026-06-03T16:00:00.000Z', []), editors: ['person-p'] }
 		],
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // seat inherited season-wide — both events are conducted
@@ -255,9 +258,11 @@ function setTwoConductedRecentEventsFixture() {
 
 /** One conducted recent event + a two-member roster; m1 answered 'going', m2 never answered. */
 function setConductedRecentFixture() {
+	// #356 — person-p gains `_editor` on the event: the marking gate is rights,
+	// not the seat (see setTwoConductedRecentEventsFixture above).
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
-		recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
+		recent: [{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] }],
 		seasonId: 's1',
 		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // person-p inherits the seat (event list empty)
 	}));

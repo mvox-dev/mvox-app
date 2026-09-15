@@ -118,7 +118,10 @@ function isoAt(offsetDays: number): string {
 }
 
 /** A PAST event the viewer conducts — the attendance section renders and the
- *  Take-attendance button is hers. */
+ *  Take-attendance button is hers.
+ *  #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
+ *  seat: person-p gains `_editor` on the event so the saved-cue flows this
+ *  file pins stay reachable. The seat stays too (conductor display data). */
 function pastConductedDetail(): EventDetail {
 	return {
 		id: 'ev1',
@@ -132,7 +135,7 @@ function pastConductedDetail(): EventDetail {
 		conductorNames: ['Vera Viewer'],
 		capacity: null,
 		ownerIds: [],
-		editorIds: [],
+		editorIds: ['person-p'],
 		seasonId: 'season1',
 		seasonOwnerIds: [],
 		seasonEditorIds: [],

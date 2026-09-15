@@ -205,9 +205,12 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 }
 
 function setOneConductedRecentEventFixture() {
+	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
+	// seat: person-p gains `_editor` on the event so the focus flows this file
+	// pins stay reachable. The seat stays too.
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
-		recent: [agendaItem('past-1', '2026-06-10T16:00:00.000Z', [])],
+		recent: [{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] }],
 		seasonId: 's1',
 		seasonConductors: ['person-p'],
 		seasonOwners: [],
