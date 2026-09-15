@@ -45,6 +45,11 @@ export interface FakeAdapter extends ByteStoreAdapter {
 
 export function createFakeAdapter(): FakeAdapter {
 	const map = new Map<string, ByteStoreRow>();
+	// The metadata half, kept in its own map for the same reason the real
+	// adapter keeps it in its own object store (#352 review): `listMeta` must be
+	// answerable WITHOUT touching the payloads, and a double that cheated by
+	// reading `map` could not hold an implementation to that.
+	const meta = new Map<string, { size: number; openedAt: number }>();
 	const putLog: FakeAdapter['putLog'] = [];
 	const touchLog: FakeAdapter['touchLog'] = [];
 	return {
@@ -56,6 +61,7 @@ export function createFakeAdapter(): FakeAdapter {
 		async put(db, personId, fileId, record) {
 			putLog.push({ db, personId, fileId, record });
 			map.set(key(db, personId, fileId), { db, personId, fileId, record });
+			meta.set(key(db, personId, fileId), { size: record.size, openedAt: record.openedAt });
 		},
 		async touch(db, personId, fileId, openedAt) {
 			const k = key(db, personId, fileId);
@@ -64,9 +70,13 @@ export function createFakeAdapter(): FakeAdapter {
 			if (!held) return;
 			touchLog.push({ db, personId, fileId, openedAt });
 			map.set(k, { ...held, record: { ...held.record, openedAt } });
+			// The stamp moves in BOTH halves — the real adapter carries `size`
+			// forward through a touch, so the metadata never drifts from the row.
+			meta.set(k, { size: held.record.size, openedAt });
 		},
 		async delete(db, personId, fileId) {
 			map.delete(key(db, personId, fileId));
+			meta.delete(key(db, personId, fileId));
 		},
 		async list() {
 			return Array.from(map.values());
@@ -79,6 +89,18 @@ export function createFakeAdapter(): FakeAdapter {
 			return Array.from(map.keys()).map((k) => {
 				const [db, personId, fileId] = triple(k);
 				return { db, personId, fileId };
+			});
+		},
+		async listMeta() {
+			// Answered from the SEPARATE metadata map, exactly as the real
+			// adapter answers it from its own object store with the payload
+			// store outside the transaction (#352 review). Reading `map` here
+			// would make this double unable to distinguish an implementation
+			// that pulls every cached PDF into the heap from one that does not —
+			// which is the whole property the #352 fix rests on.
+			return Array.from(meta.entries()).map(([k, m]) => {
+				const [db, personId, fileId] = triple(k);
+				return { db, personId, fileId, size: m.size, openedAt: m.openedAt };
 			});
 		},
 		rows() {
@@ -155,6 +177,24 @@ export function createFakeByteStore(): FakeByteStore {
 			// Delegates to heldFor — one implementation, not a divergent double
 			// (#351: the real interface and this fake gained the same member).
 			return this.heldFor(db, personId);
+		},
+
+		async usageForPartition(db, personId) {
+			const mine = Array.from(map.entries())
+				.map(([k, record]) => ({ triple: triple(k), record }))
+				.filter(({ triple: [d, p] }) => d === db && p === personId);
+			return { count: mine.length, size: mine.reduce((sum, { record }) => sum + record.size, 0) };
+		},
+
+		async usageForOthers(db, personId) {
+			const others = Array.from(map.entries())
+				.map(([k, record]) => ({ triple: triple(k), record }))
+				.filter(({ triple: [d, p] }) => !(d === db && p === personId));
+			return { count: others.length, size: others.reduce((sum, { record }) => sum + record.size, 0) };
+		},
+
+		async clearAllPartitions() {
+			map.clear();
 		}
 	};
 }

@@ -39,6 +39,14 @@
 	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../auth/[provider]/build-oauth-init-url';
+	// #352 — "Remove downloaded parts from this device" (profile storage
+	// section). The byte-store seam only, never a direct IndexedDB touch (the
+	// library-page precedent). The fileId→filename join is the ONLINE library
+	// metadata read (listAllEditions) — OFFLINE naming (reading names without
+	// a fetch) is #353's scope, not this slice's.
+	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { formatFileSize } from '$lib/files/fileSize';
+	import { listAllEditions } from '$lib/library/libraryData';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
@@ -127,6 +135,39 @@
 	// top of the page to reach the buttons that just appeared.
 	let linkAnotherEl = $state<HTMLButtonElement | null>(null);
 	let linkPickerEl = $state<HTMLDivElement | null>(null);
+
+	// #352 — the storage section's read state. `null` means "not answered
+	// yet" (no section rendered), never a fabricated {count: 0, size: 0} —
+	// the same "absent, not wrong" discipline `heldFileIds` uses on the
+	// library page. `storagePartNames` is the ONLINE fileId→filename join
+	// (offline naming is #353's scope); an entry only exists for a fileId the
+	// metadata read actually found, so a failed read leaves it empty and the
+	// part list simply renders nothing (count + size still stand).
+	let storageMine = $state<{ count: number; size: number } | null>(null);
+	let storageOthers = $state<{ count: number; size: number } | null>(null);
+	let storageHeldFileIds = $state<string[]>([]);
+	let storagePartNames = $state<Record<string, string>>({});
+	// Two INDEPENDENT armed slots (house pattern — roster's armRemove /
+	// season-manage's delete confirm): arming one never disturbs the other.
+	let storageArmedMine = $state(false);
+	let storageArmedAll = $state(false);
+	let storageRemoveMinePending = $state(false);
+	let storageRemoveAllPending = $state(false);
+	// #352 (review F1) — a REMOVAL that failed must not look like one that
+	// worked. The roster-names precedent below (rosterError, set in the write
+	// path's catch and rendered as role="alert") applied to the destructive
+	// half: console.error alone left the member on a shared device with the
+	// original numbers still on screen and no word that nothing was deleted,
+	// which is exactly the false answer this section exists to prevent.
+	let storageError = $state<string | null>(null);
+	// #352 (review F3) — the fileId→filename join reads a CAPPED list. When the
+	// server says there is more than came back, an unnamed held part is "we
+	// could not look it up", not "this part has no name" — and silence there is
+	// the same class of false answer as the one above.
+	let storageNamesTruncated = $state(false);
+	const storageNamesPartial = $derived(
+		storageNamesTruncated && storageHeldFileIds.some((fileId) => !storagePartNames[fileId])
+	);
 
 	/** The step name used when the identity read — not a mint — is what failed. */
 	const IDENTITY_READ_STEP = 'identity-read';
@@ -308,6 +349,19 @@
 		rosterBusy = false;
 		rosterStatus = '';
 		rosterError = null;
+		// #352 — a stale collective's storage numbers/armed state must never
+		// bleed into the next collective (#257/#260 class, same as roster-names
+		// above): the numbers are scoped to the OLD (db, personId).
+		storageMine = null;
+		storageOthers = null;
+		storageHeldFileIds = [];
+		storagePartNames = {};
+		storageArmedMine = false;
+		storageArmedAll = false;
+		storageRemoveMinePending = false;
+		storageRemoveAllPending = false;
+		storageError = null;
+		storageNamesTruncated = false;
 		autosaveCtrl.destroy();
 	}
 
@@ -373,6 +427,203 @@
 		}
 	}
 
+	/**
+	 * #352 — the storage section's read: usage numbers for the signed-in
+	 * partition and for everything else, plus the held fileIds to name. Fired
+	 * independently of the profile-fields load (loadRosterNames precedent), so
+	 * a hiccup here never takes down the name/email editing surface.
+	 *
+	 * NEVER calls store.get(): `usageForPartition`/`usageForOthers`/
+	 * `heldFileIds` are the presence-only reads (#351's law) — a profile visit
+	 * must not stamp opens and corrupt LRU eviction order.
+	 *
+	 * The three run CONCURRENTLY, and all three read metadata only — keys,
+	 * sizes and recency stamps, no stored ArrayBuffer deserialised (#352
+	 * review). That is what makes firing them together safe: when the two
+	 * usage reads still went through `adapter.list()`, this Promise.all put two
+	 * full-cache reads in flight at once — up to ~400MB of peak heap against a
+	 * 200MB cap — on every profile load and again after every remove-confirm,
+	 * which is an OOM on a phone with a full offline score library.
+	 *
+	 * THE NAME JOIN IS OPTIONAL AND SCOPED (#352 review F3). It is the one
+	 * NETWORK read this section makes, and it is catalogue-sized
+	 * (listAllEditions: every edition in the collective, with file metadata),
+	 * so it only fires when it can actually change what the page shows:
+	 *   - `joinNames: false` — the caller already holds a valid name map and
+	 *     only needs the numbers again. A removal only SHRINKS the held-id set,
+	 *     and the markup iterates `storageHeldFileIds`, so entries for
+	 *     just-removed ids are never reachable: re-fetching the catalogue after
+	 *     a remove-confirm would buy nothing.
+	 *   - nothing held — there is no id to name. A member who has downloaded
+	 *     nothing (the common case on a settings page) pays no network read.
+	 * The durable fix is #353's: carry the filename in the stored record at
+	 * download time, so naming needs no network at all and works offline. Until
+	 * then this is the honest-but-narrow version of the same answer.
+	 */
+	async function loadStorageSection(
+		cfg: { db: string; token: string },
+		identity: { db: string; personId: string },
+		g: number,
+		opts: { joinNames?: boolean } = {}
+	): Promise<void> {
+		try {
+			// getAppByteStore() itself can throw synchronously (e.g. no
+			// IndexedDB in the environment) — it must land in THIS try, not
+			// escape it, the same defensive shape refreshPresence uses on the
+			// library page: this call is fired void, and an escaped throw here
+			// becomes an unhandled rejection instead of a caught, logged one.
+			const store = getAppByteStore();
+			const [mine, others, heldIds] = await Promise.all([
+				store.usageForPartition(identity.db, identity.personId),
+				store.usageForOthers(identity.db, identity.personId),
+				store.heldFileIds(identity.db, identity.personId)
+			]);
+			if (g !== routeLoad.generation) return;
+			storageMine = mine;
+			storageOthers = others;
+			storageHeldFileIds = heldIds;
+		} catch (err) {
+			if (g !== routeLoad.generation) return;
+			// #267 loadRosterNames precedent, verbatim reasoning: console.warn, not
+			// .error — this read is fired independently on EVERY profile load, and
+			// every OTHER profile-page spec asserts console.error silence without
+			// mocking this new dependency away. A degrade to "the section stays
+			// absent" is non-fatal, same class as the roster-names default.
+			console.warn('profile: storage usage read failed', err);
+			return;
+		}
+
+		// The fileId→filename join is the ONLINE library metadata read
+		// (listAllEditions) — OFFLINE naming (reading names without a fetch) is
+		// #353's scope, not this slice's. A FAILED read degrades to count + size
+		// with no names; the destructive controls below do not depend on it.
+		// Skipped entirely when the caller already holds the map, or when there
+		// is nothing held to name — see the header note.
+		if (opts.joinNames === false) return;
+		if (storageHeldFileIds.length === 0) {
+			storagePartNames = {};
+			storageNamesTruncated = false;
+			return;
+		}
+		try {
+			const editions = await listAllEditions(cfg);
+			if (g !== routeLoad.generation) return;
+			const names: Record<string, string> = {};
+			for (const edition of editions.items) {
+				for (const file of edition.files) {
+					names[file.id] = file.filename;
+				}
+			}
+			storagePartNames = names;
+			// #321's signal, consumed rather than dropped: past the read's cap,
+			// a held part we could not name is an unanswered lookup, and the
+			// page says so instead of rendering an indistinguishable blank.
+			storageNamesTruncated = editions.truncated;
+		} catch (err) {
+			if (g !== routeLoad.generation) return;
+			// console.warn, same reasoning as above — never .error here either.
+			console.warn('profile: storage part-name metadata read failed', err);
+			storagePartNames = {};
+			// A read that never landed is a FAILURE, not a truncation: the
+			// partial-names notice would be claiming to know something about a
+			// list that was never received.
+			storageNamesTruncated = false;
+		}
+	}
+
+	/** Arm a slot's two-step confirm, moving focus onto the confirm button
+	 *  that replaces the trigger (WCAG 2.4.3 — the roster armRemove /
+	 *  season-manage delete-confirm shape verbatim: one control, one meaning,
+	 *  never window.confirm). */
+	async function armStorageRemoveMine(): Promise<void> {
+		storageArmedMine = true;
+		await tick();
+		document
+			.querySelector<HTMLElement>('[data-testid="profile-storage-remove-mine-confirm"]')
+			?.focus();
+	}
+
+	/** Disarm, handing focus back to the trigger that comes back. */
+	async function disarmStorageRemoveMine(): Promise<void> {
+		storageArmedMine = false;
+		await tick();
+		document.querySelector<HTMLElement>('[data-testid="profile-storage-remove-mine"]')?.focus();
+	}
+
+	async function armStorageRemoveAll(): Promise<void> {
+		storageArmedAll = true;
+		await tick();
+		document
+			.querySelector<HTMLElement>('[data-testid="profile-storage-remove-all-confirm"]')
+			?.focus();
+	}
+
+	async function disarmStorageRemoveAll(): Promise<void> {
+		storageArmedAll = false;
+		await tick();
+		document.querySelector<HTMLElement>('[data-testid="profile-storage-remove-all"]')?.focus();
+	}
+
+	/** Confirm: clears EXACTLY the signed-in partition (never the device-wide
+	 *  member), then re-reads the section so the page tells the new truth.
+	 *
+	 *  #352 (review F1) — a FAILED removal is a user-visible, NAMED state
+	 *  (storageError, rendered as role="alert"), not a console line. Nothing
+	 *  was deleted, the numbers above still stand, and the member reading them
+	 *  on a shared device must be told that rather than left to read an
+	 *  unchanged screen as a completed wipe. `storageError` is cleared at the
+	 *  START of each attempt (the rosterError idiom), never at the end. */
+	async function confirmStorageRemoveMine(): Promise<void> {
+		const ctx = activeContext();
+		if (!ctx) return;
+		storageError = null;
+		storageRemoveMinePending = true;
+		try {
+			await getAppByteStore().clearPartition(ctx.cfg.db, ctx.personId);
+			// joinNames: false — the removal only shrank the held-id set, so the
+			// name map in hand is still correct for everything that survived.
+			await loadStorageSection(
+				ctx.cfg,
+				{ db: ctx.cfg.db, personId: ctx.personId },
+				routeLoad.generation,
+				{ joinNames: false }
+			);
+		} catch (err) {
+			console.error('profile: remove-downloaded-parts (this account) failed', err);
+			storageError = m.profile_storage_remove_error();
+		} finally {
+			storageRemoveMinePending = false;
+		}
+		await disarmStorageRemoveMine();
+	}
+
+	/** Confirm: the device-wide wipe (never a page-side sweep of the
+	 *  partitions this page happens to know about — that would miss the
+	 *  identities not signed in, which is exactly what this action exists to
+	 *  clear). */
+	async function confirmStorageRemoveAll(): Promise<void> {
+		const ctx = activeContext();
+		if (!ctx) return;
+		storageError = null;
+		storageRemoveAllPending = true;
+		try {
+			await getAppByteStore().clearAllPartitions();
+			// joinNames: false — same reasoning as the mine-confirm above.
+			await loadStorageSection(
+				ctx.cfg,
+				{ db: ctx.cfg.db, personId: ctx.personId },
+				routeLoad.generation,
+				{ joinNames: false }
+			);
+		} catch (err) {
+			console.error('profile: remove-everything-downloaded failed', err);
+			storageError = m.profile_storage_remove_error();
+		} finally {
+			storageRemoveAllPending = false;
+		}
+		await disarmStorageRemoveAll();
+	}
+
 	// #232 — the shared route-load machine (Status union, generation guard,
 	// loadForSelected sequencing) extracted into $lib/loading/routeLoad; this
 	// page's fetch BODY (below, `load`) and its page-specific `resetState` stay
@@ -426,6 +677,11 @@
 
 			draft = nextDraft;
 			status = 'ready';
+
+			// #352 — fired independently, same reasoning as loadRosterNames: the
+			// storage section is its own read and must not take down (or wait on)
+			// the name/email editing surface above.
+			void loadStorageSection(cfg, { db: cfg.db, personId }, g);
 
 			// #193 — linked-identities read, own failure handling: a hiccup here must
 			// not take down the name/email editing surface above (already 'ready').
@@ -1204,6 +1460,148 @@
 					</p>
 				{/if}
 			</section>
+
+			<!-- #352 — "Remove downloaded parts from this device". #343 ruled that
+			     logout/token expiry do NOT clear the byte store; this is the honest
+			     control for a shared device. Scoped to the signed-in (db, personId)
+			     identity, so there is nothing truthful to show before that read
+			     lands (storageMine/storageOthers stay null until then — "absent, not
+			     wrong", the heldFileIds precedent). NAMING IS ONLINE-PATH ONLY in
+			     this slice (the join comes from listAllEditions, a network read);
+			     OFFLINE naming is #353's scope. -->
+			{#if storageMine !== null && storageOthers !== null}
+				<section
+					data-testid="profile-storage"
+					class="flex flex-col gap-4 border-t border-ink/10 pt-4"
+				>
+					<h2 class="text-sm font-semibold">{m.profile_storage_title()}</h2>
+
+					<!-- #352 (review F1) — a removal that failed says so. Covers BOTH
+					     actions: whichever one rejected, nothing was deleted and the
+					     numbers below are still the pre-attempt truth. -->
+					{#if storageError}
+						<p data-testid="profile-storage-error" role="alert" class="text-xs text-red-700">
+							{storageError}
+						</p>
+					{/if}
+
+					<div data-testid="profile-storage-mine" class="flex flex-col gap-2">
+						<p class="text-sm text-ink-2">
+							{m.profile_storage_mine_summary({
+								count: storageMine.count,
+								size: formatFileSize(storageMine.size)
+							})}
+						</p>
+						{#if storageHeldFileIds.some((fileId) => storagePartNames[fileId])}
+							<ul class="flex flex-col gap-1">
+								{#each storageHeldFileIds as fileId (fileId)}
+									{#if storagePartNames[fileId]}
+										<li
+											data-testid={`profile-storage-part-${fileId}`}
+											class="text-sm text-ink-2"
+										>
+											{storagePartNames[fileId]}
+										</li>
+									{/if}
+								{/each}
+							</ul>
+						{/if}
+						<!-- #352 (review F3) — the name join reads a capped list; past
+						     the cap an unnamed held part is an unanswered lookup, not a
+						     nameless part. Rendered only when a held id actually went
+						     unnamed, so a complete-enough read stays silent. -->
+						{#if storageNamesPartial}
+							<p data-testid="profile-storage-names-partial" role="status" class="text-xs text-ink-3">
+								{m.profile_storage_names_partial()}
+							</p>
+						{/if}
+
+						{#if !storageArmedMine}
+							<button
+								type="button"
+								data-testid="profile-storage-remove-mine"
+								class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+								onclick={armStorageRemoveMine}
+							>
+								{m.profile_storage_remove_mine()}
+							</button>
+						{:else}
+							<p data-testid="profile-storage-remove-mine-note" class="text-xs text-ink-3">
+								{m.profile_storage_remove_mine_note()}
+							</p>
+							<div class="flex gap-2">
+								<button
+									type="button"
+									data-testid="profile-storage-remove-mine-confirm"
+									disabled={storageRemoveMinePending}
+									aria-busy={storageRemoveMinePending}
+									class="rounded-md border border-red-700 px-4 py-2 text-sm text-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+									onclick={confirmStorageRemoveMine}
+								>
+									{m.profile_storage_remove_mine_confirm()}
+								</button>
+								<button
+									type="button"
+									data-testid="profile-storage-remove-mine-cancel"
+									disabled={storageRemoveMinePending}
+									class="rounded-md border border-ink/40 px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+									onclick={disarmStorageRemoveMine}
+								>
+									{m.profile_storage_cancel()}
+								</button>
+							</div>
+						{/if}
+					</div>
+
+					<!-- PO ruling (#352): count and size only — NEVER titled. Devtools
+					     already exposes everything to anyone determined; a titled list
+					     in our own UI would lower that bar for the merely curious. -->
+					<div data-testid="profile-storage-others" class="flex flex-col gap-2">
+						<p class="text-sm text-ink-2">
+							{m.profile_storage_others_summary({
+								count: storageOthers.count,
+								size: formatFileSize(storageOthers.size)
+							})}
+						</p>
+
+						{#if !storageArmedAll}
+							<button
+								type="button"
+								data-testid="profile-storage-remove-all"
+								class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+								onclick={armStorageRemoveAll}
+							>
+								{m.profile_storage_remove_all()}
+							</button>
+						{:else}
+							<p data-testid="profile-storage-remove-all-note" class="text-xs text-ink-3">
+								{m.profile_storage_remove_all_note()}
+							</p>
+							<div class="flex gap-2">
+								<button
+									type="button"
+									data-testid="profile-storage-remove-all-confirm"
+									disabled={storageRemoveAllPending}
+									aria-busy={storageRemoveAllPending}
+									class="rounded-md border border-red-700 px-4 py-2 text-sm text-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+									onclick={confirmStorageRemoveAll}
+								>
+									{m.profile_storage_remove_all_confirm()}
+								</button>
+								<button
+									type="button"
+									data-testid="profile-storage-remove-all-cancel"
+									disabled={storageRemoveAllPending}
+									class="rounded-md border border-ink/40 px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
+									onclick={disarmStorageRemoveAll}
+								>
+									{m.profile_storage_cancel()}
+								</button>
+							</div>
+						{/if}
+					</div>
+				</section>
+			{/if}
 		{/if}
 	</div>
 </main>

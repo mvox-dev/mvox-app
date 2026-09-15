@@ -197,6 +197,108 @@ describe('idbAdapter — against a real IndexedDB implementation', () => {
 		// method exists to avoid.
 		expect(Object.keys(keys[0]).sort()).toEqual(['db', 'fileId', 'personId']);
 	});
+
+	// #352 review — the metadata seam every size sum now rides. listKeys was
+	// not enough: the usage answers need `size`, and reaching it through the
+	// payload store put the whole 200MB cap into the JS heap on every profile
+	// load (twice, concurrently) and again on every put.
+	describe('listMeta — sizes and stamps without the bytes', () => {
+		it('answers the triple plus size and openedAt for every held row, and nothing delete removed', async () => {
+			const adapter = createIdbAdapter(new IDBFactory());
+			await adapter.put('polyphony', 'person-a', 'file-1', record(1, 10));
+			await adapter.put('polyphony', 'person-b', 'file-2', record(2, 20));
+			await adapter.put('crede', 'person-a', 'file-3', record(3, 30));
+
+			const metas = await adapter.listMeta();
+			expect([...metas].sort((a, b) => a.fileId.localeCompare(b.fileId))).toEqual([
+				{
+					db: 'polyphony',
+					personId: 'person-a',
+					fileId: 'file-1',
+					size: 10,
+					openedAt: 1_757_000_000_001
+				},
+				{
+					db: 'polyphony',
+					personId: 'person-b',
+					fileId: 'file-2',
+					size: 20,
+					openedAt: 1_757_000_000_002
+				},
+				{
+					db: 'crede',
+					personId: 'person-a',
+					fileId: 'file-3',
+					size: 30,
+					openedAt: 1_757_000_000_003
+				}
+			]);
+
+			await adapter.delete('polyphony', 'person-b', 'file-2');
+			expect((await adapter.listMeta()).map((m) => m.fileId).sort()).toEqual(['file-1', 'file-3']);
+		});
+
+		it('reads NO payload — the returned objects carry the triple and two numbers, no bytes, no record', async () => {
+			const adapter = createIdbAdapter(new IDBFactory());
+			await adapter.put('polyphony', 'person-a', 'file-1', record(5, 4096));
+
+			const metas = await adapter.listMeta();
+			// Full-shape pin, same law as listKeys above: a `record`/`bytes`
+			// member here would mean the payload store was read.
+			expect(Object.keys(metas[0]).sort()).toEqual([
+				'db',
+				'fileId',
+				'openedAt',
+				'personId',
+				'size'
+			]);
+		});
+
+		it('a touch moves the stamp and CARRIES THE SIZE FORWARD — metadata never drifts from the row it describes', async () => {
+			const adapter = createIdbAdapter(new IDBFactory());
+			await adapter.put('polyphony', 'person-a', 'file-1', record(5, 4096));
+
+			await adapter.touch('polyphony', 'person-a', 'file-1', 1_757_999_999_999);
+
+			// `size` is a duplicate of bytes.byteLength kept beside the stamp; a
+			// touch that dropped it would silently zero this row out of every
+			// usage sum and let the cap overrun.
+			expect(await adapter.listMeta()).toEqual([
+				{
+					db: 'polyphony',
+					personId: 'person-a',
+					fileId: 'file-1',
+					size: 4096,
+					openedAt: 1_757_999_999_999
+				}
+			]);
+			// The full reads still agree with it.
+			const rows = await adapter.list();
+			expect(rows[0].record.size).toBe(4096);
+			expect(rows[0].record.openedAt).toBe(1_757_999_999_999);
+			expect((await adapter.get('polyphony', 'person-a', 'file-1'))!.size).toBe(4096);
+		});
+
+		it('on an empty store it is an empty list, not a throw', async () => {
+			const adapter = createIdbAdapter(new IDBFactory());
+			expect(await adapter.listMeta()).toEqual([]);
+		});
+
+		it('survives a re-open, like every other read — a SECOND adapter over the same factory sees the metadata', async () => {
+			const factory = new IDBFactory();
+			await createIdbAdapter(factory).put('polyphony', 'person-a', 'file-1', record(5, 64));
+
+			expect(await createIdbAdapter(factory).listMeta()).toEqual([
+				{
+					db: 'polyphony',
+					personId: 'person-a',
+					fileId: 'file-1',
+					size: 64,
+					openedAt: 1_757_000_000_005
+				}
+			]);
+		});
+	});
 });
 
 // (*MVOX:Tallis*)

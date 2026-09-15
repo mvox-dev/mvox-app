@@ -303,19 +303,12 @@ export async function uploadEditionFiles(
 	return { uploaded, failed };
 }
 
-/** Human filesize: bytes plain below 1 KB, 1024-based units with one decimal
- *  from KB up. Locale-independent (numeric/tabular text — #207 rule 7). */
-export function formatFileSize(bytes: number): string {
-	if (bytes < 1024) return `${bytes} B`;
-	const units = ['KB', 'MB', 'GB', 'TB'];
-	let value = bytes / 1024;
-	let unitIndex = 0;
-	while (value >= 1024 && unitIndex < units.length - 1) {
-		value /= 1024;
-		unitIndex++;
-	}
-	return `${value.toFixed(1)} ${units[unitIndex]}`;
-}
+/** Human filesize — SHARED since #352 (review): the profile page's storage
+ *  section renders the same bytes and must render them the same way, without
+ *  importing this upload module. The implementation moved verbatim to
+ *  $lib/files/fileSize; it stays exported from here so every existing importer
+ *  (and every spec that mocks this module) is unchanged. */
+export { formatFileSize } from '$lib/files/fileSize';
 
 // (*MVOX:Tallis* — #275 RED contract stub)
 // (*MVOX:Palestrina* — #275 GREEN implementation)

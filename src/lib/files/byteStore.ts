@@ -37,6 +37,14 @@
 // persistence layer keeps it apart from the bytes is the adapter's business
 // (idbAdapter keeps a separate recency row under the same key).
 //
+// NO ARITHMETIC READS BYTES (#352 review). Every number this module answers —
+// the global usage sum, the cap/eviction pass, the profile page's
+// partition-vs-others split — comes from `adapter.listMeta()`: keys, sizes and
+// recency stamps, no payload deserialised. `adapter.list()` (full rows, bytes
+// and all) is called from NOWHERE in here. A store at the cap holds 200MB, and
+// on a phone that is not a heap allocation any render, or any download, may
+// make just to add up a column of byte lengths.
+//
 // STALENESS IS STRUCTURAL, not a validator field: Entu mints a NEW
 // file-property `_id` when a file is replaced (probe ledger
 // scripts/migrations/seed-results/probe-343-file-replace-identity-live-
@@ -86,6 +94,15 @@ export interface ByteStoreAdapter {
 	 */
 	touch(db: string, personId: string, fileId: string, openedAt: number): Promise<void>;
 	delete(db: string, personId: string, fileId: string): Promise<void>;
+	/**
+	 * FULL ROWS, BYTES AND ALL — the one method here that deserialises
+	 * payloads. NOTHING in the policy core calls it any more (#352 review):
+	 * every question the core asks is about keys, sizes or recency stamps,
+	 * and `listKeys` / `listMeta` answer those without touching a payload. It
+	 * stays on the seam as the adapter's complete read, driven by the adapter
+	 * spec; a caller that genuinely wants every byte on the device has a name
+	 * for what it is asking for.
+	 */
 	list(): Promise<ByteStoreRow[]>;
 	/**
 	 * KEYS ONLY — every (db, personId, fileId) currently held, reading NOT ONE
@@ -93,11 +110,26 @@ export interface ByteStoreAdapter {
 	 * ArrayBuffer it returns, so against a full store it pulls the whole cap
 	 * (BYTE_STORE_CAP_BYTES — 200MB) into the JS heap; on a phone, that is not
 	 * a price a page load may pay to learn a set of ids. Anything whose answer
-	 * IS a set of keys — presence, partition clearing — takes this. Only the
-	 * cap arithmetic still needs `list()` (it sums `record.size`), and that
-	 * runs on a put, never on a render.
+	 * IS a set of keys — presence, partition clearing — takes this.
 	 */
 	listKeys(): Promise<ByteStoreKey[]>;
+	/**
+	 * KEYS PLUS SIZE AND RECENCY, STILL NO PAYLOAD (#352 review). `listKeys`
+	 * answers "which rows"; this answers "which rows, how big, last opened
+	 * when" — and that is the entire input to every arithmetic question the
+	 * core asks: the global `usage()` sum, the cap/eviction pass, and the
+	 * profile page's partition-vs-others split.
+	 *
+	 * Before this existed those all went through `list()`, dragging up to the
+	 * whole 200MB cap into the JS heap to read numbers that are themselves
+	 * measured in bytes — and the profile page did it TWICE CONCURRENTLY, on
+	 * every load and again after every remove, which is ~400MB of peak heap on
+	 * a phone to sum two complementary columns. An adapter must answer this
+	 * from metadata it keeps APART from the bytes (idbAdapter parks `size`
+	 * alongside the recency stamp, in the store already written and deleted in
+	 * lockstep with the payload).
+	 */
+	listMeta(): Promise<ByteStoreMeta[]>;
 }
 
 /** The key triple alone — what `listKeys` answers. */
@@ -105,6 +137,14 @@ export interface ByteStoreKey {
 	db: string;
 	personId: string;
 	fileId: string;
+}
+
+/** The key triple plus the two numbers — what `listMeta` answers. NO bytes. */
+export interface ByteStoreMeta extends ByteStoreKey {
+	/** Byte length of the row's payload — what the usage sums add up. */
+	size: number;
+	/** Last-opened timestamp (ms) — what eviction orders by. */
+	openedAt: number;
 }
 
 /** The store interface the app consumes. */
@@ -135,6 +175,39 @@ export interface ByteStore {
 	 * appearing on the NEXT call to this method.
 	 */
 	heldFileIds(db: string, personId: string): Promise<string[]>;
+	/**
+	 * #352 — the profile storage section's scoped answer: {count, size} for
+	 * EXACTLY the asked (db, personId) partition.
+	 *
+	 * READS NO BYTES, same law as `heldFileIds` (#352 review): it needs
+	 * `size`, which `listKeys()` does not carry, so it goes through
+	 * `adapter.listMeta()` — keys + size + stamp, no payload deserialised.
+	 * NOT `adapter.list()`: the profile page fires this and `usageForOthers`
+	 * CONCURRENTLY on every load and again after every remove, so a
+	 * payload-reading implementation would put two full 200MB cap reads in
+	 * flight at once on a phone, to sum two complementary columns of numbers.
+	 *
+	 * It is also NOT AN OPEN: no `adapter.touch`, no recency movement — a
+	 * profile visit must not stamp rows as freshly opened and corrupt LRU
+	 * eviction order.
+	 */
+	usageForPartition(db: string, personId: string): Promise<{ count: number; size: number }>;
+	/**
+	 * #352 — the complement of `usageForPartition`: every OTHER (db, personId)
+	 * partition's rows, aggregated. "Other" includes the SAME human's
+	 * partition under a different `db` (partitions are the pair, not the
+	 * person) — the profile section's "everything else on this device"
+	 * bucket is a statement about the DEVICE, not the human. Same
+	 * `adapter.listMeta()` read, same no-bytes/no-open law.
+	 */
+	usageForOthers(db: string, personId: string): Promise<{ count: number; size: number }>;
+	/**
+	 * #352 — the device-wide wipe behind "Remove everything downloaded on
+	 * this device": empties EVERY partition, including ones belonging to
+	 * identities not signed in right now. Like `clearPartition`, this works
+	 * from KEYS alone — deleting bytes never needs to read them.
+	 */
+	clearAllPartitions(): Promise<void>;
 }
 
 export const BYTE_STORE_CAP_BYTES = 200 * 1024 * 1024;
@@ -152,27 +225,36 @@ export function createByteStore(
 ): ByteStore {
 	const capBytes = opts?.capBytes ?? BYTE_STORE_CAP_BYTES;
 
-	async function evictUntilFits(neededBytes: number, exceptKey: { db: string; personId: string; fileId: string }) {
-		let rows = await adapter.list();
-		let usage = rows.reduce((sum, row) => sum + row.record.size, 0);
+	// The cap pass needs sizes and recency stamps for every held row and
+	// NOTHING else — so it reads `listMeta`, not `list` (#352 review). A put is
+	// already carrying one score's bytes in memory; deserialising every OTHER
+	// cached score on top of it, purely to add up their `size` fields, is how a
+	// download OOMs a phone that is merely near the cap.
+	async function evictUntilFits(neededBytes: number, exceptKey: ByteStoreKey) {
+		const isExcepted = (meta: ByteStoreMeta) =>
+			meta.db === exceptKey.db && meta.personId === exceptKey.personId && meta.fileId === exceptKey.fileId;
+
+		let metas = await adapter.listMeta();
+		let usage = metas.reduce((sum, meta) => sum + meta.size, 0);
 		// The row being overwritten (if any) is about to be replaced — its
 		// current size must not count against the incoming write.
-		const existing = rows.find(
-			(row) => row.db === exceptKey.db && row.personId === exceptKey.personId && row.fileId === exceptKey.fileId
-		);
-		if (existing) usage -= existing.record.size;
+		const existing = metas.find(isExcepted);
+		if (existing) usage -= existing.size;
 
 		while (usage + neededBytes > capBytes) {
-			const candidates = rows.filter(
-				(row) =>
-					!(row.db === exceptKey.db && row.personId === exceptKey.personId && row.fileId === exceptKey.fileId)
-			);
+			const candidates = metas.filter((meta) => !isExcepted(meta));
 			if (candidates.length === 0) break;
-			const oldest = candidates.reduce((a, b) => (a.record.openedAt <= b.record.openedAt ? a : b));
+			const oldest = candidates.reduce((a, b) => (a.openedAt <= b.openedAt ? a : b));
 			await adapter.delete(oldest.db, oldest.personId, oldest.fileId);
-			usage -= oldest.record.size;
-			rows = rows.filter((row) => row !== oldest);
+			usage -= oldest.size;
+			metas = metas.filter((meta) => meta !== oldest);
 		}
+	}
+
+	/** Sum {count, size} over the metadata rows a predicate keeps. */
+	function tally(metas: ByteStoreMeta[], keep: (meta: ByteStoreMeta) => boolean) {
+		const kept = metas.filter(keep);
+		return { count: kept.length, size: kept.reduce((sum, meta) => sum + meta.size, 0) };
 	}
 
 	return {
@@ -222,8 +304,11 @@ export function createByteStore(
 		},
 
 		async usage() {
-			const rows = await adapter.list();
-			return rows.reduce((sum, row) => sum + row.record.size, 0);
+			// Metadata, not rows: the answer is a sum of `size` fields, and
+			// reading the bytes to add up their lengths is the #352 review's
+			// finding in its plainest form.
+			const metas = await adapter.listMeta();
+			return metas.reduce((sum, meta) => sum + meta.size, 0);
 		},
 
 		async heldFileIds(db, personId) {
@@ -233,6 +318,24 @@ export function createByteStore(
 			// (#351 review finding 2). See the `listKeys` doc above.
 			const keys = await adapter.listKeys();
 			return keys.filter((key) => key.db === db && key.personId === personId).map((key) => key.fileId);
+		},
+
+		async usageForPartition(db, personId) {
+			// METADATA, never rows — see the interface doc: the profile page
+			// fires this alongside usageForOthers on every load.
+			return tally(await adapter.listMeta(), (meta) => meta.db === db && meta.personId === personId);
+		},
+
+		async usageForOthers(db, personId) {
+			return tally(await adapter.listMeta(), (meta) => !(meta.db === db && meta.personId === personId));
+		},
+
+		async clearAllPartitions() {
+			// Keys, not rows — same reasoning as clearPartition above.
+			const keys = await adapter.listKeys();
+			for (const key of keys) {
+				await adapter.delete(key.db, key.personId, key.fileId);
+			}
 		}
 	};
 }
