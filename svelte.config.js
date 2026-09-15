@@ -18,6 +18,21 @@ const config = {
 		paths: {
 			relative: false,
 		},
+		serviceWorker: {
+			// #368 — CF Pages config files live in static/ because that is the only
+			// way they reach build output under adapter-static, but CF CONSUMES them
+			// as deploy config and never serves them as assets. Left in
+			// `$service-worker`'s `files` they join the worker's install-time
+			// `cache.addAll`, which rejects atomically on any non-OK response — so a
+			// path CF does not serve would take the whole install down, and no client
+			// would ever get a new worker again: precisely the wedge #368 exists to
+			// fix. Exclude them from the worker manifest, not from static/.
+			// (`.DS_Store` repeats SvelteKit's own default, which this option
+			// replaces wholesale. `file` arrives relative to static/, no leading
+			// slash — see kit's build_service_worker.js.)
+			files: (file) =>
+				!/^_(headers|redirects|routes\.json)$/.test(file) && !/\.DS_Store/.test(file),
+		},
 	},
 };
 

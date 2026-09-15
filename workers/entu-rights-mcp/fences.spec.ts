@@ -49,8 +49,16 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 
 describe('the static app is untouched', () => {
 	it('svelte.config.js is unchanged', () => {
+		// Repinned for #368 (kit.serviceWorker.files — excluding the CF Pages
+		// config files from the service worker's install-time precache, which
+		// otherwise takes the whole install down when CF declines to serve a path
+		// it only consumes as deploy config). Same reasoning as the vite.config.ts
+		// repin below and the #322 ER-pin precedent: this pin's job is catching
+		// ACCIDENTAL drift from workers/entu-rights-mcp/, and refreshing it on a
+		// sanctioned change outside that scope is the pin working as designed. The
+		// change itself is pinned on its own terms in src/lib/sw/swUpdate.spec.ts.
 		expect(sha256('svelte.config.js')).toBe(
-			'3a07fbeab3aeb4cfc9fad08947d284401a5d92844bb5498138107409e6da1488'
+			'f9224c961ef6d940b1ab5524e2aa78871019fa7a60fa9594f0fe25cf9699eece'
 		);
 	});
 

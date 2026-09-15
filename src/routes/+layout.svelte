@@ -1,5 +1,6 @@
 <script module lang="ts">
 	import { install401Recovery } from '$lib/auth/install-401-recovery';
+	import { startUpdateForcing } from '$lib/sw/swUpdate';
 
 	// #107 — register the browser-side 401 recovery (session teardown + sign-in
 	// redirect) into the shared `entuFetch` seam. Module scope, not `onMount`:
@@ -8,6 +9,12 @@
 	// the effects OUT of $lib/entu/request is what lets the node migration
 	// scripts keep importing that module (see install-401-recovery.ts).
 	install401Recovery();
+
+	// #368 — start the service worker update-forcing dance (interval +
+	// visibility re-checks, guarded single reload on controllerchange). Module
+	// scope for the same reason as install401Recovery above: runs exactly once,
+	// as early as possible, regardless of which route the client boots into.
+	startUpdateForcing();
 </script>
 
 <script lang="ts">
