@@ -50,6 +50,7 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
+vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';

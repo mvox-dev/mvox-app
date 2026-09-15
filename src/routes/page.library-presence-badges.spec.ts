@@ -144,6 +144,7 @@ vi.mock('$lib/library/editionFiles', () => ({
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
+vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
 
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';

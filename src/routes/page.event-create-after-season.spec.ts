@@ -664,6 +664,7 @@ describe('#167 review round 2, F1 — the upgraded works read is not clobbered b
 		editionName: '',
 		ordinal: null,
 		fileId: '',
+		fileName: '',
 		externalLinks: [],
 		canBorrow: false,
 		notes: ''

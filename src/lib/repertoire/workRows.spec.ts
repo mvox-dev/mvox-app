@@ -71,6 +71,7 @@ describe('buildWorkRows — program items', () => {
 				editionName: '40-part original',
 				ordinal: 1,
 				fileId: 'file-score',
+				fileName: 'spem-vocal-score.pdf',
 				externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
 				canBorrow: true,
 				notes: 'soloist: N. N.'
@@ -86,6 +87,7 @@ describe('buildWorkRows — program items', () => {
 				editionName: 'Bärenreiter BA 5103',
 				ordinal: 2,
 				fileId: '',
+				fileName: '',
 				externalLinks: [],
 				canBorrow: false,
 				notes: ''
@@ -119,6 +121,7 @@ describe('buildWorkRows — program items', () => {
 				editionName: '',
 				ordinal: 1,
 				fileId: '',
+				fileName: '',
 				externalLinks: [],
 				canBorrow: false,
 				notes: ''
@@ -153,6 +156,7 @@ describe('buildWorkRows — repertoire items', () => {
 				editionName: '40-part original',
 				ordinal: null,
 				fileId: 'file-score',
+				fileName: 'spem-vocal-score.pdf',
 				externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
 				canBorrow: true,
 				notes: ''
@@ -168,6 +172,7 @@ describe('buildWorkRows — repertoire items', () => {
 				editionName: '',
 				ordinal: null,
 				fileId: '',
+				fileName: '',
 				externalLinks: [],
 				canBorrow: false,
 				notes: ''
@@ -348,6 +353,7 @@ describe('loadWorksByEventId', () => {
 					editionName: '40-part original',
 					ordinal: null,
 					fileId: 'file-score',
+					fileName: 'spem.pdf',
 					externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
 					canBorrow: true,
 					notes: '',
@@ -379,6 +385,7 @@ describe('loadWorksByEventId', () => {
 					editionName: '40-part original',
 					ordinal: null,
 					fileId: 'file-score',
+					fileName: 'spem.pdf',
 					externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
 					canBorrow: true,
 					notes: '',

@@ -477,6 +477,7 @@ describe('AgendaList — Works line per row (#90 TR.2)', () => {
 				editionName: '40-part original',
 				ordinal: null,
 				fileId: '',
+				fileName: '',
 				externalLinks: [],
 				canBorrow: false,
 				notes: ''

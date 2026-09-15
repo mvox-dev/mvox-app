@@ -689,5 +689,12 @@
 	"links_reorder_saved": "Порядок посилань збережено.",
 	"links_create_failed": "Не вдалося створити посилання. Спробуйте ще раз.",
 	"links_update_failed": "Не вдалося оновити посилання. Спробуйте ще раз.",
-	"links_remove_failed": "Не вдалося видалити посилання. Спробуйте ще раз."
+	"links_remove_failed": "Не вдалося видалити посилання. Спробуйте ще раз.",
+	"downloads_title": "Завантажені партії",
+	"downloads_loading": "Завантаження…",
+	"downloads_load_error": "Не вдалося отримати завантажені партії.",
+	"downloads_empty": "На цьому пристрої ще нічого не завантажено.",
+	"downloads_unnamed_part": "Партія без назви",
+	"downloads_open": "Відкрити",
+	"agenda_downloads_link": "Відкрити завантажені партії"
 }

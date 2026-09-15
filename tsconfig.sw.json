@@ -1,0 +1,19 @@
+{
+	"$comment": "#353 — src/service-worker.ts is EXCLUDED from svelte-check's generated .svelte-kit/tsconfig.json by name (spike 1f, live-verified). This config type-checks it on its own: `webworker` lib for ServiceWorkerGlobalScope/caches/clients, and `@sveltejs/kit`'s ambient types for the `$service-worker` module. See package.json's `check:sw`, chained into `check`.",
+	"compilerOptions": {
+		"target": "esnext",
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"lib": ["esnext", "webworker"],
+		"types": ["@sveltejs/kit"],
+		"strict": true,
+		"skipLibCheck": true,
+		"noEmit": true,
+		"isolatedModules": true,
+		"paths": {
+			"$lib": ["./src/lib"],
+			"$lib/*": ["./src/lib/*"]
+		}
+	},
+	"include": ["src/service-worker.ts"]
+}

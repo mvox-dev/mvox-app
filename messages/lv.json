@@ -688,5 +688,12 @@
 	"links_reorder_saved": "Saišu secība saglabāta.",
 	"links_create_failed": "Neizdevās izveidot saiti. Mēģiniet vēlreiz.",
 	"links_update_failed": "Neizdevās atjaunināt saiti. Mēģiniet vēlreiz.",
-	"links_remove_failed": "Neizdevās noņemt saiti. Mēģiniet vēlreiz."
+	"links_remove_failed": "Neizdevās noņemt saiti. Mēģiniet vēlreiz.",
+	"downloads_title": "Lejupielādētās partijas",
+	"downloads_loading": "Ielāde…",
+	"downloads_load_error": "Neizdevās ielādēt lejupielādētās partijas.",
+	"downloads_empty": "Šajā ierīcē vēl nekas nav lejupielādēts.",
+	"downloads_unnamed_part": "Nenosaukta partija",
+	"downloads_open": "Atvērt",
+	"agenda_downloads_link": "Atvērt lejupielādētās partijas"
 }

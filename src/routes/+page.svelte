@@ -61,6 +61,8 @@
 	import { listScheduleItemsByEventId, type ScheduleItem } from '$lib/schedule/scheduleData';
 	import { openFileBytes } from '$lib/files/openFileBytes';
 	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { getAppLabelStore } from '$lib/files/appLabelStore';
+	import { recordPartLabel } from '$lib/files/labelStore';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import type {
 		ManageRightsState,
@@ -1562,12 +1564,27 @@
 	// window — a window.open() issued after the signing await is swallowed by
 	// popup blockers. If the blocker took it anyway (tab === null) we navigate
 	// the current tab rather than silently dropping the download.
+	/** #353 — the label write needs work/composer/edition/filename, which
+	 *  `handlePdfClick` only receives a bare fileId for (RepertoireElement's
+	 *  onpdfclick(fileId) contract is pinned elsewhere and stays a single
+	 *  string). `worksByEventId` already carries all four on the row that
+	 *  fileId came from, so the click handler looks it up there rather than
+	 *  widening the callback. */
+	function findWorkRowByFileId(fileId: string): WorkRow | undefined {
+		for (const rows of Object.values(worksByEventId)) {
+			const row = rows.find((r) => r.fileId === fileId);
+			if (row) return row;
+		}
+		return undefined;
+	}
+
 	function handlePdfClick(fileId: string) {
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const identity = get(selectedCollectiveIdentityStore);
 		if (!identity) return;
 		pdfError = false;
+		const row = findWorkRowByFileId(fileId);
 		const tab = window.open('', '_blank');
 		if (tab) tab.opener = null;
 		openFileBytes(cfg, identity, fileId, getAppByteStore())
@@ -1579,6 +1596,18 @@
 				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
+				// #353 — the label written at download time, from the row's own
+				// fields (`reason` gates the write to the two paths that landed
+				// bytes — recordPartLabel's own doc).
+				if (row) {
+					recordPartLabel(
+						getAppLabelStore(),
+						identity,
+						fileId,
+						{ work: row.workName, composer: row.composer, edition: row.editionName, filename: row.fileName },
+						reason
+					);
+				}
 				// #343 fix-round, ruling condition 1 — the delivery path is not
 				// rendered here (no UI in this slice), but it must not be dropped:
 				// #334's availability child is the reader that needs it.
@@ -8581,6 +8610,13 @@
 				>
 					{m.agenda_collectives_error_retry()}
 				</button>
+				<!-- #353 — this branch is what a cold, offline start actually
+				     renders (collective discovery is a network call; with none,
+				     `collectiveState` settles here, never 'ready') — so it is the
+				     one surface with a door to the parts already on this device. -->
+				<a href="/downloads" class="text-sm text-ink underline" data-testid="agenda-downloads-link">
+					{m.agenda_downloads_link()}
+				</a>
 			{:else}
 				<p class="text-sm text-ink">{m.agenda_collectives_loading()}</p>
 			{/if}

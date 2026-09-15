@@ -392,12 +392,16 @@ describe('#338 — collectives status error', () => {
 			expect(q(container, 'collectives-retry')).not.toBeNull();
 		});
 		const retry = q(container, 'collectives-retry')!;
-		// A retry, not a navigation — the link target is gone.
+		// A retry, not a navigation to /collectives — that link target is gone.
 		expect(retry.tagName).toBe('BUTTON');
 		expect(retry.getAttribute('class'), 'the retry button carries a class (#335)').toBeTruthy();
 		expect(retry.textContent).toContain('[agenda_collectives_error_retry]');
 		expect(container.querySelector('a[href="/collectives"]')).toBeNull();
-		expect(container.querySelectorAll('a')).toHaveLength(0);
+		// #353 — this IS the branch a cold offline start renders (collective
+		// discovery is a network call), so it carries the one door to parts
+		// already on this device — the sole anchor here now.
+		expect(container.querySelectorAll('a')).toHaveLength(1);
+		expect(container.querySelector('a[href="/downloads"]')).not.toBeNull();
 
 		// Clicking re-invokes the store's OWN discovery entry point.
 		expect(hydrateCollectivesMock).not.toHaveBeenCalled();

@@ -221,9 +221,23 @@ function requireIdentity(identity: CollectiveIdentity | null): CollectiveIdentit
 
 export function createByteStore(
 	adapter: ByteStoreAdapter,
-	opts?: { capBytes?: number }
+	opts?: {
+		capBytes?: number;
+		/**
+		 * #353 — fired for EVERY key this store stops holding, however that
+		 * happens: an explicit `evict`, a `clearPartition`/`clearAllPartitions`
+		 * sweep, or a silent LRU eviction inside a `put`'s cap pass. This store
+		 * stays policy-only about WHAT it holds (bytes, never names) — the
+		 * label index (labelStore.ts) is a sibling store keyed the same way,
+		 * and its eager-removal lifecycle rides this hook rather than this
+		 * module learning anything about labels. Never awaited here: a label
+		 * write failing must not slow or gate a byte-store operation.
+		 */
+		onRowRemoved?: (key: ByteStoreKey) => void;
+	}
 ): ByteStore {
 	const capBytes = opts?.capBytes ?? BYTE_STORE_CAP_BYTES;
+	const onRowRemoved = opts?.onRowRemoved;
 
 	// The cap pass needs sizes and recency stamps for every held row and
 	// NOTHING else — so it reads `listMeta`, not `list` (#352 review). A put is
@@ -246,6 +260,7 @@ export function createByteStore(
 			if (candidates.length === 0) break;
 			const oldest = candidates.reduce((a, b) => (a.openedAt <= b.openedAt ? a : b));
 			await adapter.delete(oldest.db, oldest.personId, oldest.fileId);
+			onRowRemoved?.({ db: oldest.db, personId: oldest.personId, fileId: oldest.fileId });
 			usage -= oldest.size;
 			metas = metas.filter((meta) => meta !== oldest);
 		}
@@ -290,6 +305,7 @@ export function createByteStore(
 
 		async evict(identity, fileId) {
 			await adapter.delete(identity.db, identity.personId, fileId);
+			onRowRemoved?.({ db: identity.db, personId: identity.personId, fileId });
 		},
 
 		async clearPartition(db, personId) {
@@ -299,6 +315,7 @@ export function createByteStore(
 			for (const key of keys) {
 				if (key.db === db && key.personId === personId) {
 					await adapter.delete(key.db, key.personId, key.fileId);
+					onRowRemoved?.(key);
 				}
 			}
 		},
@@ -335,6 +352,7 @@ export function createByteStore(
 			const keys = await adapter.listKeys();
 			for (const key of keys) {
 				await adapter.delete(key.db, key.personId, key.fileId);
+				onRowRemoved?.(key);
 			}
 		}
 	};

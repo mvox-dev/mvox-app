@@ -44,6 +44,8 @@
 	import { uploadEditionFiles, formatFileSize } from '$lib/library/editionFiles';
 	import { openFileBytes } from '$lib/files/openFileBytes';
 	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { getAppLabelStore } from '$lib/files/appLabelStore';
+	import { recordPartLabel } from '$lib/files/labelStore';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
 	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
@@ -917,7 +919,7 @@
 	// and suppressing closes the blank tab and releases the minted object URL,
 	// same as the agenda: an about:blank that never resolves, and a pinned
 	// copy of the score nothing can reach, are both worse than nothing.
-	function handleOpenEditionFile(fileId: string): void {
+	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const identity = get(selectedCollectiveIdentityStore);
@@ -938,6 +940,18 @@
 				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
+				// #353 — the label written at download time: work/composer/edition
+				// are in hand exactly here (the work/edition this file belongs to,
+				// resolved by the surrounding {#each} blocks), and `reason` is
+				// what gates the write to the two paths that actually landed bytes
+				// (recordPartLabel's own doc).
+				recordPartLabel(
+					getAppLabelStore(),
+					identity,
+					fileId,
+					{ work: work.name, composer: work.composer, edition: edition.name, filename },
+					reason
+				);
 				// #351 — a delivery that ATTEMPTED a store write mutates the WHOLE
 				// store, not just this key: the put runs the cap's evictUntilFits
 				// first and may have deleted other rows on this same screen to
@@ -1899,7 +1913,7 @@
 																			type="button"
 																			data-testid="library-edition-file-open-{file.id}"
 																			class="shrink-0 text-xs underline"
-																			onclick={() => handleOpenEditionFile(file.id)}
+																			onclick={() => handleOpenEditionFile(file.id, work, edition, file.filename)}
 																		>
 																			{m.library_edition_file_open()}
 																		</button>

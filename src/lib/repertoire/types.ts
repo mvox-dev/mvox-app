@@ -66,6 +66,12 @@ export type WorkRow = {
 	 *  (entu-www src/api/files/index.md), so it can never be resolved at agenda
 	 *  load and stashed in an href. '' = the edition carries no file. */
 	fileId: string;
+	/** #353 — the picked file's OWN name, the same file `fileId` names. '' iff
+	 *  `fileId` is '' (no file) — the two fields never describe different
+	 *  files. This is what distinguishes SOPRAN from ALT: "tonight's PART",
+	 *  not just "tonight's piece" — load-bearing for the label a downloaded
+	 *  part is named by when opened with no network (see labelStore.ts). */
+	fileName: string;
 	externalLinks: string[];
 	/** Copies exist for this edition — show the Borrow link. */
 	canBorrow: boolean;

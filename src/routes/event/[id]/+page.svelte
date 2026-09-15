@@ -126,6 +126,8 @@
 	import type { ManageRightsState, PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
 	import { openFileBytes } from '$lib/files/openFileBytes';
 	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { getAppLabelStore } from '$lib/files/appLabelStore';
+	import { recordPartLabel } from '$lib/files/labelStore';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RepertoireElement, {
@@ -1898,6 +1900,10 @@
 		const identity = get(selectedCollectiveIdentityStore);
 		if (!identity) return;
 		pdfError = false;
+		// #353 — the label write needs work/composer/edition/filename; this
+		// single event's own `workRows` already carries all four on the row
+		// this fileId came from.
+		const row = workRows.find((r) => r.fileId === fileId);
 		const tab = window.open('', '_blank');
 		if (tab) tab.opener = null;
 		openFileBytes(cfg, identity, fileId, getAppByteStore())
@@ -1909,6 +1915,17 @@
 				}
 				if (tab) tab.location.href = url;
 				else window.location.href = url;
+				// #353 — the label written at download time (`reason` gates the
+				// write to the two paths that landed bytes).
+				if (row) {
+					recordPartLabel(
+						getAppLabelStore(),
+						identity,
+						fileId,
+						{ work: row.workName, composer: row.composer, edition: row.editionName, filename: row.fileName },
+						reason
+					);
+				}
 				// #351 — a delivery that ATTEMPTED a store write mutates the WHOLE
 				// store, not just this key: the put runs the cap's evictUntilFits
 				// first and may have deleted other rows on this same screen to

@@ -241,6 +241,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 // store cap) openFileBytes hands the signed URL over on purpose rather than
 // let the cache gate an open — see its DELIVERY REPORTING block.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
+vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
 
 import Page from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';

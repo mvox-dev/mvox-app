@@ -103,6 +103,7 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 // stands in for IndexedDB. The fake implements the full pinned ByteStore
 // contract and records every put() for the partition/no-url assertions.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
+vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';

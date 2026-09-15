@@ -1,5 +1,13 @@
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import { listWorks, listAllEditions, listAllCopies, type Work, type Edition, type Copy } from '$lib/library/libraryData';
+import {
+	listWorks,
+	listAllEditions,
+	listAllCopies,
+	type Work,
+	type Edition,
+	type Copy,
+	type EditionFile
+} from '$lib/library/libraryData';
 import {
 	resolveEventWorksBatch,
 	type EventWorks,
@@ -38,17 +46,18 @@ export function collectSources(works: Work[], editions: Edition[], copies: Copy[
 }
 
 /**
- * The edition's downloadable score, as a file PROPERTY id (never a url — see
- * types.ts's `fileId` note on the 60-second signing window). Prefers an
- * actual PDF; falls back to the first file so an edition whose score was
- * uploaded with a vague filetype still offers the link.
+ * The edition's downloadable score. Prefers an actual PDF; falls back to the
+ * first file so an edition whose score was uploaded with a vague filetype
+ * still offers the link. Returns the whole file (#353: the row keeps its
+ * NAME alongside its id — never one without the other) rather than just the
+ * PROPERTY id (see types.ts's `fileId` note on the 60-second signing window).
  */
-function pickFileId(edition: Edition | undefined): string {
-	if (!edition || edition.files.length === 0) return '';
+function pickFile(edition: Edition | undefined): EditionFile | undefined {
+	if (!edition || edition.files.length === 0) return undefined;
 	const pdf = edition.files.find(
 		(f) => f.filetype.toLowerCase().includes('pdf') || f.filename.toLowerCase().endsWith('.pdf')
 	);
-	return (pdf ?? edition.files[0]).id;
+	return pdf ?? edition.files[0];
 }
 
 /**
@@ -109,6 +118,7 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 		return eventWorks.items.map((item) => {
 			const edition = editionsById.get(item.editionId);
 			const work = edition?.workId ? worksById.get(edition.workId) : undefined;
+			const file = pickFile(edition);
 			return {
 				id: item.id,
 				// #91 — provenance travels WITH the row: `id` here names a
@@ -123,7 +133,8 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 				status: null,
 				editionName: edition?.name ?? '',
 				ordinal: item.ordinal,
-				fileId: pickFileId(edition),
+				fileId: file?.id ?? '',
+				fileName: file?.filename ?? '',
 				externalLinks: safeExternalLinks(edition?.externalLinks ?? []),
 				canBorrow: (copyCountByEditionId.get(item.editionId) ?? 0) > 0,
 				notes: item.notes
@@ -134,6 +145,7 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 	return eventWorks.items.map((item) => {
 		const work = worksById.get(item.workId);
 		const edition = item.editionId === '' ? undefined : editionsById.get(item.editionId);
+		const file = pickFile(edition);
 		return {
 			id: item.id,
 			// #91 — `id` here names a repertoire_item (a CHILD OF SEASON, shared by
@@ -146,7 +158,8 @@ export function buildWorkRows(eventWorks: EventWorks, sources: WorkRowSources): 
 			status: narrowStatus(item.status),
 			editionName: edition?.name ?? '',
 			ordinal: null,
-			fileId: pickFileId(edition),
+			fileId: file?.id ?? '',
+			fileName: file?.filename ?? '',
 			externalLinks: safeExternalLinks(edition?.externalLinks ?? []),
 			canBorrow: (copyCountByEditionId.get(item.editionId) ?? 0) > 0,
 			notes: ''

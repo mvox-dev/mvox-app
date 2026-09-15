@@ -122,13 +122,25 @@ describe('package.json: at most a generator scripts entry', () => {
 	// REVIEW fix round (findings comment 5642106513) widens this fence: the
 	// gate finding (#3) needs a second script, `check:workers`, chained into
 	// `check` — still zero runtime/dev dependencies (asserted above).
-	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate', () => {
+	// #353 widens this fence again: `check:sw` type-checks src/service-worker.ts
+	// on its own tsconfig (svelte-check's generated tsconfig excludes that file
+	// by name — see tsconfig.sw.json's own comment), chained into `check` the
+	// same way `check:workers` is. Unrelated to this slice's own mandate, but
+	// this fence's job is catching ACCIDENTAL script drift FROM
+	// workers/entu-rights-mcp/ — a sanctioned, commissioned addition elsewhere
+	// is the pin working as designed (#322 ER-pin precedent, same as the
+	// vite.config.ts repin above for #347).
+	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate', () => {
 		const keys = Object.keys(pkg().scripts);
 		for (const k of BASELINE_SCRIPTS) {
 			expect(keys, `baseline script "${k}" was removed or renamed`).toContain(k);
 		}
 		const added = keys.filter((k) => !BASELINE_SCRIPTS.includes(k));
-		expect(added.sort(), `added scripts: ${added.join(', ')}`).toEqual(['check:workers', 'mcp:bundle']);
+		expect(added.sort(), `added scripts: ${added.join(', ')}`).toEqual([
+			'check:sw',
+			'check:workers',
+			'mcp:bundle'
+		]);
 	});
 });
 

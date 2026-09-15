@@ -687,5 +687,12 @@
 	"links_reorder_saved": "Linkide järjekord salvestatud.",
 	"links_create_failed": "Linki ei õnnestunud luua. Proovi uuesti.",
 	"links_update_failed": "Linki ei õnnestunud muuta. Proovi uuesti.",
-	"links_remove_failed": "Linki ei õnnestunud eemaldada. Proovi uuesti."
+	"links_remove_failed": "Linki ei õnnestunud eemaldada. Proovi uuesti.",
+	"downloads_title": "Allalaaditud partiid",
+	"downloads_loading": "Laadimine…",
+	"downloads_load_error": "Allalaaditud partiide laadimine ebaõnnestus.",
+	"downloads_empty": "Selles seadmes pole veel midagi alla laaditud.",
+	"downloads_unnamed_part": "Nimetu partii",
+	"downloads_open": "Ava",
+	"agenda_downloads_link": "Ava allalaaditud partiid"
 }

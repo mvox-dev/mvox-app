@@ -145,6 +145,12 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 // IndexedDB (unavailable under happy-dom) so this pre-existing signing-wiring
 // pin keeps exercising the real click -> signFileUrl path unchanged.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => createFakeByteStore() }));
+// #353 — the click's success path also records a part label; the real
+// label store is IndexedDB-backed too (unavailable under happy-dom), so it
+// gets the same treatment as the byte store above.
+vi.mock('$lib/files/appLabelStore', () => ({
+	getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} })
+}));
 // Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue(null),

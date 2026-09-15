@@ -28,6 +28,7 @@ function row(overrides: Partial<WorkRow> = {}): WorkRow {
 		editionName: '',
 		ordinal: null,
 		fileId: '',
+		fileName: '',
 		externalLinks: [],
 		canBorrow: false,
 		notes: '',

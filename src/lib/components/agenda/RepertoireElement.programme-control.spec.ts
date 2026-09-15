@@ -73,6 +73,7 @@ function row(overrides: Partial<WorkRow> = {}): WorkRow {
 		editionName: '40-part original',
 		ordinal: 0,
 		fileId: '',
+		fileName: '',
 		externalLinks: [],
 		canBorrow: false,
 		notes: '',

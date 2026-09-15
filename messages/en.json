@@ -687,5 +687,12 @@
 	"links_reorder_saved": "Link order saved.",
 	"links_create_failed": "Couldn't create the link. Try again.",
 	"links_update_failed": "Couldn't update the link. Try again.",
-	"links_remove_failed": "Couldn't remove the link. Try again."
+	"links_remove_failed": "Couldn't remove the link. Try again.",
+	"downloads_title": "Downloaded parts",
+	"downloads_loading": "Loading…",
+	"downloads_load_error": "Couldn't load your downloads.",
+	"downloads_empty": "Nothing downloaded on this device yet.",
+	"downloads_unnamed_part": "Unnamed part",
+	"downloads_open": "Open",
+	"agenda_downloads_link": "Open downloaded parts"
 }
