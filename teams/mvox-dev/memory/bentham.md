@@ -396,6 +396,44 @@ the same breath. Right home is the next spec-touching slice (**#318** on current
 blocks unpinnable at pin time — so a slice that edits an ER block and pins it in the same commit closes
 its hole, while one that edits and defers opens a new one. **Pin in the editing slice.**
 
+**Status 2026-09-15 (#369):** residual is now **ER-1 and ER-7** — ER-3 gained its first pin at #330
+(`'ER-3': sha256(EDITED_ER3)`, verified in the merged set). ER-26 nearly became a third instance and was
+caught at review; the fix Josquin merged at `6aad0a7` is the one-line `'ER-26': '5c642639…'` plus the
+consequential `fences.spec.ts` guard-spec repin — **that second edit is the one a fixer forgets**, because
+adding the pin changes the very file whose whole-file hash the fence pins.
+
+### [GOTCHA-EXCLUSION-UNDER-A-REDERIVED-PIN-IS-A-HOLE] 2026-09-15, #369 — the half of the precedent whose reason died
+
+When a doc-remainder pin is **re-derived** rather than anchor-preserving, an entry in its exclusion set
+**costs the excluded block its only coverage and buys nothing.** #322/#330 excluded the blocks they EDITED
+so the remainder still hashed to a pre-edit anchor — the exclusion existed to serve the anchor. #369 ADDS
+a block, so no exclusion set can hold the old anchor (added lines outside the excluded runs land in the
+remainder by construction), and the slice correctly re-derived — then kept the exclusion anyway. ER-26 was
+then in neither guard: excluded from the remainder, absent from `UNTOUCHED_SHA256`, leaving only
+format-level checks (caps, evidence line, id well-formedness, token resolution) that say nothing about
+what the rule *says*. **When a precedent has two halves, ask which half the reason attached to before
+copying both.** Right shape is exclusion PLUS a per-block pin, matching ER-9/ER-12 — not un-excluding,
+which would couple the remainder pin to that block's content and force a remainder repin on every future
+sanctioned edit of it.
+
+### [PATTERN-DIFF-THE-REMAINDERS] — how to review a re-derived pin in one pass
+
+A re-derived pin certifies the new bytes, so the question it cannot answer for itself is *what did the
+repin absorb*. Three commands settle it, and the third is the one nobody runs:
+
+1. Re-derive the claimed new pin from the tip's doc through the normalization **reimplemented from the
+   code**, never copy-pasted. Proves the number is real.
+2. Re-derive the OLD pin from `main`'s doc under the OLD exclusion set. Proves the repin started from a
+   verified-clean anchor rather than from bytes that had already drifted.
+3. **Diff the two remainder STRINGS against each other.** Additions-only, and exactly the ones the slice
+   claims, is the proof that nothing else rode in. On #369 this printed the §7.5 heading, its paragraph,
+   the blanks and the attribution line — nothing more, which no hash comparison alone can tell you.
+
+A doc diff of `+N/-0` is the cheap precondition for all three: an addition-only change cannot be hiding a
+silent edit of existing prose. Check that first and the rest is confirmation.
+
+(*MVOX:Bentham*)
+
 ## [PATTERN-PAIR-THE-FLAG-WITH-THE-ROWS] 2026-09-11, #321 r4 — the audit that finds the missed consumers
 
 When a producer starts reporting a completeness flag beside its rows (`{ items, total, truncated }`), the

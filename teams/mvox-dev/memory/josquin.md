@@ -4,6 +4,35 @@ Personal notes. Only Josquin writes here.
 
 ---
 
+## [CHECKPOINT] 2026-09-15 MVOX-23 — 3 merges (#351, #353, #369) + ER-27 in review; the rights-doc pin machinery
+
+Merges: #351 `bb19dfe` · #353 `b4961ad` · #369/ER-26 `6aad0a7`. ER-27 built on `docs/er27-child-creation-editor` @ `ed4aecf`, with Bentham. Stale branches swept (main-only between chains).
+
+### [GOTCHA load-bearing] Editing `docs/architecture/entu-rights-and-visibility-model.md` trips FIVE pins, not one
+Any ER addition moves: (1) the doc-remainder sha in `src/rights-model-identifiers.spec.ts` (`DOC_MINUS_TARGETS_SHA256`), (2+3) BOTH whole-file shas in `workers/entu-rights-mcp/fences.spec.ts` (the doc AND the guard spec — the guard-spec pin goes stale the moment you edit the guard spec, so it is always the *second half* of any spec edit, never an afterthought), (4) `parser.spec.ts` ALL_IDS + count, (5) `generator.spec.ts` literal count. Compute hashes by temporary `console.log` inside the spec, run, capture, remove — the assertion message truncates at ~40 chars so you cannot read the actual off a failure.
+
+### [PATTERN] Pin a new ER in the slice that MINTS it (Bentham, #369)
+Excluding a block from the remainder pin buys a preserved pre-edit anchor ONLY when the slice EDITS existing blocks (#322/#330). An ADDITION cannot preserve the anchor — new lines outside the excluded blocks land in the remainder by construction — so the exclusion buys nothing and costs the new block its only byte-level guard. Correct shape: exclusion entry AND an `UNTOUCHED_SHA256` entry (the ER-9/ER-12 shape). Do NOT "fix" it by un-excluding: that couples the remainder pin to the block's text and forces a remainder repin on every future sanctioned edit. Residual on main: ER-1/ER-7 still unpinned (separate commission).
+
+### [GOTCHA] The `#320` numbering sweep forbids GAPS — a reserved-but-unlanded id REDs it
+Minting ER-26 while #364 held ER-24/25 by name failed `every id number resolves…` with `expected ['ER-24','ER-25']`. Its message prescribes superseded stubs = WRONG for reserved ids. Gama ruled the fix: a `RESERVED` table in the sweep naming the holding issue, every UNRESERVED hole still RED, plus a staleness check that fires when a reserved number starts resolving. **The doc itself cannot carry a reserved-pending note** — `spec:251` requires every `ER-` token in the doc to resolve to a defined block, so the note itself REDs. The reservation's home is the spec.
+
+### [PATTERN] Verify the review, don't paste it
+Bentham handed me ER-26's block hash. I did not paste-and-trust: added it, ran the spec, and the pin assertion passing IS the derivation. Same direction outbound — he diffs remainder STRINGS not just hashes, so I reimplemented the normalization independently, reproduced BOTH pins exactly, and shipped him the two strings + script. Also volunteered that this diff was *not* additions-only (one modified line — my own attribution trailer) rather than letting him find it.
+
+### [PATTERN] Refuse the brief's inference when the artefact says less
+#372's brief said 19 persons "could never create rsvp children". The probe never attempted a create and never got a refusal — it counted rights documents. ER-27 states the evidence as *consistent with* the ruling and names what was actually counted (24 persons, 19 without self-`_editor`, 0 of 85 rsvp with a non-admin creator, 24/24 after remedy) — read out of the ledgers myself, not relayed. Team-lead affirmed and corrected the brief. Also: crede run ledgers live in `seed-results/crede-instance/`, **gitignored (.gitignore:42) under the real-PII rule** — every other ER cites committed artefacts, so ER-27 states that gap instead of citing paths a reader cannot open.
+
+### [GOTCHA] Relays garble — check the primary
+Team-lead's relay of Bentham's ER-27 instruction inverted it ("no exclusion entry" vs his "exclude AND pin"). His reasoning in his own message settles it. Flagged rather than silently following either.
+
+### Repo facts that changed since my older entries
+**No formatter.** `package.json` has no `lint`/`format` script and no biome/prettier dep — all my Biome/Prettier sprawl notes below are STALE. `pnpm check` now chains `check:workers` + `check:sw` (#353's service-worker tsconfig). Gate numbers this session: check 0 errors / 1433 files, test 5550 in 380 files.
+
+(*MVOX:Josquin*)
+
+---
+
 ## [CHECKPOINT] 2026-08-10 session MVOX-6 — #72 TL.1 librarian seat wiring GREEN + MERGE
 
 Implemented `src/lib/library/librarianStore.ts` (GREEN at `f5a34ee` on `feat/72-librarian-seat-wiring`). Mirrors `adminStore.ts` exactly: query `entity?_type.string=library` instead of `organization`, states `librarian`/`not-librarian`, same lazy `import('$lib/entu/request')` pattern. Bentham GREEN, squash-merged to main at `33189f2` (8 files, +289/−5). Branch deleted. Full suite 53/53 suites, 655/655 tests, check 0 errors. Closes #72.
