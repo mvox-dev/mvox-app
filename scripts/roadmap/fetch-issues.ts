@@ -3,7 +3,8 @@
  *
  * Pulls this repo's issues (open + closed) from the GitHub REST API using
  * the Action's own `GITHUB_TOKEN`, resolves native sub-issues for every
- * issue carrying the `epic` label, and writes the result as the
+ * issue whose kind is epic (#373: native type first, `epic` label for the
+ * pre-type archive), and writes the result as the
  * `RoadmapIssue[]` JSON that scripts/roadmap/render.ts consumes.
  *
  * Deliberately separate from render.ts: this file talks to the network and
@@ -29,6 +30,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { kindOf } from './issue-model';
 import type { RoadmapIssue, RoadmapLabel } from './render';
 
 const API_BASE = 'https://api.github.com';
@@ -52,6 +54,8 @@ interface GitHubIssue {
 	pull_request?: unknown;
 	closed_at?: string | null;
 	html_url: string;
+	/** Native issue type (#373). REST reports an object; pre-type issues carry null. */
+	type?: { name?: string | null } | null;
 }
 
 /** Extract the `rel="next"` URL from a GitHub `Link` response header, or null when absent. */
@@ -84,7 +88,10 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 		body: raw.body,
 		closedAt: raw.closed_at ?? null,
 		htmlUrl: raw.html_url,
-		subIssues: []
+		subIssues: [],
+		// #373: only the type's NAME crosses this seam — the REST `type` object
+		// (ids, colours, timestamps) is a raw GitHub shape and stays in this file.
+		issueType: raw.type?.name ?? null
 	};
 }
 
@@ -156,7 +163,9 @@ export async function fetchBoard(
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();
 	for (const issue of issues) {
-		if (issue.labels.some((l) => l.name === 'epic')) {
+		// #373: kind is read through the model — native type first, `epic` label
+		// only for the pre-type archive. A post-#393 epic carries no labels at all.
+		if (kindOf(issue.issueType, issue.labels.map((l) => l.name)) === 'epic') {
 			const fetched = await fetchSubIssues(repo, token, issue.number, fetchImpl);
 			// Nest the object from the top-level list, not the sub_issues copy of it.
 			// The copy is a distinct object whose own subIssues stay empty forever, so
