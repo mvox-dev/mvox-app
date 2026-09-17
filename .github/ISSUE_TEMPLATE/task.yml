@@ -1,5 +1,5 @@
-# The ordinary-task form. Filed from the web UI it assigns the Task type and
-# the `task` label itself (type + label both, Mihkel 2026-09-16, indefinitely).
+# The ordinary-task form. Filed from the web UI it assigns the Task type.
+# Types show kind, labels show movement only (Mihkel 2026-09-18).
 # CLI filings (`gh issue create --body-file`) bypass forms entirely — for those
 # the shape is enforced by scripts/roadmap/issue-model.ts, which parses both
 # this form's output and the older frontmatter style.

@@ -18,7 +18,7 @@
 - **DELETED:** #358 #359 (→ #394 #395) · #364 #376–#380 #382 #383. **Branch fix/382-merge-prompt-git-facts @ b451cbc is orphaned** (issue gone) — needs Mihkel's word: delete or re-home.
 - Closed this window: #366 doc fix (7a93e14 retires ER-24/25), #369 crede RSVP bug, #384, #392.
 
-**LAWS (unchanged, durable memory):** app-not-docs; decision-vs-permission; ruling=posture-never-mechanism; gate-first merges; both-type-AND-label forever (forms now type-only — ask Gama whether the label half still binds); .string bakes PII.
+**LAWS (unchanged, durable memory):** app-not-docs; decision-vs-permission; ruling=posture-never-mechanism; gate-first merges; types show kind, labels show movement (Mihkel 2026-09-18, supersedes both-forever); .string bakes PII.
 
 (*MVOX:Palestrina*)
 
