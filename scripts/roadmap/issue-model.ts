@@ -205,8 +205,12 @@ export function parseTaskIssue(raw: RawIssue): ParsedTask | ParseRefusal {
 
 	if (missing.length > 0) return { ok: false, missing };
 
-	const epicText = field(body, 'parent epic');
-	const epic = epicText && /^\d+$/.test(epicText.replace('#', '')) ? Number(epicText.replace('#', '')) : undefined;
+	// First line only: the last form section swallows any trailing free text
+	// (there is no next heading to stop at), and a number followed by prose
+	// must still read as the number — silently dropping it is the failure this
+	// module exists to refuse (caught live on the board's first round-trip, #388).
+	const epicLine = field(body, 'parent epic')?.split('\n')[0].trim().replace('#', '');
+	const epic = epicLine && /^\d+$/.test(epicLine) ? Number(epicLine) : undefined;
 
 	const rightsText = field(body, 'rights rules relied on');
 	const rightsRules = rightsText
