@@ -14,7 +14,7 @@
 - Epic #334 offline parts: #367 agenda presence badge (ready) — rest closed.
 - Epic #333 doodling: no children yet (#394 is the reusable stroke component, filed under #390).
 - No epic: #233 event_name formula (ready, old) · #270 crede person.email reminder · #370 Bug RSVP 'try again' · #371 grantSelfEditor (ready) · #373 roadmap reads kind from type · #374/#375 Features (link scheme / relative path).
-- **ready:** #233 #344 (`good readable issue`) #367 #371. `in research`: none (#344 label cleared? — it shows ready only now).
+- **ready:** #233 #344 (`good readable issue`) #367 #371. `in research`: none.
 - **DELETED:** #358 #359 (→ #394 #395) · #364 #376–#380 #382 #383. **Branch fix/382-merge-prompt-git-facts @ b451cbc is orphaned** (issue gone) — needs Mihkel's word: delete or re-home.
 - Closed this window: #366 doc fix (7a93e14 retires ER-24/25), #369 crede RSVP bug, #384, #392.
 
