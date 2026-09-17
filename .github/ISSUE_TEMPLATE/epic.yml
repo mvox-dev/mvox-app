@@ -1,0 +1,36 @@
+# Epic form — a PO-owned initiative: the story, with children linked as the
+# gates are named, never all upfront.
+name: Epic
+description: A product initiative that will own child tasks.
+title: "The story, as one sentence"
+type: Epic
+labels: ["epic"]
+body:
+  - type: input
+    id: slugline
+    attributes:
+      label: Slugline
+      description: Üks eestikeelne rida avalikule tahvlile.
+    validations:
+      required: true
+  - type: input
+    id: lead
+    attributes:
+      label: Lead
+      description: Üks-kaks eestikeelset lauset — mida see muudab ja kellele.
+    validations:
+      required: true
+  - type: textarea
+    id: story
+    attributes:
+      label: The story
+      description: What this initiative changes for a real person, plain words.
+    validations:
+      required: true
+  - type: textarea
+    id: children
+    attributes:
+      label: Children
+      description: Task numbers, one per line, added as they are cut — an empty list at filing is normal.
+      placeholder: |
+        - #372

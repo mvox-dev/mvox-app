@@ -1,0 +1,20 @@
+# Feature form — intake, unshaped by definition. One required field: the ask,
+# verbatim. Shaping into tasks happens later, on the board.
+name: Feature
+description: A request or idea, in your own words. Shaping comes later.
+title: "What you want to be able to do"
+type: Feature
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: The request
+      description: Oma sõnadega, nii nagu pähe tuli. Vormistamata jätmine on siin õige.
+    validations:
+      required: true
+  - type: input
+    id: who-is-it-for
+    attributes:
+      label: Who is it for
+      placeholder: "laulja / dirigent / admin"

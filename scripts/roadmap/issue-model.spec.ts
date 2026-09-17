@@ -2,7 +2,7 @@
 // the field named; both body shapes (issue-form headings, legacy frontmatter)
 // parse to the same TaskIssue.
 import { describe, expect, it } from 'vitest';
-import { parseTaskIssue, type RawIssue } from './issue-model';
+import { parseIssue, parseTaskIssue, type RawIssue } from './issue-model';
 
 const base: Omit<RawIssue, 'body'> = {
 	number: 400,
@@ -81,7 +81,7 @@ describe('parseTaskIssue — refusals name every missing field', () => {
 		expect(r.ok).toBe(false);
 		if (r.ok) return;
 		expect(r.missing).toEqual(
-			expect.arrayContaining(['slugline', 'lead', 'done when (at least one checkable statement)', 'author marker'])
+			expect.arrayContaining(['slugline', 'lead', 'done when (at least one checkable statement)', 'author (in-body marker, or a personal account)'])
 		);
 	});
 
@@ -106,5 +106,69 @@ describe('parseTaskIssue — refusals name every missing field', () => {
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
 		expect(r.task.epic).toBeUndefined();
+	});
+});
+
+describe('bug / feature / epic parsers and dispatch', () => {
+	const bugBody = `### What was seen
+
+"Couldn't save — tap to try again" on today's rehearsal.
+
+### Where
+
+mvox.eu agenda, iPhone Brave
+
+### Who is affected
+
+üks crede laulja`;
+
+	it('parses a form-filed bug authored by a personal account — no marker needed', () => {
+		const r = parseIssue({ ...base, issueType: 'Bug', body: bugBody, authorLogin: 'mitselek-mobile' });
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.issue.kind).toBe('bug');
+		if (r.issue.kind !== 'bug') return;
+		expect(r.issue.where).toBe('mvox.eu agenda, iPhone Brave');
+		expect(r.issue.author).toBe('mitselek-mobile');
+	});
+
+	it('refuses a bug from the shared account with no marker — that login names nobody', () => {
+		const r = parseIssue({ ...base, issueType: 'Bug', body: bugBody, authorLogin: 'mitselek' });
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.missing).toEqual(['author (in-body marker, or a personal account)']);
+	});
+
+	it('parses a feature: the request verbatim, nothing else required', () => {
+		const r = parseIssue({
+			...base,
+			issueType: 'Feature',
+			body: `### The request\n\nwhen adding a link, prepend https:// silently\n\n(*PO:Gama*)`
+		});
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.issue.kind).toBe('feature');
+		if (r.issue.kind !== 'feature') return;
+		expect(r.issue.request).toBe('when adding a link, prepend https:// silently');
+	});
+
+	it('parses an epic with children by reference; empty children list is normal', () => {
+		const r = parseIssue({
+			...base,
+			issueType: 'Epic',
+			body: `### Slugline\n\nVäravad loevad Entu õigusi\n\n### Lead\n\nRakendus ei otsusta ise.\n\n### The story\n\nEvery gate reads the grants Entu returned.\n\n### Children\n\n- #363\n- #372\n\n(*PO:Gama*)`
+		});
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.issue.kind).toBe('epic');
+		if (r.issue.kind !== 'epic') return;
+		expect(r.issue.children).toEqual([363, 372]);
+	});
+
+	it('refuses an unknown type by name', () => {
+		const r = parseIssue({ ...base, issueType: 'Chore', body: formBody });
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.missing[0]).toContain('Chore');
 	});
 });

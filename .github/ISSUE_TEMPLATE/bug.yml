@@ -1,0 +1,29 @@
+# Bug form — a field report. Shaped for filing from a phone: what you saw,
+# where. Type + kind label assigned by the form itself.
+name: Bug
+description: Something a user hit. Say what was seen and where.
+title: "What the user cannot do, in plain words"
+type: Bug
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-was-seen
+    attributes:
+      label: What was seen
+      description: Mida kasutaja nägi — sõnadega, ekraanipilt kui on.
+    validations:
+      required: true
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      description: Leht/vaade + seade ja brauser, kui teada.
+      placeholder: "mvox.eu agenda, iPhone Brave"
+    validations:
+      required: true
+  - type: input
+    id: who-is-affected
+    attributes:
+      label: Who is affected
+      description: Üks inimene, üks kollektiiv või kõik? Mitte kunagi pärisnime — kirjelda rolliga.
+      placeholder: "üks crede laulja"
