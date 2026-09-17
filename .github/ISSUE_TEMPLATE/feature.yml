@@ -4,7 +4,6 @@ name: Feature
 description: A request or idea, in your own words. Shaping comes later.
 title: "What you want to be able to do"
 type: Feature
-labels: ["enhancement"]
 body:
   - type: textarea
     id: request
