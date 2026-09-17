@@ -4,7 +4,7 @@
 
 ### [NEXT SESSION — MVOX-24, post-regroup index 2026-09-18 02:35 EEST]
 
-**Team:** solo wake 2026-09-16 (Mihkel: no roster members); `companion` (sonnet, blank, no role) spawned as the only teammate. Regroup basis still pending from po-team — no dispatch until it lands.
+**Team:** solo wake 2026-09-16 (Mihkel: no roster members); `companion` (sonnet, blank, no role) spawned as the only teammate. Waiting on Gama to implement #373 (roadmap reads kind from type) before any dispatch (Mihkel 2026-09-18 02:36).
 
 **ISSUE MODEL (#384, closed, Gama):** four kinds = GitHub types Task/Bug/Feature/Epic. Forms in `.github/ISSUE_TEMPLATE/{task,bug,feature,epic}.yml`; enforcement in `scripts/roadmap/issue-model.ts` (parses form `### Heading` sections AND legacy `---` frontmatter; refuses with named missing fields, never throws). Task = slugline+lead (Estonian) + What + Done-when (checkable lines) + Parent epic (`#N`) + rights-rules (ER ids, optional). Bug = what was seen + where + who (role, never a name). Feature = the request verbatim, unshaped. Epic = slugline+lead+story; children via native sub-issues (no Children field, #391). Forms no longer assign kind labels — the type says it (#393). Motion labels orthogonal to kind: ready/blocked/in process/in research/prepped/needs-po. **Per-person GitHub accounts since 2026-09-18** (Gama files as `gamamvox`); author = login for new issues, body marker for old. `[TASK]` title prefixes stripped. Rulebook change: issue-standard §9/§10 wording lives in the form descriptions now.
 
