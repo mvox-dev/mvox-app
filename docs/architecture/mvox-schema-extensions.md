@@ -77,8 +77,8 @@ roster-wide toggle for whether members see real or profile names.
 **Parent**: `database` (single, required) — the same attachment point as
 `member`, reusing the existing collective owner/editor = admin rights cascade
 with no new rights mechanism. **Corrected post-shape-review**: the review
-approved `organization` as the parent, but neither polyphony nor mvox_crede
-has an `organization` type-def live — it was retired in the #161
+approved `organization` as the parent, but mvox_crede
+has no `organization` type-def live — it was retired in the #161
 org→db-entity migration (2026-08, MVOX-11). The collective root has been the
 database entity itself since then, on both databases uniformly, not as a
 single-collective special case; `member`'s own type-def description
@@ -221,7 +221,7 @@ rules.
 ### Org tree (excerpt)
 
 ```
-polyphony database root (= the collective root, post-#161: organization retired)
+collective database root (post-#161: organization retired)
         ├── member
         ├── admin_member_record    ← mvox extension, one per person
         ├── link                   ← mvox extension, one collection per collective
@@ -332,7 +332,7 @@ schema-independence ruling. Two rulings on that issue are load-bearing beyond
 the shape itself:
 
 - **Posture** (comment 5561632474): `mvox_crede` is a real-life pilot holding
-  real people's personal data; `polyphony` is the synthetic one. This is why
+  real people's personal data. This is why
   the per-property sharing split matters as a genuine privacy control and why
   entering real names/phones/emails/birth dates into `mvox_crede` needs
   Mihkel's explicit say-so as its own decision, separate from this shape's
