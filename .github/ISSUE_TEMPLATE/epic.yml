@@ -27,10 +27,3 @@ body:
       description: What this initiative changes for a real person, plain words.
     validations:
       required: true
-  - type: textarea
-    id: children
-    attributes:
-      label: Children
-      description: Task numbers, one per line, added as they are cut — an empty list at filing is normal.
-      placeholder: |
-        - #372
