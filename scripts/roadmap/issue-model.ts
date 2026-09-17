@@ -37,10 +37,11 @@ export interface BaseIssue {
 	state: 'open' | 'closed';
 	kind: IssueKind;
 	motion: MotionLabel[];
-	/** Estonian one-liner for the public board. */
-	slugline: string;
-	/** Estonian lead — what it changes and for whom. */
-	lead: string;
+	/** Estonian one-liner for the public board. Required on Task and Epic;
+	 *  a Bug or Feature arrives from the field without one. */
+	slugline?: string;
+	/** Estonian lead — what it changes and for whom. Same rule as slugline. */
+	lead?: string;
 	/** The in-body author marker, e.g. `(*PO:Gama*)`, or the GitHub login for
 	 *  issues filed after per-person accounts (2026-09-18). */
 	author: string;
@@ -49,6 +50,8 @@ export interface BaseIssue {
 /** A shaped piece of work: the done-when is the contract. */
 export interface TaskIssue extends BaseIssue {
 	kind: 'task';
+	slugline: string;
+	lead: string;
 	/** Checkable statements; never empty — an empty contract is not a task. */
 	doneWhen: string[];
 	/** Parent epic by reference, never by type structure. */
@@ -57,12 +60,44 @@ export interface TaskIssue extends BaseIssue {
 	rightsRules?: string[];
 }
 
+/** A field report: what was seen, where. Arrives raw — no slugline required. */
+export interface BugIssue extends BaseIssue {
+	kind: 'bug';
+	whatWasSeen: string;
+	where: string;
+	whoIsAffected?: string;
+}
+
+/** Intake, unshaped by definition. One required field: the ask, verbatim. */
+export interface FeatureIssue extends BaseIssue {
+	kind: 'feature';
+	request: string;
+	whoIsItFor?: string;
+}
+
+/** A PO-owned initiative: the story, children by reference as gates are named. */
+export interface EpicIssue extends BaseIssue {
+	kind: 'epic';
+	slugline: string;
+	lead: string;
+	story: string;
+	children: number[];
+}
+
+export type MvoxIssue = TaskIssue | BugIssue | FeatureIssue | EpicIssue;
+
 /** A parse refusal names every missing piece; it is data, not an exception. */
 export interface ParseRefusal {
 	ok: false;
 	missing: string[];
 }
 
+export interface Parsed<T extends MvoxIssue> {
+	ok: true;
+	issue: T;
+}
+
+/** @deprecated shape kept one slice for the merged Task parser's callers. */
 export interface ParsedTask {
 	ok: true;
 	task: TaskIssue;
@@ -76,6 +111,20 @@ export interface RawIssue {
 	body: string | null;
 	labels: string[];
 	issueType: string | null;
+	/** GitHub login of the filing account, when the fetch carries it. */
+	authorLogin?: string | null;
+}
+
+/** Logins that historically carried EVERY actor's writes — as an author they
+ *  identify nobody, so the in-body marker stays the authorship for them. */
+const SHARED_LOGINS = new Set(['mitselek']);
+
+/** In-body marker wins; a personal GitHub account stands on its own. */
+function resolveAuthor(raw: RawIssue): string | null {
+	const marker = AUTHOR_MARKER_RE.exec(raw.body ?? '');
+	if (marker) return marker[0];
+	if (raw.authorLogin && !SHARED_LOGINS.has(raw.authorLogin)) return raw.authorLogin;
+	return null;
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
@@ -151,8 +200,8 @@ export function parseTaskIssue(raw: RawIssue): ParsedTask | ParseRefusal {
 	const doneWhen = doneWhenText ? checklistItems(doneWhenText) : [];
 	if (doneWhen.length === 0) missing.push('done when (at least one checkable statement)');
 
-	const authorMatch = AUTHOR_MARKER_RE.exec(body);
-	if (!authorMatch) missing.push('author marker');
+	const author = resolveAuthor(raw);
+	if (!author) missing.push('author (in-body marker, or a personal account)');
 
 	if (missing.length > 0) return { ok: false, missing };
 
@@ -177,12 +226,135 @@ export function parseTaskIssue(raw: RawIssue): ParsedTask | ParseRefusal {
 			motion: raw.labels.filter((l): l is MotionLabel => (MOTION_LABELS as readonly string[]).includes(l)),
 			slugline: slugline as string,
 			lead: lead as string,
-			author: authorMatch![0],
+			author: author as string,
 			doneWhen,
 			...(epic !== undefined ? { epic } : {}),
 			...(rightsRules && rightsRules.length > 0 ? { rightsRules } : {})
 		}
 	};
+}
+
+function baseOf(raw: RawIssue, kind: MvoxIssue['kind'], author: string): Omit<BaseIssue, 'kind'> & { kind: typeof kind } {
+	const body = raw.body ?? '';
+	const slugline = field(body, 'slugline');
+	const lead = field(body, 'lead');
+	return {
+		number: raw.number,
+		title: raw.title,
+		state: raw.state,
+		kind,
+		motion: raw.labels.filter((l): l is MotionLabel => (MOTION_LABELS as readonly string[]).includes(l)),
+		author,
+		...(slugline ? { slugline } : {}),
+		...(lead ? { lead } : {})
+	};
+}
+
+function requireKind(raw: RawIssue, expected: string, missing: string[]): void {
+	const kind = raw.issueType?.toLowerCase() ?? null;
+	if (kind !== expected) missing.push(`issue type is ${raw.issueType ?? 'absent'}, not ${expected[0].toUpperCase()}${expected.slice(1)}`);
+}
+
+export function parseBugIssue(raw: RawIssue): Parsed<BugIssue> | ParseRefusal {
+	const missing: string[] = [];
+	const body = raw.body ?? '';
+	requireKind(raw, 'bug', missing);
+	const whatWasSeen = field(body, 'what was seen');
+	if (!whatWasSeen) missing.push('what was seen');
+	const where = field(body, 'where');
+	if (!where) missing.push('where');
+	const author = resolveAuthor(raw);
+	if (!author) missing.push('author (in-body marker, or a personal account)');
+	if (missing.length > 0) return { ok: false, missing };
+	const whoIsAffected = field(body, 'who is affected');
+	return {
+		ok: true,
+		issue: {
+			...baseOf(raw, 'bug', author as string),
+			kind: 'bug',
+			whatWasSeen: whatWasSeen as string,
+			where: where as string,
+			...(whoIsAffected ? { whoIsAffected } : {})
+		}
+	};
+}
+
+export function parseFeatureIssue(raw: RawIssue): Parsed<FeatureIssue> | ParseRefusal {
+	const missing: string[] = [];
+	const body = raw.body ?? '';
+	requireKind(raw, 'feature', missing);
+	const request = field(body, 'the request');
+	if (!request) missing.push('the request');
+	const author = resolveAuthor(raw);
+	if (!author) missing.push('author (in-body marker, or a personal account)');
+	if (missing.length > 0) return { ok: false, missing };
+	const whoIsItFor = field(body, 'who is it for');
+	return {
+		ok: true,
+		issue: {
+			...baseOf(raw, 'feature', author as string),
+			kind: 'feature',
+			request: request as string,
+			...(whoIsItFor ? { whoIsItFor } : {})
+		}
+	};
+}
+
+/** `- #372` / `372` lines under Children — numbers by reference. */
+function childNumbers(text: string): number[] {
+	return text
+		.split('\n')
+		.map((line) => /#?(\d+)/.exec(line.trim())?.[1])
+		.filter((n): n is string => n !== undefined)
+		.map(Number);
+}
+
+export function parseEpicIssue(raw: RawIssue): Parsed<EpicIssue> | ParseRefusal {
+	const missing: string[] = [];
+	const body = raw.body ?? '';
+	requireKind(raw, 'epic', missing);
+	const slugline = field(body, 'slugline');
+	if (!slugline) missing.push('slugline');
+	const lead = field(body, 'lead');
+	if (!lead) missing.push('lead');
+	const story = field(body, 'the story');
+	if (!story) missing.push('the story');
+	const author = resolveAuthor(raw);
+	if (!author) missing.push('author (in-body marker, or a personal account)');
+	if (missing.length > 0) return { ok: false, missing };
+	const childrenText = field(body, 'children');
+	return {
+		ok: true,
+		issue: {
+			...baseOf(raw, 'epic', author as string),
+			kind: 'epic',
+			slugline: slugline as string,
+			lead: lead as string,
+			story: story as string,
+			children: childrenText ? childNumbers(childrenText) : []
+		}
+	};
+}
+
+/**
+ * Dispatch on the native issue type. An absent or unknown type is a refusal —
+ * the board has no kindless issues; the compiler has no fifth kind.
+ */
+export function parseIssue(raw: RawIssue): Parsed<MvoxIssue> | ParseRefusal {
+	switch (raw.issueType?.toLowerCase() ?? '') {
+		case 'task': {
+			const r = parseTaskIssue(raw);
+			return r.ok ? { ok: true, issue: r.task } : r;
+		}
+		case 'bug':
+			return parseBugIssue(raw);
+		case 'feature':
+			return parseFeatureIssue(raw);
+		case 'epic':
+			return parseEpicIssue(raw);
+		default:
+			return { ok: false, missing: [`issue type is ${raw.issueType ?? 'absent'} — not one of Task, Bug, Feature, Epic`] };
+	}
 }
 
 // (*PO:Gama*)
