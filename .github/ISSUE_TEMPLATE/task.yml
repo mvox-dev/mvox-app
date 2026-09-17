@@ -1,0 +1,53 @@
+# The ordinary-task form. Filed from the web UI it assigns the Task type and
+# the `task` label itself (type + label both, Mihkel 2026-09-16, indefinitely).
+# CLI filings (`gh issue create --body-file`) bypass forms entirely — for those
+# the shape is enforced by scripts/roadmap/issue-model.ts, which parses both
+# this form's output and the older frontmatter style.
+name: Task
+description: A shaped piece of work with a done-when. One outcome per issue.
+title: "What the user cannot do yet, in plain words"
+type: Task
+labels: ["task"]
+body:
+  - type: input
+    id: slugline
+    attributes:
+      label: Slugline
+      description: Üks eestikeelne rida avalikule tahvlile (docs.mvox.eu/roadmap).
+      placeholder: "Laulja näeb oma partiid ka võrguta"
+    validations:
+      required: true
+  - type: input
+    id: lead
+    attributes:
+      label: Lead
+      description: Üks-kaks eestikeelset lauset — mida see muudab ja kellele.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What
+      description: What cannot be done today, or what changes. Plain words, no jargon. Cite file:line where the claim is checkable.
+    validations:
+      required: true
+  - type: textarea
+    id: done-when
+    attributes:
+      label: Done when
+      description: The contract. Checkable statements — one per line.
+      placeholder: |
+        - [ ] ...
+    validations:
+      required: true
+  - type: input
+    id: epic
+    attributes:
+      label: Parent epic
+      description: Issue number of the epic this belongs to, if any.
+      placeholder: "362"
+  - type: textarea
+    id: rights-rules
+    attributes:
+      label: Rights rules relied on
+      description: ER-identifiers of every rights rule this change rests on. Query the rights doc — this cannot be honestly filled from memory. Leave empty when no rights mechanics are touched.
