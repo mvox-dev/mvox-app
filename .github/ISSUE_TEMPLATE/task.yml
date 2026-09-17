@@ -7,7 +7,6 @@ name: Task
 description: A shaped piece of work with a done-when. One outcome per issue.
 title: "What the user cannot do yet, in plain words"
 type: Task
-labels: ["task"]
 body:
   - type: input
     id: slugline

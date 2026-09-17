@@ -4,7 +4,6 @@ name: Bug
 description: Something a user hit. Say what was seen and where.
 title: "What the user cannot do, in plain words"
 type: Bug
-labels: ["bug"]
 body:
   - type: textarea
     id: what-was-seen

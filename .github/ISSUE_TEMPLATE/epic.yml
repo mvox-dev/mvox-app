@@ -4,7 +4,6 @@ name: Epic
 description: A product initiative that will own child tasks.
 title: "The story, as one sentence"
 type: Epic
-labels: ["epic"]
 body:
   - type: input
     id: slugline
