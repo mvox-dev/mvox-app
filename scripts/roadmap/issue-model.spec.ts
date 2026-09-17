@@ -172,3 +172,13 @@ mvox.eu agenda, iPhone Brave
 		expect(r.missing[0]).toContain('Chore');
 	});
 });
+
+describe('the last form section swallows trailing prose (#388 live catch)', () => {
+	it('parent epic still parses when free text follows it', () => {
+		const body = formBody.replace('362\n\n### Rights rules relied on\n\nER-1, ER-27', '362\n\nOriginal: #380, re-filed as a live test.');
+		const r = parseTaskIssue({ ...base, body });
+		expect(r.ok).toBe(true);
+		if (!r.ok) return;
+		expect(r.task.epic).toBe(362);
+	});
+});
