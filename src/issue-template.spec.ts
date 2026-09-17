@@ -1,165 +1,171 @@
 // #319 — the issue template carries the rights-citation field, bypass limit beside it.
 //
-// RED for the #319 TDD chain (repo-half only: the claim-time citation rule
-// itself shipped as §11 of the po-team issue standard, 2026-09-15 — see the
-// #319 body, "Already done, elsewhere"). This spec mechanically checks the
-// REAL template file (.github/ISSUE_TEMPLATE/task.md) and is its drift-pin,
-// the same role the runbook/rights-model pins play for their documents.
-// Scanning a real repo file follows the rights-model-identifiers.spec /
-// typography-scale.spec precedent (mechanical checks over real repo files,
-// spec at src root).
+// REPINNED for #384 (d18ded5): the ordinary-task template moved from
+// .github/ISSUE_TEMPLATE/task.md (markdown, the shape the #319 body ordered)
+// to task.yml, a native issue form — web filings assign type and label
+// themselves, and the rights-citation field rides as an optional form field.
+// The #319 substance survives the move and this spec now pins it in the new
+// home: the field exists, the bypass limit ships BESIDE it in full (§9), and
+// nothing claims the field is enforcement. The limit's wording shifts one
+// word with the mechanism ("forms bind web-UI creation only" — it is a form
+// now, not a markdown template); the vector (`gh issue create --body-file`)
+// and the conclusion (a filled field is NOT proof) are unchanged.
 //
-// The contract, from the #319 body (current over comments — Gama 20:56):
-// 1. `.github/ISSUE_TEMPLATE/task.md` exists as a MARKDOWN template (.md with
-//    YAML frontmatter carrying `name` and `about`) — deliberately NOT an
-//    issue-form .yml: forms validate nothing beyond `required` anyway, and the
-//    field block is an HTML-comment-annotated markdown section.
-// 2. The body carries the literal heading `## Rights rules relied on`.
-// 3. The bypass limit ships BESIDE the field, in the template itself, in full
-//    (§9: limits stay in full) — the field block is pinned VERBATIM from the
-//    issue body, plus the three load-bearing substrings named by the slice
-//    brief as independent assertions so a partial paraphrase names which
-//    clause it dropped.
-// 4. Negative: nothing in the template claims the field is enforcement or
-//    validation. GitHub issue templates bind web-UI creation only; `gh issue
-//    create --body-file` bypasses them entirely (how every issue on this
-//    board is created), so a filled field is NOT proof the rule was followed
-//    — nobody may later read it as one.
+// The retirement of task.md is itself pinned: two templates named "Task"
+// would fork the filing path this form exists to close.
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { parse } from 'yaml';
 
-const TEMPLATE_PATH = resolve(__dirname, '../.github/ISSUE_TEMPLATE/task.md');
+const FORM_PATH = resolve(__dirname, '../.github/ISSUE_TEMPLATE/task.yml');
+const RETIRED_MD_PATH = resolve(__dirname, '../.github/ISSUE_TEMPLATE/task.md');
 
-/** Reads the real template; '' when absent so every assertion fails with its own message (RED reads clean). */
-const template = (): string => (existsSync(TEMPLATE_PATH) ? readFileSync(TEMPLATE_PATH, 'utf-8') : '');
+/** Reads the real form; '' when absent so every assertion fails with its own message. */
+const form = (): string => (existsSync(FORM_PATH) ? readFileSync(FORM_PATH, 'utf-8') : '');
 
-/** Frontmatter body between the opening `---` (byte 0) and the closing `---`, or null. */
-function frontmatter(text: string): string | null {
-	const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
-	return m ? m[1] : null;
+interface FormField {
+	type?: string;
+	id?: string;
+	attributes?: { label?: string; description?: string };
+	validations?: { required?: boolean };
 }
 
-// ── the field block, VERBATIM from the #319 issue body (§9: limits stay in full) ──
-// GREEN copies these bytes into the template. The heading and the HTML-comment
-// annotation are one unit: the limit ships beside the field, not in a doc.
-const FIELD_BLOCK = [
-	'## Rights rules relied on',
-	'<!-- ER-identifiers of every rule this change rests on. Query the rights doc',
-	'     (or the rights tool when live) — this field cannot be honestly filled',
-	'     from memory. LIMIT: templates bind web-UI creation only; `gh issue create',
-	'     --body-file` bypasses them entirely (how every issue on this board is',
-	'     created). A filled field is therefore NOT proof the rule was followed —',
-	'     the claim-time citation rule above is what covers agent-authored text. -->'
+/** The parsed form, or null when absent/unparseable. */
+function parsed(): { name?: string; description?: string; body?: FormField[] } | null {
+	try {
+		const doc: unknown = parse(form());
+		return doc && typeof doc === 'object' ? (doc as ReturnType<typeof parsed>) : null;
+	} catch {
+		return null;
+	}
+}
+
+const rightsField = (): FormField | undefined =>
+	parsed()?.body?.find((f) => f.attributes?.label === 'Rights rules relied on');
+
+// ── the bypass limit, VERBATIM as it ships beside the field (§9: limits stay in full) ──
+const LIMIT_BLOCK = [
+	'  # The #319 bypass limit, beside the field it limits (§9: limits ship in full):',
+	'  # forms bind web-UI creation only; `gh issue create --body-file` bypasses them',
+	'  # entirely (how every issue on this board is created). A filled field is',
+	'  # therefore NOT proof the rule was followed — the claim-time citation rule',
+	'  # (po-team issue standard §11) is what covers agent-authored text.'
 ].join('\n');
 
-// ── 1. the file exists, as a markdown template with YAML frontmatter ────────
+// ── 1. the form exists; the markdown template it replaced is gone ───────────
 
-describe('#319: .github/ISSUE_TEMPLATE/task.md exists as a markdown template', () => {
-	it('the template file exists (this repo had no .github/ISSUE_TEMPLATE directory at all — #319 creates the infrastructure)', () => {
+describe('#319/#384: .github/ISSUE_TEMPLATE/task.yml exists as the task issue form', () => {
+	it('the form file exists', () => {
+		expect(existsSync(FORM_PATH), '.github/ISSUE_TEMPLATE/task.yml does not exist').toBe(true);
+	});
+
+	it('task.md stays retired — #384 replaced it; two "Task" templates would fork the filing path', () => {
 		expect(
-			existsSync(TEMPLATE_PATH),
-			'.github/ISSUE_TEMPLATE/task.md does not exist — #319 RED'
-		).toBe(true);
+			existsSync(RETIRED_MD_PATH),
+			'.github/ISSUE_TEMPLATE/task.md is back — #384 retired it in favour of the task.yml form'
+		).toBe(false);
 	});
 
-	it('the file opens with a YAML frontmatter block (--- fence at byte 0, closed)', () => {
-		expect(
-			frontmatter(template()),
-			'no YAML frontmatter block — a markdown issue template needs `---`-fenced frontmatter or GitHub ignores it'
-		).not.toBeNull();
+	it('the form carries a top-level `name`', () => {
+		expect(parsed()?.name, 'the form has no top-level `name` key').toBeTruthy();
 	});
 
-	it('the frontmatter carries a `name:` key', () => {
-		expect(frontmatter(template()) ?? '', 'frontmatter has no `name:` key').toMatch(/^name:\s*\S/m);
-	});
-
-	it('the frontmatter carries an `about:` key', () => {
-		expect(frontmatter(template()) ?? '', 'frontmatter has no `about:` key').toMatch(/^about:\s*\S/m);
+	it('the form carries a top-level `description`', () => {
+		expect(parsed()?.description, 'the form has no top-level `description` key').toBeTruthy();
 	});
 });
 
-// ── 2. the rights-citation field heading, literal ───────────────────────────
+// ── 2. the rights-citation field ────────────────────────────────────────────
 
-describe('#319: the template body carries the rights-citation field', () => {
-	it("contains the literal heading '## Rights rules relied on'", () => {
+describe('#319: the form carries the rights-citation field', () => {
+	it("a body field is labeled 'Rights rules relied on'", () => {
 		expect(
-			template().includes('## Rights rules relied on'),
-			"the template does not contain the literal heading '## Rights rules relied on'"
-		).toBe(true);
+			rightsField(),
+			"no form field carries the label 'Rights rules relied on'"
+		).toBeDefined();
 	});
 
-	it('the heading sits in the body, after the frontmatter, not inside it', () => {
-		const fm = frontmatter(template());
+	it('the field is a textarea — room for one ER-identifier per line', () => {
+		expect(rightsField()?.type, 'the rights field is not a textarea').toBe('textarea');
+	});
+
+	it('the field description says the field cannot be honestly filled from memory', () => {
 		expect(
-			(fm ?? '').includes('Rights rules relied on'),
-			'the field heading is inside the YAML frontmatter — it belongs in the template body'
-		).toBe(false);
+			rightsField()?.attributes?.description ?? '',
+			"the field description lost its 'cannot be honestly filled from memory' clause"
+		).toContain('cannot be honestly filled from memory');
 	});
 });
 
 // ── 3. the bypass limit, beside the field, in full ──────────────────────────
 
-describe('#319: the bypass limit ships beside the field, in the template itself', () => {
+describe('#319: the bypass limit ships beside the field, in the form itself', () => {
 	// The three load-bearing substrings first, as independent assertions —
 	// a paraphrase that drops one clause names which clause it dropped.
-	it("states 'templates bind web-UI creation only' (exact casing)", () => {
+	it("states 'forms bind web-UI creation only' (exact casing)", () => {
 		expect(
-			template().includes('templates bind web-UI creation only'),
-			"the bypass limit's scope clause is missing: 'templates bind web-UI creation only'"
+			form().includes('forms bind web-UI creation only'),
+			"the bypass limit's scope clause is missing: 'forms bind web-UI creation only'"
 		).toBe(true);
 	});
 
 	it("names the bypass vector: 'gh issue create'", () => {
 		expect(
-			template().includes('gh issue create'),
+			form().includes('gh issue create'),
 			"the bypass limit does not name 'gh issue create' — the vector every issue on this board is created through"
 		).toBe(true);
 	});
 
 	it("states a filled field is 'NOT proof' (exact casing) the rule was followed", () => {
 		expect(
-			template().includes('NOT proof'),
+			form().includes('NOT proof'),
 			"the bypass limit's conclusion is missing: a filled field is 'NOT proof' the rule was followed"
 		).toBe(true);
 	});
 
-	it('carries the whole field block VERBATIM from the #319 issue body — the limit ships in full, not distilled (§9)', () => {
+	it('carries the whole limit block VERBATIM — the limit ships in full, not distilled (§9)', () => {
 		expect(
-			template().includes(FIELD_BLOCK),
-			'the field block (heading + full HTML-comment annotation) does not appear verbatim — the limit must sit beside the field in the exact words the issue specified, byte-for-byte including line breaks and indentation'
+			form().includes(LIMIT_BLOCK),
+			'the limit block does not appear verbatim — the limit must sit beside the field in full, byte-for-byte including line breaks'
 		).toBe(true);
+	});
+
+	it('the limit sits directly above the rights-rules field entry — beside the field, not in a header', () => {
+		const at = form().indexOf(LIMIT_BLOCK);
+		const fieldAt = form().indexOf('id: rights-rules');
+		expect(at, 'limit block missing').toBeGreaterThan(-1);
+		expect(fieldAt, 'rights-rules field missing').toBeGreaterThan(-1);
+		const between = form().slice(at + LIMIT_BLOCK.length, fieldAt);
+		expect(
+			between,
+			'the limit block is not adjacent to the rights-rules field'
+		).toMatch(/^\s*- type: textarea\s*$/m);
+		expect(between.length, 'the limit block drifted away from the field').toBeLessThan(40);
 	});
 });
 
-// ── 4. negative: nothing claims the field is enforcement/validation ─────────
+// ── 4. negative: nothing claims the rights field is enforcement/validation ──
 
-describe('#319: nothing in the template claims the field is enforcement or validation', () => {
-	// The issue's third done-when: "nothing claims it is enforcement." The only
-	// validation GitHub offers is `required` on issue FORMS, which this .md
-	// template is not; any enforcement/validation language here would be a
-	// false claim someone later reads as proof.
-	it("contains no 'enforc*' claim (enforce/enforced/enforcement/enforces)", () => {
-		const hit = template().match(/enforc\w*/i);
+describe('#319: nothing claims the rights field is enforcement or validation', () => {
+	// The issue's third done-when: "nothing claims it is enforcement." Forms DO
+	// validate `required` on OTHER fields (slugline, lead, what, done-when — the
+	// #384 model), so the negative is scoped to the rights field: it stays
+	// optional (a forced field would be filled with noise, the false-proof
+	// reading the limit forbids) and its own text claims no enforcement.
+	it('the rights field carries no `validations` — it stays optional', () => {
 		expect(
-			hit?.[0] ?? null,
-			`the template says "${hit?.[0]}" — templates enforce nothing; the bypass limit exists precisely because nobody may read this field as enforcement`
-		).toBeNull();
+			rightsField()?.validations,
+			'the rights field grew a `validations` block — a required rights field is filled with noise and read as proof'
+		).toBeUndefined();
 	});
 
-	it("contains no 'validat*' claim (validate/validated/validation/validates)", () => {
-		const hit = template().match(/validat\w*/i);
+	it("the rights field's label and description contain no 'enforc*' or 'validat*' claim", () => {
+		const text = `${rightsField()?.attributes?.label ?? ''} ${rightsField()?.attributes?.description ?? ''}`;
+		const hit = text.match(/enforc\w*|validat\w*/i);
 		expect(
 			hit?.[0] ?? null,
-			`the template says "${hit?.[0]}" — no validation exists for markdown templates (forms validate nothing beyond \`required\` either); claiming it would be the false-proof reading the limit forbids`
-		).toBeNull();
-	});
-
-	it("contains no 'required' claim — nothing about this field is required by any mechanism", () => {
-		const hit = template().match(/\brequired\b/i);
-		expect(
-			hit?.[0] ?? null,
-			'the template says "required" — no mechanism requires anything in a markdown template; the word reads as enforcement'
+			`the rights field says "${hit?.[0]}" — the field enforces nothing; the bypass limit exists precisely because nobody may read it as enforcement`
 		).toBeNull();
 	});
 });

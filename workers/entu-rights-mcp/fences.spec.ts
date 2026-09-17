@@ -39,11 +39,16 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		).toBe('7160b596c9077942032283d9f1a66268fffbef5a4051601074a3c47433ed4b41');
 	});
 
+	// #397 repin (Mihkel-ruled 2026-09-18, closing #364) — the guard spec's
+	// RESERVED table stops citing #364: ER-24/25 retired, never minting, their
+	// numbers permanently empty so no citation ever repoints. Same caveat as
+	// #369/#372 above: this pin proves no drift SINCE that edit, never that the
+	// edit was right.
 	it('src/rights-model-identifiers.spec.ts (the guard spec) is unchanged', () => {
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('002bb006ca99c8a9811c0fae6d6fe634217f4d1ded7f94afd20f62f8edcdff8a');
+		).toBe('38740fba0b724d993979415aaaf6e93ec7f11b47727a4830ffb6f6ae2b775962');
 	});
 });
 
