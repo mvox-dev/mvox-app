@@ -44,8 +44,8 @@ body:
     id: epic
     attributes:
       label: Parent epic
-      description: Issue number of the epic this belongs to, if any.
-      placeholder: "362"
+      description: The epic this belongs to, with the # so GitHub links it.
+      placeholder: "#362"
   - type: textarea
     id: rights-rules
     attributes:
