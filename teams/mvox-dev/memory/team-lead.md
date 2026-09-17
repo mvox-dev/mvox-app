@@ -2,17 +2,23 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-23→24, REGROUP checkpoint 2026-09-16 00:51 EEST]
+### [NEXT SESSION — MVOX-24, post-regroup index 2026-09-18 02:35 EEST]
 
-**REGROUP: po-team + mvox-dev restart on a NEW BASIS — expect changed working agreements at wake; read po-team's word before dispatching ANYTHING. Board ruling that triggered it: "we are building an app, not expensive docs" — #376/#377/#378/#379 DELETED, #373/#364 backlogged unreleased, run 4 cut twice then all work hard-stopped.**
+**Team:** solo wake 2026-09-16 (Mihkel: no roster members); `companion` (sonnet, blank, no role) spawned as the only teammate. Regroup basis still pending from po-team — no dispatch until it lands.
 
-**MVOX-23 FINAL TALLY: #348 closed + 13 merges + crede remedy + 2 field bugs.** #350 6fdd9bb · #354 31750f0 · #351 bb19dfe · #352 cde3e36 · #353 b4961ad · #319 1f594c4 · #360 70a7b5b · #356 5cc367a · ER-26 6aad0a7 · ER-27 725ad26 · #368 1213b52 · #357 d1891fb (recovery chain) · #381 ef42821. #369 remedied (24/24 sweep-verified) — OPEN until a real crede member saves an RSVP. Prod = healthy through it all; dev.mvox.eu live.
+**ISSUE MODEL (#384, closed, Gama):** four kinds = GitHub types Task/Bug/Feature/Epic. Forms in `.github/ISSUE_TEMPLATE/{task,bug,feature,epic}.yml`; enforcement in `scripts/roadmap/issue-model.ts` (parses form `### Heading` sections AND legacy `---` frontmatter; refuses with named missing fields, never throws). Task = slugline+lead (Estonian) + What + Done-when (checkable lines) + Parent epic (`#N`) + rights-rules (ER ids, optional). Bug = what was seen + where + who (role, never a name). Feature = the request verbatim, unshaped. Epic = slugline+lead+story; children via native sub-issues (no Children field, #391). Forms no longer assign kind labels — the type says it (#393). Motion labels orthogonal to kind: ready/blocked/in process/in research/prepped/needs-po. **Per-person GitHub accounts since 2026-09-18** (Gama files as `gamamvox`); author = login for new issues, body marker for old. `[TASK]` title prefixes stripped. Rulebook change: issue-standard §9/§10 wording lives in the form descriptions now.
 
-**WOKE SOLO 2026-09-16 00:57 EEST (Mihkel: no members).** Inbox empty, courier alive, `in process` cleared on #382/#371/#367 (still `ready`). #344 still `in research`. Awaiting new basis before any dispatch.
+**GROOMED BACKLOG (20 open):**
+- Epic #390 in-app feedback (Gama, Mihkel rulings 2026-09-15): #388 roster PII capture · #394 drawing component (strokes only) · #395 feedback entity (member's child, domain-visible) · #361 name-bearing surfaces · #392 CLOSED (rebadge of #357, d1891fb). Compose-and-send task cut after children land.
+- Epic #362 gates read Entu grants: #372 RSVP control asks may-write · #363 canSeeTally · #365 season-summary opens on rights.
+- Epic #334 offline parts: #367 agenda presence badge (ready) — rest closed.
+- Epic #333 doodling: no children yet (#394 is the reusable stroke component, filed under #390).
+- No epic: #233 event_name formula (ready, old) · #270 crede person.email reminder · #370 Bug RSVP 'try again' · #371 grantSelfEditor (ready) · #373 roadmap reads kind from type · #374/#375 Features (link scheme / relative path).
+- **ready:** #233 #344 (`good readable issue`) #367 #371. `in research`: none (#344 label cleared? — it shows ready only now).
+- **DELETED:** #358 #359 (→ #394 #395) · #364 #376–#380 #382 #383. **Branch fix/382-merge-prompt-git-facts @ b451cbc is orphaned** (issue gone) — needs Mihkel's word: delete or re-home.
+- Closed this window: #366 doc fix (7a93e14 retires ER-24/25), #369 crede RSVP bug, #384, #392.
 
-**PARKED, DECISIONS NEEDED AT WAKE (post-regroup):** (1) branch fix/382-merge-prompt-git-facts @ b451cbc (RED 7da4164 + GREEN b451cbc committed, UNREVIEWED — merge-prompt-from-git-facts, the #357-class stopper; Gama kept it at last cut; resume = review→merge, or drop per new basis). (2) #371 (grantSelfEditor — protects next collective's singers; was in the final cut) + #367 (agenda badges, product) — both still ready+in process labels… CLEAR THE LABELS at wake if not immediately dispatching. (3) Args banked: args-run4c.json [382,371,367]. (4) Held-for-Mihkel set: #370/#372/#374/#375/#380/#383 + backlogged #373/#364.
-
-**LAWS THIS SESSION (all in durable memory + rulebook):** app-not-docs (doc/fence findings never become issues); decision-vs-permission; ruling=posture-never-mechanism; exclude-AND-pin + independent-toggle + mechanism-vs-claim (rulebook A/E); gate-first merges (12-min monitor threshold); both-type-AND-label forever; issue bodies in the attribution enumeration; .string bakes PII. #357 ref-discipline defect: write-up scratchpad/defect-357-merge-prompt.md, fences landed #381(+#382 unreviewed). Full session record: ~/workspace/scratchpad/findings-334-children.md + research/diagnose digests + args files.
+**LAWS (unchanged, durable memory):** app-not-docs; decision-vs-permission; ruling=posture-never-mechanism; gate-first merges; both-type-AND-label forever (forms now type-only — ask Gama whether the label half still binds); .string bakes PII.
 
 (*MVOX:Palestrina*)
 
