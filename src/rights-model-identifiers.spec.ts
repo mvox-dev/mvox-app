@@ -622,13 +622,14 @@ describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)'
 		// about gaps". So a reserved number is listed by hand with the issue that
 		// holds it, and every OTHER hole still fails exactly as before.
 		//
-		// The other half of the arrangement lives on #364: its body carries the
-		// obligation that landing it removes {24, 25} from this table, and the
-		// staleness check below is that obligation enforced from this side — the
-		// two halves point at each other, so neither can rot alone. Ruled by Gama
-		// 2026-09-15 on the #369 commission: a stable number is worth more than a
-		// dense sequence, so if #364 never lands, 24/25 stay empty at no cost.
-		const RESERVED: Record<number, string> = { 24: '#364', 25: '#364' };
+		// 24/25 are RETIRED, never minting (Mihkel 2026-09-18, closing #364 with
+		// the schema-level ruling: rights bookkeeping is not board work). The
+		// numbers stay empty forever — reusing either would silently repoint
+		// citations, and renumbering ER-26+ to close the hole would do the same.
+		const RESERVED: Record<number, string> = {
+			24: 'retired 2026-09-18, never minting',
+			25: 'retired 2026-09-18, never minting'
+		};
 		const ns = blocks.map((b) => Number(b.id.slice(3))).sort((a, b) => a - b);
 		expect(new Set(ns).size, 'duplicate id numbers').toBe(ns.length);
 		// Sweeping from 1 rather than from ns[0] also covers a missing ER-1, so no
