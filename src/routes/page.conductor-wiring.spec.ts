@@ -151,8 +151,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { get } from 'svelte/store';
-import { isConductor, resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(
@@ -211,7 +209,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
-	resetConductor();
 });
 
 describe('+page — recent items reach AgendaList (#83 conductor wiring)', () => {
@@ -293,58 +290,6 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
-	});
-});
-
-describe('+page — isConductor store reflects the broader signal (#83 signal shape fix)', () => {
-	it('sets isConductor to "conductor" when person is in seasonConductors, even with no past events', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
-			recent: [], // no past events yet
-			seasonId: 's1',
-			seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: []
-		}));
-		setAuthedWithOneCollective('person-p');
-		render(Page);
-
-		await waitFor(() => {
-			expect(get(isConductor)).toBe('conductor');
-		});
-	});
-
-	it('sets isConductor to "not-conductor" when person is NOT in seasonConductors and has no conducted events', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming: [agendaItem('up-1', '2026-09-10T16:00:00.000Z')],
-			recent: [],
-			seasonId: 's1',
-			seasonConductors: ['other-person'], seasonOwners: [], seasonEditors: []
-		}));
-		setAuthedWithOneCollective('person-p');
-		render(Page);
-
-		await waitFor(() => {
-			// Need to wait for the load to complete
-			expect(loadFullAgendaMock).toHaveBeenCalled();
-		});
-		// Give the .then() a tick to execute
-		await new Promise((r) => setTimeout(r, 0));
-		expect(get(isConductor)).toBe('not-conductor');
-	});
-
-	it('sets isConductor to "conductor" via conducted past events (per-event ids.size > 0)', async () => {
-		const recentEvent = agendaItem('past-1', '2026-06-10T16:00:00.000Z', []);
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming: [],
-			recent: [recentEvent],
-			seasonId: 's1',
-			seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] // person conducts all events (inherit)
-		}));
-		setAuthedWithOneCollective('person-p');
-		render(Page);
-
-		await waitFor(() => {
-			expect(get(isConductor)).toBe('conductor');
-		});
 	});
 });
 

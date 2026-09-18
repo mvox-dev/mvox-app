@@ -181,7 +181,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
@@ -290,7 +289,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
-	resetConductor();
 });
 
 describe('+page — the attendance panel opens INSIDE the tapped event row (#87)', () => {

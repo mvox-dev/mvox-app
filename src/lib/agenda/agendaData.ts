@@ -14,7 +14,8 @@ export interface FullAgendaResult {
 	recent: AgendaItem[];
 	/** The current season's entity id (null if no season is current). */
 	seasonId: string | null;
-	/** The current season's conductor person refs (for determineConductor). */
+	/** The current season's conductor person refs (for conductor-name display
+	 *  via `conductorLogic.resolveConductors`; not a rights signal). */
 	seasonConductors: string[];
 	/** #91 — the current season's `_owner`/`_editor` refs as VISIBLE to this
 	 *  caller (private bucket: no grant → empty). Repertoire management gates on

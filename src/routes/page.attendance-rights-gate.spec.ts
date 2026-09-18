@@ -13,8 +13,8 @@
 //   • the SEAT ALONE no longer shows it — no affordance, no empty panel, and
 //     no attendance reads fired for a viewer who cannot write anyway.
 //
-// The seat's OTHER consumers (isConductor/canExpand — the season summary
-// expand) are out of scope here and stay on conductorStore (#365/epic #362).
+// The seat's LAST gate consumer (canExpand — the season summary expand) moves
+// to season rights in #365, taking conductorStore with it (epic #362).
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -169,7 +169,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(
@@ -257,7 +256,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
-	resetConductor();
 });
 
 const ROW = '[data-testid="agenda-recent-row-past-1"]';

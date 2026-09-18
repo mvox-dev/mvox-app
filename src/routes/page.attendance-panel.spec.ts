@@ -186,7 +186,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(
@@ -304,7 +303,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
-	resetConductor();
 });
 
 describe('+page — the Take attendance entry point (#84 TA.3)', () => {

@@ -34,7 +34,6 @@
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
-	import { computeConductorEventIds, isConductor, resetConductor } from '$lib/attendance/conductorStore';
 	import { completionGateStore } from '$lib/profile/completionGate';
 	import { loadRoster } from '$lib/roster/rosterData';
 	import type { RosterRow } from '$lib/roster/rosterData';
@@ -284,9 +283,9 @@
 	// same function /event/[id] calls, on the same owners/editors, so the two
 	// surfaces cannot answer differently for one event. Computed PURELY from the
 	// `_owner`/`_editor` refs the agenda read already carried (#91 review F1) —
-	// no new IO. The conductor SEAT no longer admits a row here — see
-	// conductorStore.ts's `isConductor`/`canExpand`, which stay a display/expand
-	// signal only (#365, epic #362).
+	// no new IO. The conductor SEAT no longer admits a row anywhere — the
+	// season-summary expand derives from `seasonManageRights` instead (#365,
+	// epic #362).
 	let attendanceEventIds = $state<Set<string>>(new Set());
 
 	// #214 — event type filter chips above the agenda. Gama's ruling
@@ -1002,7 +1001,6 @@
 			// ever flip `resetManagement`'s two loading flags back off.
 			libraryPickersLoading = false;
 			worksRowsLoading = false;
-			resetConductor();
 			closeAttendancePanel();
 			rosterCache = null;
 			rosterRows = [];
@@ -1379,18 +1377,6 @@
 							}
 						});
 					}
-					// Conductor event IDs: pure computation on already-loaded data (no IO).
-					// #365/epic #362 — `isConductor` (below) still reads this; the seat
-					// stays the display/expand signal it always was, it just no longer
-					// gates the marking affordance (#356).
-					const ids = computeConductorEventIds(personId, seasonConductors, recent);
-					// F3 fix — wire isConductor from the broader signal: a season conductor
-					// IS a conductor even before any past events exist this season (the
-					// per-event Set gates rows; this store is the coarser "is a conductor
-					// at all" signal for TA.3).
-					isConductor.set(
-						ids.size > 0 || seasonConductors.includes(personId) ? 'conductor' : 'not-conductor'
-					);
 					// #356 — the marking gate, called on the item itself so this surface
 					// and /event/[id] run LITERALLY the same function: owner-OR-editor
 					// on the EVENT, nothing else. `item.owners`/`item.editors` are the
@@ -1430,7 +1416,6 @@
 				// truth here, and the effect resolving over it is correct.
 				libraryPickersLoading = false;
 				worksRowsLoading = false;
-				resetConductor();
 				resetSeasonManage();
 				seasons = [];
 			});
@@ -8670,7 +8655,7 @@
 								{#snippet seasonSummary()}
 									<SeasonSummary
 										myRate={mySeasonRate}
-										canExpand={$isConductor === 'conductor'}
+										canExpand={seasonManageRights === 'editor'}
 										expanded={seasonSummaryExpanded}
 										memberRates={seasonMemberRates}
 										membersPartial={seasonRatesPartial}

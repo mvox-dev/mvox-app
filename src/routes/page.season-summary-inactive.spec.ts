@@ -104,7 +104,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string) {
@@ -138,7 +137,8 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 }
 
 beforeEach(() => {
-	// Conductor seat inherited season-wide — the expand affordance renders.
+	// #365 — the expand affordance opens on SEASON RIGHTS (owner-or-editor on
+	// the current season), not on the conductor list. person-p holds `_owner`.
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({
 			seasons: [],
@@ -148,8 +148,8 @@ beforeEach(() => {
 				agendaItem('past-2', '2026-06-03T16:00:00.000Z')
 			],
 			seasonId: 's1',
-			seasonConductors: ['person-p'],
-			seasonOwners: [],
+			seasonConductors: [],
+			seasonOwners: ['person-p'],
 			seasonEditors: []
 		})
 	);
@@ -185,7 +185,6 @@ afterEach(() => {
 	selectedCollectiveDbStore.set(null);
 	urlCollectiveDbStore.set(null);
 	resetGate();
-	resetConductor();
 });
 
 async function renderExpandedSummary() {

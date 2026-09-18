@@ -194,7 +194,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string) {
@@ -340,7 +339,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
-	resetConductor();
 });
 
 describe('+page — the saved cue fires on reconcile, per (event, member) (#327)', () => {

@@ -113,8 +113,12 @@ describe('deriveAllMemberRates', () => {
 
 // ── 3. Page composition — badges + season summary ─────────────────────────────
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+// #365 — the editor grant in setConductorFixture makes the page's admin
+// surfaces (onboarding checklist, toolbar) render too; their keys are not this
+// file's subject, so unknown keys fall back to a `[key]` stub instead of
+// crashing the render. Assertions keep matching the real copy listed below.
+vi.mock('$lib/paraglide/messages.js', () => {
+	const known = {
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 		agenda_today: () => 'Today',
@@ -173,8 +177,20 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_all_members: () => 'All members',
 		attendance_season_loading: () => 'Loading…',
 		attendance_season_load_error: () => "Couldn't load member rates."
-	}
-}));
+	};
+	const lookup = known as unknown as Record<
+		string,
+		((params?: Record<string, unknown>) => string) | undefined
+	>;
+	return {
+		m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
+			get: (_t, key) =>
+				lookup[String(key)] ??
+				((params?: Record<string, unknown>) =>
+					params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`)
+		})
+	};
+});
 
 const {
 	loadFullAgendaMock,
@@ -288,7 +304,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
@@ -351,6 +366,8 @@ function setMemberFixture() {
  * A CONDUCTOR (who is also member m1) with two past rehearsals. Full-event
  * attendance: past-1 → m1 present + m2 absent; past-2 → m1 late (m2 unrecorded).
  * Expected rates: m1 attended 2 of 2, m2 attended 0 of 2.
+ * #365 — the expand affordance opens on SEASON RIGHTS, so she holds `_editor`
+ * on the season; the conductor seat stays as display data only.
  */
 function setConductorFixture() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
@@ -360,7 +377,7 @@ function setConductorFixture() {
 			agendaItem('past-2', '2026-06-03T16:00:00.000Z')
 		],
 		seasonId: 's1',
-		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [], seasons: []
+		seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: ['person-p'], seasons: []
 	}));
 	findMyMemberIdMock.mockResolvedValue('m1');
 	listMyAttendanceMock.mockResolvedValue(toListRead([
@@ -404,7 +421,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
-	resetConductor();
 });
 
 describe('+page — attendance badges on Recent rows (#85 TA.4)', () => {

@@ -104,7 +104,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetConductor } from '$lib/attendance/conductorStore';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { realNamesWire, PROFILE_NAMES, REAL_NAMES } from '$lib/testing/realNamesFence';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
@@ -157,7 +156,6 @@ afterEach(() => {
 	selectedCollectiveDbStore.set(null);
 	urlCollectiveDbStore.set(null);
 	resetGate();
-	resetConductor();
 });
 
 /** One conducted recent event; the viewer (person-p) holds the season seat. */
