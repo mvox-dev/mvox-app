@@ -45,6 +45,11 @@ body:
       label: Parent epic
       description: The epic this belongs to, with the # so GitHub links it.
       placeholder: "#362"
+  # The #319 bypass limit, beside the field it limits (§9: limits ship in full):
+  # forms bind web-UI creation only; `gh issue create --body-file` bypasses them
+  # entirely (how every issue on this board is created). A filled field is
+  # therefore NOT proof the rule was followed — the claim-time citation rule
+  # (po-team issue standard §11) is what covers agent-authored text.
   - type: textarea
     id: rights-rules
     attributes:
