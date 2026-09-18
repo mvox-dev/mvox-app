@@ -37,8 +37,9 @@ export interface BaseIssue {
 	state: 'open' | 'closed';
 	kind: IssueKind;
 	motion: MotionLabel[];
-	/** Estonian one-liner for the public board. Required on Task and Epic;
-	 *  a Bug or Feature arrives from the field without one. */
+	/** Estonian one-liner for the public board. Required on Task and Epic by
+	 *  kind, and on ANY kind once released (#405) — a Bug or Feature may
+	 *  arrive from the field without one, but not reach readers without one. */
 	slugline?: string;
 	/** Estonian lead — what it changes and for whom. Same rule as slugline. */
 	lead?: string;
@@ -224,6 +225,44 @@ function checklistItems(text: string): string[] {
 }
 
 /**
+ * Released = carrying any motion label. That is the moment an issue stops
+ * being intake: Mihkel has put it in front of the team, and the board renders
+ * it to readers who are not us.
+ */
+export function isReleased(raw: RawIssue): boolean {
+	return raw.labels.some((l) => (MOTION_LABELS as readonly string[]).includes(l));
+}
+
+/** Push a missing-field name once, so two rules asking for the same field
+ *  (kind and release both wanting a slugline) name it a single time. */
+function pushMissing(missing: string[], item: string): void {
+	if (!missing.includes(item)) missing.push(item);
+}
+
+/**
+ * The public board's own requirement (#405), Mihkel 2026-09-18: *"the board is
+ * a public surface and thus should read homogenous"*. A released issue carries
+ * an Estonian slugline and lead WHATEVER ITS KIND — #374 and #375 sat on the
+ * board in English because the requirement was tied to kind alone.
+ *
+ * Intake keeps its exemption, which is the half that was right: a field report
+ * from a phone and a one-line request still file without either. The bar moves
+ * at release, not at filing.
+ *
+ * Called from the Bug and Feature parsers only. Task and Epic already demand
+ * both unconditionally, so calling it there would name one missing field
+ * twice; their stricter rule stands, because the ruling raises Bug and Feature
+ * and dropping a fence that already holds would be a regression dressed up as
+ * symmetry.
+ */
+function requireBoardFaceWhenReleased(raw: RawIssue, missing: string[]): void {
+	if (!isReleased(raw)) return;
+	const body = raw.body ?? '';
+	if (!field(body, 'slugline')) pushMissing(missing, 'slugline (released issues carry one, any kind)');
+	if (!field(body, 'lead')) pushMissing(missing, 'lead (released issues carry one, any kind)');
+}
+
+/**
  * Parse one raw issue into a TaskIssue, or refuse with every missing field
  * named. Strictness is the point: a task without a done-when, slugline, lead
  * or author is refused, not defaulted — defaults are how unshaped issues got
@@ -308,6 +347,7 @@ export function parseBugIssue(raw: RawIssue): Parsed<BugIssue> | ParseRefusal {
 	const missing: string[] = [];
 	const body = raw.body ?? '';
 	requireKind(raw, 'bug', missing);
+	requireBoardFaceWhenReleased(raw, missing);
 	const whatWasSeen = field(body, 'what was seen');
 	if (!whatWasSeen) missing.push('what was seen');
 	const where = field(body, 'where');
@@ -332,6 +372,7 @@ export function parseFeatureIssue(raw: RawIssue): Parsed<FeatureIssue> | ParseRe
 	const missing: string[] = [];
 	const body = raw.body ?? '';
 	requireKind(raw, 'feature', missing);
+	requireBoardFaceWhenReleased(raw, missing);
 	const request = field(body, 'the request');
 	if (!request) missing.push('the request');
 	const author = resolveAuthor(raw);

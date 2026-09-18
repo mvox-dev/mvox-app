@@ -1,4 +1,7 @@
-# Feature form — intake, unshaped by definition. One required field: the ask,
+# Feature form — intake, unshaped by definition. Slugline/lead are optional
+# HERE and required at RELEASE (#405): intake stays cheap, the public board
+# stays homogeneous. issue-model.ts enforces the release half.
+# Feature form — One required field: the ask,
 # verbatim. Shaping into tasks happens later, on the board.
 name: Feature
 description: A request or idea, in your own words. Shaping comes later.
@@ -17,3 +20,17 @@ body:
     attributes:
       label: Who is it for
       placeholder: "laulja / dirigent / admin"
+  - type: input
+    id: slugline
+    attributes:
+      label: Slugline
+      description: Üks eestikeelne rida avalikule tahvlile. Sisestusel võib tühjaks jääda — enne väljalaset on see kohustuslik.
+    validations:
+      required: false
+  - type: textarea
+    id: lead
+    attributes:
+      label: Lead
+      description: Üks-kaks eestikeelset lauset — mida see muudab ja kellele. Sama reegel mis sluglinel.
+    validations:
+      required: false
