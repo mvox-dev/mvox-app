@@ -149,6 +149,13 @@
 		// AT CLICK TIME by the page (the signed url lives 60s), never pre-resolved
 		// into an href.
 		onpdfclick?: (fileId: string) => void;
+		// #367 — the on-device/needs-network file badge, from the page's ONE
+		// heldFileIds(db, personId) query per agenda load (never a per-row
+		// get()). Forwarded verbatim to every RepertoireElement this component
+		// renders — the shared worksElement snippet feeds BOTH the Upcoming and
+		// the Recent row templates from the same answer. `null` = not yet
+		// answered: RepertoireElement's own default (no badge) applies.
+		heldFileIds?: ReadonlySet<string> | null;
 		// #91 TR.3 — the management surface, forwarded per event row. Omitted =
 		// the read-only agenda, unchanged (RepertoireElement's own rights default
 		// is 'not-editor', so nothing extra renders).
@@ -208,6 +215,7 @@
 		seasonSummary,
 		worksByEventId = {},
 		onpdfclick,
+		heldFileIds = null,
 		worksManage,
 		emptyState,
 		recentEmptyState,
@@ -377,6 +385,7 @@
 		<RepertoireElement
 			rows={worksByEventId[item.id] ?? NO_OPTIONS}
 			{onpdfclick}
+			{heldFileIds}
 			context={worksContext(item.id)}
 			seasonRights={worksManage?.seasonRights ?? 'not-editor'}
 			eventRights={eventRightsFor(item.id)}

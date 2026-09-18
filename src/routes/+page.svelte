@@ -421,6 +421,36 @@
 	// A PDF whose click-time signing rejected — surfaced inline rather than
 	// leaving the member staring at a tab that never navigated.
 	let pdfError = $state(false);
+	// #367 — the on-device/needs-network file badge, mirroring #351's landed
+	// /library and /event/[id] pattern verbatim. `null` means the store has
+	// not answered yet: an absent badge, not a wrong one (byteStore.ts
+	// heldFileIds doc). ONE heldFileIds(db, personId) call per agenda load,
+	// never a per-row get() — feeds BOTH render sites (AgendaList's shared
+	// worksElement snippet AND the season-manage repertoire panel).
+	let heldFileIds = $state<Set<string> | null>(null);
+
+	// #367 — THE ONLY path by which `heldFileIds` is ever populated: the
+	// load-time query and the post-open refresh both come through here.
+	// See event/[id]/+page.svelte's own `refreshPresence` for the full
+	// "why a re-query, not a local patch" reasoning (a put is a store-wide
+	// mutation via the cap's evictUntilFits, not a single-key fact).
+	let presenceSeq = 0;
+	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
+		const seq = ++presenceSeq;
+		try {
+			getAppByteStore()
+				.heldFileIds(db, personId)
+				.then((ids) => {
+					if (seq !== presenceSeq || !isCurrent()) return;
+					heldFileIds = new Set(ids);
+				})
+				.catch((e) => {
+					console.error('agenda: file presence read failed', e);
+				});
+		} catch (e) {
+			console.error('agenda: file presence read failed', e);
+		}
+	}
 
 	// #91 TR.3 — repertoire/programme MANAGEMENT. Everything below is what makes
 	// the write layer reachable: without it `manageRights` never left its
@@ -996,6 +1026,9 @@
 			worksByEventId = {};
 			scheduleByEventId = {};
 			pdfError = false;
+			// #367 — no collective, no answer to carry: cleared alongside
+			// `worksByEventId` so a deselect can never leave a stale badge.
+			heldFileIds = null;
 			resetManagement();
 			// #288 — deselection: no agenda load follows, so nothing else would
 			// ever flip `resetManagement`'s two loading flags back off.
@@ -1079,6 +1112,11 @@
 		worksByEventId = {};
 		scheduleByEventId = {};
 		pdfError = false;
+		// #367 — a fresh selection (genuine switch OR same-collective refresh)
+		// must not carry the previous load's presence answer: an absent badge
+		// while the new query is in flight, never a stale one (the collective-
+		// switch partition test).
+		heldFileIds = null;
 		resetManagement();
 		if (!keepSeasonManage) {
 			// #214 — a genuine collective switch (this is the same "not
@@ -1283,6 +1321,13 @@
 						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
 					);
 					loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
+					// #367 — ONE presence query for the whole agenda load, never a
+					// per-row get() (byteStore.ts heldFileIds doc — get() counts as an
+					// open). Feeds BOTH render sites off this single answer, keyed on
+					// the SELECTED collective's (db, personId) partition, independent
+					// of rights (upgradeRepertoireManagement's later, rights-only
+					// re-fetch needs no presence re-query — the store didn't change).
+					refreshPresence(worksCfg.db, personId, () => thisRequest === requestId);
 					loadScheduleItems(worksCfg, eventIds, thisRequest);
 					// ── the DATABASE-entity rights fallback (#167 review F2/F3) ────
 					//
@@ -1406,6 +1451,10 @@
 				attendanceEventIds = new Set();
 				worksByEventId = {};
 				scheduleByEventId = {};
+				// #367 — the agenda load failed, so `loadWorksAndManagement` (the
+				// only dispatcher of `refreshPresence`) never ran for this cycle;
+				// blank-and-settled here too, same posture as `worksByEventId`.
+				heldFileIds = null;
 				resetManagement();
 				// #288 review F1 — the agenda load FAILED, so neither the picker read
 				// nor the row read is ever dispatched for this cycle and nothing else
@@ -1687,6 +1736,21 @@
 				// rendered here (no UI in this slice), but it must not be dropped:
 				// #334's availability child is the reader that needs it.
 				void reason;
+				// #367 — a delivery that ATTEMPTED a store write mutates the WHOLE
+				// store (the cap's evictUntilFits may have deleted OTHER rows on
+				// this same screen to make room), never just this key. BOTH
+				// write-attempting reasons, not just the successful one:
+				// byteStore.put evicts BEFORE it writes, so a put that REJECTS
+				// ('network-uncached') has already discarded rows too — gating on
+				// 'network-stored' alone would leave them badged on-device for the
+				// rest of the page's life. Re-query, never a local patch (#351
+				// semantics, mirrored from event/[id]/+page.svelte's own
+				// `refreshPresence` call site).
+				if (reason === 'network-stored' || reason === 'network-uncached') {
+					refreshPresence(identity.db, identity.personId, () =>
+						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
+					);
+				}
 			})
 			.catch(() => {
 				tab?.close();
@@ -7848,6 +7912,7 @@
 										addWorkKey={PANEL_ADD_WORK_KEY}
 										expanded={true}
 										onpdfclick={handlePdfClick}
+										{heldFileIds}
 										onaddwork={handlePanelAddWork}
 										onstatuschange={handlePanelStatusChange}
 										onremoveitem={handlePanelRemoveItem}
@@ -8641,6 +8706,7 @@
 								{myAttendanceByEventId}
 								{worksByEventId}
 								{worksManage}
+								{heldFileIds}
 								scheduleItemsByEventId={scheduleByEventId}
 								{attendancePanel}
 								{justCreatedEventId}
