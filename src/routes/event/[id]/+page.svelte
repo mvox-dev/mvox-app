@@ -233,20 +233,21 @@
 	// this page's now-different control.
 	let rsvpSaved = $state(false);
 
-	// #102 TE.2 — the rights-gated tally (owner OR editor, see `canSeeTally`
-	// below), per-status counts from the domain
-	// rsvp read (listAllRsvpsForEvent). null until loaded (or never loaded, for
-	// a non-editor) — the template gates BOTH the tally and the capacity line on
-	// `tally !== null`, not on `isEditor` alone, so neither surface ever renders
-	// its zero-filled placeholder ahead of the real counts (see page.spec.ts:
-	// every tally/capacity assertion follows a waitFor on the SAME element).
+	// #102 TE.2 — the tally, per-status counts from the domain rsvp read
+	// (listAllRsvpsForEvent). #363: rendered for EVERY viewer, no rights gate —
+	// rsvp rows are `_sharing: domain`, Entu already answers this cross-person
+	// read for every member. null until loaded — the template gates BOTH the
+	// tally and the capacity line on `tally !== null` alone, so neither surface
+	// ever renders its zero-filled placeholder ahead of the real counts (see
+	// page.spec.ts: every tally/capacity assertion follows a waitFor on the
+	// SAME element).
 	let tally = $state<{ going: number; not_going: number; maybe: number; late: number } | null>(
 		null
 	);
 	// #102 review round 2 (F2) — a FAILED tally read is not "no counts to show".
-	// Without this the `isEditor && tally` gate rendered a conductor exactly the
-	// plain-member view on a 500/offline read, so she read "nobody answered / I
-	// have no rights" instead of "the counts failed to load". Same rule the rest
+	// Without this the `tally` gate rendered every viewer exactly the
+	// no-counts-yet view on a 500/offline read, so she read "nobody answered"
+	// instead of "the counts failed to load". Same rule the rest
 	// of the rights code states out loud (repertoireActions.resolveManageRights:
 	// absence IS the clean negative, a fetch failure is NOT) and the same
 	// error+retry treatment this page already gives the event read.
@@ -522,18 +523,22 @@
 	 * `_owner` was missing from both, so an owner-only conductor got the agenda's
 	 * programme controls for this event yet no tally here — the two surfaces
 	 * disagreed about who is an editor of the SAME entity.
+	 *
+	 * #363 — the tally itself no longer reads this: rsvp rows are `_sharing:
+	 * domain`, so Entu already answers the cross-person read for every member
+	 * (epic #362 rule 3, readable data is never hidden behind an app
+	 * predicate). `isEditor` stays exactly this manage-rights question for the
+	 * ~20 CRUD sites on this page that still gate on it.
 	 */
-	function canSeeTally(d: EventDetail, personId: string): boolean {
-		return manageRightsFrom(d.ownerIds, d.editorIds, personId) === 'editor';
-	}
-
 	const isEditor = $derived(
-		detail !== null && selected !== null && canSeeTally(detail, selected.personId)
+		detail !== null &&
+			selected !== null &&
+			manageRightsFrom(detail.ownerIds, detail.editorIds, selected.personId) === 'editor'
 	);
 
 	/**
 	 * #304 — SPECIFICALLY owner-tier (not merely `_editor`), off the SAME
-	 * `ownerIds` the tally/isEditor rule already reads. UNASSIGN (a `_parent`
+	 * `ownerIds` the isEditor rule already reads. UNASSIGN (a `_parent`
 	 * value DELETE) is owner-gated on the wire (SPIKE, probe-304-parent-rights-
 	 * gate-live-2026-09-10); an `_editor`-only viewer gets a 403 for a delete
 	 * the picker must never even offer. `ownerIds` already carries the FULL
@@ -663,12 +668,12 @@
 			detail = loaded;
 			status = 'ready';
 			loadRsvpControl(cfg, current.personId, id, g);
-			if (canSeeTally(loaded, current.personId)) {
-				// #255 (D) stale-closure pin — pastness CAPTURED here, at request
-				// time, off the just-resolved `loaded` detail, never read live
-				// inside loadTally's own async continuation.
-				loadTally(cfg, id, g, isPastDetail(loaded));
-			}
+			// #363 — no rights gate: rsvp rows are `_sharing: domain`, Entu already
+			// answers this cross-person read for every viewer.
+			// #255 (D) stale-closure pin — pastness CAPTURED here, at request
+			// time, off the just-resolved `loaded` detail, never read live inside
+			// loadTally's own async continuation.
+			loadTally(cfg, id, g, isPastDetail(loaded));
 			loadComposeSurfaces(cfg, loaded, current.personId, g);
 		} catch (e) {
 			if (g !== generation) return;
@@ -838,10 +843,11 @@
 			});
 	}
 
-	/** The rights-gated tally read — domain-tier listAllRsvpsForEvent (#82's
-	 *  widen), counted per status. Only ever called behind `canSeeTally` (owner
-	 *  OR editor visible on this event): on first load, and again once the
-	 *  viewer's own rsvp write lands (#102 review F4).
+	/** The tally read — domain-tier listAllRsvpsForEvent (#82's widen), counted
+	 *  per status. #363: no rights gate — `_sharing: domain` means Entu answers
+	 *  this cross-person read for every member. Called for every viewer, on
+	 *  first load, and again once the viewer's own rsvp write lands (#102
+	 *  review F4).
 	 *
 	 *  #255 (D), DATE-GATED (Gama 15:31 refinement): a FUTURE event's tally
 	 *  joins against the ACTIVE roster — a deactivated member's recorded 'yes'
@@ -897,20 +903,21 @@
 	}
 
 	/** Re-run the tally read for the event on screen — the Retry beside the
-	 *  "counts unavailable" line. Rights-gated exactly like every other call
-	 *  site, so it can never become a back door to the cross-person read. */
+	 *  "counts unavailable" line. #363: no rights gate — every viewer who can
+	 *  see the error line issued the read that failed, so every viewer can
+	 *  retry it. */
 	function retryTally(): void {
 		const current = selected;
 		const loaded = detail;
-		if (!current || !loaded || !canSeeTally(loaded, current.personId)) return;
+		if (!current || !loaded) return;
 		tallyError = false;
 		loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation, isPastDetail(loaded));
 	}
 
 	// ── #203 — delete: the ONE destructive action this page owns ───────────────
-	// Gated on `isEditor` in the template — the same predicate the pencils and
-	// tally run. Two-step confirm, same shape as the agenda's #197 season-manage
-	// delete rows: arming writes nothing, only the confirm button destroys.
+	// Gated on `isEditor` in the template — the same predicate the pencils run.
+	// Two-step confirm, same shape as the agenda's #197 season-manage delete
+	// rows: arming writes nothing, only the confirm button destroys.
 
 	// Review F1 — both halves are async for ONE reason (the roster's
 	// `armRemove`/`disarmRemove` spell it out, and `armSeasonManageDelete` follows
@@ -1043,13 +1050,12 @@
 			// tally counts, so a successful write just invalidated it (and the
 			// capacity line, which reads `tally.going`). Re-read rather than patch a
 			// local delta: the read is the same one that produced these counts, and
-			// it also picks up anything else that changed meanwhile. Gated on the
-			// SAME rights predicate as the initial fetch, so a plain member never
-			// issues the cross-person read. `revert` needs no refresh — a failed
-			// write changed nothing server-side.
+			// it also picks up anything else that changed meanwhile. #363: no
+			// rights gate — every viewer issues this read now. `revert` needs no
+			// refresh — a failed write changed nothing server-side.
 			const current = selected;
 			const loaded = detail;
-			if (current && loaded && canSeeTally(loaded, current.personId)) {
+			if (current && loaded) {
 				loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation, isPastDetail(loaded));
 			}
 		},
@@ -3431,7 +3437,7 @@
 		{:else if detail}
 			<div class="flex flex-col gap-1.5">
 				<!-- #304 — the series picker. Rights-holders only (`isEditor`, the SAME
-				     one predicate the pencils/tally/delete all run — a plain member
+				     one predicate the pencils/delete all run — a plain member
 				     gets no picker and no note); scoped to events that HAVE a season
 				     (series are season children, so a season-less event has nothing to
 				     scope options by). Placed FIRST in the header — name is the field
@@ -4528,8 +4534,9 @@
 				{/if}
 
 				<!-- #102 TE.2 — the RSVP section: the SAME RsvpControl component and
-				     rsvp entity the agenda rows use, plus (for a viewer visible in this
-				     event's `_owner`/`_editor` list) the tally and capacity. -->
+				     rsvp entity the agenda rows use, plus the tally and capacity (#363:
+				     no rights gate — rendered from the domain rsvp read for every
+				     viewer). -->
 				<section
 					data-testid="event-detail-rsvp"
 					class="mt-3 flex flex-col gap-2"
@@ -4558,10 +4565,11 @@
 						saved={rsvpSaved}
 						onchange={handleRsvpChange}
 					/>
-					<!-- Gated on the counts actually being loaded, not merely on
-					     `isEditor`: rendering the moment rights resolve — ahead of the
-					     tally fetch — would flash a zero-filled placeholder. -->
-					{#if isEditor && tally}
+					<!-- #363 — no rights gate: rsvp rows are `_sharing: domain`, so the
+					     tally renders from the read's result for every viewer. Gated on
+					     the counts actually being loaded — rendering ahead of the tally
+					     fetch would flash a zero-filled placeholder. -->
+					{#if tally}
 						<p data-testid="event-detail-tally" class="text-xs text-ink-2" aria-live="polite">
 							<span data-testid="event-detail-tally-going"
 								>{m.event_detail_tally_going({ count: tally.going })}</span
@@ -4585,12 +4593,12 @@
 							</p>
 						{/if}
 					{/if}
-					<!-- The counts FAILED to load (#102 review round 2, F2). Shown to the
-					     same viewers the tally itself is shown to — a plain member is not
-					     told about a read she never issues — and never at the same time
+					<!-- The counts FAILED to load (#102 review round 2, F2). #363 — shown
+					     to every viewer: every viewer now issues this read, so a failure
+					     of HER read is hers to be told about — and never at the same time
 					     as the tally: a failed read drops the counts rather than leaving
 					     a stale number standing as if it were current. -->
-					{#if isEditor && tallyError}
+					{#if tallyError}
 						<p
 							data-testid="event-detail-tally-error"
 							role="status"
@@ -4740,7 +4748,7 @@
 				{/if}
 
 				<!-- #203 — delete: the ONE destructive action on this page, gated on the
-				     SAME isEditor predicate as the pencils/tally above (rights props live
+				     SAME isEditor predicate as the pencils above (rights props live
 				     in the private bucket — a plain member reads no rights lists at all and
 				     must never see this affordance). Two-step confirm, same posture as the
 				     agenda's #197 season-manage delete rows: the trigger ARMS (writes

@@ -13,9 +13,9 @@
 //
 //   src/routes/event/[id]/+page.svelte
 //     • event-detail-delete — the idle × <button>, rendered ONLY when
-//       `isEditor` (the SAME gate the pencils and the tally run — rights props
-//       live in the private bucket, so a plain member reads no rights lists at
-//       all and must never see the button).
+//       `isEditor` (the SAME gate the pencils run — rights props live in the
+//       private bucket, so a plain member reads no rights lists at all and must
+//       never see the button).
 //     • tap → ARMED state: event-detail-delete-confirm and
 //       event-detail-delete-cancel replace the ×. Arming writes NOTHING.
 //     • confirm → deleteEvent(cfg, eventId) from $lib/seasons/seasonManage

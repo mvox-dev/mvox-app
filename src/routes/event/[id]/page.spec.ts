@@ -1168,7 +1168,12 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 
 // ── page: rights-gated tally + capacity ───────────────────────────────────────
 
-describe('/event/[id] — tally + capacity, gated on `_editor` (event) containing the viewer', () => {
+// #363 — the gate is GONE: rsvp rows are `_sharing: domain`, Entu already
+// answers the cross-person read for every member, so the tally renders from
+// the read's result for everyone (epic #362 rule 3 — readable data is never
+// hidden behind an app predicate). The editor/owner cases below stay green;
+// the three no-grant cases are FLIPPED from their pre-#363 "sees nothing" law.
+describe('/event/[id] — tally + capacity render from the domain rsvp read for EVERY member (#363)', () => {
 	it('an _editor on the event sees the tally: per-status counts from the domain rsvp read', async () => {
 		const { container } = renderRsvpPage({ event: editorEvent() });
 		await waitFor(() => {
@@ -1184,34 +1189,48 @@ describe('/event/[id] — tally + capacity, gated on `_editor` (event) containin
 		expect(count('late')!.textContent).toContain('0');
 	});
 
-	it('a plain member sees the control but NO tally and NO capacity (default fixture: _editor invisible)', async () => {
-		const { container } = renderRsvpPage();
-		// Settle past the async seeding (pressed state proves the rsvp reads have
-		// resolved) before asserting the ABSENCE of the gated surfaces.
+	it('a plain member with NO grant on the event sees the tally AND capacity — the render follows the read, not a rights predicate (#363)', async () => {
+		// Default fixture: rights props invisible — the viewer holds no grant at
+		// all on the event (ownerIds/editorIds both []).
+		const { container, fetchStub } = renderRsvpPage();
 		await waitFor(() => {
-			expect(
-				container
-					.querySelector('[data-testid="rsvp-btn-going"]')
-					?.getAttribute('aria-pressed')
-			).toBe('true');
+			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
+		const count = (s: string) =>
+			container.querySelector(`[data-testid="event-detail-tally-${s}"]`);
+		// Full-shape: every bucket from the real rsvp fixture, zeros included.
+		expect(count('going')!.textContent).toContain('12');
+		expect(count('not_going')!.textContent).toContain('2');
+		expect(count('maybe')!.textContent).toContain('1');
+		expect(count('late')!.textContent).toContain('0');
+		// Capacity OPENS WITH the tally (Gama ruling on #363): 12 going of 20.
+		const cap = container.querySelector('[data-testid="event-detail-capacity"]')!.textContent ?? '';
+		expect(cap).toContain('12');
+		expect(cap).toContain('20');
+		// …and the domain-tier cross-person read was actually ISSUED for this
+		// non-editor — the fetch gate is gone, not just the render gate.
+		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
+		expect(
+			urls.some(
+				(u) =>
+					u.includes('_type.string=rsvp') &&
+					u.includes('event.reference=ev1') &&
+					!u.includes('_parent.reference=')
+			)
+		).toBe(true);
 	});
 
-	it('an _editor list WITHOUT the viewer does not reveal the tally — membership of the list, not presence of the prop', async () => {
+	it('an _editor list WITHOUT the viewer changes nothing — the tally renders from the read, not from list membership (#363)', async () => {
 		const { container } = renderRsvpPage({
 			event: eventEntity({ _editor: [{ reference: 'p-other' }] })
 		});
 		await waitFor(() => {
-			expect(
-				container
-					.querySelector('[data-testid="rsvp-btn-going"]')
-					?.getAttribute('aria-pressed')
-			).toBe('true');
+			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
+		expect(
+			container.querySelector('[data-testid="event-detail-tally-going"]')!.textContent
+		).toContain('12');
+		expect(container.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
 	});
 
 	it('capacity renders as going-count / capacity alongside the tally when event.capacity is set', async () => {
@@ -1254,20 +1273,20 @@ describe('/event/[id] — tally + capacity, gated on `_editor` (event) containin
 		expect(cap).toContain('20');
 	});
 
-	it('an `_owner` list WITHOUT the viewer still reveals nothing (membership of the list, not presence of the prop)', async () => {
+	it('an `_owner` list WITHOUT the viewer changes nothing either — tally + capacity render for her too (#363)', async () => {
 		const { container } = renderRsvpPage({
 			event: eventEntity({ _owner: [{ reference: 'p-other' }] })
 		});
 		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
-			).toBe('true');
+			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
+		expect(
+			container.querySelector('[data-testid="event-detail-tally-going"]')!.textContent
+		).toContain('12');
+		expect(container.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
 	});
 
-	it('integration: the RSVP section holds the control AND the gated tally + capacity together (editor view)', async () => {
+	it('integration: the RSVP section holds the control AND the tally + capacity together (editor view)', async () => {
 		const { container } = renderRsvpPage({ event: editorEvent() });
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-rsvp"]')).not.toBeNull();
@@ -1460,7 +1479,10 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 		expect(c.querySelector('[data-testid="event-detail-capacity"]')!.textContent).toContain('11');
 	});
 
-	it('a plain member issues NO cross-person tally read at all, before or after her own change', async () => {
+	// #363 — FLIPPED (was: "issues NO cross-person tally read at all"). rsvp
+	// rows are `_sharing: domain`; the F4 re-fetch runs for every viewer now,
+	// same as the initial load (epic #362 rule 3).
+	it("a plain member's F4 re-fetch DOES issue the cross-person tally read, same as the initial load (#363)", async () => {
 		const { container, fetchStub } = renderRsvpPage(); // default fixture: no rights visible
 		await waitFor(() => {
 			const maybe = container.querySelector('[data-testid="rsvp-btn-maybe"]') as HTMLButtonElement;
@@ -1474,13 +1496,13 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 			expect(posts.length).toBeGreaterThan(0);
 		});
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		// #329 — the viewer's OWN answer is now read via the scoped
+		// #329 — the viewer's OWN answer is read via the scoped
 		// `findMyRsvpForEvent` (_parent.reference=p-viewer AND event.reference=ev1),
 		// which legitimately carries `event.reference=ev1` too; only a query WITHOUT
 		// `_parent.reference=` is the cross-person tally shape this test guards.
 		expect(
 			urls.some((u) => u.includes('event.reference=ev1') && !u.includes('_parent.reference='))
-		).toBe(false);
+		).toBe(true);
 	});
 });
 
@@ -1646,13 +1668,30 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 		errorSpy.mockRestore();
 	});
 
-	it('a plain member is never shown the error line — she issues no tally read at all', async () => {
-		const { container } = renderRsvpPage(); // default fixture: no rights visible
-		await waitFor(() => {
-			const maybe = container.querySelector('[data-testid="rsvp-btn-maybe"]') as HTMLButtonElement;
-			expect(maybe.disabled).toBe(false);
+	// #363 — FLIPPED (was: a plain member issues no read, sees no error line).
+	// Every member issues the read now, so the failure of a read SHE issued is
+	// hers to be told about (Gama ruling on #363), Retry included.
+	it("a plain member's FAILED tally read shows HER the error line + Retry (#363)", async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const base = rsvpWireStub(); // default fixture: no rights visible
+		const failing = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (
+				url.includes('_type.string=rsvp') &&
+				url.includes('event.reference=ev1') &&
+				!url.includes('_parent.reference=')
+			)
+				return json({ message: 'boom' }, 500);
+			return base(input, init);
 		});
-		expect(container.querySelector('[data-testid="event-detail-tally-error"]')).toBeNull();
+		const { container } = renderWithFetch(failing);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-tally-error"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="event-detail-tally-retry"]')).not.toBeNull();
+		// The counts are dropped, never rendered stale beside the error.
+		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
+		errorSpy.mockRestore();
 	});
 });
 

@@ -132,7 +132,8 @@ function eventEntity(startDatetime: string, over: Partial<Record<string, unknown
 		duration_minutes: [{ _id: 'val-dur-1', number: 180 }],
 		location: [{ _id: 'val-loc-1', string: 'Rehearsal Hall' }],
 		capacity: [{ _id: 'val-cap-1', number: 20 }],
-		// The viewer holds `_editor` — canSeeTally passes, the tally renders.
+		// #363 — the tally renders for every viewer regardless of rights; `_editor`
+		// here is incidental fixture shape, not what makes the tally appear.
 		_editor: [{ reference: 'p-viewer' }],
 		_parent: [{ reference: 'org1', entity_type: 'organization' }],
 		...over
