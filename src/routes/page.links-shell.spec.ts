@@ -87,6 +87,9 @@ vi.mock('$lib/links/linkActions', () => ({
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
+// #374/#375 — the page reads its OWN host from $app/state at save time.
+vi.mock('$app/state', () => ({ page: { url: new URL('https://dev.mvox.eu/links') } }));
+
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
 import { authStore } from '$lib/auth/session';

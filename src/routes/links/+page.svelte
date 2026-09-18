@@ -19,11 +19,13 @@
 	//     only is standing law; no drag-drop); boundary controls are disabled.
 	//   - Edit = whole-field in-situ (standing rule): the row's static view is
 	//     replaced by its own input fields, never a separate modal.
+	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 	import { adminStore } from '$lib/nav/adminStore';
 	import { listLinks, type LinkRow } from '$lib/links/linkData';
 	import { createLink, updateLink, reorderLinks, deleteLink } from '$lib/links/linkActions';
+	import { normalizeUrl } from '$lib/links/normalizeUrl';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 
@@ -186,7 +188,12 @@
 		// a previous failure must not outlive the retry that fixed it.
 		writeError = null;
 		try {
-			await createLink(cfg, { name, url: addUrl, description, displayOrder: maxOrder + 1 });
+			await createLink(cfg, {
+				name,
+				url: normalizeUrl(addUrl, page.url.host),
+				description,
+				displayOrder: maxOrder + 1
+			});
 			if (g !== routeLoad.generation) return;
 			addName = '';
 			addUrl = '';
@@ -224,7 +231,7 @@
 		const g = routeLoad.generation;
 		writeError = null;
 		try {
-			await updateLink(cfg, id, { name, url: editUrl, description });
+			await updateLink(cfg, id, { name, url: normalizeUrl(editUrl, page.url.host), description });
 			if (g !== routeLoad.generation) return;
 			cancelEdit();
 			await refreshRows(cfg, g);

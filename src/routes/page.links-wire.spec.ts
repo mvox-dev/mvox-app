@@ -12,8 +12,10 @@
 //     module's SORTED order (server order deliberately shuffled);
 //   - add → ONE create POST whose body is EXACTLY _type-as-REFERENCE
 //     (resolveTypeId, never a string), _parent = the database entity,
-//     name/url verbatim, display_order appended, EXPLICIT _sharing 'domain'
-//     + _inheritrights true (#256 pin 5);
+//     name verbatim, url NORMALISED at the page layer (#374: schemeless →
+//     https:// prepended; #375: own-host → relative — the data layer still
+//     sends what it is given verbatim), display_order appended, EXPLICIT
+//     _sharing 'domain' + _inheritrights true (#256 pin 5);
 //   - move-down → the atomic-overwrite renumber wire, exactly
 //     reorderSections' shape: per link GET ?props=display_order → ONE POST
 //     pairing the old value id with the 1-based position; ZERO DELETEs on
@@ -45,6 +47,12 @@ vi.mock('$lib/entu/request', async (importActual) => ({
 }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
+// #374/#375 — the page reads its OWN host from $app/state at save time. The
+// stub host dev.mvox.eu is NOT crede.ee, so the typed crede.ee url below is
+// prepended, not trimmed.
+const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }));
+vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
@@ -202,8 +210,8 @@ describe('#256 integration — the page drives the REAL read module', () => {
 	});
 });
 
-describe('#256 integration — add drives the REAL createLink wire (pin 5)', () => {
-	it('one create POST: _type as REFERENCE, _parent = database entity, url VERBATIM, display_order appended, EXPLICIT _sharing domain + _inheritrights', async () => {
+describe('#256 integration — add drives the REAL createLink wire (pin 5, url law now #374/#375)', () => {
+	it('one create POST: _type as REFERENCE, _parent = database entity, url NORMALISED by the page (schemeless typed → https:// on the wire), display_order appended, EXPLICIT _sharing domain + _inheritrights', async () => {
 		const { container } = await renderReady();
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Uus link' } });
 		await fireEvent.input(q(container, 'links-add-url')!, {
@@ -231,7 +239,9 @@ describe('#256 integration — add drives the REAL createLink wire (pin 5)', () 
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: DB_ENTITY },
 			{ type: 'name', string: 'Uus link' },
-			{ type: 'url', string: 'crede.ee/salvestused' },
+			// The page normalised the typed 'crede.ee/salvestused' (#374);
+			// the data layer sent what it was handed, verbatim as ever.
+			{ type: 'url', string: 'https://crede.ee/salvestused' },
 			{ type: 'display_order', number: 3 },
 			{ type: '_sharing', string: 'domain' },
 			{ type: '_inheritrights', boolean: true }

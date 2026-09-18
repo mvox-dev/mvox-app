@@ -17,9 +17,15 @@
 //      idiom (roster record editor, library edition files, event convert).
 //   3. A link with no description renders WITHOUT an empty line — the
 //      description NODE is absent, not an empty element.
-//   4. URLs stored AS GIVEN: the add/edit forms submit the url string
-//      verbatim; name and url are required non-empty (no create/update call
-//      fires on an empty one); description optional.
+//   4. URLs NORMALISED at payload-build time (#374 + #375, superseding the
+//      #256 as-given ruling on the SAVE path only): schemeless gets https://
+//      prepended; a url whose host is the page's own host is trimmed to a
+//      relative path. Silent — the bound inputs are NOT mutated and nothing
+//      rendered tells the person. Name and url stay required non-empty on
+//      what was TYPED (no create/update call fires on an empty one — the
+//      check runs before the helper); description optional. Display stays
+//      verbatim (pin 1) — the transform lives at the page save layer,
+//      normalizeUrl.spec.ts pins the pure contract.
 //   5. Reorder = NATIVE move up / move down buttons per row (native controls
 //      only is standing law; no drag-drop). Boundary controls (up on first,
 //      down on last) are disabled — a boundary tap never fires a write.
@@ -78,6 +84,12 @@ vi.mock('$lib/links/linkActions', () => ({
 }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
+// #374/#375 — the page reads its OWN host from $app/state at save time
+// (ssr=false; precedent: profile/+page.svelte + page.session-expired.spec.ts).
+// The stub host is dev.mvox.eu — the own-surface trim compares against it.
+const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }));
+vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
@@ -286,12 +298,15 @@ describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, no
 
 // ── add ─────────────────────────────────────────────────────────────────────
 
-describe('#256 — add: name+url required non-empty, description optional, url submitted VERBATIM', () => {
-	it('submits createLink with the typed values verbatim and displayOrder = max existing + 1, then refreshes the list', async () => {
+describe('#374/#375 — add: url normalised at payload-build time, silently', () => {
+	it('a schemeless url goes to createLink with https:// prepended (#374), displayOrder = max existing + 1, then refreshes — and the form renders NO hint about the change', async () => {
 		const { container } = await renderReady('admin');
+		// The silent pin: whatever the normaliser does, the rendered form text
+		// stays exactly what it was (input VALUES are not part of textContent).
+		const formTextBefore = q(container, 'links-add-form')!.textContent;
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Uus link' } });
 		await fireEvent.input(q(container, 'links-add-url')!, {
-			target: { value: 'example.com/uus' }
+			target: { value: 'crede.ee/salvestused' }
 		});
 		const listCallsBefore = listLinksMock.mock.calls.length;
 		await fireEvent.click(q(container, 'links-add-submit')!);
@@ -301,16 +316,53 @@ describe('#256 — add: name+url required non-empty, description optional, url s
 		});
 		const [cfgArg, inputArg] = createLinkMock.mock.calls[0];
 		expect(cfgArg).toEqual(CFG);
-		// FULL-shape toEqual — url verbatim (no scheme guessed), no description
-		// (none typed), displayOrder appends at the end of the stable order.
+		// FULL-shape toEqual — the PAYLOAD carries the prepended url; no
+		// description (none typed); displayOrder appends at the end.
 		expect(inputArg).toEqual({
 			name: 'Uus link',
-			url: 'example.com/uus',
+			url: 'https://crede.ee/salvestused',
 			description: null,
 			displayOrder: 4
 		});
 		await waitFor(() => {
 			expect(listLinksMock.mock.calls.length).toBeGreaterThan(listCallsBefore);
+		});
+		expect(q(container, 'links-add-form')!.textContent).toBe(formTextBefore);
+	});
+
+	it('an own-host url (page host dev.mvox.eu) goes to createLink as a relative path keeping query+fragment (#375) — and the bound input is NOT mutated while the write is in flight', async () => {
+		let resolveCreate!: (id: string) => void;
+		createLinkMock.mockImplementation(
+			() =>
+				new Promise<string>((res) => {
+					resolveCreate = res;
+				})
+		);
+		const { container } = await renderReady('admin');
+		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Salvestused' } });
+		await fireEvent.input(q(container, 'links-add-url')!, {
+			target: { value: 'https://dev.mvox.eu/salvestused?x=1#y' }
+		});
+		await fireEvent.click(q(container, 'links-add-submit')!);
+
+		await waitFor(() => {
+			expect(createLinkMock).toHaveBeenCalledTimes(1);
+		});
+		expect(createLinkMock.mock.calls[0][1]).toEqual({
+			name: 'Salvestused',
+			url: '/salvestused?x=1#y',
+			description: null,
+			displayOrder: 4
+		});
+		// Normalise at PAYLOAD-BUILD time only — the draft still shows exactly
+		// what was typed while the write is in flight (the draft-survives pin
+		// in page.links-save-states-wire.spec.ts depends on this).
+		expect((q(container, 'links-add-url') as HTMLInputElement).value).toBe(
+			'https://dev.mvox.eu/salvestused?x=1#y'
+		);
+		resolveCreate('l-new');
+		await waitFor(() => {
+			expect((q(container, 'links-add-url') as HTMLInputElement).value).toBe('');
 		});
 	});
 
@@ -333,7 +385,7 @@ describe('#256 — add: name+url required non-empty, description optional, url s
 		});
 	});
 
-	it('empty url → NO create call; empty name → NO create call (non-empty is the ONLY validation — nothing checks what a url looks like)', async () => {
+	it('empty url → NO create call; empty name → NO create call (non-empty stays the ONLY validation, run on what was TYPED, before the normaliser)', async () => {
 		const { container } = await renderReady('admin');
 		// name only, url empty
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'A' } });
@@ -348,8 +400,8 @@ describe('#256 — add: name+url required non-empty, description optional, url s
 
 // ── edit ────────────────────────────────────────────────────────────────────
 
-describe('#256 — edit: whole-field, prefilled, url verbatim', () => {
-	it('opens the row prefilled, submits updateLink with the full field set — an emptied description goes as null', async () => {
+describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-build time', () => {
+	it('opens the row prefilled, submits updateLink with the full field set — the typed schemeless url goes with https:// prepended (#374), an emptied description goes as null', async () => {
 		const { container } = await renderReady('admin');
 		const scoresRow = rowEls(container)[1];
 		await fireEvent.click(scoresRow.querySelector('[data-testid="links-edit"]')!);
@@ -369,10 +421,80 @@ describe('#256 — edit: whole-field, prefilled, url verbatim', () => {
 		});
 		expect(updateLinkMock.mock.calls[0][0]).toEqual(CFG);
 		expect(updateLinkMock.mock.calls[0][1]).toBe('l-scores');
-		// url stays schemeless — VERBATIM; description stays absent (null).
+		// The PAYLOAD carries the prepended url; description stays absent
+		// (null). The stored rows still render verbatim — display is pin 1's
+		// job, untouched by #374/#375.
 		expect(updateLinkMock.mock.calls[0][2]).toEqual({
 			name: 'Scores',
-			url: 'f.io/abc',
+			url: 'https://f.io/abc',
+			description: null
+		});
+	});
+
+	it('an own-host url (page host dev.mvox.eu) goes to updateLink as a relative path keeping query+fragment (#375) — and the bound editUrl input is NOT mutated while the write is in flight', async () => {
+		let resolveUpdate!: () => void;
+		updateLinkMock.mockImplementation(
+			() =>
+				new Promise<void>((res) => {
+					resolveUpdate = res;
+				})
+		);
+		const { container } = await renderReady('admin');
+		const scoresRow = rowEls(container)[1];
+		await fireEvent.click(scoresRow.querySelector('[data-testid="links-edit"]')!);
+		await fireEvent.input(q(container, 'links-edit-url')!, {
+			target: { value: 'https://dev.mvox.eu/salvestused?x=1#y' }
+		});
+		await fireEvent.click(q(container, 'links-edit-save')!);
+
+		await waitFor(() => {
+			expect(updateLinkMock).toHaveBeenCalledTimes(1);
+		});
+		expect(updateLinkMock.mock.calls[0][2]).toEqual({
+			name: 'Scores',
+			url: '/salvestused?x=1#y',
+			description: null
+		});
+		// Payload-build only — the in-situ draft still shows what was typed.
+		expect((q(container, 'links-edit-url') as HTMLInputElement).value).toBe(
+			'https://dev.mvox.eu/salvestused?x=1#y'
+		);
+		resolveUpdate();
+		await waitFor(() => {
+			expect(q(container, 'links-edit-url')).toBeNull();
+		});
+	});
+
+	it('a row whose stored url is ALREADY relative re-saves with that SAME url when only the name changes — no https:// glued onto it', async () => {
+		// #375 stores own-host links as '/salvestused'. Reopening that row
+		// prefills editUrl with the stored relative path; a name-only edit
+		// must send it back untouched. Prepending would write
+		// 'https:///salvestused' — a dead link to a host named `salvestused`.
+		listLinksMock.mockResolvedValue([
+			{
+				id: 'l-own',
+				name: 'Salvestused',
+				url: '/salvestused?x=1#y',
+				description: null,
+				displayOrder: 1
+			}
+		]);
+		const { container } = await renderReady('admin');
+		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-edit"]')!);
+		const urlInput = q(container, 'links-edit-url') as HTMLInputElement;
+		expect(urlInput.value).toBe('/salvestused?x=1#y');
+
+		await fireEvent.input(q(container, 'links-edit-name')!, {
+			target: { value: 'Salvestused 2026' }
+		});
+		await fireEvent.click(q(container, 'links-edit-save')!);
+
+		await waitFor(() => {
+			expect(updateLinkMock).toHaveBeenCalledTimes(1);
+		});
+		expect(updateLinkMock.mock.calls[0][2]).toEqual({
+			name: 'Salvestused 2026',
+			url: '/salvestused?x=1#y',
 			description: null
 		});
 	});

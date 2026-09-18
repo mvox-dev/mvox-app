@@ -192,7 +192,7 @@ repertoire_item" being about ordering alone).
 | Property        | Type   | Required | Notes                                                                                  |
 | ---------------- | ------ | -------- | ----------------------------------------------------------------------------------------- |
 | `name`           | string | yes      | what the link is                                                                           |
-| `url`            | string | yes      | the target, stored **exactly as given** — no normalising, no scheme-guessing, no validation beyond non-empty (Gama's explicit ruling: inventing URL-shape rules risks rejecting valid ones) |
+| `url`            | string | yes      | the target. Save-time normalisation at the page layer only (#374/#375): a schemeless input gets `https://` prepended, and a url on our own host is stored as a relative path starting with `/`. Beyond that there is no validation but non-empty — no URL-shape rules (Gama's #256 ruling: inventing them risks rejecting valid urls), and the data and read layers pass the value verbatim, as does display. #256's "exactly as given" now binds display and the non-page layers, not the write |
 | `description`    | string | no       | one optional line of free text                                                             |
 | `display_order`  | number | no       | manual arrangement, same shape as `section`/`repertoire_item` — a collection of links has no inherent order |
 

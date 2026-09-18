@@ -9,7 +9,11 @@
 //     the database entity, no readable one fails loud naming the db. `name`
 //     trimmed/required; `url` required non-empty (a non-whitespace char) and
 //     otherwise sent VERBATIM — no trim, no normalising, no scheme-guessing
-//     (#256 ruling: "URLs are stored as given"). `description` written only
+//     at THIS layer (#256 ruling: "URLs are stored as given"; #374/#375
+//     supersede that ruling at the PAGE layer only — the page runs
+//     normalizeUrl on the typed url before calling create/updateLink, so
+//     what arrives here is already the payload to store, verbatim, same as
+//     always). `description` written only
 //     when non-empty. `display_order` written when a number is given (the
 //     page passes max existing + 1). `_sharing: 'domain'` EXPLICIT at create
 //     time (every entity owns its own `_sharing`; the type-def's `domain`
@@ -36,9 +40,12 @@ export interface CreateLinkInput {
 	/** Required non-empty (trimmed before sending — house name hygiene). */
 	name: string;
 	/**
-	 * Required non-empty (must contain a non-whitespace char). Sent VERBATIM —
-	 * no trim, no normalising, no scheme-guessing, no validation beyond
-	 * non-empty (#256 ruling: "URLs are stored as given").
+	 * Required non-empty (must contain a non-whitespace char). Sent VERBATIM
+	 * by this layer — no trim, no normalising, no scheme-guessing, no
+	 * validation beyond non-empty (#256 ruling: "URLs are stored as given").
+	 * The caller (the page) has already run normalizeUrl (#374/#375), so what
+	 * arrives here may be a prepended `https://…` or an own-host relative
+	 * path; this layer writes whatever it is given.
 	 */
 	url: string;
 	/** Optional one-liner; absent/empty → NO description property is written. */

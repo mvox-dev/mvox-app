@@ -3,6 +3,13 @@
 // Model: listSeasons' database-entity scoping (#161 — the collective is the
 // DATABASE entity, not organization) + sectionData's missing-display_order-
 // sorts-last convention. See linkData.spec.ts for the pinned contract.
+//
+// #374/#375 note: this READ layer stays verbatim — whatever a link's `url`
+// property holds is returned as-is, no re-normalising on read. The
+// normalisation (schemeless → https://, own-host → relative) happens once,
+// at SAVE time, at the page layer (src/routes/links/+page.svelte via
+// normalizeUrl.ts); it supersedes #256's "stored as given" wording only for
+// what gets WRITTEN, not for this read path.
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -10,7 +17,12 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 export interface LinkRow {
 	id: string;
 	name: string;
-	/** Stored VERBATIM — never normalised, never scheme-guessed (#256 ruling). */
+	/**
+	 * Returned VERBATIM by this read layer — never normalised, never
+	 * scheme-guessed here (#256 ruling). The write side normalises once at
+	 * the page layer (#374/#375, normalizeUrl.ts), so a stored value may
+	 * already be `https://…` or an own-host relative path starting with '/'.
+	 */
 	url: string;
 	/** null when the link has no description (absent OR empty-string property). */
 	description: string | null;
@@ -63,7 +75,8 @@ export async function listLinks(
 		(raw): LinkRow => ({
 			id: raw._id,
 			name: raw.name?.[0]?.string ?? '',
-			// VERBATIM — no normalising, no scheme-guessing (#256 ruling).
+			// VERBATIM on read — no normalising, no scheme-guessing here (#256
+			// ruling); normalisation is the page layer's, at save (#374/#375).
 			url: raw.url?.[0]?.string ?? '',
 			// Absent OR empty-string maps to null: the page must be able to
 			// render NO description node at all (#256 done-when 3).
