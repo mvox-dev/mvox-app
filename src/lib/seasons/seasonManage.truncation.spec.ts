@@ -72,7 +72,8 @@ describe('listEventSeriesForSeason — truncation detection (#321)', () => {
 			]
 		]);
 		expect(await listEventSeriesForSeason(cfg, 'season-1', fetchImpl)).toEqual({
-			items: [{ id: 'series-1', name: 'Tuesdays', eventCount: 2 }],
+			// #400 — `ownerIds` rides along; this fixture carries no `_owner`.
+			items: [{ id: 'series-1', name: 'Tuesdays', eventCount: 2, ownerIds: [] }],
 			truncated: false
 		});
 	});
@@ -93,7 +94,7 @@ describe('listEventSeriesForSeason — truncation detection (#321)', () => {
 			truncated: boolean;
 		};
 		expect(res.truncated).toBe(true);
-		expect(res.items).toEqual([{ id: 'series-1', name: 'Tuesdays', eventCount: 1 }]);
+		expect(res.items).toEqual([{ id: 'series-1', name: 'Tuesdays', eventCount: 1, ownerIds: [] }]);
 	});
 
 	it('the SERIES read truncated → truncated: true', async () => {

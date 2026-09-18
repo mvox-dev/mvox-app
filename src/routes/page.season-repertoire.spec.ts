@@ -1004,7 +1004,10 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 	 *  trigger); this is now driven through the SURVIVING write-triggered
 	 *  reload — a series delete (`refreshAfterSeasonManageDelete`), the ONLY
 	 *  remaining coverage of the panel staying open across that reload. */
-	const SERIES_ROW = { id: 'series-9', name: 'Proovid', eventCount: 3 };
+	// #400 — `ownerIds` includes the viewer ('person-p') so the delete
+	// trigger this test clicks still renders; this pin is about the panel
+	// reload surviving, not the rights gate.
+	const SERIES_ROW = { id: 'series-9', name: 'Proovid', eventCount: 3, ownerIds: ['person-p'] };
 
 	it('rows and the add-work select survive a series delete, with no repertoire refetch to hide a wipe', async () => {
 		// The trap: from the moment the delete fires, every repertoire_item read

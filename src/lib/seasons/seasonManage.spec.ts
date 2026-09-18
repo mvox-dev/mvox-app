@@ -115,11 +115,12 @@ describe('listEventSeriesForSeason — series with event counts, no N+1', () => 
 		const result = await listEventSeriesForSeason(cfg, 'season1', impl);
 
 		const byId = [...result.items].sort((a, b) => a.id.localeCompare(b.id));
-		// FULL shape (partial assertions hide bugs — house rule).
+		// FULL shape (partial assertions hide bugs — house rule). #400 —
+		// `ownerIds` rides along; this fixture's entities carry no `_owner`.
 		expect(byId).toEqual([
-			{ id: 's1', name: 'Monday rehearsals', eventCount: 2 },
-			{ id: 's2', name: 'Sectionals', eventCount: 1 },
-			{ id: 's3', name: 'Empty series', eventCount: 0 }
+			{ id: 's1', name: 'Monday rehearsals', eventCount: 2, ownerIds: [] },
+			{ id: 's2', name: 'Sectionals', eventCount: 1, ownerIds: [] },
+			{ id: 's3', name: 'Empty series', eventCount: 0, ownerIds: [] }
 		]);
 	});
 

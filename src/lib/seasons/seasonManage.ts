@@ -37,6 +37,14 @@ export interface SeriesListItem {
 	id: string;
 	name: string;
 	eventCount: number;
+	/** #400 — the series' OWN `_owner` grant, ids only (`.reference`, NEVER
+	 *  `.string` — ER-26: reference strings bake PII). The season-manage
+	 *  panel's series-delete trigger gates on this, not the season's rights:
+	 *  Entu's entity DELETE checks `_owner` on the TARGET, and the season and
+	 *  a series inside it are different entities with independent grants.
+	 *  Absent (private bucket withheld — no grant visible on this series) →
+	 *  `[]`, same as "no owners": both read as "grant not in hand". */
+	ownerIds: string[];
 }
 
 /** #321 — `listEventSeriesForSeason`'s shape: no `total`, because TWO
@@ -64,6 +72,14 @@ interface ParentRef {
 interface SeriesEntity {
 	_id: string;
 	name?: Array<{ string: string }>;
+	_owner?: Array<{ reference?: string }>;
+}
+
+/** #400 — `_owner`'s `.reference` values ONLY (ER-26: never `.string` — it
+ *  bakes the denormalized display name, PII). A value with no `reference`
+ *  contributes nothing. */
+function ownerIdsOf(series: SeriesEntity): string[] {
+	return (series._owner ?? []).flatMap((o) => (o.reference ? [o.reference] : []));
 }
 
 interface EventEntity {
@@ -85,7 +101,9 @@ export async function listEventSeriesForSeason(
 ): Promise<SeriesListRead> {
 	const seriesRes = await entuFetch(
 		cfg.db,
-		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name&limit=200`,
+		// #400 — `_owner` rides the same read: the delete trigger's gate is the
+		// series' OWN grant, not the season's (epic #362 rules 1-2).
+		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name,_owner&limit=200`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -125,7 +143,8 @@ export async function listEventSeriesForSeason(
 		items: seriesList.map((series) => ({
 			id: series._id,
 			name: series.name?.[0]?.string ?? '',
-			eventCount: counts.get(series._id) ?? 0
+			eventCount: counts.get(series._id) ?? 0,
+			ownerIds: ownerIdsOf(series)
 		})),
 		truncated: seriesTruncated || eventsTruncated
 	};

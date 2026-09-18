@@ -265,6 +265,7 @@ interface SeriesRow {
 	id: string;
 	name: string;
 	eventCount: number;
+	ownerIds: string[];
 }
 interface EventRow {
 	id: string;
@@ -292,8 +293,12 @@ let cascadeDeletedCount: Record<string, number> = {};
 
 function resetRows(): void {
 	seriesRows = [
-		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 },
-		{ id: 'series-2', name: 'Sectionals', eventCount: 0 }
+		// #400 — this suite pins the delete MECHANICS (confirm, cascade,
+		// errors), not the rights gate (that's page.season-manage-series-
+		// owner-gate.spec.ts); the viewer ('person-p') owns both rows so
+		// every trigger below still renders.
+		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] },
+		{ id: 'series-2', name: 'Sectionals', eventCount: 0, ownerIds: ['person-p'] }
 	];
 	eventRows = [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
 	liveOccurrenceCount = { 'series-1': 14, 'series-2': 0 };

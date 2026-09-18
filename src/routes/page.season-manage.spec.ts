@@ -374,11 +374,14 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-/** The season's event series, as the panel lists them: name + event count. */
+/** The season's event series, as the panel lists them: name + event count.
+ *  #400 — `ownerIds` includes the viewer ('person-p'): this suite pins panel
+ *  mechanics unrelated to the #400 rights gate, so every delete trigger it
+ *  exercises must still render. */
 function seriesFixture() {
 	return [
-		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 },
-		{ id: 'series-2', name: 'Sectionals', eventCount: 0 }
+		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] },
+		{ id: 'series-2', name: 'Sectionals', eventCount: 0, ownerIds: ['person-p'] }
 	];
 }
 
@@ -1556,8 +1559,14 @@ function twoSeasonResult(opts: { aEditor?: boolean; bEditor?: boolean } = {}) {
 const flush = () => new Promise((r) => setTimeout(r, 0));
 
 const SEASON_B_ID = 'season-2';
-const seriesA = [{ id: 'series-a1', name: 'Monday rehearsals', eventCount: 12 }];
-const seriesB = [{ id: 'series-b1', name: 'Thursday sectionals', eventCount: 4 }];
+// #400 — `ownerIds` includes the viewer ('person-p'): these switch-pin tests
+// exercise the delete flow across a season switch, not the rights gate.
+const seriesA = [
+	{ id: 'series-a1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] }
+];
+const seriesB = [
+	{ id: 'series-b1', name: 'Thursday sectionals', eventCount: 4, ownerIds: ['person-p'] }
+];
 /** One repertoire row per season — what lets the write-race pin tell A's row
  *  from B's inside the panel's repertoire section. */
 const repertoireA = [

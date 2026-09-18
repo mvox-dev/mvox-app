@@ -665,7 +665,9 @@ describe('integration — conversion writes, the REAL agenda/panel producers rea
 
 		expect((await listEventsForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([]);
 		expect((await listEventSeriesForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([
-			{ id: seriesId, name: 'Proov', eventCount: 1 }
+			// #400 — the fake wire's create doesn't simulate Entu's
+			// auto-granted-creator `_owner` doc, so the read comes back empty.
+			{ id: seriesId, name: 'Proov', eventCount: 1, ownerIds: [] }
 		]);
 	});
 });

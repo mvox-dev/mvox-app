@@ -73,6 +73,7 @@
 	} from '$lib/repertoire/types';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import {
+		canDeleteSeries,
 		canMarkAttendance,
 		createProgramItem,
 		createRepertoireItem,
@@ -7727,6 +7728,17 @@
 												     mutual-exclusion precedent the panel's opener buttons use. No
 												     convert form lives in this panel any more, so the wrapper left
 												     with it. -->
+												<!-- #400 (epic #362 rules 1-2) — the write's grant lives on the
+												     SERIES, not the season (the panel's own gate above): a season
+												     editor who did not create this series inherits `_editor` on it
+												     but holds no `_owner`, and Entu's entity DELETE checks `_owner`
+												     on the TARGET. `canDeleteSeries` fails closed on an absent/
+												     excluding `ownerIds` — no visible grant IS no grant. Gating only
+												     the entry trigger (never rendering it) leaves the armed-confirm
+												     branch below dead code with no click path to reach it, so the
+												     `forbidden` fallback copy it guards stays unreachable rather
+												     than needing its own removal. -->
+												{#if selected && canDeleteSeries(series, selected.personId)}
 												{#if seasonManageDeleteArmed === series.id}
 													<button
 														type="button"
@@ -7771,6 +7783,7 @@
 														aria-label={m.season_manage_series_delete({ name: series.name })}
 														onclick={() => void armSeasonManageSeriesDelete(series)}
 													/>
+												{/if}
 												{/if}
 											</div>
 										</div>

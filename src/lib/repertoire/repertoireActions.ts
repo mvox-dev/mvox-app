@@ -349,6 +349,25 @@ export function canMarkAttendance(
 }
 
 /**
+ * #400 (epic #362 rules 1-2) — THE one gate for the season-manage panel's
+ * per-series delete trigger: the caller must hold `_owner` on the SERIES
+ * itself, the entity Entu's entity DELETE actually checks — not the season's
+ * rights (the panel's own gate), and not `_editor` either. Editing a series
+ * (`_editor`, inherited season-editor tier-for-tier included) does not carry
+ * the right to delete it; only its own `_owner` does. `manageRightsFrom` with
+ * an empty editors list expresses exactly that: owners only.
+ */
+export function canDeleteSeries(
+	series: { ownerIds?: readonly string[] },
+	personId: string
+): boolean {
+	// `ownerIds` missing reads exactly like `[]` (absence IS no grant) — a
+	// pre-#400 fixture/caller that predates this field must fail closed the
+	// same way a live read with the private bucket withheld does, never throw.
+	return manageRightsFrom(series.ownerIds ?? [], [], personId) === 'editor';
+}
+
+/**
  * "Add work" picker: library works NOT already present in the current
  * season's repertoire (by workId), preserving library order. Pure — no
  * fetch. Excludes a work regardless of its repertoire_item's status: a
