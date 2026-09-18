@@ -46,6 +46,12 @@ export interface RoadmapIssue {
 	body: string | null;
 	/** ISO date-time the issue was (most recently) closed; null while open or never recorded. */
 	closedAt: string | null;
+	/**
+	 * #403: ISO date-time GitHub last recorded a change to the issue — an edit,
+	 * a comment, a label or a close. Optional so pre-#403 fixtures stay valid
+	 * input; a card with no value renders no corner.
+	 */
+	updatedAt?: string | null;
 	/** The issue's own GitHub page. Carried verbatim from the API's `html_url` — never assembled. */
 	htmlUrl: string;
 	/** Native GitHub sub-issues, already resolved by the fetch step. Empty = flat. */
@@ -408,6 +414,28 @@ function renderLabel(label: RoadmapLabel): string {
  * than resting on the fetch step alone — a child reported under two epics lands
  * under the first and is skipped under the second instead of appearing twice.
  */
+/**
+ * The card's upper-right corner (#403): when anyone last touched the issue.
+ *
+ * Read ONLY from `updatedAt` — never from `closedAt`, a label, or the build
+ * stamp. That is what makes the corner's claim true: GitHub moves `updated_at`
+ * on an edit, a comment, a label and a close, and leaves it alone when a commit
+ * or another issue merely references this one.
+ *
+ * The instant is re-emitted from `Date.parse` rather than interpolated raw.
+ * `escapeHtml` deliberately leaves quotes alone (it is built for text content),
+ * so nothing unvalidated may reach the `datetime` ATTRIBUTE — a normalized
+ * ISO string cannot carry one. An unparseable value renders nothing at all,
+ * which is also the empty-field case.
+ */
+export function renderUpdatedAt(updatedAt: string | null | undefined): string {
+	if (!updatedAt) return '';
+	const parsed = Date.parse(updatedAt);
+	if (Number.isNaN(parsed)) return '';
+	const iso = new Date(parsed).toISOString();
+	return `<time class="issue-updated" datetime="${iso}">${escapeHtml(formatGeneratedAt(iso))}</time>`;
+}
+
 function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	if (rendered.has(issue.number)) return '';
 	rendered.add(issue.number);
@@ -450,6 +478,7 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	const subIssuesHtml = childrenHtml ? `<ul class="sub-issues">${childrenHtml}</ul>` : '';
 	return (
 		`<article class="issue" data-issue="${issue.number}" data-state="${issue.state}"${stateReasonAttr}>` +
+		renderUpdatedAt(issue.updatedAt) +
 		`<a class="issue-link" href="${escapeHtml(issue.htmlUrl)}">` +
 		`<span class="issue-number">#${issue.number}</span>` +
 		`<span class="issue-title">${escapeHtml(title)}</span>` +
@@ -534,7 +563,8 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 <title>mvox roadmap</title>
 <style>
 	body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
-	.issue { display: block; border: 1px solid #ccc; border-radius: 0.5rem; padding: 0.75rem; margin: 0.5rem 0; }
+	.issue { display: flow-root; border: 1px solid #ccc; border-radius: 0.5rem; padding: 0.75rem; margin: 0.5rem 0; }
+	.issue-updated { float: right; font-size: 0.75rem; color: #666; margin-left: 0.75rem; }
 	.issue[data-state="closed"] { opacity: 0.6; }
 	.issue-link { text-decoration: underline; color: inherit; }
 	.issue-number { color: #666; margin-right: 0.5rem; }
