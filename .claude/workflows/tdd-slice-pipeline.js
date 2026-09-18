@@ -160,7 +160,12 @@ const GIT_SAFETY = '\n\nGIT SAFETY (absolute): NEVER run `git reset --hard`, `gi
 // NOTE (baked 2026-09-06): a `_shared` key in the LAUNCH args object is NOT read by agents —
 // they read only their own prompts and any args JSON file those prompts name. Put per-run rules
 // in that args file (or in the prompts themselves), never in launch-args `_shared`.
-const agentS = (prompt, opts) => agent(prompt + GIT_SAFETY + FINAL_DISCIPLINE + STRUCT_FINAL, opts)
+// TURN DISCIPLINE (baked 2026-09-18 after wf_02ad008b-072 green-363: the agent ran `pnpm test` with
+// run_in_background, wrote "I'll pause and wait", and ended its turn — a subagent's turn ends when it
+// stops calling tools, background tasks re-invoke only the parent, so the pipeline died on
+// "completed without calling StructuredOutput"). Foreground gates, and never end the turn early.
+const TURN_DISCIPLINE = '\n\nTURN DISCIPLINE: run every gate (pnpm check, pnpm test, builds) in the FOREGROUND — never run_in_background, never "pause and wait" for a background task — and do not end your turn until you have called StructuredOutput with your result; a turn that ends without it fails the whole pipeline.'
+const agentS = (prompt, opts) => agent(prompt + TURN_DISCIPLINE + GIT_SAFETY + FINAL_DISCIPLINE + STRUCT_FINAL, opts)
 
 const VERDICT_SCHEMA = {
   type: 'object',

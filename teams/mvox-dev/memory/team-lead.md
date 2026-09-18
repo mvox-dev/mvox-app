@@ -2,23 +2,17 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-24, post-regroup index 2026-09-18 02:35 EEST]
+### [NEXT SESSION — MVOX-24, seam checkpoint 2026-09-18 16:45 EEST]
 
-**Team:** solo wake 2026-09-16 (Mihkel: no roster members); `companion` (sonnet, blank, no role) spawned as the only teammate. #373 CLOSED. **GRANT-TRUST paradigm ratified on #362 body (Gama 2026-09-18 09:03):** grants enforced by Entu, app reads them and renders controls; no BFF exists (static SPA, browser-direct). Gist: https://gist.github.com/mitselek/4a4401ecfc6606a6aa7e10552e3d683b (00-ask, paradigm, no-bff rewrite list, survey). **RELEASED ready, order fixed: #363 → #372 → #400 → #365** (one slice or four is ours). Pending Mihkel: (a) invariant line common-prompt:184 — Gama leans drop; (b) clearance to wake roster for the slice. Ours after: markers chore PR (4 sites, survey Class A/C), corpus rewrite (12 living docs in gist file 02), Bentham/Tallis prompt rules.
+**#362 PACK LANDED (wf_966a614f-827, 31 agents, 0 errors): #363 fb2c20d · #372 7315cdd · #400 7b4be2c · #365 d7b7dfe · #371 e27beb2.** All four gate children of #362 closed; epic's close is Gama's. Grant-trust paradigm ratified on #362; no-BFF corpus rewrite landed (772906a/35619e2 app, 2123058/d77aacc schema repo).
 
-**ISSUE MODEL (#384, closed, Gama):** four kinds = GitHub types Task/Bug/Feature/Epic. Forms in `.github/ISSUE_TEMPLATE/{task,bug,feature,epic}.yml`; enforcement in `scripts/roadmap/issue-model.ts` (parses form `### Heading` sections AND legacy `---` frontmatter; refuses with named missing fields, never throws). Task = slugline+lead (Estonian) + What + Done-when (checkable lines) + Parent epic (`#N`) + rights-rules (ER ids, optional). Bug = what was seen + where + who (role, never a name). Feature = the request verbatim, unshaped. Epic = slugline+lead+story; children via native sub-issues (no Children field, #391). Forms no longer assign kind labels — the type says it (#393). Motion labels orthogonal to kind: ready/blocked/in process/in research/prepped/needs-po. **Per-person GitHub accounts since 2026-09-18** (Gama files as `gamamvox`); author = login for new issues, body marker for old. `[TASK]` title prefixes stripped. Rulebook change: issue-standard §9/§10 wording lives in the form descriptions now.
+**QUEUE (args in ~/workspace/scratchpad/, all prepped, TURN DISCIPLINE on every prompt):** (1) ledger pack args-next-pack.json [402→401→367→344] — LAUNCH NEXT; (2) links args-links-374-375.json (one slice, closes both); (3) #233 args-233-pack.json [S1,S2,S3,S4 CODE slices] — live runs are Pérotin's on Mihkel's per-step authorization (S1, S2, then S2-rerun+S4), all after #402; S3 precondition = S1+S2 live ledgers on main; (4) #407 args-407.json LAST (358-file polyphony→history sweep, sampledb token, fence spec).
 
-**GROOMED BACKLOG (20 open):**
-- Epic #390 in-app feedback (Gama, Mihkel rulings 2026-09-15): #388 roster PII capture · #394 drawing component (strokes only) · #395 feedback entity (member's child, domain-visible) · #361 name-bearing surfaces · #392 CLOSED (rebadge of #357, d1891fb). Compose-and-send task cut after children land.
-- Epic #362 gates read Entu grants: #372 RSVP control asks may-write · #363 canSeeTally · #365 season-summary opens on rights.
-- Epic #334 offline parts: #367 agenda presence badge (ready) — rest closed.
-- Epic #333 doodling: no children yet (#394 is the reusable stroke component, filed under #390).
-- No epic: #233 event_name formula (ready, old) · #270 crede person.email reminder · #370 Bug RSVP 'try again' · #371 grantSelfEditor (ready) · #373 roadmap reads kind from type · #374/#375 Features (link scheme / relative path).
-- **ready:** #233 #344 (`good readable issue`) #367 #371. `in research`: none.
-- **DELETED:** #358 #359 (→ #394 #395) · #364 #376–#380 #382 #383. **Branch fix/382-merge-prompt-git-facts @ b451cbc is orphaned** (issue gone) — needs Mihkel's word: delete or re-home.
-- Closed this window: #366 doc fix (7a93e14 retires ER-24/25), #369 crede RSVP bug, #384, #392.
+**TOOLS LANDED THIS SEAM:** teams/mvox-dev/scripts/context-health.sh (real context tokens per agent; merge Monitor prints it at every landing); .claude/workflows/research-pack.js (research template: contract-pinned verify agents + blast + clears `in research` itself); tdd-slice-pipeline.js TURN_DISCIPLINE baked into agentS. Memory: mvox-db-from-jwt-accounts (no PUBLIC_ENTU_DB), workflow-agent-background-gates-fail, context-health-at-seams, native-issue-types (types=kind, labels=movement only).
 
-**LAWS (unchanged, durable memory):** app-not-docs; decision-vs-permission; ruling=posture-never-mechanism; gate-first merges; types show kind, labels show movement (Mihkel 2026-09-18, supersedes both-forever); .string bakes PII.
+**LAWS ADDED:** grant-trust (Entu grants only authority; no BFF exists); research workflow clears its own labels, team-lead sets prepped only with args; §12/issue-standard.md is po-team's — done-when boxes are the contract; polyphony dropped from constraining us (crede-only schema work, one script per step, #407).
+
+**Session record:** ~/workspace/scratchpad/findings-362-slice.md (+ research-*-digest.md, gist https://gist.github.com/mitselek/4a4401ecfc6606a6aa7e10552e3d683b).
 
 (*MVOX:Palestrina*)
 
