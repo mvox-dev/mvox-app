@@ -5,12 +5,16 @@
 	Disable REASON, not a pre-collapsed boolean. The old single `disabled` prop
 	conflated two distinct meanings — "not a member" and "a write is in flight" —
 	so a member mid-write was told "Only members can RSVP" (the reported
-	regression). The control now takes the reason itself:
-	  • `nonMember` — a CONFIRMED non-member → disabled + the non-member hint.
-	  • `pending`   — a write for this event is in flight → disabled, aria-busy,
-	                  and NO hint (PO ruling: silent-disable, no "saving" text).
-	`isDisabled = nonMember || pending` drives the button [disabled] attr and the
-	handleClick early-return; the hint is gated on `nonMember` ONLY.
+	regression). One reason is left, and it is the only one this control renders:
+	  • `pending` — a write for this event is in flight → disabled, aria-busy,
+	                and NO hint (PO ruling: silent-disable, no "saving" text).
+
+	#372 (+ its review, F3) — the `nonMember` half is GONE. A confirmed
+	non-member no longer gets a disabled control at all; she gets the hint in the
+	control's PLACE, which now lives in its own component
+	(RsvpNonMemberHint.svelte) rendered by the two surfaces instead of this one.
+	Keeping a `nonMember` prop no caller passed left the hint markup duplicated
+	across three files, free to drift apart unnoticed.
 
 	`saveFailed` surfaces a per-row error line when the last write for this event
 	rejected (its value having been reverted upstream). Distinct from `pending`:
@@ -44,9 +48,8 @@
 
 	interface Props {
 		status?: RsvpStatus | null;
-		// The disable REASON, split so the hint tracks membership, not the button
-		// state (see block comment above).
-		nonMember?: boolean;
+		// The one disable REASON this control knows: a write is in flight. See the
+		// block comment above for why membership is not one of its inputs.
 		pending?: boolean;
 		// The last write for this event failed — show an inline error line.
 		saveFailed?: boolean;
@@ -59,19 +62,14 @@
 	}
 	const {
 		status = null,
-		nonMember = false,
 		pending = false,
 		saveFailed = false,
 		saved = false,
 		onchange
 	}: Props = $props();
 
-	// Both reasons disable the buttons; only `nonMember` shows the hint.
-	const isDisabled = $derived(nonMember || pending);
-
-	// Stable, per-instance id so each row's buttons can point at THEIR OWN hint
-	// via aria-describedby (never a different row's).
-	const hintId = $props.id();
+	// The sole disable reason (see block comment) — a write in flight.
+	const isDisabled = $derived(pending);
 
 	const BUTTONS: { value: RsvpStatus; label: () => string }[] = [
 		{ value: 'going', label: m.rsvp_status_going },
@@ -133,7 +131,6 @@
 				type="button"
 				disabled={isDisabled}
 				aria-pressed={status === btn.value ? 'true' : 'false'}
-				aria-describedby={nonMember ? hintId : undefined}
 				tabindex={activeStatus === btn.value ? 0 : -1}
 				onfocus={() => (roving = btn.value)}
 				class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 disabled:cursor-default disabled:opacity-[0.45]"
@@ -147,29 +144,26 @@
 		{/each}
 	</div>
 	<!--
-		Message line — ALWAYS rendered (min-height reserves the vertical space) so a
-		hint/error appearing or disappearing on a tap never shifts the layout. Holds
-		the non-member hint (membership) OR the save-failed error (last write), which
-		are mutually exclusive (a non-member can't issue a write).
+		Message line — ALWAYS rendered (min-height reserves the vertical space) so an
+		error appearing or disappearing on a tap never shifts the layout. Holds the
+		save-failed error for the last write; since #372 the non-member hint is not
+		one of its occupants (a non-member gets no control, so nothing to describe
+		here) and lives in RsvpNonMemberHint.svelte, which reuses this same reserved
+		box so the hint↔control swap still shifts nothing.
 
 		#151 — the line sits at the dense BODY tier (`text-xs`), not the stamp tier:
-		both of its occupants are sentences, and an error sentence is never a stamp
-		(the buttons above are the stamp tier — font-mono chips). Because the two
-		occupants swap inside one reserved box, they share one step; the reserved
-		pair `min-h-[16px] leading-[16px]` is text-xs's 12/16 metric, so the swap
-		still shifts nothing. Error colour is the shared `text-red-700` error role,
+		its occupant is a sentence, and an error sentence is never a stamp (the
+		buttons above are the stamp tier — font-mono chips). The reserved pair
+		`min-h-[16px] leading-[16px]` is text-xs's 12/16 metric, so the line
+		appearing or clearing still shifts nothing. Error colour is the shared `text-red-700` error role,
 		NOT the bare `text-red` destructive-ACTION token. See docs/design/typography.md.
 	-->
 	<p
 		data-testid="rsvp-msg-line"
 		class="min-h-[16px] text-xs leading-[16px]"
-		class:italic={nonMember}
-		class:text-ink-2={nonMember}
-		class:text-red-700={saveFailed && !nonMember}
+		class:text-red-700={saveFailed}
 	>
-		{#if nonMember}
-			<span id={hintId} data-testid="rsvp-non-member-hint">{m.rsvp_non_member_hint()}</span>
-		{:else if saveFailed}
+		{#if saveFailed}
 			<span data-testid="rsvp-save-failed" role="alert">{m.rsvp_save_failed()}</span>
 		{/if}
 	</p>

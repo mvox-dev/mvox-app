@@ -823,7 +823,11 @@ describe('agenda — [+ Season] survives the states where no season is current',
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
 		// Zero-fetch: the list read already carried `_owner`/`_editor`.
-		expect(resolveManageRightsMock).not.toHaveBeenCalled();
+		// #372 — resolveManageRightsMock is now ALSO called once per load for the
+		// rsvp enablement read (entityId === personId, "person-p"); that call is
+		// excluded here, not counted against the organization round-trip claim.
+		const orgProbes = resolveManageRightsMock.mock.calls.filter((c) => c[1] !== 'person-p');
+		expect(orgProbes).toEqual([]);
 	});
 
 	it('(H) fail-closed: a lapsed season the viewer does NOT edit still hides season-create', async () => {

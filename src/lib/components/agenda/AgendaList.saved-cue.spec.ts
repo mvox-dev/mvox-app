@@ -107,7 +107,7 @@ describe('AgendaList — savedEventIds reaches the matching row and ONLY that ro
 	it("a saved row stays fully interactive — saved is not pending, so its buttons remain enabled", () => {
 		const { container } = render(AgendaList, {
 			items,
-			membership: 'member',
+			canRsvp: 'editor', // #372 — canRsvp, not membership, is the enablement gate
 			savedEventIds: new Set(['r1'])
 		});
 		const btn = row(container, 'r1')?.querySelector(

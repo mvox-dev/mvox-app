@@ -165,7 +165,11 @@ afterEach(() => {
 });
 
 describe('+page — resolves member id + existing rsvps alongside the agenda (#12 data half)', () => {
-	it('calls findMyMemberId with {db,token} for the selected collective and the selected person id', async () => {
+	// #372 — this call-shape pin survives for the WRITE PAYLOAD path only: the
+	// member id rides on the created rsvp entity (createRsvp's `member` prop).
+	// It is NOT what enables the control — enablement is the Entu grant on the
+	// person entity (page.rsvp-rights-gate.spec.ts).
+	it('calls findMyMemberId with {db,token} — the member id feeds the WRITE payload, never enablement (#372)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));

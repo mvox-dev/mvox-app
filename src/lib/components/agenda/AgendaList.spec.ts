@@ -330,25 +330,24 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 		}
 	});
 
-	it("membership='non-member' disables every row's control (confirmed non-member)", () => {
-		const { container } = render(AgendaList, { items: itemSameDay, membership: 'non-member' });
+	// #372 (issue #362 paradigm) — membership no longer has ANY say in the
+	// control's enabled state; `canRsvp` (the Entu grant) is the ONE gate. See
+	// the 'AgendaList — canRsvp is the RSVP gate (#372)' describe below for the
+	// full canRsvp contract; this negative pin stays here, beside the old
+	// (now-superseded) membership claim, so the paradigm shift can't silently
+	// regress back to reading membership.
+	it("membership='member' alone does NOT enable the control — canRsvp is the gate", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' }); // canRsvp defaults 'loading'
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(true);
-	});
-
-	it("membership='member' enables every row's control", () => {
-		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' });
-		const row = container.querySelector('[data-testid="agenda-row-r1"]');
-		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
-		expect(btn?.disabled).toBe(false);
 	});
 
 	it("tapping a row's control forwards (item, status) via onrsvpchange — the right item, not a different row's", async () => {
 		const onrsvpchange = vi.fn();
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			membership: 'member',
+			canRsvp: 'editor',
 			onrsvpchange
 		});
 		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
@@ -360,18 +359,48 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 	});
 });
 
+// ── AgendaList — canRsvp is the RSVP gate (#372, issue #362 paradigm) ───────
+// The Entu grant (`_owner`/`_editor` on the singer's own person, resolved by
+// the page via resolveManageRights) is the ONE thing that decides whether a
+// row's control renders at all, and whether it's enabled. Membership is
+// display only now — see the 'membership state' describe below for its
+// (narrowed) remaining job, the non-member hint.
+describe('AgendaList — canRsvp is the RSVP gate (#372)', () => {
+	it("canRsvp='editor' enables every row's control", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, canRsvp: 'editor' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(false);
+	});
+
+	it("canRsvp='loading' (the default) renders the control disabled — never an enabled invitation ahead of the grant", () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+		expect(btn?.disabled).toBe(true);
+	});
+
+	it("canRsvp='not-editor' renders NO control at all on the row — not disabled, absent (#369)", () => {
+		const { container } = render(AgendaList, { items: itemSameDay, canRsvp: 'not-editor' });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]');
+		expect(row?.querySelector('[data-testid="rsvp-control"]')).toBeNull();
+	});
+});
+
 // ── AgendaList — per-event pending disables the WHOLE control (#15) ─────────
 // Mihkel's ruling: while an event's write is in flight, that event's entire
 // RsvpControl (all 4 buttons) is unclickable — re-enabled on resolve. This is
 // the primary #15 fix (rsvpChangeQueue.spec.ts covers the write-orchestration
 // half); here we only pin that the pending signal actually reaches the row's
-// `disabled` prop, and does so per-event.
+// `disabled` prop, and does so per-event. `canRsvp: 'editor'` throughout —
+// otherwise every row is disabled on the rights gate alone (see the describe
+// above), which would make this block's own claims vacuous.
 
 describe('AgendaList — pending event disables its whole control (#15)', () => {
-	it("an event id in pendingEventIds disables ALL FOUR buttons of that row's control, even for a resolved member", () => {
+	it("an event id in pendingEventIds disables ALL FOUR buttons of that row's control, even with the grant in hand", () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			membership: 'member',
+			canRsvp: 'editor',
 			pendingEventIds: new Set(['r1'])
 		});
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
@@ -385,7 +414,7 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 	it('a DIFFERENT row (not in pendingEventIds) stays fully interactive — pending is per-event, not global', () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			membership: 'member',
+			canRsvp: 'editor',
 			pendingEventIds: new Set(['r1']) // only r1 pending
 		});
 		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
@@ -393,10 +422,10 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 		expect(btn?.disabled).toBe(false);
 	});
 
-	it('an empty pendingEventIds (nothing in flight) disables no row on account of pending — membership alone still governs', () => {
+	it('an empty pendingEventIds (nothing in flight) disables no row on account of pending — canRsvp alone still governs', () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
-			membership: 'member',
+			canRsvp: 'editor',
 			pendingEventIds: new Set<string>()
 		});
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
@@ -405,16 +434,25 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 	});
 });
 
-// ── AgendaList — membership 3-state passes the right REASON to each control ──
-// The disable reason (not a pre-collapsed boolean) reaches RsvpControl:
-//   'non-member' → disabled + hint;  'member' → enabled;  'loading' (unresolved)
-//   → disabled, NO hint (fail-safe — never a false "Only members can RSVP").
+// ── AgendaList — membership state: the non-member hint only (#372) ──────────
+// renders in the control's place — nothing else. Rules:
+//   'non-member' + canRsvp !== 'editor' → NO control, hint shows instead.
+//   'member'                            → no hint (control's own state is
+//                                          canRsvp's call, see the describe
+//                                          above).
+//   'loading' (unresolved)              → no hint (fail-safe — never a false
+//                                          "Only members can RSVP").
 
 describe('AgendaList — membership state (loading / member / non-member)', () => {
-	it("membership='non-member' shows the non-member hint on a row", () => {
-		const { container } = render(AgendaList, { items: itemSameDay, membership: 'non-member' });
+	it("membership='non-member' + no grant shows the hint, renders NO control", () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			membership: 'non-member',
+			canRsvp: 'not-editor'
+		});
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		expect(row?.textContent).toContain('You are not an active member.');
+		expect(row?.querySelector('[data-testid="rsvp-control"]')).toBeNull();
 	});
 
 	it("membership='member' shows no non-member hint", () => {
@@ -423,11 +461,11 @@ describe('AgendaList — membership state (loading / member / non-member)', () =
 		expect(row?.textContent).not.toContain('You are not an active member.');
 	});
 
-	it("membership='loading' (unresolved) disables the control but shows NO non-member hint", () => {
+	it("membership='loading' (unresolved) shows NO non-member hint, regardless of canRsvp", () => {
 		const { container } = render(AgendaList, { items: itemSameDay, membership: 'loading' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
-		expect(btn?.disabled).toBe(true);
+		expect(btn?.disabled).toBe(true); // canRsvp defaults 'loading' too — disabled, not absent
 		expect(row?.textContent).not.toContain('You are not an active member.');
 	});
 });

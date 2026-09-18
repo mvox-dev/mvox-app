@@ -644,7 +644,13 @@ describe('agenda — the event-creation entry point (rights gate — #213: the g
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 		// The rights rode along on the season list — no database-entity round-trip.
-		expect(resolveManageRightsMock).not.toHaveBeenCalled();
+		// #372 — resolveManageRightsMock is now ALSO called once per load for the
+		// rsvp enablement read (entityId === personId, "person-p"); that call is
+		// excluded here, not counted against the database-entity claim.
+		const databaseEntityProbes = resolveManageRightsMock.mock.calls.filter(
+			(c) => c[1] !== 'person-p'
+		);
+		expect(databaseEntityProbes).toEqual([]);
 	});
 
 	it('fail-closed on the same shape: a lapsed-only season the viewer does NOT edit (and no collective-wide grant) still hides the card', async () => {

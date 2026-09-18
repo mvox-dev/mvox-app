@@ -219,13 +219,27 @@
 	// Membership as an explicit 3-state, kept SEPARATE from memberId. `memberId`
 	// alone was ambiguous: null meant BOTH "still looking up / lookup failed" AND
 	// "confirmed non-member", so a real member was flashed (and, on a rejected
-	// lookup, PERMANENTLY shown) the "Only members can RSVP" hint. Rules:
-	//   'loading'    — unresolved: still in flight, OR the lookup rejected. Control
-	//                  disabled, NO non-member hint (fail-safe — never a false claim).
-	//   'member'     — resolved to an active member id. Control enabled.
-	//   'non-member' — resolved, no active membership. Control disabled + hint.
+	// lookup, PERMANENTLY shown) the "Only members can RSVP" hint. #372: this is
+	// now DISPLAY ONLY (the hint + AgendaList's attendance-badge/season-summary
+	// visibility) — it has no say in the control's enabled state, see
+	// `rsvpRights` below. Rules:
+	//   'loading'    — unresolved: still in flight, OR the lookup rejected. NO
+	//                  non-member hint (fail-safe — never a false claim).
+	//   'member'     — resolved to an active member id.
+	//   'non-member' — resolved, no active membership. Hint shows (in the
+	//                  control's place, once `rsvpRights` confirms no grant).
 	// Only 'non-member' (a genuine resolution) ever shows the hint.
 	let membership = $state<'loading' | 'member' | 'non-member'>('loading');
+	// #372 (issue #362 paradigm, Gama ruling on #372) — THE gate for the
+	// RsvpControl: the Entu grant (`_owner`/`_editor`) on the singer's own
+	// PERSON entity, the entity her rsvp write actually targets (ER-27) — read
+	// via resolveManageRights(cfg, personId, personId), the app's one rights
+	// predicate (repertoireActions.ts, ER-26: `.reference` only, never
+	// `.string`). Membership above answers "am I on the roster", a different
+	// question from "may I write" — #369 was 19 of 24 active members shown a
+	// fully enabled control for a write Entu always refused. See AgendaList's
+	// `canRsvp` prop doc for the render rule per state.
+	let rsvpRights = $state<'loading' | 'editor' | 'not-editor'>('loading');
 	let rsvpByEventId = $state<RsvpByEventId>({});
 	// #321 — true when the singer's OWN listMyRsvps read came back truncated
 	// (server count > raw entities.length on that same request): the answer
@@ -970,6 +984,7 @@
 			agendaError = false;
 			memberId = null;
 			membership = 'loading';
+			rsvpRights = 'loading';
 			rsvpByEventId = {};
 			rsvpPartial = false;
 			failedEventIds = new Set();
@@ -1036,6 +1051,10 @@
 		// stale member/non-member), and no event has a failed write yet.
 		memberId = null;
 		membership = 'loading';
+		// #372 — the rights read belongs to the collective it was issued in, same
+		// as membership: a fresh selection starts unresolved again, never carried
+		// over as a stale grant/no-grant answer.
+		rsvpRights = 'loading';
 		failedEventIds = new Set();
 		// #326 — a saved cue belongs to the collective whose write earned it, so
 		// this drops every cue ALREADY EARNED at switch time (pin 7), including
@@ -1415,6 +1434,27 @@
 				seasons = [];
 			});
 
+		// #372 — the RSVP enablement read: ONE GET, wired through the app's one
+		// rights predicate (resolveManageRights), never joined to the membership
+		// lookup above (that promise can hang forever — see
+		// page.rsvp-rights-gate.spec.ts's WIRE test — without ever blocking this
+		// one). Guarded with sameCollectiveIdentity (not `thisRequest`, though
+		// both would discard the same stale answer here): the same primitive
+		// handlePdfClick/handleRsvpChange already use to drop a late-settling
+		// read issued under a since-abandoned collective selection.
+		{
+			const rightsCfg = { db: current.db, token: getToken() ?? '' };
+			const rightsIdentity = { db: current.db, personId };
+			resolveManageRights(rightsCfg, personId, personId).then((state) => {
+				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), rightsIdentity)) return;
+				// 'error' folds into 'not-editor' (fail-safe): a blip must never
+				// enable a write it cannot confirm, and resolveManageRights already
+				// settles rather than hangs, so this can't strand the control
+				// looking perpetually 'loading'.
+				rsvpRights = state === 'editor' ? 'editor' : 'not-editor';
+			});
+		}
+
 		findMyMemberId({ db: current.db, token: getToken() ?? '' }, personId)
 			.then((id) => {
 				if (thisRequest !== requestId) return;
@@ -1543,13 +1583,43 @@
 		if (!selected) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const personId = selected.personId;
+		const identity = { db: selected.db, personId };
 
 		const current: RsvpEntry | undefined = rsvpByEventId[item.id];
 		const existing: MyRsvp | null = current
 			? { rsvpId: current.rsvpId, eventId: item.id, status: current.status }
 			: null;
 
-		rsvpQueue.request({ cfg, personId, memberId, eventId: item.id, existing, newStatus });
+		rsvpQueue.request({
+			cfg,
+			personId,
+			memberId,
+			// #372 review F1 — the load-time lookup can REJECT, and when it does
+			// `memberId` parks at null for the page's life while the grant keeps the
+			// control enabled: every tap would throw the create-path backstop, for
+			// good. Retry it here, once per tap that actually needs it (the queue
+			// only calls this on the create path with memberId still null), so a
+			// transient blip costs one extra GET rather than the write.
+			resolveMemberId: async () => {
+				const id = await findMyMemberId(cfg, personId);
+				// Same late-settle guard the load-time reads use — a collective
+				// switched mid-write must not have its state written by this answer.
+				if (sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
+					memberId = id;
+					// A CONFIRMED null downgrades the display state, which swaps the
+					// control for the non-member hint (AgendaList's first branch). A
+					// positive id updates `memberId` only: promoting `membership` to
+					// 'member' here would light the season summary / attendance badge off
+					// an empty `myAttendance` (the load path's listMyAttendance never ran
+					// on this degraded path), i.e. a wrong number rather than none.
+					if (!id) membership = 'non-member';
+				}
+				return id;
+			},
+			eventId: item.id,
+			existing,
+			newStatus
+		});
 	}
 
 	// #90 TR.2 — the PDF download, signed AT CLICK TIME. Entu's signed S3 url is
@@ -6311,16 +6381,35 @@
 		if (seriesCreateOpen && seriesCreateNameInput) seriesCreateNameInput.focus();
 	});
 
-	// T4.8/#28 — fold the completion gate into the ONE membership value AgendaList
-	// already consumes (RECON A: S1, the enabled RSVP control, is the whole member-
-	// display set). An incomplete member is a MEMBER, not a non-member — she must
-	// NEVER see the S2 "Only members can RSVP" hint; present her as 'loading'
-	// (disabled, no hint) until the gate resolves 'complete'. No new prop; no
-	// AgendaList/RsvpControl change. Effect B in +layout.svelte redirects her to
-	// /profile; this is the belt-and-suspenders that S1 never lights during the
-	// redirect's in-flight tick.
+	// T4.8/#28 — fold the completion gate into the membership value AgendaList's
+	// DISPLAY surfaces read (attendance badge, season summary): an incomplete
+	// member is a MEMBER, not a non-member — she must NEVER see the S2 "Only
+	// members can RSVP" hint; present her as 'loading' until the gate resolves
+	// 'complete'.
+	//
+	// #372 — this no longer reaches the RSVP control itself (RECON A's original
+	// S1 target): that gate is `gatedCanRsvp` below, folding the SAME
+	// completion gate into the RIGHTS primitive instead of membership (the
+	// grant, not the roster, is what permits the write). Effect B in
+	// +layout.svelte redirects an incomplete member to /profile; both folds are
+	// the belt-and-suspenders that neither surface lights during the redirect's
+	// in-flight tick.
 	const gatedMembership = $derived(
 		membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : membership
+	);
+	// #372 review F2 — the gate may only DOWNGRADE a positive answer, never lift a
+	// negative one. Unconditional, it turned a CONFIRMED 'not-editor' into
+	// 'loading' whenever the gate wasn't 'complete' — rendering a DISABLED control
+	// where the ruling says none may render at all. That is not a tick-long
+	// window: resolveGate fails safe to 'loading' FOREVER on a failed read
+	// (no-flash discipline), so a no-grant singer sat with a dead four-button
+	// strip indefinitely. 'not-editor' short-circuits ahead of the gate.
+	const gatedCanRsvp = $derived(
+		rsvpRights === 'not-editor'
+			? 'not-editor'
+			: $completionGateStore !== 'complete'
+				? 'loading'
+				: rsvpRights
 	);
 
 	// #138 review — this effect must react to EXACTLY ONE thing: a genuine
@@ -8545,6 +8634,7 @@
 								loading={agendaLoading}
 								{rsvpByEventId}
 								membership={gatedMembership}
+								canRsvp={gatedCanRsvp}
 								{pendingEventIds}
 								{failedEventIds}
 								{savedEventIds}

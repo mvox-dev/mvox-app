@@ -83,7 +83,15 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 // page.repertoire-manage-wiring.spec.ts.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
+	// (called as (cfg, personId, personId)): grant her editor on her OWN
+	// person while every other entity (season/event/database) stays
+	// 'not-editor', so this file's existing rights-suppressed assertions
+	// are untouched.
+	resolveManageRights: vi.fn((..._args: unknown[]) => {
+		const [, entityId, personId] = _args as [unknown, string, string];
+		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
+	})
 }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/rsvp/rsvpData', () => ({

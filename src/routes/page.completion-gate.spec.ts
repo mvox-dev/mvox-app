@@ -1,17 +1,20 @@
 // @vitest-environment happy-dom
 //
-// T4.8/#28 RED — "not shown as a member anywhere until the domain name is filled."
+// T4.8/#28 — "not shown as a member anywhere until the domain name is filled."
 // RECON A proved the ONLY surface presenting the current user AS a member is the
 // enabled RSVP control (S1) on the agenda home. This spec renders the real +page →
-// AgendaList → RsvpControl chain and asserts that an INCOMPLETE member (real member
-// id, but no domain name → completionGateStore !== 'complete') is NOT presented as a
-// member: her control stays disabled and — crucially — she is NEVER mislabeled a
-// non-member (no "Only members can RSVP" hint; she is a member, just incomplete).
+// AgendaList → RsvpControl chain and asserts that an INCOMPLETE member (real grant
+// on her own person, but no domain name → completionGateStore !== 'complete') is
+// NOT presented as a member: her control stays disabled and — crucially — she is
+// NEVER mislabeled a non-member (no "Only members can RSVP" hint; she is a member,
+// just incomplete).
 //
-// RED: +page.svelte does not yet consume completionGateStore, so a member with an
-// incomplete gate is wrongly shown the ENABLED control — the load-bearing
-// suppression assertions FAIL until GREEN folds the gate into `gatedMembership`.
-// Template: page.rsvp-membership.spec.ts.
+// #372 (issue #362 paradigm) update: the control's own gate moved from membership
+// to the Entu grant (resolveManageRights(cfg, personId, personId) — see
+// page.rsvp-membership.spec.ts / page.rsvp-rights-gate.spec.ts). The completion
+// gate folds into THAT rights state now (`gatedCanRsvp` in +page.svelte), not into
+// membership — this file dials `resolveManageRightsMock` per test to isolate the
+// gate's own suppression from the grant question.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -48,12 +51,20 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
+const {
+	loadFullAgendaMock,
+	discoverMock,
+	gotoMock,
+	findMyMemberIdMock,
+	listMyRsvpsMock,
+	resolveManageRightsMock
+} = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn()
+	listMyRsvpsMock: vi.fn(),
+	resolveManageRightsMock: vi.fn()
 }));
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
@@ -65,15 +76,17 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 // request context under happy-dom. Same one-line fix the library/profile specs
 // already use; the real modules keep running, only the base url is stubbed.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// ...and the page resolves management rights per season/event on every load.
-// Only that ONE call is stubbed (the pure helpers and the write functions stay
-// real): left alone it issues a live request per agenda event, which is both a
-// network call from a unit test and a source of teardown AbortErrors. The
-// management surface itself is covered end-to-end in
-// page.repertoire-manage-wiring.spec.ts.
+// ...and the page resolves management rights per season/event on every load,
+// AND (#372) the agenda's rsvp enablement itself — resolveManageRights(cfg,
+// personId, personId). Only that ONE call is stubbed (the pure helpers and
+// the write functions stay real): left alone it issues a live request per
+// agenda event, which is both a network call from a unit test and a source of
+// teardown AbortErrors. The management surface itself is covered end-to-end
+// in page.repertoire-manage-wiring.spec.ts; each test below dials its own
+// rsvp-rights answer via `resolveManageRightsMock`.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+	resolveManageRights: resolveManageRightsMock
 }));
 // #132/T2 review F3 — the agenda's season-CREATE gate falls back to the
 // ORGANIZATION's rights when the collective has no season at all (which is this
@@ -184,6 +197,7 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
+	resolveManageRightsMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -193,18 +207,20 @@ afterEach(() => {
 });
 
 describe('+page — completion gate suppresses S1 (the member RSVP affordance)', () => {
-	it('an INCOMPLETE member (real member id, gate incomplete) is NOT shown as a member: control disabled AND no non-member hint (never mislabeled)', async () => {
+	it('an INCOMPLETE member (real grant, gate incomplete) is NOT shown as a member: control disabled AND no non-member hint (never mislabeled)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1'); // she IS an active member
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('editor'); // #372 — she HAS the grant
 		completionGateStore.set('incomplete'); // ...but her domain name is missing
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
 		await waitForGoingButton(container);
 		await vi.waitFor(() => expect(findMyMemberIdMock).toHaveBeenCalled());
-		// Let membership resolution + Svelte reactivity fully settle (a macrotask flushes
-		// all pending microtasks/effects), so we test the RESOLVED state, not a loading tick.
+		// Let membership/rights resolution + Svelte reactivity fully settle (a
+		// macrotask flushes all pending microtasks/effects), so we test the
+		// RESOLVED state, not a loading tick.
 		await new Promise((r) => setTimeout(r, 0));
 
 		const btn = goingButton(container)!;
@@ -216,6 +232,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('editor');
 		completionGateStore.set('complete');
 		setAuthedWithOneCollective();
 
@@ -229,6 +246,7 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('editor');
 		completionGateStore.set('loading');
 		setAuthedWithOneCollective();
 
@@ -242,18 +260,53 @@ describe('+page — completion gate suppresses S1 (the member RSVP affordance)',
 		expect(container.textContent).not.toContain('Only members can RSVP.');
 	});
 
-	it('a GENUINE non-member is unaffected by the gate: disabled + the non-member hint (no over-reach)', async () => {
+	// #372 — a genuine non-member's write capability is no longer decided by
+	// membership at all: it follows whatever grant `resolveManageRights`
+	// answers for her (mocked here as 'not-editor', the realistic shape for
+	// someone with no roster row and no direct grant on her own person). The
+	// completion gate is complete, so this test isolates the OTHER suppression
+	// (#369's shape: no control, not a disabled one) from the gate's own.
+	it('a GENUINE non-member with no grant is unaffected by the (complete) gate: the hint shows, NO control renders (no over-reach)', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue(null); // confirmed non-member
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('not-editor');
 		completionGateStore.set('complete');
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
-		await waitForGoingButton(container);
 		await waitFor(() => expect(container.textContent).toContain('Only members can RSVP.'));
-		expect(goingButton(container)!.disabled).toBe(true);
+		expect(container.querySelector('[data-testid="rsvp-control"]')).toBeNull();
 	});
+
+	// #372 review F2 — `gatedCanRsvp` folds the gate into the RIGHTS primitive,
+	// and that fold may only DOWNGRADE a positive answer. Unconditional, it
+	// UPGRADED a confirmed 'not-editor' to 'loading', which renders a DISABLED
+	// control where the ruling says none may render at all. Not a one-tick
+	// window either: resolveGate fails safe to 'loading' FOREVER on a failed read
+	// (no-flash discipline), so a no-grant singer sat with a dead four-button
+	// strip indefinitely. Both non-'complete' gate values are pinned; the subject
+	// is an ACTIVE member (#369's shape) so the non-member hint branch cannot be
+	// what suppresses the control.
+	for (const gate of ['incomplete', 'loading'] as const) {
+		it(`F2: gate='${gate}' must not resurrect a control for a CONFIRMED no-grant member — nothing renders`, async () => {
+			loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
+			findMyMemberIdMock.mockResolvedValue('member-1'); // active member, no grant
+			listMyRsvpsMock.mockResolvedValue(toListRead([]));
+			resolveManageRightsMock.mockResolvedValue('not-editor');
+			completionGateStore.set(gate);
+			setAuthedWithOneCollective();
+
+			const { container } = render(Page);
+			await vi.waitFor(() => expect(resolveManageRightsMock).toHaveBeenCalled());
+			await new Promise((r) => setTimeout(r, 0));
+
+			expect(container.querySelector('[data-testid="rsvp-control"]')).toBeNull();
+			expect(goingButton(container)).toBeNull();
+			// ...and she is still not mislabeled a non-member: she IS one.
+			expect(container.textContent).not.toContain('Only members can RSVP.');
+		});
+	}
 });
 
 // (*MVOX:Tallis*)

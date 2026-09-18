@@ -213,6 +213,16 @@ function entuFetchStub(fixtures: Fixtures = {}) {
 	const profiles = fixtures.profiles ?? PROFILES;
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
+		// #372 — the rsvp enablement read: ONE GET through the app's rights
+		// predicate (resolveManageRights(cfg, personId, personId)). Grant the
+		// viewer editor on her OWN person here, centrally, so every test built
+		// on this stub (and rsvpWireStub/composeWireStub, both layered on top of
+		// it) keeps rendering/writing the control exactly as it did before the
+		// grant became the gate — this file's subject is the rest of the page,
+		// not rsvp rights (those are pinned in page.rsvp-rights-gate.spec.ts).
+		if (url.includes('/entity/p-viewer') && url.includes('props=_owner')) {
+			return json({ entity: { _id: 'p-viewer', _editor: [{ reference: 'p-viewer' }] } });
+		}
 		if (url.includes('/entity/ev1')) return json({ entity: event });
 		if (url.includes('/entity/season1')) return json({ entity: season });
 		if (url.includes('/entity/series1')) return json({ entity: series });
@@ -1303,14 +1313,26 @@ describe('/event/[id] — tally + capacity render from the domain rsvp read for 
 
 // ── #102 review fixes: the RSVP control's disable reasons + tally freshness ───
 
-// F2 — the control was interactive while membership was still unresolved. The
-// member lookup only STARTS after the event read resolves (and may fail, which
-// parks the state back in 'loading' for good), so there is a real window where a
-// tap reaches applyRsvpChange with a null memberId — which THROWS on the create
-// path, reverts, and shows `rsvp_save_failed` to a genuine active member. The
-// agenda never had this: its rows map `membership === 'loading'` into `pending`.
-describe('/event/[id] — RSVP control while membership is still unresolved (#102 review F2)', () => {
-	/** The member query never settles; every other route serves normally. */
+// F2, superseded by #372 (issue #362 paradigm) and re-fixed by its review: the
+// control USED to stay interactive-but-eventually-disabled while membership was
+// unresolved, on the theory that a tap could reach applyRsvpChange with a null
+// memberId — which THROWS on the create path. #372's ruling moved enablement OFF
+// membership entirely and onto the Entu grant (resolveManageRights(cfg,
+// personId, personId) — see page.rsvp-rights-gate.spec.ts's WIRE test, which
+// pins the control enabling WHILE the member lookup hangs, on the grant alone).
+//
+// #372 review F1 — accepting the create-path throw as the answer HERE was the
+// old bug re-admitted under a new name: the load-time lookup parks `memberId` at
+// null for the page's life, so every tap failed, forever, with no way out short
+// of a reload. The member id is now resolved LAZILY, at write time, by the tap
+// that needs it (rsvpChangeQueue's `resolveMemberId`): a lookup that merely
+// failed once no longer costs the singer her answer. The data-layer throw stays
+// where it was, as the backstop for the only case left — a lookup that answers
+// "no active member" — and that answer also swaps the control for the hint.
+describe('/event/[id] — RSVP control while membership is still unresolved (#372 supersedes #102 review F2)', () => {
+	/** The member query never settles; every other route serves normally
+	 *  (including the rsvp enablement read — rsvpWireStub's base grants the
+	 *  viewer editor on her own person). */
 	function stallingMemberWire(opts: { myRsvp?: boolean } = {}) {
 		const base = rsvpWireStub({}, opts);
 		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1319,7 +1341,54 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#10
 		});
 	}
 
-	it('keeps all four buttons DISABLED — and shows no non-member hint (unresolved ≠ non-member)', async () => {
+	/** The load-time member query never settles; the WRITE-TIME retry (a second
+	 *  request for the same route) answers with her real member row, and the rsvp
+	 *  create routes are served so the write can actually land. */
+	function lateMemberWire() {
+		const base = rsvpWireStub({}, { myRsvp: false });
+		let memberCalls = 0;
+		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			const method = init?.method ?? 'GET';
+			if (url.includes('_type.string=member')) {
+				memberCalls += 1;
+				if (memberCalls === 1) return new Promise<Response>(() => {});
+				return json({ entities: [{ _id: 'member-1' }] });
+			}
+			// createRsvp's two legs: resolve the `rsvp` type definition, then POST.
+			if (url.includes('_type.string=entity') && url.includes('name.string=rsvp'))
+				return json({ entities: [{ _id: 'type-rsvp' }] });
+			if (method === 'POST' && /\/entity$/.test(url.split('?')[0])) return json({ _id: 'rsvp-new' });
+			return base(input, init);
+		});
+	}
+
+	/** The member query REJECTS (500) every time — load-time and write-time. */
+	function failingMemberWire() {
+		const base = rsvpWireStub({}, { myRsvp: false });
+		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input).includes('_type.string=member'))
+				return new Response('boom', { status: 500 });
+			return base(input, init);
+		});
+	}
+
+	/** The member query resolves to NO active member — she is not on the roster. */
+	function noMemberWire() {
+		const base = rsvpWireStub({}, { myRsvp: false });
+		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input).includes('_type.string=member')) return json({ entities: [] });
+			return base(input, init);
+		});
+	}
+
+	function postCalls(fetchStub: ReturnType<typeof vi.fn>) {
+		return fetchStub.mock.calls.filter(
+			(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
+		);
+	}
+
+	it('ENABLES on the grant alone — membership staying unresolved decides nothing, no non-member hint', async () => {
 		const { container } = renderWithFetch(stallingMemberWire());
 		// The event read and the viewer's own rsvp read HAVE resolved (pressed
 		// state proves it) — only membership is outstanding.
@@ -1328,38 +1397,74 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#10
 				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
 			).toBe('true');
 		});
-		for (const btn of rsvpButtons(container)) expect(btn.disabled).toBe(true);
-		// Silent disable: a lookup in flight is not a verdict about this person.
+		await waitFor(() => {
+			for (const btn of rsvpButtons(container)) expect(btn.disabled).toBe(false);
+		});
+		// Silent disable was never about membership to begin with — a lookup in
+		// flight is not a verdict about this person, and now it isn't consulted
+		// for enablement at all.
 		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
 		expect(container.querySelector('[data-testid="rsvp-save-failed"]')).toBeNull();
 	});
 
-	// The exact reported failure: a viewer with NO existing rsvp taps before the
-	// member query returns. `existing` is null and `memberId` is null, so the
-	// create path throws ('applyRsvpChange: cannot create without a memberId'),
-	// the queue reverts, and an active member is shown `rsvp_save_failed`.
-	it('a first tap by a viewer with no existing rsvp records NOTHING — and shows no save-failed error', async () => {
-		const { container, fetchStub } = renderWithFetch(stallingMemberWire({ myRsvp: false }));
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="rsvp-control"]')).not.toBeNull();
-			expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
-				'Tuesday Rehearsal'
-			);
+	// The F1 fix in the open: her first tap resolves the member id itself rather
+	// than reading the parked null and failing. The create LANDS, carrying the
+	// member reference the rsvp entity requires.
+	it('a first tap RESOLVES the member id at write time when the load-time lookup never answered — the create lands', async () => {
+		const { container, fetchStub } = renderWithFetch(lateMemberWire());
+		const btn = await waitFor(() => {
+			const b = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+			expect(b).not.toBeNull();
+			expect(b!.disabled).toBe(false);
+			return b!;
 		});
-		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-going"]')!);
-		// Let any write the tap COULD have started settle (real timers — only Date
-		// is faked), so this is not merely a same-tick snapshot.
-		await new Promise((r) => setTimeout(r, 30));
+		await fireEvent.click(btn);
 
-		const posts = fetchStub.mock.calls.filter(
-			(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
-		);
-		expect(posts).toEqual([]);
+		const post = await waitFor(() => {
+			const posts = postCalls(fetchStub);
+			expect(posts.length).toBe(1);
+			return posts[0];
+		});
+		const body = JSON.parse(String((post[1] as RequestInit).body)) as Array<Record<string, unknown>>;
+		expect(body).toContainEqual({ type: 'member', reference: 'member-1' });
+		expect(body).toContainEqual({ type: 'event', reference: 'ev1' });
+		// A write that landed: no error line, and the answer stays pressed.
 		expect(container.querySelector('[data-testid="rsvp-save-failed"]')).toBeNull();
-		// …and the control did not fake a pressed state either.
+		expect(
+			container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
+		).toBe('true');
+	});
+
+	// The retry is not a promise that it will work: when the lookup rejects at
+	// write time too, the write fails the way every other rejected write does —
+	// revert + the save-failed banner, no POST, no false-pressed value left.
+	it('a write-time lookup that REJECTS fails safely — revert + save-failed, no POST ever issued', async () => {
+		const { container, fetchStub } = renderWithFetch(failingMemberWire());
+		const btn = await waitFor(() => {
+			const b = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
+			expect(b).not.toBeNull();
+			expect(b!.disabled).toBe(false);
+			return b!;
+		});
+		await fireEvent.click(btn);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="rsvp-save-failed"]')).not.toBeNull();
+		});
+		expect(postCalls(fetchStub)).toEqual([]);
 		expect(
 			container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
 		).toBe('false');
+	});
+
+	// A lookup that ANSWERS "no active member" is a verdict, not a blip: the
+	// control gives way to the hint rather than staying up to be tapped again.
+	it('a confirmed non-member never gets the control at all — the hint stands in its place', async () => {
+		const { container, fetchStub } = renderWithFetch(noMemberWire());
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="rsvp-control"]')).toBeNull();
+		expect(postCalls(fetchStub)).toEqual([]);
 	});
 });
 

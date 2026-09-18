@@ -158,4 +158,82 @@ describe('createRsvpChangeQueue — two DIFFERENT events tapped concurrently', (
 	});
 });
 
+// #372 review F1 — the LAST-RESORT member-id lookup. The page's load-time
+// lookup can reject, parking `memberId` at null for the page's life while the
+// Entu grant keeps the control enabled; every create-path tap then threw the
+// data-layer backstop, forever. `resolveMemberId` gives that tap one retry.
+describe('createRsvpChangeQueue — resolveMemberId (the write-time member lookup)', () => {
+	const EXISTING: MyRsvp = { rsvpId: 'r-1', eventId: 'e1', status: 'going' };
+
+	it('create path with memberId null — calls the resolver and hands its answer to applyRsvpChange', async () => {
+		applyRsvpChangeMock.mockResolvedValueOnce({ rsvpId: 'real-1' });
+		const resolveMemberId = vi.fn().mockResolvedValue('member-late');
+		const cb = makeCallbacks();
+		const queue = createRsvpChangeQueue(cb);
+
+		queue.request({ cfg, personId: 'person-p', memberId: null, resolveMemberId, eventId: 'e1', existing: null, newStatus: 'going' });
+
+		// The optimistic/pending feedback is still SYNCHRONOUS — the retry never
+		// delays the control's own response to the tap.
+		expect(cb.setPending).toHaveBeenCalledWith('e1', true);
+		expect(cb.setOptimistic).toHaveBeenCalledWith('e1', expect.objectContaining({ status: 'going' }));
+
+		await vi.waitFor(() => expect(applyRsvpChangeMock).toHaveBeenCalledTimes(1));
+		expect(resolveMemberId).toHaveBeenCalledTimes(1);
+		expect(applyRsvpChangeMock.mock.calls[0][0]).toEqual(
+			expect.objectContaining({ memberId: 'member-late' })
+		);
+		await vi.waitFor(() => expect(cb.reconcile).toHaveBeenCalledWith('e1', { rsvpId: 'real-1', status: 'going' }));
+	});
+
+	it('a resolver that REJECTS fails the write the ordinary way — revert, no swallowed error', async () => {
+		const resolveMemberId = vi.fn().mockRejectedValue(new Error('500'));
+		const cb = makeCallbacks();
+		const queue = createRsvpChangeQueue(cb);
+
+		queue.request({ cfg, personId: 'person-p', memberId: null, resolveMemberId, eventId: 'e1', existing: null, newStatus: 'going' });
+
+		await vi.waitFor(() => expect(cb.revert).toHaveBeenCalledWith('e1', null));
+		expect(cb.setPending).toHaveBeenLastCalledWith('e1', false);
+		// The write itself was never attempted — nothing to send without a member.
+		expect(applyRsvpChangeMock).not.toHaveBeenCalled();
+	});
+
+	it('memberId already known — the resolver is NOT called and the write is dispatched synchronously', () => {
+		applyRsvpChangeMock.mockResolvedValueOnce({ rsvpId: 'real-1' });
+		const resolveMemberId = vi.fn();
+		const cb = makeCallbacks();
+		const queue = createRsvpChangeQueue(cb);
+
+		queue.request({ cfg, personId: 'person-p', memberId: 'member-m', resolveMemberId, eventId: 'e1', existing: null, newStatus: 'going' });
+
+		expect(resolveMemberId).not.toHaveBeenCalled();
+		expect(applyRsvpChangeMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('UPDATE and CLEAR paths never consult the resolver — they need no member id, and a failing lookup must not cost them their write', () => {
+		applyRsvpChangeMock.mockResolvedValue({ rsvpId: 'r-1' });
+		const resolveMemberId = vi.fn();
+		const cb = makeCallbacks();
+		const queue = createRsvpChangeQueue(cb);
+
+		queue.request({ cfg, personId: 'person-p', memberId: null, resolveMemberId, eventId: 'e1', existing: EXISTING, newStatus: 'maybe' });
+		queue.request({ cfg, personId: 'person-p', memberId: null, resolveMemberId, eventId: 'e2', existing: { ...EXISTING, eventId: 'e2' }, newStatus: null });
+
+		expect(resolveMemberId).not.toHaveBeenCalled();
+		expect(applyRsvpChangeMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('no resolver supplied — the old behaviour stands (applyRsvpChange gets the null and throws its own backstop)', () => {
+		applyRsvpChangeMock.mockRejectedValueOnce(new Error('cannot create without a memberId'));
+		const cb = makeCallbacks();
+		const queue = createRsvpChangeQueue(cb);
+
+		queue.request({ cfg, personId: 'person-p', memberId: null, eventId: 'e1', existing: null, newStatus: 'going' });
+
+		expect(applyRsvpChangeMock).toHaveBeenCalledTimes(1);
+		expect(applyRsvpChangeMock.mock.calls[0][0]).toEqual(expect.objectContaining({ memberId: null }));
+	});
+});
+
 // (*MVOX:Tallis*)

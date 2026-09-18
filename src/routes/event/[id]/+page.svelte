@@ -114,6 +114,7 @@
 		pinEdition,
 		planProgramMove,
 		reorderProgramItems,
+		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
 	import {
@@ -131,6 +132,7 @@
 	import { recordPartLabel } from '$lib/files/labelStore';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
+	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
 	import RepertoireElement, {
 		ADD_PROGRAMME_KEY,
 		ADD_WORK_KEY
@@ -217,12 +219,33 @@
 	let detail = $state<EventDetail | null>(null);
 
 	// #102 TE.2 — the RSVP control's own state: the viewer's active member id
-	// (gates the control itself, same 'loading'/'member'/'non-member' tri-state
-	// the agenda uses — a FAILED lookup must never be asserted as non-member),
-	// her existing rsvp on THIS event (seeds the control's pressed state), and
-	// the per-write pending/failed flags RsvpControl expects.
+	// (same 'loading'/'member'/'non-member' tri-state the agenda uses — a
+	// FAILED lookup must never be asserted as non-member; #372: DISPLAY only
+	// now, see `membership` below), her existing rsvp on THIS event (seeds the
+	// control's pressed state), and the per-write pending/failed flags
+	// RsvpControl expects.
 	let memberId = $state<string | null>(null);
+	// #372 (issue #362 paradigm, Gama ruling) — membership is DISPLAY ONLY: it
+	// drives the non-member hint that stands in for an absent control, nothing
+	// else. A CONFIRMED 'non-member' substitutes that hint for the control
+	// BEFORE `rsvpRights` is consulted (review F1: the rsvp entity needs a
+	// `member` reference, so no grant can make her write land) — but it never
+	// turns an enabled control into a disabled one, which is the part the
+	// ruling forbids. `rsvpRights` below remains the enablement gate.
 	let membership = $state<'loading' | 'member' | 'non-member'>('loading');
+	// #372 — THE gate for RsvpControl: the Entu grant (`_owner`/`_editor`) on
+	// the viewer's own PERSON entity, the entity her rsvp write actually
+	// targets (ER-27) — read via resolveManageRights(cfg, personId, personId),
+	// the app's one rights predicate (repertoireActions.ts, ER-26). NOT
+	// membership — #369 was 19 of 24 active members shown a fully enabled
+	// control for a write Entu always refused.
+	//   'editor'     → the control renders, enabled (subject to rsvpPending).
+	//   'loading'    → the control renders disabled (never an enabled
+	//                  invitation ahead of the grant being confirmed).
+	//   'not-editor' → NO control renders — an active member with no grant
+	//                  (#369's shape) gets nothing. Asked only after a
+	//                  confirmed non-member has already been given the hint.
+	let rsvpRights = $state<'loading' | 'editor' | 'not-editor'>('loading');
 	let myRsvp = $state<RsvpEntry | null>(null);
 	let rsvpPending = $state(false);
 	let rsvpFailed = $state(false);
@@ -699,6 +722,7 @@
 	function resetRsvpState(): void {
 		memberId = null;
 		membership = 'loading';
+		rsvpRights = 'loading';
 		myRsvp = null;
 		rsvpPending = false;
 		rsvpFailed = false;
@@ -818,6 +842,17 @@
 	 *  fall past: its empty result IS the fact of no answer, so there is no
 	 *  unknown state to render here, only found-or-absent. */
 	function loadRsvpControl(cfg: EntuCfg, personId: string, evId: string, g: number): void {
+		// #372 — the RSVP enablement read: ONE GET through the app's one rights
+		// predicate, never joined to the membership lookup below (which can hang
+		// or reject independently — see page.rsvp-rights-gate.spec.ts's WIRE
+		// test). `g` guards it exactly like every other read in this function.
+		resolveManageRights(cfg, personId, personId).then((state) => {
+			if (g !== generation) return;
+			// 'error' folds into 'not-editor' (fail-safe): a blip must never
+			// enable a write it cannot confirm.
+			rsvpRights = state === 'editor' ? 'editor' : 'not-editor';
+		});
+
 		findMyMemberId(cfg, personId)
 			.then((id) => {
 				if (g !== generation) return;
@@ -1075,13 +1110,32 @@
 	function handleRsvpChange(newStatus: RsvpStatus | null): void {
 		if (!selected || !detail) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const personId = selected.personId;
+		const g = generation;
 		const existing: MyRsvp | null = myRsvp
 			? { rsvpId: myRsvp.rsvpId, eventId: detail.id, status: myRsvp.status }
 			: null;
 		rsvpQueue.request({
 			cfg,
-			personId: selected.personId,
+			personId,
 			memberId,
+			// #372 review F1 — the load-time lookup can REJECT, parking `memberId` at
+			// null for the page's life while the grant keeps the control enabled;
+			// every tap would then throw the create-path backstop, for good. Retry it
+			// here, once per tap that actually needs one (the queue calls this only on
+			// the create path with memberId still null). Same rule as the agenda's.
+			resolveMemberId: async () => {
+				const id = await findMyMemberId(cfg, personId);
+				// `g` guards a late answer exactly like every other read on this page.
+				if (g === generation) {
+					memberId = id;
+					// A CONFIRMED null swaps the control for the non-member hint; a
+					// positive id updates `memberId` only (membership is display-only
+					// here and the load path owns its transitions).
+					if (!id) membership = 'non-member';
+				}
+				return id;
+			},
 			eventId: detail.id,
 			existing,
 			newStatus
@@ -4545,26 +4599,32 @@
 					<h2 id="event-detail-rsvp-heading" class="font-display text-lg text-ink-2">
 						{m.event_detail_rsvp_heading()}
 					</h2>
-					<!-- Three silent-disable reasons collapse into `pending`, exactly as
-					     the agenda maps them (AgendaList: `membership === 'loading' ||
-					     pendingEventIds.has(id)` on upcoming rows, `pending={true}` on
-					     past ones):
-					       • isPast — nothing left to answer (#102 review F3).
-					       • membership unresolved — the member lookup starts only AFTER
-					         the event read resolves, and may fail; tapping in that window
-					         reached applyRsvpChange with a null memberId, which throws and
-					         surfaces the save-failed error to a genuine member (F2).
-					       • rsvpPending — a write for this event is in flight.
-					     `nonMember` stays separate: it is the one reason that earns a
-					     visible hint. -->
-					<RsvpControl
-						status={myRsvp?.status ?? null}
-						nonMember={membership === 'non-member'}
-						pending={isPast || membership === 'loading' || rsvpPending}
-						saveFailed={rsvpFailed}
-						saved={rsvpSaved}
-						onchange={handleRsvpChange}
-					/>
+					<!-- #372 (+ its review, F1) — same branch order as the agenda row
+					     (AgendaList.svelte), for the same reason. A past event stays the
+					     existing always-render/always-read-only display (nothing left to
+					     answer, #102 review F3), independent of rights. Otherwise a
+					     CONFIRMED non-member is answered FIRST — an rsvp entity requires a
+					     `member` reference (rsvpData.ts createRsvp), so no Entu grant can
+					     make her write land, and every mvox-minted person carries a
+					     self-`_editor` grant that survives deactivation — she gets the
+					     display hint in the control's place. Membership still has NO say in
+					     the ENABLED state (Gama's ruling); it only substitutes a display.
+					     Only then does the grant decide: the control renders iff
+					     `rsvpRights` isn't 'not-editor'. An active member with no grant
+					     (#369's shape) gets neither. -->
+					{#if isPast}
+						<RsvpControl status={myRsvp?.status ?? null} pending={true} />
+					{:else if membership === 'non-member'}
+						<RsvpNonMemberHint />
+					{:else if rsvpRights !== 'not-editor'}
+						<RsvpControl
+							status={myRsvp?.status ?? null}
+							pending={rsvpRights === 'loading' || rsvpPending}
+							saveFailed={rsvpFailed}
+							saved={rsvpSaved}
+							onchange={handleRsvpChange}
+						/>
+					{/if}
 					<!-- #363 — no rights gate: rsvp rows are `_sharing: domain`, so the
 					     tally renders from the read's result for every viewer. Gated on
 					     the counts actually being loaded — rendering ahead of the tally

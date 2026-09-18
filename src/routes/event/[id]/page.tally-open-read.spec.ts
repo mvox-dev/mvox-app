@@ -132,6 +132,12 @@ function wireStub(event: Record<string, unknown>) {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		if (url.includes('/property/')) return json({ deleted: true });
+		// #372 — the rsvp enablement read: grant her editor on her OWN person so
+		// the control renders/writes exactly as it did before the grant became
+		// the gate (this file's subject is the tally read, not rsvp rights).
+		if (url.includes('/entity/p-viewer') && url.includes('props=_owner')) {
+			return json({ entity: { _id: 'p-viewer', _editor: [{ reference: 'p-viewer' }] } });
+		}
 		if (url.includes('/entity/ev1')) return json({ entity: event });
 		if (url.includes('/entity/rsvp-77')) {
 			if (method === 'POST') return json({});

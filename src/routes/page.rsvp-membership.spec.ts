@@ -1,13 +1,20 @@
 // @vitest-environment happy-dom
 //
-// The full-scope RSVP disabled/pending/non-member UX fix, page level. Renders
-// the real +page -> AgendaList -> RsvpControl chain (with agenda rows present,
-// unlike page.rsvp-wiring which loads an empty agenda) so we can observe the
-// membership 3-state and the write-failure feedback in the DOM:
-//   - loading / lookup-failure   → control disabled, NO false non-member hint
-//   - confirmed non-member       → control disabled + hint
-//   - confirmed member           → control enabled, no hint
-//   - a rejected write           → per-row error surfaced + optimistic value reverts
+// Membership as DISPLAY, rights as the GATE (#372), page level. Renders the
+// real +page -> AgendaList -> RsvpControl chain (with agenda rows present,
+// unlike page.rsvp-wiring which loads an empty agenda). The law (Gama ruling
+// on #372): the control's ENABLED state derives from the Entu grant on the
+// singer's own person entity (resolveManageRights(cfg, personId, personId) —
+// the app's one rights predicate); the membership lookup survives only as
+// DISPLAY (the non-member hint) and as the write payload's memberId:
+//   - membership 'loading' alone  → decides NOTHING (rights alone enable)
+//   - confirmed non-member, no grant → hint SHOWN (display), control NOT rendered
+//   - active member, no grant     → NO control, no hint (#369's trap)
+//   - membership lookup failure   → no false hint; rights alone decide
+//   - a rejected write            → per-row error surfaced + optimistic value reverts
+// The wire shape of the rights read itself (GET entity/{personId}?props=
+// _owner,_editor) is pinned end-to-end in page.rsvp-rights-gate.spec.ts; here
+// the predicate is a controllable spy so each test dials the rights answer.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -50,14 +57,16 @@ const {
 	gotoMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
-	applyRsvpChangeMock
+	applyRsvpChangeMock,
+	resolveManageRightsMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
-	applyRsvpChangeMock: vi.fn()
+	applyRsvpChangeMock: vi.fn(),
+	resolveManageRightsMock: vi.fn()
 }));
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
@@ -77,7 +86,9 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 // page.repertoire-manage-wiring.spec.ts.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
+	// #372 — resolveManageRights is now ALSO the rsvp enablement primitive
+	// (called with (cfg, personId, personId)), so each test dials its answer.
+	resolveManageRights: resolveManageRightsMock
 }));
 // #132/T2 review F3 — the agenda's season-CREATE gate falls back to the
 // ORGANIZATION's rights when the collective has no season at all (which is this
@@ -198,73 +209,103 @@ afterEach(() => {
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	applyRsvpChangeMock.mockReset();
+	resolveManageRightsMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 	resetGate();
 });
 
-describe('+page — membership 3-state gates the non-member hint', () => {
-	it('while membership is UNRESOLVED (findMyMemberId still in flight) the control is disabled with NO non-member hint', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
-		findMyMemberIdMock.mockReturnValue(new Promise(() => {})); // never resolves — stays loading
+describe('+page — membership is display, the Entu grant is the gate (#372)', () => {
+	const AGENDA = () =>
+		fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+
+	it("membership 'loading' alone never disables OR enables: the grant says editor while the member lookup hangs -> ENABLED", async () => {
+		loadFullAgendaMock.mockResolvedValue(AGENDA());
+		findMyMemberIdMock.mockReturnValue(new Promise(() => {})); // never resolves
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('editor');
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
 		const btn = await waitForGoingButton(container);
 
-		expect(btn.disabled).toBe(true);
-		expect(container.textContent).not.toContain('Only members can RSVP.');
-	});
-
-	it('a CONFIRMED non-member (findMyMemberId resolves null) shows disabled control + the hint', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
-		findMyMemberIdMock.mockResolvedValue(null);
-		listMyRsvpsMock.mockResolvedValue(toListRead([]));
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-		await waitForGoingButton(container);
-
-		await waitFor(() => {
-			expect(container.textContent).toContain('Only members can RSVP.');
-		});
-		const btn = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement;
-		expect(btn.disabled).toBe(true);
-	});
-
-	it('a CONFIRMED member (findMyMemberId resolves an id) enables the control and shows no hint', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
-		findMyMemberIdMock.mockResolvedValue('member-1');
-		listMyRsvpsMock.mockResolvedValue(toListRead([]));
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-		const btn = await waitForGoingButton(container);
-
+		// Enabled on the grant alone — membership had no say (it never resolved).
 		await waitFor(() => {
 			expect(btn.disabled).toBe(false);
 		});
 		expect(container.textContent).not.toContain('Only members can RSVP.');
+
+		// The enablement question was asked of the app's ONE rights predicate,
+		// against the entity the write targets: her own person, as herself.
+		expect(
+			resolveManageRightsMock.mock.calls.some(
+				(c) => (c[0] as { db?: string })?.db === 'polyphony' && c[1] === 'person-p' && c[2] === 'person-p'
+			)
+		).toBe(true);
 	});
 
-	it('a lookup FAILURE (findMyMemberId rejects) does NOT assert non-member — disabled, no false hint (fail-safe)', async () => {
-		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
+	it('a CONFIRMED non-member without the grant: the hint STAYS (display) and the control is NOT rendered — two separate facts', async () => {
+		loadFullAgendaMock.mockResolvedValue(AGENDA());
+		findMyMemberIdMock.mockResolvedValue(null);
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('not-editor');
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+
+		// Fact 1 — the membership DISPLAY survives: the hint shows.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).not.toBeNull();
+		});
+		// Fact 2 — no grant, so no write-inviting control renders at all
+		// (not disabled — absent).
+		expect(container.querySelector('[data-testid="rsvp-control"]')).toBeNull();
+	});
+
+	it('an ACTIVE member without the grant sees NO control and NO hint — the #369 trap', async () => {
+		loadFullAgendaMock.mockResolvedValue(AGENDA());
+		findMyMemberIdMock.mockResolvedValue('member-1');
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('not-editor');
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+
+		// Let both answers land: member (display) + not-editor (gate).
+		await waitFor(() => {
+			expect(
+				resolveManageRightsMock.mock.calls.some((c) => c[1] === 'person-p' && c[2] === 'person-p')
+			).toBe(true);
+		});
+		await waitFor(() => expect(findMyMemberIdMock).toHaveBeenCalled());
+		await Promise.resolve();
+		await Promise.resolve();
+
+		expect(container.querySelector('[data-testid="rsvp-control"]')).toBeNull();
+		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
+	});
+
+	it('a membership lookup FAILURE shows no false hint — and the grant alone still ENABLES', async () => {
+		loadFullAgendaMock.mockResolvedValue(AGENDA());
 		findMyMemberIdMock.mockRejectedValue(new Error('lookup boom'));
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('editor');
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
 		const btn = await waitForGoingButton(container);
 
-		// Let the rejection settle so we're testing the FAILED state, not merely the
-		// initial loading tick.
+		// Let the rejection settle so we're testing the FAILED state, not merely
+		// the initial loading tick.
 		await waitFor(() => expect(findMyMemberIdMock).toHaveBeenCalled());
 		await Promise.resolve();
 		await Promise.resolve();
 
-		expect(btn.disabled).toBe(true);
+		// The write is permitted (Entu said so); the display fails safe (no hint).
+		await waitFor(() => {
+			expect(btn.disabled).toBe(false);
+		});
 		expect(container.textContent).not.toContain('Only members can RSVP.');
 	});
 });
@@ -274,6 +315,7 @@ describe('+page — write-failure feedback (a rejected rsvp save)', () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('editor'); // #372 — the grant enables the tap
 		applyRsvpChangeMock.mockRejectedValue(new Error('save failed'));
 		setAuthedWithOneCollective();
 

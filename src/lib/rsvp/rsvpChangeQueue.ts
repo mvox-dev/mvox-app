@@ -56,6 +56,18 @@ export interface RequestRsvpChangeInput {
 	personId: string;
 	memberId: string | null;
 	eventId: string;
+	/** #372 review F1 — a LAST-RESORT lookup for the member id, used only when
+	 *  `memberId` is null AND this tap takes the create path (the only path that
+	 *  needs one). The page resolves the member id at load; when that read
+	 *  REJECTED it parks at null forever, and the control is now enabled on the
+	 *  Entu grant alone, so every tap would throw 'cannot create without a
+	 *  memberId' — a repeatable error with no way out short of a reload. Retrying
+	 *  the lookup here turns a transient blip into a write that lands. A reject
+	 *  here PROPAGATES (revert + save-failed, same as any other failed write);
+	 *  a null result reaches applyRsvpChange's backstop throw, and the page's
+	 *  own resolver records the confirmed non-member so the control gives way to
+	 *  the hint. */
+	resolveMemberId?: () => Promise<string | null>;
 	/** The real (or already-reconciled) existing rsvp for this event, or null. */
 	existing: MyRsvp | null;
 	newStatus: RsvpStatus | null;
@@ -73,7 +85,7 @@ export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChang
 
 	return {
 		request(input) {
-			const { cfg, personId, memberId, eventId, existing, newStatus } = input;
+			const { cfg, personId, memberId, eventId, existing, newStatus, resolveMemberId } = input;
 
 			// Defensive backstop (see module doc) — the primary guard is the UI
 			// disabling the control for a pending event, via `setPending`.
@@ -86,7 +98,19 @@ export function createRsvpChangeQueue(callbacks: RsvpChangeCallbacks): RsvpChang
 				newStatus !== null ? { rsvpId: existing?.rsvpId ?? '__optimistic__', status: newStatus } : null;
 			callbacks.setOptimistic(eventId, optimisticEntry);
 
-			applyRsvpChange({ cfg, personId, eventId, memberId, existing, newStatus })
+			// Only the create path consults `memberId` at all (rsvpOptimistic.ts), so
+			// an update/delete never pays for — nor can be failed by — this lookup.
+			// When nothing needs resolving, the write is dispatched SYNCHRONOUSLY,
+			// exactly as before: the retry must not insert a microtask into the
+			// normal path.
+			const needsLookup = !existing && newStatus !== null && memberId === null && !!resolveMemberId;
+			const write = needsLookup
+				? resolveMemberId!().then((resolved) =>
+						applyRsvpChange({ cfg, personId, eventId, memberId: resolved, existing, newStatus })
+					)
+				: applyRsvpChange({ cfg, personId, eventId, memberId, existing, newStatus });
+
+			write
 				.then((result) => {
 					pending.delete(eventId);
 					callbacks.setPending(eventId, false);

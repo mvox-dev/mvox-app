@@ -86,40 +86,36 @@ describe('RsvpControl — tap behavior (set / tap-active-to-clear)', () => {
 	});
 });
 
-// ── The root split (this fix): the disable REASON is now two distinct inputs ──
-// `nonMember` (a confirmed non-member — disabled + hint) and `pending` (a write
-// in flight — disabled, NO hint, per the PO's silent-disable ruling). The old
-// single `disabled` boolean conflated the two, so a member with a write in
-// flight got the "Only members can RSVP" hint (the reported regression).
+// ── The root split (the earlier fix) and what #372 left of it ──────────────
+// The old single `disabled` boolean conflated "not a member" with "a write is
+// in flight", so a member mid-write got the "Only members can RSVP" hint (the
+// reported regression). #372 + its review F3 finished the job from the other
+// end: membership is no longer an input to this component AT ALL. A confirmed
+// non-member gets no control (the two surfaces render RsvpNonMemberHint in its
+// place), so `pending` is the only disable reason left and the hint is never
+// this component's to render.
 
-describe('RsvpControl — non-member state (nonMember)', () => {
-	it('nonMember=true — every status button carries the disabled attribute', () => {
-		const { container } = render(RsvpControl, { status: null, nonMember: true });
-		for (const [value] of STATUSES) {
-			const btn = container.querySelector(`[data-testid="rsvp-btn-${value}"]`) as HTMLButtonElement | null;
-			expect(btn?.disabled).toBe(true);
-		}
-	});
-
-	it('nonMember=true — shows the non-member hint, not a silent no-op', () => {
-		const { container } = render(RsvpControl, { status: null, nonMember: true });
-		expect(container.textContent).toContain('You are not an active member.');
-	});
-
-	it('neither nonMember nor pending (default) — no hint text, buttons are enabled', () => {
+describe('RsvpControl — membership is not one of its inputs (#372 review F3)', () => {
+	it('by default — buttons are enabled and no non-member hint is rendered', () => {
 		const { container } = render(RsvpControl, { status: null });
 		expect(container.textContent).not.toContain('You are not an active member.');
+		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
 		const btn = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(false);
 	});
 
-	it('nonMember=true — clicking a button does NOT call onchange (real disablement, not just visual)', async () => {
-		const onchange = vi.fn();
-		const { container } = render(RsvpControl, { status: null, nonMember: true, onchange });
-		const btn = container.querySelector('[data-testid="rsvp-btn-going"]');
-		expect(btn).not.toBeNull();
-		await fireEvent.click(btn!);
-		expect(onchange).not.toHaveBeenCalled();
+	it('the hint is not reachable through any prop — the control never renders it', () => {
+		// The dead `nonMember` prop is gone; passing it must change nothing (an
+		// unknown prop is inert), so the hint cannot come back by a stale call site.
+		const { container } = render(RsvpControl, {
+			status: null,
+			...({ nonMember: true } as Record<string, unknown>)
+		});
+		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
+		for (const [value] of STATUSES) {
+			const btn = container.querySelector(`[data-testid="rsvp-btn-${value}"]`) as HTMLButtonElement | null;
+			expect(btn?.disabled).toBe(false);
+		}
 	});
 });
 
@@ -146,8 +142,8 @@ describe('RsvpControl — pending (write in flight) state', () => {
 		expect(onchange).not.toHaveBeenCalled();
 	});
 
-	it('a member with a write in flight (pending, not nonMember) sees disabled buttons and NO hint — the reported regression', () => {
-		const { container } = render(RsvpControl, { status: 'going', nonMember: false, pending: true });
+	it('a member with a write in flight sees disabled buttons and NO hint — the reported regression', () => {
+		const { container } = render(RsvpControl, { status: 'going', pending: true });
 		const btn = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(true);
 		expect(container.textContent).not.toContain('You are not an active member.');
@@ -167,28 +163,18 @@ describe('RsvpControl — aria-busy while pending (a11y)', () => {
 		expect(control?.getAttribute('aria-busy')).not.toBe('true');
 	});
 
-	it('nonMember=true (but no write in flight) — aria-busy is not "true"', () => {
-		const { container } = render(RsvpControl, { status: null, nonMember: true });
-		const control = container.querySelector('[data-testid="rsvp-control"]');
-		expect(control?.getAttribute('aria-busy')).not.toBe('true');
-	});
 });
 
-describe('RsvpControl — non-member hint is associated via aria-describedby (a11y)', () => {
-	it('nonMember=true — the hint <p> has an id and the buttons point at it via aria-describedby', () => {
-		const { container } = render(RsvpControl, { status: null, nonMember: true });
-		const hint = container.querySelector('[data-testid="rsvp-non-member-hint"]');
-		expect(hint).not.toBeNull();
-		const hintId = hint!.getAttribute('id');
-		expect(hintId).toBeTruthy();
-		const btn = container.querySelector('[data-testid="rsvp-btn-going"]');
-		expect(btn?.getAttribute('aria-describedby')).toBe(hintId);
-	});
-
-	it('not nonMember — buttons carry no aria-describedby (nothing to describe)', () => {
-		const { container } = render(RsvpControl, { status: null });
-		const btn = container.querySelector('[data-testid="rsvp-btn-going"]');
-		expect(btn?.getAttribute('aria-describedby')).toBeNull();
+describe('RsvpControl — nothing to describe, so no aria-describedby (a11y)', () => {
+	// The hint the buttons used to point at is no longer this component's (#372
+	// review F3), and `pending` is a SILENT disable by PO ruling — so there is no
+	// description to associate, in any state.
+	it('buttons carry no aria-describedby, idle or pending', () => {
+		for (const props of [{ status: null }, { status: null, pending: true }]) {
+			const { container } = render(RsvpControl, props);
+			const btn = container.querySelector('[data-testid="rsvp-btn-going"]');
+			expect(btn?.getAttribute('aria-describedby')).toBeNull();
+		}
 	});
 });
 
@@ -312,8 +298,8 @@ describe('RsvpControl — roving tabindex (#156)', () => {
 		}
 	});
 
-	it('all four buttons disabled (non-member) — arrows move nothing, no crash, and no stop is claimed by a disabled button', async () => {
-		const { container } = render(RsvpControl, { status: 'going', nonMember: true });
+	it('all four buttons disabled (write in flight) — arrows move nothing, no crash, and no stop is claimed by a disabled button', async () => {
+		const { container } = render(RsvpControl, { status: 'going', pending: true });
 		const btns = buttons(container);
 		btns.forEach((b) => expect(b.disabled).toBe(true));
 		await fireEvent.keyDown(btns[0], { key: 'ArrowRight' });

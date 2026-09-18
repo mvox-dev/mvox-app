@@ -278,22 +278,28 @@ describe('(D) stale-closure pin — the gate is captured for the REQUESTED event
 	});
 });
 
-describe('(E adjacent, unchanged) a deactivated viewer keeps her own prior answer, visible but disabled', () => {
-	it('future event: her recorded going answer renders pressed, the control is disabled, the existing non-member hint shows', async () => {
+// (E adjacent) #372 + its review F1 changed what a deactivated viewer sees on a
+// FUTURE event. She used to get a disabled control (still showing her old
+// answer) plus the hint. She cannot write an rsvp at all — the entity requires a
+// `member` reference (rsvpData.ts createRsvp) and her member row is no longer
+// active — and deactivation does NOT revoke the self-`_editor` grant every
+// mvox-minted person carries (memberLifecycle flips only the member `status`),
+// so reading the grant would hand her an ENABLED control whose every tap throws.
+// The confirmed non-member branch is therefore asked FIRST, and she gets the
+// hint in the control's PLACE: no dead buttons, no invitation to a write that
+// can never land. The trade this makes explicit: her stale prior answer is no
+// longer displayed back to her.
+describe('(E adjacent) a deactivated viewer gets the hint in place of the control', () => {
+	it('future event: no control renders at all — the non-member hint stands in for it', async () => {
 		findMyMemberIdMock.mockResolvedValue(null); // status-scoped read drops her
 		findMyRsvpForEventMock.mockResolvedValue({ rsvpId: 'r-my', status: 'going' });
 		// Plain-member view: no _editor list — no tally, just her own control.
 		const { container } = renderPage(
 			eventEntity('2026-09-01T16:00:00.000Z', { _editor: undefined })
 		);
-		const goingBtn = await waitFor(() => {
-			const el = q(container, 'rsvp-btn-going');
-			expect(el).not.toBeNull();
-			return el as HTMLButtonElement;
-		});
 		await waitFor(() => expect(q(container, 'rsvp-non-member-hint')).not.toBeNull());
-		expect(goingBtn.getAttribute('aria-pressed')).toBe('true');
-		expect((goingBtn as HTMLButtonElement).disabled).toBe(true);
+		expect(q(container, 'rsvp-control')).toBeNull();
+		expect(q(container, 'rsvp-btn-going')).toBeNull();
 	});
 });
 

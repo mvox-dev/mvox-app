@@ -412,8 +412,13 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
-		const rightsProbes = fetchMock.mock.calls.filter(([url]) =>
-			String(url).includes('props=_owner,_editor')
+		// #372 — one GET now rides on EVERY load regardless: entity/{personId}
+		// (the rsvp enablement read, resolveManageRights(cfg, personId, personId)
+		// — see page.rsvp-rights-gate.spec.ts). This test's subject is the
+		// PER-ENTITY fanout (season/event) the old shape paid, so the rsvp
+		// self-probe is excluded, not counted against it.
+		const rightsProbes = fetchMock.mock.calls.filter(
+			([url]) => String(url).includes('props=_owner,_editor') && !String(url).includes('/entity/person-p?')
 		);
 		expect(rightsProbes).toEqual([]);
 	});

@@ -127,6 +127,12 @@ function wireStub(opts: WireOpts = {}) {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		if (url.includes('/property/') && method === 'DELETE') return json({ deleted: true });
+		// #372 — the rsvp enablement read: grant her editor on her OWN person so
+		// the control renders/writes exactly as it did before the grant became
+		// the gate (this file's subject is the fact-read source, not rights).
+		if (url.includes('/entity/p-viewer') && url.includes('props=_owner')) {
+			return json({ entity: { _id: 'p-viewer', _editor: [{ reference: 'p-viewer' }] } });
+		}
 		if (url.includes('/entity/rsvp-77')) {
 			if (method === 'POST') return json({});
 			// updateRsvpStatus's lookup: current status value-id, event ref, sentinel.

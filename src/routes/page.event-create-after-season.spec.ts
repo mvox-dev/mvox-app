@@ -644,7 +644,14 @@ describe('#167 review F3 — the database-entity probe is not paid per agenda lo
 		await flush();
 		// A's answer was already known — no third pair.
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(2);
-		expect(resolveManageRightsMock).toHaveBeenCalledTimes(2);
+		// #372 — resolveManageRightsMock is now ALSO called once per load for the
+		// rsvp enablement read (entityId === personId, "person-p"); the
+		// database-entity probe pair this test is about is every OTHER call
+		// (entityId is the resolved database entity id, never personId itself).
+		const databaseEntityProbes = resolveManageRightsMock.mock.calls.filter(
+			(c) => c[1] !== 'person-p'
+		);
+		expect(databaseEntityProbes).toHaveLength(2);
 	});
 });
 

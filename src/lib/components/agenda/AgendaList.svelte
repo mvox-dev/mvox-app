@@ -23,6 +23,7 @@
 	// already import from.
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import RsvpControl from './RsvpControl.svelte';
+	import RsvpNonMemberHint from './RsvpNonMemberHint.svelte';
 	import RepertoireElement from './RepertoireElement.svelte';
 	// #90 TR.2 — ONE definition of the works view model, shared with
 	// RepertoireElement and its producer (repertoire/workRows.ts). Previously
@@ -55,15 +56,41 @@
 		// component's test unit-level).
 		rsvpByEventId?: RsvpByEventId;
 		// The singer's membership, as an explicit 3-state — NOT a memberId-or-null
-		// (which conflated "still resolving" with "confirmed non-member"). Each
-		// row's control gets the REASON it's disabled, so the non-member hint tracks
-		// membership only:
-		//   'member'     → control enabled.
-		//   'non-member' → disabled + "Only members can RSVP" hint (CONFIRMED only).
-		//   'loading'    → unresolved (still looking up, or lookup failed) → disabled,
-		//                  NO hint (fail-safe: never a false non-member claim). Mapped
-		//                  onto the control's `pending` reason (disabled, no hint).
+		// (which conflated "still resolving" with "confirmed non-member"). #372
+		// (issue #362 paradigm): membership is DISPLAY ONLY — it drives the
+		// attendance badge / season summary visibility below and the non-member
+		// hint beside an absent RsvpControl. It no longer has any say in the
+		// control's enabled/pending state — that's `canRsvp` (below), the Entu
+		// grant on the singer's own person.
+		//   'member'     → attendance badge / season summary render.
+		//   'non-member' → the "Only members can RSVP" hint renders, standing in
+		//                  for the control (CONFIRMED only — this branch is asked
+		//                  BEFORE `canRsvp`, because no grant can make a
+		//                  memberless rsvp writable; see the row markup).
+		//   'loading'    → unresolved (still looking up, or lookup failed) → no
+		//                  hint (fail-safe: never a false non-member claim), no
+		//                  attendance badge / season summary.
 		membership?: 'loading' | 'member' | 'non-member';
+		// #372 (issue #362 paradigm, Gama ruling) — THE gate for the upcoming
+		// row's RsvpControl: the Entu grant (`_owner`/`_editor`) on the singer's
+		// own PERSON entity, the entity her rsvp write actually targets (ER-27)
+		// — read via resolveManageRights(cfg, personId, personId), the app's one
+		// rights predicate (repertoireActions.ts). NOT membership: a member
+		// lookup answers "am I on the roster", a different question from "may I
+		// write" — #369 was 19 of 24 active members shown a fully enabled
+		// control for a write Entu always refused.
+		//   'editor'     → the control renders, enabled (subject to
+		//                  pendingEventIds for the in-flight-write disable).
+		//   'loading'    → the read is still in flight → the control renders
+		//                  disabled (never an enabled invitation ahead of the
+		//                  grant being confirmed).
+		//   'not-editor' → NO control renders at all — not disabled, not a
+		//                  hint-bearing invitation. An active member with no
+		//                  grant (#369's shape) gets nothing.
+		// Asked only AFTER `membership === 'non-member'` has been ruled out: a
+		// confirmed non-member gets the hint instead, whatever her grant (the
+		// rsvp entity needs a `member` reference she hasn't got).
+		canRsvp?: 'loading' | 'editor' | 'not-editor';
 		onrsvpchange?: (item: AgendaItem, status: RsvpStatus | null) => void;
 		// #15 — while an event's write is in flight, its whole RsvpControl (all 4
 		// buttons) is unclickable (Mihkel's ruling), not just the tapped button.
@@ -168,6 +195,7 @@
 		loading = false,
 		rsvpByEventId = {},
 		membership = 'loading',
+		canRsvp = 'loading',
 		onrsvpchange,
 		pendingEventIds = new Set<string>(),
 		failedEventIds = new Set<string>(),
@@ -619,14 +647,32 @@
 							{/if}
 							{@render worksElement(item)}
 							{@render scheduleLine(item)}
-							<RsvpControl
-								status={rsvpByEventId[item.id]?.status ?? null}
-								nonMember={membership === 'non-member'}
-								pending={membership === 'loading' || pendingEventIds.has(item.id)}
-								saveFailed={failedEventIds.has(item.id)}
-								saved={savedEventIds.has(item.id)}
-								onchange={(newStatus) => onrsvpchange?.(item, newStatus)}
-							/>
+							<!-- #372 (+ its review, F1) — TWO facts gate this control, and the
+							     order they are asked in matters. A CONFIRMED non-member is
+							     answered FIRST: an rsvp entity requires a `member` reference
+							     (rsvpData.ts createRsvp), so she cannot write one whatever her
+							     Entu grant says — and every mvox-minted person carries a
+							     self-`_editor` grant on her own person (inviteData.ts step 3),
+							     which survives a deactivation (memberLifecycle flips only the
+							     member `status`). Reading the grant first therefore handed
+							     archived/not-yet-accepted people an ENABLED control whose every
+							     tap throws 'cannot create without a memberId', and made this
+							     hint unreachable in production. Membership still has NO say in
+							     the ENABLED state (Gama's ruling) — it only SUBSTITUTES a
+							     display for the control. Only then does the grant decide: the
+							     control renders iff `canRsvp` isn't 'not-editor'. An active
+							     member with no grant (#369's shape) gets neither. -->
+							{#if membership === 'non-member'}
+								<RsvpNonMemberHint />
+							{:else if canRsvp !== 'not-editor'}
+								<RsvpControl
+									status={rsvpByEventId[item.id]?.status ?? null}
+									pending={canRsvp === 'loading' || pendingEventIds.has(item.id)}
+									saveFailed={failedEventIds.has(item.id)}
+									saved={savedEventIds.has(item.id)}
+									onchange={(newStatus) => onrsvpchange?.(item, newStatus)}
+								/>
+							{/if}
 						</div>
 					</div>
 				{/each}
