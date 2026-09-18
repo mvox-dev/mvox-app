@@ -60,6 +60,18 @@
 // has had since #274. Not specific to this field; not fixed here. Trigger
 // for revisiting: the first ledger line that actually writes an
 // interpolated composite value.
+//
+// mvox-app#402 closes that evasion for COMMITTED ledgers by construction:
+// `committed` doesn't redact by field NAME (the denylist's blind spot —
+// an evasion only needs an unlisted key), it builds the committed twin by
+// ALLOWLIST instead — copy a key iff its name is spelled out in `allow`,
+// at every level, dropping the whole subtree otherwise. A composite value
+// like `summary: "${name} (${id_code})"` has no home in an allowlisted
+// payload unless `summary` itself is named, which a caller assembling an
+// ids/counts/outcomes-only twin has no reason to do. The instance ledger
+// (crede-instance/, gitignored) is unchanged and keeps the denylist and
+// its recorded blind spot — this closes the evasion only for the file that
+// actually lands in git history.
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -105,6 +117,45 @@ function looksLikeCrede(db: string): boolean {
 	return db.toLowerCase().includes('crede');
 }
 
+/**
+ * mvox-app#402 — the committed-twin half of the allowlist mechanism.
+ * Copy a key iff its exact name is in `allow`, at EVERY level: a container
+ * key (e.g. `entries`) must itself be named to recurse into it, and an
+ * unnamed container drops its WHOLE subtree even if allowed names appear
+ * underneath — the full path has to be spelled out, nothing is reached by
+ * accident. Array elements are filtered element-wise; an element that ends
+ * up with no allowed keys becomes `{}` rather than being dropped, so array
+ * LENGTH (a count) survives.
+ */
+function filterByAllowlist(value: unknown, allow: ReadonlySet<string>): unknown {
+	if (Array.isArray(value)) return value.map((v) => filterByAllowlist(v, allow));
+	if (value && typeof value === 'object') {
+		const out: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+			if (allow.has(k)) out[k] = filterByAllowlist(v, allow);
+		}
+		return out;
+	}
+	return value;
+}
+
+/**
+ * mvox-app#402 — belt-and-braces content scrub for the committed twin.
+ * Allowlisting a field by NAME never exempts its VALUE from the same
+ * unconditional EMAIL_RE scan every ledger already gets — an allowlisted
+ * `message` carrying a stray email still needs the email caught.
+ */
+function scrubEmails(value: unknown): unknown {
+	if (typeof value === 'string') return value.replace(EMAIL_RE, '[REDACTED-EMAIL]');
+	if (Array.isArray(value)) return value.map(scrubEmails);
+	if (value && typeof value === 'object') {
+		const out: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = scrubEmails(v);
+		return out;
+	}
+	return value;
+}
+
 export interface WriteLedgerOptions {
 	/** Base name for the artifact file, e.g. 'seed-184-crede-members-menu'. */
 	scriptName: string;
@@ -134,6 +185,19 @@ export interface WriteLedgerOptions {
 	 * forces the decision into the open at the one call site that needs it.
 	 */
 	acknowledgedNonSensitive?: boolean;
+	/**
+	 * mvox-app#402 — when present, writes a SECOND artifact alongside the
+	 * instance ledger: a committed twin, allowlist-assembled from `payload`
+	 * (see `filterByAllowlist`), landing tracked in plain `seed-results/`
+	 * with an `-committed.json` suffix on the instance filename. Only
+	 * meaningful (and only accepted) alongside `sensitive: true` — a
+	 * non-sensitive ledger already lands tracked in full, so there is
+	 * nothing to twin; `sensitive: false` + `committed` throws. Naming a
+	 * denylisted field in `allow` (DEFAULT_REDACT_FIELDS, this call's own
+	 * `redactFields`, or the literal Entu wrapper key `string`) throws too —
+	 * the twin is built from the raw payload, so nothing else would catch it.
+	 */
+	committed?: { allow: readonly string[] };
 }
 
 /**
@@ -142,10 +206,51 @@ export interface WriteLedgerOptions {
  * otherwise plain `seed-results/` (tracked).
  *
  * Throws before writing anything if `db` looks like crede and
- * `sensitive: false` arrives without `acknowledgedNonSensitive: true` —
- * see that field's doc comment.
+ * `sensitive: false` arrives without `acknowledgedNonSensitive: true`, or
+ * if `committed.allow` names a denylisted field — see those fields' doc
+ * comments.
  */
 export function writeLedger(opts: WriteLedgerOptions): string {
+	if (opts.committed && !opts.sensitive) {
+		throw new Error(
+			`writeLedger: committed twin requested with sensitive:false. A non-sensitive ledger already lands ` +
+				`tracked in full — there is nothing to twin. Pass sensitive:true, or drop 'committed'.`
+		);
+	}
+
+	if (opts.committed) {
+		// mvox-app#402 review round 1 (Bentham) — the committed twin is
+		// assembled from the RAW payload, deliberately (allowlisting an
+		// already-denylisted payload would only copy `[REDACTED]` markers
+		// around). The price of that choice is that the denylist does NOT
+		// stand behind the twin: name a denylisted field in `allow` and the
+		// real value lands in tracked `seed-results/` in the clear, with no
+		// layer left to catch it — `scrubEmails` only matches EMAIL_RE, and
+		// the gitignored routing applies to the instance file only. Git
+		// history is not retractable, so refuse the combination at the gate,
+		// the same shape as the YELLOW-274.3 `acknowledgedNonSensitive`
+		// check below: name the offending keys and make the caller choose in
+		// the open. The literal key `string` is refused alongside the
+		// redact fields — it is Entu's value/reference wrapper
+		// (`{person: {string: 'Jaan Tamm'}}`), so allowing it turns any
+		// allowlisted container into a name-carrying leaf. Compared
+		// case-insensitively: `filterByAllowlist` matches keys exactly, so
+		// `Name` would not copy a `name` key, but it would copy a `Name` one.
+		const deniedInCommitted = new Set(
+			[...DEFAULT_REDACT_FIELDS, ...(opts.redactFields ?? []), 'string'].map((f) => f.toLowerCase())
+		);
+		const offenders = opts.committed.allow.filter((f) => deniedInCommitted.has(f.toLowerCase()));
+		if (offenders.length > 0) {
+			throw new Error(
+				`writeLedger: committed.allow names redacted field(s) [${offenders.join(', ')}]. The committed ` +
+					`twin is built from the RAW payload, so the denylist does not stand behind it — an ` +
+					`allowlisted '${offenders[0]}' would land in tracked seed-results/ in the clear, and git ` +
+					`history cannot be retracted. Allowlist ids, counts and outcomes instead; resolve any ` +
+					`human-readable label from the ids at read time.`
+			);
+		}
+	}
+
 	if (!opts.sensitive && looksLikeCrede(opts.db) && !opts.acknowledgedNonSensitive) {
 		throw new Error(
 			`writeLedger: db '${opts.db}' looks like the crede real-PII pilot, but sensitive:false was passed ` +
@@ -174,6 +279,27 @@ export function writeLedger(opts: WriteLedgerOptions): string {
 		filePath,
 		JSON.stringify({ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, ...redactedPayload }, null, 2)
 	);
+
+	if (opts.committed) {
+		const allowSet = new Set(opts.committed.allow);
+		const filtered = filterByAllowlist(opts.payload, allowSet) as Record<string, unknown>;
+		const scrubbed = scrubEmails(filtered) as Record<string, unknown>;
+
+		const committedDir = join('scripts', 'migrations', 'seed-results');
+		mkdirSync(committedDir, { recursive: true });
+		const committedFilename = filename.replace(/\.json$/, '-committed.json');
+		const committedPath = join(committedDir, committedFilename);
+
+		writeFileSync(
+			committedPath,
+			JSON.stringify(
+				{ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, committed: true, ...scrubbed },
+				null,
+				2
+			)
+		);
+	}
+
 	return filePath;
 }
 

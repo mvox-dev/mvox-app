@@ -159,6 +159,29 @@ async function main(): Promise<void> {
 		dryRun,
 		db: cfg.db,
 		sensitive: true,
+		// mvox-app#402 — first caller wired to the committed-twin pattern
+		// (ledger-writer.ts). Allowlisted by name, not by field-shape guess:
+		// ids (personId), counts (total, withSelfEditorCount,
+		// expectedGivenFlags), and outcomes (step, dryRun, plan, action,
+		// existingTier, results, status) — the containers (`ledger`, `plan`,
+		// `results`) must be named too, or their contents never reach the
+		// twin. `purpose` (free text) is deliberately NOT allowlisted.
+		committed: {
+			allow: [
+				'ledger',
+				'step',
+				'dryRun',
+				'plan',
+				'personId',
+				'action',
+				'existingTier',
+				'results',
+				'status',
+				'total',
+				'withSelfEditorCount',
+				'expectedGivenFlags'
+			]
+		},
 		payload: {
 			purpose: 'mvox-app#369 remedy — grant self-_editor on the 19 WITHOUT-set persons, per Mihkel\'s release via team-lead. ids only, .string stripped.',
 			ledger
