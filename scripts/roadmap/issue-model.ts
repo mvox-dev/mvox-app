@@ -206,7 +206,7 @@ function frontmatterField(body: string, key: string): string | null {
 }
 
 /** Both shapes: form `### Slugline` section, or frontmatter `slugline:`. */
-function field(body: string, name: string): string | null {
+export function field(body: string, name: string): string | null {
 	// The author marker ends the body, not the last section — strip it from
 	// section content so it never reads as a field value.
 	const fromForm = formSections(body).get(name)?.replace(AUTHOR_MARKER_RE, '').trim();

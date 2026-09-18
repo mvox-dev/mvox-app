@@ -30,7 +30,7 @@
 import { describe, expect, it } from 'vitest';
 import { fetchBoard, normalizeIssue } from './fetch-issues';
 import { kindFromLabels, kindFromType, kindOf } from './issue-model';
-import { renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
+import { displayLead, displayTitle, renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
 
 const GENERATED_AT = '2026-09-18T09:00:00.000Z';
 
@@ -371,5 +371,26 @@ describe('#373 — fetchBoard resolves sub-issues for a typed Epic with no label
 		expect(result.map((i) => i.number)).toEqual([410, 289]);
 		expect(result[0].subIssues?.map((s) => s.number)).toEqual([411]);
 		expect(result[1].subIssues?.map((s) => s.number)).toEqual([290]);
+	});
+});
+
+describe('sluglines and leads read from both body shapes', () => {
+	const formBody = '### Slugline\n\nLaulja saab asja tehtud\n\n### Lead\n\nÜks lause.\n\n### What\n\nx\n\n(*PO:Gama*)';
+	const fmBody = '---\nslugline: "Vana kuju"\nlead: "Vana lause."\n---\n\nx';
+	const mk = (body: string) => issue({ number: 999, title: 'English title', body });
+
+	it('a form-groomed issue shows its Estonian slugline and lead', () => {
+		expect(displayTitle(mk(formBody))).toBe('Laulja saab asja tehtud');
+		expect(displayLead(mk(formBody))).toBe('Üks lause.');
+	});
+
+	it('legacy frontmatter still wins its own shape', () => {
+		expect(displayTitle(mk(fmBody))).toBe('Vana kuju');
+		expect(displayLead(mk(fmBody))).toBe('Vana lause.');
+	});
+
+	it('neither shape → English title, no lead', () => {
+		expect(displayTitle(mk('plain body'))).toBe('English title');
+		expect(displayLead(mk('plain body'))).toBeNull();
 	});
 });

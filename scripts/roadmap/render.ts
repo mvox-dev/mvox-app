@@ -26,7 +26,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
-import { isKindLabel, kindFromType, kindOf, type IssueKind } from './issue-model';
+import { field, isKindLabel, kindFromType, kindOf, type IssueKind } from './issue-model';
 import { labelTextColor } from './label-color';
 
 /** One label as GitHub reports it: name plus its colour (hex, no leading '#'), or null when absent. */
@@ -87,10 +87,17 @@ export function parseFrontmatter(body: string | null | undefined): Record<string
  * (Estonian) when present and a non-empty string; the English title otherwise.
  */
 export function displayTitle(issue: RoadmapIssue): string {
-	const frontmatter = parseFrontmatter(issue.body);
-	const slugline = frontmatter?.slugline;
-	if (typeof slugline === 'string' && slugline.length > 0) return slugline;
-	return issue.title;
+	// Both body shapes carry sluglines now: `### Slugline` sections (the #384
+	// issue forms) and legacy `---` frontmatter. issue-model's field() reads
+	// both; without it the 2026-09 groomed issues silently lost their
+	// Estonian face on the board.
+	const slugline = field(issue.body ?? '', 'slugline') ?? parseFrontmatterField(issue, 'slugline');
+	return slugline ?? issue.title;
+}
+
+function parseFrontmatterField(issue: RoadmapIssue, key: string): string | null {
+	const value = parseFrontmatter(issue.body)?.[key];
+	return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 /**
@@ -99,9 +106,7 @@ export function displayTitle(issue: RoadmapIssue): string {
  * replacement. Same type-guard shape as displayTitle's slugline check.
  */
 export function displayLead(issue: RoadmapIssue): string | null {
-	const frontmatter = parseFrontmatter(issue.body);
-	const lead = frontmatter?.lead;
-	return typeof lead === 'string' && lead.length > 0 ? lead : null;
+	return field(issue.body ?? '', 'lead') ?? parseFrontmatterField(issue, 'lead');
 }
 
 /**
