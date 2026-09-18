@@ -2,17 +2,17 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-24, seam checkpoint 2026-09-18 16:45 EEST]
+### [NEXT SESSION — MVOX-24, seam checkpoint 2026-09-18 21:05Z]
 
-**#362 PACK LANDED (wf_966a614f-827, 31 agents, 0 errors): #363 fb2c20d · #372 7315cdd · #400 7b4be2c · #365 d7b7dfe · #371 e27beb2.** All four gate children of #362 closed; epic's close is Gama's. Grant-trust paradigm ratified on #362; no-BFF corpus rewrite landed (772906a/35619e2 app, 2123058/d77aacc schema repo).
+**LANDED TODAY (10 slices, all one commit each):** #362 pack #363 fb2c20d · #372 7315cdd · #400 7b4be2c · #365 d7b7dfe · #371 e27beb2; ledger pack #402 13a1f06 · #401 a362a6f · #367 09036c6 · #344 864929c. Epic #362 closed (Gama). #334 open: #409/#410 remain.
 
-**QUEUE (args in ~/workspace/scratchpad/, all prepped, TURN DISCIPLINE on every prompt):** (1) ledger pack args-next-pack.json [402→401→367→344] — LAUNCH NEXT; (2) links args-links-374-375.json (one slice, closes both); (3) #233 args-233-pack.json [S1,S2,S3,S4 CODE slices] — live runs are Pérotin's on Mihkel's per-step authorization (S1, S2, then S2-rerun+S4), all after #402; S3 precondition = S1+S2 live ledgers on main; (4) #407 args-407.json LAST (358-file polyphony→history sweep, sampledb token, fence spec).
+**QUEUE (args in ~/workspace/scratchpad/, all prepped):** (1) links args-links-374-375.json — LAUNCH NEXT (one slice, closes both); (2) #409→#410 args-409-410.json (scope ruled: every collective the signed-in person joined, never other identities; #409 needs #367 — landed); (3) #233 args-233-pack.json S1..S4 CODE slices — live runs are Pérotin's on Mihkel's per-step authorization (S1, S2, then S2-rerun+S4), all after #402 (landed); S3 precondition = S1+S2 live ledgers on main; (4) #407 args-407.json LAST. #411 = Gama's own (research digest sent: 3-deep fence repin). #408 unrung.
 
-**TOOLS LANDED THIS SEAM:** teams/mvox-dev/scripts/context-health.sh (real context tokens per agent; merge Monitor prints it at every landing); .claude/workflows/research-pack.js (research template: contract-pinned verify agents + blast + clears `in research` itself); tdd-slice-pipeline.js TURN_DISCIPLINE baked into agentS. Memory: mvox-db-from-jwt-accounts (no PUBLIC_ENTU_DB), workflow-agent-background-gates-fail, context-health-at-seams, native-issue-types (types=kind, labels=movement only).
+**GATE FACTS:** manual mode covers the team-lead session only; workflow subagents were classifier-blocked on git merge/push until Mihkel's 17:50 settings change — since then MERGE agents land on their own (#367, #344). Recovery from any halt = remainder args + fresh launch, never resume. Relayed operator lines abort running agents → RELAYED_LINE_GUARD now in agentS. Context-health is the last step of both templates (no hooks).
 
-**LAWS ADDED:** grant-trust (Entu grants only authority; no BFF exists); research workflow clears its own labels, team-lead sets prepped only with args; §12/issue-standard.md is po-team's — done-when boxes are the contract; polyphony dropped from constraining us (crede-only schema work, one script per step, #407).
+**TOOLS ON MAIN:** teams/mvox-dev/scripts/context-health.sh · .claude/workflows/research-pack.js (contract pins + blast + clears `in research` + context report) · tdd-slice-pipeline.js with TURN_DISCIPLINE + RELAYED_LINE_GUARD + final context-health agent.
 
-**Session record:** ~/workspace/scratchpad/findings-362-slice.md (+ research-*-digest.md, gist https://gist.github.com/mitselek/4a4401ecfc6606a6aa7e10552e3d683b).
+**Session record:** ~/workspace/scratchpad/findings-362-slice.md + research-*-digest.md; gist https://gist.github.com/mitselek/4a4401ecfc6606a6aa7e10552e3d683b.
 
 (*MVOX:Palestrina*)
 

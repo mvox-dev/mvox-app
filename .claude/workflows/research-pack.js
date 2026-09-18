@@ -7,7 +7,8 @@
  *   args.blast:  'text'       // optional extra brief for the blast/axes agent
  *
  * Phases: Verify (one read-only agent per issue, contract-pinned) → Blast (overlap, tests, four axes, order)
- *         → Labels (clears `in research` on every issue + epic — scripted, never team-lead memory; Mihkel 2026-09-18).
+ *         → Labels (context-health report + clears `in research` on every issue + epic —
+ *           both scripted into the template so neither can be forgotten; Mihkel 2026-09-18).
  * Team-lead sets `prepped` only when args are actually written.
  *
  * (*MVOX:Palestrina*)
@@ -18,7 +19,7 @@ export const meta = {
   phases: [
     { title: 'Verify', detail: 'one read-only agent per issue, contract pin first', model: 'claude-sonnet-5[1m]' },
     { title: 'Blast', detail: 'overlap with live tree, tests, four axes, recommended order', model: 'claude-sonnet-5[1m]' },
-    { title: 'Labels', detail: 'clear `in research` on every researched issue and epic', model: 'claude-haiku-4-5' }
+    { title: 'Labels', detail: 'context-health table, then clear `in research` on every researched issue and epic', model: 'claude-haiku-4-5' }
   ]
 }
 const M = 'claude-sonnet-5[1m]'
@@ -36,8 +37,8 @@ const SCHEMA = {
 }
 const LABEL_SCHEMA = {
   type: 'object',
-  properties: { cleared: { type: 'array', items: { type: 'number' } }, failed: { type: 'array', items: { type: 'string' } } },
-  required: ['cleared', 'failed'],
+  properties: { cleared: { type: 'array', items: { type: 'number' } }, failed: { type: 'array', items: { type: 'string' } }, contextHealth: { type: 'array', items: { type: 'string' } } },
+  required: ['cleared', 'failed', 'contextHealth'],
   additionalProperties: false
 }
 function pin(n, marker) {
@@ -50,6 +51,6 @@ const verify = await parallel(issues.map(i => () =>
     { label: 'verify-' + i.n, phase: 'Verify', schema: SCHEMA, model: M })))
 const blast = await agent(GUARD + "Blast-radius + axes sweep for issues [" + issues.map(i => '#' + i.n).join(', ') + "] (read each: gh issue view N --comments). Contract pins are done by sibling agents. Report: (1) FILE OVERLAP between these issues and with any live branch on the tree (git branch --show-current; git log --oneline origin/main..HEAD) — same file vs same function/block; hard dependencies vs line drift. (2) SHARED PRIMITIVES each issue needs; which need a NEW read/primitive. (3) TESTS asserting current behaviour each issue breaks, file:line. (4) AXES, one paragraph each with evidence: multi-collective/multi-db; locales en/et/lv/uk (new strings → Comenius); rights tiers (target entity, tier, ER ids from docs/architecture/entu-rights-and-visibility-model.md; inherited vs direct); invite-created vs auto-provisioned persons. (5) RECOMMENDED ORDER with one-line reasons: can-start-now vs after-which-landing; which issues need Mihkel's live-run authorization (any live mutation on polyphony/crede). " + (args.blast || ''),
   { label: 'blast', phase: 'Blast', schema: SCHEMA, model: M })
-const labels = await agent("cd ~/workspace-app && git remote get-url origin — abort unless it ends mvox-app.git. Then for EACH number in [" + issues.map(i => i.n).concat(epics).join(', ') + "] run `gh issue edit <n> --remove-label \"in research\"` and afterwards verify with `gh issue view <n> --json labels -q '.labels|map(.name)|join(\",\")'` that `in research` is gone. Do nothing else — no other label, no comment. Return cleared numbers and any failures.",
+const labels = await agent("cd ~/workspace-app && git remote get-url origin — abort unless it ends mvox-app.git. FIRST run `~/workspace-app/teams/mvox-dev/scripts/context-health.sh` and copy its CTX lines verbatim into `contextHealth` (one string per line) — this is the end-of-workflow context report Mihkel asked for. Then for EACH number in [" + issues.map(i => i.n).concat(epics).join(', ') + "] run `gh issue edit <n> --remove-label \"in research\"` and afterwards verify with `gh issue view <n> --json labels -q '.labels|map(.name)|join(\",\")'` that `in research` is gone. Do nothing else — no other label, no comment. Return cleared numbers and any failures.",
   { label: 'clear-in-research', phase: 'Labels', schema: LABEL_SCHEMA, model: 'claude-haiku-4-5' })
 return { verify, blast, labels }
