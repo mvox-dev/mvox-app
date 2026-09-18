@@ -20,6 +20,7 @@ import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
 import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
 import { writeLedger } from './lib/ledger-writer';
+import { grantSelfEditor } from './lib/grant-self-editor';
 
 const DRY_RUN = readDryRun();
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
@@ -104,6 +105,11 @@ async function processRecord(db: string, token: string, record: SourceRecord, le
 			{ type: '_parent', reference: DB_ENTITY_ID },
 			{ type: '_inheritrights', boolean: true }
 		]);
+
+		// #371 — parity with the invite path: the newly created person gets
+		// nothing from the create-time grant (that goes to this script's admin
+		// key), so grant self-`_editor` right after person-create.
+		await grantSelfEditor({ db, token }, personId);
 
 		memberId = await createEntity(db, token, [
 			{ type: '_type', reference: MEMBER_TYPE_ID },
