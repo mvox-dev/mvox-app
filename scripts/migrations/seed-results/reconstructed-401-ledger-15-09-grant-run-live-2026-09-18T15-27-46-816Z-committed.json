@@ -1,0 +1,37 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "personIds": [
+    "6a92a3f0ca67df980f415489",
+    "6a92a3f1ca67df980f4154a3",
+    "6a92a3f2ca67df980f4154bd",
+    "6a92a3f3ca67df980f4154d7",
+    "6a92a3f4ca67df980f4154f1",
+    "6a92a3f4ca67df980f41550b",
+    "6a92a3f5ca67df980f415525",
+    "6a92a3f6ca67df980f41553f",
+    "6a92a3f6ca67df980f415559",
+    "6a92a3f7ca67df980f415573",
+    "6a92a3f8ca67df980f41558d",
+    "6a92a3f8ca67df980f4155a7",
+    "6a92a3f9ca67df980f4155c1",
+    "6a92a3faca67df980f4155db",
+    "6a92a3faca67df980f4155f5",
+    "6a92a3fbca67df980f41560f",
+    "6a92a3fcca67df980f415629",
+    "6a92a3fcca67df980f415643",
+    "6a92a3feca67df980f415677"
+  ],
+  "grantCount": 19,
+  "postSweep": {
+    "held": 24,
+    "of": 24
+  },
+  "runAt": "2026-09-15T14:39+03:00",
+  "authorizedBy": "Mihkel (team console, verbatim)",
+  "reconstructed": true,
+  "reconstructedAt": "2026-09-18T15:27:46.814Z",
+  "reconstructionNote": "#401 reconstructed, never live-captured — built after the fact from #369's own recorded run (script committed at remedy-369-crede-self-editor-grant-2026-09-15.ts; this ledger is its missing result)."
+}
