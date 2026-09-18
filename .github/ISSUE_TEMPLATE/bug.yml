@@ -1,3 +1,6 @@
+# Slugline/lead are optional HERE and required at RELEASE (#405): a field
+# report must stay cheap to file, while the public board stays homogeneous.
+# issue-model.ts enforces the release half.
 # Bug form — a field report. Shaped for filing from a phone: what you saw,
 # where. Type + kind label assigned by the form itself.
 name: Bug
@@ -26,3 +29,17 @@ body:
       label: Who is affected
       description: Üks inimene, üks kollektiiv või kõik? Mitte kunagi pärisnime — kirjelda rolliga.
       placeholder: "üks crede laulja"
+  - type: input
+    id: slugline
+    attributes:
+      label: Slugline
+      description: Üks eestikeelne rida avalikule tahvlile. Sisestusel võib tühjaks jääda — enne väljalaset on see kohustuslik.
+    validations:
+      required: false
+  - type: textarea
+    id: lead
+    attributes:
+      label: Lead
+      description: Üks-kaks eestikeelset lauset — mida see muudab ja kellele. Sama reegel mis sluglinel.
+    validations:
+      required: false

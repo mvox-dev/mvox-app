@@ -110,6 +110,11 @@ describe('parseTaskIssue — refusals name every missing field', () => {
 });
 
 describe('bug / feature / epic parsers and dispatch', () => {
+	// #405: a field report and a one-line request are INTAKE — filed, not
+	// released — so they carry no motion label. Release is what adds the
+	// slugline/lead requirement, and these three tests are about authorship
+	// and shape, not about release.
+	const intake: Omit<RawIssue, 'body'> = { ...base, labels: [] };
 	const bugBody = `### What was seen
 
 "Couldn't save — tap to try again" on today's rehearsal.
@@ -123,7 +128,7 @@ mvox.eu agenda, iPhone Brave
 üks crede laulja`;
 
 	it('parses a form-filed bug authored by a personal account — no marker needed', () => {
-		const r = parseIssue({ ...base, issueType: 'Bug', body: bugBody, authorLogin: 'mitselek-mobile' });
+		const r = parseIssue({ ...intake, issueType: 'Bug', body: bugBody, authorLogin: 'mitselek-mobile' });
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
 		expect(r.issue.kind).toBe('bug');
@@ -133,7 +138,7 @@ mvox.eu agenda, iPhone Brave
 	});
 
 	it('refuses a bug from the shared account with no marker — that login names nobody', () => {
-		const r = parseIssue({ ...base, issueType: 'Bug', body: bugBody, authorLogin: 'mitselek' });
+		const r = parseIssue({ ...intake, issueType: 'Bug', body: bugBody, authorLogin: 'mitselek' });
 		expect(r.ok).toBe(false);
 		if (r.ok) return;
 		expect(r.missing).toEqual(['author (in-body marker, or a personal account)']);
@@ -141,7 +146,7 @@ mvox.eu agenda, iPhone Brave
 
 	it('parses a feature: the request verbatim, nothing else required', () => {
 		const r = parseIssue({
-			...base,
+			...intake,
 			issueType: 'Feature',
 			body: `### The request\n\nwhen adding a link, prepend https:// silently\n\n(*PO:Gama*)`
 		});
@@ -180,5 +185,67 @@ describe('the last form section swallows trailing prose (#388 live catch)', () =
 		expect(r.ok).toBe(true);
 		if (!r.ok) return;
 		expect(r.task.epic).toBe(362);
+	});
+});
+
+/**
+ * #405 — the public board reads Estonian whatever the kind.
+ *
+ * Mihkel, 2026-09-18: *"the board is a public surface and thus should read
+ * homogenous"*. The requirement follows STATE, not kind: intake still files
+ * without a slugline, a released issue does not. #374 and #375 are the live
+ * instance — both sat on the public board in English until the day this landed.
+ *
+ * (*PO:Gama*)
+ */
+describe('#405 — a released issue carries a slugline and a lead, whatever its kind', () => {
+	const intake: Omit<RawIssue, 'body'> = { ...base, labels: [] };
+	const bugBody = `### What was seen\n\nThe write was refused.\n\n### Where\n\nmvox.eu agenda, iPhone\n\n(*PO:Gama*)`;
+	const featureBody = `### The request\n\nprepend https:// silently\n\n(*PO:Gama*)`;
+	const faced = (body: string) =>
+		`### Slugline\n\nÜks rida tahvlile\n\n### Lead\n\nÜks lause, mis ütleb kellele ja mida.\n\n${body}`;
+
+	for (const [kind, body] of [
+		['Bug', bugBody],
+		['Feature', featureBody]
+	] as const) {
+		it(`refuses a released ${kind} with no slugline and no lead, naming each`, () => {
+			const r = parseIssue({ ...intake, labels: ['ready'], issueType: kind, body });
+			expect(r.ok).toBe(false);
+			if (r.ok) return;
+			expect(r.missing).toEqual([
+				'slugline (released issues carry one, any kind)',
+				'lead (released issues carry one, any kind)'
+			]);
+		});
+
+		it(`parses the same ${kind} while it is still intake — no motion label, no requirement`, () => {
+			const r = parseIssue({ ...intake, issueType: kind, body });
+			expect(r.ok).toBe(true);
+		});
+
+		it(`parses a released ${kind} once it has both`, () => {
+			const r = parseIssue({ ...intake, labels: ['prepped'], issueType: kind, body: faced(body) });
+			expect(r.ok).toBe(true);
+			if (!r.ok) return;
+			expect(r.issue.slugline).toBe('Üks rida tahvlile');
+		});
+	}
+
+	it('any motion label releases, not only `ready` — `in research` is already in front of the team', () => {
+		const r = parseIssue({ ...intake, labels: ['in research'], issueType: 'Bug', body: bugBody });
+		expect(r.ok).toBe(false);
+	});
+
+	it('names a missing slugline ONCE for a released Task, not twice — the kind rule and the release rule ask for the same field', () => {
+		const r = parseIssue({
+			...intake,
+			labels: ['ready'],
+			issueType: 'Task',
+			body: `### Done when\n\n- [ ] The singer does the thing\n\n(*PO:Gama*)`
+		});
+		expect(r.ok).toBe(false);
+		if (r.ok) return;
+		expect(r.missing.filter((m) => m.startsWith('slugline'))).toHaveLength(1);
 	});
 });
