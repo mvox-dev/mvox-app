@@ -95,6 +95,7 @@
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { loadRoster, listActiveMembers, type RosterRow } from '$lib/roster/rosterData';
+	import { loadRosterIncludingArchived } from '$lib/roster/memberLifecycle';
 	import type { AgendaItem } from '$lib/agenda/types';
 	// #103 TE.3 — the works pipeline: the SAME producer the agenda uses
 	// (workRows.ts joins repertoireData's resolved items against the library
@@ -264,9 +265,15 @@
 	// ever renders its zero-filled placeholder ahead of the real counts (see
 	// page.spec.ts: every tally/capacity assertion follows a waitFor on the
 	// SAME element).
-	let tally = $state<{ going: number; not_going: number; maybe: number; late: number } | null>(
-		null
-	);
+	let tally = $state<{
+		going: number;
+		not_going: number;
+		maybe: number;
+		late: number;
+		// #344 — the future-only fifth count (#255 D join); null on a past
+		// event, where the line/card stay four-wide.
+		not_responded: number | null;
+	} | null>(null);
 	// #102 review round 2 (F2) — a FAILED tally read is not "no counts to show".
 	// Without this the `tally` gate rendered every viewer exactly the
 	// no-counts-yet view on a 500/offline read, so she read "nobody answered"
@@ -275,6 +282,47 @@
 	// absence IS the clean negative, a fetch failure is NOT) and the same
 	// error+retry treatment this page already gives the event read.
 	let tallyError = $state(false);
+
+	/** #344 — the ONE shared order for the tally line's spans AND the card's
+	 *  groups: going · not_going · maybe · late · not_responded. */
+	const RSVP_TALLY_STATUS_ORDER = ['going', 'not_going', 'maybe', 'late', 'not_responded'] as const;
+	type RsvpTallyStatus = (typeof RSVP_TALLY_STATUS_ORDER)[number];
+
+	// #344 — the per-person rows behind the counts above, retained from the
+	// SAME `listAllRsvpsForEvent` read `loadTally` already performs (no second
+	// fetch): memberIds per answered status, and — future events only — the
+	// not-responded memberIds (active members minus every answerer, #255 D).
+	// null on a past event or before the first load; the card's groups read
+	// straight off these.
+	let tallyMemberIdsByStatus = $state<Record<
+		'going' | 'not_going' | 'maybe' | 'late',
+		string[]
+	> | null>(null);
+	let tallyNotRespondedMemberIds = $state<string[] | null>(null);
+	// The RAW row count `listAllRsvpsForEvent` returned (pre active-roster
+	// join) — the card activator's own gate: "zero rows back" means nobody
+	// has answered at all, independent of how many are simply not-responded.
+	let tallyRawRowCount = $state(0);
+
+	// #344 — the fold-out card: closed by default (never auto-opened by a
+	// reload), names resolved through loadRoster ONCE per open, never once per
+	// row (Henry's 2026-09-06 fence: event pages keep profile names, ONE
+	// resolution chain).
+	let tallyCardOpen = $state(false);
+	let tallyCardNames = $state<Record<string, string> | null>(null);
+	// #344 review F3 — the name read is a read like any other on this page, so
+	// it fails the way the tally read itself does (#102 review F2): said on
+	// screen, with a Retry, never a console line and a card full of raw ids.
+	let tallyCardNamesError = $state(false);
+	// #321 (PO ruling 2026-09-11) — the member read behind these names is
+	// class (2) REACHABLE, and the card is a closed set over it: a short read
+	// reads as "she is not a member", so the card says so itself.
+	let tallyCardNamesPartial = $state(false);
+	// #344 review F2 — the SAME class-(2) problem, one level up: since #344 the
+	// not-responded count is DERIVED from the active-member read, so a short
+	// read under-reports it on the line itself, card closed or open. Carried out
+	// of `loadTally` rather than discarded, and said next to the count.
+	let tallyMembersPartial = $state(false);
 
 	// ── #203 — delete state ────────────────────────────────────────────────────
 	// Same two-step confirm shape as the agenda's #197 season-manage delete rows:
@@ -729,6 +777,14 @@
 		rsvpSaved = false;
 		tally = null;
 		tallyError = false;
+		tallyMemberIdsByStatus = null;
+		tallyNotRespondedMemberIds = null;
+		tallyRawRowCount = 0;
+		tallyCardOpen = false;
+		tallyCardNames = null;
+		tallyCardNamesError = false;
+		tallyCardNamesPartial = false;
+		tallyMembersPartial = false;
 	}
 
 	/** #203 — a fresh (or superseded) load must not carry the PREVIOUS event's
@@ -908,21 +964,43 @@
 		])
 			.then(([rows, activeMembersRead]) => {
 				if (g !== generation) return;
-				// #321 — the active-member read is here only as a FILTER on the tally
-				// (drop answers from people who have since left), never as a rendered
-				// list, so its `truncated` gets no notice of its own on this page: the
-				// member list whose cardinality it is lives on /roster and says so
-				// there. `listActiveMembers`' own doc states the same boundary.
+				// #321 / #344 review F2 — the active-member read started life here as
+				// a pure FILTER on the tally (drop answers from people who have since
+				// left), which needed no truncation notice of its own. #344 changed
+				// that: the not-responded group is DERIVED from this read and is now
+				// rendered twice over — as the fifth count on the line and as a group
+				// inside the card. A short read therefore under-reports a number on
+				// screen, so its `truncated` is carried out (`tallyMembersPartial`)
+				// and said next to that count, exactly as the card says it about its
+				// own name read.
 				const activeMembers = activeMembersRead?.items;
+				tallyMembersPartial = activeMembersRead?.truncated ?? false;
 				const scoped = activeMembers
 					? rows.filter((r) => activeMembers.some((am) => am.memberId === r.memberId))
 					: rows;
+				// #344 — the per-person rows the card renders, retained from this SAME
+				// read (never a second fetch): memberIds grouped by the status she
+				// answered with, plus (future events only) the not-responded group —
+				// active members who answered nothing at all.
+				const answeredMemberIds = new Set(scoped.map((r) => r.memberId));
+				const notResponded = activeMembers
+					? activeMembers.filter((am) => !answeredMemberIds.has(am.memberId)).map((am) => am.memberId)
+					: null;
 				tallyError = false;
+				tallyRawRowCount = rows.length;
+				tallyMemberIdsByStatus = {
+					going: scoped.filter((r) => r.status === 'going').map((r) => r.memberId),
+					not_going: scoped.filter((r) => r.status === 'not_going').map((r) => r.memberId),
+					maybe: scoped.filter((r) => r.status === 'maybe').map((r) => r.memberId),
+					late: scoped.filter((r) => r.status === 'late').map((r) => r.memberId)
+				};
+				tallyNotRespondedMemberIds = notResponded;
 				tally = {
-					going: scoped.filter((r) => r.status === 'going').length,
-					not_going: scoped.filter((r) => r.status === 'not_going').length,
-					maybe: scoped.filter((r) => r.status === 'maybe').length,
-					late: scoped.filter((r) => r.status === 'late').length
+					going: tallyMemberIdsByStatus.going.length,
+					not_going: tallyMemberIdsByStatus.not_going.length,
+					maybe: tallyMemberIdsByStatus.maybe.length,
+					late: tallyMemberIdsByStatus.late.length,
+					not_responded: notResponded?.length ?? null
 				};
 			})
 			.catch((e) => {
@@ -934,6 +1012,14 @@
 				console.error('event detail: tally load failed', e);
 				tally = null;
 				tallyError = true;
+				tallyMemberIdsByStatus = null;
+				tallyNotRespondedMemberIds = null;
+				tallyRawRowCount = 0;
+				tallyCardOpen = false;
+				tallyCardNames = null;
+				tallyCardNamesError = false;
+				tallyCardNamesPartial = false;
+				tallyMembersPartial = false;
 			});
 	}
 
@@ -947,6 +1033,137 @@
 		if (!current || !loaded) return;
 		tallyError = false;
 		loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation, isPastDetail(loaded));
+	}
+
+	/** #344 — the card's own activator gate: the tally read landed clean AND
+	 *  the card has at least one NAME to show — an answered row, or (future
+	 *  events) a not-responded member.
+	 *
+	 *  #344 review F4 widened this from `tallyRawRowCount > 0`. A future event
+	 *  nobody has answered yet is exactly when "kes on kes" is asked — the
+	 *  conductor reading "0 going … 7 not responded" wants those seven names
+	 *  so she can chase them, and keying the activator off the RAW rsvp count
+	 *  alone made the fifth number the one count on the line you could not
+	 *  open. A PAST event is unchanged: `tallyNotRespondedMemberIds` is null
+	 *  there (#255 D — no fifth group on a past tally), so zero rows back
+	 *  still renders the line with no activator. */
+	const showTallyCardToggle = $derived(
+		tally !== null &&
+			!tallyError &&
+			(tallyRawRowCount > 0 || (tallyNotRespondedMemberIds?.length ?? 0) > 0)
+	);
+
+	/** #344 — one group per applicable status, SAME order as the line
+	 *  (RSVP_TALLY_STATUS_ORDER), each carrying the memberIds `loadTally`
+	 *  already retained. `not_responded` is included only when the tally
+	 *  itself carries it (future events; #255 D) — a past card never grows a
+	 *  fifth group. */
+	const tallyCardGroups = $derived.by<
+		{ status: RsvpTallyStatus; count: number; memberIds: string[] }[] | null
+	>(() => {
+		if (!tally || !tallyMemberIdsByStatus) return null;
+		const groups: { status: RsvpTallyStatus; count: number; memberIds: string[] }[] = [
+			{ status: 'going', count: tally.going, memberIds: tallyMemberIdsByStatus.going },
+			{ status: 'not_going', count: tally.not_going, memberIds: tallyMemberIdsByStatus.not_going },
+			{ status: 'maybe', count: tally.maybe, memberIds: tallyMemberIdsByStatus.maybe },
+			{ status: 'late', count: tally.late, memberIds: tallyMemberIdsByStatus.late }
+		];
+		if (tallyNotRespondedMemberIds !== null) {
+			groups.push({
+				status: 'not_responded',
+				count: tallyNotRespondedMemberIds.length,
+				memberIds: tallyNotRespondedMemberIds
+			});
+		}
+		return groups;
+	});
+
+	/** #344 — the group header text: the SAME `rsvp_status_*` keys the roster
+	 *  page's own status labels use, plus the new `not_responded` one. */
+	function rsvpTallyStatusLabel(status: RsvpTallyStatus): string {
+		switch (status) {
+			case 'going':
+				return m.rsvp_status_going();
+			case 'not_going':
+				return m.rsvp_status_not_going();
+			case 'maybe':
+				return m.rsvp_status_maybe();
+			case 'late':
+				return m.rsvp_status_late();
+			case 'not_responded':
+				return m.rsvp_status_not_responded();
+		}
+	}
+
+	/** #344 — the card's ONE name-resolution chain: `loadRoster` (rosterData.ts),
+	 *  the same producer the attendance panel already reuses (Henry's
+	 *  2026-09-06 fence: event pages keep profile names, no RedactedField, no
+	 *  second chain). Runs ONCE per open, never once per row — the whole
+	 *  card's memberId → name map comes back from this ONE read.
+	 *
+	 *  #344 review F1 — on a PAST event the ids to name are NOT active-only.
+	 *  `loadTally` deliberately leaves a past tally unjoined (#255 D: the
+	 *  singer who has since left still answered, and her answer stands as
+	 *  recorded), so the groups carry ARCHIVED memberIds that the active
+	 *  roster can never name. Past events therefore resolve over
+	 *  `loadRosterIncludingArchived` — the same two wrappers' rows unioned,
+	 *  still one profile-name rule (memberLifecycle.ts). Future events keep
+	 *  `loadRoster`: their ids are active-only by construction, and the
+	 *  archived read is the collective's whole membership history, not a read
+	 *  to pay for when its answer is unused.
+	 *
+	 *  Pastness is read from the JUST-LOADED detail (`isPastDetail(loaded)`),
+	 *  never the live `isPast` $derived — the same stale-closure discipline
+	 *  `loadTally`'s own `past` parameter is given. */
+	function loadTallyCardNames(): void {
+		const current = selected;
+		const loaded = detail;
+		if (!current || !loaded) return;
+		const g = generation;
+		const evId = loaded.id;
+		const cfg = { db: current.db, token: getToken() ?? '' };
+		tallyCardNamesError = false;
+		const read = isPastDetail(loaded) ? loadRosterIncludingArchived(cfg) : loadRoster(cfg);
+		read
+			.then((rosterRead) => {
+				if (g !== generation || detail?.id !== evId) return;
+				const names: Record<string, string> = {};
+				for (const row of rosterRead.items) names[row.memberId] = row.profileName ?? row.name;
+				tallyCardNames = names;
+				// #321 — carried through, not discarded: a truncated member read
+				// drops people out of this card, and "not on the list" reads as
+				// "not a member" unless the card says otherwise.
+				tallyCardNamesPartial = rosterRead.truncated;
+			})
+			.catch((e) => {
+				console.error('event detail: tally card roster load failed', e);
+				if (g !== generation || detail?.id !== evId) return;
+				// Drop the stale map rather than leave half a card standing, and
+				// SAY so — with the same Retry the tally error line offers.
+				tallyCardNames = null;
+				tallyCardNamesPartial = false;
+				tallyCardNamesError = true;
+			});
+	}
+
+	/** #344 review F3 — re-run the card's name read, the Retry beside the
+	 *  "names unavailable" line inside the open card. Same no-rights-gate
+	 *  reasoning as `retryTally`: whoever sees the failure issued the read. */
+	function retryTallyCardNames(): void {
+		loadTallyCardNames();
+	}
+
+	/** #344 — the tally line IS the activator (standing rule 4/4b): a click
+	 *  folds the card in/out in place, no navigation, no second fetch of the
+	 *  rows already held. Focus never leaves the button — it stays mounted
+	 *  across both states. */
+	function toggleTallyCard(): void {
+		if (tallyCardOpen) {
+			tallyCardOpen = false;
+			return;
+		}
+		tallyCardOpen = true;
+		loadTallyCardNames();
 	}
 
 	// ── #203 — delete: the ONE destructive action this page owns ───────────────
@@ -4605,9 +4822,11 @@
 					     answer, #102 review F3), independent of rights. Otherwise a
 					     CONFIRMED non-member is answered FIRST — an rsvp entity requires a
 					     `member` reference (rsvpData.ts createRsvp), so no Entu grant can
-					     make her write land, and every mvox-minted person carries a
-					     self-`_editor` grant that survives deactivation — she gets the
-					     display hint in the control's place. Membership still has NO say in
+					     make her write land, and a self-`_editor` grant that survives
+					     deactivation is true on crede via #369's backfill (2026-09-15),
+					     for every future bulk-created person via #371's grantSelfEditor
+					     (e27beb2), and for invite-created persons via inviteData.ts — she
+					     gets the display hint in the control's place. Membership still has NO say in
 					     the ENABLED state (Gama's ruling); it only substitutes a display.
 					     Only then does the grant decide: the control renders iff
 					     `rsvpRights` isn't 'not-editor'. An active member with no grant
@@ -4629,24 +4848,142 @@
 					     tally renders from the read's result for every viewer. Gated on
 					     the counts actually being loaded — rendering ahead of the tally
 					     fetch would flash a zero-filled placeholder. -->
+					{#snippet tallyLine()}
+						{#if tally}
+							<span data-testid="event-detail-tally" class="text-xs text-ink-2" aria-live="polite">
+								<span data-testid="event-detail-tally-going"
+									>{m.event_detail_tally_going({ count: tally.going })}</span
+								>
+								·
+								<span data-testid="event-detail-tally-not_going"
+									>{m.event_detail_tally_not_going({ count: tally.not_going })}</span
+								>
+								·
+								<span data-testid="event-detail-tally-maybe"
+									>{m.event_detail_tally_maybe({ count: tally.maybe })}</span
+								>
+								·
+								<span data-testid="event-detail-tally-late"
+									>{m.event_detail_tally_late({ count: tally.late })}</span
+								>
+								{#if tally.not_responded !== null}
+									·
+									<span data-testid="event-detail-tally-not_responded"
+										>{m.event_detail_tally_not_responded({ count: tally.not_responded })}</span
+									>
+								{/if}
+							</span>
+						{/if}
+					{/snippet}
 					{#if tally}
-						<p data-testid="event-detail-tally" class="text-xs text-ink-2" aria-live="polite">
-							<span data-testid="event-detail-tally-going"
-								>{m.event_detail_tally_going({ count: tally.going })}</span
+						<!-- #344 — the WHOLE line is the activator (standing rule 4/4b): a
+						     native <button type="button"> wrapping every count span, closed
+						     by default, folding the card in place below it. Absent entirely
+						     when there is nothing to fold out (zero rows back — #344's own
+						     gate, distinct from #363's tally-renders-regardless one). -->
+						{#if showTallyCardToggle}
+							<button
+								type="button"
+								data-testid="event-detail-tally-toggle"
+								class="flex w-full flex-wrap items-baseline gap-1 text-left"
+								aria-expanded={tallyCardOpen}
+								onclick={toggleTallyCard}
 							>
-							·
-							<span data-testid="event-detail-tally-not_going"
-								>{m.event_detail_tally_not_going({ count: tally.not_going })}</span
-							>
-							·
-							<span data-testid="event-detail-tally-maybe"
-								>{m.event_detail_tally_maybe({ count: tally.maybe })}</span
-							>
-							·
-							<span data-testid="event-detail-tally-late"
-								>{m.event_detail_tally_late({ count: tally.late })}</span
-							>
-						</p>
+								{@render tallyLine()}
+								<!-- #344 review F1 — the activator names ITS OWN object. The
+								     season card's labels ("Open/Close season card") were reused
+								     here at first and read as the wrong thing entirely to a
+								     screen reader standing on an event page. -->
+								<span class="sr-only"
+									>{tallyCardOpen
+										? m.event_detail_tally_card_collapse_label()
+										: m.event_detail_tally_card_expand_label()}</span
+								>
+							</button>
+							{#if tallyCardOpen}
+								<!-- #344 — folds out IN PLACE, same section, below the line: no
+								     new route, no goto. Groups follow the line's own order;
+								     names resolved through loadRoster (the card's ONE chain),
+								     filled in once that read lands. -->
+								<div
+									data-testid="event-detail-tally-card"
+									class="flex flex-col gap-2 rounded-md border border-ink-5 p-2 text-xs text-ink-2"
+								>
+									<!-- #344 review F3 — the name read failed: said on screen, with
+									     the same Retry the tally's own error line carries. Never a
+									     console line and a card full of raw entity ids. -->
+									{#if tallyCardNamesError}
+										<p
+											data-testid="event-detail-tally-card-names-error"
+											role="status"
+											class="flex flex-wrap items-baseline gap-2 text-red-700"
+										>
+											<span>{m.event_detail_tally_names_error()}</span>
+											<button
+												type="button"
+												data-testid="event-detail-tally-card-names-retry"
+												class="underline"
+												onclick={retryTallyCardNames}
+											>
+												{m.event_detail_retry()}
+											</button>
+										</p>
+									{/if}
+									<!-- #321 (PO ruling 2026-09-11) — this card is a closed set over
+									     the member read: a short read drops people out of it, which
+									     reads as "she is not a member" unless stated. -->
+									{#if tallyCardNamesPartial}
+										<p data-testid="event-detail-tally-card-partial-notice" class="text-ink-2">
+											{m.picker_partial_members_notice()}
+										</p>
+									{/if}
+									<!-- The names are still in flight: the group headers already carry
+									     the counts, so the card says what it is waiting for rather than
+									     standing a list of placeholders in for people. -->
+									{#if tallyCardNames === null && !tallyCardNamesError}
+										<p data-testid="event-detail-tally-card-loading" class="text-ink-2">
+											{m.picker_roster_loading()}
+										</p>
+									{/if}
+									{#each tallyCardGroups ?? [] as group (group.status)}
+										<div data-testid={`event-detail-tally-card-group-${group.status}`}>
+											<h3 class="font-medium text-ink">
+												{rsvpTallyStatusLabel(group.status)} ({group.count})
+											</h3>
+											{#if group.memberIds.length > 0 && tallyCardNames}
+												<ul class="pl-3">
+													{#each group.memberIds as memberId (memberId)}
+														<!-- #344 review F1/F2 — NEVER the raw memberId: a 24-hex
+														     entity id is not a person's name (standing rule). An
+														     id this map cannot resolve — a member whose profile
+														     carries no domain/public name, so the #28 completeness
+														     gate dropped her row — renders a translated placeholder
+														     instead. -->
+														<li>
+															{tallyCardNames[memberId] ??
+																m.event_detail_tally_name_unavailable()}
+														</li>
+													{/each}
+												</ul>
+											{/if}
+										</div>
+									{/each}
+								</div>
+							{/if}
+						{:else}
+							{@render tallyLine()}
+						{/if}
+						<!-- #344 review F2 — the fifth count is derived from a capped member
+						     read (`listActiveMembers`, limit 500). When that read came back
+						     short the number under-reports, so it says so — on the LINE, card
+						     closed or open, which is where the count is. Suppressed only when
+						     the open card is already saying the same sentence about its own
+						     name read (one notice, never two identical paragraphs). -->
+						{#if tallyMembersPartial && tally.not_responded !== null && !tallyCardNamesPartial}
+							<p data-testid="event-detail-tally-partial-notice" class="text-xs text-ink-2">
+								{m.picker_partial_members_notice()}
+							</p>
+						{/if}
 						{#if detail.capacity !== null}
 							<p data-testid="event-detail-capacity" class="text-xs text-ink-2">
 								{m.event_detail_capacity({ going: tally.going, capacity: detail.capacity })}

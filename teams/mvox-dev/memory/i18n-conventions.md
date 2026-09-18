@@ -154,6 +154,20 @@ Append entries here when a non-obvious translation choice is made. Format: key, 
 | `auth_provider_email_sub` | lv | `maģiskā saite` | `maģiskā` = magical (adj.); `saite` = link. Natural Latvian compound. |
 | `auth_provider_email_sub` | uk | `магічне посилання` | `магічне` = magical; `посилання` = link. Standard Ukrainian tech phrasing. |
 | `library_overdue_marginalia` | et/lv/uk | `TODO` markers | Free-text marginalia with a specific date ("31 May") — deferred for PO to supply locale-specific copy or confirm en passthrough. |
+| `rsvp_status_not_responded` | et | `Ei ole vastanud` | #344. Standalone GROUP HEADER in the tally card — no number in front of it, so the full finite verb phrase reads naturally on its own line. Deliberately worded differently from `event_detail_tally_not_responded` below; see that row. |
+| `event_detail_tally_not_responded` | et | `{count} pole vastanud` | #344. The COUNTED tally line, Gama's own slugline («7 pole vastanud»). `pole` is the contracted negative that Estonian prefers directly after a numeral; `Ei ole vastanud` in the same slot would read as a sentence interrupted by a number. Same concept, two renderings, because the two slots are grammatically different — not an inconsistency to "fix". |
+| `rsvp_status_not_responded` / `event_detail_tally_not_responded` | lv | `Nav atbildējuši` / `{count} nav atbildējuši` | #344. Latvian needs no such split: `nav atbildējuši` is already the plain negative and reads the same standing alone as after a numeral. Its sibling tally keys inflect for tense (`nebūs`, `kavēsies`) because THEY describe the event; this one describes an answer that never came, which has no future form. |
+| `rsvp_status_not_responded` / `event_detail_tally_not_responded` | uk | `Не відповіли` / `{count} не відповіли` | #344. Same as lv — one past-tense plural form works in both slots; only capitalisation differs (sentence-initial as a header). |
+| `event_detail_tally_names_error` | et | `Nimede laadimine ebaõnnestus.` | #344 review F3. "Loading the names failed" — verbal-noun subject, matching the sibling `event_detail_tally_error` (`Vastuste arvu ei õnnestunud laadida.`) in register without repeating its construction. |
+| `event_detail_tally_names_error` | lv | `Neizdevās ielādēt vārdus.` | #344 review F3. Mirrors `event_detail_tally_error` (`Neizdevās ielādēt skaitus.`) exactly, swapping the object — the two lines can appear in the same card. |
+| `event_detail_tally_names_error` | uk | `Не вдалося завантажити імена.` | #344 review F3. Mirrors `event_detail_tally_error` (`Не вдалося завантажити підрахунки.`), object swapped, for the same reason. |
+| `event_detail_tally_name_unavailable` | et | `Nimi pole saadaval` | #344 review F2. Stands in a list where every other item is a person's name, so it is a NOUN PHRASE, not a sentence, and carries no full stop. Never the raw entity id (standing rule: an id is not a name). |
+| `event_detail_tally_name_unavailable` | lv | `Vārds nav pieejams` | #344 review F2. Noun phrase, no full stop — same list-item reasoning as et. |
+| `event_detail_tally_name_unavailable` | uk | `Ім’я недоступне` | #344 review F2. Noun phrase, no full stop; neuter agreement with `ім'я`. |
+| `event_detail_tally_card_expand_label` / `event_detail_tally_card_collapse_label` | en | `Show who answered` / `Hide who answered` | #344 review F1. The tally activator's sr-only label. Dedicated pair, NOT the home page's `season_manage_expand_label` / `season_manage_collapse_label` ("Open/Close season card"), which the first cut reused: a screen reader on an event page then heard "… 7 not responded, Open season card" — the label named the wrong object, in all four locales. A disclosure label names the thing it discloses. |
+| `event_detail_tally_card_expand_label` / `event_detail_tally_card_collapse_label` | et | `Näita, kes vastas` / `Peida, kes vastas` | #344 review F1. Imperative + comma-separated subordinate clause, the Estonian way to say "show who answered"; singular `vastas` because the clause's subject is the interrogative `kes`. Deliberately echoes the card's own subject (the answers), not the card as an object. |
+| `event_detail_tally_card_expand_label` / `event_detail_tally_card_collapse_label` | lv | `Rādīt, kas atbildēja` / `Slēpt, kas atbildēja` | #344 review F1. Infinitive form for UI actions (Latvian convention for control labels), subordinate clause with `kas` + past `atbildēja`. |
+| `event_detail_tally_card_expand_label` / `event_detail_tally_card_collapse_label` | uk | `Показати, хто відповів` / `Сховати, хто відповів` | #344 review F1. Perfective infinitives (`показати`/`сховати`) for a one-shot action, clause with `хто` + past `відповів`. |
 
 ### New key group: `library_*` (added session 21)
 
@@ -580,3 +594,7 @@ own notice, so a sibling key would only invite drift.
 | `login_error_generic` | et/lv/uk | `Midagi läks valesti.` / `Kaut kas nogāja greizi.` / `Щось пішло не так.` | Idiomatic "something went wrong" per locale + the established "please try again" tail; en value pinned verbatim to the pre-#218 hardcoded string. |
 
 (*MVOX:Palestrina, contributed for Comenius's stewardship*)
+
+(*MVOX:Josquin, #344 review F5 — the not-responded split + the two review-fix keys*)
+
+(*MVOX:Josquin, #344 review F1 — the tally card's own disclosure labels*)

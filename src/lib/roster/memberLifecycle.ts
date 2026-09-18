@@ -1,7 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listAdmins, listLibrarians } from '$lib/admin/roleManagement';
-import { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterData';
+import { listProfilesForPerson, loadRoster, toRosterRow, type RosterRow } from './rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // #255 — the member LIFECYCLE write layer (deactivate / reinstate) plus the
@@ -209,6 +209,53 @@ export async function loadInactiveRoster(
 			.sort((a, b) => a.name.localeCompare(b.name)),
 		total: members.total,
 		truncated: members.truncated
+	};
+}
+
+/**
+ * #344 review F1 — `loadRoster` UNIONED with `loadInactiveRoster`: every member
+ * the collective has ever had, active or archived, resolved through the SAME
+ * `listProfilesForPerson` + `toRosterRow` chain both wrappers already use (no
+ * third resolution path, no second name rule).
+ *
+ * Exists for ONE caller shape: a surface that must name memberIds it did not
+ * get from the active roster. The event page's #344 tally card is the first —
+ * a PAST event's tally is deliberately NOT joined against the active roster
+ * (#255 D: the singer who has since left still answered, and her answer is
+ * shown as recorded), so its rows carry archived memberIds that
+ * `loadRoster` alone can never name. Resolving those over the active list only
+ * printed the raw 24-hex `_id` on screen as the person's name.
+ *
+ * FUTURE-event surfaces must keep calling `loadRoster`: their id sets are
+ * active-only by construction, and the archived read is the collective's whole
+ * membership history — not a read to pay for when its answer is unused (the
+ * same reasoning `loadTally` gives for skipping the roster read on a past
+ * event, in the other direction).
+ *
+ * ACTIVE WINS on a memberId collision. The two reads are disjoint by query
+ * (`status.string=active` vs `=archived`), so a duplicate means one member
+ * entity changed status mid-flight between the two requests; naming her by the
+ * active row is the answer that matches what the rest of the app shows.
+ *
+ * #321 — `truncated` is the OR of the two reads (either one short means this
+ * list is missing people) and `total` their sum, the same combining rule
+ * `loadRosterWithRealNames` applies to its own two reads.
+ */
+export async function loadRosterIncludingArchived(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<ListRead<RosterRow>> {
+	const [active, inactive] = await Promise.all([
+		loadRoster(cfg, fetchImpl),
+		loadInactiveRoster(cfg, fetchImpl)
+	]);
+	const activeIds = new Set(active.items.map((r) => r.memberId));
+	return {
+		items: [...active.items, ...inactive.items.filter((r) => !activeIds.has(r.memberId))].sort(
+			(a, b) => a.name.localeCompare(b.name)
+		),
+		total: active.total + inactive.total,
+		truncated: active.truncated || inactive.truncated
 	};
 }
 
