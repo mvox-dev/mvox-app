@@ -56,6 +56,31 @@ below is only how *I* work: method, self-corrections, and findings I have alread
   declining. The prompt file is team config and not mine to edit; flagged to team-lead for the seam.
   The rest of the restriction stands unchanged: still no production code, no tests, no migrations, no
   PRs, no merges.
+- **[CHECKPOINT 2026-09-18] There is NO BFF, and my prompt plus two rulebook triggers still assume one.**
+  Verified at the tree this turn (`main` @ `fccbc44`): **`src/lib/server/` does not exist**, `svelte.config.js:1`
+  imports `@sveltejs/adapter-static`, and the only `+server.ts` in `src/` is `src/routes/version.json/+server.ts`
+  — no `hooks.server.ts`, no `+page.server.ts`, nothing server-side. The app is a **static SPA; the browser calls
+  Entu directly with the person's JWT.** So:
+  - `prompts/bentham.md`'s "Security-Critical Files" list names four paths of which **three do not exist**, and its
+    **"Direct calls to `https://entu.app` from client code — RED" line is INVERTED** — browser-direct IS the design
+    (the "Data path — browser-direct to Entu" decision, Path C). Firing it manufactures a false RED. Section C
+    trigger 6 already states the correct form: the target is calls **bypassing `src/lib/entu/client.ts`** and the
+    storage helpers, not browser-direct itself. Enforce trigger 6's wording, never the prompt's line.
+  - Section C **trigger 4** ("a new route running in elevated mode" → the BFF elevated-ops list) and the
+    **"BFF elevated-ops list"** decision have **no surface left to bind** — there are no routes running as anyone.
+    Do not demand a list entry; there is no server to run elevated.
+  - Ratified upstream of me, so this is not my call to make or unmake: **mvox-app#362** (epic, Gama 2026-09-18)
+    posture item 0 — *"No server of our own... every 'BFF enforces' line in the corpus is stale."* Six posture
+    items; read the issue before reviewing anything in this epic.
+  - **The new standing check from #362**: a gate that **computes** access (membership test, named seat, a
+    management-rights check standing in for a different question) instead of **reading** Entu's grant on the
+    **target entity** is **YELLOW**. RED tests for gated controls must run against **rights fixtures on the target
+    entity, never membership fixtures**. Known deviations carry an in-place `GRANT-TRUST` marker.
+  - **What this does NOT touch**: section C triggers 1, 2, 3, 5 and 7, the `PO-Approved:` schema gate, and every
+    rights mechanic in section B stand unchanged — the authority moved from our server to Entu's grants, which is
+    what those triggers were always about. `prompts/bentham.md` is team config and not mine to edit; flagged to
+    team-lead, same as the section-E gate-running contradiction above.
+
 - **[ENV-GATE-OUTPUT-SHAPES]** Two instrument facts, both cost me a wasted run this session.
   `pnpm check | tail -8` does **NOT** show the svelte-check summary — `check:workers` and `check:sw`
   echo their own banners *after* it, so the tail is sub-command noise and the verdict line is already
