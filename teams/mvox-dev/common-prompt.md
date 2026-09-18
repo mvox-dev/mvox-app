@@ -10,7 +10,7 @@
 
 **Mvox** — web application for choral music sharing. Schema is mvox's own (independent since Mihkel's 2026-09-06 ruling), with v4E heritage — the `entu/research` repo's `docs/schema/v4E/` is historical reference, not a sync target.
 
-Backed by Entu (entity-property database platform); no own database. Acts as a BFF in front of Entu's API. Successor to the polyphony prototype, with refined data model and federation-ready design.
+Backed by Entu (entity-property database platform); no own database. Static SPA — the browser calls Entu directly with the user's JWT; Entu's grants are the only authority. Successor to the polyphony prototype, with refined data model and federation-ready design.
 
 ## Path Conventions
 
@@ -47,8 +47,8 @@ Landed 2026-05-18 session 2. See `memory/architecture-decisions.md` for the rati
 | Framework       | SvelteKit 2 + Svelte 5         | Runes ONLY (`$state`, `$derived`, `$effect`, `$props`, `$bindable`) — never legacy `export let` / `$:`                                                                 |
 | Platform        | Cloudflare Pages + Workers     | `@sveltejs/adapter-cloudflare`. Env vars only — NO D1, R2, KV, or Durable Objects                                                                                      |
 | Backend         | Entu API                       | MongoDB + S3 under the hood; mvox has no own DB. Schema: mvox-independent (v4E-heritage; `entu/research` docs are historical reference only, 2026-09-06)               |
-| File storage    | S3 via Entu signed URLs        | 60-second TTL; client uploads direct to S3 after BFF requests the URL from Entu                                                                                        |
-| Auth            | Entu OAuth + BFF JWT cookie    | OAuth providers via Entu (Google, Apple, Smart-ID, Mobile-ID, ID-card, e-mail). SvelteKit server stores Entu JWT (48h, no refresh) in httpOnly cookie; proxies all API |
+| File storage    | S3 via Entu signed URLs        | 60-second TTL; client uploads direct to S3 after the app requests the URL from Entu                                                                                    |
+| Auth            | Entu OAuth, client-held JWT    | OAuth providers via Entu (Google, Apple, Smart-ID, Mobile-ID, ID-card, e-mail). Browser stores the Entu JWT (48h, no refresh) in localStorage; calls Entu's API directly |
 | i18n            | Paraglide                      | 4 locales: en, et, lv, uk. Messages at `messages/{locale}.json`; generated TS at `src/lib/paraglide/`; usage `import * as m from '$lib/paraglide/messages.js'`         |
 | Testing         | Vitest + Playwright            | Unit + E2E                                                                                                                                                             |
 | Package manager | pnpm                           | Always pnpm, never npm. Flat single-app — no workspaces                                                                                                                |
@@ -180,10 +180,9 @@ git push origin --delete <feature-branch>   # skip if the branch was local-only
 - **Formula output is string or number only.** Declaring `type: reference` on a formula property doesn't enforce reference output — it silently coerces to string. Declare as `type: string` for honest schema (case study D3).
 - **Formula evaluator bypasses rights** (`entu/api/utils/formula.js`). Use formulas for AGGREGATES (counts, sums) across rights boundaries — never project raw values (names, descriptions) via formulas, since that leaks (case study D6).
 - **Rights islands at org boundaries.** `_inheritrights: false` on `organization` is load-bearing — blocks cascade from umbrella to collective. Don't flip it without a v4E schema change (case study B3).
-- **BFF user-rights default.** SvelteKit server proxies as the authenticated user via their Entu JWT. Elevated ops live on an explicit enumerated list (cron cleanup, federation reports); add to that list only with team-lead approval (case study B4).
-- **Membership-rights invariant.** Any explicit `_owner` / `_editor` / `_viewer` grant on an org-subtree entity requires an active `member` for that person in that org. BFF enforces (case study B2).
+- **Grants are the only authority.** The browser calls Entu directly with the user's own JWT; who may read or write is answered by the rights Entu returns on the target entity, never re-derived by the app. The short enumerated list of ops that run under something other than the user's own token (data-manager scripts, cron) stays written down and stays short (case study B4).
 - **Field-level rights don't exist.** Rights are per-entity. If two roles need different write access to one entity, split it into two entities (case study D5).
-- **No multi-hop reference picker scoping.** `reference_query` on a reference property type is static — no `{{_parent}}` substitution. Enforce contextual scoping in your BFF / UI layer (case study D7).
+- **No multi-hop reference picker scoping.** `reference_query` on a reference property type is static — no `{{_parent}}` substitution. Enforce contextual scoping in the UI (case study D7).
 
 ### Git Safety
 

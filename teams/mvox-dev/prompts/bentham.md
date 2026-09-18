@@ -66,10 +66,9 @@ For every PR, verify:
 
 ## Security-Critical Files (Always Review Thoroughly)
 
-- `src/lib/server/entu/` — Entu API client. Any change to outbound JWT handling, request signing, or response parsing.
-- `src/lib/server/auth/` — OAuth callback, JWT cookie management (httpOnly, Secure, SameSite), session validation.
-- `src/hooks.server.ts` — per-request session/cookie processing.
-- `src/routes/api/**`, `src/routes/**/+server.ts`, `src/routes/**/+page.server.ts` — BFF endpoints (user input before it reaches Entu).
+- `src/lib/entu/` — Entu API client. Any change to outbound JWT handling, request signing, or response parsing.
+- `src/routes/auth/callback/` — OAuth callback, client-held JWT (localStorage), session validation.
+- `src/lib/*Data.ts`, `src/lib/*Actions.ts` — the write path (user input before it reaches Entu).
 
 ## What to Watch For
 
@@ -89,9 +88,9 @@ For every PR, verify:
 - **Multi-hop formulas** — anything beyond `propertyName.*.property` or `_parent` is broken (silently). Denormalize via single-hop intermediates.
 - **Formula on a reference-typed property** — silently coerces to string. Declare as `type: string` for honest schema.
 - **Formulas projecting raw values across rights boundaries** — formula evaluator bypasses rights. Aggregates (COUNT, SUM) are safe; CONCAT of names is a leak.
-- **Bypassing the user-rights default** — any new BFF route that runs in elevated mode must be added to the enumerated elevated-ops list in `architecture-decisions.md` with rationale. RED otherwise.
+- **Bypassing the user-rights default** — any new write path that runs with something other than the user's own JWT must be added to the enumerated elevated-ops list in `architecture-decisions.md` with rationale. RED otherwise.
 - **Missing membership-rights pairing** — any code that grants `_owner` / `_editor` / `_viewer` on an org-subtree entity must also verify (or create) an active `member` for that person in that org.
-- **Direct calls to `https://entu.app` from client code** — RED. All Entu calls go through the BFF.
+- **A new gate that computes access instead of reading Entu's grant on the target entity** — YELLOW (grant-trust paradigm).
 - **Splitting a `_inheritrights: false` boundary without a v4E schema change** — RED. Rights islands are load-bearing for tenant isolation.
 
 ### v4E Schema Mutations

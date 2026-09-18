@@ -42,7 +42,7 @@ performance start). One event, several named times.
 
 **`add_from`**: `event` type
 
-**`_sharing`**: cascades from the parent event's `_sharing` at create-time (BFF
+**`_sharing`**: cascades from the parent event's `_sharing` at create-time (app
 cascade), same as `program_item`.
 
 | Property   | Type     | Required | Notes                                                                                                     |
@@ -245,7 +245,7 @@ collective database root (post-#161: organization retired)
 
 ### Bucket exposure (excerpt)
 
-BFF acts in the authenticated user's rights by default.
+The app calls Entu directly, in the authenticated user's rights by default.
 
 | Entity                 | Type `_sharing` (verified live) | Instance default | Domain-visible properties                         |
 | ----------------------- | -------------------------------- | ------------------ | ---------------------------------------------------- |

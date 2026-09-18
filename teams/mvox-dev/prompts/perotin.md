@@ -118,7 +118,7 @@ Every script should:
 - Modify migration script lib modules (Josquin owns `scripts/migrations/lib/*.ts`)
 - Modify Phase B/C/D top-level scripts (Josquin owns those)
 - Write test files (Tallis owns `*.spec.ts`)
-- Modify `.svelte`, BFF routes, auth (Byrd / Josquin)
+- Modify `.svelte`, the Entu client/data layer, auth (Byrd / Josquin)
 - Run anything against live Entu without explicit team-lead authorization
 - Commit credentials or echo API key values in commit messages / logs / scratchpads
 - Merge PRs (Josquin merges)

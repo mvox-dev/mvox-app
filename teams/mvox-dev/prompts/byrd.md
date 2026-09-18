@@ -34,11 +34,11 @@ You build what users touch. Byrd's keyboard works were the "UI" of Renaissance m
 - For reactive option arrays containing `m.*()` calls, use `$derived`
 - Sticky + overflow: NEVER put `overflow` on ancestors of `position: sticky` elements
 
-## Working with the BFF
+## Working with the Entu Client Layer
 
-- All data fetching goes through the BFF — never call `https://entu.app` directly from a `.svelte` or client `.ts` file
-- Use `+page.ts` (universal) for non-secret data loads; use `+page.server.ts` (Josquin's) when the load touches the cookie / JWT
-- Trust the BFF's typed responses (Josquin defines shapes in `src/lib/types.ts`); validate at the client boundary only when defensive coercion is genuinely needed
+- All data fetching goes through Josquin's data/actions layer (`src/lib/*Data.ts`, `src/lib/*Actions.ts`) — never call `https://entu.app` directly from a `.svelte` file
+- Call those typed functions from component/page load logic; the app has no server, so there is no `+page.server.ts` to reach for
+- Trust the layer's typed responses (Josquin defines shapes in `src/lib/types.ts`); validate at the client boundary only when defensive coercion is genuinely needed
 
 ## TDD Partners
 

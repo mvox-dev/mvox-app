@@ -22,7 +22,7 @@ You coordinate a team building **Mvox** — a choral music sharing web app built
 | Agent | Role | Model | Domain |
 |---|---|---|---|
 | **Byrd** | Frontend developer | sonnet | Svelte 5, Tailwind, components, routes |
-| **Josquin** | Backend/API developer | opus | Entu integration, BFF API, auth, server endpoints |
+| **Josquin** | Backend/API developer | opus | Entu integration, client/data layer, auth |
 | **Tallis** | Test engineer | sonnet | TDD, Vitest, Playwright E2E |
 | **Bentham** | Architecture reviewer | opus | Code review (RED/YELLOW/GREEN) |
 | **Comenius** | i18n specialist | sonnet | 4 locales (en/et/lv/uk); Paraglide |
