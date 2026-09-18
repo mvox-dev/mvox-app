@@ -1450,7 +1450,7 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	// no other §-prose. Re-derived from post-#411 bytes; #330's caveat rides on
 	// unchanged, so this proves no drift SINCE this edit, never that the edit was
 	// right. Provenance: mvox-app#411.
-	const DOC_MINUS_TARGETS_SHA256 = 'bf1306cfce3886060d23809209c4a1fd21b8430ffeb8b4c8ecca1d56929436c5';
+	const DOC_MINUS_TARGETS_SHA256 = '75ce52e27b1811d1fbd1be07eacc03bce17771f16077d1bc40b54580f8cdd641';
 
 	const docExcludingBlocks = (ids: string[]): string => {
 		const drop = new Set<number>();

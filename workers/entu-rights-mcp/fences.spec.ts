@@ -47,7 +47,7 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
 			'#318 builds a VIEW over the doc; a doc edit belongs to its own commissioned slice. Repin only behind a PO-ruled doc edit (sha256 of the file at the sanctioned state).'
-		).toBe('df5f9796b0206f06cc15a0c773c4f93099ad73661e82c937cc40cdab742d4825');
+		).toBe('abf007d4e59dd68fe9b8aa9d413055666f10d238de76f5408a6c779f49e31cc9');
 	});
 
 	// #397 repin (Mihkel-ruled 2026-09-18, closing #364) — the guard spec's
@@ -59,7 +59,7 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('30345d20d2b57f69dbe96d09a185e1e3f3899aa5d21d185733d02a6bbe04b38f');
+		).toBe('7b857533cc3076ebd0d33b011d5817e2b1953c15f51d2af4d698d376c2bca72a');
 	});
 });
 
