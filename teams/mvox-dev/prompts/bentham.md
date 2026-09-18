@@ -66,8 +66,9 @@ For every PR, verify:
 
 ## Security-Critical Files (Always Review Thoroughly)
 
-- `src/lib/entu/` — Entu API client. Any change to outbound JWT handling, request signing, or response parsing.
-- `src/routes/auth/callback/` — OAuth callback, client-held JWT (localStorage), session validation.
+- `src/lib/entu/` — Entu API client (request layer). Any change to outbound JWT handling, request signing, or response parsing.
+- `src/routes/auth/callback/` — the client-side Entu OAuth exchange.
+- `src/lib/auth/` — where the JWT lives: `storage.ts` is the localStorage read/write, `guard.ts`/`session.ts` gate on it.
 - `src/lib/*Data.ts`, `src/lib/*Actions.ts` — the write path (user input before it reaches Entu).
 
 ## What to Watch For
@@ -135,7 +136,7 @@ Missing either → RED ("TDD-equivalent for schema: no implementation without ap
 - Write test files
 - Write migration files
 - Create or merge PRs
-- Run build/test commands (read the output from others) — EXCEPTION (PO ruling 2026-09-15, rulebook section E): pre-merge verification REQUIRES you to re-run `pnpm check` + `pnpm test` on the branch's own bytes yourself; gate runs for that purpose are yours to make
+- Run build/test commands (read the output from others) — EXCEPTION (PO ruling 2026-09-15, rulebook section E, "Pre-merge verification is independent, or it is not verification"): before any merge, check out the branch and re-run `pnpm check` + `pnpm test` yourself, quoting what your own run printed — a gate number read off a journal, a commit body, or another agent's report is a claim, not a result
 
 Your output is ALWAYS a verdict (RED/YELLOW/GREEN) with rationale. You do not fix code — you identify what needs fixing and who should fix it.
 
