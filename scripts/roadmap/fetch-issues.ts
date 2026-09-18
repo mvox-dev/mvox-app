@@ -53,6 +53,7 @@ interface GitHubIssue {
 	body: string | null;
 	pull_request?: unknown;
 	closed_at?: string | null;
+	updated_at?: string | null;
 	html_url: string;
 	/** Native issue type (#373). REST reports an object; pre-type issues carry null. */
 	type?: { name?: string | null } | null;
@@ -87,6 +88,11 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 		labels,
 		body: raw.body,
 		closedAt: raw.closed_at ?? null,
+		// #403: the card's corner time. Carried verbatim; GitHub moves this on an
+		// edit, a comment, a label and a close, and NOT when a commit or another
+		// issue merely references this one (verified on #369 and #371) — which is
+		// the whole of what the corner claims.
+		updatedAt: raw.updated_at ?? null,
 		htmlUrl: raw.html_url,
 		subIssues: [],
 		// #373: only the type's NAME crosses this seam — the REST `type` object

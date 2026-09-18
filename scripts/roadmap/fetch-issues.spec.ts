@@ -225,7 +225,27 @@ describe('normalizeIssue', () => {
 			subIssues: [],
 			htmlUrl: 'https://github.com/mvox-dev/mvox-app/issues/309',
 			// #373: the type's name rides along, null for the pre-type archive.
-			issueType: null
+			issueType: null,
+			// #403: the card's corner time; null when the payload omits it.
+			updatedAt: null
 		});
+	});
+
+	// #403: the corner is only as true as this carry — the renderer reads this
+	// one field and has no other source to fall back on.
+	it('carries updated_at through as updatedAt, verbatim (#403)', () => {
+		expect(
+			normalizeIssue({
+				number: 403,
+				title: 'A roadmap card shows when the issue was last updated',
+				state: 'open',
+				state_reason: null,
+				labels: [],
+				body: null,
+				closed_at: null,
+				updated_at: '2026-09-18T11:53:00Z',
+				html_url: 'https://github.com/mvox-dev/mvox-app/issues/403'
+			}).updatedAt
+		).toBe('2026-09-18T11:53:00Z');
 	});
 });
