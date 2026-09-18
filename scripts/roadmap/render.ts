@@ -26,6 +26,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse as parseYaml } from 'yaml';
+import { field, isKindLabel, kindFromType, kindOf, type IssueKind } from './issue-model';
 import { labelTextColor } from './label-color';
 
 /** One label as GitHub reports it: name plus its colour (hex, no leading '#'), or null when absent. */
@@ -49,6 +50,13 @@ export interface RoadmapIssue {
 	htmlUrl: string;
 	/** Native GitHub sub-issues, already resolved by the fetch step. Empty = flat. */
 	subIssues?: RoadmapIssue[];
+	/**
+	 * #373: the native issue type's NAME (e.g. "Task"), or null/absent for the
+	 * pre-type archive. Optional so pre-#373 fixtures stay valid input. The
+	 * board's kind read is issue-model.ts's kindOf — type first, kind label
+	 * fallback; this field is the only trace of GitHub's `type` object here.
+	 */
+	issueType?: string | null;
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
@@ -79,10 +87,17 @@ export function parseFrontmatter(body: string | null | undefined): Record<string
  * (Estonian) when present and a non-empty string; the English title otherwise.
  */
 export function displayTitle(issue: RoadmapIssue): string {
-	const frontmatter = parseFrontmatter(issue.body);
-	const slugline = frontmatter?.slugline;
-	if (typeof slugline === 'string' && slugline.length > 0) return slugline;
-	return issue.title;
+	// Both body shapes carry sluglines now: `### Slugline` sections (the #384
+	// issue forms) and legacy `---` frontmatter. issue-model's field() reads
+	// both; without it the 2026-09 groomed issues silently lost their
+	// Estonian face on the board.
+	const slugline = field(issue.body ?? '', 'slugline') ?? parseFrontmatterField(issue, 'slugline');
+	return slugline ?? issue.title;
+}
+
+function parseFrontmatterField(issue: RoadmapIssue, key: string): string | null {
+	const value = parseFrontmatter(issue.body)?.[key];
+	return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 /**
@@ -91,9 +106,7 @@ export function displayTitle(issue: RoadmapIssue): string {
  * replacement. Same type-guard shape as displayTitle's slugline check.
  */
 export function displayLead(issue: RoadmapIssue): string | null {
-	const frontmatter = parseFrontmatter(issue.body);
-	const lead = frontmatter?.lead;
-	return typeof lead === 'string' && lead.length > 0 ? lead : null;
+	return field(issue.body ?? '', 'lead') ?? parseFrontmatterField(issue, 'lead');
 }
 
 /**
@@ -263,8 +276,21 @@ function hasLabel(issue: RoadmapIssue, name: string): boolean {
 }
 
 /**
- * #340 — the staleness predicate: issue numbers of open, `task`+`ready`
- * issues that carry none of `in process` / `prepped` / `blocked`, evaluated
+ * #373 — one issue's kind, read through the model: native type first, kind
+ * label only as fallback for the pre-type archive. Defensive over labels for
+ * the same #340 never-fail reason as activityTier.
+ */
+function issueKind(issue: RoadmapIssue): IssueKind | null {
+	return kindOf(
+		issue?.issueType,
+		(issue?.labels ?? []).map((label) => label?.name ?? '')
+	);
+}
+
+/**
+ * #340 — the staleness predicate: issue numbers of open issues of kind task
+ * (#373: native type first, `task` label for the archive) carrying `ready`
+ * and none of `in process` / `prepped` / `blocked`, evaluated
  * only when no open issue anywhere carries `in research` or `blocks
  * research` (either suppresses the whole check — Mihkel's ruling that a
  * build merely running is not itself an excuse; only an explicit `blocks
@@ -283,8 +309,11 @@ function stalenessViolators(issues: RoadmapIssue[]): number[] {
 			STALENESS_SUPPRESSOR_LABELS.some((label) => hasLabel(issue, label))
 		);
 		if (suppressed) return [];
+		// #373: scope is the KIND task — the native type since #393's forms, the
+		// `task` label for the archive — so a typed Task with no labels at all
+		// still fires. Motion (`ready` and the satisfiers below) stays labels.
 		return open
-			.filter((issue) => hasLabel(issue, 'task') && hasLabel(issue, 'ready'))
+			.filter((issue) => issueKind(issue) === 'task' && hasLabel(issue, 'ready'))
 			.filter((issue) => !STALENESS_SATISFIER_LABELS.some((label) => hasLabel(issue, label)))
 			.map((issue) => issue.number);
 	} catch {
@@ -332,6 +361,20 @@ function boardOrder(issues: RoadmapIssue[]): RoadmapIssue[] {
 }
 
 const NO_COLOR_HEX_RE = /^[0-9a-fA-F]{6}$/;
+
+/**
+ * #373 — the kind chip's canonical colours: the live palette of the legacy
+ * kind labels (gh api repos/mvox-dev/mvox-app/labels, 2026-09-18), so a
+ * type-derived chip is indistinguishable from the label chip it replaces.
+ * `feature` wears `enhancement`'s colour — the repo never had a `feature`
+ * label.
+ */
+const KIND_CHIP_COLORS: Record<IssueKind, string> = {
+	task: '1d76db',
+	bug: 'd73a4a',
+	feature: 'a2eeef',
+	epic: '6f42c1'
+};
 
 /**
  * One label chip. Background is the label's own colour (GitHub sends hex
@@ -385,7 +428,19 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 		issue.state === 'open'
 			? (issue.labels ?? [])
 			: (issue.labels ?? []).filter((label) => !isMotionLabel(label?.name ?? ''));
-	const labelsHtml = visibleLabels.map(renderLabel).join(' ');
+	// #373: an issue with a native type chips its kind FROM THE TYPE — whatever
+	// labels it carries — and its legacy kind labels come off the row so a
+	// retyped issue never shows two contradicting kinds. An issue with no type
+	// (the pre-type archive) renders its labels exactly as before: the kind
+	// label IS its kind chip. Motion labels pass through untouched either way.
+	const typedKind = kindFromType(issue.issueType);
+	const kindChipHtml = typedKind ? renderLabel({ name: typedKind, color: KIND_CHIP_COLORS[typedKind] }) : '';
+	const chipLabels = typedKind
+		? visibleLabels.filter((label) => !isKindLabel(label?.name ?? ''))
+		: visibleLabels;
+	const labelsHtml = [kindChipHtml, ...chipLabels.map(renderLabel)]
+		.filter((html) => html.length > 0)
+		.join(' ');
 	const subIssues = issue.subIssues ?? [];
 	const childrenHtml = boardOrder(subIssues)
 		.map((sub) => renderIssue(sub, rendered))

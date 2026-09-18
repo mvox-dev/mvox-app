@@ -103,6 +103,51 @@ export interface ParsedTask {
 	task: TaskIssue;
 }
 
+/** The native issue type's kind, or null when the type is absent/unknown. */
+export function kindFromType(issueType: string | null | undefined): IssueKind | null {
+	const t = issueType?.toLowerCase();
+	return t === 'task' || t === 'bug' || t === 'feature' || t === 'epic' ? t : null;
+}
+
+/**
+ * #373 — the legacy kind labels, in fallback precedence order, for issues
+ * that predate native types. `enhancement` is the pre-type spelling of
+ * feature (the repo never had a `feature` label). Exact live label strings,
+ * same rename caveat as every label match on this board.
+ */
+export const KIND_LABELS: readonly (readonly [string, IssueKind])[] = [
+	['task', 'task'],
+	['bug', 'bug'],
+	['epic', 'epic'],
+	['enhancement', 'feature']
+];
+
+/** Is this label name one of the legacy kind labels? */
+export function isKindLabel(name: string): boolean {
+	return KIND_LABELS.some(([label]) => label === name);
+}
+
+/** Kind from the legacy kind labels alone — the pre-type archive's read. */
+export function kindFromLabels(labelNames: readonly string[]): IssueKind | null {
+	for (const [label, kind] of KIND_LABELS) {
+		if (labelNames.includes(label)) return kind;
+	}
+	return null;
+}
+
+/**
+ * #373 — the board's one kind read: the native type first, the kind label
+ * only as fallback for issues that predate types. The type wins over a
+ * conflicting label — retyping an issue on GitHub retypes it on the board,
+ * stale labels notwithstanding.
+ */
+export function kindOf(
+	issueType: string | null | undefined,
+	labelNames: readonly string[]
+): IssueKind | null {
+	return kindFromType(issueType) ?? kindFromLabels(labelNames);
+}
+
 /** The raw shape the GitHub fetch hands us — the only place it appears. */
 export interface RawIssue {
 	number: number;
@@ -161,7 +206,7 @@ function frontmatterField(body: string, key: string): string | null {
 }
 
 /** Both shapes: form `### Slugline` section, or frontmatter `slugline:`. */
-function field(body: string, name: string): string | null {
+export function field(body: string, name: string): string | null {
 	// The author marker ends the body, not the last section — strip it from
 	// section content so it never reads as a field value.
 	const fromForm = formSections(body).get(name)?.replace(AUTHOR_MARKER_RE, '').trim();

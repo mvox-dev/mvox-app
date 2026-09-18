@@ -223,7 +223,9 @@ describe('normalizeIssue', () => {
 			body: null,
 			closedAt: null,
 			subIssues: [],
-			htmlUrl: 'https://github.com/mvox-dev/mvox-app/issues/309'
+			htmlUrl: 'https://github.com/mvox-dev/mvox-app/issues/309',
+			// #373: the type's name rides along, null for the pre-type archive.
+			issueType: null
 		});
 	});
 });
