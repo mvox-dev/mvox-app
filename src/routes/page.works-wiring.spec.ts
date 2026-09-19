@@ -7,7 +7,11 @@
 //   1. the page resolves works for the agenda's events (upcoming AND recent),
 //      with the current season id, once the agenda load settles;
 //   2. the resolved rows reach the actual rendered agenda row;
-//   3. tapping PDF signs the url AT CLICK TIME (never a pre-signed href).
+//   3. tapping PDF signs the url AT CLICK TIME (never a pre-signed href) —
+//      NARROWED by #409: ONLY the next event's parts (agendaItems[0]) are
+//      signed-and-immediately-fetched at load, by the opportunistic prefetch;
+//      every other event's parts stay click-time. fileUrls.ts's fence holds:
+//      a sign is consumed by its fetch in the same breath, never stashed.
 //
 // #343 FLIPS the delivery leg on every path that can serve bytes. The handler
 // captures (db, personId) from selectedCollectiveIdentityStore AT CLICK TIME,
@@ -25,9 +29,21 @@
 // longer current must NOT navigate (the routeLoad isCurrent discipline,
 // applied to this chain), while its bytes still land under the ISSUING
 // identity's partition — never the new one.
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// #409 — resolved at MODULE LOAD, with `import.meta.url` forced to a plain
+// string first. Under this file's happy-dom environment, the global `URL`
+// class is happy-dom's own (it replaces `globalThis.URL`); handed
+// `import.meta.url` UNCOERCED as `base`, it throws "must be of scheme file" —
+// a happy-dom/Vite-SSR interop quirk unrelated to anything this suite pins.
+// `String(...)` first sidesteps it without touching what the test verifies
+// (still the real file, still hashed byte-for-byte).
+const SERVICE_WORKER_PATH = fileURLToPath(new URL('../service-worker.ts', String(import.meta.url)));
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	// Proxy mock: assertions below pin structure (testids, call arguments),
@@ -212,6 +228,25 @@ const recent = [
 	}
 ];
 
+/** #409 — TWO upcoming events, so "ONLY the next event's parts" is a claim a
+ *  build that prefetches EVERY event's parts must FAIL: ev-1 is the next
+ *  event (soonest first — agendaItems is chronological-ascending), ev-2
+ *  exists precisely to have parts that must NOT be signed at load. */
+const fartherFuture = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
+const upcomingTwo = [
+	upcoming[0],
+	{
+		id: 'ev-2',
+		name: 'Concert',
+		startDatetime: fartherFuture,
+		durationMinutes: 90,
+		location: '',
+		conductors: [],
+		owners: [],
+		editors: []
+	}
+];
+
 function workRow(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'ri-1',
@@ -297,37 +332,79 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		});
 	});
 
-	it('signs the PDF url AT CLICK TIME — the file id round-trips from the row to signFileUrl', async () => {
+	// #409 FLIP — this test used to pin "no signing before a click, ever". The
+	// prefetch narrows that: the NEXT event's parts are signed-and-fetched on
+	// open, and the "ONLY" clause is load-bearing (Gama): a build that signs
+	// EVERY event's parts on open must FAIL here — that is why the fixture
+	// carries TWO upcoming events. fileUrls.ts's fence stays true throughout:
+	// each sign is consumed by its byte fetch immediately (asserted on call
+	// order below), never signed at load for later use.
+	it("signs ONLY the next event's parts on open, and everything else at click time", async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
-			upcoming,
+			upcoming: upcomingTwo,
 			recent: [],
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		}));
-		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
+		loadWorksByEventIdMock.mockResolvedValue({
+			'ev-1': [
+				workRow({ id: 'ri-a1', fileId: 'file-a1', fileName: 'a1.pdf' }),
+				workRow({ id: 'ri-a2', fileId: 'file-a2', fileName: 'a2.pdf' })
+			],
+			'ev-2': [workRow({ id: 'ri-b1', fileId: 'file-b1', fileName: 'b1.pdf' })]
+		});
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		const fetchMock = stubByteFetch();
 		vi.spyOn(window, 'open').mockReturnValue(null);
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
 
+		// The prefetch settles: the NEXT event's two parts landed on the device.
 		await vi.waitFor(() => {
-			expect(container.querySelector('[data-testid="works-line"]')).not.toBeNull();
+			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+				'file-a1',
+				'file-a2'
+			]);
 		});
-		await fireEvent.click(container.querySelector('[data-testid="works-line"]')!);
-		const pdf = container.querySelector('[data-testid="work-link-pdf"]');
-		// The whole point: no href was ever resolved at load time (a signed Entu
-		// url lives 60 seconds and would be dead by now).
+		// ONLY ev-1's parts were signed, in row order — ev-2's part was NOT.
+		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-a1', 'file-a2']);
+		// The fence: every sign is consumed by its own byte fetch in the same
+		// breath — sign(a1) < fetch(a1) < sign(a2) < fetch(a2), and each fetch
+		// GETs exactly the url its sign minted. Never sign-at-load-for-later.
+		const signOrder = signFileUrlMock.mock.invocationCallOrder;
+		const fetchOrder = fetchMock.mock.invocationCallOrder;
+		expect(signOrder[0]).toBeLessThan(fetchOrder[0]);
+		expect(fetchOrder[0]).toBeLessThan(signOrder[1]);
+		expect(signOrder[1]).toBeLessThan(fetchOrder[1]);
+		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-file-a1');
+		expect(String(fetchMock.mock.calls[1][0])).toBe('https://s3.example/signed-file-a2');
+
+		// The click-time half, on a NON-next-event row: ev-2's part has no
+		// pre-resolved href (a signed Entu url lives 60 seconds and would be
+		// dead by now) and signs only when tapped.
+		await fireEvent.click(
+			container.querySelector('[data-testid="agenda-row-ev-2"] [data-testid="works-line"]')!
+		);
+		const pdf = container.querySelector(
+			'[data-testid="agenda-row-ev-2"] [data-testid="work-link-pdf"]'
+		);
 		expect(pdf?.getAttribute('href')).toBeNull();
-		expect(signFileUrlMock).not.toHaveBeenCalled();
+		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-a1', 'file-a2']);
 
 		await fireEvent.click(pdf!);
 		// #343 — the read-through leg may thread a fetchImpl behind cfg+fileId;
 		// the click-time pin is on WHAT gets signed, not the arity.
-		expect(signFileUrlMock).toHaveBeenCalledTimes(1);
-		expect(signFileUrlMock.mock.calls[0].slice(0, 2)).toEqual([
+		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual([
+			'file-a1',
+			'file-a2',
+			'file-b1'
+		]);
+		expect(signFileUrlMock.mock.calls[2].slice(0, 2)).toEqual([
 			{ db: 'polyphony', token: 'jwt-abc' },
-			'file-score'
+			'file-b1'
 		]);
 	});
 
@@ -462,7 +539,18 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			seasonId: 'season-1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: []
 		}));
-		loadWorksByEventIdMock.mockResolvedValue({ 'ev-1': [workRow({ fileId: 'file-score' })] });
+		// #409 — crede's own load (triggered by the switch below) resolves NO
+		// rows: this fixture's `upcoming` is reused verbatim for whichever
+		// collective is selected, so a blanket 'file-score' answer here would
+		// have crede's #409 prefetch ALSO reach for the SAME fileId — not the
+		// late-settle poisoning this test pins, just an unrelated mock
+		// collision the real app never has (two collectives never share a
+		// work catalogue). Only polyphony's load is given rows.
+		loadWorksByEventIdMock.mockImplementation((cfg: { db: string }) =>
+			cfg.db === 'polyphony'
+				? Promise.resolve({ 'ev-1': [workRow({ fileId: 'file-score' })] })
+				: Promise.resolve({})
+		);
 		// Hold the signing so the WHOLE chain settles after the switch.
 		let releaseSigning!: (url: string) => void;
 		signFileUrlMock.mockReturnValue(new Promise<string>((r) => (releaseSigning = r)));
@@ -643,6 +731,177 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		});
 		expect(container.querySelector('[data-testid="agenda-error"]')).toBeNull();
 		expect(container.querySelector('[data-testid="works-line"]')).toBeNull();
+	});
+});
+
+// #409 — "Järgmise proovi noodid laaditakse seadmesse ette": the WIRING of
+// the opportunistic prefetch. Once the agenda load settles (worksByEventId
+// populated), the page fetches the NEXT event's parts through the same
+// read-through seam a click uses (openFileBytes), on her own key, and
+// re-queries presence so the #367 badges flip without a reload. Epic #334's
+// standing constraint: opportunistic while the app is OPEN, never in the
+// background while away — no service-worker fetch, no periodicsync, no push,
+// no wake-me-later listener of any kind.
+describe("#409 — the next event's parts reach the device on app open", () => {
+	/** node:crypto twin of openFileBytes' own digest — what a stored put must carry. */
+	function sha256HexSync(bytes: Uint8Array): string {
+		return createHash('sha256').update(bytes).digest('hex');
+	}
+
+	it('on agenda load settle, every next-event part not yet held is fetched once and stored — held parts are skipped without a get()', async () => {
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		loadWorksByEventIdMock.mockResolvedValue({
+			'ev-1': [
+				workRow({ id: 'ri-a1', fileId: 'file-a1', fileName: 'a1.pdf' }),
+				workRow({ id: 'ri-a2', fileId: 'file-a2', fileName: 'a2.pdf' })
+			]
+		});
+		// file-a1 is ALREADY on the device — the singer opened it at home.
+		const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
+		fakeByteStore.seed({ db: 'polyphony', personId: 'person-p' }, 'file-a1', {
+			bytes: pdfBytes.slice().buffer,
+			filetype: 'application/pdf',
+			sha256: sha256HexSync(pdfBytes)
+		});
+		const getSpy = vi.spyOn(fakeByteStore, 'get');
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		const fetchMock = stubByteFetch();
+		setAuthedWithOneCollective();
+
+		render(Page);
+
+		await vi.waitFor(() => {
+			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+				'file-a1',
+				'file-a2'
+			]);
+		});
+		// The missing part, and ONLY the missing part: one sign, one fetch.
+		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-a2']);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-file-a2');
+		// Full shape on puts — the bytes, the type and the digest, under HER key.
+		expect(
+			fakeByteStore.puts.map((p) => ({
+				identity: p.identity,
+				fileId: p.fileId,
+				filetype: p.data.filetype,
+				sha256: p.data.sha256,
+				bytes: Array.from(new Uint8Array(p.data.bytes))
+			}))
+		).toEqual([
+			{
+				identity: { db: 'polyphony', personId: 'person-p' },
+				fileId: 'file-a2',
+				filetype: 'application/pdf',
+				sha256: sha256HexSync(pdfBytes),
+				bytes: Array.from(pdfBytes)
+			}
+		]);
+		// The held part was decided from the keys-only presence read — never a
+		// get() (a get counts as an open and would move recency; the full trap
+		// is pinned in prefetch.spec.ts against byteStore.presence.spec.ts:76's
+		// harness). The one get() here is the miss check for the fetched part.
+		expect(getSpy.mock.calls.map((c) => c[1])).toEqual(['file-a2']);
+	});
+
+	it('after the prefetch writes, presence is re-queried ONCE and the fetched parts render the on-device badge — no reload, no click', async () => {
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		loadWorksByEventIdMock.mockResolvedValue({
+			'ev-1': [
+				workRow({ id: 'ri-a1', fileId: 'file-a1', fileName: 'a1.pdf' }),
+				workRow({ id: 'ri-a2', fileId: 'file-a2', fileName: 'a2.pdf' })
+			]
+		});
+		const heldSpy = vi.spyOn(fakeByteStore, 'heldFileIds');
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		stubByteFetch();
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+
+		await vi.waitFor(() => {
+			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+				'file-a1',
+				'file-a2'
+			]);
+		});
+		// EXACTLY three presence reads for the whole cycle: (1) #367's own
+		// load-time query, (2) the prefetch's single skip-set read, (3) ONE
+		// post-write re-query — never one per fetched part.
+		await vi.waitFor(() => {
+			expect(heldSpy).toHaveBeenCalledTimes(3);
+		});
+		for (const call of heldSpy.mock.calls) {
+			expect(call.slice(0, 2)).toEqual(['polyphony', 'person-p']);
+		}
+		// And the singer SEES it: both prefetched parts carry #367's on-device
+		// badge without any reload or click on the part itself.
+		await fireEvent.click(
+			container.querySelector('[data-testid="agenda-row-ev-1"] [data-testid="works-line"]')!
+		);
+		await vi.waitFor(() => {
+			const a1 = container.querySelector('[data-testid="file-presence-file-a1"]');
+			const a2 = container.querySelector('[data-testid="file-presence-file-a2"]');
+			expect(a1?.textContent?.trim()).toBe('[file_presence_on_device]');
+			expect(a2?.textContent?.trim()).toBe('[file_presence_on_device]');
+		});
+	});
+
+	it("nothing runs while the app is closed: the prefetch fires from the page's own load chain — no visibility/focus/sync hooks, and the service worker is byte-unmodified", async () => {
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		loadWorksByEventIdMock.mockResolvedValue({
+			'ev-1': [workRow({ id: 'ri-a1', fileId: 'file-a1', fileName: 'a1.pdf' })]
+		});
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		stubByteFetch();
+		const winAdd = vi.spyOn(window, 'addEventListener');
+		const docAdd = vi.spyOn(document, 'addEventListener');
+		setAuthedWithOneCollective();
+
+		render(Page);
+
+		// The prefetch happened — triggered by nothing but the load chain itself.
+		await vi.waitFor(() => {
+			expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-a1']);
+		});
+		// No wake-me-later hook of any kind was registered on the way.
+		const banned = ['visibilitychange', 'focus', 'sync', 'periodicsync'];
+		expect(winAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
+		expect(docAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
+		// And the service worker gained NOTHING: byte-identical to the #353
+		// shell-only worker (its three listeners are install/activate/fetch —
+		// no sync, no periodicsync, no push). Read from disk, pinned by hash.
+		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
+		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
+			'fbb0db9246a7a41aaa676f51fbcc854f7a69e6a22f780df7485f074cef230527'
+		);
+		expect(
+			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])
+		).toEqual(['install', 'activate', 'fetch']);
+		winAdd.mockRestore();
+		docAdd.mockRestore();
 	});
 });
 

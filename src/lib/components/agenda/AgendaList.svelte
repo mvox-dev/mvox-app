@@ -660,10 +660,12 @@
 							     order they are asked in matters. A CONFIRMED non-member is
 							     answered FIRST: an rsvp entity requires a `member` reference
 							     (rsvpData.ts createRsvp), so she cannot write one whatever her
-							     Entu grant says — and every mvox-minted person carries a
-							     self-`_editor` grant on her own person (inviteData.ts step 3),
-							     which survives a deactivation (memberLifecycle flips only the
-							     member `status`). Reading the grant first therefore handed
+							     Entu grant says — and a self-`_editor` grant that survives
+							     deactivation (memberLifecycle flips only the member `status`)
+							     is true on crede via #369's backfill (2026-09-15), for every
+							     future bulk-created person via #371's grantSelfEditor (e27beb2),
+							     and for invite-created persons via inviteData.ts. Reading the
+							     grant first therefore handed
 							     archived/not-yet-accepted people an ENABLED control whose every
 							     tap throws 'cannot create without a memberId', and made this
 							     hint unreachable in production. Membership still has NO say in

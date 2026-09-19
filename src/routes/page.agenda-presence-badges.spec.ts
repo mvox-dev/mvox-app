@@ -451,9 +451,15 @@ describe('#367 — home agenda part rows carry the presence badge (integration)'
 			expect(q(container, 'file-presence-file-absent')).not.toBeNull();
 		});
 
-		// One store query per agenda LOAD, keyed on the SELECTED collective's
-		// partition — not one per row, not one per render site.
-		expect(presenceSpy.mock.calls).toEqual([['polyphony', 'person-p']]);
+		// #409 — TWO store queries per agenda LOAD, not one per row/render
+		// site: #367's own load-time query, plus the opportunistic prefetch's
+		// own skip-check for the next event's (already-held) 'file-held' part
+		// (prefetch.ts's pinned contract — one keys-only read decides every
+		// skip). Both key on the SAME selected-collective partition.
+		expect(presenceSpy.mock.calls).toEqual([
+			['polyphony', 'person-p'],
+			['polyphony', 'person-p']
+		]);
 		// get() counts as an open (byteStore.ts head comment) — a render must
 		// never call it, or LRU collapses to render order.
 		expect(getSpy).not.toHaveBeenCalled();
@@ -489,7 +495,13 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 			fullAgendaResult({
 				seasons: [],
 				upcoming,
-				recent: [],
+				// #409 — file-absent sits on a RECENT event, never the next
+				// (upcoming[0]) one: only THIS click's open may fetch/store it.
+				// Parked under `upcoming` too, it would be an unheld next-event
+				// part and the opportunistic prefetch would fetch+evict it on
+				// load, before this test's own click — racing the very
+				// "on-device initially" assertion below.
+				recent,
 				seasonId: 'season-1',
 				seasonConductors: [],
 				seasonOwners: [],
@@ -497,7 +509,8 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 			})
 		);
 		loadWorksByEventIdMock.mockResolvedValue({
-			'ev-1': [workRow('ri-1', 'Spem in alium', 'file-held'), workRow('ri-2', 'If ye love me', 'file-absent')]
+			'ev-1': [workRow('ri-1', 'Spem in alium', 'file-held')],
+			'ev-0': [workRow('ri-2', 'If ye love me', 'file-absent')]
 		});
 		setAuthedWithOneCollective();
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
@@ -514,16 +527,18 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
 
 		const container = await renderAgendaReady();
-		const row = await expandWorks(container, 'agenda-row-ev-1');
+		await expandWorks(container, 'agenda-row-ev-1');
+		const recentRow = await expandWorks(container, 'agenda-recent-row-ev-0');
 		await waitFor(() => {
 			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
 				'[file_presence_on_device]'
 			);
 		});
 
-		// Row 2 is the unheld part — its open goes to the network and stores.
-		const links = row.querySelectorAll('[data-testid="work-link-pdf"]');
-		await fireEvent.click(links[1]);
+		// The recent row's part is the unheld one — its open goes to the
+		// network and stores.
+		const link = recentRow.querySelector('[data-testid="work-link-pdf"]')!;
+		await fireEvent.click(link);
 
 		await waitFor(() => {
 			// The newcomer is now on the device...
@@ -539,8 +554,12 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 			);
 		});
 		// A RE-QUERY, not a local patch: the store, not the page, knows which
-		// rows survived.
+		// rows survived. THREE calls now, not two (#409): the load-time #367
+		// query, the opportunistic prefetch's own skip-check for the next
+		// event's (already-held) 'file-held' part, and the click-triggered
+		// re-query below.
 		expect(presenceSpy.mock.calls).toEqual([
+			['polyphony', 'person-p'],
 			['polyphony', 'person-p'],
 			['polyphony', 'person-p']
 		]);
@@ -551,7 +570,11 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 			fullAgendaResult({
 				seasons: [],
 				upcoming,
-				recent: [],
+				// #409 — file-absent on a RECENT event, same reasoning as the
+				// network-stored test above: an unheld NEXT-event part would be
+				// auto-prefetched (and would trip this same put mock) before the
+				// click this test drives.
+				recent,
 				seasonId: 'season-1',
 				seasonConductors: [],
 				seasonOwners: [],
@@ -559,7 +582,8 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 			})
 		);
 		loadWorksByEventIdMock.mockResolvedValue({
-			'ev-1': [workRow('ri-1', 'Spem in alium', 'file-held'), workRow('ri-2', 'If ye love me', 'file-absent')]
+			'ev-1': [workRow('ri-1', 'Spem in alium', 'file-held')],
+			'ev-0': [workRow('ri-2', 'If ye love me', 'file-absent')]
 		});
 		setAuthedWithOneCollective();
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
@@ -575,15 +599,16 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
 
 		const container = await renderAgendaReady();
-		const row = await expandWorks(container, 'agenda-row-ev-1');
+		await expandWorks(container, 'agenda-row-ev-1');
+		const recentRow = await expandWorks(container, 'agenda-recent-row-ev-0');
 		await waitFor(() => {
 			expect(q(container, 'file-presence-file-held')!.textContent).toContain(
 				'[file_presence_on_device]'
 			);
 		});
 
-		const links = row.querySelectorAll('[data-testid="work-link-pdf"]');
-		await fireEvent.click(links[1]);
+		const link = recentRow.querySelector('[data-testid="work-link-pdf"]')!;
+		await fireEvent.click(link);
 
 		// The open still DELIVERS — the cache is never a gate (#343).
 		await waitFor(() => {
@@ -602,7 +627,10 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 				'[file_presence_on_device]'
 			);
 		});
+		// THREE calls (#409): load-time #367 query, the prefetch's own
+		// skip-check for 'file-held', and the click-triggered re-query.
 		expect(presenceSpy.mock.calls).toEqual([
+			['polyphony', 'person-p'],
 			['polyphony', 'person-p'],
 			['polyphony', 'person-p']
 		]);
@@ -661,9 +689,16 @@ describe('#367 — the query keys on the SELECTED collective (per-load clear + p
 			);
 		});
 
-		// One query per load, each keyed on ITS load's identity.
+		// #409 — TWO queries per load, each keyed on ITS load's identity:
+		// #367's own load-time query, then the opportunistic prefetch's own
+		// skip-check for the next event's 'file-held' part (held under
+		// polyphony, so no further write-attempt call; not held under crede,
+		// but the fetch it tries resolves 'fallback-navigation' — no signed
+		// URL to sign in this fixture — which is not a write-attempt either).
 		expect(presenceSpy.mock.calls).toEqual([
 			['polyphony', 'person-p'],
+			['polyphony', 'person-p'],
+			['crede', 'person-c'],
 			['crede', 'person-c']
 		]);
 	});

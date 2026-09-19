@@ -24,6 +24,8 @@
 	} from '$lib/collectives/store';
 	import { loadFullAgenda } from '$lib/agenda/agendaData';
 	import type { AgendaItem } from '$lib/agenda/types';
+	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
+	import { prefetchNextEventParts } from '$lib/files/prefetch';
 	import { getToken } from '$lib/auth/storage';
 	import {
 		findMyMemberId,
@@ -1990,11 +1992,44 @@
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = byEvent;
 				worksRowsLoading = false;
+				prefetchNextEventPartsAfterSettle(cfg, thisRequest);
 			})
 			.catch(() => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = {};
 				worksRowsLoading = false;
+			});
+	}
+
+	/**
+	 * #409 — "the next rehearsal's parts reach the device before she needs
+	 * them": once `worksByEventId` settles, fetch the next event's (still
+	 * `agendaItems[0]`) parts on her own key, opportunistically WHILE THE APP
+	 * IS OPEN (epic #334's standing constraint — no service-worker fetch, no
+	 * periodicsync, no push; this is the page's own load chain, nothing else).
+	 * `nextEventFileIds` is the one shared definition of "the next event's
+	 * parts" (also consumed by #410); held parts are skipped inside
+	 * `prefetchNextEventParts` itself, from ONE keys-only presence read.
+	 *
+	 * A write-attempt (`network-stored` or `network-uncached` — the cap's
+	 * `evictUntilFits` may run either way, per `handlePdfClick`'s own gate)
+	 * re-queries presence so #367's badges flip without a reload or a click.
+	 */
+	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number) {
+		const fileIds = nextEventFileIds(agendaItems, worksByEventId);
+		if (fileIds.length === 0) return;
+		const identity = get(selectedCollectiveIdentityStore);
+		prefetchNextEventParts(cfg, identity, fileIds, getAppByteStore(), fetch, () => thisRequest === requestId)
+			.then((results) => {
+				if (thisRequest !== requestId || !identity) return;
+				if (
+					results.some((r) => r.outcome === 'network-stored' || r.outcome === 'network-uncached')
+				) {
+					refreshPresence(identity.db, identity.personId, () => thisRequest === requestId);
+				}
+			})
+			.catch((e) => {
+				console.error('agenda: next-event prefetch failed', e);
 			});
 	}
 
