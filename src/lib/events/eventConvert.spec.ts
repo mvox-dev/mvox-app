@@ -13,7 +13,8 @@
 //
 //   CHOREOGRAPHY — four steps, exactly this order, fail-loud at every one:
 //
-//     1. read-event    GET entity/{eventId}?props=name,event_type
+//     1. read-event    GET entity/{eventId}?props=event_name,event_type (#420 —
+//                      the EVENT's own name lives on `event_name`, never `name`)
 //                      The event's own name (string AND value `_id`s — the ids
 //                      feed step 4) and event_type. An event whose name OR
 //                      event_type is absent/blank REFUSES here, before any
@@ -45,7 +46,7 @@
 //                      the converted event from the very agenda the user is
 //                      looking at. The ordered call-log assertion below is
 //                      what pins the absence of any such DELETE.
-//     4. delete-name   DELETE property/{id} for EACH old name value — strictly
+//     4. delete-name   DELETE property/{id} for EACH old event_name value (#420) — strictly
 //                      AFTER the link POST landed (POST before DELETE, the
 //                      eventFieldEdit ordering), so a failure part-way leaves
 //                      a NAMED standalone event, never a nameless orphan. With
@@ -116,7 +117,7 @@ function defaultEventEntity(): unknown {
 	return {
 		entity: {
 			_id: 'ev-9',
-			name: [{ _id: 'nv-1', string: 'Proov' }],
+			event_name: [{ _id: 'nv-1', string: 'Proov' }],
 			event_type: [{ _id: 'etv-1', string: 'rehearsal' }]
 		}
 	};
@@ -204,7 +205,7 @@ describe('convertEventToSeries — happy path choreography', () => {
 		await convertEventToSeries(cfg, validInput, fetchImpl);
 
 		expect(callLog(fetchImpl)).toEqual([
-			`GET ${BASE}/entity/ev-9?props=name,event_type`,
+			`GET ${BASE}/entity/ev-9?props=event_name,event_type`,
 			`GET ${BASE}/entity?_type.string=entity&name.string=event_series&props=_id&limit=1`,
 			`POST ${BASE}/entity`,
 			`POST ${BASE}/entity/ev-9`,
@@ -255,7 +256,7 @@ describe('convertEventToSeries — happy path choreography', () => {
 			eventEntity: {
 				entity: {
 					_id: 'ev-9',
-					name: [
+					event_name: [
 						{ _id: 'nv-1', string: 'Proov' },
 						{ _id: 'nv-2', string: 'Proov (vana)' }
 					],
@@ -340,7 +341,7 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 		expect(failure.step).toBe('read-event');
 		expect(failure.message).toContain('read-event');
 		expect(failure.seriesId).toBeUndefined();
-		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=name,event_type`]);
+		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=event_name,event_type`]);
 	});
 
 	it('a NAMELESS event refuses in read-event — a series with no name violates v4E — and NO write was issued', async () => {
@@ -353,7 +354,7 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 		expect(failure.step).toBe('read-event');
 		expect(failure.message).toMatch(/name/);
 		expect(failure.reason).toBe('missing-name');
-		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=name,event_type`]);
+		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=event_name,event_type`]);
 	});
 
 	it('a TYPELESS event refuses in read-event too — BEFORE any write, so nothing is stranded (#196 review F1)', async () => {
@@ -363,7 +364,7 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 		// occurrence loop could not run, with the event out of the standalone list
 		// and no in-app way back. Nothing past the GET may go on the wire.
 		const fetchImpl = makeConvertWire({
-			eventEntity: { entity: { _id: 'ev-9', name: [{ _id: 'nv-1', string: 'Proov' }] } }
+			eventEntity: { entity: { _id: 'ev-9', event_name: [{ _id: 'nv-1', string: 'Proov' }] } }
 		});
 		const failure = await failureOf(convertEventToSeries(cfg, validInput, fetchImpl));
 
@@ -372,7 +373,7 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 		expect(failure.message).toMatch(/event_type/);
 		expect(failure.reason).toBe('missing-event-type');
 		expect(failure.seriesId).toBeUndefined();
-		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=name,event_type`]);
+		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=event_name,event_type`]);
 	});
 
 	it('a BLANK-STRING event_type is refused exactly like an absent one — never sent as `string: ""`', async () => {
@@ -380,7 +381,7 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 			eventEntity: {
 				entity: {
 					_id: 'ev-9',
-					name: [{ _id: 'nv-1', string: 'Proov' }],
+					event_name: [{ _id: 'nv-1', string: 'Proov' }],
 					event_type: [{ _id: 'etv-1', string: '   ' }]
 				}
 			}
@@ -388,7 +389,7 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 		const failure = await failureOf(convertEventToSeries(cfg, validInput, fetchImpl));
 
 		expect(failure.reason).toBe('missing-event-type');
-		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=name,event_type`]);
+		expect(callLog(fetchImpl)).toEqual([`GET ${BASE}/entity/ev-9?props=event_name,event_type`]);
 	});
 
 	it('series create POST non-2xx → step "create-series"; no link POST, no name DELETE, no seriesId on the error', async () => {
@@ -597,7 +598,7 @@ function seededWire(): FakeEntu {
 		_parent: [{ reference: 'org-1' }]
 	});
 	wire.seed('ev-9', 'event', {
-		name: [{ string: 'Proov' }],
+		event_name: [{ string: 'Proov' }],
 		event_type: [{ string: 'rehearsal' }],
 		start_datetime: [{ datetime: '2027-04-20T18:00:00.000Z' }],
 		duration_minutes: [{ number: 75 }],

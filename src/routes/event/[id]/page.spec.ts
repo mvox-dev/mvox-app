@@ -136,7 +136,9 @@ function json(body: unknown, status = 200) {
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
-		name: [{ string: 'Tuesday Rehearsal' }],
+		// #420 — the EVENT's own name lives on `event_name`; `name` is retired on
+		// events. The season/series fixtures below keep `name` (only events moved).
+		event_name: [{ string: 'Tuesday Rehearsal' }],
 		event_type: [{ string: 'rehearsal' }],
 		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
 		duration_minutes: [{ number: 90 }],
@@ -331,6 +333,17 @@ describe('loadEventDetail — full header shape', () => {
 		expect(detail.seasonEditorIds).toEqual([]);
 	});
 
+	it('the event GET asks for event_name and NEVER the retired bare name (#420 — no fallback read)', async () => {
+		const fetchImpl = entuFetchStub();
+		await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		const evUrl = fetchImpl.mock.calls
+			.map((c) => String(c[0]))
+			.find((u) => u.includes('/entity/ev1'))!;
+		const props = (/[?&]props=([^&]*)/.exec(evUrl)?.[1] ?? '').split(',');
+		expect(props).toContain('event_name');
+		expect(props).not.toContain('name');
+	});
+
 	it('throws on a non-2xx event response (fail loud, no silent empty detail)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
 		await expect(
@@ -343,7 +356,7 @@ describe('loadEventDetail — series inheritance (read-time merge, verbatim list
 	it('missing name/duration/location/description fall back to the parent series values', async () => {
 		const fetchImpl = entuFetchStub({
 			event: eventEntity({
-				name: undefined,
+				event_name: undefined,
 				duration_minutes: undefined,
 				location: undefined,
 				description: undefined

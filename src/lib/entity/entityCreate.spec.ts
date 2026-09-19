@@ -383,7 +383,7 @@ describe('createEventSeries — wire shape', () => {
 // ---------------------------------------------------------------------------
 
 describe('createEvent — wire shape', () => {
-	it('resolves the `event` type; minimal body is EXACTLY _type ref + _parent refs + name string + event_type string + start_datetime { datetime }', async () => {
+	it('resolves the `event` type; minimal body is EXACTLY _type ref + _parent refs + event_name string (#420 — never bare `name`) + event_type string + start_datetime { datetime }', async () => {
 		const fetchImpl = makeFetchMock({ typeIds: { event: 'event-type-3' } });
 		await createEvent(
 			cfg,
@@ -406,7 +406,7 @@ describe('createEvent — wire shape', () => {
 				{ type: '_type', reference: 'event-type-3' },
 				{ type: '_parent', reference: 'org-1' },
 				{ type: '_parent', reference: 'season-1' },
-				{ type: 'name', string: 'Spring concert' },
+				{ type: 'event_name', string: 'Spring concert' },
 				{ type: 'event_type', string: 'concert' },
 				{ type: 'start_datetime', datetime: '2027-04-11T17:00:00.000Z' }
 			].sort(byType)
@@ -439,7 +439,7 @@ describe('createEvent — wire shape', () => {
 				{ type: '_parent', reference: 'org-1' },
 				{ type: '_parent', reference: 'season-1' },
 				{ type: '_parent', reference: 'series-1' },
-				{ type: 'name', string: 'Mon rehearsal' },
+				{ type: 'event_name', string: 'Mon rehearsal' },
 				{ type: 'event_type', string: 'rehearsal' },
 				{ type: 'start_datetime', datetime: '2026-09-07T16:00:00.000Z' },
 				{ type: 'duration_minutes', number: 120 },
@@ -518,6 +518,8 @@ describe('createEvent — wire shape', () => {
 
 		const blank = makeFetchMock({ typeIds: { event: 'event-type-3' } });
 		await createEvent(cfg, { ...minimalEvent, seriesId: 'series-42', name: '   ' }, blank);
+		expect(createCallBody(blank).filter((p) => p.type === 'event_name')).toEqual([]);
+		// #420 — bare `name` is retired from event creates in EVERY case, blank or not.
 		expect(createCallBody(blank).filter((p) => p.type === 'name')).toEqual([]);
 	});
 
@@ -542,7 +544,7 @@ describe('createEvent — wire shape', () => {
 				{ type: '_type', reference: 'event-type-3' },
 				{ type: '_parent', reference: 'org-1' },
 				{ type: '_parent', reference: 'series-42' },
-				{ type: 'name', string: 'Mon rehearsal' },
+				{ type: 'event_name', string: 'Mon rehearsal' },
 				{ type: 'event_type', string: 'rehearsal' },
 				{ type: 'start_datetime', datetime: '2026-09-07T16:00:00.000Z' }
 			].sort(byType)
@@ -577,7 +579,7 @@ describe('createEvent — wire shape', () => {
 				{ type: '_type', reference: 'event-type-3' },
 				{ type: '_parent', reference: 'org-1' },
 				{ type: '_parent', reference: 'season-1' },
-				{ type: 'name', string: 'E' },
+				{ type: 'event_name', string: 'E' },
 				{ type: 'event_type', string: 'concert' },
 				{ type: 'start_datetime', datetime: '2026-09-07T16:00:00.000Z' }
 			].sort(byType)

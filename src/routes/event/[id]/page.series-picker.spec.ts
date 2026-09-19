@@ -141,7 +141,7 @@ function json(body: unknown, status = 200) {
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
-		name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
+		event_name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
 		event_type: [{ _id: 'val-type-1', string: 'rehearsal' }],
 		start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:00:00.000Z' }],
 		duration_minutes: [{ _id: 'val-dur-1', number: 90 }],
@@ -165,9 +165,11 @@ function ownerEvent(over: Partial<Record<string, unknown>> = {}) {
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
-/** The four inheritable props raw-ABSENT — the event inherits all four. */
+/** The four inheritable props raw-ABSENT — the event inherits all four.
+ *  The name slot is the EVENT's own `event_name` (#420); the series side of
+ *  the merge stays `series.name`. */
 const INHERITING = {
-	name: undefined,
+	event_name: undefined,
 	duration_minutes: undefined,
 	location: undefined,
 	description: undefined
@@ -208,7 +210,7 @@ function series2Entity() {
 function credeEventEntity() {
 	return {
 		_id: 'ev1',
-		name: [{ _id: 'cval-name', string: 'Crede Event' }],
+		event_name: [{ _id: 'cval-name', string: 'Crede Event' }],
 		event_type: [{ _id: 'cval-type', string: 'rehearsal' }],
 		start_datetime: [{ _id: 'cval-start', datetime: '2026-09-02T16:00:00.000Z' }],
 		duration_minutes: [{ _id: 'cval-dur', number: 60 }],
@@ -416,10 +418,10 @@ describe('#304 loadEventDetail — inheritedFields: the RAW-PRESENCE test, never
 		expect(detail.inheritedFields).toEqual(['name', 'durationMinutes', 'location', 'description']);
 	});
 
-	it('a STORED "" name and a STORED 0 duration BLOCK inheritance — they are real values that merely display blank', async () => {
+	it('a STORED "" name (an event_name value, #420) and a STORED 0 duration BLOCK inheritance — they are real values that merely display blank', async () => {
 		const { stub } = seriesWireStub(
 			eventEntity({
-				name: [{ _id: 'val-name-1', string: '' }],
+				event_name: [{ _id: 'val-name-1', string: '' }],
 				duration_minutes: [{ _id: 'val-dur-1', number: 0 }],
 				location: undefined,
 				description: undefined
@@ -615,7 +617,7 @@ describe('#304 — the on-screen inherited-fields list (owner view)', () => {
 
 	it('a STORED "" name inherits NOTHING on screen — the raw-array test, not the displayed blank', async () => {
 		const { container } = renderSeriesPage(
-			ownerEvent({ name: [{ _id: 'val-name-1', string: '' }] })
+			ownerEvent({ event_name: [{ _id: 'val-name-1', string: '' }] })
 		);
 		const select = await waitSelect(container);
 		expect(q(container, 'event-series-inherited-name')).toBeNull();

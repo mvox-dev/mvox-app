@@ -35,7 +35,9 @@ function mockSeasonsFetch(opts: {
 function eventRaw(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'e1',
-		name: [{ string: 'Mon rehearsal' }],
+		// #420 — the EVENT's own name lives on `event_name`; `name` is retired
+		// on events (the series side of the merge stays `series.name`).
+		event_name: [{ string: 'Mon rehearsal' }],
 		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
 		_parent: [
 			{ reference: 'org1', entity_type: 'organization' },
@@ -195,8 +197,8 @@ describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => 
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1'))
 				return json({ entity: { _id: 'series1', name: [{ string: 'Tuesday Series' }] } });
-			// event has NO name of its own → inherited from the series
-			return json({ entities: [eventRaw({ name: [] })] });
+			// event has NO event_name of its own → inherited from the series
+			return json({ entities: [eventRaw({ event_name: [] })] });
 		});
 		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('Tuesday Series');
@@ -205,20 +207,20 @@ describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => 
 		expect(String(seriesCall[0])).toContain('name');
 	});
 
-	it('the event own name still wins over the series name', async () => {
+	it('the event own event_name still wins over the series name', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1'))
 				return json({ entity: { _id: 'series1', name: [{ string: 'Tuesday Series' }] } });
-			return json({ entities: [eventRaw()] }); // eventRaw carries 'Mon rehearsal'
+			return json({ entities: [eventRaw()] }); // eventRaw carries event_name 'Mon rehearsal'
 		});
 		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('Mon rehearsal');
 	});
 
-	it('no name on the event AND none on the series → "" (never undefined)', async () => {
+	it('no event_name on the event AND no name on the series → "" (never undefined)', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
-			return json({ entities: [eventRaw({ name: [] })] });
+			return json({ entities: [eventRaw({ event_name: [] })] });
 		});
 		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('');
@@ -337,6 +339,15 @@ describe('listEvents — no event_type filter, eventType carried (#194 + #202)',
 		expect(url).toContain('_parent.reference=season1');
 	});
 
+	it('the events query asks for event_name and NEVER the retired bare name (#420 — no fallback read)', async () => {
+		const fetchImpl = vi.fn(async (_url?: string) => json({ entities: [] }));
+		await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
+		const url = String(fetchImpl.mock.calls[0][0]);
+		const props = (new URL(url).searchParams.get('props') ?? '').split(',');
+		expect(props).toContain('event_name');
+		expect(props).not.toContain('name');
+	});
+
 	it('asks for event_type in props and maps it onto eventType', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
@@ -358,7 +369,7 @@ describe('listEvents — no event_type filter, eventType carried (#194 + #202)',
 					eventRaw({ _id: 'e-reh', event_type: [{ string: 'rehearsal' }] }),
 					eventRaw({
 						_id: 'e-con',
-						name: [{ string: 'Kevadkontsert' }],
+						event_name: [{ string: 'Kevadkontsert' }],
 						start_datetime: [{ datetime: '2026-09-02T16:00:00.000Z' }],
 						event_type: [{ string: 'concert' }]
 					}),
