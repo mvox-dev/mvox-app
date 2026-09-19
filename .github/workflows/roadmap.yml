@@ -72,10 +72,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Gate: a failing suite stops here, before any live fetch or render —
+      # Gate: a failing test stops here, before any live fetch or render —
       # the deploy job below never starts, and the current live page stays up.
+      #
+      # #413 — the gate runs the ROADMAP's tests, not the whole suite. It used
+      # to run `pnpm test`, so any red test anywhere froze a page built from
+      # nothing but issue data: on 2026-09-19 a prompt-template fence
+      # (pipeline-ref-discipline.spec.ts) held the board stale for ten hours
+      # while every issue behind it was current.
+      #
+      # The scope is not a preference: every non-spec file under
+      # scripts/roadmap/ imports only its siblings, node builtins and `yaml`,
+      # so these tests cover the whole render path. That property is itself
+      # pinned by scripts/roadmap/gate-scope.spec.ts — if a render-path file
+      # ever reaches outside this directory, that test fails and this gate's
+      # narrowness has to be re-argued rather than quietly going blind.
       - name: Test (gate before any deploy)
-        run: pnpm test
+        run: pnpm test:roadmap
 
       - name: Fetch issues
         run: node --import tsx scripts/roadmap/fetch-issues.ts --out ./roadmap-build/issues.json

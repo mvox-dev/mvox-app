@@ -16,6 +16,7 @@
 		"check:workers": "tsc -p workers/entu-rights-mcp/tsconfig.json --noEmit",
 		"check:sw": "tsc -p tsconfig.sw.json --noEmit",
 		"test": "vitest run",
+		"test:roadmap": "vitest run scripts/roadmap",
 		"test:watch": "vitest",
 		"migrate:t4-10:dry": "DRY_RUN=true node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts",
 		"migrate:t4-10:live": "DRY_RUN=false node --import tsx --import ./scripts/migrations/lib/register-loader.mjs ./scripts/migrations/t4-10-migrate-name-email-to-profile-2026-08-07.ts",
