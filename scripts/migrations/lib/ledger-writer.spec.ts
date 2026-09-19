@@ -598,8 +598,21 @@ describe('assertLiveRunAuthorized — preflight unit contract (#417)', () => {
 		expect(() => assertLiveRunAuthorized(false, LIVE_AUTH)).not.toThrow();
 	});
 
-	it('does not throw on a dry run with no value — it is a LIVE-run gate', () => {
+	it('does not throw on a dry run with no value — the live-run REQUIREMENT is live-only', () => {
 		expect(() => assertLiveRunAuthorized(true, undefined)).not.toThrow();
+	});
+
+	it('does not throw on a dry run with an explicit non-email value — a pre-authorized rehearsal is legal', () => {
+		expect(() => assertLiveRunAuthorized(true, LIVE_AUTH)).not.toThrow();
+	});
+
+	// Review round 2 (Bentham): the '@' test sat behind the dry-run early
+	// return, so DRY_RUN=true with an email in AUTHORIZED_BY passed — and
+	// writeLedger appends the envelope value after the payload, past both
+	// scrubbing passes, into the TRACKED committed twin. The value-SHAPE
+	// check binds every run; only the live-run REQUIREMENT is live-only.
+	it("throws on a DRY run when the value contains '@' — the shape check is not a live-run-only check", () => {
+		expect(() => assertLiveRunAuthorized(true, 'mihkel@example.test, team console')).toThrow(/@|email/i);
 	});
 
 	it('exports the fixed dry-run sentinel NO_AUTHORIZATION_DRY_RUN with these exact bytes', () => {
@@ -689,7 +702,7 @@ describe('writeLedger — authorizedBy in the envelope (#417)', () => {
 		expect(content.authorizedBy).toBe(NO_AUTH_DRY_RUN_LITERAL);
 	});
 
-	it('dry run + explicit value keeps the explicit value — a pre-authorized rehearsal stays recorded as itself', () => {
+	it('dry run + explicit non-email value keeps the explicit value — a pre-authorized rehearsal stays recorded as itself', () => {
 		writeLedgerWithAuth({
 			scriptName: 'x',
 			dryRun: true,
@@ -700,6 +713,28 @@ describe('writeLedger — authorizedBy in the envelope (#417)', () => {
 		});
 		const { content } = lastWrite();
 		expect(content.authorizedBy).toBe(LIVE_AUTH);
+	});
+
+	// Review round 2 (Bentham): this case used to assert the opposite — a dry
+	// run KEPT whatever it was handed, email included. The envelope value is
+	// appended after the payload in both twins, so it meets neither the
+	// instance denylist nor the committed twin's scrubEmails pass, and the
+	// committed twin is tracked. The documented rehearsal order (export
+	// AUTHORIZED_BY once, then DRY_RUN=true first) makes the dry run the
+	// FIRST place a bad value reaches disk, so it has to throw there too.
+	it("dry run + a value containing '@' throws before any fs write — the tracked twin never sees an address", () => {
+		expect(() =>
+			writeLedgerWithAuth({
+				scriptName: 'x',
+				dryRun: true,
+				db: 'mvox_crede',
+				sensitive: true,
+				authorizedBy: 'mihkel@example.test, team console',
+				committed: { allow: ['total'] },
+				payload: { total: 1 }
+			})
+		).toThrow(/@|email/i);
+		expect(writeFileSyncMock).not.toHaveBeenCalled();
 	});
 });
 

@@ -33,9 +33,9 @@ export function readDryRun(): boolean {
 }
 
 /**
- * mvox-app#417 — reads the live-run authorizer (name, channel, and the
- * issue-comment URL where the authorization is recorded) from env
- * `AUTHORIZED_BY`. Unset or blank (whitespace-only) reads as `undefined` —
+ * mvox-app#417 — reads the live-run authorizer (who authorized the run, the
+ * channel it came through, and a link to where the authorization is written
+ * when there is one) from env `AUTHORIZED_BY`. Unset or blank (whitespace-only) reads as `undefined` —
  * a blank record is no record — so the caller's `assertLiveRunAuthorized`
  * preflight, not this reader, decides whether that is fatal.
  */

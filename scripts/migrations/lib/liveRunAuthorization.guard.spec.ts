@@ -148,13 +148,25 @@ describe('mvox-app#417 — every crede-mutating script gates its live run on a r
 	// named `authorizedBy` through `filterByAllowlist` into the tracked file.
 	// The writer now writes its own value last so such a key cannot win, and
 	// the scripts no longer allowlist a name the envelope already owns.
+	// Review round 2 (Bentham): this used to scan the WHOLE file for the
+	// substring "'authorizedBy'", so a comment, a payload key read, or any
+	// unrelated mention tripped a failure whose message insisted the name was
+	// in `committed.allow`. Match the allow array itself instead — one regex
+	// per `committed: { … allow: [ … ] }` block ([^}]*? cannot cross out of
+	// the committed object, and an allow array in this corpus holds only
+	// quoted names), then test membership inside those blocks.
+	const COMMITTED_ALLOW_RE = /committed:\s*\{[^}]*?allow:\s*\[[^\]]*\]/g;
+	const ALLOWS_AUTHORIZED_BY = /(['"`])authorizedBy\1/;
+
 	it("no enumerated script allowlists 'authorizedBy' — the committed envelope carries it, the allow entry only admits a payload impostor", () => {
 		const violations: string[] = [];
 		for (const rel of CREDE_MUTATING_SCRIPTS) {
 			const content = readScript(rel);
-			if (!content.includes('committed:')) continue;
-			if (content.includes("'authorizedBy'")) {
-				violations.push(`${rel}: names 'authorizedBy' in its committed.allow array`);
+			const allowBlocks = content.match(COMMITTED_ALLOW_RE) ?? [];
+			for (const block of allowBlocks) {
+				if (ALLOWS_AUTHORIZED_BY.test(block)) {
+					violations.push(`${rel}: names 'authorizedBy' in its committed.allow array`);
+				}
 			}
 		}
 		expect(

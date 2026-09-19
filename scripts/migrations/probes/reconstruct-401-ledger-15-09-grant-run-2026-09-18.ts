@@ -63,6 +63,15 @@ async function main(): Promise<void> {
 		// authorizer; passed through so the new live-run preflight (which
 		// this reconstruction, run at import time with dryRun:false, is
 		// subject to like any other live write) has something to check.
+		// Name and channel, no URL, and that is the honest value here: this
+		// authorization was spoken at the team console and written down in
+		// the BODY of #369 ("Authorized by Mihkel at the team console,
+		// verbatim: …"), which carries no comment to link to. #417 review
+		// round 2 (Bentham) flagged the gap between this example and the
+		// preflight's error text; the text now states what it enforces
+		// (non-blank, not the sentinel, no '@') and asks for a link only
+		// where one exists — do not copy a fabricated URL in here to make a
+		// shape look satisfied.
 		authorizedBy: 'Mihkel (team console, verbatim)',
 		committed: {
 			allow: [
