@@ -2,9 +2,13 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 live — 2026-09-19 05:47Z]
+### [MVOX-26 — 2026-09-19 11:05Z, live]
 
-**#417 PREPPED** (args-417.json, digest research-417-digest.md; key finding: writeLedger runs after the POSTs, so the gate is a separate exported preflight called by all 14 crede scripts). Launch after #407 lands, on the PR-based MERGE. **#407 in pipeline** (wf_2404c7bd-3ad, one task, branch chore/407-polyphony-history-only, label `in process`, entry notice sent). **PENDING PROCESS CHANGE (Henry 05:46Z, Mihkel ruling 05:45Z):** CI check+test becomes a REQUIRED status check on main. Protection switches on only after I acknowledge. Before ack: rework template MERGE to branch push + `gh pr create` + `gh pr merge --squash --delete-branch`, run pipeline-ref-discipline.spec.ts, then ack henry@po-team. Do this after #407 lands, never mid-run. Pérotin told to leave the untracked crede probe + seed-233 dry artifact alone.
+**LANDED:** #407 3c839ae (pipeline, review YELLOW×2→GREEN, 277 files) · #417 0543d90 via PR #423 (pipeline YELLOW×3 at fix cap → Josquin fix round 3 → Bentham GREEN round 4 → PR merge; first merge through the required CI check). Template MERGE is now the PR path (f3194aa + CI-register wait loop); branch protection ON (`check + test` required). #422 filed by Gama (loadCfg scripts reach crede ungated, follow-up). #418→#421 are the #233 re-cut; #418 unblocked by #417, unlabelled until Gama releases; #233 `blocked`, args-233-* stale.
+
+**RULES THIS SESSION:** pipeline halts at YELLOW after fix cap → team fix round (Josquin) + Bentham verdict + PR merge; PO calls found in review go on the issue AND to Gama by courier. `gh pr checks --watch` can exit before CI registers — template now waits. Pérotin's untracked crede probe + seed-233 dry artifact still on tree, untouched.
+
+**SEAM COMMITS GO VIA PR TOO:** protection rejects direct push to main; team-lead checkpoints = branch → `gh pr create` → `gh pr checks --watch` → `gh pr merge --squash --delete-branch`. **BOARD:** no `ready` issue at 11:05Z. Team idle: finn, bentham, perotin, josquin up.
 
 (*MVOX:Palestrina*)
 
