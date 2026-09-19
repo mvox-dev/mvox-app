@@ -168,7 +168,12 @@ describe('package.json: at most a generator scripts entry', () => {
 	// workers/entu-rights-mcp/ — a sanctioned, commissioned addition elsewhere
 	// is the pin working as designed (#322 ER-pin precedent, same as the
 	// vite.config.ts repin above for #347).
-	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate', () => {
+	// #413 widens it once more: `test:roadmap` runs the roadmap's own tests,
+	// which is what .github/workflows/roadmap.yml gates the board deploy on
+	// now — it ran the whole suite before, so a prompt-template fence held the
+	// public page stale for ten hours (2026-09-19). Commissioned by Mihkel;
+	// still zero runtime/dev dependencies, still nothing from this slice.
+	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate', () => {
 		const keys = Object.keys(pkg().scripts);
 		for (const k of BASELINE_SCRIPTS) {
 			expect(keys, `baseline script "${k}" was removed or renamed`).toContain(k);
@@ -177,7 +182,8 @@ describe('package.json: at most a generator scripts entry', () => {
 		expect(added.sort(), `added scripts: ${added.join(', ')}`).toEqual([
 			'check:sw',
 			'check:workers',
-			'mcp:bundle'
+			'mcp:bundle',
+			'test:roadmap'
 		]);
 	});
 });
