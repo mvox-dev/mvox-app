@@ -84,7 +84,7 @@ function ownerIdsOf(series: SeriesEntity): string[] {
 
 interface EventEntity {
 	_id: string;
-	name?: Array<{ string: string }>;
+	event_name?: Array<{ string: string }>;
 	start_datetime?: Array<{ datetime: string }>;
 	_parent?: ParentRef[];
 }
@@ -205,7 +205,7 @@ export async function listEventsForSeason(
 ): Promise<ListRead<StandaloneEvent>> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=event&_parent.reference=${seasonId}&props=name,start_datetime,_parent&limit=500`,
+		`entity?_type.string=event&_parent.reference=${seasonId}&props=event_name,start_datetime,_parent&limit=500`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -217,7 +217,7 @@ export async function listEventsForSeason(
 		.filter((event) => seriesRefOf(event) === undefined)
 		.map((event) => ({
 			id: event._id,
-			name: event.name?.[0]?.string ?? '',
+			name: event.event_name?.[0]?.string ?? '',
 			startDatetime: event.start_datetime?.[0]?.datetime ?? ''
 		}));
 	return deriveListRead(items, events.length, body.count);

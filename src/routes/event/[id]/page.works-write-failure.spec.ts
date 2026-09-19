@@ -121,7 +121,7 @@ type EntityRaw = Record<string, unknown>;
 function eventEntity(): EntityRaw {
 	return {
 		_id: 'ev1',
-		name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
+		event_name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
 		start_datetime: [{ _id: 'val-start-1', datetime: isoAt(7) }],
 		duration_minutes: [{ _id: 'val-dur-1', number: 90 }],
 		_parent: [
@@ -202,7 +202,7 @@ function programItemsFixture(): EntityRaw[] {
  *  single, different repertoire row (so the works section it renders is
  *  unmistakably not the one the failure was raised over). */
 function credeEventEntity(): EntityRaw {
-	return { ...eventEntity(), name: [{ _id: 'cval-name-1', string: 'Crede Rehearsal' }] };
+	return { ...eventEntity(), event_name: [{ _id: 'cval-name-1', string: 'Crede Rehearsal' }] };
 }
 const CREDE_REPERTOIRE: EntityRaw[] = [
 	{

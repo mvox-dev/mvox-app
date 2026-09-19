@@ -153,7 +153,7 @@ export async function listEvents(
 	// Detection is never wrong; class (1) only claims the cap is not reachable.
 	const res = await entuFetch(
 		cfg.db,
-		`entity?_type.string=event&_parent.reference=${seasonId}&props=name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor&limit=500`,
+		`entity?_type.string=event&_parent.reference=${seasonId}&props=event_name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor&limit=500`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -195,7 +195,7 @@ export async function listEvents(
 				// the detail page). Before this, an event carrying its name only on
 				// its series rendered a BLANK agenda row whose detail link had no
 				// accessible name, then opened a page showing a populated name.
-				name: raw.name?.[0]?.string ?? series?.name?.[0]?.string ?? '',
+				name: raw.event_name?.[0]?.string ?? series?.name?.[0]?.string ?? '',
 				startDatetime: raw.start_datetime?.[0]?.datetime ?? '',
 				// event value wins; series fills the gap; else 0/''.
 				durationMinutes:

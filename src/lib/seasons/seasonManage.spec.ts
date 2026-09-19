@@ -171,7 +171,8 @@ describe('listEventsForSeason — standalone events only (no event_series parent
 	const seasonEvents = [
 		{
 			_id: 'e-series',
-			name: [{ string: 'Weekly rehearsal' }],
+			// #420 — events carry their own name on `event_name`, never `name`.
+			event_name: [{ string: 'Weekly rehearsal' }],
 			start_datetime: [{ datetime: '2026-09-07T16:00:00.000Z' }],
 			_parent: [
 				{ reference: 'season1', entity_type: 'season' },
@@ -180,7 +181,7 @@ describe('listEventsForSeason — standalone events only (no event_series parent
 		},
 		{
 			_id: 'e-solo',
-			name: [{ string: 'Spring concert' }],
+			event_name: [{ string: 'Spring concert' }],
 			start_datetime: [{ datetime: '2027-04-18T18:00:00.000Z' }],
 			_parent: [{ reference: 'season1', entity_type: 'season' }]
 		}
@@ -203,6 +204,15 @@ describe('listEventsForSeason — standalone events only (no event_series parent
 		expect(url).toContain('_type.string=event');
 		expect(url).toContain('_parent.reference=season1');
 		expect(url).not.toContain('event_type.string');
+	});
+
+	it('the standalone-events query asks for event_name and NEVER the retired bare name (#420)', async () => {
+		const { impl, calls } = recordingFetch(() => json({ entities: seasonEvents }));
+		await listEventsForSeason(cfg, 'season1', impl);
+
+		const props = (/[?&]props=([^&]*)/.exec(calls[0].url)?.[1] ?? '').split(',');
+		expect(props).toContain('event_name');
+		expect(props).not.toContain('name');
 	});
 
 	it('throws on a non-2xx response', async () => {

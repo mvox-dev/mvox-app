@@ -3307,7 +3307,7 @@
 	 *  source of truth both the header and the edit-draft seed from. */
 	function fieldValue(d: EventDetail, field: EditableEventField): string | number {
 		switch (field) {
-			case 'name':
+			case 'event_name':
 				return d.name;
 			case 'start_datetime':
 				return d.startDatetime;
@@ -3330,7 +3330,7 @@
 	function applyFieldLocally(field: EditableEventField, value: string | number): void {
 		if (!detail) return;
 		switch (field) {
-			case 'name':
+			case 'event_name':
 				detail = { ...detail, name: value as string };
 				break;
 			case 'start_datetime':
@@ -4083,7 +4083,7 @@
 					</p>
 				{/if}
 				<!-- #104 TE.4 — name: always present, no empty-guard needed. -->
-				{#if editingField === 'name'}
+				{#if editingField === 'event_name'}
 					<input
 						type="text"
 						data-testid="event-edit-input-name"
@@ -4092,8 +4092,8 @@
 						value={editDraft}
 						use:focusOnMount
 						oninput={(e) => (editDraft = (e.currentTarget as HTMLInputElement).value)}
-						onblur={() => confirmFieldEdit('name', false)}
-						onkeydown={(e) => handleFieldKeydown(e, 'name', false)}
+						onblur={() => confirmFieldEdit('event_name', false)}
+						onkeydown={(e) => handleFieldKeydown(e, 'event_name', false)}
 					/>
 				{:else if isEditor}
 					<!-- #157 — the whole field (value + pencil), not just the pencil, is the
@@ -4134,9 +4134,9 @@
 							type="button"
 							data-testid="event-edit-btn-name"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
-							disabled={editWritePending.name === true}
-							bind:this={pencilRefs.name}
-							onclick={() => beginFieldEdit('name')}
+							disabled={editWritePending.event_name === true}
+							bind:this={pencilRefs.event_name}
+							onclick={() => beginFieldEdit('event_name')}
 						>
 							<span class="sr-only">{m.event_edit_name_aria_label()}</span>
 							<!-- `group`/`group-hover:text-ink` on all five whole-field buttons
@@ -4152,7 +4152,7 @@
 				{:else}
 					<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
 				{/if}
-				{#if editErrors.name}
+				{#if editErrors.event_name}
 					<p data-testid="event-edit-error-name" role="alert" class="text-xs text-red-700">
 						{m.event_edit_save_error()}
 					</p>

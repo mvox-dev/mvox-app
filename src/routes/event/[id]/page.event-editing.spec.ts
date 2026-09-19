@@ -159,7 +159,7 @@ import {
 	readDateTime
 } from '$lib/testing/timeControls';
 // The TE.4 contract module — does not exist yet; GREEN creates it.
-import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
+import { updateEventField } from '$lib/events/eventFieldEdit';
 import { authStore } from '$lib/auth/session';
 import {
 	collectiveState,
@@ -169,13 +169,16 @@ import {
 
 const cfg = { db: 'sampledb', token: 'jwt' };
 
-const EDITABLE_FIELDS: EditableEventField[] = [
+// UI field keys — these name the page's data-testids (event-edit-btn-<field>),
+// which are app-internal and did NOT move with #420's wire rename (the event's
+// name rides the wire as `event_name`; the UI slot is still called 'name').
+const EDITABLE_FIELDS = [
 	'name',
 	'start_datetime',
 	'duration_minutes',
 	'location',
 	'description'
-];
+] as const;
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -189,7 +192,7 @@ function json(body: unknown, status = 200) {
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
-		name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
+		event_name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
 		event_type: [{ _id: 'val-type-1', string: 'rehearsal' }],
 		start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:00:00.000Z' }],
 		duration_minutes: [{ _id: 'val-dur-1', number: 90 }],
@@ -351,7 +354,7 @@ function postedProps(call: unknown[]): Array<Record<string, unknown>> {
 /** Tap the field's pencil and hand back the input it becomes. */
 async function beginEdit(
 	container: HTMLElement,
-	field: EditableEventField
+	field: string
 ): Promise<HTMLInputElement | HTMLTextAreaElement> {
 	await waitFor(() => {
 		expect(
@@ -392,8 +395,16 @@ function fieldWireStub(
 
 describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)', () => {
 	it('replaces an existing string value ATOMICALLY: the POST entry carries the old value id, and no DELETE round-trip remains', async () => {
-		const fetchImpl = fieldWireStub('name', [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }]);
-		await updateEventField(cfg, 'ev1', 'name', 'Autumn Sing', fetchImpl as unknown as typeof fetch);
+		const fetchImpl = fieldWireStub('event_name', [
+			{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }
+		]);
+		await updateEventField(
+			cfg,
+			'ev1',
+			'event_name',
+			'Autumn Sing',
+			fetchImpl as unknown as typeof fetch
+		);
 
 		const calls = fetchImpl.mock.calls.map((c) => ({
 			url: String(c[0]),
@@ -404,14 +415,14 @@ describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)
 		const lookup = calls.find((c) => c.method === 'GET' && c.url.includes('/entity/ev1'));
 		expect(lookup, 'no lookup GET of the event').not.toBeUndefined();
 		expect(lookup!.url).toContain('props=');
-		expect(lookup!.url).toContain('name');
+		expect(lookup!.url).toContain('event_name');
 		// #264 — the old value is replaced IN the POST (its `_id` rides the
 		// entry; setEntity soft-deletes it in the same call). A separate DELETE
 		// would reopen the half-landing window the atomic overwrite closed.
 		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('/entity/ev1'));
 		expect(postIdx, 'no POST of the new value').toBeGreaterThan(-1);
 		expect(JSON.parse(String(calls[postIdx].body))).toEqual([
-			{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }
+			{ _id: 'val-name-1', type: 'event_name', string: 'Autumn Sing' }
 		]);
 		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
@@ -437,11 +448,13 @@ describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)
 	});
 
 	it('a failed POST leaves the OLD value standing — no delete is issued at all', async () => {
-		const fetchImpl = fieldWireStub('name', [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }], {
-			failPost: true
-		});
+		const fetchImpl = fieldWireStub(
+			'event_name',
+			[{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
+			{ failPost: true }
+		);
 		await expect(
-			updateEventField(cfg, 'ev1', 'name', 'Autumn Sing', fetchImpl as unknown as typeof fetch)
+			updateEventField(cfg, 'ev1', 'event_name', 'Autumn Sing', fetchImpl as unknown as typeof fetch)
 		).rejects.toThrow();
 		const deletes = fetchImpl.mock.calls.filter(
 			(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'DELETE'
@@ -492,16 +505,16 @@ describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)
 	});
 
 	it('throws on a failed POST and on a failed lookup — fail loud, never a silent no-op', async () => {
-		const failPost = fieldWireStub('name', [{ _id: 'val-name-1', string: 'x' }], {
+		const failPost = fieldWireStub('event_name', [{ _id: 'val-name-1', string: 'x' }], {
 			failPost: true
 		});
 		await expect(
-			updateEventField(cfg, 'ev1', 'name', 'New', failPost as unknown as typeof fetch)
+			updateEventField(cfg, 'ev1', 'event_name', 'New', failPost as unknown as typeof fetch)
 		).rejects.toThrow();
 
-		const failLookup = fieldWireStub('name', [], { failLookup: true });
+		const failLookup = fieldWireStub('event_name', [], { failLookup: true });
 		await expect(
-			updateEventField(cfg, 'ev1', 'name', 'New', failLookup as unknown as typeof fetch)
+			updateEventField(cfg, 'ev1', 'event_name', 'New', failLookup as unknown as typeof fetch)
 		).rejects.toThrow();
 	});
 });
@@ -717,7 +730,7 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
 			expect(postedProps(posts[0])).toEqual([
-				{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }
+				{ _id: 'val-name-1', type: 'event_name', string: 'Autumn Sing' }
 			]);
 		});
 	});
@@ -978,9 +991,12 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 			expect(editPosts(fetchStub).length).toBeGreaterThan(0);
 		});
 		await new Promise((r) => setTimeout(r, 30));
-		// FULL shape of everything written: the name, and ONLY the name.
+		// FULL shape of everything written: the name (wire slot event_name, #420),
+		// and ONLY the name.
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
-		expect(allProps).toEqual([{ _id: 'val-name-1', type: 'name', string: 'Renamed rehearsal' }]);
+		expect(allProps).toEqual([
+			{ _id: 'val-name-1', type: 'event_name', string: 'Renamed rehearsal' }
+		]);
 	});
 });
 
@@ -1403,7 +1419,7 @@ describe('/event/[id] — integration: the edit surface is wired to the REAL pag
 			expect(String(posts[0][0])).toContain('/sampledb/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
 			expect(postedProps(posts[0])).toEqual([
-				{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }
+				{ _id: 'val-name-1', type: 'event_name', string: 'Autumn Sing' }
 			]);
 		});
 	});

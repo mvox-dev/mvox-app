@@ -123,7 +123,7 @@ describe('listEventsForSeason — truncation detection (#321)', () => {
 					entities: [
 						{
 							_id: 'ev-1',
-							name: [{ string: 'Concert' }],
+							event_name: [{ string: 'Concert' }],
 							start_datetime: [{ datetime: '2026-10-01T19:00' }],
 							_parent: [{ reference: 'season-1', entity_type: 'season' }]
 						},
@@ -149,7 +149,7 @@ describe('listEventsForSeason — truncation detection (#321)', () => {
 					entities: [
 						{
 							_id: 'ev-1',
-							name: [{ string: 'Concert' }],
+							event_name: [{ string: 'Concert' }],
 							start_datetime: [{ datetime: '2026-10-01T19:00' }],
 							_parent: [{ reference: 'season-1', entity_type: 'season' }]
 						}
