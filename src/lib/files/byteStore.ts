@@ -208,9 +208,53 @@ export interface ByteStore {
 	 * from KEYS alone — deleting bytes never needs to read them.
 	 */
 	clearAllPartitions(): Promise<void>;
+	/**
+	 * #410 — the storage-PRESSURE sweep: reads the platform's (or an
+	 * injected) `estimate()` and, only when usage/quota is AT OR ABOVE
+	 * `PRESSURE_RATIO`, deletes least-recently-OPENED, non-PROTECTED rows
+	 * (across every partition, same order as the put-time cap pass) until
+	 * the ratio is strictly below the 0.7 relief target OR only protected
+	 * rows remain. Reads `adapter.listMeta()` AT MOST ONCE, and not at all
+	 * below the pressure line — no `get()`, no
+	 * `touch()`, no recency movement (#367's trap: a sweep that stamps a
+	 * row it read, not evicted, is a bug). Never throws; an absent
+	 * `estimate()` (no injected seam, no `navigator.storage` — true in
+	 * every non-browser test environment) answers `{ outcome:
+	 * 'unsupported' }` rather than guessing.
+	 */
+	relieve(): Promise<RelieveResult>;
+	/**
+	 * #410 — the retention input: composite JSON-triple keys
+	 * (`JSON.stringify([db, personId, fileId])`, the adapter's own
+	 * collision-safe encoding) that `relieve()` and the put-time cap pass
+	 * (`evictUntilFits`) must never pick as an eviction candidate. This
+	 * store never learns WHAT it is protecting or why — the page builds the
+	 * set (the next event's parts, over every collective the signed-in
+	 * person has joined — `$lib/files/retention`, built once per SESSION from
+	 * the root layout) and hands it over. `clearPartition` /
+	 * `clearAllPartitions` (#352, manual remove) ignore this set entirely —
+	 * she asked, and that beats retention.
+	 */
+	setProtectedKeys(keys: ReadonlySet<string>): void;
 }
 
 export const BYTE_STORE_CAP_BYTES = 200 * 1024 * 1024;
+
+/** #410 — the ratio (usage/quota) AT OR ABOVE which `relieve()` evicts.
+ *  Below it a sweep reads nothing and deletes nothing: only `estimate()`. */
+export const PRESSURE_RATIO = 0.8;
+
+/** #410 — the ratio a triggered sweep evicts DOWN TO, strictly below
+ *  (hysteresis: a sweep that stopped exactly AT 0.7 would trigger again on
+ *  the very next put). Not exported — callers read the pressure line only
+ *  through `PRESSURE_RATIO` and `relieve()`'s own `before`/`after`. */
+const PRESSURE_RELIEF_TARGET = 0.7;
+
+/** #410 — `relieve()`'s answer. `'unsupported'` when no `estimate()` seam
+ *  exists (no injected option, no `navigator.storage`) — never a throw. */
+export type RelieveResult =
+	| { outcome: 'unsupported' }
+	| { outcome: 'swept'; before: number; after: number; removed: ByteStoreKey[] };
 
 function requireIdentity(identity: CollectiveIdentity | null): CollectiveIdentity {
 	if (identity === null) {
@@ -234,10 +278,111 @@ export function createByteStore(
 		 * write failing must not slow or gate a byte-store operation.
 		 */
 		onRowRemoved?: (key: ByteStoreKey) => void;
+		/**
+		 * #410 — the injectable pressure signal `relieve()` reads. Defaults to
+		 * `navigator.storage.estimate` (bound) when the platform has one —
+		 * `undefined` in every non-browser test environment (node, happy-dom:
+		 * neither implements `StorageManager`), which is exactly when
+		 * `relieve()` must answer `{ outcome: 'unsupported' }` rather than
+		 * guessing. Mirrors the adapter's own injectable-seam shape.
+		 */
+		estimate?: () => Promise<{ usage?: number; quota?: number }>;
 	}
 ): ByteStore {
 	const capBytes = opts?.capBytes ?? BYTE_STORE_CAP_BYTES;
 	const onRowRemoved = opts?.onRowRemoved;
+	const estimate =
+		opts?.estimate ??
+		(typeof navigator !== 'undefined' && navigator.storage
+			? () => navigator.storage.estimate()
+			: undefined);
+
+	// #410 — composite JSON-triple keys (the adapter's own collision-safe
+	// encoding) handed over via `setProtectedKeys`. Default empty: a store
+	// never given a protected set evicts exactly as it did before #410.
+	let protectedKeys: ReadonlySet<string> = new Set();
+
+	function keyStr(key: ByteStoreKey): string {
+		return JSON.stringify([key.db, key.personId, key.fileId]);
+	}
+
+	function isProtected(key: ByteStoreKey): boolean {
+		return protectedKeys.has(keyStr(key));
+	}
+
+	function sameKey(a: ByteStoreKey, b: ByteStoreKey): boolean {
+		return a.db === b.db && a.personId === b.personId && a.fileId === b.fileId;
+	}
+
+	function isQuotaError(err: unknown): boolean {
+		return (
+			typeof err === 'object' && err !== null && (err as { name?: unknown }).name === 'QuotaExceededError'
+		);
+	}
+
+	// #410 — THE eviction loop: delete least-recently-OPENED, non-PROTECTED
+	// rows (never the excepted one — an incoming write, or the row a sweep is
+	// running on behalf of) until `enough(freedBytes)` answers true or no
+	// candidate is left. ONE `listMeta()` read feeds the whole run, and that is
+	// its whole vocabulary besides `delete`: `adapter.list()` is never called,
+	// `adapter.get()`/`adapter.touch()` never either — an eviction pass must
+	// not move a stamp on a row it did not evict (#367's trap).
+	//
+	// Shared by the two callers that differ ONLY in when they have freed
+	// enough: the pressure sweep (down to a ratio) and the
+	// QuotaExceededError recovery (a number of bytes — review F3).
+	async function evictOldestUntil(
+		enough: (freedBytes: number) => boolean,
+		exceptKey?: ByteStoreKey
+	): Promise<{ removed: ByteStoreKey[]; freed: number }> {
+		let metas = await adapter.listMeta();
+		const removed: ByteStoreKey[] = [];
+		let freed = 0;
+		while (!enough(freed)) {
+			const candidates = metas.filter(
+				(meta) => !isProtected(meta) && !(exceptKey && sameKey(meta, exceptKey))
+			);
+			if (candidates.length === 0) break;
+			const oldest = candidates.reduce((a, b) => (a.openedAt <= b.openedAt ? a : b));
+			await adapter.delete(oldest.db, oldest.personId, oldest.fileId);
+			const key: ByteStoreKey = { db: oldest.db, personId: oldest.personId, fileId: oldest.fileId };
+			onRowRemoved?.(key);
+			removed.push(key);
+			freed += oldest.size;
+			metas = metas.filter((meta) => meta !== oldest);
+		}
+		return { removed, freed };
+	}
+
+	// #410 — the storage-PRESSURE sweep, shared by the public `relieve()` and
+	// the after-every-put trigger (which excepts the row it just wrote — the
+	// same exception the cap pass below makes for an incoming write). AT MOST
+	// ONE `listMeta()` read feeds the whole sweep — none at all below the
+	// pressure line (review F2).
+	async function sweepPressure(exceptKey?: ByteStoreKey): Promise<RelieveResult> {
+		if (!estimate) return { outcome: 'unsupported' };
+		const est = await estimate();
+		if (est.usage === undefined || est.quota === undefined || est.quota <= 0) {
+			return { outcome: 'unsupported' };
+		}
+		const quota = est.quota;
+		const usage = est.usage;
+		const before = usage / quota;
+
+		// #410 review F2 — the metadata read happens ONLY under pressure. Below
+		// the line there is nothing to choose between, and this sweep runs after
+		// EVERY put: reading every row's metadata to then delete none doubled the
+		// per-download metadata cost of a device that is nowhere near full.
+		if (before < PRESSURE_RATIO) {
+			return { outcome: 'swept', before, after: before, removed: [] };
+		}
+
+		const { removed, freed } = await evictOldestUntil(
+			(freedBytes) => (usage - freedBytes) / quota < PRESSURE_RELIEF_TARGET,
+			exceptKey
+		);
+		return { outcome: 'swept', before, after: (usage - freed) / quota, removed };
+	}
 
 	// The cap pass needs sizes and recency stamps for every held row and
 	// NOTHING else — so it reads `listMeta`, not `list` (#352 review). A put is
@@ -245,14 +390,20 @@ export function createByteStore(
 	// cached score on top of it, purely to add up their `size` fields, is how a
 	// download OOMs a phone that is merely near the cap.
 	async function evictUntilFits(neededBytes: number, exceptKey: ByteStoreKey) {
-		const isExcepted = (meta: ByteStoreMeta) =>
-			meta.db === exceptKey.db && meta.personId === exceptKey.personId && meta.fileId === exceptKey.fileId;
+		const isIncoming = (meta: ByteStoreMeta) => sameKey(meta, exceptKey);
+		// #410 — a PROTECTED row (the next event's parts) is never a candidate
+		// here either: the retention exemption reaches the put-time cap pass,
+		// not only the pressure sweep above. Kept SEPARATE from `isIncoming`:
+		// a protected row is not "the row being overwritten" and must not have
+		// its size subtracted from usage below — only a genuine same-key
+		// overwrite earns that.
+		const isExcepted = (meta: ByteStoreMeta) => isIncoming(meta) || isProtected(meta);
 
 		let metas = await adapter.listMeta();
 		let usage = metas.reduce((sum, meta) => sum + meta.size, 0);
 		// The row being overwritten (if any) is about to be replaced — its
 		// current size must not count against the incoming write.
-		const existing = metas.find(isExcepted);
+		const existing = metas.find(isIncoming);
 		if (existing) usage -= existing.size;
 
 		while (usage + neededBytes > capBytes) {
@@ -299,8 +450,33 @@ export function createByteStore(
 				size: data.bytes.byteLength,
 				openedAt: Date.now()
 			};
-			await evictUntilFits(record.size, { db: id.db, personId: id.personId, fileId });
-			await adapter.put(id.db, id.personId, fileId, record);
+			const key: ByteStoreKey = { db: id.db, personId: id.personId, fileId };
+			await evictUntilFits(record.size, key);
+			try {
+				await adapter.put(id.db, id.personId, fileId, record);
+			} catch (err) {
+				// #410 — a REAL QuotaExceededError: free room once, retry the put
+				// ONCE. Still failing propagates — openFileBytes' existing belt
+				// (#343) owns the degradation from there (reason:
+				// 'network-uncached', nothing thrown, nothing lost but the row).
+				//
+				// #410 review F3 — NOT the ratio-gated `sweepPressure`. The
+				// platform just said the device is out of room; that is proof,
+				// and it OUTRANKS whatever `estimate()` reports. A browser that
+				// over-reports quota (so the ratio sits below PRESSURE_RATIO) is
+				// exactly the one that raises this error early — and a gated
+				// sweep would then free nothing, making the single retry below
+				// guaranteed to fail identically. Free at least this record's
+				// own size, unconditionally, from the least-recently-opened
+				// non-protected rows.
+				if (!isQuotaError(err)) throw err;
+				await evictOldestUntil((freedBytes) => freedBytes >= record.size, key);
+				await adapter.put(id.db, id.personId, fileId, record);
+			}
+			// #410 — the after-every-put pressure trigger. The row just written
+			// survives its own sweep (the same exception the cap pass makes for
+			// an incoming write, above).
+			await sweepPressure(key);
 		},
 
 		async evict(identity, fileId) {
@@ -354,6 +530,14 @@ export function createByteStore(
 				await adapter.delete(key.db, key.personId, key.fileId);
 				onRowRemoved?.(key);
 			}
+		},
+
+		async relieve() {
+			return sweepPressure();
+		},
+
+		setProtectedKeys(keys) {
+			protectedKeys = keys;
 		}
 	};
 }

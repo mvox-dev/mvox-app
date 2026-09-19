@@ -27,11 +27,15 @@
 	import { hydrateAuth, authStore } from '$lib/auth/session';
 	import {
 		hydrateCollectives,
+		collectiveState,
 		urlCollectiveDbStore,
 		selectedCollectiveStore,
 		selectedCollectiveIdentityStore,
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
+	// #410 — the session-scoped retention set behind the storage-pressure
+	// sweep (see the effect below, and $lib/files/retention).
+	import { ensureRetentionSweep } from '$lib/files/retention';
 	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
 	import { membershipStore, resetMembership, resolveMembership } from '$lib/collective/membershipStore';
 	import NavShell from '$lib/components/nav/NavShell.svelte';
@@ -114,6 +118,35 @@
 				hydrating = false;
 			});
 		}
+	});
+
+	// ── #410 — the storage-pressure sweep's retention set, built ONCE PER
+	// SESSION here rather than on the agenda page.
+	//
+	// review F1: the byte store is a module singleton and FOUR routes put bytes
+	// through it (agenda, /event/<id>, /library, /downloads); every put fires
+	// the after-every-put pressure sweep. While the build lived in
+	// `+page.svelte`, a cold boot straight into any of the other three never
+	// mounted that component, `setProtectedKeys` was never called, and the
+	// store swept the whole session with the default-EMPTY protected set —
+	// evicting the next event's parts, the exact thing #410 forbids. One effect
+	// in the root layout covers every route (the same pattern as the
+	// documentElement.lang effect above).
+	//
+	// review F2: the scope is the collectives she has JOINED — the hydrated,
+	// marker-filtered `collectiveState` list, NOT `auth.personIdByDb` (every
+	// Entu db in her token, her non-mvox apps included).
+	//
+	// `ensureRetentionSweep` is idempotent (run-once latch, same promise
+	// returned) and never rejects, so this effect may re-run freely and can
+	// neither hold up nor break the loads running beside it.
+	$effect(() => {
+		const auth = $authStore;
+		const state = $collectiveState;
+		if (auth.status !== 'authenticated' || state.status !== 'ready') return;
+		const token = getToken();
+		if (!token) return;
+		void ensureRetentionSweep({ token, collectives: state.collectives });
 	});
 
 	// ── T4.8/#28 — the mandatory-completion gate, enforced APP-WIDE in the one layout

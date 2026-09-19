@@ -12,6 +12,7 @@
 import type {
 	ByteStore,
 	ByteStoreAdapter,
+	ByteStoreKey,
 	ByteStoreRow,
 	StoredFileRecord
 } from '$lib/files/byteStore';
@@ -120,6 +121,24 @@ export interface FakeByteStore extends ByteStore {
 	seed(identity: CollectiveIdentity, fileId: string, data: { bytes: ArrayBuffer; filetype: string; sha256: string }): void;
 	/** All fileIds currently held for a partition. */
 	heldFor(db: string, personId: string): string[];
+	/**
+	 * #410 — every setProtectedKeys() call's set, in order, so page specs can
+	 * pin WHAT the app-open build protected without reimplementing the sweep.
+	 */
+	protectedLog: Array<ReadonlySet<string>>;
+	/** #410 — the retention input (composite JSON-triple keys). Recording only
+	 *  here: the fake runs no eviction, so protection has nothing to skip. */
+	setProtectedKeys(keys: ReadonlySet<string>): void;
+	/**
+	 * #410 — the pressure sweep member, so page specs can spy call ORDER
+	 * (app open: setProtectedKeys → relieve → prefetch). The fake has no
+	 * injected estimate() and answers 'unsupported' — page wiring must treat
+	 * the sweep as fire-and-observe, never gate anything on its outcome.
+	 */
+	relieve(): Promise<
+		| { outcome: 'unsupported' }
+		| { outcome: 'swept'; before: number; after: number; removed: ByteStoreKey[] }
+	>;
 }
 
 /**
@@ -129,6 +148,7 @@ export interface FakeByteStore extends ByteStore {
 export function createFakeByteStore(): FakeByteStore {
 	const map = new Map<string, StoredFileRecord>();
 	const puts: FakeByteStore['puts'] = [];
+	const protectedLog: FakeByteStore['protectedLog'] = [];
 
 	function requireIdentity(identity: CollectiveIdentity | null): CollectiveIdentity {
 		if (identity === null) throw new Error('byte store: no identity — anonymous access has no partition key');
@@ -141,6 +161,15 @@ export function createFakeByteStore(): FakeByteStore {
 
 	return {
 		puts,
+		protectedLog,
+		setProtectedKeys(keys) {
+			protectedLog.push(keys);
+		},
+		async relieve() {
+			// No estimate() seam on the fake — honest 'unsupported', same as the
+			// real store without navigator.storage (byteStore.pressure.spec.ts).
+			return { outcome: 'unsupported' as const };
+		},
 		seed(identity, fileId, data) {
 			map.set(key(identity.db, identity.personId, fileId), toRecord(data));
 		},

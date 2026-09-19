@@ -26,6 +26,10 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 	import { prefetchNextEventParts } from '$lib/files/prefetch';
+	// #410 — the SESSION-scoped retention set (root layout drives the build;
+	// this page only seeds the selected collective's already-loaded half and
+	// waits for the sweep before #409's prefetch). See $lib/files/retention.
+	import { ensureRetentionSweep, seedRetentionKeys } from '$lib/files/retention';
 	import { getToken } from '$lib/auth/storage';
 	import {
 		findMyMemberId,
@@ -962,6 +966,11 @@
 	// one if the user switches collectives before the first load resolves — the
 	// same guard covers a stale rejection (M2 fix below), not just a stale resolve.
 	let requestId = 0;
+	// #410 — the storage-pressure sweep runs ONCE, at app open, ahead of
+	// #409's prefetch — never re-derived on a later collective switch (that
+	// would be a fresh cross-collective read fan-out on every switch, for a
+	// retention set that only needs building once per session).
+	let pressureSweepRanAtOpen = false;
 	/**
 	 * A SECOND, finer generation counter, for `worksByEventId` alone (#167 review
 	 * round 2, F1). `requestId` only changes on a collective switch, so it cannot
@@ -1992,13 +2001,67 @@
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = byEvent;
 				worksRowsLoading = false;
-				prefetchNextEventPartsAfterSettle(cfg, thisRequest);
+				runPressureSweepThenPrefetch(cfg, thisRequest);
 			})
 			.catch(() => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = {};
 				worksRowsLoading = false;
 			});
+	}
+
+	/**
+	 * #410 — "Vahemälu vabastab ise ruumi, kui seade täis saab": this page's
+	 * part in the storage-pressure sweep, which is now a SESSION duty owned by
+	 * `$lib/files/retention` and driven from the root layout (review F1 — the
+	 * byte store is a singleton and event-detail / library / downloads all put
+	 * bytes through it, so a build bound to THIS component protected nothing
+	 * on a cold boot into any of those routes).
+	 *
+	 * What is left here is two things, in order:
+	 *  - the F2 shortcut, as a CONTRIBUTION and not the source: the selected
+	 *    collective's next-event parts are already in memory (`agendaItems` +
+	 *    `worksByEventId`, both in hand at this call site), so seeding them
+	 *    spares the session build a second `listFullAgenda` plus a second
+	 *    `loadWorksByEventId` fan-out for that db — WHEN the seed lands before
+	 *    the build reaches that db. It is a saving, not a guarantee: the layout
+	 *    starts the build as soon as collectives hydrate, which on a cold open
+	 *    is usually before this page's works settle. Correctness does not
+	 *    depend on which of the two wins — both produce the same keys;
+	 *  - awaiting the session build before #409's prefetch signs anything, so
+	 *    the sweep frees room FOR the prefetch. If the layout already ran it,
+	 *    `ensureRetentionSweep` hands back the same settled promise and the
+	 *    prefetch fires straight away.
+	 *
+	 * #410 review F2 — the scope is the collectives she has JOINED
+	 * (`collectiveState`, the marker-filtered list the header picker shows),
+	 * never `auth.personIdByDb` (every Entu db in her token, mvox or not).
+	 *
+	 * #410 review F1 (round 1) — NO stale-request guard on the retention half.
+	 * The keys are identity-ABSOLUTE `(db, personId, fileId)` triples, not
+	 * selected-collective state, so a set that lands after a collective switch
+	 * is still exactly right; only the prefetch handoff is selection-scoped,
+	 * so only IT keeps the `requestId` check.
+	 */
+	function runPressureSweepThenPrefetch(cfg: { db: string; token: string }, thisRequest: number) {
+		if (pressureSweepRanAtOpen) {
+			prefetchNextEventPartsAfterSettle(cfg, thisRequest);
+			return;
+		}
+		pressureSweepRanAtOpen = true;
+		const identity = get(selectedCollectiveIdentityStore);
+		if (identity && identity.db === cfg.db) {
+			seedRetentionKeys(identity.db, identity.personId, nextEventFileIds(agendaItems, worksByEventId));
+		}
+		const state = get(collectiveState);
+		ensureRetentionSweep({
+			token: cfg.token,
+			collectives: state.status === 'ready' ? state.collectives : [],
+			fetchImpl: fetch
+		}).finally(() => {
+			if (thisRequest !== requestId) return;
+			prefetchNextEventPartsAfterSettle(cfg, thisRequest);
+		});
 	}
 
 	/**

@@ -55,19 +55,28 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 
 const {
 	loadFullAgendaMock,
+	listFullAgendaMock,
 	discoverMock,
 	gotoMock,
 	loadWorksByEventIdMock,
 	signFileUrlMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
+	// #410 — the per-db agenda read the app-open protected-set build makes for
+	// each JOINED collective (auth.personIdByDb), selected or not. Mocked
+	// SEPARATELY from loadFullAgenda (the page's own selected-collective load)
+	// so the build's reads are countable on their own.
+	listFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
 	gotoMock: vi.fn(),
 	loadWorksByEventIdMock: vi.fn(),
 	signFileUrlMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', () => ({
+	loadFullAgenda: loadFullAgendaMock,
+	listFullAgenda: listFullAgendaMock
+}));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 // #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
 // library reads that feed its pickers), which reaches entuFetch ->
@@ -134,6 +143,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import { resetRetentionForTests } from '$lib/files/retention';
 
 let fakeByteStore: FakeByteStore;
 
@@ -268,11 +278,20 @@ function workRow(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
 	fakeByteStore = createFakeByteStore();
+	// #410 review F1 — the retention set is SESSION state now ($lib/files/
+	// retention, driven from the root layout and seeded by this page), so its
+	// run-once latch outlives a component unmount and must be cleared between
+	// tests exactly like the fake store above.
+	resetRetentionForTests();
+	// #410 default — a joined collective the test does not care about answers
+	// an EMPTY agenda (nothing to protect), so pre-#410 fixtures are untouched.
+	listFullAgendaMock.mockResolvedValue(fullAgendaResult());
 });
 
 afterEach(() => {
 	cleanup();
 	loadFullAgendaMock.mockReset();
+	listFullAgendaMock.mockReset();
 	loadWorksByEventIdMock.mockReset();
 	signFileUrlMock.mockReset();
 	vi.unstubAllGlobals();
@@ -902,6 +921,253 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		).toEqual(['install', 'activate', 'fetch']);
 		winAdd.mockRestore();
 		docAdd.mockRestore();
+	});
+});
+
+// #410 — "Vahemälu vabastab ise ruumi, kui seade täis saab": the APP-OPEN
+// wiring of the pressure sweep. The sweep itself is pinned in
+// byteStore.pressure.spec.ts; here the page must, at the same wiring point
+// as #409's prefetch and BEFORE it (so the prefetch has room):
+//   1. build the protected set — nextEventFileIds over the agenda of EVERY
+//      collective the SIGNED-IN PERSON has joined (auth.personIdByDb, Gama's
+//      scope ruling (b)): one listFullAgenda per joined db SHE IS NOT LOOKING
+//      AT, on her key, one loadWorksByEventId for that agenda's FIRST item
+//      only. Never a db she has not joined, never every partition on the
+//      device — and NEVER the SELECTED db, whose next-event parts come free
+//      from the agenda/works load that just settled (review F2).
+//   1b. and the hand-over is NOT gated on the selection still being current:
+//      the keys are absolute (db, personId, fileId) triples, so a set that
+//      lands after a collective switch is still right (review F1).
+//   2. hand it to the store (setProtectedKeys — composite JSON-triple keys),
+//   3. run relieve(),
+//   4. only then let the prefetch fetch.
+// The build reads the byte store NOT AT ALL (zero get(), zero recency — the
+// #367 trap): its inputs are agenda + works reads, its output a key set.
+describe('#410 — the pressure sweep runs at app open, before the prefetch, scoped to every JOINED collective', () => {
+	it('app open: protected set is handed over, relieve() runs, and ONLY THEN the prefetch signs — order pinned', async () => {
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		listFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		loadWorksByEventIdMock.mockResolvedValue({
+			'ev-1': [
+				workRow({ id: 'ri-a1', fileId: 'file-a1', fileName: 'a1.pdf' }),
+				workRow({ id: 'ri-a2', fileId: 'file-a2', fileName: 'a2.pdf' })
+			]
+		});
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		stubByteFetch();
+		const protectSpy = vi.spyOn(fakeByteStore, 'setProtectedKeys');
+		const relieveSpy = vi.spyOn(fakeByteStore, 'relieve');
+		setAuthedWithOneCollective();
+
+		render(Page);
+
+		// The whole open settles: sweep ran AND the prefetch landed both parts.
+		await vi.waitFor(() => {
+			expect(relieveSpy).toHaveBeenCalled();
+			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+				'file-a1',
+				'file-a2'
+			]);
+		});
+		// review F2 — the ONLY joined db is the selected one, so the build made
+		// NO agenda read at all: its keys came from the load that just settled.
+		expect(listFullAgendaMock).not.toHaveBeenCalled();
+		// The protected set the sweep saw: BOTH next-event parts, composite keys.
+		expect(protectSpy).toHaveBeenCalled();
+		const handed = protectSpy.mock.calls.at(-1)![0];
+		expect([...handed].sort()).toEqual(
+			[
+				JSON.stringify(['polyphony', 'person-p', 'file-a1']),
+				JSON.stringify(['polyphony', 'person-p', 'file-a2'])
+			].sort()
+		);
+		// ORDER: the set exists before the sweep, the sweep runs before the
+		// prefetch signs its first part — the sweep frees room FOR the prefetch.
+		expect(protectSpy.mock.invocationCallOrder[0]).toBeLessThan(
+			relieveSpy.mock.invocationCallOrder[0]
+		);
+		expect(relieveSpy.mock.invocationCallOrder[0]).toBeLessThan(
+			signFileUrlMock.mock.invocationCallOrder[0]
+		);
+	});
+
+	it("two joined dbs → ONE agenda read for the db she is not looking at, BOTH next-event sets protected; a db she has not joined is never read; the build itself makes ZERO byte-store get()s", async () => {
+		// Selected: polyphony. ALSO joined (authStore.personIdByDb): crede.
+		// crede's agenda has TWO upcoming events, so "agendaItems[0] only" is a
+		// claim a build that reads every event's works must FAIL.
+		const credeSoon = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
+		const credeLater = new Date(Date.now() + 10 * 24 * 3600 * 1000).toISOString();
+		const credeUpcoming = [
+			{ id: 'ev-c1', name: 'Crede rehearsal', startDatetime: credeSoon, durationMinutes: 90, location: '', conductors: [], owners: [], editors: [] },
+			{ id: 'ev-c2', name: 'Crede concert', startDatetime: credeLater, durationMinutes: 90, location: '', conductors: [], owners: [], editors: [] }
+		];
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		listFullAgendaMock.mockImplementation(async (cfg: { db: string; token: string }) =>
+			cfg.db === 'crede'
+				? fullAgendaResult({ seasons: [],
+						upcoming: credeUpcoming,
+						recent: [],
+						seasonId: 'season-c',
+						seasonConductors: [], seasonOwners: [], seasonEditors: []
+					})
+				: fullAgendaResult({ seasons: [],
+						upcoming,
+						recent: [],
+						seasonId: 'season-1',
+						seasonConductors: [], seasonOwners: [], seasonEditors: []
+					})
+		);
+		loadWorksByEventIdMock.mockImplementation(async (cfg: { db: string }) =>
+			cfg.db === 'crede'
+				? { 'ev-c1': [workRow({ id: 'ri-c1', fileId: 'file-c1', fileName: 'c1.pdf' })] }
+				: { 'ev-1': [workRow({ id: 'ri-p1', fileId: 'file-p1', fileName: 'p1.pdf' })] }
+		);
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		stubByteFetch();
+		const protectSpy = vi.spyOn(fakeByteStore, 'setProtectedKeys');
+		const relieveSpy = vi.spyOn(fakeByteStore, 'relieve');
+		const getSpy = vi.spyOn(fakeByteStore, 'get');
+		setAuthedWithTwoCollectives();
+
+		render(Page);
+
+		await vi.waitFor(() => {
+			expect(relieveSpy).toHaveBeenCalled();
+			expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-p1']);
+		});
+		// ONE agenda read per joined db SHE IS NOT LOOKING AT, on her own key
+		// (the shared JWT) — nothing else on the device. review F2: the SELECTED
+		// db is absent, because the page had just loaded its agenda and works.
+		const agendaDbs = listFullAgendaMock.mock.calls.map((c) => (c[0] as { db: string }).db);
+		expect([...agendaDbs].sort()).toEqual(['crede']);
+		for (const call of listFullAgendaMock.mock.calls) {
+			expect((call[0] as { token: string }).token).toBe('jwt-abc');
+		}
+		// ...and the selected db's works fan-out (listWorks + listAllEditions +
+		// listAllCopies + resolveEventWorksBatch) happened ONCE, for the page's
+		// own load — the build reused those rows rather than paying for them again.
+		expect(
+			loadWorksByEventIdMock.mock.calls.filter((c) => (c[0] as { db: string }).db === 'polyphony')
+				.length
+		).toBe(1);
+		// The OTHER collective's works read is agendaItems[0] ONLY: ev-c1,
+		// never ev-c2, under crede's own season id.
+		const credeWorkCalls = loadWorksByEventIdMock.mock.calls.filter(
+			(c) => (c[0] as { db: string }).db === 'crede'
+		);
+		expect(credeWorkCalls.length).toBe(1);
+		expect(credeWorkCalls[0][1]).toEqual(['ev-c1']);
+		expect(credeWorkCalls[0][2]).toBe('season-c');
+		// BOTH next-event sets protected — each under ITS OWN (db, personId)
+		// partition (ruled (b): the person's collectives, never the device).
+		const handed = protectSpy.mock.calls.at(-1)![0];
+		expect([...handed].sort()).toEqual(
+			[
+				JSON.stringify(['crede', 'person-c', 'file-c1']),
+				JSON.stringify(['polyphony', 'person-p', 'file-p1'])
+			].sort()
+		);
+		// The build reads the byte store NOT AT ALL: the only get() of the whole
+		// open is the prefetch's own miss check for the selected collective's
+		// part (the #367 trap — a build that asks per row would show here).
+		expect(getSpy.mock.calls.map((c) => c[1])).toEqual(['file-p1']);
+		// And protection is NOT prefetch: crede's part was never signed or
+		// fetched (#409 stays selected-collective; retention alone spans dbs).
+		expect(signFileUrlMock.mock.calls.map((c) => c[1])).toEqual(['file-p1']);
+		expect(fakeByteStore.heldFor('crede', 'person-c')).toEqual([]);
+	});
+
+	// #410 review F1 — the sweep runs ONCE per page instance, so a hand-over
+	// skipped because the selection moved while the build was in flight is
+	// skipped FOREVER: the protected set stays empty for the whole session,
+	// and the after-every-put sweep then evicts the next event's parts — the
+	// exact eviction #410 exists to forbid. The keys are absolute
+	// (db, personId, fileId) triples, so a late set is still the right set.
+	// A header-picker switch is not even the only trigger: requestId also bumps
+	// on a same-collective keepSeasonManage reload (creating an event).
+	it('a collective switch WHILE the build is in flight does not cancel retention: the set still lands, whole, exactly once', async () => {
+		let releaseCredeAgenda: (() => void) | undefined;
+		const credeSoon = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
+		const credeUpcoming = [
+			{ id: 'ev-c1', name: 'Crede rehearsal', startDatetime: credeSoon, durationMinutes: 90, location: '', conductors: [], owners: [], editors: [] }
+		];
+		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
+			upcoming,
+			recent: [],
+			seasonId: 'season-1',
+			seasonConductors: [], seasonOwners: [], seasonEditors: []
+		}));
+		// crede's agenda read — the build's ONE network await — hangs until the
+		// test releases it, with the switch already done.
+		listFullAgendaMock.mockImplementation(async (cfg: { db: string }) => {
+			if (cfg.db !== 'crede') return fullAgendaResult();
+			await new Promise<void>((resolve) => {
+				releaseCredeAgenda = resolve;
+			});
+			return fullAgendaResult({ seasons: [],
+				upcoming: credeUpcoming,
+				recent: [],
+				seasonId: 'season-c',
+				seasonConductors: [], seasonOwners: [], seasonEditors: []
+			});
+		});
+		loadWorksByEventIdMock.mockImplementation(async (cfg: { db: string }) =>
+			cfg.db === 'crede'
+				? { 'ev-c1': [workRow({ id: 'ri-c1', fileId: 'file-c1', fileName: 'c1.pdf' })] }
+				: { 'ev-1': [workRow({ id: 'ri-p1', fileId: 'file-p1', fileName: 'p1.pdf' })] }
+		);
+		signFileUrlMock.mockImplementation(
+			async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
+		);
+		stubByteFetch();
+		const protectSpy = vi.spyOn(fakeByteStore, 'setProtectedKeys');
+		const relieveSpy = vi.spyOn(fakeByteStore, 'relieve');
+		setAuthedWithTwoCollectives();
+
+		render(Page);
+
+		// The build is parked inside crede's agenda read...
+		await vi.waitFor(() => {
+			expect(releaseCredeAgenda).toBeTypeOf('function');
+		});
+		expect(protectSpy).not.toHaveBeenCalled();
+		// ...and the singer switches collective with the header picker.
+		selectedCollectiveDbStore.set('crede');
+		releaseCredeAgenda!();
+
+		// Retention still lands, and it lands WHOLE: both dbs' next-event parts.
+		await vi.waitFor(() => {
+			expect(relieveSpy).toHaveBeenCalled();
+		});
+		expect(protectSpy).toHaveBeenCalledTimes(1);
+		expect([...protectSpy.mock.calls[0][0]].sort()).toEqual(
+			[
+				JSON.stringify(['crede', 'person-c', 'file-c1']),
+				JSON.stringify(['polyphony', 'person-p', 'file-p1'])
+			].sort()
+		);
+		// Still exactly once for the page instance — the switch's own load took
+		// the already-ran path, it did not re-sweep.
+		expect(relieveSpy).toHaveBeenCalledTimes(1);
 	});
 });
 

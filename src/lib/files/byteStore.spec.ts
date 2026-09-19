@@ -234,6 +234,54 @@ describe('byteStore — GLOBAL cap, least-recently-OPENED eviction', () => {
 	});
 });
 
+// #410 — the retention exemption reaches the PUT-TIME cap pass too, not only
+// the pressure sweep (byteStore.pressure.spec.ts owns the sweep itself). The
+// protected set is an INPUT (composite JSON-triple keys, set via
+// setProtectedKeys); default empty — every fixture above runs unchanged.
+describe('#410 — protected rows are not candidates in the put-time evictUntilFits', () => {
+	/** The #410 contract shape — an intersection until byteStore.ts declares it
+	 *  (same idiom as byteStore.presence.spec.ts's PresenceCapable). */
+	type RetentionCapable = ByteStore & {
+		setProtectedKeys(keys: ReadonlySet<string>): void;
+	};
+	/** Composite key = the adapter's own JSON fixed-arity triple — collision-
+	 *  safe against any separator character appearing in a db/person/file id. */
+	function pkey(db: string, personId: string, fileId: string): string {
+		return JSON.stringify([db, personId, fileId]);
+	}
+
+	it('an over-cap put with a PROTECTED oldest row evicts the next-oldest instead', async () => {
+		const retaining = store as RetentionCapable;
+		// cap 100: A holds 40 (opened t0, PROTECTED), B holds 40 (opened t1).
+		await store.put(A, 'file-next', data(40));
+		vi.advanceTimersByTime(1000);
+		await store.put(B, 'file-mid', data(40));
+		vi.advanceTimersByTime(1000);
+		retaining.setProtectedKeys(new Set([pkey(A.db, A.personId, 'file-next')]));
+
+		// C's 40 pushes usage to 120 → the globally-oldest row is A's, but it
+		// is the next event's part — the NEXT-oldest (B's) goes instead.
+		await store.put(C, 'file-new', data(40));
+
+		expect(await store.get(A, 'file-next')).toBeDefined();
+		expect(await store.get(B, 'file-mid')).toBeUndefined();
+		expect(await store.get(C, 'file-new')).toBeDefined();
+		expect(await store.usage()).toBe(80);
+	});
+
+	it('the default is EMPTY — a store never handed a protected set evicts exactly as before (the fixtures above are the pin)', async () => {
+		// Belt for the additive-parameter claim: same shape as the first cap
+		// fixture, no setProtectedKeys call anywhere — oldest still goes.
+		await store.put(A, 'file-a', data(40));
+		vi.advanceTimersByTime(1000);
+		await store.put(B, 'file-b', data(40));
+		vi.advanceTimersByTime(1000);
+		await store.put(C, 'file-c', data(40));
+		expect(await store.get(A, 'file-a')).toBeUndefined();
+		expect(await store.get(B, 'file-b')).toBeDefined();
+	});
+});
+
 describe('byteStore — the module says what it must, where the reader meets it (source pins)', () => {
 	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
 
