@@ -484,7 +484,10 @@ const CONTEXT_SCHEMA = {
   required: ['contextHealth'],
   additionalProperties: false
 }
-const contextHealth = await agent(
+// Dispatched through agentS (not bare agent) so the #381 fence's pinned count of bare
+// dispatches stays exactly one (the LOAD reader) — src/pipeline-ref-discipline.spec.ts:263.
+// The appended guards are inert for a read-only script runner.
+const contextHealth = await agentS(
   'Run `~/workspace-app/teams/mvox-dev/scripts/context-health.sh` once and copy its CTX output lines verbatim into `contextHealth`, one string per line, unmodified. Do nothing else.',
   { label: 'context-health', phase: 'MERGE', schema: CONTEXT_SCHEMA, model: 'claude-haiku-4-5' }
 )
