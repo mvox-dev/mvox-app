@@ -31,11 +31,28 @@
 //   references.
 //
 // - CENSUS: one db-wide GET
-//   `entity?_type.string=event&props=name,event_name&limit=10000` — NO
-//   `_parent.reference=` scoping (S2 must cover every crede event, whatever
-//   it hangs under). HARD-THROW when `body.count !== body.entities.length`
-//   (tidy-td2c's census-truncated guard): a silently truncated census would
-//   leave unmigrated events for S4's formula to blank.
+//   `entity?_type.string=event&props=name,event_name,_owner,_editor&limit=10000`
+//   — NO `_parent.reference=` scoping (S2 must cover every crede event,
+//   whatever it hangs under). HARD-THROW when
+//   `body.count !== body.entities.length` (tidy-td2c's census-truncated
+//   guard): a silently truncated census would leave unmigrated events for
+//   S4's formula to blank. The rights props ride along on this ONE query
+//   (Entu returns them on a list — precedent:
+//   probes/probe-356-crede-conductor-rights-2026-09-15.ts, which lists
+//   crede events with exactly those props), so the rights preflight below
+//   issues NO request of its own.
+//
+// - MULTI-VALUED SOURCE STOPS THE STEP (#419 review round 1): Entu string
+//   props are implicitly multi-valued (POST appends). An event whose `name`
+//   or `event_name` holds MORE THAN ONE value is collected as `multiValue`
+//   (eventId + nameCount + eventNameCount) during classification, given NO
+//   outcome, and a non-empty list stops the run before the rights check and
+//   before any write — dry and live alike, no request beyond the census,
+//   throws, ONE ledger with outcome 'aborted-multi-value'. Checked FIRST,
+//   ahead of the three rules: copying value [0] and leaving [1] behind is
+//   exactly the loss S4's formula then makes permanent, and the read-back
+//   canary's exactly-one-value check covers only values THIS run wrote.
+//   The list carries no value string, so the committed twin keeps it whole.
 //
 // - IDEMPOTENCE = THREE RULES (#233 body / #419), in this precedence:
 //     1. `event_name` already holds a non-empty value → PRESENCE check
@@ -58,27 +75,29 @@
 //   event is a surprise a human decides on, not a state to skip past.
 //
 // - RIGHTS PREFLIGHT (same comment, point 2): before any write, for EVERY
-//   event that would be written, GET `entity/{id}?props=_owner,_editor` and
-//   check `cfg.userId` appears among the `reference`s of either list
-//   (references only — never `.string`, which bakes PII). Events lacking it
-//   are collected as `noRights` (id + name); non-empty → STOP before any
-//   write, throw (exit non-zero), ledger outcome 'aborted-rights' with the
-//   list. This runs ON THE DRY RUN TOO, so the dry-run report shows the
-//   missing grants before authorization is sought. All preflight GETs run
-//   before any POST — the report names every missing grant, not the first.
+//   event that would be written, check `cfg.userId` appears among the
+//   `reference`s of the `_owner`/`_editor` lists the CENSUS returned
+//   (references only — never `.string`, which bakes PII; and no per-event
+//   GET — see CENSUS above). Events lacking it are collected as `noRights`
+//   (id + name); non-empty → STOP before any write, throw (exit non-zero),
+//   ledger outcome 'aborted-rights' with the list. This runs ON THE DRY RUN
+//   TOO, so the dry-run report shows the missing grants before
+//   authorization is sought. The list is complete before any POST — the
+//   report names every missing grant, not the first.
 //
-// - ABORT ARTEFACTS (both kinds): nothing was written, so the payload keys
+// - ABORT ARTEFACTS (all three kinds): nothing was written, so the payload keys
 //   the plan as `wouldMigrate`/`wouldMigrateIds` on dry AND live runs alike
 //   (a count named for what happened cannot be misread — 'migrated' names
 //   writes that never occurred), and `rerun` is FALSE: an aborted run has
 //   migrated===0 and failed===0, and without the pin the crash artefact
-//   would carry the exact flag the closing sweep reads as healthy. The two
-//   abort lists (`eventNameDiffers`, `noRights`) plus `outcome` are the
-//   ONLY ledger additions besides the drafted buckets. The lists carry the
-//   name values (nameValue/storedValue) for the operator — the instance
-//   ledger is gitignored (sensitive:true) — while the committed allowlist
-//   admits only `eventId` inside them, so no name value can reach git
-//   history.
+//   would carry the exact flag the closing sweep reads as healthy. The
+//   three abort lists (`multiValue`, `eventNameDiffers`, `noRights`) plus
+//   `outcome` are the ONLY ledger additions besides the drafted buckets.
+//   `eventNameDiffers`/`noRights` carry the name values
+//   (nameValue/storedValue) for the operator — the instance ledger is
+//   gitignored (sensitive:true) — while the committed allowlist admits only
+//   `eventId` inside them, so no name value can reach git history.
+//   `multiValue` carries counts, never a value, so it survives whole.
 //
 // - LIVE WRITE per migrated event: `POST entity/{id}` with
 //   `[{ type: 'event_name', string: <name> }]` (event_name never has a prior
@@ -157,7 +176,7 @@ const BASE = 'https://api.entu-test.invalid/mvox_crede';
 /** #417 canonical authorizer shape: name, channel, issue-comment URL — never an email. */
 const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/419#issuecomment-5742461628';
 
-const CENSUS_URL = `${BASE}/entity?_type.string=event&props=name,event_name&limit=10000`;
+const CENSUS_URL = `${BASE}/entity?_type.string=event&props=name,event_name,_owner,_editor&limit=10000`;
 
 // The exact allowlist the committed twin is built from — ids, counts and
 // outcomes only; no DEFAULT_REDACT_FIELDS member, no `string`, and NOT the
@@ -184,7 +203,12 @@ const COMMITTED_ALLOW = [
 	'outcome',
 	'eventId',
 	'eventNameDiffers',
-	'noRights'
+	'noRights',
+	// the multi-value abort list — ids and counts only, never a value, so it
+	// is the one abort list that reaches the committed twin intact
+	'multiValue',
+	'nameCount',
+	'eventNameCount'
 ] as const;
 
 // ---------------------------------------------------------------------------
@@ -268,9 +292,35 @@ const TWO_PLAIN: CensusEvent[] = [
 	{ _id: 'ev-g2', name: [{ _id: 'p-g2-name', string: 'Kontsert Tartus' }] }
 ];
 
+/**
+ * #419 review round 1 — one clean event, one holding TWO `name` values, one
+ * holding TWO `event_name` values whose [0] equals `name` (the read-side
+ * blind spot: it would otherwise classify as 'already-migrated' and the
+ * stray duplicate would survive unreported). The clean event proves the
+ * abort stops even the write that would have been fine.
+ */
+const MULTI_VALUE: CensusEvent[] = [
+	{ _id: 'ev-v1', name: [{ _id: 'p-v1-name', string: 'Ainus nimi' }] },
+	{
+		_id: 'ev-v2',
+		name: [
+			{ _id: 'p-v2-name-a', string: 'Esimene nimi' },
+			{ _id: 'p-v2-name-b', string: 'Teine nimi' }
+		]
+	},
+	{
+		_id: 'ev-v3',
+		name: [{ _id: 'p-v3-name', string: 'Kolmas nimi' }],
+		event_name: [
+			{ _id: 'p-v3-en-a', string: 'Kolmas nimi' },
+			{ _id: 'p-v3-en-b', string: 'Keegi lisas teise' }
+		]
+	}
+];
+
 // ---------------------------------------------------------------------------
-// Fake wire: census GET, per-event rights GET, per-event POST + read-back
-// GET, routed by full URL.
+// Fake wire: census GET (carrying the rights references), per-event POST +
+// read-back GET, routed by full URL.
 // ---------------------------------------------------------------------------
 
 type LoggedRequest = { url: string; method: string; body: unknown };
@@ -294,8 +344,9 @@ function makeWire(
 		/** Read-back reports TWO values (canary c fails). */
 		readbackDoubled?: boolean;
 		/**
-		 * Per-event _owner/_editor references the rights preflight reads.
-		 * Default: every event carries the runner in _owner.
+		 * Per-event _owner/_editor references the census reports and the
+		 * rights preflight reads. Default: every event carries the runner in
+		 * _owner.
 		 */
 		rightsByEvent?: Record<string, EventRights>;
 	} = {}
@@ -304,6 +355,19 @@ function makeWire(
 	// what a well-behaved db would hold after each POST this wire accepts
 	const written = new Map<string, string>();
 
+	// The census carries the rights references — one query, no per-event GET.
+	// `reference` is the id the preflight must check; `string` is the baked
+	// person NAME (PII), present here precisely so a check that read .string
+	// instead of .reference could not pass.
+	const censusEntities = events.map((event) => {
+		const rights = overrides.rightsByEvent?.[event._id] ?? { owner: [RUNNER_ID] };
+		const refs = (ids: string[] | undefined, tier: string) =>
+			ids?.length
+				? ids.map((id, i) => ({ _id: `r-${event._id}-${tier}-${i}`, reference: id, string: `Isik ${id}` }))
+				: undefined;
+		return { ...event, _owner: refs(rights.owner, 'owner'), _editor: refs(rights.editor, 'editor') };
+	});
+
 	const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
@@ -311,27 +375,7 @@ function makeWire(
 		requests.push({ url, method, body: parsedBody });
 
 		if (method === 'GET' && url === CENSUS_URL) {
-			return json({ count: overrides.countOverride ?? events.length, entities: events });
-		}
-
-		const rightsMatch = url.match(new RegExp(`^${BASE}/entity/(ev-[\\w-]+)\\?props=_owner,_editor$`));
-		if (method === 'GET' && rightsMatch) {
-			const eventId = rightsMatch[1];
-			const rights = overrides.rightsByEvent?.[eventId] ?? { owner: [RUNNER_ID] };
-			// reference is the id the preflight must check; `string` is the
-			// baked person NAME (PII) — present here precisely so a check
-			// that read .string instead of .reference could not pass.
-			const refs = (ids: string[] | undefined, tier: string) =>
-				ids?.length
-					? ids.map((id, i) => ({ _id: `r-${eventId}-${tier}-${i}`, reference: id, string: `Isik ${id}` }))
-					: undefined;
-			return json({
-				entity: {
-					_id: eventId,
-					_owner: refs(rights.owner, 'owner'),
-					_editor: refs(rights.editor, 'editor')
-				}
-			});
+			return json({ count: overrides.countOverride ?? events.length, entities: censusEntities });
 		}
 
 		const postMatch = url.match(new RegExp(`^${BASE}/entity/(ev-[\\w-]+)$`));
@@ -379,11 +423,6 @@ function collectKeys(value: unknown, into: Set<string> = new Set()): Set<string>
 
 const censusGet: LoggedRequest = { url: CENSUS_URL, method: 'GET', body: null };
 
-/** The rights-preflight GET issued for every event that would be written. */
-function rightsGet(eventId: string): LoggedRequest {
-	return { url: `${BASE}/entity/${eventId}?props=_owner,_editor`, method: 'GET', body: null };
-}
-
 function migrationPair(eventId: string, nameValue: string): LoggedRequest[] {
 	return [
 		{
@@ -428,15 +467,15 @@ describe('#233 S2 — census', () => {
 });
 
 describe('#233 S2 — dry-run (the default)', () => {
-	it('ZERO POSTs; the plan lists every event with its outcome under the three-rule precedence, and the rights preflight ran for the would-write event', async () => {
+	it('ZERO POSTs; the plan lists every event with its outcome under the three-rule precedence, off the census alone', async () => {
 		const { fetchImpl, requests } = makeWire(MIX);
 
 		const result = await runSeed233S2(cfg, true, fetchImpl);
 
-		// The dry run's wire traffic is the census plus ONE rights-preflight
-		// GET per would-write event (#419: the dry-run report shows missing
-		// grants before authorization is sought) — never a POST.
-		expect(requests).toEqual([censusGet, rightsGet('ev-m1')]);
+		// The dry run's WHOLE wire traffic is the census — the rights
+		// references it already carries are what the preflight reads, so a
+		// dry run costs exactly one round-trip and never a POST.
+		expect(requests).toEqual([censusGet]);
 
 		expect(result).toEqual({
 			// the plan is `wouldMigrate`, never `migrated` — nothing was written
@@ -496,15 +535,15 @@ describe('#233 S2 — dry-run (the default)', () => {
 });
 
 describe('#233 S2 — live run', () => {
-	it('POSTs exactly [{type: event_name, string: <name>}] per plain event after its rights preflight, read-back-verifies, skips already-migrated, records no-name', async () => {
+	it('POSTs exactly [{type: event_name, string: <name>}] per plain event after the rights preflight, read-back-verifies, skips already-migrated, records no-name', async () => {
 		const { fetchImpl, requests } = makeWire(MIX);
 
 		const result = await runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH);
 
-		// Full request sequence: census, the rights-preflight GET for the ONE
-		// plain event, then its migration pair — nothing for the two no-name
-		// and two already-migrated.
-		expect(requests).toEqual([censusGet, rightsGet('ev-m1'), ...migrationPair('ev-m1', 'Kevadkontsert 2026')]);
+		// Full request sequence: census, then the migration pair for the ONE
+		// plain event — nothing for the two no-name and two already-migrated,
+		// and no rights GET at all (the census carried the references).
+		expect(requests).toEqual([censusGet, ...migrationPair('ev-m1', 'Kevadkontsert 2026')]);
 
 		expect(result).toEqual({
 			counts: { total: 5, migrated: 1, alreadyMigrated: 2, noName: 2, failed: 0 },
@@ -559,6 +598,128 @@ describe('#233 S2 — live run', () => {
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
 		const call = writeLedgerMock.mock.calls[0]?.[0] as { payload: { failedIds: string[] } };
 		expect(call.payload.failedIds).toEqual(['ev-m1']);
+	});
+});
+
+describe('#419 — a multi-valued name/event_name stops the step, never copied in part', () => {
+	it('LIVE: multiValue non-empty → NO request beyond the census, throws, ONE ledger with outcome aborted-multi-value and both counts per event', async () => {
+		const { fetchImpl, requests } = makeWire(MULTI_VALUE);
+
+		await expect(runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/more than one/i);
+
+		// Even the clean event ev-v1 is not written: copying value [0] and
+		// leaving [1] for S4's formula to blank is the loss this script
+		// exists to prevent, so a human decides before any write.
+		expect(requests).toEqual([censusGet]);
+		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s2-event-name-backfill-crede',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: false,
+				// aborted, not healthy — same reason as the divergence abort
+				rerun: false,
+				outcome: 'aborted-multi-value',
+				// nothing was written, so the plan keys stay `would*`; the two
+				// multi-valued events get NO outcome and appear in no bucket
+				counts: { total: 3, wouldMigrate: 1, alreadyMigrated: 0, noName: 0, failed: 0 },
+				wouldMigrateIds: ['ev-v1'],
+				alreadyMigratedIds: [],
+				noNameIds: [],
+				failedIds: [],
+				multiValue: [
+					{ eventId: 'ev-v2', nameCount: 2, eventNameCount: 0 },
+					// the READ side: event_name[0] equals name, so without this
+					// stop it would read 'already-migrated' and the stray
+					// duplicate would survive unreported
+					{ eventId: 'ev-v3', nameCount: 1, eventNameCount: 2 }
+				]
+			}
+		});
+	});
+
+	it('DRY: the multi-value abort fires on the dry run alike — throws, outcome aborted-multi-value, zero requests beyond the census', async () => {
+		const { fetchImpl, requests } = makeWire(MULTI_VALUE);
+
+		await expect(runSeed233S2(cfg, true, fetchImpl)).rejects.toThrow(/more than one/i);
+
+		expect(requests).toEqual([censusGet]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s2-event-name-backfill-crede',
+			dryRun: true,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: undefined,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: true,
+				rerun: false,
+				outcome: 'aborted-multi-value',
+				counts: { total: 3, wouldMigrate: 1, alreadyMigrated: 0, noName: 0, failed: 0 },
+				wouldMigrateIds: ['ev-v1'],
+				alreadyMigratedIds: [],
+				noNameIds: [],
+				failedIds: [],
+				multiValue: [
+					{ eventId: 'ev-v2', nameCount: 2, eventNameCount: 0 },
+					{ eventId: 'ev-v3', nameCount: 1, eventNameCount: 2 }
+				]
+			}
+		});
+	});
+
+	it('the multi-value abort is checked AHEAD of divergence — a doubled name is not classifiable at all', async () => {
+		// ev-x1 would abort as divergence if it were ever classified; ev-x2
+		// holds two `name` values. The multi-value stop must win, because
+		// asking whether value [0] equals the stored event_name is the wrong
+		// question about an event with two names.
+		const BOTH: CensusEvent[] = [
+			{
+				_id: 'ev-x1',
+				name: [{ _id: 'p-x1-name', string: 'Õige nimi' }],
+				event_name: [{ _id: 'p-x1-en', string: 'Keegi kirjutas muud' }]
+			},
+			{
+				_id: 'ev-x2',
+				name: [
+					{ _id: 'p-x2-a', string: 'Esimene nimi' },
+					{ _id: 'p-x2-b', string: 'Teine nimi' }
+				]
+			}
+		];
+
+		const { fetchImpl, requests } = makeWire(BOTH);
+
+		await expect(runSeed233S2(cfg, true, fetchImpl)).rejects.toThrow(/more than one/i);
+
+		expect(requests).toEqual([censusGet]);
+
+		const call = writeLedgerMock.mock.calls[0]?.[0] as {
+			payload: { outcome: string; multiValue: Array<{ eventId: string }> };
+		};
+		expect(call.payload.outcome).toBe('aborted-multi-value');
+		expect(call.payload.multiValue).toEqual([{ eventId: 'ev-x2', nameCount: 2, eventNameCount: 0 }]);
+	});
+
+	it('exactly ONE value on each prop is the normal case — no abort, the run proceeds', async () => {
+		const { fetchImpl, requests } = makeWire(TWO_PLAIN);
+
+		const result = await runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH);
+
+		expect(requests).toEqual([
+			censusGet,
+			...migrationPair('ev-g1', 'Lauluproov'),
+			...migrationPair('ev-g2', 'Kontsert Tartus')
+		]);
+		expect(result.counts).toEqual({ total: 2, migrated: 2, alreadyMigrated: 0, noName: 0, failed: 0 });
 	});
 });
 
@@ -647,7 +808,7 @@ describe('#419 — a divergent event_name stops the step, never skipped past', (
 
 		const result = await runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH);
 
-		expect(requests).toEqual([censusGet, rightsGet('ev-d1'), ...migrationPair('ev-d1', 'Puhas sündmus')]);
+		expect(requests).toEqual([censusGet, ...migrationPair('ev-d1', 'Puhas sündmus')]);
 		expect(result.counts).toEqual({ total: 2, migrated: 1, alreadyMigrated: 1, noName: 0, failed: 0 });
 		expect(result.outcomes).toEqual([
 			{ eventId: 'ev-d1', outcome: 'migrated' },
@@ -667,9 +828,10 @@ describe('#419 — rights preflight: every would-be-written event needs the runn
 
 		await expect(runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/rights/i);
 
-		// EVERY preflight GET runs before the stop — the report names every
-		// missing grant, not just the first — and no POST is ever issued.
-		expect(requests).toEqual([censusGet, rightsGet('ev-g1'), rightsGet('ev-g2')]);
+		// The check is complete over EVERY would-write event before the stop —
+		// the report names every missing grant, not just the first — and no
+		// POST is ever issued. The census is the only request either way.
+		expect(requests).toEqual([censusGet]);
 		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
 
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
@@ -704,7 +866,7 @@ describe('#419 — rights preflight: every would-be-written event needs the runn
 
 		await expect(runSeed233S2(cfg, true, fetchImpl)).rejects.toThrow(/rights/i);
 
-		expect(requests).toEqual([censusGet, rightsGet('ev-g1'), rightsGet('ev-g2')]);
+		expect(requests).toEqual([censusGet]);
 
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
 		const call = writeLedgerMock.mock.calls[0]?.[0] as {
@@ -715,7 +877,7 @@ describe('#419 — rights preflight: every would-be-written event needs the runn
 		expect(call.payload.rerun).toBe(false);
 	});
 
-	it('all would-be-written events carry the runner (owner OR editor reference) → every preflight GET first, then the writes proceed', async () => {
+	it('all would-be-written events carry the runner (owner OR editor reference) → the whole check first, then the writes proceed', async () => {
 		const { fetchImpl, requests } = makeWire(TWO_PLAIN, {
 			rightsByEvent: {
 				'ev-g1': { owner: [RUNNER_ID] },
@@ -726,12 +888,11 @@ describe('#419 — rights preflight: every would-be-written event needs the runn
 
 		const result = await runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH);
 
-		// ALL preflight GETs precede ANY POST: the noRights list must be
-		// complete before the first write can be allowed to happen.
+		// The noRights list is complete before the first write can be allowed
+		// to happen — and it costs no request: the references came in on the
+		// census, so the POST pairs follow it directly.
 		expect(requests).toEqual([
 			censusGet,
-			rightsGet('ev-g1'),
-			rightsGet('ev-g2'),
 			...migrationPair('ev-g1', 'Lauluproov'),
 			...migrationPair('ev-g2', 'Kontsert Tartus')
 		]);
@@ -741,15 +902,13 @@ describe('#419 — rights preflight: every would-be-written event needs the runn
 });
 
 describe('#233 S2 — rerun (the closing sweep before S4)', () => {
-	it('half the estate already migrated → only the other half preflighted and POSTed, each with its own read-back', async () => {
+	it('half the estate already migrated → only the other half POSTed, each with its own read-back', async () => {
 		const { fetchImpl, requests } = makeWire(HALF);
 
 		const result = await runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH);
 
 		expect(requests).toEqual([
 			censusGet,
-			rightsGet('ev-r1'),
-			rightsGet('ev-r3'),
 			...migrationPair('ev-r1', 'Esimene proov'),
 			...migrationPair('ev-r3', 'Kolmas proov')
 		]);

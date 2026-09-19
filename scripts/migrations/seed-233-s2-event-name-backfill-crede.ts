@@ -22,7 +22,29 @@
 // every crede event, whatever it hangs under. Hard-throws when the reported
 // `count` disagrees with the returned entity count (tidy-td2c's
 // census-truncated guard): a silently truncated census would leave
-// unmigrated events for S4's formula to blank.
+// unmigrated events for S4's formula to blank. The census asks for
+// `_owner,_editor` alongside `name,event_name` — Entu returns rights props
+// on a list query (precedent: probes/probe-356-crede-conductor-rights-
+// 2026-09-15.ts, which lists crede events with exactly those props) — so
+// the rights preflight below costs ZERO extra round-trips instead of one
+// GET per would-write event. Visibility is identical either way: an event
+// the runner holds no rights on comes back without `_owner`/`_editor`,
+// which is the signal the check already relies on.
+//
+// MULTI-VALUED SOURCE STOPS THE STEP (#419 review round 1): Entu string
+// props are implicitly multi-valued (POST appends), so `name` and
+// `event_name` can each hold more than one value. This script copies ONE;
+// S4 then turns `name` into a formula and overwrites what is stored, so a
+// second `name` value nobody copied is destroyed — precisely the loss this
+// script is the fence against. A second `event_name` value is the same
+// surprise read from the other side (the exactly-one-value read-back
+// canary covers only values THIS run wrote). So: an event whose `name` or
+// `event_name` holds more than one value is collected during
+// classification as `multiValue` (id + both counts), given no outcome, and
+// a non-empty list stops the run before the rights check and before any
+// write — dry and live alike — with ledger outcome 'aborted-multi-value'.
+// Same shape and the same reason as the divergence stop: a surprise a
+// human decides on, not a state to skip past.
 //
 // IDEMPOTENCE = THREE RULES (#233 body / #419 amended body), in this
 // precedence:
@@ -42,14 +64,18 @@
 // census, throws, and writes ONE ledger with outcome 'aborted-divergence'
 // and the offending list. Nothing writes `event_name` today, so a divergent
 // event is a surprise a human decides on, not a state to skip past.
+// Multi-value is checked FIRST, before divergence: an event holding two
+// `name` values cannot be classified at all, so it never reaches the
+// equal/differs comparison.
 //
 // RIGHTS PREFLIGHT (#419 amended body): before any write, for every event
-// that would be written, GET its `_owner`/`_editor` references and check
-// `cfg.userId` appears among them. Events lacking it are collected as
+// that would be written, check `cfg.userId` appears among the `_owner`/
+// `_editor` references the census already returned (references only —
+// never `.string`, which bakes PII). Events lacking it are collected as
 // `noRights` (id + name); non-empty -> stop before any write, throw, ledger
 // outcome 'aborted-rights' with the list. Runs on the dry run too, so the
-// dry-run report shows missing grants before authorization is sought. All
-// preflight GETs run before any POST — the report names every missing
+// dry-run report shows missing grants before authorization is sought. The
+// whole list is complete before any POST — the report names every missing
 // grant, not the first.
 //
 // LIVE WRITE per migrated event: `POST entity/{id}` with
@@ -85,9 +111,10 @@
 // routes the instance file to gitignored crede-instance/, `committed.allow`
 // builds the tracked twin. `name` is a DEFAULT_REDACT_FIELDS member, so the
 // payload is keyed by eventId/outcome/counts — never a key named `name`.
-// The two abort lists (`eventNameDiffers`, `noRights`) carry the name
-// values for the operator in the gitignored instance file only — the
-// committed allowlist admits `eventId` alone inside them.
+// The two value-carrying abort lists (`eventNameDiffers`, `noRights`) carry
+// the name values for the operator in the gitignored instance file only —
+// the committed allowlist admits `eventId` alone inside them. `multiValue`
+// carries no value at all, only ids and counts, so it survives whole.
 //
 // Authorization: PO-Approved via the #233 estate ruling (Mihkel, 2026-09-18,
 // via Gama comment 5728594975) for the definition and scope; mvox-app#417's
@@ -116,13 +143,11 @@ interface CensusEvent {
 	_id: string;
 	name?: Array<{ _id: string; string?: string }>;
 	event_name?: Array<{ _id: string; string?: string }>;
-}
-
-interface EventRightsBody {
-	entity?: {
-		_owner?: Array<{ reference?: string }>;
-		_editor?: Array<{ reference?: string }>;
-	};
+	// Rights references ride along on the census (see CENSUS above) — the
+	// preflight reads `reference` only; `.string` on these is the person's
+	// baked NAME and never leaves this module.
+	_owner?: Array<{ reference?: string }>;
+	_editor?: Array<{ reference?: string }>;
 }
 
 export interface RunSeed233S2Counts {
@@ -168,7 +193,12 @@ const COMMITTED_ALLOW = [
 	'outcome',
 	'eventId',
 	'eventNameDiffers',
-	'noRights'
+	'noRights',
+	// multi-value abort list: ids and counts only, no value ever — it is the
+	// one abort list that survives into the committed twin intact.
+	'multiValue',
+	'nameCount',
+	'eventNameCount'
 ] as const;
 
 function isNonEmpty(value: string | undefined): value is string {
@@ -186,7 +216,7 @@ export async function runSeed233S2(
 
 	const censusRes = await entuFetch(
 		cfg.db,
-		'entity?_type.string=event&props=name,event_name&limit=10000',
+		'entity?_type.string=event&props=name,event_name,_owner,_editor&limit=10000',
 		cfg.token,
 		{},
 		fetchImpl
@@ -214,8 +244,23 @@ export async function runSeed233S2(
 	const failedIds: string[] = [];
 	const migratedIds: string[] = [];
 	const eventNameDiffers: Array<{ eventId: string; nameValue: string; storedValue: string }> = [];
+	const multiValue: Array<{ eventId: string; nameCount: number; eventNameCount: number }> = [];
+	// Rights references, straight off the census — the preflight below reads
+	// these instead of issuing a GET per would-write event.
+	const eventById = new Map<string, CensusEvent>();
 
 	for (const event of censusBody.entities) {
+		eventById.set(event._id, event);
+
+		const nameCount = event.name?.length ?? 0;
+		const eventNameCount = event.event_name?.length ?? 0;
+		if (nameCount > 1 || eventNameCount > 1) {
+			// Only value [0] would be read below — the rest would be copied by
+			// nobody and blanked by S4's formula. Not classifiable: stop.
+			multiValue.push({ eventId: event._id, nameCount, eventNameCount });
+			continue;
+		}
+
 		const eventNameValue = event.event_name?.[0]?.string;
 		const nameValue = event.name?.[0]?.string;
 
@@ -275,6 +320,15 @@ export async function runSeed233S2(
 		});
 	}
 
+	if (multiValue.length > 0) {
+		writeAbortLedger({ outcome: 'aborted-multi-value', multiValue });
+		throw new Error(
+			`runSeed233S2: ${multiValue.length} event(s) hold more than one name/event_name value -- only one ` +
+				`would be copied and S4's formula would blank the rest -- stopping before any write: ` +
+				`${multiValue.map((m) => m.eventId).join(', ')}`
+		);
+	}
+
 	if (eventNameDiffers.length > 0) {
 		writeAbortLedger({ outcome: 'aborted-divergence', eventNameDiffers });
 		throw new Error(
@@ -283,17 +337,15 @@ export async function runSeed233S2(
 		);
 	}
 
-	// mvox-app#419 rights preflight — ALL GETs run before any write is
-	// allowed to happen, on the dry run too.
+	// mvox-app#419 rights preflight — the whole list is built before any
+	// write is allowed to happen, on the dry run too. The references come off
+	// the census (zero extra round-trips); an event the runner holds no
+	// rights on returns without `_owner`/`_editor` either way.
 	const noRights: Array<{ eventId: string; nameValue: string }> = [];
 	for (const eventId of toWriteIds) {
-		const rightsRes = await entuFetch(cfg.db, `entity/${eventId}?props=_owner,_editor`, cfg.token, {}, fetchImpl);
-		if (!rightsRes.ok) {
-			throw new Error(`runSeed233S2: rights preflight GET for ${eventId} failed: ${rightsRes.status}`);
-		}
-		const rightsBody = (await rightsRes.json()) as EventRightsBody;
-		const ownerRefs = (rightsBody.entity?._owner ?? []).map((r) => r.reference);
-		const editorRefs = (rightsBody.entity?._editor ?? []).map((r) => r.reference);
+		const event = eventById.get(eventId) as CensusEvent;
+		const ownerRefs = (event._owner ?? []).map((r) => r.reference);
+		const editorRefs = (event._editor ?? []).map((r) => r.reference);
 		if (!ownerRefs.includes(cfg.userId) && !editorRefs.includes(cfg.userId)) {
 			noRights.push({ eventId, nameValue: nameById.get(eventId) as string });
 		}
