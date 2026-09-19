@@ -60,8 +60,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Typecheck first: it is the faster of the two, so a type error reports
-      # in about a minute instead of after the suite.
+      # `src/lib/paraglide/` is generated and gitignored. Vite's paraglide
+      # plugin writes it during a build or a vitest run, so `pnpm test` makes
+      # its own copy — but `pnpm check` does not, and svelte-check then fails
+      # on 45 missing-module errors in a clean checkout. Locally it passes
+      # only because the directory is already there from an earlier run, which
+      # is why this step cannot be discovered without running CI once. Same
+      # project/outdir as vite.config.ts's plugin.
+      - name: Compile messages (generated, gitignored)
+        run: npx paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      # Typecheck before the suite: it is the faster of the two, so a type
+      # error reports in about a minute instead of after the suite.
       - name: Typecheck
         run: pnpm check
 
