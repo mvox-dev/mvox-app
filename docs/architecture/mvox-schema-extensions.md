@@ -310,6 +310,44 @@ entity `admin_member_record` is parented to.
   whoever already holds `_owner`/`_editor` on the collective can already write
   any of its existing properties.
 
+### `event_name` (on `event`)
+
+Commissioned [mvox-app#233](https://github.com/mvox-dev/mvox-app/issues/233).
+Mihkel, 2026-09-03: "event name goes into new 'event_name' field, and 'name'
+field becomes formula of all three values -- date, type, name" — so
+entu.app's own listing pane shows something readable once `name` stops being
+the free-text field and becomes that formula. `event` is canonical v4E with
+no `MvoxEntityDef` entry in this catalog, so `event_name` is a fresh
+top-level `PropertyAdditionDef`, mirroring `roster_show_real_names`'s shape
+rather than `admin_member_record`'s inline-array pattern.
+
+- **crede ONLY** (Mihkel estate ruling, 2026-09-18, folded into the #233
+  body: "run on crede only — we will return to templating the schema, when
+  we stabilise it" / "drop polyphony from constraining us"). This is the
+  first `PropertyAdditionDef` whose provisioning script is a single script,
+  not a `-crede-`/`-polyphony-` pair — every earlier schema change
+  (`schedule_item`, `admin_member_record`+`roster_show_real_names`, `link`)
+  landed twice; that pattern ends with #233.
+- **Sharing and ordinal are deliberately unset in the definition** — no
+  committed artefact records the live crede `event` type's `name` prop-def
+  posture (no `ordinal` field exists at all in the historical v4E
+  `schema.ts`, and no `probe-233-*` ledger reads it). S1's own provisioning
+  script (`scripts/migrations/seed-233-s1-event-name-propdef-crede.ts`)
+  reads the live `event.name` prop-def first and derives `event_name`'s
+  posture from it: `_sharing` mirrors `event.name`'s, `ordinal` sits
+  adjacent (`name`'s ordinal + 1) — resolved at run time, set explicitly,
+  never inherited by omission (the #265 trap).
+- **Ordering is a data-loss fence** (issue body): S1 (this prop-def) → S2
+  (backfill every `event.name` into `event_name`) → S3 (move every app
+  read/write off `name`) → S4 (only then PATCH `name` into the display
+  formula). A formula property overwrites the stored value on every save and
+  silently drops POSTs, so S2/S3 must land before S4 or names are destroyed
+  permanently.
+- **Polyphony gets no `event_name` at all** — the app's read side (S3) has
+  no fallback to `name` once it moves, per Mihkel's standing no-fallbacks
+  stance; this is the visible, accepted cost of polyphony leaving the
+  estate, scoped explicitly to that deployment.
+
 ---
 
 ## Provenance
@@ -360,5 +398,12 @@ correction (`organization` → `database`) was caught by this same team at
 definition time, following the identical trap `admin_member_record` hit on
 #265, and verified empirically before the definition was written rather than
 copied from the issue thread's prose.
+
+`event_name` was commissioned on
+[mvox-app#233](https://github.com/mvox-dev/mvox-app/issues/233) (Mihkel,
+2026-09-03, the field split itself; the estate — crede only — 2026-09-18).
+It is the first `PropertyAdditionDef` provisioned by a single script rather
+than a `-crede-`/`-polyphony-` pair, per the 2026-09-18 ruling that ends that
+pattern going forward.
 
 (*MVOX:Perotin*)

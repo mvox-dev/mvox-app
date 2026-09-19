@@ -438,4 +438,63 @@ export const link: MvoxEntityDef = {
 	commissionedBy: 'mvox-app#256'
 };
 
+/**
+ * `event_name` — a property added to the EXISTING canonical `event` type, not
+ * a new type of its own (the `id_code`-on-`admin_member_record` shape does
+ * NOT apply: `event` is canonical v4E with no `MvoxEntityDef` entry in this
+ * file, so it has no `properties` array to extend inline — this mirrors
+ * `roster_show_real_names`'s shape instead, a fresh top-level
+ * `PropertyAdditionDef`).
+ *
+ * Commissioned [mvox-app#233](https://github.com/mvox-dev/mvox-app/issues/233):
+ * Mihkel, 2026-09-03, verbatim: *"event name goes into new 'event_name'
+ * field, and 'name' field becomes formula of all three values -- date, type,
+ * name"* — so entu.app's own listing pane shows something readable once
+ * `name` stops being the free-text field and becomes that formula (S4, this
+ * same issue, gated on S1-S3 landing first: a formula overwrites the stored
+ * value on every save and silently drops POSTs, so this prop-def and the
+ * backfill that populates it must exist and be fully populated before `name`
+ * is ever turned into one).
+ *
+ * **The estate** (Mihkel, 2026-09-18, folded into the #233 body): *"run on
+ * crede only — we will return to templating the schema, when we stabilise
+ * it"* and *"drop polyphony from constraining us."* This prop-def is
+ * provisioned on `mvox_crede` and nowhere else — polyphony receives no
+ * further schema changes, and the `-crede-`/`-polyphony-` twin-script
+ * pattern every earlier schema change used (seed-246, seed-256, seed-265,
+ * seed-282) ends here: one script per step.
+ *
+ * **Sharing and ordinal are deliberately left UNSET here** — no committed
+ * artefact records the live crede `event` type's `name` prop-def posture
+ * (no ordinal field exists at all in the historical v4E schema.ts, and no
+ * probe-233-* ledger reads it), so there is nothing to copy in at definition
+ * time. Per `PropertySpec.sharing`'s standing doc comment (establish
+ * empirically, set EXPLICITLY, never omit-and-inherit — the #265 trap): S1's
+ * own script reads the live `event.name` prop-def FIRST and DERIVES
+ * `event_name`'s posture from it — **`_sharing` mirrors event.name's, and
+ * `ordinal` sits adjacent (name's ordinal + 1)** — then passes that resolved
+ * value into `ensurePropDef` explicitly, the same discipline as every other
+ * property in this file, just resolved at run time instead of write time
+ * because the source value itself isn't known until then.
+ */
+export const event_name: PropertyAdditionDef = {
+	onType: 'event',
+	property: {
+		name: 'event_name',
+		type: 'string',
+		required: false,
+		note: "the event's own free-text name — moves out of `name` once `name` becomes a formula (S4); no fallback (Mihkel's standing no-fallbacks stance) once the app's reads move (S3)",
+		descriptionEn: "The event's own name. Read and written by the app; `name` becomes a display formula once this field is fully populated.",
+		descriptionEt: 'Sündmuse enda nimi. Rakendus loeb ja kirjutab seda; `name` muutub kuvamise valemiks pärast selle välja täielikku täitmist.'
+		// sharing / ordinal intentionally absent — see the doc comment above:
+		// S1 derives both live (mirrors event.name's sharing, ordinal adjacent).
+	},
+	commissionedBy: 'mvox-app#233',
+	notes: [
+		'crede ONLY (Mihkel estate ruling, 2026-09-18) — polyphony receives no further schema changes; this is the first PropertyAdditionDef whose provisioning script is single (no -crede-/-polyphony- twin).',
+		"Sharing mirrors event.name's live posture and ordinal sits adjacent to it (name's ordinal + 1) — read at S1 run time, not set here, because no committed artefact records either value for the live crede `event` type.",
+		'Step ordering is a data-loss fence (issue body): S1 (this prop-def) -> S2 (backfill every event.name into event_name) -> S3 (move every app read/write off `name`) -> S4 (only then PATCH `name` into a formula) — a formula overwrites the stored value on every save and silently drops POSTs, so S2/S3 must precede it or names are destroyed.'
+	]
+};
+
 // (*MVOX:Perotin*)
