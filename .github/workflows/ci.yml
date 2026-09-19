@@ -1,0 +1,79 @@
+# #415 — the repo's code gate: typecheck + the whole suite, on every push to
+# main and every pull request.
+#
+# Why it did not exist before: `roadmap.yml` ran `pnpm test`, but on `issues`
+# events — so the suite fired when somebody LABELLED an issue, minutes or
+# hours after the code had landed, and the only thing it could stop was the
+# board rebuilding. It could not block anything: by the time it ran, the merge
+# was already on main. That is how the 2026-09-19 pipeline-fence break
+# surfaced — as a public page stale for ten hours until a human asked why.
+# #413 narrowed that deploy gate to what it actually builds; this workflow is
+# the piece that was missing underneath it.
+#
+# Deliberately NOT coupled to the roadmap deploy. The board gates on its own
+# tests (#413) and must not wait on this one: these answer different questions
+# — whether the code changed safely, and whether a page can be rendered — and
+# re-joining them would undo #413.
+#
+# Mihkel, 2026-09-19, on whether it also gates merging: "yes, on merge, too".
+# Branch protection on main requires this check by name. That is a repository
+# setting, not a file, and it is applied separately — see #415 for the
+# sequence and for the precondition it carries (a required check blocks direct
+# pushes, so every merge has to go through the pull request).
+#
+# (*PO:Gama*)
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only: this job builds nothing and publishes nothing.
+permissions:
+  contents: read
+
+# One run per ref. A superseded push to the same pull request cancels the run
+# it replaced; main is never cancelled, because its result is the record of
+# whether that commit is green.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: check + test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `src/lib/paraglide/` is generated and gitignored. Vite's paraglide
+      # plugin writes it during a build or a vitest run, so `pnpm test` makes
+      # its own copy — but `pnpm check` does not, and svelte-check then fails
+      # on 45 missing-module errors in a clean checkout. Locally it passes
+      # only because the directory is already there from an earlier run, which
+      # is why this step cannot be discovered without running CI once. Same
+      # project/outdir as vite.config.ts's plugin.
+      - name: Compile messages (generated, gitignored)
+        run: npx paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
+
+      # Typecheck before the suite: it is the faster of the two, so a type
+      # error reports in about a minute instead of after the suite.
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Test
+        run: pnpm test
