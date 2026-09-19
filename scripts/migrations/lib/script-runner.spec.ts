@@ -1,5 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCredeCfg, readDryRun } from './script-runner';
+import * as scriptRunnerModule from './script-runner';
+
+// mvox-app#417 (RED, Tallis) — scripts read the live-run authorizer from env
+// `AUTHORIZED_BY` via a NEW `readAuthorizedBy()` export, sibling of
+// readDryRun. loadCredeCfg's signature and return are deliberately untouched
+// (its exact-shape toEqual below keeps guarding that). The destructure pins
+// the contract while the export does not exist yet (RED fails test-by-test
+// with "not a function" instead of taking the whole file down at import);
+// GREEN makes it equivalent to a plain named import with zero test edits.
+const { readAuthorizedBy } = scriptRunnerModule as unknown as {
+	readAuthorizedBy: () => string | undefined;
+};
 
 // mvox-app#274 review round 1 (Bentham, RED-274.2) — lib/script-runner.ts
 // shipped with zero tests.
@@ -89,5 +101,31 @@ describe('loadCredeCfg', () => {
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
 		expect(cfg.db).toBe('mvox_other');
 		expect((fetchImpl.mock.calls[0] as [string])[0]).toMatch(/\/auth\?db=mvox_other$/);
+	});
+});
+
+describe('readAuthorizedBy (#417)', () => {
+	const saved: string | undefined = process.env.AUTHORIZED_BY;
+	afterEach(() => {
+		if (saved === undefined) delete process.env.AUTHORIZED_BY;
+		else process.env.AUTHORIZED_BY = saved;
+	});
+
+	it('is undefined when AUTHORIZED_BY is unset — the preflight, not this reader, decides whether that is fatal', () => {
+		delete process.env.AUTHORIZED_BY;
+		expect(readAuthorizedBy()).toBeUndefined();
+	});
+
+	it('is undefined for a blank (whitespace-only) value — a blank record is no record', () => {
+		process.env.AUTHORIZED_BY = '   ';
+		expect(readAuthorizedBy()).toBeUndefined();
+	});
+
+	it('returns the trimmed string when set', () => {
+		process.env.AUTHORIZED_BY =
+			'  Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-0000000001  ';
+		expect(readAuthorizedBy()).toBe(
+			'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-0000000001'
+		);
 	});
 });

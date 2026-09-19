@@ -15,6 +15,50 @@ vi.mock('node:fs', () => ({
 }));
 
 import { DEFAULT_REDACT_FIELDS, writeLedger } from './ledger-writer';
+import * as ledgerWriterModule from './ledger-writer';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// mvox-app#417 (RED, Tallis) — live-run authorization gate.
+//
+// API DECISION, pinned by this block (research of record:
+// ~/workspace/scratchpad/research-417-digest.md):
+// - `assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | undefined): void`
+//   is a NEW export of ledger-writer.ts — a synchronous preflight every live
+//   script calls BEFORE its first mutating entuFetch. writeLedger runs only
+//   AFTER the POSTs in every live script observed (grant-294: POST at :115,
+//   writeLedger at :161), so a check inside writeLedger alone can never
+//   satisfy #417's "throws before any POST" — writeLedger calling the same
+//   preflight (pinned below) is defense in depth, not the gate itself. The
+//   per-script call sites are fenced by lib/liveRunAuthorization.guard.spec.ts.
+// - `WriteLedgerOptions.authorizedBy?: string` — ONE string: name, channel,
+//   and the issue-comment URL where the authorization is recorded. Never an
+//   email: any value containing '@' throws.
+// - `NO_AUTHORIZATION_DRY_RUN` — exported constant written into the envelope
+//   key `authorizedBy` on a dry run with no explicit value, so an ABSENT
+//   field is never ambiguous (unrecorded vs not-required).
+// - `authorizedBy` is NOT a DEFAULT_REDACT_FIELDS member — the committed twin
+//   must carry it (issue Done-when box 3), and naming it in committed.allow
+//   is legal.
+//
+// The destructure below pins the exact contract while the exports do not
+// exist yet (RED fails with "not a function"/undefined, test-by-test, instead
+// of taking the whole file down at import); GREEN makes it equivalent to a
+// plain named import with zero test edits.
+const { assertLiveRunAuthorized, NO_AUTHORIZATION_DRY_RUN } = ledgerWriterModule as unknown as {
+	assertLiveRunAuthorized: (dryRun: boolean, authorizedBy: string | undefined) => void;
+	NO_AUTHORIZATION_DRY_RUN: string;
+};
+
+/** #417: WriteLedgerOptions grows `authorizedBy?: string` — typed shim until GREEN adds the field. */
+const writeLedgerWithAuth = writeLedger as (
+	opts: Parameters<typeof writeLedger>[0] & { authorizedBy?: string }
+) => string;
+
+/** Canonical #417 value shape: name, channel, issue-comment URL — never an email. */
+const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-0000000001';
+
+/** The exact bytes NO_AUTHORIZATION_DRY_RUN must carry — pinned as a literal, not via the (RED: undefined) export, so a missing key can never pass by comparing undefined to undefined. */
+const NO_AUTH_DRY_RUN_LITERAL = 'dry run — no authorization required';
 
 beforeEach(() => {
 	writeFileSyncMock.mockClear();
@@ -197,8 +241,8 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 		'createdIds'
 	] as const;
 
-	/** Envelope keys the writer itself owns on the committed file. */
-	const ENVELOPE_KEYS = ['dryRun', 'db', 'sensitive', 'committed'] as const;
+	/** Envelope keys the writer itself owns on the committed file — #417 adds `authorizedBy`. */
+	const ENVELOPE_KEYS = ['dryRun', 'db', 'sensitive', 'committed', 'authorizedBy'] as const;
 
 	function allWrites(): Array<{ path: string; raw: string; content: Record<string, unknown> }> {
 		return (writeFileSyncMock.mock.calls as Array<[string, string]>).map(([path, raw]) => ({
@@ -252,11 +296,12 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 	};
 
 	function runCommitted() {
-		return writeLedger({
+		return writeLedgerWithAuth({
 			scriptName: 'seed-999-crede-members',
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
+			authorizedBy: LIVE_AUTH, // #417: a live run records who authorized it
 			committed: { allow: ALLOW },
 			payload: crossSitePayload
 		});
@@ -275,6 +320,7 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
+			authorizedBy: LIVE_AUTH,
 			total: 2,
 			byStatus: { created: 1, skipped: 1 },
 			entries: [
@@ -298,6 +344,7 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 			db: 'mvox_crede',
 			sensitive: true,
 			committed: true,
+			authorizedBy: LIVE_AUTH,
 			total: 2,
 			byStatus: { created: 1, skipped: 1 },
 			entries: [{ personId: 'p1', memberId: 'm1', status: 'created' }]
@@ -308,27 +355,29 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 		expect(returned).toBe(instance.path);
 	});
 
-	it('sensitive:true WITHOUT committed → one write, byte-identical to today', () => {
-		writeLedger({
+	it('sensitive:true WITHOUT committed → one write, byte-pinned envelope (#417 adds authorizedBy after sensitive)', () => {
+		writeLedgerWithAuth({
 			scriptName: 'seed-999-crede-members',
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
+			authorizedBy: LIVE_AUTH,
 			payload: crossSitePayload
 		});
 
 		expect(writeFileSyncMock).toHaveBeenCalledTimes(1);
 		const only = allWrites()[0];
 		expect(only.path).toMatch(/crede-instance/);
-		// Byte-pin: the serialized form is exactly the pre-#402 envelope +
-		// denylist-redacted payload, 2-space JSON — no committed marker, no
-		// reordering, nothing.
+		// Byte-pin: the pre-#402 envelope + the #417 `authorizedBy` key (after
+		// `sensitive`, before the payload spread) + denylist-redacted payload,
+		// 2-space JSON — no committed marker, no reordering, nothing else.
 		expect(only.raw).toBe(
 			JSON.stringify(
 				{
 					dryRun: false,
 					db: 'mvox_crede',
 					sensitive: true,
+					authorizedBy: LIVE_AUTH,
 					total: 2,
 					byStatus: { created: 1, skipped: 1 },
 					entries: [
@@ -400,6 +449,9 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 			db: 'mvox_crede',
 			sensitive: true,
 			committed: true,
+			// #417: a dry run with no explicit value records the fixed sentinel
+			// — an absent field is never ambiguous.
+			authorizedBy: NO_AUTH_DRY_RUN_LITERAL,
 			total: 3,
 			byStatus: { created: 2, skipped: 1 },
 			createdIds: ['68c1a', '68c1b'],
@@ -446,11 +498,12 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 		"committed.allow naming '%s' throws before any write — the twin is built from the raw payload",
 		(field) => {
 			expect(() =>
-				writeLedger({
+				writeLedgerWithAuth({
 					scriptName: 'seed-999-crede-members',
 					dryRun: false,
 					db: 'mvox_crede',
 					sensitive: true,
+					authorizedBy: LIVE_AUTH, // #417: live call sites always record the authorizer
 					committed: { allow: [...ALLOW, field] },
 					payload: crossSitePayload
 				})
@@ -461,11 +514,12 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 
 	it('the refusal is case-insensitive and names every offender — filterByAllowlist matches keys exactly, so a differently-cased leak is still a leak', () => {
 		expect(() =>
-			writeLedger({
+			writeLedgerWithAuth({
 				scriptName: 'seed-999-crede-members',
 				dryRun: false,
 				db: 'mvox_crede',
 				sensitive: true,
+				authorizedBy: LIVE_AUTH,
 				committed: { allow: [...ALLOW, 'Name', 'ID_CODE'] },
 				payload: crossSitePayload
 			})
@@ -475,11 +529,12 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 
 	it("the caller's own redactFields count as denylisted too — allowlisting what this run just declared sensitive throws", () => {
 		expect(() =>
-			writeLedger({
+			writeLedgerWithAuth({
 				scriptName: 'seed-999-crede-members',
 				dryRun: false,
 				db: 'mvox_crede',
 				sensitive: true,
+				authorizedBy: LIVE_AUTH,
 				redactFields: ['fullName'],
 				committed: { allow: [...ALLOW, 'fullName'] },
 				payload: crossSitePayload
@@ -489,11 +544,12 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 	});
 
 	it('belt-and-braces: the committed payload still gets the EMAIL_RE scan — an allowlisted message carrying an email is scrubbed', () => {
-		writeLedger({
+		writeLedgerWithAuth({
 			scriptName: 'seed-999-crede-members',
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
+			authorizedBy: LIVE_AUTH,
 			committed: { allow: ['entries', 'status', 'message'] },
 			payload: {
 				entries: [{ status: 'failed', message: 'duplicate of jaan.tamm@example.ee — skipped' }]
@@ -506,8 +562,112 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 			db: 'mvox_crede',
 			sensitive: true,
 			committed: true,
+			authorizedBy: LIVE_AUTH,
 			entries: [{ status: 'failed', message: 'duplicate of [REDACTED-EMAIL] — skipped' }]
 		});
+	});
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// mvox-app#417 (RED, Tallis) — a live run cannot start without recording who
+// authorized it. Contract header sits next to the shim imports at the top.
+describe('assertLiveRunAuthorized — preflight unit contract (#417)', () => {
+	it('throws when live (dryRun:false) and authorizedBy is absent', () => {
+		expect(() => assertLiveRunAuthorized(false, undefined)).toThrow(/authorizedBy|AUTHORIZED_BY/i);
+	});
+
+	it('throws when live and authorizedBy is blank (whitespace-only) — a blank record is no record', () => {
+		expect(() => assertLiveRunAuthorized(false, '   ')).toThrow(/authorizedBy|AUTHORIZED_BY/i);
+	});
+
+	it("throws when live and the value contains '@' — name, channel and issue-comment URL, never an email", () => {
+		expect(() => assertLiveRunAuthorized(false, 'mihkel@example.test, team console')).toThrow(/@|email/i);
+	});
+
+	it('does not throw when live and the value is the full name+channel+issue-comment shape', () => {
+		expect(() => assertLiveRunAuthorized(false, LIVE_AUTH)).not.toThrow();
+	});
+
+	it('does not throw on a dry run with no value — it is a LIVE-run gate', () => {
+		expect(() => assertLiveRunAuthorized(true, undefined)).not.toThrow();
+	});
+
+	it('exports the fixed dry-run sentinel NO_AUTHORIZATION_DRY_RUN with these exact bytes', () => {
+		expect(NO_AUTHORIZATION_DRY_RUN).toBe(NO_AUTH_DRY_RUN_LITERAL);
+	});
+});
+
+describe('writeLedger — authorizedBy in the envelope (#417)', () => {
+	function writes(): Array<{ path: string; content: Record<string, unknown> }> {
+		return (writeFileSyncMock.mock.calls as Array<[string, string]>).map(([path, raw]) => ({
+			path,
+			content: JSON.parse(raw) as Record<string, unknown>
+		}));
+	}
+
+	it('live + no authorizedBy throws before any fs write (defense in depth behind the per-script preflight)', () => {
+		expect(() =>
+			writeLedger({ scriptName: 'x', dryRun: false, db: 'mvox_crede', sensitive: true, payload: {} })
+		).toThrow(/authorizedBy|AUTHORIZED_BY/i);
+		expect(writeFileSyncMock).not.toHaveBeenCalled();
+	});
+
+	it("live + a value containing '@' throws before any fs write — never an email", () => {
+		expect(() =>
+			writeLedgerWithAuth({
+				scriptName: 'x',
+				dryRun: false,
+				db: 'mvox_crede',
+				sensitive: true,
+				authorizedBy: 'mihkel@example.test, team console',
+				payload: {}
+			})
+		).toThrow(/@|email/i);
+		expect(writeFileSyncMock).not.toHaveBeenCalled();
+	});
+
+	it('live + valid value lands under authorizedBy in BOTH twins, and naming it in committed.allow is legal (not denylisted)', () => {
+		writeLedgerWithAuth({
+			scriptName: 'seed-999-crede-members',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: ['total', 'authorizedBy'] },
+			payload: { total: 1 }
+		});
+
+		expect(writeFileSyncMock).toHaveBeenCalledTimes(2);
+		const instance = writes().find((w) => /crede-instance/.test(w.path));
+		const committed = writes().find((w) => /-committed\.json$/.test(w.path));
+		expect(instance?.content.authorizedBy).toBe(LIVE_AUTH);
+		expect(committed?.content.authorizedBy).toBe(LIVE_AUTH);
+
+		// The committed twin stays walkable: every key is either an envelope
+		// key (now including authorizedBy) or an allowlisted name.
+		const permitted = new Set(['dryRun', 'db', 'sensitive', 'committed', 'authorizedBy', 'total']);
+		for (const key of Object.keys(committed?.content ?? {})) {
+			expect(permitted.has(key), `unexpected key '${key}' in committed ledger`).toBe(true);
+		}
+	});
+
+	it('dry run + no value writes exactly the fixed sentinel — an absent field is never ambiguous', () => {
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: { total: 1 } });
+		const { content } = lastWrite();
+		expect(content.authorizedBy).toBe(NO_AUTH_DRY_RUN_LITERAL);
+	});
+
+	it('dry run + explicit value keeps the explicit value — a pre-authorized rehearsal stays recorded as itself', () => {
+		writeLedgerWithAuth({
+			scriptName: 'x',
+			dryRun: true,
+			db: 'sampledb',
+			sensitive: false,
+			authorizedBy: LIVE_AUTH,
+			payload: {}
+		});
+		const { content } = lastWrite();
+		expect(content.authorizedBy).toBe(LIVE_AUTH);
 	});
 });
 
