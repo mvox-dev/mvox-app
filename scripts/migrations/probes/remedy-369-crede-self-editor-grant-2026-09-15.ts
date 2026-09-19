@@ -37,8 +37,8 @@
 //   DRY_RUN=false node --import tsx ... (same script)
 
 import { entuFetch } from '$lib/entu/request';
-import { loadCredeCfg, readDryRun } from '../lib/script-runner';
-import { writeLedger } from '../lib/ledger-writer';
+import { loadCredeCfg, readDryRun, readAuthorizedBy } from '../lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from '../lib/ledger-writer';
 
 // The 19 WITHOUT-self-editor person ids from the #369 population sweep
 // (scripts/migrations/seed-results/crede-instance/probe-369-crede-self-editor-
@@ -85,6 +85,8 @@ function directSelfTier(entity: Record<string, RawRef[] | undefined>, personId: 
 
 async function main(): Promise<void> {
 	const dryRun = readDryRun();
+	const authorizedBy = readAuthorizedBy();
+	assertLiveRunAuthorized(dryRun, authorizedBy); // mvox-app#417 — before any mutating call
 	const cfg = await loadCredeCfg();
 	console.log(`db=${cfg.db}  DRY_RUN=${dryRun}  targets=${TARGET_IDS.length}\n`);
 
@@ -159,6 +161,7 @@ async function main(): Promise<void> {
 		dryRun,
 		db: cfg.db,
 		sensitive: true,
+		authorizedBy,
 		// mvox-app#402 — first caller wired to the committed-twin pattern
 		// (ledger-writer.ts). Allowlisted by name, not by field-shape guess:
 		// ids (personId), counts (total, withSelfEditorCount,

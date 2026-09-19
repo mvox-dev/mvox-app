@@ -33,6 +33,18 @@ export function readDryRun(): boolean {
 }
 
 /**
+ * mvox-app#417 — reads the live-run authorizer (who authorized the run, the
+ * channel it came through, and a link to where the authorization is written
+ * when there is one) from env `AUTHORIZED_BY`. Unset or blank (whitespace-only) reads as `undefined` —
+ * a blank record is no record — so the caller's `assertLiveRunAuthorized`
+ * preflight, not this reader, decides whether that is fatal.
+ */
+export function readAuthorizedBy(): string | undefined {
+	const value = process.env.AUTHORIZED_BY?.trim();
+	return value ? value : undefined;
+}
+
+/**
  * Exchange the mvox_crede permanent API key for a 48h JWT, same wire shape
  * every crede-touching script duplicated inline (`GET /auth?db=<db>` with
  * the api-key as Bearer). Fails loud on a missing key, a non-2xx exchange,

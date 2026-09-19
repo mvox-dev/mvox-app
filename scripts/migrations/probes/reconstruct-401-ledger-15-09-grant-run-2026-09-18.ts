@@ -59,6 +59,10 @@ async function main(): Promise<void> {
 		dryRun: false,
 		db: 'mvox_crede',
 		sensitive: true,
+		// mvox-app#417 — the authorizer of the run of record: name and
+		// channel, no URL, because this authorization is written in the BODY
+		// of #369 and has no comment to link.
+		authorizedBy: 'Mihkel (team console, verbatim)',
 		committed: {
 			allow: [
 				'personIds',

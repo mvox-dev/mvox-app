@@ -17,10 +17,12 @@
 //   DRY_RUN=false ... same-file                                               # live, AFTER authorization
 
 import { entuFetch } from '$lib/entu/request';
-import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
-import { writeLedger } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, runScript, errMsg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 const SECTION_TYPE_ID = '6a92a325ca67df980f414ea3';
 
@@ -110,6 +112,7 @@ async function main(): Promise<boolean> {
 		scriptName: 'seed-188-phase3b-crede-sections',
 		dryRun: DRY_RUN,
 		db: cfg.db,
+		authorizedBy: AUTHORIZED_BY,
 		sensitive: true,
 		payload: { byStatus, ledger }
 	});

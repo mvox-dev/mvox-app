@@ -43,10 +43,12 @@
 //     ./scripts/migrations/grant-294-joosep-owner-crede-2026-09-09.ts   # only after team-lead's authorization
 
 import { entuFetch } from '$lib/entu/request';
-import { loadCredeCfg, readDryRun } from './lib/script-runner';
-import { writeLedger } from './lib/ledger-writer';
+import { loadCredeCfg, readDryRun, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 
 // Sourced from today's read-only crede check (2026-09-09) — already in hand,
 // not a fresh PII fetch.
@@ -163,6 +165,7 @@ async function main(): Promise<void> {
 		dryRun: DRY_RUN,
 		db: cfg.db,
 		sensitive: true,
+		authorizedBy: AUTHORIZED_BY,
 		payload: {
 			purpose: "mvox-app#294 — grant Joosep Loidap _owner on crede's database entity, Mihkel-authorized 2026-09-09 (relayed via team-lead's explicit authorization), so #294's owner-gated invite controls are reachable by the pilot's actual admin. Idempotent, no cleanup phase — the grant persists by design.",
 			target: JOOSEP_PERSON_ID,

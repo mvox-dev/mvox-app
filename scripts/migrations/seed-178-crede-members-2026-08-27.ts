@@ -18,11 +18,13 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
-import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
-import { writeLedger } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, runScript, errMsg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from './lib/ledger-writer';
 import { grantSelfEditor } from './lib/grant-self-editor';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 // Type ids updated 2026-08-29 (#188 clean-slate re-provision — Phase 2 minted
 // fresh type entities for everything except the built-in `person` type).
@@ -170,6 +172,7 @@ async function main(): Promise<boolean> {
 		scriptName: 'seed-178-crede-members',
 		dryRun: DRY_RUN,
 		db: cfg.db,
+		authorizedBy: AUTHORIZED_BY,
 		sensitive: true,
 		redactFields: ['fullName', 'displayName'],
 		payload: { byStatus, ledger }
