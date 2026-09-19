@@ -251,18 +251,15 @@ export async function loadEventDetail(
 	// own array slot is PRESENT (a field neither side carries is not
 	// "inherited", it is simply unset). Order pinned to the module doc's table.
 	//
-	// #420 SEAM — this line is a read of the event's own `name` and must move
-	// with the others when the app's event name relocates to `event_name`.
-	// #420 makes `name` on the EVENT type formula-owned, and a formula prop
-	// always carries a persisted value: `event.name?.[0] === undefined` would
-	// then be permanently false, 'name' would silently drop out of
-	// `inheritedFields`, and the nameless-after-unassign warning on the event
-	// page (`event_detail_series_unassign_name_empty`) would stop firing — the
-	// exact loss #304 exists to prevent, with every test still green because
-	// the fixtures move to `event_name` at the same time. #420 reads
-	// `event.event_name?.[0]`; the SERIES side stays `series.name`
-	// (the formula is per-prop-def, event type only — event_series `name` is
-	// untouched).
+	// #420 — the presence test below keys on the event's own `event_name`;
+	// the SERIES side stays `series.name` (event_series is untouched).
+	//
+	// #421 will make `name` formula-owned on the EVENT type, and a formula
+	// prop always carries a persisted value: `event.name?.[0] === undefined`
+	// would then be permanently false, 'name' would drop out of
+	// `inheritedFields`, and the nameless-after-unassign warning
+	// (`event_detail_series_unassign_name_empty`) would stop firing. That is
+	// why the test moved off `name` first.
 	const inheritedFields: EventInheritedField[] = [];
 	if (event.event_name?.[0] === undefined && series?.name?.[0] !== undefined) {
 		inheritedFields.push('name');
