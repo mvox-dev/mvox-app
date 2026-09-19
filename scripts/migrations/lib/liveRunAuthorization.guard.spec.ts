@@ -45,7 +45,7 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // they cannot reach crede: `loadCfg` takes its target db from env
 // ENTU_DATABASE (lib/creds.ts), so any of them run with
 // ENTU_DATABASE=mvox_crede mutates crede with no gate. They are deliberately
-// left ungated in this slice, pending a follow-up that widens the fence —
+// left ungated in this slice, pending mvox-app#422, which carries the gap —
 // out of scope by decision, not by construction.
 
 /**
