@@ -57,10 +57,12 @@
 //     ./scripts/migrations/seed-293-crede-season-repertoire-2026-09-08.ts        # ONLY after team-lead's explicit authorization
 
 import { entuFetch } from '$lib/entu/request';
-import { readDryRun, loadCredeCfg } from './lib/script-runner';
-import { writeLedger } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 
 interface WorkDef {
 	name: string;
@@ -269,6 +271,7 @@ async function main(): Promise<void> {
 		scriptName: 'seed-293-crede-season-repertoire',
 		dryRun: DRY_RUN,
 		db: cfg.db,
+		authorizedBy: AUTHORIZED_BY,
 		sensitive: false,
 		acknowledgedNonSensitive: true,
 		payload: {

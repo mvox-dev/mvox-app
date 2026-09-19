@@ -81,6 +81,45 @@ export const DEFAULT_REDACT_FIELDS = ['email', 'forename', 'surname', 'phone', '
 const EMAIL_RE = /[^\s"]+@[^\s"]+\.[^\s"]+/g;
 
 /**
+ * mvox-app#417 — `writeLedger` records this literal under `authorizedBy`
+ * on a dry run with no explicit value, so an absent field is never
+ * ambiguous between "nobody recorded an authorizer" and "not required".
+ */
+export const NO_AUTHORIZATION_DRY_RUN = 'dry run — no authorization required';
+
+/**
+ * mvox-app#417 — the live-run authorization preflight. Every crede-mutating
+ * script calls this BEFORE its first mutating entuFetch (fenced by
+ * lib/liveRunAuthorization.guard.spec.ts): `writeLedger` runs only AFTER
+ * the POSTs in every live script observed, so a check placed only inside
+ * `writeLedger` could never stop a mutation — the per-script call site is
+ * the actual gate. `writeLedger` also calls this (defense in depth).
+ *
+ * Throws synchronously when the run is live (`dryRun === false`) and
+ * `authorizedBy` is absent, blank, or contains '@'. The recorded value is a
+ * name, the channel it came through, and the issue-comment URL where the
+ * authorization is recorded — never an email address. Never throws on a
+ * dry run; this is a live-run gate only.
+ */
+export function assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | undefined): void {
+	if (dryRun) return;
+	if (!authorizedBy || !authorizedBy.trim()) {
+		throw new Error(
+			`assertLiveRunAuthorized: a live run needs authorizedBy recorded — set env AUTHORIZED_BY to a name, ` +
+				`the channel it came through, and the issue-comment URL where the authorization is recorded ` +
+				`(e.g. 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-…'). ` +
+				`Never an email address.`
+		);
+	}
+	if (authorizedBy.includes('@')) {
+		throw new Error(
+			`assertLiveRunAuthorized: AUTHORIZED_BY '${authorizedBy}' contains '@' — this is a name, a channel, ` +
+				`and an issue-comment URL, never an email address.`
+		);
+	}
+}
+
+/**
  * mvox-app#274 review round 1 (Bentham, RED-274.1): the key check MUST be
  * the first thing this function does, before any type dispatch. The
  * original version checked the key only inside the string branch, so a
@@ -198,6 +237,17 @@ export interface WriteLedgerOptions {
 	 * the twin is built from the raw payload, so nothing else would catch it.
 	 */
 	committed?: { allow: readonly string[] };
+	/**
+	 * mvox-app#417 — a name, the channel it came through, and the
+	 * issue-comment URL where the authorization is recorded. Never an
+	 * email. Required (and checked via `assertLiveRunAuthorized`, defense
+	 * in depth behind the per-script preflight) when `dryRun: false`. On a
+	 * dry run with no value, the envelope records `NO_AUTHORIZATION_DRY_RUN`
+	 * so the field is never ambiguously absent. Not a DEFAULT_REDACT_FIELDS
+	 * member — the committed twin must carry it, and it may be named in
+	 * `committed.allow`.
+	 */
+	authorizedBy?: string;
 }
 
 /**
@@ -211,6 +261,15 @@ export interface WriteLedgerOptions {
  * comments.
  */
 export function writeLedger(opts: WriteLedgerOptions): string {
+	// mvox-app#417 — defense in depth: the per-script preflight (called
+	// before the first mutating entuFetch) is the actual gate; this call
+	// still runs before any fs write here so a script that skipped the
+	// preflight cannot get a ledger written for an unauthorized live run.
+	assertLiveRunAuthorized(opts.dryRun, opts.authorizedBy);
+	// assertLiveRunAuthorized already guaranteed a non-blank value on a live
+	// run; a dry run with nothing explicit records the fixed sentinel.
+	const authorizedBy = opts.authorizedBy ?? NO_AUTHORIZATION_DRY_RUN;
+
 	if (opts.committed && !opts.sensitive) {
 		throw new Error(
 			`writeLedger: committed twin requested with sensitive:false. A non-sensitive ledger already lands ` +
@@ -277,7 +336,11 @@ export function writeLedger(opts: WriteLedgerOptions): string {
 
 	writeFileSync(
 		filePath,
-		JSON.stringify({ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, ...redactedPayload }, null, 2)
+		JSON.stringify(
+			{ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, authorizedBy, ...redactedPayload },
+			null,
+			2
+		)
 	);
 
 	if (opts.committed) {
@@ -293,7 +356,14 @@ export function writeLedger(opts: WriteLedgerOptions): string {
 		writeFileSync(
 			committedPath,
 			JSON.stringify(
-				{ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, committed: true, ...scrubbed },
+				{
+					dryRun: opts.dryRun,
+					db: opts.db,
+					sensitive: opts.sensitive,
+					committed: true,
+					authorizedBy,
+					...scrubbed
+				},
 				null,
 				2
 			)

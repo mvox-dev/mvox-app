@@ -59,6 +59,11 @@ async function main(): Promise<void> {
 		dryRun: false,
 		db: 'mvox_crede',
 		sensitive: true,
+		// mvox-app#417 — the recorded run of record already names its
+		// authorizer; passed through so the new live-run preflight (which
+		// this reconstruction, run at import time with dryRun:false, is
+		// subject to like any other live write) has something to check.
+		authorizedBy: 'Mihkel (team console, verbatim)',
 		committed: {
 			allow: [
 				'personIds',

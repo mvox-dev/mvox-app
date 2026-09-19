@@ -10,10 +10,12 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
-import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
-import { writeLedger } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, runScript, errMsg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 const DB_ENTITY_ID = process.env.MVOX_CREDE_DB_ENTITY_ID ?? '6a8f471a5eb2498f434e5112';
 const SECTION_TYPE_ID = '6a8f91145eb2498f434e57bc';
 
@@ -128,6 +130,7 @@ async function main(): Promise<boolean> {
 		scriptName: 'seed-182-crede-sections',
 		dryRun: DRY_RUN,
 		db: cfg.db,
+		authorizedBy: AUTHORIZED_BY,
 		sensitive: true,
 		payload: { byStatus, ledger }
 	});

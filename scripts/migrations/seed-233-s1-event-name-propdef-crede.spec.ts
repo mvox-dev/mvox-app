@@ -47,8 +47,13 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 const writeLedgerMock = vi.fn(() => 'scripts/migrations/seed-results/crede-instance/seed-233-s1-fake.json');
 
+// mvox-app#417 — this spec exercises the prop-def-ensure contract, not the
+// authorization gate (that's ledger-writer.spec.ts + liveRunAuthorization.
+// guard.spec.ts); assertLiveRunAuthorized is mocked to a no-op so these
+// dryRun:false calls (none of which pass an authorizedBy) keep passing.
 vi.mock('./lib/ledger-writer', () => ({
 	writeLedger: (...args: unknown[]) => writeLedgerMock(...(args as [unknown])),
+	assertLiveRunAuthorized: () => {},
 	DEFAULT_REDACT_FIELDS: ['email', 'forename', 'surname', 'phone', 'birthdate', 'name', 'id_code']
 }));
 
@@ -246,7 +251,8 @@ describe('#233 S1 — seed-233-s1-event-name-propdef-crede (dry-run)', () => {
 			dryRun: true,
 			db: 'mvox_crede',
 			sensitive: true,
-			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
+			authorizedBy: undefined,
+			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun', 'authorizedBy'] },
 			payload: {
 				typeId: TYPE_EVENT,
 				propDefId: null,
@@ -335,7 +341,8 @@ describe('#233 S1 — ledger through the #402 committed-allowlist writer', () =>
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
-			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
+			authorizedBy: undefined,
+			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun', 'authorizedBy'] },
 			payload: {
 				typeId: TYPE_EVENT,
 				propDefId: PD_EVENT_NAME_NEW,

@@ -57,8 +57,8 @@ import {
 	type LedgerStep
 } from './lib/ensure-schema-type';
 import { event_name, type PropertySpec, type Sharing } from './lib/mvox-schema-extensions';
-import { readDryRun, loadCredeCfg } from './lib/script-runner';
-import { writeLedger as writeLedgerShared } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 export interface RunSeed233S1Result {
 	typeId: string;
@@ -72,8 +72,12 @@ export interface RunSeed233S1Result {
 export async function runSeed233S1(
 	cfg: EntuCfg,
 	dryRun: boolean,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	authorizedBy?: string
 ): Promise<RunSeed233S1Result> {
+	// mvox-app#417 — before the first mutating call (ensurePropDef below).
+	assertLiveRunAuthorized(dryRun, authorizedBy);
+
 	const ledger: LedgerStep[] = [];
 
 	const { entityMetaTypeId, propertyMetaTypeId } = await resolveMetaTypeIds(cfg, fetchImpl);
@@ -148,7 +152,8 @@ export async function runSeed233S1(
 		dryRun,
 		db: cfg.db,
 		sensitive: true,
-		committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
+		authorizedBy,
+		committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun', 'authorizedBy'] },
 		payload
 	});
 
@@ -157,10 +162,11 @@ export async function runSeed233S1(
 
 async function main(): Promise<void> {
 	const DRY_RUN = readDryRun();
+	const AUTHORIZED_BY = readAuthorizedBy();
 	const cfg = await loadCredeCfg();
 	console.log(`Mode: ${DRY_RUN ? 'DRY_RUN' : 'LIVE'} — db=${cfg.db}\n`);
 
-	const result = await runSeed233S1(cfg, DRY_RUN);
+	const result = await runSeed233S1(cfg, DRY_RUN, fetch, AUTHORIZED_BY);
 
 	console.log(
 		`event.event_name prop-def: ${result.propDefId ?? '(would create — dry-run)'} ` +

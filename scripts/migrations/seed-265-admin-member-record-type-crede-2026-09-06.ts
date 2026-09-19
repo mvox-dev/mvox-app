@@ -52,10 +52,12 @@ import {
 	type LedgerStep
 } from './lib/ensure-schema-type';
 import { admin_member_record, roster_show_real_names } from './lib/mvox-schema-extensions';
-import { readDryRun, loadCredeCfg } from './lib/script-runner';
-import { writeLedger as writeLedgerShared } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 
 // mvox-app#274 — writeLedger now goes through the shared, redaction-aware
 // writer; `sensitive: false` — this ledger records prop-def ids and sharing
@@ -66,7 +68,7 @@ const DRY_RUN = readDryRun();
 // stated explicitly here for the same reason `sensitive` itself is
 // explicit, not inferred.
 function writeLedger(payload: Record<string, unknown>): string {
-	return writeLedgerShared({ scriptName: 'seed-265-admin-member-record-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, acknowledgedNonSensitive: true, payload });
+	return writeLedgerShared({ scriptName: 'seed-265-admin-member-record-type-crede', dryRun: DRY_RUN, db: process.env.MVOX_CREDE_DB ?? 'mvox_crede', sensitive: false, acknowledgedNonSensitive: true, authorizedBy: AUTHORIZED_BY, payload });
 }
 
 async function main(): Promise<void> {

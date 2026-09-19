@@ -19,10 +19,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { entuFetch } from '$lib/entu/request';
-import { readDryRun, loadCredeCfg, runScript, errMsg } from './lib/script-runner';
-import { writeLedger } from './lib/ledger-writer';
+import { readDryRun, loadCredeCfg, runScript, errMsg, readAuthorizedBy } from './lib/script-runner';
+import { writeLedger, assertLiveRunAuthorized } from './lib/ledger-writer';
 
 const DRY_RUN = readDryRun();
+const AUTHORIZED_BY = readAuthorizedBy();
+assertLiveRunAuthorized(DRY_RUN, AUTHORIZED_BY); // mvox-app#417 — before any mutating call
 const PROFILE_TYPE_ID = '6a8f91355eb2498f434e5c40';
 
 const SNAPSHOT_PATH = join('scripts', 'migrations', 'snapshots', 'crede-profile-emails-2026-08-27.json');
@@ -90,6 +92,7 @@ async function main(): Promise<boolean> {
 		scriptName: 'seed-186-crede-profile-emails',
 		dryRun: DRY_RUN,
 		db: cfg.db,
+		authorizedBy: AUTHORIZED_BY,
 		sensitive: true,
 		redactFields: ['name'],
 		payload: { byStatus, ledger }

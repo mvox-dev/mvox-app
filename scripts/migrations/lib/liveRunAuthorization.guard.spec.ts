@@ -41,9 +41,9 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // DEFINES loadCredeCfg, and the ensure-schema-type helpers receive cfg as
 // an argument; run discipline (dry-run flag, authorization) belongs to the
 // entrypoint script that owns the run. Spec files are excluded as always.
-// Polyphony-era grandfathered writers (loadCfg, own writeFileSync) never
-// import loadCredeCfg, so they are out of scope by construction (#407:
-// polyphony is frozen history).
+// Grandfathered writers from the frozen legacy db's era (loadCfg, own
+// writeFileSync) never import loadCredeCfg, so they are out of scope by
+// construction (#407 froze that era as dated history).
 
 /**
  * The 14 crede-mutating scripts, enumerated from the #417 research digest
