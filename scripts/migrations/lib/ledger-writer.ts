@@ -88,47 +88,63 @@ const EMAIL_RE = /[^\s"]+@[^\s"]+\.[^\s"]+/g;
 export const NO_AUTHORIZATION_DRY_RUN = 'dry run — no authorization required';
 
 /**
- * mvox-app#417 — the live-run authorization preflight. Every crede-mutating
- * script calls this BEFORE its first mutating entuFetch (fenced by
- * lib/liveRunAuthorization.guard.spec.ts): `writeLedger` runs only AFTER
- * the POSTs in every live script observed, so a check placed only inside
- * `writeLedger` could never stop a mutation — the per-script call site is
- * the actual gate. `writeLedger` also calls this (defense in depth).
- *
- * Two checks of different kinds, in this order:
- *
- * 1. VALUE SHAPE, on ANY run, dry or live: a value containing '@' is
- *    refused. mvox-app#417 review round 2 (Bentham) — this used to sit
- *    behind the dry-run early return, so `DRY_RUN=true` with an email in
- *    AUTHORIZED_BY sailed through, and `writeLedger` then wrote that
- *    address verbatim into the envelope of BOTH twins (the envelope value
- *    is appended after the payload, so neither the denylist nor the
- *    committed twin's `scrubEmails` pass — both walk the payload only —
- *    ever saw it). The committed twin is tracked, and git history is not
- *    retractable. The documented operator order of operations is to export
- *    AUTHORIZED_BY once and rehearse with DRY_RUN=true first, so the dry
- *    run is exactly where a bad value first reaches disk.
- * 2. LIVE-RUN REQUIREMENT, only when `dryRun === false`: the value must be
- *    present, non-blank, and not the reserved dry-run sentinel.
- *
- * Enforced here, and nothing more: non-blank (live), not the sentinel
- * (live), no '@' (always). The recorded value should name who authorized
- * the run and the channel it came through, plus a link to where the
- * authorization is written when one exists — convention, deliberately not
- * a checked shape (see the in-repo example in
- * probes/reconstruct-401-ledger-15-09-grant-run-2026-09-18.ts, whose
- * authorization lives in #369's issue body and has no comment URL).
+ * mvox-app#417 — what `writeLedger` records under `authorizedBy` when a LIVE
+ * run reaches the writer with no value. The per-script preflight is the gate
+ * and refuses such a run before it mutates; a caller that predates the gate
+ * writes its ledger AFTER its mutations, so throwing here would destroy the
+ * record of a live run rather than prevent it. Record the gap in the
+ * artefact instead.
  */
-export function assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | undefined): void {
-	// Value shape first, so it binds a dry run too — see (1) above.
+export const UNRECORDED_AUTHORIZATION = 'live run — authorizer not recorded';
+
+/**
+ * Value-shape refusal, on ANY run: the envelope carries this value verbatim
+ * into the committed twin, which is tracked, and git history is not
+ * retractable.
+ */
+function refuseEmailShapedAuthorizer(authorizedBy: string | undefined): void {
 	if (authorizedBy?.includes('@')) {
 		throw new Error(
-			`assertLiveRunAuthorized: AUTHORIZED_BY '${authorizedBy}' contains '@' — record who authorized the ` +
-				`run and the channel it came through, never an email address. This value is written verbatim ` +
-				`into the ledger envelope, on a dry run as much as a live one, and the committed twin is tracked ` +
-				`in git.`
+			`AUTHORIZED_BY '${authorizedBy}' contains '@' — record who authorized the run and the channel it ` +
+				`came through, never an email address. This value is written verbatim into the ledger envelope, ` +
+				`on a dry run as much as a live one, and the committed twin is tracked in git.`
 		);
 	}
+}
+
+/**
+ * Value-shape refusal, live runs only: the sentinel is non-blank and carries
+ * no '@', so nothing else refuses it, and a ledger written with it comes out
+ * byte-identical to a genuine dry run's — the one ambiguity the sentinel
+ * exists to remove.
+ */
+function refuseSentinelAsLiveAuthorizer(authorizedBy: string): void {
+	if (authorizedBy.trim() === NO_AUTHORIZATION_DRY_RUN) {
+		throw new Error(
+			`AUTHORIZED_BY '${authorizedBy}' is the reserved dry-run sentinel — it means "no authorization ` +
+				`required" and may never stand in for one on a live run. Set AUTHORIZED_BY to who authorized the ` +
+				`run and the channel it came through.`
+		);
+	}
+}
+
+/**
+ * mvox-app#417 — the live-run authorization preflight, and the actual gate.
+ * Every crede-mutating script calls it BEFORE its first mutating entuFetch,
+ * fenced by lib/liveRunAuthorization.guard.spec.ts; `writeLedger` runs only
+ * AFTER the POSTs in every live script observed, so a check there can never
+ * stop a mutation.
+ *
+ * Three checks, nothing more: no '@' (any run), non-blank (live), not the
+ * reserved dry-run sentinel (live). The recorded value should name who
+ * authorized the run and the channel it came through, plus a link to where
+ * the authorization is written when one exists — convention, deliberately
+ * not a checked shape (the in-repo example in
+ * probes/reconstruct-401-ledger-15-09-grant-run-2026-09-18.ts has its
+ * authorization in #369's issue body, which carries no comment URL).
+ */
+export function assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | undefined): void {
+	refuseEmailShapedAuthorizer(authorizedBy);
 	if (dryRun) return;
 	if (!authorizedBy || !authorizedBy.trim()) {
 		throw new Error(
@@ -138,19 +154,27 @@ export function assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | 
 				`https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-…'). Never an email address.`
 		);
 	}
-	// mvox-app#417 review round 1 (Bentham) — the sentinel is non-blank and
-	// carries no '@', so without this it passed the live gate verbatim and the
-	// ledger's `authorizedBy` came out byte-identical to a genuine dry run's.
-	// That is exactly the ambiguity the sentinel exists to remove, so the
-	// reserved value is refused on a live run.
-	if (authorizedBy.trim() === NO_AUTHORIZATION_DRY_RUN) {
-		throw new Error(
-			`assertLiveRunAuthorized: AUTHORIZED_BY '${authorizedBy}' is the reserved dry-run sentinel — it means ` +
-				`"no authorization required" and may never stand in for one on a live run. Set AUTHORIZED_BY to ` +
-				`who authorized the run and the channel it came through.`
-		);
-	}
+	refuseSentinelAsLiveAuthorizer(authorizedBy);
 }
+
+/**
+ * mvox-app#417 review round 3 — the envelope value `writeLedger` records.
+ * Value SHAPE is enforced here; the live-run REQUIREMENT is not. An absent
+ * value on a live run records UNRECORDED_AUTHORIZATION rather than throwing:
+ * 15 callers predate the gate and pass `dryRun: false` with no authorizer,
+ * and all of them write their ledger after their mutations. Requiring the
+ * value is the preflight's job, at the one call site that can still stop the
+ * run.
+ */
+function resolveLedgerAuthorizer(dryRun: boolean, authorizedBy: string | undefined): string {
+	refuseEmailShapedAuthorizer(authorizedBy);
+	if (!authorizedBy || !authorizedBy.trim()) {
+		return dryRun ? NO_AUTHORIZATION_DRY_RUN : UNRECORDED_AUTHORIZATION;
+	}
+	if (!dryRun) refuseSentinelAsLiveAuthorizer(authorizedBy);
+	return authorizedBy;
+}
+
 
 /**
  * mvox-app#274 review round 1 (Bentham, RED-274.1): the key check MUST be
@@ -271,16 +295,15 @@ export interface WriteLedgerOptions {
 	 */
 	committed?: { allow: readonly string[] };
 	/**
-	 * mvox-app#417 — a name, the channel it came through, and the
-	 * issue-comment URL where the authorization is recorded. Never an
-	 * email. Required (and checked via `assertLiveRunAuthorized`, defense
-	 * in depth behind the per-script preflight) when `dryRun: false`. A
-	 * value containing '@' is refused on ANY run, dry or live — the envelope
-	 * carries it verbatim into the tracked committed twin. On a
-	 * dry run with no value, the envelope records `NO_AUTHORIZATION_DRY_RUN`
-	 * so the field is never ambiguously absent. Not a DEFAULT_REDACT_FIELDS
-	 * member — the committed twin must carry it, and it may be named in
-	 * `committed.allow`.
+	 * mvox-app#417 — who authorized the run and the channel it came through,
+	 * plus the issue-comment URL where the authorization is recorded when
+	 * there is one. Never an email: a value containing '@' is refused on ANY
+	 * run, dry or live, since the envelope carries it verbatim into the
+	 * tracked committed twin. Required on a live run by the per-script
+	 * preflight, not by this writer: absent here, the envelope records
+	 * `NO_AUTHORIZATION_DRY_RUN` on a dry run and `UNRECORDED_AUTHORIZATION`
+	 * on a live one, so the field is never ambiguously absent. Not a
+	 * DEFAULT_REDACT_FIELDS member — the committed twin must carry it.
 	 */
 	authorizedBy?: string;
 }
@@ -296,21 +319,12 @@ export interface WriteLedgerOptions {
  * comments.
  */
 export function writeLedger(opts: WriteLedgerOptions): string {
-	// mvox-app#417 — defense in depth: the per-script preflight (called
-	// before the first mutating entuFetch) is the actual gate; this call
-	// still runs before any fs write here so a script that skipped the
-	// preflight cannot get a ledger written for an unauthorized live run.
-	assertLiveRunAuthorized(opts.dryRun, opts.authorizedBy);
-	// assertLiveRunAuthorized already guaranteed a non-blank value on a live
-	// run; a dry run with nothing explicit records the fixed sentinel.
-	// The `scrubEmails` pass is belt-and-braces (#417 review round 2): this
-	// value is appended AFTER the payload in both twins, so neither the
+	// mvox-app#417 — value shape only; the per-script preflight is the gate
+	// that can still stop a run. The `scrubEmails` pass is belt-and-braces:
+	// this value is appended AFTER the payload in both twins, so neither the
 	// instance ledger's denylist nor the committed twin's own scrub reaches
-	// it — both walk the payload only. `assertLiveRunAuthorized` above
-	// refuses any '@' on any run, dry or live, so this should never have
-	// anything to do; it means a future reordering of those checks still
-	// cannot land an address in tracked seed-results/.
-	const authorizedBy = scrubEmails(opts.authorizedBy ?? NO_AUTHORIZATION_DRY_RUN) as string;
+	// it — both walk the payload only.
+	const authorizedBy = scrubEmails(resolveLedgerAuthorizer(opts.dryRun, opts.authorizedBy)) as string;
 
 	if (opts.committed && !opts.sensitive) {
 		throw new Error(

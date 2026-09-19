@@ -36,6 +36,10 @@ import * as ledgerWriterModule from './ledger-writer';
 // - `NO_AUTHORIZATION_DRY_RUN` — exported constant written into the envelope
 //   key `authorizedBy` on a dry run with no explicit value, so an ABSENT
 //   field is never ambiguous (unrecorded vs not-required).
+// - `UNRECORDED_AUTHORIZATION` (review round 3) — its live-run sibling: the
+//   writer records it instead of throwing when a live run arrives with no
+//   value, so a caller that predates the gate still lands its ledger and the
+//   gap shows in the artefact. Requiring the value is the preflight's job.
 // - `authorizedBy` is NOT a DEFAULT_REDACT_FIELDS member — the committed twin
 //   must carry it (issue Done-when box 3), and naming it in committed.allow
 //   is legal.
@@ -44,10 +48,12 @@ import * as ledgerWriterModule from './ledger-writer';
 // exist yet (RED fails with "not a function"/undefined, test-by-test, instead
 // of taking the whole file down at import); GREEN makes it equivalent to a
 // plain named import with zero test edits.
-const { assertLiveRunAuthorized, NO_AUTHORIZATION_DRY_RUN } = ledgerWriterModule as unknown as {
-	assertLiveRunAuthorized: (dryRun: boolean, authorizedBy: string | undefined) => void;
-	NO_AUTHORIZATION_DRY_RUN: string;
-};
+const { assertLiveRunAuthorized, NO_AUTHORIZATION_DRY_RUN, UNRECORDED_AUTHORIZATION } =
+	ledgerWriterModule as unknown as {
+		assertLiveRunAuthorized: (dryRun: boolean, authorizedBy: string | undefined) => void;
+		NO_AUTHORIZATION_DRY_RUN: string;
+		UNRECORDED_AUTHORIZATION: string;
+	};
 
 /** #417: WriteLedgerOptions grows `authorizedBy?: string` — typed shim until GREEN adds the field. */
 const writeLedgerWithAuth = writeLedger as (
@@ -59,6 +65,9 @@ const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/is
 
 /** The exact bytes NO_AUTHORIZATION_DRY_RUN must carry — pinned as a literal, not via the (RED: undefined) export, so a missing key can never pass by comparing undefined to undefined. */
 const NO_AUTH_DRY_RUN_LITERAL = 'dry run — no authorization required';
+
+/** The exact bytes UNRECORDED_AUTHORIZATION must carry — pinned as a literal for the same reason. */
+const UNRECORDED_AUTH_LITERAL = 'live run — authorizer not recorded';
 
 beforeEach(() => {
 	writeFileSyncMock.mockClear();
@@ -628,10 +637,45 @@ describe('writeLedger — authorizedBy in the envelope (#417)', () => {
 		}));
 	}
 
-	it('live + no authorizedBy throws before any fs write (defense in depth behind the per-script preflight)', () => {
+	// Review round 3 (Bentham): this used to assert a throw, which broke 15
+	// callers that predate the gate — they pass `dryRun: false` with no
+	// authorizer and write their ledger AFTER their mutations, so the throw
+	// destroyed the record of a live run instead of preventing it. The writer
+	// records the gap; the preflight (next case) still refuses the run.
+	it('live + no authorizedBy writes UNRECORDED_AUTHORIZATION — the ledger lands and names the gap', () => {
+		writeLedger({ scriptName: 'x', dryRun: false, db: 'sampledb', sensitive: false, payload: { total: 1 } });
+
+		expect(writeFileSyncMock).toHaveBeenCalledTimes(1);
+		const { content } = lastWrite();
+		expect(content).toEqual({
+			dryRun: false,
+			db: 'sampledb',
+			sensitive: false,
+			total: 1,
+			authorizedBy: UNRECORDED_AUTH_LITERAL
+		});
+	});
+
+	it('the preflight still throws on that same live run — the gate is the call site, not the writer', () => {
+		expect(() => assertLiveRunAuthorized(false, undefined)).toThrow(/authorizedBy|AUTHORIZED_BY/i);
+	});
+
+	it('exports UNRECORDED_AUTHORIZATION with these exact bytes, distinct from the dry-run sentinel', () => {
+		expect(UNRECORDED_AUTHORIZATION).toBe(UNRECORDED_AUTH_LITERAL);
+		expect(UNRECORDED_AUTHORIZATION).not.toBe(NO_AUTHORIZATION_DRY_RUN);
+	});
+
+	it('live + the dry-run sentinel still throws before any fs write — a value-shape refusal, not an opt-in check', () => {
 		expect(() =>
-			writeLedger({ scriptName: 'x', dryRun: false, db: 'mvox_crede', sensitive: true, payload: {} })
-		).toThrow(/authorizedBy|AUTHORIZED_BY/i);
+			writeLedgerWithAuth({
+				scriptName: 'x',
+				dryRun: false,
+				db: 'sampledb',
+				sensitive: false,
+				authorizedBy: NO_AUTH_DRY_RUN_LITERAL,
+				payload: { total: 1 }
+			})
+		).toThrow(/sentinel|dry run/i);
 		expect(writeFileSyncMock).not.toHaveBeenCalled();
 	});
 

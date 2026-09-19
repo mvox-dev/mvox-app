@@ -41,9 +41,12 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // DEFINES loadCredeCfg, and the ensure-schema-type helpers receive cfg as
 // an argument; run discipline (dry-run flag, authorization) belongs to the
 // entrypoint script that owns the run. Spec files are excluded as always.
-// Grandfathered writers from the frozen legacy db's era (loadCfg, own
-// writeFileSync) never import loadCredeCfg, so they are out of scope by
-// construction (#407 froze that era as dated history).
+// Scripts that call `loadCfg` instead are NOT fenced here, and not because
+// they cannot reach crede: `loadCfg` takes its target db from env
+// ENTU_DATABASE (lib/creds.ts), so any of them run with
+// ENTU_DATABASE=mvox_crede mutates crede with no gate. They are deliberately
+// left ungated in this slice, pending a follow-up that widens the fence —
+// out of scope by decision, not by construction.
 
 /**
  * The 14 crede-mutating scripts, enumerated from the #417 research digest
