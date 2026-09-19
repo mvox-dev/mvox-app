@@ -58,9 +58,12 @@ describe('#413 — the render path reaches no further than this directory', () =
 		}
 		expect(
 			offenders,
-			"the deploy gate runs only this directory's tests (#413). An import reaching outside it means " +
-				'those tests no longer cover the whole render path: move the import back, or widen the gate in ' +
-				'roadmap.yml and this fence together — never one without the other'
+			'a render-path file now imports outside scripts/roadmap/ (listed above as file → specifier). ' +
+				"The board's deploy gate runs `pnpm test:roadmap` — vitest over THIS DIRECTORY ONLY " +
+				'(.github/workflows/roadmap.yml) — and that scope is derived from this closure, not chosen. ' +
+				'With the import in place those tests no longer cover the whole render path, so the gate would ' +
+				'pass while the thing it guards is broken. Either move the import back, or widen BOTH the ' +
+				"workflow's scope and this fence in the same change — never one without the other"
 		).toEqual([]);
 	});
 
