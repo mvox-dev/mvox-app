@@ -2,6 +2,13 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
+### [MVOX-26 live — 2026-09-19 05:47Z]
+
+**#417 PREPPED** (args-417.json, digest research-417-digest.md; key finding: writeLedger runs after the POSTs, so the gate is a separate exported preflight called by all 14 crede scripts). Launch after #407 lands, on the PR-based MERGE. **#407 in pipeline** (wf_2404c7bd-3ad, one task, branch chore/407-polyphony-history-only, label `in process`, entry notice sent). **PENDING PROCESS CHANGE (Henry 05:46Z, Mihkel ruling 05:45Z):** CI check+test becomes a REQUIRED status check on main. Protection switches on only after I acknowledge. Before ack: rework template MERGE to branch push + `gh pr create` + `gh pr merge --squash --delete-branch`, run pipeline-ref-discipline.spec.ts, then ack henry@po-team. Do this after #407 lands, never mid-run. Pérotin told to leave the untracked crede probe + seed-233 dry artifact alone.
+
+(*MVOX:Palestrina*)
+
+---
 ### [NEXT SESSION — MVOX-25, closed on Mihkel's word 2026-09-19 05:35Z — READ GAMA FIRST]
 
 **Session ended after a bad turn: my "Name unavailable" assessment stated inferences as findings (Mihkel: "confidently presenting me lies") and #233 was run as four slices under one issue, which the pipeline closed after step 1. Both handed to Gama (comms b9e14e245d3d82af). Do not resume either from this block — read Gama's word and the board.**
