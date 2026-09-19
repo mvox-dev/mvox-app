@@ -32,11 +32,22 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 	// #372 repin (PO-approved 2026-09-15, Gama; ruling recorded on #372) — both
 	// move together again for ER-27 and its §7.6 home (creating a child under a
 	// parent is governed by `_editor` on that parent). Same caveat.
+	//
+	// #411 repin (PO ruling, Gama 2026-09-18; Mihkel released the issue and
+	// widened the docs carve-out) — both move together again, and this one edits
+	// NO rule: the "What this changes" SUPERSEDED marker claimed ~15 person
+	// prop-defs still sat at `domain`, true when written 2026-08-06 and false
+	// since #181 flipped them on 2026-08-27. The guard spec moves with it only
+	// because its doc-remainder pin re-derives. A fence that preserves a stale
+	// privacy claim about a live-pilot database is holding the wrong thing still;
+	// the claim reached a reader as a real exposure before the dates were checked.
+	// Same caveat: these pins prove no drift SINCE this edit, never that the edit
+	// was right.
 	it('docs/architecture/entu-rights-and-visibility-model.md is unchanged', () => {
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
 			'#318 builds a VIEW over the doc; a doc edit belongs to its own commissioned slice. Repin only behind a PO-ruled doc edit (sha256 of the file at the sanctioned state).'
-		).toBe('7160b596c9077942032283d9f1a66268fffbef5a4051601074a3c47433ed4b41');
+		).toBe('abf007d4e59dd68fe9b8aa9d413055666f10d238de76f5408a6c779f49e31cc9');
 	});
 
 	// #397 repin (Mihkel-ruled 2026-09-18, closing #364) — the guard spec's
@@ -48,7 +59,7 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('38740fba0b724d993979415aaaf6e93ec7f11b47727a4830ffb6f6ae2b775962');
+		).toBe('7b857533cc3076ebd0d33b011d5817e2b1953c15f51d2af4d698d376c2bca72a');
 	});
 });
 

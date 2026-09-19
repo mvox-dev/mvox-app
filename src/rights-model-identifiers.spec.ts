@@ -1438,7 +1438,19 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	// #372 maintenance: same shape again for ER-27 and its §7.6 home — an
 	// addition, so the remainder re-derives rather than preserving an anchor, and
 	// the same caveat rides along. ER-27 is pinned below in this same slice.
-	const DOC_MINUS_TARGETS_SHA256 = '54fccff44d348d687b7b1ecc726a933a1bfa57ef47e643ad9efdaaf9b6599b90';
+	//
+	// #411 maintenance (PO ruling, Gama 2026-09-18, Mihkel releasing the issue and
+	// widening the docs carve-out) — the FIRST repin that touches no ER block at
+	// all. The edit is one sentence of §-prose inside the "What this changes"
+	// SUPERSEDED marker: it claimed ~15 person prop-defs still sat at `domain`,
+	// true when written 2026-08-06 and false since #181 flipped them on
+	// 2026-08-27. A stale privacy claim on a live-pilot database is exactly what
+	// this fence must not preserve, so the mandate widens to it by name: prose
+	// correction inside that marker, nothing else — no ER block, no renumbering,
+	// no other §-prose. Re-derived from post-#411 bytes; #330's caveat rides on
+	// unchanged, so this proves no drift SINCE this edit, never that the edit was
+	// right. Provenance: mvox-app#411.
+	const DOC_MINUS_TARGETS_SHA256 = '75ce52e27b1811d1fbd1be07eacc03bce17771f16077d1bc40b54580f8cdd641';
 
 	const docExcludingBlocks = (ids: string[]): string => {
 		const drop = new Set<number>();
@@ -1461,7 +1473,7 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	it('the doc minus the ER-3/ER-9/ER-10/ER-12/ER-26/ER-27 blockquote runs hashes to its post-#372 state', () => {
 		expect(
 			sha256(docExcludingBlocks(['ER-3', 'ER-9', 'ER-10', 'ER-12', 'ER-26', 'ER-27'])),
-			"#322's mandate was ER-9/ER-12, #330's is ER-3/ER-10/ER-12, #369's is ER-26 plus its §7.5 home and #372's is ER-27 plus its §7.6 home, nothing else — no renumbering, no other §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: take the doc at the sanctioned state, drop the six blockquote runs, sha256 the remainder"
+			"#322's mandate was ER-9/ER-12, #330's is ER-3/ER-10/ER-12, #369's is ER-26 plus its §7.5 home, #372's is ER-27 plus its §7.6 home and #411's is one prose sentence inside the \"What this changes\" SUPERSEDED marker, nothing else — no renumbering, no other §-prose edit, no other block touched. Repin only behind a PO ruling that widens the mandate: take the doc at the sanctioned state, drop the six blockquote runs, sha256 the remainder"
 		).toBe(DOC_MINUS_TARGETS_SHA256);
 	});
 });
