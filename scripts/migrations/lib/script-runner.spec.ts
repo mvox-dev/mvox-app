@@ -86,18 +86,53 @@ describe('loadCredeCfg', () => {
 		await expect(loadCredeCfg(undefined, undefined, undefined, fetchImpl)).rejects.toThrow(/no token/i);
 	});
 
-	it('succeeds and defaults db to mvox_crede when MVOX_CREDE_DB is unset', async () => {
-		const fetchImpl = vi.fn().mockResolvedValue(json({ token: 'the-jwt' }));
+	// mvox-app#419 — the auth exchange's `accounts` array names the runner
+	// identity per db (`user._id`, the id the rights preflight checks against
+	// each event's _owner/_editor references). loadCredeCfg surfaces it as a
+	// NEW `userId` key; the existing keys stay untouched (exact-shape toEqual).
+	it('succeeds, defaults db to mvox_crede when MVOX_CREDE_DB is unset, and surfaces the runner identity as userId', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				token: 'the-jwt',
+				accounts: [{ _id: 'mvox_crede', name: 'mvox_crede', user: { _id: 'runner-1', name: 'Runner' } }]
+			})
+		);
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
-		expect(cfg).toEqual({ db: 'mvox_crede', token: 'the-jwt' });
+		expect(cfg).toEqual({ db: 'mvox_crede', token: 'the-jwt', userId: 'runner-1' });
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
 		expect(url).toMatch(/\/auth\?db=mvox_crede$/);
 		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer crede-key-123');
 	});
 
+	it("userId comes from the account matching the TARGET db, not whichever account happens first", async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				token: 't',
+				accounts: [
+					{ _id: 'muu_baas', name: 'muu_baas', user: { _id: 'other-user', name: 'Keegi Muu' } },
+					{ _id: 'mvox_crede', name: 'mvox_crede', user: { _id: 'runner-1', name: 'Runner' } }
+				]
+			})
+		);
+		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
+		// cast: the draft return type predates the `userId` key (RED) — GREEN
+		// widens the return type and makes this a plain property access.
+		expect((cfg as { userId?: string }).userId).toBe('runner-1');
+	});
+
+	it('throws when the exchange reports NO user id for the db — the rights preflight needs the runner identity, a silent gap would surface as aborted-rights much later', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ token: 't' }));
+		await expect(loadCredeCfg(undefined, undefined, undefined, fetchImpl)).rejects.toThrow(/no user id/i);
+	});
+
 	it('honours an overridden MVOX_CREDE_DB', async () => {
 		process.env.MVOX_CREDE_DB = 'mvox_other';
-		const fetchImpl = vi.fn().mockResolvedValue(json({ token: 't' }));
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				token: 't',
+				accounts: [{ _id: 'mvox_other', name: 'mvox_other', user: { _id: 'runner-2', name: 'Runner' } }]
+			})
+		);
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
 		expect(cfg.db).toBe('mvox_other');
 		expect((fetchImpl.mock.calls[0] as [string])[0]).toMatch(/\/auth\?db=mvox_other$/);

@@ -50,13 +50,21 @@ export function readAuthorizedBy(): string | undefined {
  * the api-key as Bearer). Fails loud on a missing key, a non-2xx exchange,
  * or a 2xx body with no `token` (the apparent-success trap already named in
  * the individual scripts this replaces).
+ *
+ * mvox-app#419 — also surfaces the runner identity as `userId`: the
+ * exchange's `accounts` array carries one entry per db the key can reach,
+ * each with a `user._id`; the entry matching the TARGET db (not whichever
+ * comes first) is the id a per-event rights preflight checks against
+ * `_owner`/`_editor` references. Fails loud when the exchange reports none
+ * for this db — a silent gap here would otherwise surface much later as
+ * every event failing the rights preflight.
  */
 export async function loadCredeCfg(
 	dbEnvVar = 'MVOX_CREDE_DB',
 	keyEnvVar = 'MVOX_CREDE_API_KEY',
 	defaultDb = 'mvox_crede',
 	fetchImpl: typeof fetch = fetch
-): Promise<EntuCfg> {
+): Promise<EntuCfg & { userId: string }> {
 	const db = process.env[dbEnvVar] ?? defaultDb;
 	const key = process.env[keyEnvVar];
 	if (!key) throw new Error(`loadCredeCfg: ${keyEnvVar} is not set — source ~/.config/mvox/credentials.env first`);
@@ -64,9 +72,14 @@ export async function loadCredeCfg(
 		headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' }
 	});
 	if (!res.ok) throw new Error(`loadCredeCfg: auth exchange failed: ${res.status}`);
-	const body = (await res.json()) as { token?: string };
+	const body = (await res.json()) as {
+		token?: string;
+		accounts?: Array<{ _id: string; user?: { _id?: string } }>;
+	};
 	if (!body.token) throw new Error('loadCredeCfg: auth exchange returned no token (apparent-success trap)');
-	return { db, token: body.token };
+	const userId = body.accounts?.find((account) => account._id === db)?.user?._id;
+	if (!userId) throw new Error(`loadCredeCfg: auth exchange reported no user id for db '${db}'`);
+	return { db, token: body.token, userId };
 }
 
 /** Common error-to-string, unifies the `errMsg` helper duplicated across scripts. */
