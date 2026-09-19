@@ -46,6 +46,15 @@
 //   (a computed `name` beside no `event_name` wears the straggler shape),
 //   so 'aborted-already-formula' must win on a re-run.
 //
+// - EMPTY OPERANDS stop the step too, and before the POST: an event whose
+//   start_datetime, event_type and event_name are ALL empty/absent computes
+//   to no value at all (entu-www src/api/formulas/index.md, "Empty Input
+//   Behaviour": CONCAT_WS with empty input writes no property), so the
+//   formula would leave it with no `name` whatsoever. Collected as
+//   `emptyOperands` ({eventId} only), outcome 'aborted-empty-operands'.
+//   Pairing wins when both are present — a straggler loses a stored name,
+//   which is the worse verdict of the two.
+//
 // - MULTI-VALUE stops the step AHEAD of pairing (S2 precedent: a doubled
 //   name is not classifiable at all): any event holding more than one
 //   `name` or `event_name` value → `multiValue` (eventId + both counts),
@@ -76,7 +85,8 @@
 //   overwrite cannot be previewed (a formula has no non-destructive mode).
 //
 // - LIVE: exactly ONE POST — `entity/{namePropDefId}` with body
-//   `[{type:'formula', string: FORMULA}]` (probe-233's proven wire shape,
+//   `[{type:'formula', string: FORMULA}]`
+//   (probe-233-formula-name-overwrite-2026-09-03.ts's proven wire shape,
 //   NO DELETE first: `formula` behaved as a settable single value). Then
 //   touch-save EVERY crede event via `GET entity/{id}/aggregate` — the
 //   documented mechanic (api/best-practices: "fresh formula values after
@@ -90,6 +100,20 @@
 //   non-empty (date — type). Mismatches → ledger outcome
 //   'completed-with-mismatch' with `mismatchIds`, saying plainly the
 //   overwrite cannot be undone, then THROW — never a silent partial.
+//
+// - EVERY FAILURE FROM THE POST ONWARDS writes a ledger before it rethrows:
+//   outcome 'completed-with-error' with the counts reached, `aggregatedIds`
+//   (what was touch-saved) and a fixed `errorNote`. A 5xx on the POST does
+//   not prove the write did not apply, and a failure mid-touch-save leaves
+//   a live formula over a part-refreshed estate — the same stance the
+//   mismatch branch states, and Done-when box 4's committed ledger.
+//
+// - RESUME (`{ resumeTouchSaves: true }`, CLI RESUME_TOUCH_SAVES=true) is
+//   the way back from that state: it REQUIRES the prop-def to already carry
+//   this FORMULA ('aborted-resume-precondition' otherwise), issues NO POST,
+//   and runs the touch-saves and read-back alone. It skips the pairing
+//   verdict, unreadable under a live formula; its ledgers carry
+//   `resumed: true`.
 //
 // - LEDGER through #402's committed-allowlist writer: sensitive:true,
 //   `committed.allow` keyed by ids/outcome/counts only — NEVER a field
@@ -161,7 +185,11 @@ const COMMITTED_ALLOW = [
 	'overwritePreview',
 	'mismatchIds',
 	'mismatchNote',
+	'aggregatedIds',
+	'errorNote',
+	'resumed',
 	'pairingStragglers',
+	'emptyOperands',
 	'multiValue',
 	'eventId',
 	'nameCount',
@@ -175,6 +203,10 @@ const OVERWRITE_PREVIEW =
 /** The mismatch ledger's plain statement that the overwrite cannot be undone. */
 const MISMATCH_NOTE =
 	'the formula overwrite cannot be undone — the mismatched events need manual review';
+
+/** The post-write failure ledger's fixed statement — no error message folded in. */
+const POST_WRITE_ERROR_NOTE =
+	'the run failed at or after the formula POST — the formula may already be in force and the touch-saves are partial; aggregatedIds lists what was refreshed, and a RESUME_TOUCH_SAVES=true run finishes the rest';
 
 // ---------------------------------------------------------------------------
 // Fixtures — census entities in Entu's multi-value wire shape. The name
@@ -254,6 +286,23 @@ const MULTI_VALUE: CensusEvent[] = [
 	}
 ];
 
+/**
+ * Events the formula would compute NOTHING for: all three sources empty or
+ * absent. `ev-empty-2` carries both properties with no usable value (a blank
+ * beats presence here, same as the straggler above). They are also nameless
+ * — the buckets overlap; the abort is what matters.
+ */
+const EMPTY_OPERANDS: CensusEvent[] = [
+	pairedEvent(1),
+	namelessEvent(1),
+	{ _id: 'ev-empty-1' },
+	{
+		_id: 'ev-empty-2',
+		start_datetime: [{ _id: 'p-empty-2-dt' }],
+		event_type: [{ _id: 'p-empty-2-type', string: '   ' }]
+	}
+];
+
 /** Small clean estate for the preflight-abort cases — the estate BEFORE S4 runs. */
 const SMALL: CensusEvent[] = [pairedEvent(1), namelessEvent(1), namelessEvent(2)];
 
@@ -302,9 +351,14 @@ function makeWire(
 		propDef?: { owners?: string[]; editors?: string[]; formula?: string };
 		/** Read-back `name` value per event id, overriding the computed one. */
 		readbackNameOverride?: Record<string, string>;
+		/** The formula POST answers 500 — a 5xx that does not prove the write did not apply. */
+		postFails?: boolean;
+		/** The Nth aggregate GET (1-based) answers 500, mid-touch-save. */
+		aggregateFailsAt?: number;
 	} = {}
 ): { fetchImpl: typeof fetch; requests: LoggedRequest[] } {
 	const requests: LoggedRequest[] = [];
+	let aggregateCalls = 0;
 
 	const propDef = overrides.propDef ?? { owners: [RUNNER_ID] };
 	// `reference` is the id the rights preflight must check; `string` is the
@@ -353,11 +407,16 @@ function makeWire(
 		}
 
 		if (method === 'POST' && url === `${BASE}/entity/${NAME_PROPDEF_ID}`) {
+			if (overrides.postFails) return json({ error: 'upstream exploded' }, 500);
 			return json({ properties: [{ _id: 'p-pd-formula-new', type: 'formula' }] });
 		}
 
 		const aggregateMatch = url.match(new RegExp(`^${BASE}/entity/(ev-[\\w-]+)/aggregate$`));
 		if (method === 'GET' && aggregateMatch) {
+			aggregateCalls += 1;
+			if (overrides.aggregateFailsAt === aggregateCalls) {
+				return json({ error: 'upstream exploded' }, 500);
+			}
 			return json({ _id: aggregateMatch[1] });
 		}
 
@@ -564,6 +623,60 @@ describe('#421 — a multi-valued name/event_name stops the step ahead of pairin
 	});
 });
 
+describe('#421 — an event the formula would compute NOTHING for stops the step before the POST', () => {
+	it('DRY: all three formula sources empty/absent → throws, outcome aborted-empty-operands with the ids, reads only', async () => {
+		const { fetchImpl, requests } = makeWire(EMPTY_OPERANDS);
+
+		await expect(runSeed233S4(cfg, true, fetchImpl)).rejects.toThrow(/no non-empty start_datetime/i);
+
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
+		expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s4-event-name-formula-crede',
+			dryRun: true,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: undefined,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: true,
+				outcome: 'aborted-empty-operands',
+				// the two empty-operand events are nameless as well — the
+				// buckets overlap, the abort is what the ledger is for
+				counts: { total: 4, paired: 1, nameless: 3 },
+				emptyOperands: [{ eventId: 'ev-empty-1' }, { eventId: 'ev-empty-2' }]
+			}
+		});
+	});
+
+	it('LIVE: the same abort fires before the irreversible POST — zero POSTs, zero aggregate GETs', async () => {
+		const { fetchImpl, requests } = makeWire(EMPTY_OPERANDS);
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/compute no name at all/i);
+
+		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
+		expect(requests.filter((r) => r.url.endsWith('/aggregate'))).toEqual([]);
+		const call = writeLedgerMock.mock.calls[0]?.[0] as { payload: { outcome: string } };
+		expect(call.payload.outcome).toBe('aborted-empty-operands');
+	});
+
+	it('pairing WINS when both are present — a straggler loses a stored name, the worse of the two verdicts', async () => {
+		const BOTH: CensusEvent[] = [
+			{ _id: 'ev-s1', name: [{ _id: 'p-s1-name', string: 'Kirjutati vahepeal' }] },
+			{ _id: 'ev-empty-1' }
+		];
+		const { fetchImpl } = makeWire(BOTH);
+
+		await expect(runSeed233S4(cfg, true, fetchImpl)).rejects.toThrow(/pairing/i);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		const call = writeLedgerMock.mock.calls[0]?.[0] as { payload: { outcome: string } };
+		expect(call.payload.outcome).toBe('aborted-pairing');
+	});
+});
+
 describe('#421 — prop-def + rights preflight on the `name` prop-def', () => {
 	it('LIVE: runner absent from the prop-def _owner/_editor references → aborted-rights, NO POST — .reference only, never .string', async () => {
 		const { fetchImpl, requests } = makeWire(SMALL, {
@@ -711,7 +824,8 @@ describe('#421 — live run: ONE formula POST, then touch-save EVERY event, then
 		const result = await runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH);
 
 		// Full request order: census → prop-def resolution → the ONE formula
-		// POST (no DELETE first — probe-233's proven wire shape) → one
+		// POST (no DELETE first — the wire shape proven by
+		// probe-233-formula-name-overwrite-2026-09-03.ts) → one
 		// aggregate GET per event in census order → the read-back GET.
 		expect(requests).toEqual([
 			censusGet,
@@ -786,6 +900,181 @@ describe('#421 — live run: ONE formula POST, then touch-save EVERY event, then
 				mismatchNote: MISMATCH_NOTE
 			}
 		});
+	});
+});
+
+describe('#421 — a failure from the POST onwards is recorded, never only thrown', () => {
+	it('the 20th aggregate GET fails mid-touch-save → ledger completed-with-error with aggregated: 19 and the ids, then rethrows', async () => {
+		const { fetchImpl, requests } = makeWire(CREDE, { aggregateFailsAt: 20 });
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/aggregate GET for .* failed: 500/i);
+
+		// The formula is live and 19 of 46 events are refreshed: the estate
+		// is half-recomputed, and the ledger is the only record of which half.
+		expect(requests.filter((r) => r.method === 'POST')).toEqual([formulaPost]);
+		expect(requests.filter((r) => r.url.endsWith('/aggregate'))).toHaveLength(20);
+		expect(requests.filter((r) => r.url === READBACK_URL)).toEqual([]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s4-event-name-formula-crede',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: false,
+				outcome: 'completed-with-error',
+				formula: FORMULA,
+				counts: { total: 46, paired: 10, nameless: 36, aggregated: 19 },
+				namePropDefId: NAME_PROPDEF_ID,
+				errorNote: POST_WRITE_ERROR_NOTE,
+				aggregatedIds: CREDE.slice(0, 19).map((e) => e._id)
+			}
+		});
+	});
+
+	it('a 500 on the formula POST is ledgered too — a 5xx does not prove the write did not apply', async () => {
+		const { fetchImpl, requests } = makeWire(CREDE, { postFails: true });
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/formula POST .* failed: 500/i);
+
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets, formulaPost]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		const call = writeLedgerMock.mock.calls[0]?.[0] as {
+			payload: { outcome: string; counts: Record<string, number>; aggregatedIds: string[]; errorNote: string };
+		};
+		expect(call.payload.outcome).toBe('completed-with-error');
+		expect(call.payload.counts).toEqual({ total: 46, paired: 10, nameless: 36, aggregated: 0 });
+		expect(call.payload.aggregatedIds).toEqual([]);
+		expect(call.payload.errorNote).toBe(POST_WRITE_ERROR_NOTE);
+	});
+
+	it('the read-back GET failing is ledgered too — the overwrite already happened', async () => {
+		const { fetchImpl } = makeWire(CREDE);
+		const failing = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+			if (String(input) === READBACK_URL) {
+				return Promise.resolve(new Response(JSON.stringify({ error: 'boom' }), { status: 500 }));
+			}
+			return fetchImpl(input, init);
+		}) as typeof fetch;
+
+		await expect(runSeed233S4(cfg, false, failing, LIVE_AUTH)).rejects.toThrow(/read-back GET failed: 500/i);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		const call = writeLedgerMock.mock.calls[0]?.[0] as {
+			payload: { outcome: string; counts: Record<string, number> };
+		};
+		expect(call.payload.outcome).toBe('completed-with-error');
+		expect(call.payload.counts).toEqual({ total: 46, paired: 10, nameless: 36, aggregated: 46 });
+	});
+});
+
+describe('#421 — resume: finishing a run that died after the formula POST', () => {
+	it('the formula already in force → NO POST, touch-saves + read-back only, outcome completed with resumed: true', async () => {
+		const { fetchImpl, requests } = makeWire(AFTER_SUCCESS, {
+			propDef: { owners: [RUNNER_ID], formula: FORMULA }
+		});
+
+		const result = await runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH, { resumeTouchSaves: true });
+
+		expect(requests).toEqual([
+			censusGet,
+			...propDefResolutionGets,
+			...AFTER_SUCCESS.map((e) => aggregateGet(e._id)),
+			readbackGet
+		]);
+		expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
+
+		// The two nameless events wear the straggler shape under a live
+		// formula — resume skips that verdict, which is why `nameless` is 0.
+		expect(result).toEqual({
+			outcome: 'completed',
+			formula: FORMULA,
+			counts: { total: 3, paired: 1, nameless: 0, aggregated: 3, readBackOk: 3, readBackMismatch: 0 },
+			namePropDefId: NAME_PROPDEF_ID,
+			mismatchIds: [],
+			ledgerPath: LEDGER_PATH
+		});
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s4-event-name-formula-crede',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: false,
+				outcome: 'completed',
+				formula: FORMULA,
+				counts: { total: 3, paired: 1, nameless: 0, aggregated: 3, readBackOk: 3, readBackMismatch: 0 },
+				namePropDefId: NAME_PROPDEF_ID,
+				mismatchIds: [],
+				resumed: true
+			}
+		});
+	});
+
+	it('resume asked for with NO formula in force → aborted-resume-precondition, zero POSTs, zero aggregate GETs', async () => {
+		const { fetchImpl, requests } = makeWire(SMALL);
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH, { resumeTouchSaves: true })).rejects.toThrow(
+			/no post-POST run to finish/i
+		);
+
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s4-event-name-formula-crede',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: false,
+				outcome: 'aborted-resume-precondition',
+				counts: { total: 3, paired: 1, nameless: 2 },
+				namePropDefId: NAME_PROPDEF_ID,
+				rightsOk: true,
+				resumed: true
+			}
+		});
+	});
+
+	it("resume with someone ELSE's formula in force stops the same way — the estate is not this run's", async () => {
+		const { fetchImpl, requests } = makeWire(SMALL, {
+			propDef: { owners: [RUNNER_ID], formula: "event_name ' ' CONCAT_WS" }
+		});
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH, { resumeTouchSaves: true })).rejects.toThrow(
+			/no post-POST run to finish/i
+		);
+
+		expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
+		const call = writeLedgerMock.mock.calls[0]?.[0] as {
+			payload: { outcome: string; existingFormula: string };
+		};
+		expect(call.payload.outcome).toBe('aborted-resume-precondition');
+		expect(call.payload.existingFormula).toBe("event_name ' ' CONCAT_WS");
+	});
+
+	it('a resume run still needs an authorizer — the #417 gate is untouched by the flag', async () => {
+		const { fetchImpl, requests } = makeWire(AFTER_SUCCESS, {
+			propDef: { owners: [RUNNER_ID], formula: FORMULA }
+		});
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, undefined, { resumeTouchSaves: true })).rejects.toThrow(
+			/authorizedBy|AUTHORIZED_BY/i
+		);
+
+		expect(requests).toEqual([]);
+		expect(writeLedgerMock).not.toHaveBeenCalled();
 	});
 });
 

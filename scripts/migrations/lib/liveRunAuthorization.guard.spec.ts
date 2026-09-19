@@ -161,6 +161,13 @@ describe('mvox-app#417 — every crede-mutating script gates its live run on a r
 	// per `committed: { … allow: [ … ] }` block ([^}]*? cannot cross out of
 	// the committed object, and an allow array in this corpus holds only
 	// quoted names), then test membership inside those blocks.
+	// Known reach, recorded so this fence's green is not read as coverage it
+	// does not have (#421 review): the regex sees INLINE arrays only. A
+	// script passing `allow: SOME_CONST` (seed-233-s2 and seed-233-s4 today)
+	// yields zero blocks here and passes vacuously — their allow arrays are
+	// pinned by their own specs' full-array toEqual instead.
+	// Closing it means resolving the identifier to its module-level const,
+	// or importing each script and reading the array it actually passes.
 	const COMMITTED_ALLOW_RE = /committed:\s*\{[^}]*?allow:\s*\[[^\]]*\]/g;
 	const ALLOWS_AUTHORIZED_BY = /(['"`])authorizedBy\1/;
 
