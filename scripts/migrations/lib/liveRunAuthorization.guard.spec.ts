@@ -49,10 +49,11 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // out of scope by decision, not by construction.
 
 /**
- * The 14 crede-mutating scripts, enumerated from the #417 research digest
- * §(d) and re-verified against this tree by the discovery test below. A NEW
- * script that imports loadCredeCfg and mutates must BOTH appear here and
- * call the preflight — failing either test loudly is the point.
+ * The 15 crede-mutating scripts: the 14 enumerated from the #417 research
+ * digest §(d), plus seed-233-s2 (#419), re-verified against this tree by the
+ * discovery test below. A NEW script that imports loadCredeCfg and mutates
+ * must BOTH appear here and call the preflight — failing either test loudly
+ * is the point.
  */
 const CREDE_MUTATING_SCRIPTS = [
 	'grant-294-joosep-owner-crede-2026-09-09.ts',
@@ -64,6 +65,7 @@ const CREDE_MUTATING_SCRIPTS = [
 	'seed-187-crede-content-menus-2026-08-27.ts',
 	'seed-188-phase3b-crede-sections-2026-08-29.ts',
 	'seed-233-s1-event-name-propdef-crede.ts',
+	'seed-233-s2-event-name-backfill-crede.ts',
 	'seed-246-schedule-item-type-crede-2026-09-06.ts',
 	'seed-256-link-type-crede-2026-09-10.ts',
 	'seed-265-admin-member-record-type-crede-2026-09-06.ts',
@@ -110,7 +112,7 @@ function discoveredCredeMutators(): string[] {
 }
 
 describe('mvox-app#417 — every crede-mutating script gates its live run on a recorded authorizer', () => {
-	it('the discovered loadCredeCfg-importing mutating set matches the enumerated 14 — a new crede-mutating script must be added here AND gated', () => {
+	it('the discovered loadCredeCfg-importing mutating set matches the enumerated 15 — a new crede-mutating script must be added here AND gated', () => {
 		expect(
 			discoveredCredeMutators(),
 			'A script importing loadCredeCfg and issuing a mutating Entu call is not in CREDE_MUTATING_SCRIPTS. ' +

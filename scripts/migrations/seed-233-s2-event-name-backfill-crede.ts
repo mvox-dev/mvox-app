@@ -4,8 +4,9 @@
 // stored value on every save and silently drops POSTs — run it first and
 // every existing name is destroyed).
 //
-// Crede ONLY, ONE script (the `-crede-`/`-polyphony-` twin pattern ended at
-// S1 — estate ruling, Mihkel 2026-09-18, folded into the #233 body).
+// Crede ONLY, ONE script (the per-db `-crede-`/`-<other>-` twin-script
+// pattern ended at S1 — estate ruling, Mihkel 2026-09-18, folded into the
+// #233 body).
 //
 // `runSeed233S2(cfg, dryRun, fetchImpl)` is the whole contract, pinned by
 // `seed-233-s2-event-name-backfill-crede.spec.ts`: side-effect-free on
@@ -66,7 +67,7 @@
 // via Gama comment 5728594975) for the definition and scope; team-lead's
 // explicit "I authorize this run" gates DRY_RUN=false separately, per the
 // standing two-step gate (crede is real PII — routine pre-authorization
-// covers polyphony's synthetic data only).
+// covers synthetic-db data only).
 //
 // Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
 //   cd ~/workspace-app
