@@ -1,8 +1,7 @@
 // mvox-app#233 S2 / mvox-app#419 (RED, Tallis) — copy every crede event's
-// `name` value into `event_name`. The data-loss fence's FIRST half: this
-// backfill must be complete before S4 turns `name` into a formula (a formula
-// overwrites the stored value on every save and silently drops POSTs — run
-// it first and every existing name is destroyed).
+// `name` value into `event_name`. This backfill must be complete before S4
+// turns `name` into a formula: a formula overwrites the stored value on
+// every save and silently drops POSTs, so any name not copied first is gone.
 //
 // Crede ONLY, ONE script (the per-db `-crede-`/`-<other>-` twin-script
 // pattern ended at S1 — estate ruling, Mihkel 2026-09-18, folded into the
@@ -34,8 +33,8 @@
 //   `entity?_type.string=event&props=name,event_name,_owner,_editor&limit=10000`
 //   — NO `_parent.reference=` scoping (S2 must cover every crede event,
 //   whatever it hangs under). HARD-THROW when
-//   `body.count !== body.entities.length` (tidy-td2c's census-truncated
-//   guard): a silently truncated census would leave unmigrated events for
+//   `body.count !== body.entities.length`: a silently truncated census
+//   would otherwise leave unmigrated events for
 //   S4's formula to blank. The rights props ride along on this ONE query
 //   (Entu returns them on a list — precedent:
 //   probes/probe-356-crede-conductor-rights-2026-09-15.ts, which lists
@@ -55,15 +54,28 @@
 //   The list carries no value string, so the committed twin keeps it whole.
 //
 // - IDEMPOTENCE = THREE RULES (#233 body / #419), in this precedence:
-//     1. `event_name` already holds a non-empty value → PRESENCE check
-//        (Entu's POST appends — a second value must never be written).
-//        Value EQUAL to `name` (or `name` absent/empty) → outcome
-//        'already-migrated', NO write, run CONTINUES. Value that DIFFERS
-//        from a non-empty `name` → collected as `eventNameDiffers`
-//        (id + name + stored value) — see DIVERGENCE below.
+//     1. `event_name` PRESENT (the property exists) → never POSTed to,
+//        whatever it holds: Entu's POST appends, so a second value must
+//        never be written, and presence is the only test that keeps it from
+//        being. A non-empty value EQUAL to `name` (or `name` absent/empty)
+//        → outcome 'already-migrated', NO write, run CONTINUES. A non-empty
+//        value that DIFFERS from a non-empty `name` → `eventNameDiffers`
+//        (id + name + stored value), see DIVERGENCE below. A BLANK value —
+//        whitespace-only, empty, or a value document with no `string` at
+//        all → `blankEventName` (id only), see BLANK below.
 //     2. else `name` absent OR empty/whitespace → outcome 'no-name', id
 //        recorded, NO write — NEVER write an empty value.
 //     3. only then POST.
+//
+// - BLANK STOPS THE STEP (#419 review round 2): a present-but-blank
+//   `event_name` is collected as `blankEventName` during classification,
+//   given NO outcome, and a non-empty list stops the run right after the
+//   multi-value stop and before divergence — dry and live alike, no request
+//   beyond the census, throws, ONE ledger with outcome
+//   'aborted-blank-event-name'. Nothing writes `event_name` today, so a
+//   blank value is a surprise a human decides on; a write would append a
+//   second value and the read-back canary would only catch it afterwards.
+//   The list carries ids alone, so the committed twin keeps it whole.
 //
 // - DIVERGENCE STOPS THE STEP (#419 amended body, Gama comment 5742461628 +
 //   the fourth Done-when box: 'a divergent value stops the step and is
@@ -85,25 +97,26 @@
 //   authorization is sought. The list is complete before any POST — the
 //   report names every missing grant, not the first.
 //
-// - ABORT ARTEFACTS (all three kinds): nothing was written, so the payload keys
+// - ABORT ARTEFACTS (all four kinds): nothing was written, so the payload keys
 //   the plan as `wouldMigrate`/`wouldMigrateIds` on dry AND live runs alike
 //   (a count named for what happened cannot be misread — 'migrated' names
 //   writes that never occurred), and `rerun` is FALSE: an aborted run has
 //   migrated===0 and failed===0, and without the pin the crash artefact
 //   would carry the exact flag the closing sweep reads as healthy. The
-//   three abort lists (`multiValue`, `eventNameDiffers`, `noRights`) plus
-//   `outcome` are the ONLY ledger additions besides the drafted buckets.
-//   `eventNameDiffers`/`noRights` carry the name values
+//   four abort lists (`multiValue`, `blankEventName`, `eventNameDiffers`,
+//   `noRights`) plus `outcome` are the ONLY ledger additions besides the
+//   drafted buckets. `eventNameDiffers`/`noRights` carry the name values
 //   (nameValue/storedValue) for the operator — the instance ledger is
 //   gitignored (sensitive:true) — while the committed allowlist admits only
 //   `eventId` inside them, so no name value can reach git history.
-//   `multiValue` carries counts, never a value, so it survives whole.
+//   `multiValue` carries counts and `blankEventName` ids alone, never a
+//   value, so those two survive whole.
 //
 // - LIVE WRITE per migrated event: `POST entity/{id}` with
 //   `[{ type: 'event_name', string: <name> }]` (event_name never has a prior
-//   value on a migrated event — rule 1 skipped or aborted otherwise — so
-//   Entu's POST-append is unambiguously a new value, not a replace). Then
-//   the 3-check canary (tidy-td2c's touch-save shape): (a) POST response
+//   property at all on a migrated event — rule 1 skipped or aborted
+//   otherwise — so Entu's POST-append is unambiguously a new value, not a
+//   replace). Then the 3-check canary: (a) POST response
 //   carries the new `event_name` property _id, (b) re-GET `entity/{id}?
 //   props=event_name` reads back a value EQUAL to the source name,
 //   (c) exactly ONE value. Any check failing → ledger records the event as
@@ -204,9 +217,10 @@ const COMMITTED_ALLOW = [
 	'eventId',
 	'eventNameDiffers',
 	'noRights',
-	// the multi-value abort list — ids and counts only, never a value, so it
-	// is the one abort list that reaches the committed twin intact
+	// the multi-value and blank-event_name abort lists — ids and counts only,
+	// never a value, so these two reach the committed twin intact
 	'multiValue',
+	'blankEventName',
 	'nameCount',
 	'eventNameCount'
 ] as const;
@@ -236,8 +250,8 @@ const MIX: CensusEvent[] = [
 		name: [{ _id: 'p-m4-name', string: 'Jõulukontsert' }],
 		event_name: [{ _id: 'p-m4-en', string: 'Jõulukontsert' }]
 	},
-	// post-S3 event: event_name set, NO name — the re-run trap; rule 1 must
-	// catch it BEFORE the no-name rule ever sees the absent `name`
+	// post-S3 event: event_name set, NO name — rule 1 must catch it BEFORE
+	// the no-name rule ever sees the absent `name`
 	{ _id: 'ev-m5', event_name: [{ _id: 'p-m5-en', string: 'Sügisproov' }] }
 ];
 
@@ -316,6 +330,32 @@ const MULTI_VALUE: CensusEvent[] = [
 			{ _id: 'p-v3-en-b', string: 'Keegi lisas teise' }
 		]
 	}
+];
+
+/**
+ * #419 review round 2 — the presence/emptiness gap. One clean event, one
+ * holding a whitespace-only `event_name`, one holding an `event_name` value
+ * document with no `string` at all. Both are PRESENT properties, so a POST
+ * would append and leave the event holding two values; the test that decides
+ * must be presence, not emptiness. The clean event proves the abort stops
+ * even the write that would have been fine.
+ */
+const BLANK_EVENT_NAME: CensusEvent[] = [
+	{ _id: 'ev-b1', name: [{ _id: 'p-b1-name', string: 'Puhas sündmus' }] },
+	{
+		_id: 'ev-b2',
+		name: [{ _id: 'p-b2-name', string: 'Tühi sihtväli' }],
+		event_name: [{ _id: 'p-b2-en', string: '   ' }]
+	},
+	{
+		_id: 'ev-b3',
+		name: [{ _id: 'p-b3-name', string: 'Väärtuseta sihtväli' }],
+		event_name: [{ _id: 'p-b3-en' }]
+	},
+	// empty-string event_name and no `name` — nothing would be written here
+	// either way, but the blank value is still one nobody wrote, so it is
+	// reported rather than filed as 'no-name'
+	{ _id: 'ev-b4', event_name: [{ _id: 'p-b4-en', string: '' }] }
 ];
 
 // ---------------------------------------------------------------------------
@@ -720,6 +760,66 @@ describe('#419 — a multi-valued name/event_name stops the step, never copied i
 			...migrationPair('ev-g2', 'Kontsert Tartus')
 		]);
 		expect(result.counts).toEqual({ total: 2, migrated: 2, alreadyMigrated: 0, noName: 0, failed: 0 });
+	});
+});
+
+describe('#419 — a PRESENT but blank event_name stops the step, never written over', () => {
+	it('LIVE: a whitespace-only, a string-less and an empty-string event_name → NO request beyond the census, throws, ONE ledger with outcome aborted-blank-event-name', async () => {
+		const { fetchImpl, requests } = makeWire(BLANK_EVENT_NAME);
+
+		await expect(runSeed233S2(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/blank event_name/i);
+
+		// The POST appends, so writing over a present-but-blank value leaves
+		// the event holding TWO event_name values — and the read-back canary
+		// would only notice AFTER the write. Presence decides, not emptiness.
+		expect(requests).toEqual([censusGet]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s2-event-name-backfill-crede',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: false,
+				rerun: false,
+				outcome: 'aborted-blank-event-name',
+				// the three blank events get NO outcome and appear in no bucket
+				// — ev-b4 included, blank beats 'no-name'
+				counts: { total: 4, wouldMigrate: 1, alreadyMigrated: 0, noName: 0, failed: 0 },
+				wouldMigrateIds: ['ev-b1'],
+				alreadyMigratedIds: [],
+				noNameIds: [],
+				failedIds: [],
+				// ids only — a blank value carries nothing to redact, so this
+				// list reaches the committed twin whole
+				blankEventName: [{ eventId: 'ev-b2' }, { eventId: 'ev-b3' }, { eventId: 'ev-b4' }]
+			}
+		});
+	});
+
+	it('DRY: the blank abort fires on the dry run alike — throws, outcome aborted-blank-event-name, zero requests beyond the census', async () => {
+		const { fetchImpl, requests } = makeWire(BLANK_EVENT_NAME);
+
+		await expect(runSeed233S2(cfg, true, fetchImpl)).rejects.toThrow(/blank event_name/i);
+
+		expect(requests).toEqual([censusGet]);
+
+		const call = writeLedgerMock.mock.calls[0]?.[0] as {
+			dryRun: boolean;
+			payload: { outcome: string; rerun: boolean; blankEventName: Array<{ eventId: string }> };
+		};
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(call.dryRun).toBe(true);
+		expect(call.payload.outcome).toBe('aborted-blank-event-name');
+		expect(call.payload.rerun).toBe(false);
+		expect(call.payload.blankEventName).toEqual([
+			{ eventId: 'ev-b2' },
+			{ eventId: 'ev-b3' },
+			{ eventId: 'ev-b4' }
+		]);
 	});
 });
 

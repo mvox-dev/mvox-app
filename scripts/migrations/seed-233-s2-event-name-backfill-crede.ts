@@ -1,126 +1,45 @@
-// mvox-app#233 S2 / mvox-app#419 — backfill every crede event's `name`
-// value into `event_name`. The data-loss fence's FIRST half: this backfill
-// must be complete before S4 turns `name` into a formula (a formula
-// overwrites the stored value on every save and silently drops POSTs — run
-// it first and every existing name is destroyed).
+// mvox-app#233 S2 / mvox-app#419 — copy every crede event's `name` value
+// into `event_name`. Crede only, one script. Must finish before S4 turns
+// `name` into a formula: a formula overwrites the stored value on every
+// save, so any name not copied first is gone.
 //
-// Crede ONLY, ONE script (the per-db `-crede-`/`-<other>-` twin-script
-// pattern ended at S1 — estate ruling, Mihkel 2026-09-18, folded into the
-// #233 body).
+// Contract — `runSeed233S2(cfg, dryRun, fetchImpl, authorizedBy?)`, pinned
+// by seed-233-s2-event-name-backfill-crede.spec.ts, which carries the
+// rationale (review history on #419). Side-effect-free on import; #417's
+// `assertLiveRunAuthorized` is the first statement. One db-wide census GET
+// (`_type.string=event&props=name,event_name,_owner,_editor`), no `_parent`
+// scoping, hard-throw when the reported `count` disagrees with the entity
+// count. Classification then stops the whole run — dry and live alike, no
+// request beyond the census, one ledger, throw — on any of four surprises:
+// more than one `name` or `event_name` value (`multiValue`), a present but
+// blank `event_name` (`blankEventName`), an `event_name` differing from a
+// non-empty `name` (`eventNameDiffers`), and a would-be-written event whose
+// `_owner`/`_editor` lack `cfg.userId` (`noRights`; the references ride on
+// the census, so the check costs no round-trip — references only, `.string`
+// bakes the person's name). Otherwise: an event_name PRESENT at all is
+// never written to — POST appends, so presence, not emptiness, is the test
+// — and counts as 'already-migrated'; `name` absent or blank -> 'no-name',
+// an empty value is never written; else POST
+// `[{ type: 'event_name', string: <name> }]` and verify three things: the
+// POST response carries the new property _id, a re-GET reads back the
+// source value, and exactly one value is stored. Any check failing records
+// the event as failed in the ledger, then throws — never a false 'migrated'.
 //
-// `runSeed233S2(cfg, dryRun, fetchImpl, authorizedBy?)` is the whole
-// contract, pinned by `seed-233-s2-event-name-backfill-crede.spec.ts`:
-// side-effect-free on import (no top-level network call — `main()` below
-// only runs when this file is executed directly, guarded by the
-// `isMainModule` check at the bottom, same pattern as S1).
+// Re-run rules. This script is re-run immediately before S4 as the closing
+// sweep, so a run that writes zero and skips all must read as healthy:
+// `rerun: true` only when `migrated === 0`, `failed === 0` and `total > 0`
+// — the `failed === 0` term keeps a crashed run (which also wrote nothing)
+// from carrying the healthy flag, and an aborted run never carries it
+// either. A dry run and any aborted run key the plan `wouldMigrate` /
+// `wouldMigrateIds`, never `migrated`, so no artefact names writes that
+// never happened. Every step commits a ledger through #402's writer with
+// `sensitive: true`: the instance file is gitignored, the committed twin is
+// built from COMMITTED_ALLOW — `name` is a redact field, and the abort
+// lists' value keys (nameValue/storedValue) stay out of it.
 //
-// `cfg.userId` (mvox-app#419) is the runner identity the /auth exchange in
-// `loadCredeCfg` reports for the target db — the rights preflight below
-// checks it against each event's `_owner`/`_editor` references.
-//
-// CENSUS: one db-wide GET, NO `_parent.reference=` scoping — S2 must cover
-// every crede event, whatever it hangs under. Hard-throws when the reported
-// `count` disagrees with the returned entity count (tidy-td2c's
-// census-truncated guard): a silently truncated census would leave
-// unmigrated events for S4's formula to blank. The census asks for
-// `_owner,_editor` alongside `name,event_name` — Entu returns rights props
-// on a list query (precedent: probes/probe-356-crede-conductor-rights-
-// 2026-09-15.ts, which lists crede events with exactly those props) — so
-// the rights preflight below costs ZERO extra round-trips instead of one
-// GET per would-write event. Visibility is identical either way: an event
-// the runner holds no rights on comes back without `_owner`/`_editor`,
-// which is the signal the check already relies on.
-//
-// MULTI-VALUED SOURCE STOPS THE STEP (#419 review round 1): Entu string
-// props are implicitly multi-valued (POST appends), so `name` and
-// `event_name` can each hold more than one value. This script copies ONE;
-// S4 then turns `name` into a formula and overwrites what is stored, so a
-// second `name` value nobody copied is destroyed — precisely the loss this
-// script is the fence against. A second `event_name` value is the same
-// surprise read from the other side (the exactly-one-value read-back
-// canary covers only values THIS run wrote). So: an event whose `name` or
-// `event_name` holds more than one value is collected during
-// classification as `multiValue` (id + both counts), given no outcome, and
-// a non-empty list stops the run before the rights check and before any
-// write — dry and live alike — with ledger outcome 'aborted-multi-value'.
-// Same shape and the same reason as the divergence stop: a surprise a
-// human decides on, not a state to skip past.
-//
-// IDEMPOTENCE = THREE RULES (#233 body / #419 amended body), in this
-// precedence:
-//   1. `event_name` already holds a non-empty value -> a PRESENCE check
-//      (Entu's POST appends — a second value must never be written). Equal
-//      to `name` (or `name` absent/empty) -> 'already-migrated', NO write,
-//      run continues. DIFFERS from a non-empty `name` -> collected as
-//      `eventNameDiffers` (id + name + stored value) — see DIVERGENCE
-//      below, never written, never skipped past.
-//   2. else `name` absent OR empty/whitespace -> 'no-name', NO write —
-//      NEVER write an empty value.
-//   3. only then POST.
-//
-// DIVERGENCE STOPS THE STEP (#419 amended body, Gama comment 5742461628):
-// when `eventNameDiffers` is non-empty after classification, the run stops
-// before any write — dry and live alike — issues no request beyond the
-// census, throws, and writes ONE ledger with outcome 'aborted-divergence'
-// and the offending list. Nothing writes `event_name` today, so a divergent
-// event is a surprise a human decides on, not a state to skip past.
-// Multi-value is checked FIRST, before divergence: an event holding two
-// `name` values cannot be classified at all, so it never reaches the
-// equal/differs comparison.
-//
-// RIGHTS PREFLIGHT (#419 amended body): before any write, for every event
-// that would be written, check `cfg.userId` appears among the `_owner`/
-// `_editor` references the census already returned (references only —
-// never `.string`, which bakes PII). Events lacking it are collected as
-// `noRights` (id + name); non-empty -> stop before any write, throw, ledger
-// outcome 'aborted-rights' with the list. Runs on the dry run too, so the
-// dry-run report shows missing grants before authorization is sought. The
-// whole list is complete before any POST — the report names every missing
-// grant, not the first.
-//
-// LIVE WRITE per migrated event: `POST entity/{id}` with
-// `[{ type: 'event_name', string: <name> }]`, then a 3-check read-back
-// canary (tidy-td2c's touch-save shape): (a) the POST response carries the
-// new `event_name` property _id, (b) re-GET reads back a value EQUAL to the
-// source name, (c) exactly ONE value. Any check failing marks the event
-// failed in the ledger, then throws — never a false 'migrated'.
-//
-// RE-RUN posture: this script is re-run immediately before S4 as the
-// closing sweep. A re-run that writes ZERO and skips ALL is the HEALTHY
-// outcome and reads as one: `rerun: true` when `migrated === 0`,
-// `failed === 0` and `total > 0`. The `failed === 0` term is load-bearing,
-// not defensive: the canary path pushes the event into `failedIds`, writes
-// the ledger and THROWS, so an ABORTED run whose very first migration
-// failed also has `migrated === 0` — without that term the crash artefact
-// would carry the exact flag the closing sweep reads as 'healthy, nothing
-// left to do'. `rerun: true` means 'wrote nothing AND nothing went wrong'.
-// An `aborted-divergence`/`aborted-rights` run is never `rerun: true`
-// either, for the same reason.
-//
-// DRY-RUN counts are keyed SEPARATELY — `wouldMigrate`/`wouldMigrateIds`,
-// never `migrated`/`migratedIds`. An aborted run (divergence or rights)
-// keys the same way on a LIVE run too — nothing was written, so `migrated`
-// would name writes that never occurred. Each live step commits a tracked
-// ledger twin, so a dry and a live artefact for the same step sit side by
-// side in git; if both spelled the plan `migrated: 1`, only the sibling
-// `dryRun` boolean would tell a reader that one of them never touched a
-// thing. A count named for what happened cannot be misread.
-//
-// Ledger: every live step on the real-personal-data pilot commits a result
-// ledger through #402's committed-allowlist writer — `sensitive: true`
-// routes the instance file to gitignored crede-instance/, `committed.allow`
-// builds the tracked twin. `name` is a DEFAULT_REDACT_FIELDS member, so the
-// payload is keyed by eventId/outcome/counts — never a key named `name`.
-// The two value-carrying abort lists (`eventNameDiffers`, `noRights`) carry
-// the name values for the operator in the gitignored instance file only —
-// the committed allowlist admits `eventId` alone inside them. `multiValue`
-// carries no value at all, only ids and counts, so it survives whole.
-//
-// Authorization: PO-Approved via the #233 estate ruling (Mihkel, 2026-09-18,
-// via Gama comment 5728594975) for the definition and scope; mvox-app#417's
-// `assertLiveRunAuthorized` gates DRY_RUN=false on a recorded `AUTHORIZED_BY`
-// separately, per the standing two-step gate (crede is real PII — routine
-// pre-authorization covers synthetic-db data only).
+// Authorization: PO-Approved via the #233 estate ruling (Mihkel,
+// 2026-09-18, Gama comment 5728594975) for definition and scope; #417's
+// gate requires a recorded AUTHORIZED_BY for DRY_RUN=false separately.
 //
 // Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
 //   cd ~/workspace-app
@@ -143,9 +62,9 @@ interface CensusEvent {
 	_id: string;
 	name?: Array<{ _id: string; string?: string }>;
 	event_name?: Array<{ _id: string; string?: string }>;
-	// Rights references ride along on the census (see CENSUS above) — the
-	// preflight reads `reference` only; `.string` on these is the person's
-	// baked NAME and never leaves this module.
+	// Rights references ride along on the census — the preflight reads
+	// `reference` only; `.string` on these is the person's baked name and
+	// never leaves this module.
 	_owner?: Array<{ reference?: string }>;
 	_editor?: Array<{ reference?: string }>;
 }
@@ -194,9 +113,10 @@ const COMMITTED_ALLOW = [
 	'eventId',
 	'eventNameDiffers',
 	'noRights',
-	// multi-value abort list: ids and counts only, no value ever — it is the
-	// one abort list that survives into the committed twin intact.
+	// multi-value and blank-event_name abort lists: ids and counts only, no
+	// value ever — the two lists that survive into the committed twin intact.
 	'multiValue',
+	'blankEventName',
 	'nameCount',
 	'eventNameCount'
 ] as const;
@@ -244,6 +164,7 @@ export async function runSeed233S2(
 	const failedIds: string[] = [];
 	const migratedIds: string[] = [];
 	const eventNameDiffers: Array<{ eventId: string; nameValue: string; storedValue: string }> = [];
+	const blankEventName: Array<{ eventId: string }> = [];
 	const multiValue: Array<{ eventId: string; nameCount: number; eventNameCount: number }> = [];
 	// Rights references, straight off the census — the preflight below reads
 	// these instead of issuing a GET per would-write event.
@@ -264,7 +185,18 @@ export async function runSeed233S2(
 		const eventNameValue = event.event_name?.[0]?.string;
 		const nameValue = event.name?.[0]?.string;
 
-		if (isNonEmpty(eventNameValue)) {
+		// PRESENCE, not emptiness, decides whether to write: Entu's POST
+		// appends, so an event that already holds an `event_name` property
+		// must never be POSTed to, whatever that property's value is.
+		if (eventNameCount === 1) {
+			if (!isNonEmpty(eventNameValue)) {
+				// A blank value (whitespace-only, or a value document with no
+				// `string` at all). Nothing writes `event_name` today, so it is
+				// a surprise a human decides on — writing would append a second
+				// value and leave the event holding two.
+				blankEventName.push({ eventId: event._id });
+				continue;
+			}
 			if (isNonEmpty(nameValue) && nameValue !== eventNameValue) {
 				eventNameDiffers.push({ eventId: event._id, nameValue, storedValue: eventNameValue });
 				continue;
@@ -326,6 +258,14 @@ export async function runSeed233S2(
 			`runSeed233S2: ${multiValue.length} event(s) hold more than one name/event_name value -- only one ` +
 				`would be copied and S4's formula would blank the rest -- stopping before any write: ` +
 				`${multiValue.map((m) => m.eventId).join(', ')}`
+		);
+	}
+
+	if (blankEventName.length > 0) {
+		writeAbortLedger({ outcome: 'aborted-blank-event-name', blankEventName });
+		throw new Error(
+			`runSeed233S2: ${blankEventName.length} event(s) already hold a blank event_name value -- writing would ` +
+				`append a second one -- stopping before any write: ${blankEventName.map((b) => b.eventId).join(', ')}`
 		);
 	}
 
