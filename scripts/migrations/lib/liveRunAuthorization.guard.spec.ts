@@ -49,11 +49,11 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // out of scope by decision, not by construction.
 
 /**
- * The 15 crede-mutating scripts: the 14 enumerated from the #417 research
- * digest §(d), plus seed-233-s2 (#419), re-verified against this tree by the
- * discovery test below. A NEW script that imports loadCredeCfg and mutates
- * must BOTH appear here and call the preflight — failing either test loudly
- * is the point.
+ * The 16 crede-mutating scripts: the 14 enumerated from the #417 research
+ * digest §(d), plus seed-233-s2 (#419) and seed-233-s4 (#421), re-verified
+ * against this tree by the discovery test below. A NEW script that imports
+ * loadCredeCfg and mutates must BOTH appear here and call the preflight —
+ * failing either test loudly is the point.
  */
 const CREDE_MUTATING_SCRIPTS = [
 	'grant-294-joosep-owner-crede-2026-09-09.ts',
@@ -66,6 +66,7 @@ const CREDE_MUTATING_SCRIPTS = [
 	'seed-188-phase3b-crede-sections-2026-08-29.ts',
 	'seed-233-s1-event-name-propdef-crede.ts',
 	'seed-233-s2-event-name-backfill-crede.ts',
+	'seed-233-s4-event-name-formula-crede.ts',
 	'seed-246-schedule-item-type-crede-2026-09-06.ts',
 	'seed-256-link-type-crede-2026-09-10.ts',
 	'seed-265-admin-member-record-type-crede-2026-09-06.ts',
@@ -112,7 +113,7 @@ function discoveredCredeMutators(): string[] {
 }
 
 describe('mvox-app#417 — every crede-mutating script gates its live run on a recorded authorizer', () => {
-	it('the discovered loadCredeCfg-importing mutating set matches the enumerated 15 — a new crede-mutating script must be added here AND gated', () => {
+	it('the discovered loadCredeCfg-importing mutating set matches the enumerated 16 — a new crede-mutating script must be added here AND gated', () => {
 		expect(
 			discoveredCredeMutators(),
 			'A script importing loadCredeCfg and issuing a mutating Entu call is not in CREDE_MUTATING_SCRIPTS. ' +
@@ -160,6 +161,13 @@ describe('mvox-app#417 — every crede-mutating script gates its live run on a r
 	// per `committed: { … allow: [ … ] }` block ([^}]*? cannot cross out of
 	// the committed object, and an allow array in this corpus holds only
 	// quoted names), then test membership inside those blocks.
+	// Known reach, recorded so this fence's green is not read as coverage it
+	// does not have (#421 review): the regex sees INLINE arrays only. A
+	// script passing `allow: SOME_CONST` (seed-233-s2 and seed-233-s4 today)
+	// yields zero blocks here and passes vacuously — their allow arrays are
+	// pinned by their own specs' full-array toEqual instead.
+	// Closing it means resolving the identifier to its module-level const,
+	// or importing each script and reading the array it actually passes.
 	const COMMITTED_ALLOW_RE = /committed:\s*\{[^}]*?allow:\s*\[[^\]]*\]/g;
 	const ALLOWS_AUTHORIZED_BY = /(['"`])authorizedBy\1/;
 
