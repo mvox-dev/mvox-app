@@ -1,0 +1,12 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "typeId": "6a92a333ca67df980f415039",
+  "propDefId": "6aae8a34b92d8486f89e38a0",
+  "outcome": "created",
+  "sharing": "public",
+  "ordinal": 2,
+  "authorizedBy": "Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-5742139735"
+}
