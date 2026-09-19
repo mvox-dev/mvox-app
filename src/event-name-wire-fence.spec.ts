@@ -2,10 +2,10 @@
 //
 // The app stopped reading and writing `name` on event entities when the name
 // moved to `event_name` (#233 chain, S3). There is deliberately NO fallback
-// read of `name`: a polyphony-account holder renders blank by design (#420
-// body; the displayed-names fence is scoped to crede — Mihkel, 2026-09-18).
-// This fence keeps the retired wire key from creeping back into event reads
-// or writes.
+// read of `name`: an account on the frozen legacy db (#407) renders events
+// blank by design (#420 body; the displayed-names fence is scoped to crede
+// — Mihkel, 2026-09-18). This fence keeps the retired wire key from creeping
+// back into event reads or writes.
 //
 // ALLOWED non-event `name` sites (the rename is events-only; these keep the
 // bare `name` prop on purpose and are NOT matched by the rules below):
@@ -18,7 +18,7 @@
 //     repertoire_item, program_item, admin_member_record, mvox_collective
 //     reads — all non-event entity types.
 //
-// Mechanical scan over real files, same posture as polyphony-history-fence /
+// Mechanical scan over real files, same posture as the #407 history fence /
 // rights-model-identifiers (spec at src root).
 
 import { describe, it, expect } from 'vitest';

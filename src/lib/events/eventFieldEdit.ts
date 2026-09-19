@@ -16,7 +16,7 @@
 import { replaceEntityProperty, type EntuWireValue } from '$lib/entu/replaceProperty';
 
 export type EditableEventField =
-	| 'name'
+	| 'event_name'
 	| 'start_datetime'
 	| 'duration_minutes'
 	| 'location'

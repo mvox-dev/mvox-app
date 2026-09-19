@@ -506,7 +506,7 @@ export async function createEvent(
 
 	const props: WireProp[] = [
 		// With a series parent, blank/absent means "track the series", not "".
-		...optional('name', name),
+		...optional('event_name', name),
 		{ type: 'event_type', string: eventType },
 		{ type: 'start_datetime', datetime: startDatetime },
 		...optionalNumber('duration_minutes', input.durationMinutes),

@@ -3,7 +3,7 @@
 // #196 GREEN — standalone event → series conversion (the data layer). The
 // full pinned contract lives in eventConvert.spec.ts. Short version:
 //
-//   1. read-event    GET  entity/{eventId}?props=name,event_type — the event's
+//   1. read-event    GET  entity/{eventId}?props=event_name,event_type — the event's
 //                    own name (string + value ids) and event_type feed the
 //                    series; an event missing EITHER refuses HERE, before any
 //                    write (#196 review F1 — both are v4E `required: true` on
@@ -32,7 +32,7 @@
 //   DURABLE CONSTRAINT (this is app-layer merge, not a data copy): the
 //   converted event's own `name` value is DELETED, not overwritten with the
 //   series name. What makes the agenda/detail still show a name is the
-//   read-side `raw.name?.[0]?.string ?? series?.name?.[0]?.string` merge in
+//   read-side `raw.event_name?.[0]?.string ?? series?.name?.[0]?.string` merge in
 //   entuSeasons.listEvents / eventDetail.loadEventDetail — the SAME merge a
 //   generated series occurrence relies on. If a future refactor of either
 //   reader drops that fallback, every converted event goes blank instead of
@@ -198,11 +198,11 @@ function requireDateRange(
 
 type EventNameValue = { _id: string; string?: string };
 
-/** The shape `GET entity/{eventId}?props=name,event_type` answers. */
+/** The shape `GET entity/{eventId}?props=event_name,event_type` answers. */
 interface EventReadRaw {
 	entity?: {
 		_id: string;
-		name?: EventNameValue[];
+		event_name?: EventNameValue[];
 		event_type?: Array<{ _id: string; string?: string }>;
 	};
 }
@@ -237,7 +237,7 @@ export async function convertEventToSeries(
 	try {
 		const res = await entuFetch(
 			cfg.db,
-			`entity/${eventId}?props=name,event_type`,
+			`entity/${eventId}?props=event_name,event_type`,
 			cfg.token,
 			{},
 			fetchImpl
@@ -246,7 +246,7 @@ export async function convertEventToSeries(
 			throw new Error(`HTTP ${res.status}`);
 		}
 		const body = (await res.json()) as EventReadRaw;
-		nameValues = body.entity?.name ?? [];
+		nameValues = body.entity?.event_name ?? [];
 		// Trimmed: a whitespace-only stored value is no event_type at all, and
 		// `createEventSeries` would trim it to blank and reject anyway — one step
 		// later, under a step name that misdescribes the problem.

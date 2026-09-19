@@ -168,7 +168,7 @@ function json(body: unknown, status = 200) {
 function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev-9',
-		name: [{ _id: 'val-name-1', string: 'Spring concert' }],
+		event_name: [{ _id: 'val-name-1', string: 'Spring concert' }],
 		event_type: [{ _id: 'val-type-1', string: 'concert' }],
 		start_datetime: [{ _id: 'val-start-1', datetime: '2027-04-18T18:00:00.000Z' }],
 		location: [{ _id: 'val-loc-1', string: 'Concert Hall' }],

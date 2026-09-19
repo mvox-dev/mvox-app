@@ -139,7 +139,7 @@ export class EventDetailLoadError extends Error {
 
 interface EventRaw {
 	_id: string;
-	name?: Array<{ string: string }>;
+	event_name?: Array<{ string: string }>;
 	event_type?: Array<{ string: string }>;
 	start_datetime?: Array<{ datetime: string }>;
 	duration_minutes?: Array<{ number: number }>;
@@ -210,7 +210,7 @@ export async function loadEventDetail(
 ): Promise<EventDetail> {
 	const eventRes = await entuFetch(
 		cfg.db,
-		`entity/${eventId}?props=name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent,capacity,_owner,_editor`,
+		`entity/${eventId}?props=event_name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent,capacity,_owner,_editor`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -238,7 +238,7 @@ export async function loadEventDetail(
 		seriesId ? fetchSeries(cfg, seriesId, fetchImpl) : Promise.resolve(undefined)
 	]);
 
-	const name = event.name?.[0]?.string ?? series?.name?.[0]?.string ?? '';
+	const name = event.event_name?.[0]?.string ?? series?.name?.[0]?.string ?? '';
 	const durationMinutes =
 		event.duration_minutes?.[0]?.number ?? series?.duration_minutes?.[0]?.number ?? 0;
 	const location = event.location?.[0]?.string ?? series?.default_location?.[0]?.string ?? '';
@@ -251,20 +251,20 @@ export async function loadEventDetail(
 	// own array slot is PRESENT (a field neither side carries is not
 	// "inherited", it is simply unset). Order pinned to the module doc's table.
 	//
-	// #233 SEAM — this line is a read of the event's own `name` and must move
+	// #420 SEAM — this line is a read of the event's own `name` and must move
 	// with the others when the app's event name relocates to `event_name`.
-	// #233 makes `name` on the EVENT type formula-owned, and a formula prop
+	// #420 makes `name` on the EVENT type formula-owned, and a formula prop
 	// always carries a persisted value: `event.name?.[0] === undefined` would
 	// then be permanently false, 'name' would silently drop out of
 	// `inheritedFields`, and the nameless-after-unassign warning on the event
 	// page (`event_detail_series_unassign_name_empty`) would stop firing — the
 	// exact loss #304 exists to prevent, with every test still green because
-	// the fixtures move to `event_name` at the same time. When #233 lands, this
-	// test reads `event.event_name?.[0]`; the SERIES side stays `series.name`
+	// the fixtures move to `event_name` at the same time. #420 reads
+	// `event.event_name?.[0]`; the SERIES side stays `series.name`
 	// (the formula is per-prop-def, event type only — event_series `name` is
 	// untouched).
 	const inheritedFields: EventInheritedField[] = [];
-	if (event.name?.[0] === undefined && series?.name?.[0] !== undefined) {
+	if (event.event_name?.[0] === undefined && series?.name?.[0] !== undefined) {
 		inheritedFields.push('name');
 	}
 	if (event.duration_minutes?.[0] === undefined && series?.duration_minutes?.[0] !== undefined) {

@@ -49,7 +49,7 @@ export interface SeriesRaw {
 
 export interface EventRaw extends RightsRefs {
 	_id: string;
-	name?: Array<{ string: string }>;
+	event_name?: Array<{ string: string }>;
 	start_datetime?: Array<{ datetime: string }>;
 	duration_minutes?: Array<{ number: number }>;
 	location?: Array<{ string: string }>;
